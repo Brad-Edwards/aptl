@@ -1,5 +1,12 @@
 # Purple Team Lab with qRadar CE
 
+> **🚧 UNDER CONSTRUCTION 🚧**  
+> **⚠️ This project is actively being developed and tested**  
+> **🔧 Documentation and features may change rapidly**  
+> **💡 Use at your own risk - this is a proof of concept**
+
+---
+
 A shoestring budget purple team lab infrastructure using AWS and Terraform, featuring IBM qRadar Community Edition 7.5 with AI-powered capabilities.
 
 This lab assumes you have a basic understanding of AWS cli, Terraform, and Linux admin tasks. This is not a deeply technical lab, but you may find it slow going if you're not familiar with these technologies.

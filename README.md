@@ -240,6 +240,23 @@ No red team around? You can use AI coding assistants like **Cline** or **Cursor*
 
 This creates a true **autonomous red team vs. blue team** scenario where AI attacks while you monitor and tune your defenses in qRadar.
 
+## Roadmap
+
+### 🔜 Coming Soon (v1.1)
+
+- **Splunk Integration**: Alternative SIEM option alongside qRadar
+- **Kali MCP**: Kali LinuxModel Context Protocol integration for better AI red teaming
+- **Victim Machine Presets**: Windows, Linux, web apps, etc
+- **Suggested Exercises**: AI-driven exercises based on what you've done
+- **Challenges with Pre-Seeded SIEM Data**: Set piece challenges to practice your SIEM skills
+
+### 🎯 Future Releases
+
+- Additional SIEM platforms (Elastic Security, Wazuh)
+- Windows victim machines
+- Container-based deployments
+- Automated report generation
+
 ## Cost Estimation
 
 - t3a.2xlarge (SIEM): ~$220/month

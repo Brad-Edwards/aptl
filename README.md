@@ -208,6 +208,10 @@ Available techniques:
 
 Example: `./simulate_mitre_attack.sh T1110`
 
+Have fun!
+
+![Offences in qRadar](assets/images/qradar_offences.png)
+
 ## AI Red Teaming
 
 ### Automated Red Team Agent

@@ -15,6 +15,12 @@ provider "aws" {
   profile = var.aws_profile != "" ? var.aws_profile : null
 }
 
+locals {
+  selected_siem_ami           = var.siem_type == "splunk" ? var.splunk_ami : var.qradar_ami
+  selected_siem_instance_type = var.siem_type == "splunk" ? "t3.large" : "t3a.2xlarge"
+  selected_siem_name          = var.siem_type == "splunk" ? "splunk" : "qradar"
+}
+
 # VPC Configuration
 resource "aws_vpc" "purple_team_vpc" {
   cidr_block           = var.vpc_cidr
@@ -175,8 +181,8 @@ resource "aws_security_group" "victim_sg" {
 
 # SIEM Instance
 resource "aws_instance" "siem" {
-  ami           = var.siem_ami
-  instance_type = "t3a.2xlarge"  # 8 vCPU, 32GB RAM - meets minimum requirements
+  ami           = local.selected_siem_ami
+  instance_type = local.selected_siem_instance_type
   subnet_id     = aws_subnet.public_subnet.id
   key_name      = var.key_name
 
@@ -326,7 +332,7 @@ resource "aws_instance" "siem" {
               EOF
 
   tags = {
-    Name = "qradar-siem"
+    Name = "${local.selected_siem_name}-siem"
     Project = "purple-team-lab"
     Environment = "poc"
   }
@@ -339,7 +345,7 @@ resource "aws_ebs_volume" "siem_store" {
   type              = "gp3"
   
   tags = {
-    Name = "qradar-store-volume"
+    Name = "${local.selected_siem_name}-store-volume"
     Project = "purple-team-lab"
     Environment = "poc"
   }

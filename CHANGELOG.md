@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cost estimation and security considerations
 - SPDX license headers (BUSL-1.1) throughout codebase
 - Legal disclaimer and usage warnings
+- Roadmap for upcoming features
 
 ### Known Issues
 

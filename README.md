@@ -1,11 +1,12 @@
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
-# Purple Team Lab
+# Advanced Purple Team Lab (APTL)
 
 > **🚧 UNDER CONSTRUCTION 🚧**  
 > **⚠️ This project is actively being developed and tested**  
 > **🔧 Documentation and features may change rapidly**  
 > **💡 Use at your own risk - this is a proof of concept**
+> **🚨 Don't be stupid or you'll get yourself in trouble.**
 
 ---
 
@@ -16,6 +17,12 @@ A shoestring budget purple team lab infrastructure using AWS and Terraform, feat
 This lab assumes you have basic understanding of AWS CLI, Terraform, and Linux admin tasks.
 
 This is a lab environment, not for production use. qRadar trial license expires in 30 days. See IBM's [qRadar Community Edition](https://www.ibm.com/community/101/qradar/ce/) for more information.
+
+## DISCLAIMER
+
+- The author takes no responsibility for your use of this lab.
+- You are solely responsible for whether you are in compliance with the laws of your jurisdiction
+- You are solely responsible for following the terms and conditions of any services or applications you use.
 
 ## Overview
 
@@ -199,6 +206,40 @@ Available techniques:
 
 Example: `./simulate_mitre_attack.sh T1110`
 
+## AI Red Teaming
+
+### Automated Red Team Agent
+
+No red team around? You can use AI coding assistants like **Cline** or **Cursor** as an AI red team agent:
+
+1. **SSH Access**: Give your AI agent the SSH connection details from `lab_connections.txt`
+2. **Explain the Lab**: Give the AI a quick overview of the lab, it's purpose, and that you have permission to attack the victim machine. Because you do. Right?
+3. **Red Team Mission**: Ask the AI to:
+   - SSH into the victim machine
+   - Enumerate the system and find vulnerabilities
+   - Install common pentesting tools
+   - Execute attack scenarios autonomously
+   - Explain how the attack works and what you should see in the SIEM
+
+4. **Example AI Prompts**:
+
+   ```text
+   "SSH into the victim machine and perform a basic privilege escalation assessment"
+   "Set up a persistent backdoor and test if it's detected by the SIEM"
+   "Simulate a data exfiltration scenario using common attack tools"
+   "Perform automated vulnerability scanning and exploitation"
+   ```
+
+5. **Benefits**:
+   - Easy set up
+   - Endless personalization
+   - On the spot tutoring
+   - Masters' level system knowledge
+   - AI adapts tactics based on what it discovers
+   - Won't judge your SIEM query fails!
+
+This creates a true **autonomous red team vs. blue team** scenario where AI attacks while you monitor and tune your defenses in qRadar.
+
 ## Cost Estimation
 
 - t3a.2xlarge (SIEM): ~$220/month
@@ -228,14 +269,20 @@ This will permanently delete all resources and data.
 
 See [troubleshooting.md](troubleshooting.md) for detailed troubleshooting steps.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
+
 ## Contributing
 
-This is a portfolio/PoC project. Feel free to fork and adapt for your needs.
+This is an early stage demo project. Feel free to fork and adapt for your personal needs.
+
+For consulting, enterprise licensing, or other inquiries, contact me at [brad@keplerops.com](mailto:brad@keplerops.com).
 
 ## License
 
-MIT License - see LICENSE file for details.
+BUSL-1.1
 
 ---
 
-*10-23 AI hacker shenanigans 🛡️*
+*10-23 AI hacker shenanigans 🚓*

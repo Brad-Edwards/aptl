@@ -5,6 +5,11 @@ output "siem_public_ip" {
   value       = aws_eip.siem_eip.public_ip
 }
 
+output "siem_type" {
+  description = "Selected SIEM platform (qradar or splunk)"
+  value       = var.siem_type
+}
+
 output "victim_public_ip" {
   description = "Public IP address of the victim instance"
   value       = aws_eip.victim_eip.public_ip

@@ -18,6 +18,8 @@ This lab assumes you have basic understanding of AWS CLI, Terraform, and Linux a
 
 This is a lab environment, not for production use. qRadar trial license expires in 30 days. See IBM's [qRadar Community Edition](https://www.ibm.com/community/101/qradar/ce/) for more information.
 
+And this is only the beginning... SecOps agents are coming.
+
 ## DISCLAIMER
 
 - The author takes no responsibility for your use of this lab.

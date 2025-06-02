@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BUSL-1.1
+
 output "siem_public_ip" {
   description = "Public IP address of the SIEM instance"
   value       = aws_eip.siem_eip.public_ip

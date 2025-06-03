@@ -82,14 +82,6 @@ resource "aws_security_group" "siem_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
-  # Allow all traffic from within the subnet (for lab connectivity)
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [var.subnet_cidr]
-  }
-
   # Allow syslog from victim machine
   ingress {
     from_port       = 514
@@ -104,6 +96,22 @@ resource "aws_security_group" "siem_sg" {
     to_port         = 514
     protocol        = "tcp"
     security_groups = [aws_security_group.victim_sg.id]
+  }
+
+  # Allow syslog from Kali machine
+  ingress {
+    from_port       = 514
+    to_port         = 514
+    protocol        = "udp"
+    security_groups = [aws_security_group.kali_sg.id]
+  }
+
+  # Allow syslog TCP from Kali machine
+  ingress {
+    from_port       = 514
+    to_port         = 514
+    protocol        = "tcp"
+    security_groups = [aws_security_group.kali_sg.id]
   }
 
   # Allow all outbound traffic
@@ -151,12 +159,12 @@ resource "aws_security_group" "victim_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
-  # Allow all traffic from within the subnet (for lab connectivity)
+  # Allow all attacks from Kali
   ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [var.subnet_cidr]
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    security_groups = [aws_security_group.kali_sg.id]
   }
 
   # Allow all outbound traffic
@@ -186,14 +194,6 @@ resource "aws_security_group" "kali_sg" {
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [var.allowed_ip]
-  }
-
-  # Allow all traffic from within the subnet (for lab connectivity)
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [var.subnet_cidr]
   }
 
   # Allow all outbound traffic

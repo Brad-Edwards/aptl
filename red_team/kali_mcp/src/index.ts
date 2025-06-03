@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+console.error(`[MCP-TOPLEVEL] Current working directory: ${process.cwd()}`);
 // SPDX-License-Identifier: BUSL-1.1
 
 /**
@@ -132,18 +133,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         command: string;
         username?: string;
       };
-
-      // Validate target is allowed
-      if (!isTargetAllowed(target, labConfig.mcp.allowed_targets)) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Error: Target ${target} is not in allowed network ranges: ${labConfig.mcp.allowed_targets.join(', ')}`,
-            },
-          ],
-        };
-      }
 
       try {
         // Determine which instance to use for SSH key

@@ -66,12 +66,15 @@ export type Instance = z.infer<typeof InstanceSchema>;
  */
 function findTerraformRoot(): string {
   let currentDir = process.cwd();
+  console.error(`[MCP] findTerraformRoot starting from: ${currentDir}`);
   
   // Search upward for terraform files
   const maxDepth = 10; // Prevent infinite loops
   let depth = 0;
   
   while (depth < maxDepth) {
+    console.error(`[MCP] Checking directory (depth ${depth}): ${currentDir}`);
+    
     // Check for terraform files in current directory
     const mainTf = resolve(currentDir, 'main.tf');
     const outputsTf = resolve(currentDir, 'outputs.tf');
@@ -80,12 +83,18 @@ function findTerraformRoot(): string {
     const infraMainTf = resolve(currentDir, 'infrastructure', 'main.tf');
     const infraOutputsTf = resolve(currentDir, 'infrastructure', 'outputs.tf');
     
+    console.error(`[MCP] Checking files: ${mainTf}, ${outputsTf}, ${infraMainTf}, ${infraOutputsTf}`);
+    console.error(`[MCP] File exists: main.tf=${existsSync(mainTf)}, outputs.tf=${existsSync(outputsTf)}, infra/main.tf=${existsSync(infraMainTf)}, infra/outputs.tf=${existsSync(infraOutputsTf)}`);
+    
     if (existsSync(mainTf) || existsSync(outputsTf)) {
+      console.error(`[MCP] Found terraform files in: ${currentDir}`);
       return currentDir;
     }
     
     if (existsSync(infraMainTf) || existsSync(infraOutputsTf)) {
-      return resolve(currentDir, 'infrastructure');
+      const terraformRoot = resolve(currentDir, 'infrastructure');
+      console.error(`[MCP] Found terraform files in infrastructure subdirectory: ${terraformRoot}`);
+      return terraformRoot;
     }
     
     // Move up one directory
@@ -99,8 +108,20 @@ function findTerraformRoot(): string {
     depth++;
   }
   
+  // Hardcoded fallback - we know the files are here
+  const fallbackPath = '/home/atomik/src/aptl/infrastructure';
+  console.error(`[MCP] Normal search failed, trying hardcoded fallback: ${fallbackPath}`);
+  
+  const fallbackMainTf = resolve(fallbackPath, 'main.tf');
+  const fallbackOutputsTf = resolve(fallbackPath, 'outputs.tf');
+  
+  if (existsSync(fallbackMainTf) || existsSync(fallbackOutputsTf)) {
+    console.error(`[MCP] Fallback successful, using: ${fallbackPath}`);
+    return fallbackPath;
+  }
+  
   throw new Error(
-    'Could not find Terraform root directory. Searched for main.tf or outputs.tf in current directory, infrastructure/ subdirectory, and parents.'
+    `Could not find Terraform root directory. Searched for main.tf or outputs.tf in current directory, infrastructure/ subdirectory, and parents. Starting directory was: ${process.cwd()}, fallback path ${fallbackPath} also failed.`
   );
 }
 

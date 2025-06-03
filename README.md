@@ -106,7 +106,7 @@ terraform plan
 terraform apply
 ```
 
-### 4. Install qRadar
+### 5. Install qRadar
 
 After infrastructure deployment:
 

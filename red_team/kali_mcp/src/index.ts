@@ -14,7 +14,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { loadLabConfig, isTargetAllowed, type LabConfig } from './config.js';
+import { loadLabConfig, isTargetAllowed, selectCredentials, type LabConfig } from './config.js';
 import { SSHConnectionManager } from './ssh.js';
 
 // Global configuration and SSH manager
@@ -147,35 +147,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       try {
         // Determine which instance to use for SSH key
-        let sshKey: string;
-        let actualUsername: string;
-
-        // Auto-detect instance and credentials
-        if ('ssh_key' in labConfig.instances.siem && 
-            (labConfig.instances.siem.public_ip === target || labConfig.instances.siem.private_ip === target)) {
-          sshKey = labConfig.instances.siem.ssh_key;
-          actualUsername = labConfig.instances.siem.ssh_user;
-        } else if ('ssh_key' in labConfig.instances.victim && 
-                   (labConfig.instances.victim.public_ip === target || labConfig.instances.victim.private_ip === target)) {
-          sshKey = labConfig.instances.victim.ssh_key;
-          actualUsername = labConfig.instances.victim.ssh_user;
-        } else if ('ssh_key' in labConfig.instances.kali && 
-                   (labConfig.instances.kali.public_ip === target || labConfig.instances.kali.private_ip === target)) {
-          sshKey = labConfig.instances.kali.ssh_key;
-          actualUsername = labConfig.instances.kali.ssh_user;
-        } else {
-          // Default to Kali credentials for unknown targets in allowed ranges
-          if (!('ssh_key' in labConfig.instances.kali)) {
-            throw new Error('Kali instance not available for SSH operations');
-          }
-          sshKey = labConfig.instances.kali.ssh_key;
-          actualUsername = username;
-        }
+        const credentials = selectCredentials(target, labConfig, username);
 
         const result = await sshManager.executeCommand(
           target,
-          actualUsername,
-          sshKey,
+          credentials.username,
+          credentials.sshKey,
           command
         );
 
@@ -186,7 +163,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify({
                 target,
                 command,
-                username: actualUsername,
+                username: credentials.username,
                 success: true,
                 output: result,
               }, null, 2),

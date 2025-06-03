@@ -2,8 +2,6 @@
 
 import { Client } from 'ssh2';
 import { readFileSync } from 'fs';
-import { resolve as resolvePath } from 'path';
-import ConfigManager, { type KaliConfig } from './config.js';
 
 export interface CommandResult {
   stdout: string;
@@ -20,84 +18,26 @@ export class SSHError extends Error {
   }
 }
 
-export class KaliConnection {
-  private client: Client;
-  private connected: boolean = false;
-  private config: KaliConfig;
+interface ConnectionInfo {
+  client: Client;
+  connected: boolean;
+}
 
-  constructor(config: KaliConfig) {
-    this.client = new Client();
-    this.config = config;
-  }
+export class SSHConnectionManager {
+  private connections: Map<string, ConnectionInfo> = new Map();
 
-  public static fromConfig(): KaliConnection {
-    const configManager = ConfigManager.getInstance();
-    const kaliConfig = configManager.getKaliConfig();
-    return new KaliConnection(kaliConfig);
-  }
-
-  public async connect(): Promise<void> {
-    if (this.connected) {
-      return;
-    }
-
-    // Prepare SSH key path outside Promise constructor
-    const homeDir = process.env['HOME'];
-    if (!homeDir) {
-      throw new SSHError('HOME environment variable not set');
-    }
+  /**
+   * Execute a command on a target host via SSH
+   */
+  public async executeCommand(
+    host: string,
+    username: string,
+    privateKeyPath: string,
+    command: string,
+    timeout: number = 30000
+  ): Promise<CommandResult> {
+    const client = await this.getConnection(host, username, privateKeyPath);
     
-    const keyPath = this.config.ssh_key.replace(/^~/, homeDir);
-    const resolvedKeyPath = resolvePath(keyPath);
-    
-    let privateKey: Buffer;
-    try {
-      privateKey = readFileSync(resolvedKeyPath);
-    } catch (error) {
-      throw new SSHError(
-        `Failed to read SSH private key from ${resolvedKeyPath}: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new SSHError('Connection timeout'));
-      }, 30000);
-
-      this.client.on('ready', () => {
-        clearTimeout(timeout);
-        this.connected = true;
-        resolve();
-      });
-
-      this.client.on('error', (err) => {
-        clearTimeout(timeout);
-        this.connected = false;
-        reject(new SSHError(`Connection failed: ${err.message}`, err));
-      });
-
-      this.client.on('close', () => {
-        this.connected = false;
-      });
-
-      this.client.connect({
-        host: this.config.public_ip,
-        port: this.config.ports.ssh,
-        username: this.config.ssh_user,
-        privateKey,
-        timeout: 30000,
-        readyTimeout: 30000,
-        keepaliveInterval: 30000,
-        keepaliveCountMax: 3,
-      });
-    });
-  }
-
-  public async executeCommand(command: string, timeout: number = 30000): Promise<CommandResult> {
-    if (!this.connected) {
-      await this.connect();
-    }
-
     return new Promise((resolve, reject) => {
       let stdout = '';
       let stderr = '';
@@ -108,7 +48,7 @@ export class KaliConnection {
         reject(new SSHError(`Command timeout after ${timeout}ms: ${command}`));
       }, timeout);
 
-      this.client.exec(command, (err, stream) => {
+      client.exec(command, (err, stream) => {
         if (err) {
           clearTimeout(timeoutId);
           reject(new SSHError(`Failed to execute command: ${err.message}`, err));
@@ -140,21 +80,104 @@ export class KaliConnection {
     });
   }
 
-  public async disconnect(): Promise<void> {
-    if (!this.connected) {
-      return;
+  /**
+   * Get or create an SSH connection to a host
+   */
+  private async getConnection(
+    host: string,
+    username: string,
+    privateKeyPath: string
+  ): Promise<Client> {
+    const connectionKey = `${username}@${host}`;
+    
+    if (this.connections.has(connectionKey)) {
+      const connInfo = this.connections.get(connectionKey)!;
+      if (connInfo.connected) {
+        return connInfo.client;
+      }
+      // Connection is dead, remove it
+      this.connections.delete(connectionKey);
     }
 
-    return new Promise((resolve) => {
-      this.client.on('close', () => {
-        this.connected = false;
-        resolve();
+    // Create new connection
+    const client = await this.createConnection(host, username, privateKeyPath);
+    this.connections.set(connectionKey, { client, connected: true });
+    
+    return client;
+  }
+
+  /**
+   * Create a new SSH connection
+   */
+  private async createConnection(
+    host: string,
+    username: string,
+    privateKeyPath: string
+  ): Promise<Client> {
+    let privateKey: Buffer;
+    try {
+      privateKey = readFileSync(privateKeyPath);
+    } catch (error) {
+      throw new SSHError(
+        `Failed to read SSH private key from ${privateKeyPath}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+
+    const client = new Client();
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new SSHError('Connection timeout'));
+      }, 30000);
+
+      client.on('ready', () => {
+        clearTimeout(timeout);
+        resolve(client);
       });
-      this.client.end();
+
+      client.on('error', (err) => {
+        clearTimeout(timeout);
+        reject(new SSHError(`Connection failed to ${host}: ${err.message}`, err));
+      });
+
+      client.on('close', () => {
+        // Mark connection as disconnected
+        const connectionKey = `${username}@${host}`;
+        const connInfo = this.connections.get(connectionKey);
+        if (connInfo) {
+          connInfo.connected = false;
+        }
+      });
+
+      client.connect({
+        host,
+        port: 22,
+        username,
+        privateKey,
+        timeout: 30000,
+        readyTimeout: 30000,
+        keepaliveInterval: 30000,
+        keepaliveCountMax: 3,
+      });
     });
   }
 
-  public isConnected(): boolean {
-    return this.connected;
+  /**
+   * Close all connections
+   */
+  public async disconnectAll(): Promise<void> {
+    const promises = Array.from(this.connections.values()).map(connInfo => {
+      return new Promise<void>((resolve) => {
+        if (connInfo.connected) {
+          connInfo.client.on('close', () => resolve());
+          connInfo.client.end();
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    await Promise.all(promises);
+    this.connections.clear();
   }
 } 

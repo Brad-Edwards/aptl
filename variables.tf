@@ -36,6 +36,12 @@ variable "siem_ami" {
   type        = string
 }
 
+variable "siem_instance_type" {
+  description = "Instance type for the SIEM instance"
+  type        = string
+  default     = "t3a.2xlarge"
+}
+
 variable "victim_ami" {
   description = "AMI ID for the victim instance"
   type        = string
@@ -43,6 +49,27 @@ variable "victim_ami" {
 
 variable "victim_instance_type" {
   description = "Instance type for the victim machine"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "kali_ami" {
+  description = "AMI ID for the Kali Linux instance"
+  type        = string
+}
+
+variable "kali_ami_alias" {
+  description = "Alias for the Kali Linux AMI"
+  type        = string
+}
+
+variable "kali_product_code" {
+  description = "Product code for the Kali Linux AMI"
+  type        = string
+}
+
+variable "kali_instance_type" {
+  description = "Instance type for the Kali Linux instance"
   type        = string
   default     = "t3.micro"
 }

@@ -173,6 +173,36 @@ resource "aws_security_group" "victim_sg" {
   }
 }
 
+# Security Group for Kali
+resource "aws_security_group" "kali_sg" {
+  count       = var.enable_kali ? 1 : 0
+  name        = "kali-security-group"
+  description = "Security group for Kali Linux red team machine"
+  vpc_id      = aws_vpc.purple_team_vpc.id
+
+  # SSH access from allowed IPs
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Allow all outbound traffic
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "kali-security-group"
+    Project = "purple-team-lab"
+    Environment = "poc"
+  }
+}
+
 # SIEM Instance
 resource "aws_instance" "siem" {
   ami           = var.siem_ami
@@ -640,24 +670,122 @@ resource "aws_eip" "victim_eip" {
   }
 }
 
+# Kali Instance
+resource "aws_instance" "kali" {
+  count         = var.enable_kali ? 1 : 0
+  ami           = var.kali_ami
+  instance_type = var.kali_instance_type
+  subnet_id     = aws_subnet.public_subnet.id
+  key_name      = var.key_name
+
+  vpc_security_group_ids = [aws_security_group.kali_sg[0].id]
+
+  root_block_device {
+    volume_size = 30
+    volume_type = "gp3"
+  }
+
+  user_data = <<-EOF
+              #!/bin/bash
+              # Log everything for troubleshooting
+              exec > >(tee /var/log/user-data.log)
+              exec 2>&1
+              
+              # Update system
+              echo "Updating Kali Linux system..."
+              sudo apt-get update -y
+              sudo apt-get upgrade -y
+              
+              # Install additional useful tools for red team operations
+              echo "Installing additional tools..."
+              sudo apt-get install -y \
+                git \
+                python3-pip \
+                golang \
+                docker.io \
+                docker-compose
+              
+              # Enable Docker service
+              sudo systemctl enable docker
+              sudo systemctl start docker
+              
+              # Add default user to docker group
+              sudo usermod -aG docker kali 2>/dev/null || true
+              
+              # Create working directory for red team operations
+              mkdir -p /home/kali/operations
+              
+              # Create a welcome script with lab information
+              cat > /home/kali/lab_info.sh << 'EOFSCRIPT'
+              #!/bin/bash
+              echo "=== APTL Red Team Kali Instance ==="
+              echo ""
+              echo "Lab Network Information:"
+              echo "  SIEM Private IP: ${aws_instance.siem.private_ip}"
+              echo "  Victim Private IP: ${aws_instance.victim.private_ip}"
+              echo "  Kali Private IP: $(hostname -I | awk '{print $1}')"
+              echo ""
+              echo "Available Tools:"
+              echo "  - Metasploit Framework"
+              echo "  - Nmap"
+              echo "  - Burp Suite"
+              echo "  - SQLMap"
+              echo "  - John the Ripper"
+              echo "  - Hashcat"
+              echo "  - Hydra"
+              echo "  - And many more..."
+              echo ""
+              echo "Working Directory: ~/operations"
+              echo ""
+              echo "Happy hunting!"
+              EOFSCRIPT
+              chmod +x /home/kali/lab_info.sh
+              
+              # Set proper ownership
+              chown -R kali:kali /home/kali/operations 2>/dev/null || true
+              chown kali:kali /home/kali/lab_info.sh 2>/dev/null || true
+              
+              echo "Kali Linux red team instance setup complete"
+              EOF
+
+  tags = {
+    Name = "kali-redteam"
+    Project = "purple-team-lab"
+    Environment = "poc"
+  }
+}
+
+resource "aws_eip" "kali_eip" {
+  count    = var.enable_kali ? 1 : 0
+  instance = aws_instance.kali[0].id
+  domain   = "vpc"
+
+  tags = {
+    Name = "kali-eip"
+    Project = "purple-team-lab"
+    Environment = "poc"
+  }
+}
 resource "local_file" "connection_info" {
   filename = "${path.module}/lab_connections.txt"
   content = <<-EOF
-Purple Team Lab Connection Info
-===============================
+APTL Purple Team Lab Connection Info
+====================================
 
-SIEM Instance:
-  IP: ${aws_eip.siem_eip.public_ip}
-  SSH: ssh -i ~/.ssh/purple-team-key ec2-user@${aws_eip.siem_eip.public_ip}
+SIEM Instance (qRadar):
+  Public IP:  ${aws_eip.siem_eip.public_ip}
+  Private IP: ${aws_instance.siem.private_ip}
+  SSH: ssh -i ~/.ssh/${var.key_name} ec2-user@${aws_eip.siem_eip.public_ip}
   HTTPS: https://${aws_eip.siem_eip.public_ip}
 
 Victim Instance:
-  IP: ${aws_eip.victim_eip.public_ip}
-  SSH: ssh -i ~/.ssh/purple-team-key ec2-user@${aws_eip.victim_eip.public_ip}
+  Public IP:  ${aws_eip.victim_eip.public_ip}
+  Private IP: ${aws_instance.victim.private_ip}
+  SSH: ssh -i ~/.ssh/${var.key_name} ec2-user@${aws_eip.victim_eip.public_ip}
   RDP: mstsc /v:${aws_eip.victim_eip.public_ip}
 
-qRadar ISO Transfer:
-  scp -i ~/.ssh/purple-team-key files/750-QRADAR-QRFULL-2021.06.12.20250509154206.iso ec2-user@${aws_eip.siem_eip.public_ip}:/tmp/
+${var.enable_kali ? "Kali Red Team Instance:\n  Public IP:  ${aws_eip.kali_eip[0].public_ip}\n  Private IP: ${aws_instance.kali[0].private_ip}\n  SSH: ssh -i ~/.ssh/${var.key_name} kali@${aws_eip.kali_eip[0].public_ip}\n\n" : ""}qRadar ISO Transfer:
+  scp -i ~/.ssh/${var.key_name} files/750-QRADAR-QRFULL-2021.06.12.20250509154206.iso ec2-user@${aws_eip.siem_eip.public_ip}:/tmp/
 
 Log Forwarding Verification:
   1. SSH to victim machine and run: ./generate_test_events.sh
@@ -666,10 +794,15 @@ Log Forwarding Verification:
   4. You should see logs from victim machine automatically
 
 Purple Team Testing:
-  SSH to victim: ssh -i ~/.ssh/purple-team-key ec2-user@${aws_eip.victim_eip.public_ip}
+  SSH to victim: ssh -i ~/.ssh/${var.key_name} ec2-user@${aws_eip.victim_eip.public_ip}
   Generate events: ./generate_test_events.sh
   Monitor in qRadar: Log Activity → Source IP filter → ${aws_instance.victim.private_ip}
 
+${var.enable_kali ? "Red Team Operations:\n  SSH to Kali: ssh -i ~/.ssh/${var.key_name} kali@${aws_eip.kali_eip[0].public_ip}\n  Run lab info: ./lab_info.sh\n  Target SIEM: ${aws_instance.siem.private_ip}\n  Target Victim: ${aws_instance.victim.private_ip}\n\n" : ""}Network Summary:
+  VPC CIDR: ${var.vpc_cidr}
+  Subnet CIDR: ${var.subnet_cidr}
+  Your Allowed IP: ${var.allowed_ip}
+
 Generated: ${timestamp()}
 EOF
-} 
+}

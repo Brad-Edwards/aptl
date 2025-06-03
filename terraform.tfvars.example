@@ -20,4 +20,7 @@ kali_instance_type = "t3.micro"
 
 # Claude/Anthropic API Configuration  
 # anthropic_api_key = "sk-ant-1234567890abcdef..."  # Get from https://console.anthropic.com/
-# claude_model      = "claude-3-sonnet-20240229"    # Options: claude-3-sonnet, claude-3-haiku, etc. 
+# claude_model      = "claude-3-sonnet-20240229"    # Options: claude-3-sonnet, claude-3-haiku, etc.
+
+# Red Team Configuration
+enable_kali       = false  # Set to true to deploy Kali Linux instance for red team operations

@@ -106,4 +106,28 @@ variable "claude_model" {
   description = "Claude model to use (e.g., claude-3-sonnet-20240229, claude-3-haiku-20240307)"
   type        = string
   default     = "claude-3-sonnet-20240229"
-} 
+}
+
+variable "enable_kali" {
+  description = "Whether to create the Kali Linux instance for red team operations"
+  type        = bool
+  default     = false
+}
+
+variable "kali_ami_id" {
+  description = "AMI ID for the Kali Linux instance (same as kali_ami)"
+  type        = string
+  default     = ""
+}
+
+variable "project_name" {
+  description = "Name of the project for resource tagging"
+  type        = string
+  default     = "aptl"
+}
+
+variable "environment" {
+  description = "Environment name for resource tagging"
+  type        = string
+  default     = "lab"
+}

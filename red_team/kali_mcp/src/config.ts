@@ -108,20 +108,8 @@ function findTerraformRoot(): string {
     depth++;
   }
   
-  // Hardcoded fallback - we know the files are here
-  const fallbackPath = '/home/atomik/src/aptl/infrastructure';
-  console.error(`[MCP] Normal search failed, trying hardcoded fallback: ${fallbackPath}`);
-  
-  const fallbackMainTf = resolve(fallbackPath, 'main.tf');
-  const fallbackOutputsTf = resolve(fallbackPath, 'outputs.tf');
-  
-  if (existsSync(fallbackMainTf) || existsSync(fallbackOutputsTf)) {
-    console.error(`[MCP] Fallback successful, using: ${fallbackPath}`);
-    return fallbackPath;
-  }
-  
   throw new Error(
-    `Could not find Terraform root directory. Searched for main.tf or outputs.tf in current directory, infrastructure/ subdirectory, and parents. Starting directory was: ${process.cwd()}, fallback path ${fallbackPath} also failed.`
+    `Could not find Terraform root directory. Searched for main.tf or outputs.tf in current directory, infrastructure/ subdirectory, and parents. Starting directory was: ${process.cwd()}.`
   );
 }
 

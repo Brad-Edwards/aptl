@@ -3,38 +3,38 @@
 # SIEM Outputs
 output "siem_public_ip" {
   description = "Public IP address of the SIEM instance"
-  value       = aws_eip.siem_eip.public_ip
+  value       = var.enable_siem ? aws_eip.siem_eip[0].public_ip : null
 }
 
 output "siem_private_ip" {
   description = "Private IP address of the SIEM instance"
-  value       = aws_instance.siem.private_ip
+  value       = var.enable_siem ? aws_instance.siem[0].private_ip : null
 }
 
 output "siem_ssh_command" {
   description = "SSH command to connect to the SIEM instance"
-  value       = "ssh -i ~/.ssh/${var.key_name} ec2-user@${aws_eip.siem_eip.public_ip}"
+  value       = var.enable_siem ? "ssh -i ~/.ssh/${var.key_name} ec2-user@${aws_eip.siem_eip[0].public_ip}" : "N/A - SIEM not enabled"
 }
 
 # Victim Outputs
 output "victim_public_ip" {
   description = "Public IP address of the victim instance"
-  value       = aws_eip.victim_eip.public_ip
+  value       = var.enable_victim ? aws_eip.victim_eip[0].public_ip : null
 }
 
 output "victim_private_ip" {
   description = "Private IP address of the victim instance"
-  value       = aws_instance.victim.private_ip
+  value       = var.enable_victim ? aws_instance.victim[0].private_ip : null
 }
 
 output "victim_ssh_command" {
   description = "SSH command to connect to the victim instance"
-  value       = "ssh -i ~/.ssh/${var.key_name} ec2-user@${aws_eip.victim_eip.public_ip}"
+  value       = var.enable_victim ? "ssh -i ~/.ssh/${var.key_name} ec2-user@${aws_eip.victim_eip[0].public_ip}" : "N/A - Victim not enabled"
 }
 
 output "victim_rdp_command" {
   description = "RDP command to connect to the victim instance (Windows)"
-  value       = "mstsc /v:${aws_eip.victim_eip.public_ip}"
+  value       = var.enable_victim ? "mstsc /v:${aws_eip.victim_eip[0].public_ip}" : "N/A - Victim not enabled"
 }
 
 # Kali Outputs (conditional)
@@ -88,30 +88,36 @@ output "lab_config_json" {
       environment = var.environment
     }
     instances = {
-      siem = {
-        public_ip  = aws_eip.siem_eip.public_ip
-        private_ip = aws_instance.siem.private_ip
+      siem = var.enable_siem ? {
+        public_ip  = aws_eip.siem_eip[0].public_ip
+        private_ip = aws_instance.siem[0].private_ip
         ssh_key    = "~/.ssh/${var.key_name}"
         ssh_user   = "ec2-user"
         instance_type = var.siem_instance_type
+        enabled    = true
         ports = {
           ssh   = 22
           https = 443
           syslog_udp = 514
           syslog_tcp = 514
         }
+      } : {
+        enabled = false
       }
-      victim = {
-        public_ip  = aws_eip.victim_eip.public_ip
-        private_ip = aws_instance.victim.private_ip
+      victim = var.enable_victim ? {
+        public_ip  = aws_eip.victim_eip[0].public_ip
+        private_ip = aws_instance.victim[0].private_ip
         ssh_key    = "~/.ssh/${var.key_name}"
         ssh_user   = "ec2-user"
         instance_type = var.victim_instance_type
+        enabled    = true
         ports = {
           ssh = 22
           rdp = 3389
           http = 80
         }
+      } : {
+        enabled = false
       }
       kali = var.enable_kali ? {
         public_ip  = aws_eip.kali_eip[0].public_ip

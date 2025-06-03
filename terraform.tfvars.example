@@ -22,5 +22,7 @@ kali_instance_type = "t3.micro"
 # anthropic_api_key = "sk-ant-1234567890abcdef..."  # Get from https://console.anthropic.com/
 # claude_model      = "claude-3-sonnet-20240229"    # Options: claude-3-sonnet, claude-3-haiku, etc.
 
-# Red Team Configuration
-enable_kali       = false  # Set to true to deploy Kali Linux instance for red team operations
+# Instance Configuration - Control which instances to deploy
+enable_siem   = true   # Deploy SIEM (qRadar) instance for log analysis
+enable_victim = true   # Deploy victim instance for generating security events  
+enable_kali   = false  # Deploy Kali Linux instance for red team operations

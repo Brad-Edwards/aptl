@@ -82,6 +82,14 @@ resource "aws_security_group" "siem_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
+  # Allow all traffic from within the subnet (for lab connectivity)
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.subnet_cidr]
+  }
+
   # Allow syslog from victim machine
   ingress {
     from_port       = 514
@@ -143,6 +151,14 @@ resource "aws_security_group" "victim_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
+  # Allow all traffic from within the subnet (for lab connectivity)
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.subnet_cidr]
+  }
+
   # Allow all outbound traffic
   egress {
     from_port   = 0
@@ -170,6 +186,14 @@ resource "aws_security_group" "kali_sg" {
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [var.allowed_ip]
+  }
+
+  # Allow all traffic from within the subnet (for lab connectivity)
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.subnet_cidr]
   }
 
   # Allow all outbound traffic

@@ -766,6 +766,8 @@ resource "aws_eip" "kali_eip" {
     Environment = "poc"
   }
 }
+
+# Existing lab_connections.txt file (keep for backward compatibility)
 resource "local_file" "connection_info" {
   filename = "${path.module}/lab_connections.txt"
   content = <<-EOF
@@ -805,4 +807,74 @@ ${var.enable_kali ? "Red Team Operations:\n  SSH to Kali: ssh -i ~/.ssh/${var.ke
 
 Generated: ${timestamp()}
 EOF
+}
+
+# New JSON configuration file for MCP server
+resource "local_file" "lab_config_json" {
+  filename = "${path.module}/lab_config.json"
+  content = jsonencode({
+    version   = "1.0"
+    generated = timestamp()
+    lab = {
+      name        = "APTL Purple Team Lab"
+      vpc_cidr    = aws_vpc.purple_team_vpc.cidr_block
+      project     = var.project_name
+      environment = var.environment
+    }
+    instances = {
+      siem = {
+        public_ip     = aws_eip.siem_eip.public_ip
+        private_ip    = aws_instance.siem.private_ip
+        ssh_key       = "~/.ssh/${var.key_name}"
+        ssh_user      = "ec2-user"
+        instance_type = var.siem_instance_type
+        ports = {
+          ssh        = 22
+          https      = 443
+          syslog_udp = 514
+          syslog_tcp = 514
+        }
+      }
+      victim = {
+        public_ip     = aws_eip.victim_eip.public_ip
+        private_ip    = aws_instance.victim.private_ip
+        ssh_key       = "~/.ssh/${var.key_name}"
+        ssh_user      = "ec2-user"
+        instance_type = var.victim_instance_type
+        ports = {
+          ssh  = 22
+          rdp  = 3389
+          http = 80
+        }
+      }
+      kali = var.enable_kali ? {
+        public_ip     = aws_eip.kali_eip[0].public_ip
+        private_ip    = aws_instance.kali[0].private_ip
+        ssh_key       = "~/.ssh/${var.key_name}"
+        ssh_user      = "kali"
+        instance_type = var.kali_instance_type
+        enabled       = true
+        ports = {
+          ssh = 22
+        }
+      } : {
+        enabled = false
+      }
+    }
+    network = {
+      vpc_cidr    = aws_vpc.purple_team_vpc.cidr_block
+      subnet_cidr = aws_subnet.public_subnet.cidr_block
+      allowed_ip  = var.allowed_ip
+    }
+    mcp = {
+      server_name      = "kali-red-team"
+      allowed_targets  = [aws_subnet.public_subnet.cidr_block]
+      max_session_time = 3600
+      audit_enabled    = true
+      log_level       = "info"
+    }
+  })
+  
+  # Make file readable only by owner for security
+  file_permission = "0600"
 }

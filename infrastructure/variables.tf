@@ -23,7 +23,6 @@ variable "availability_zone" {
 variable "allowed_ip" {
   description = "IP address allowed to access the instances (CIDR notation)"
   type        = string
-  sensitive   = true
 }
 
 variable "key_name" {
@@ -111,7 +110,7 @@ variable "claude_model" {
 variable "enable_kali" {
   description = "Whether to create the Kali Linux instance for red team operations"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "enable_siem" {
@@ -126,12 +125,6 @@ variable "enable_victim" {
   default     = true
 }
 
-variable "kali_ami_id" {
-  description = "AMI ID for the Kali Linux instance (same as kali_ami)"
-  type        = string
-  default     = ""
-}
-
 variable "project_name" {
   description = "Name of the project for resource tagging"
   type        = string
@@ -142,4 +135,4 @@ variable "environment" {
   description = "Environment name for resource tagging"
   type        = string
   default     = "lab"
-}
+} 

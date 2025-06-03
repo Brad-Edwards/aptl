@@ -342,3 +342,32 @@ files/
 
 # Cline
 cline_docs/
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Terraform output files containing IP addresses
+infrastructure/lab_connections.txt
+infrastructure/lab_config.json
+
+# Log files
+*.log

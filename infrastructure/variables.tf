@@ -23,7 +23,6 @@ variable "availability_zone" {
 variable "allowed_ip" {
   description = "IP address allowed to access the instances (CIDR notation)"
   type        = string
-  sensitive   = true
 }
 
 variable "key_name" {
@@ -36,6 +35,12 @@ variable "siem_ami" {
   type        = string
 }
 
+variable "siem_instance_type" {
+  description = "Instance type for the SIEM instance"
+  type        = string
+  default     = "t3a.2xlarge"
+}
+
 variable "victim_ami" {
   description = "AMI ID for the victim instance"
   type        = string
@@ -43,6 +48,27 @@ variable "victim_ami" {
 
 variable "victim_instance_type" {
   description = "Instance type for the victim machine"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "kali_ami" {
+  description = "AMI ID for the Kali Linux instance"
+  type        = string
+}
+
+variable "kali_ami_alias" {
+  description = "Alias for the Kali Linux AMI"
+  type        = string
+}
+
+variable "kali_product_code" {
+  description = "Product code for the Kali Linux AMI"
+  type        = string
+}
+
+variable "kali_instance_type" {
+  description = "Instance type for the Kali Linux instance"
   type        = string
   default     = "t3.micro"
 }
@@ -79,4 +105,34 @@ variable "claude_model" {
   description = "Claude model to use (e.g., claude-3-sonnet-20240229, claude-3-haiku-20240307)"
   type        = string
   default     = "claude-3-sonnet-20240229"
+}
+
+variable "enable_kali" {
+  description = "Whether to create the Kali Linux instance for red team operations"
+  type        = bool
+  default     = true
+}
+
+variable "enable_siem" {
+  description = "Whether to create the SIEM (qRadar) instance"
+  type        = bool
+  default     = true
+}
+
+variable "enable_victim" {
+  description = "Whether to create the victim instance for testing"
+  type        = bool
+  default     = true
+}
+
+variable "project_name" {
+  description = "Name of the project for resource tagging"
+  type        = string
+  default     = "aptl"
+}
+
+variable "environment" {
+  description = "Environment name for resource tagging"
+  type        = string
+  default     = "lab"
 } 

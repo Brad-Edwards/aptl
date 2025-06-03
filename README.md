@@ -89,7 +89,16 @@ You must obtain the qRadar CE ISO file and license key before proceeding.
 4. Create files directory: `mkdir files`
 5. Place both files in the `files/` directory
 
-### 3. Deploy Infrastructure
+### 3. Subscribe to Kali Linux in AWS Marketplace
+
+1. Go to [AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-fznsw3f7mq7to?sr=0-1&ref_=beagle&applicationId=AWSMPContessa)
+2. Click "Subscribe"
+3. Wait until setup is done
+4. Click "Continue to Configuration"
+5. Copy the AMI ID, AMI Alias, and Product Code
+6. Add the values to `terraform.tfvars`
+
+### 4. Deploy Infrastructure
 
 ```bash
 terraform init

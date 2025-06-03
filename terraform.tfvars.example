@@ -5,8 +5,13 @@ availability_zone = "us-east-1a"
 allowed_ip        = "YOUR_IP/32"  # Replace with your IP in CIDR notation
 key_name          = "purple-team-key"
 siem_ami          = "ami-0b8c2bd77c5e270cf"  # RHEL 8.8 x86_64
+siem_instance_type = "t3.micro"
 victim_ami        = "ami-0b8c2bd77c5e270cf"  # RHEL 8.8 x86_64
 victim_instance_type = "t3.micro"
+kali_ami          = "ami-XXXXXXXXXXXXXXXXX"  # Kali Linux 2024.2 x86_64
+kali_ami_alias    = "/aws/service/marketplace/prod-XXXXX/XXXXXXX"  # Kali Linux 2024.2 x86_64
+kali_product_code = "XXXXXXXXXXXXXXXXX"  # Kali Linux 2024.2 x86_64
+kali_instance_type = "t3.micro"
 # aws_profile       = "your-aws-profile"  # Optional: specify AWS CLI profile
 
 # OpenAI API Configuration

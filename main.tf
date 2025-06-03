@@ -176,7 +176,7 @@ resource "aws_security_group" "victim_sg" {
 # SIEM Instance
 resource "aws_instance" "siem" {
   ami           = var.siem_ami
-  instance_type = "t3a.2xlarge"  # 8 vCPU, 32GB RAM - meets minimum requirements
+  instance_type = var.siem_instance_type
   subnet_id     = aws_subnet.public_subnet.id
   key_name      = var.key_name
 

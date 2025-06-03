@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BUSL-1.1
+
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { z } from 'zod';

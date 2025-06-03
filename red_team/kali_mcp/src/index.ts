@@ -151,10 +151,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         let actualUsername: string;
 
         // Auto-detect instance and credentials
-        if (labConfig.instances.siem.public_ip === target || labConfig.instances.siem.private_ip === target) {
+        if ('ssh_key' in labConfig.instances.siem && 
+            (labConfig.instances.siem.public_ip === target || labConfig.instances.siem.private_ip === target)) {
           sshKey = labConfig.instances.siem.ssh_key;
           actualUsername = labConfig.instances.siem.ssh_user;
-        } else if (labConfig.instances.victim.public_ip === target || labConfig.instances.victim.private_ip === target) {
+        } else if ('ssh_key' in labConfig.instances.victim && 
+                   (labConfig.instances.victim.public_ip === target || labConfig.instances.victim.private_ip === target)) {
           sshKey = labConfig.instances.victim.ssh_key;
           actualUsername = labConfig.instances.victim.ssh_user;
         } else if ('ssh_key' in labConfig.instances.kali && 

@@ -205,6 +205,7 @@ resource "aws_security_group" "kali_sg" {
 
 # SIEM Instance
 resource "aws_instance" "siem" {
+  count         = var.enable_siem ? 1 : 0
   ami           = var.siem_ami
   instance_type = var.siem_instance_type
   subnet_id     = aws_subnet.public_subnet.id
@@ -364,6 +365,7 @@ resource "aws_instance" "siem" {
 
 # EBS Volume for qRadar /store
 resource "aws_ebs_volume" "siem_store" {
+  count             = var.enable_siem ? 1 : 0
   availability_zone = var.availability_zone
   size              = 200  # GB for /store - adjust as needed
   type              = "gp3"
@@ -376,13 +378,15 @@ resource "aws_ebs_volume" "siem_store" {
 }
 
 resource "aws_volume_attachment" "siem_store_attachment" {
+  count       = var.enable_siem ? 1 : 0
   device_name = "/dev/sdf"
-  volume_id   = aws_ebs_volume.siem_store.id
-  instance_id = aws_instance.siem.id
+  volume_id   = aws_ebs_volume.siem_store[0].id
+  instance_id = aws_instance.siem[0].id
 }
 
 # Victim Instance
 resource "aws_instance" "victim" {
+  count         = var.enable_victim ? 1 : 0
   ami           = var.victim_ami
   instance_type = var.victim_instance_type
   subnet_id     = aws_subnet.public_subnet.id
@@ -649,7 +653,8 @@ resource "aws_instance" "victim" {
 }
 
 resource "aws_eip" "siem_eip" {
-  instance = aws_instance.siem.id
+  count    = var.enable_siem ? 1 : 0
+  instance = aws_instance.siem[0].id
   domain   = "vpc"
 
   tags = {
@@ -660,7 +665,8 @@ resource "aws_eip" "siem_eip" {
 }
 
 resource "aws_eip" "victim_eip" {
-  instance = aws_instance.victim.id
+  count    = var.enable_victim ? 1 : 0
+  instance = aws_instance.victim[0].id
   domain   = "vpc"
 
   tags = {

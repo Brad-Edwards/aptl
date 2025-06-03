@@ -114,6 +114,18 @@ variable "enable_kali" {
   default     = false
 }
 
+variable "enable_siem" {
+  description = "Whether to create the SIEM (qRadar) instance"
+  type        = bool
+  default     = true
+}
+
+variable "enable_victim" {
+  description = "Whether to create the victim instance for testing"
+  type        = bool
+  default     = true
+}
+
 variable "kali_ami_id" {
   description = "AMI ID for the Kali Linux instance (same as kali_ami)"
   type        = string

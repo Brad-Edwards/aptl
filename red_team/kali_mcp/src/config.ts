@@ -2,6 +2,8 @@
 
 import { z } from 'zod';
 import { execSync } from 'child_process';
+import { existsSync } from 'fs';
+import { dirname, resolve } from 'path';
 import { expandTilde } from './utils.js';
 
 // Schema for individual instance configuration
@@ -59,14 +61,62 @@ export type LabConfig = z.infer<typeof LabConfigSchema>;
 export type Instance = z.infer<typeof InstanceSchema>;
 
 /**
+ * Find the Terraform root directory by searching upward for terraform files
+ */
+function findTerraformRoot(): string {
+  let currentDir = process.cwd();
+  
+  // If TERRAFORM_ROOT environment variable is set, use it
+  if (process.env.TERRAFORM_ROOT) {
+    const terraformRoot = resolve(process.env.TERRAFORM_ROOT);
+    if (existsSync(resolve(terraformRoot, 'main.tf')) || existsSync(resolve(terraformRoot, 'outputs.tf'))) {
+      return terraformRoot;
+    }
+    throw new Error(`TERRAFORM_ROOT environment variable set to ${terraformRoot}, but no terraform files found`);
+  }
+  
+  // Search upward for terraform files
+  const maxDepth = 10; // Prevent infinite loops
+  let depth = 0;
+  
+  while (depth < maxDepth) {
+    // Check for terraform files in current directory
+    const mainTf = resolve(currentDir, 'main.tf');
+    const outputsTf = resolve(currentDir, 'outputs.tf');
+    
+    if (existsSync(mainTf) || existsSync(outputsTf)) {
+      return currentDir;
+    }
+    
+    // Move up one directory
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      // Reached filesystem root
+      break;
+    }
+    
+    currentDir = parentDir;
+    depth++;
+  }
+  
+  throw new Error(
+    'Could not find Terraform root directory. Searched for main.tf or outputs.tf in current directory and parents. ' +
+    'You can set TERRAFORM_ROOT environment variable to specify the location.'
+  );
+}
+
+/**
  * Load lab configuration from Terraform output
  */
 export async function loadLabConfig(): Promise<LabConfig> {
   try {
+    // Find the terraform root directory
+    const terraformRoot = findTerraformRoot();
+    
     // Get terraform output as JSON
     const terraformOutput = execSync('terraform output -json lab_config_json', {
       encoding: 'utf8',
-      cwd: process.cwd(),
+      cwd: terraformRoot,
       timeout: 10000
     });
 

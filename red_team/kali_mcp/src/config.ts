@@ -18,8 +18,8 @@ const InstanceSchema = z.object({
   ports: z.record(z.number()).optional()
 });
 
-// Schema for disabled Kali instance
-const DisabledKaliSchema = z.object({
+// Schema for disabled instance
+const DisabledInstanceSchema = z.object({
   enabled: z.literal(false)
 });
 
@@ -50,9 +50,9 @@ const LabConfigSchema = z.object({
     environment: z.string().optional()
   }),
   instances: z.object({
-    siem: InstanceSchema,
-    victim: InstanceSchema,
-    kali: z.union([InstanceSchema, DisabledKaliSchema])
+    siem: z.union([InstanceSchema, DisabledInstanceSchema]),
+    victim: z.union([InstanceSchema, DisabledInstanceSchema]),
+    kali: z.union([InstanceSchema, DisabledInstanceSchema])
   }),
   network: NetworkSchema,
   mcp: MCPConfigSchema
@@ -129,10 +129,10 @@ export async function loadLabConfig(): Promise<LabConfig> {
     const config = LabConfigSchema.parse(configJson);
 
     // Expand tilde paths for SSH keys
-    if (config.instances.siem.ssh_key.startsWith('~')) {
+    if ('ssh_key' in config.instances.siem && config.instances.siem.ssh_key.startsWith('~')) {
       config.instances.siem.ssh_key = expandTilde(config.instances.siem.ssh_key);
     }
-    if (config.instances.victim.ssh_key.startsWith('~')) {
+    if ('ssh_key' in config.instances.victim && config.instances.victim.ssh_key.startsWith('~')) {
       config.instances.victim.ssh_key = expandTilde(config.instances.victim.ssh_key);
     }
     if ('ssh_key' in config.instances.kali && config.instances.kali.ssh_key.startsWith('~')) {

@@ -76,8 +76,16 @@ function findTerraformRoot(): string {
     const mainTf = resolve(currentDir, 'main.tf');
     const outputsTf = resolve(currentDir, 'outputs.tf');
     
+    // Check for infrastructure directory with terraform files
+    const infraMainTf = resolve(currentDir, 'infrastructure', 'main.tf');
+    const infraOutputsTf = resolve(currentDir, 'infrastructure', 'outputs.tf');
+    
     if (existsSync(mainTf) || existsSync(outputsTf)) {
       return currentDir;
+    }
+    
+    if (existsSync(infraMainTf) || existsSync(infraOutputsTf)) {
+      return resolve(currentDir, 'infrastructure');
     }
     
     // Move up one directory
@@ -92,7 +100,7 @@ function findTerraformRoot(): string {
   }
   
   throw new Error(
-    'Could not find Terraform root directory. Searched for main.tf or outputs.tf in current directory and parents.'
+    'Could not find Terraform root directory. Searched for main.tf or outputs.tf in current directory, infrastructure/ subdirectory, and parents.'
   );
 }
 

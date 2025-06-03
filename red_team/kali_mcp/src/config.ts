@@ -8,7 +8,7 @@ import { dirname, resolve } from 'path';
 import { expandTilde } from './utils.js';
 
 // Schema for individual instance configuration
-const InstanceSchema = z.object({
+export const InstanceSchema = z.object({
   public_ip: z.string().ip(),
   private_ip: z.string().ip(),
   ssh_key: z.string(),
@@ -19,7 +19,7 @@ const InstanceSchema = z.object({
 });
 
 // Schema for disabled instance
-const DisabledInstanceSchema = z.object({
+export const DisabledInstanceSchema = z.object({
   enabled: z.literal(false)
 });
 
@@ -171,4 +171,39 @@ function isIpInCidr(ip: string, cidr: string): boolean {
  */
 function ipToNumber(ip: string): number {
   return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+}
+
+/**
+ * Select SSH credentials based on target IP and lab configuration
+ */
+export function selectCredentials(target: string, config: LabConfig, defaultUsername: string = 'kali'): { sshKey: string; username: string } {
+  // Auto-detect instance and credentials
+  if ('ssh_key' in config.instances.siem && 
+      (config.instances.siem.public_ip === target || config.instances.siem.private_ip === target)) {
+    return {
+      sshKey: config.instances.siem.ssh_key,
+      username: config.instances.siem.ssh_user
+    };
+  } else if ('ssh_key' in config.instances.victim && 
+             (config.instances.victim.public_ip === target || config.instances.victim.private_ip === target)) {
+    return {
+      sshKey: config.instances.victim.ssh_key,
+      username: config.instances.victim.ssh_user
+    };
+  } else if ('ssh_key' in config.instances.kali && 
+             (config.instances.kali.public_ip === target || config.instances.kali.private_ip === target)) {
+    return {
+      sshKey: config.instances.kali.ssh_key,
+      username: config.instances.kali.ssh_user
+    };
+  } else {
+    // Default to Kali credentials for unknown targets in allowed ranges
+    if (!('ssh_key' in config.instances.kali)) {
+      throw new Error('Kali instance not available for SSH operations');
+    }
+    return {
+      sshKey: config.instances.kali.ssh_key,
+      username: defaultUsername
+    };
+  }
 } 

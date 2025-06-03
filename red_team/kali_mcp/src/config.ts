@@ -67,15 +67,6 @@ export type Instance = z.infer<typeof InstanceSchema>;
 function findTerraformRoot(): string {
   let currentDir = process.cwd();
   
-  // If TERRAFORM_ROOT environment variable is set, use it
-  if (process.env.TERRAFORM_ROOT) {
-    const terraformRoot = resolve(process.env.TERRAFORM_ROOT);
-    if (existsSync(resolve(terraformRoot, 'main.tf')) || existsSync(resolve(terraformRoot, 'outputs.tf'))) {
-      return terraformRoot;
-    }
-    throw new Error(`TERRAFORM_ROOT environment variable set to ${terraformRoot}, but no terraform files found`);
-  }
-  
   // Search upward for terraform files
   const maxDepth = 10; // Prevent infinite loops
   let depth = 0;
@@ -101,8 +92,7 @@ function findTerraformRoot(): string {
   }
   
   throw new Error(
-    'Could not find Terraform root directory. Searched for main.tf or outputs.tf in current directory and parents. ' +
-    'You can set TERRAFORM_ROOT environment variable to specify the location.'
+    'Could not find Terraform root directory. Searched for main.tf or outputs.tf in current directory and parents.'
   );
 }
 

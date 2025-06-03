@@ -1,10 +1,42 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
 import { z } from 'zod';
+import { execSync } from 'child_process';
+import { expandTilde } from './utils.js';
 
-// Zod schema for lab configuration validation
+// Schema for individual instance configuration
+const InstanceSchema = z.object({
+  public_ip: z.string().ip(),
+  private_ip: z.string().ip(),
+  ssh_key: z.string(),
+  ssh_user: z.string(),
+  instance_type: z.string(),
+  enabled: z.boolean().optional().default(true),
+  ports: z.record(z.number()).optional()
+});
+
+// Schema for disabled Kali instance
+const DisabledKaliSchema = z.object({
+  enabled: z.literal(false)
+});
+
+// Schema for network configuration
+const NetworkSchema = z.object({
+  vpc_cidr: z.string(),
+  subnet_cidr: z.string(),
+  allowed_ip: z.string()
+});
+
+// Schema for MCP server configuration
+const MCPConfigSchema = z.object({
+  server_name: z.string(),
+  allowed_targets: z.array(z.string()),
+  max_session_time: z.number(),
+  audit_enabled: z.boolean(),
+  log_level: z.string()
+});
+
+// Main lab configuration schema
 const LabConfigSchema = z.object({
   version: z.string(),
   generated: z.string(),
@@ -12,187 +44,90 @@ const LabConfigSchema = z.object({
     name: z.string(),
     vpc_cidr: z.string(),
     project: z.string().optional(),
-    environment: z.string().optional(),
+    environment: z.string().optional()
   }),
   instances: z.object({
-    siem: z.object({
-      public_ip: z.string(),
-      private_ip: z.string(),
-      ssh_key: z.string(),
-      ssh_user: z.string(),
-      instance_type: z.string(),
-      ports: z.object({
-        ssh: z.number(),
-        https: z.number(),
-        syslog_udp: z.number(),
-        syslog_tcp: z.number(),
-      }),
-    }),
-    victim: z.object({
-      public_ip: z.string(),
-      private_ip: z.string(),
-      ssh_key: z.string(),
-      ssh_user: z.string(),
-      instance_type: z.string(),
-      ports: z.object({
-        ssh: z.number(),
-        rdp: z.number(),
-        http: z.number(),
-      }),
-    }),
-    kali: z.union([
-      z.object({
-        public_ip: z.string(),
-        private_ip: z.string(),
-        ssh_key: z.string(),
-        ssh_user: z.string(),
-        instance_type: z.string(),
-        enabled: z.literal(true),
-        ports: z.object({
-          ssh: z.number(),
-        }),
-      }),
-      z.object({
-        enabled: z.literal(false),
-      }),
-    ]),
+    siem: InstanceSchema,
+    victim: InstanceSchema,
+    kali: z.union([InstanceSchema, DisabledKaliSchema])
   }),
-  network: z.object({
-    vpc_cidr: z.string(),
-    subnet_cidr: z.string(),
-    allowed_ip: z.string(),
-  }),
-  mcp: z.object({
-    server_name: z.string(),
-    allowed_targets: z.array(z.string()),
-    max_session_time: z.number(),
-    audit_enabled: z.boolean(),
-    log_level: z.string(),
-  }),
+  network: NetworkSchema,
+  mcp: MCPConfigSchema
 });
 
 export type LabConfig = z.infer<typeof LabConfigSchema>;
-export type KaliConfig = LabConfig['instances']['kali'] & { enabled: true };
+export type Instance = z.infer<typeof InstanceSchema>;
 
-export class ConfigError extends Error {
-  constructor(message: string, cause?: Error) {
-    super(message);
-    this.name = 'ConfigError';
-    this.cause = cause;
+/**
+ * Load lab configuration from Terraform output
+ */
+export async function loadLabConfig(): Promise<LabConfig> {
+  try {
+    // Get terraform output as JSON
+    const terraformOutput = execSync('terraform output -json lab_config_json', {
+      encoding: 'utf8',
+      cwd: process.cwd(),
+      timeout: 10000
+    });
+
+    // Parse the JSON (terraform output wraps the actual JSON in quotes)
+    const outputData = JSON.parse(terraformOutput.trim());
+    const configJson = JSON.parse(outputData);
+
+    // Validate the configuration
+    const config = LabConfigSchema.parse(configJson);
+
+    // Expand tilde paths for SSH keys
+    if (config.instances.siem.ssh_key.startsWith('~')) {
+      config.instances.siem.ssh_key = expandTilde(config.instances.siem.ssh_key);
+    }
+    if (config.instances.victim.ssh_key.startsWith('~')) {
+      config.instances.victim.ssh_key = expandTilde(config.instances.victim.ssh_key);
+    }
+    if ('ssh_key' in config.instances.kali && config.instances.kali.ssh_key.startsWith('~')) {
+      config.instances.kali.ssh_key = expandTilde(config.instances.kali.ssh_key);
+    }
+
+    return config;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to load lab configuration from Terraform: ${error.message}`);
+    }
+    throw new Error('Unknown error loading lab configuration');
   }
 }
 
-class ConfigManager {
-  private static instance: ConfigManager;
-  private config: LabConfig | null = null;
-
-  private constructor() {}
-
-  public static getInstance(): ConfigManager {
-    if (!ConfigManager.instance) {
-      ConfigManager.instance = new ConfigManager();
-    }
-    return ConfigManager.instance;
-  }
-
-  public loadConfig(configPath?: string): LabConfig {
-    if (this.config) {
-      return this.config;
-    }
-
-    const configFile = configPath || process.env['LAB_CONFIG'] || this.findConfigFile();
-    
-    try {
-      const configContent = readFileSync(configFile, 'utf-8');
-      const rawConfig = JSON.parse(configContent);
-      
-      this.config = LabConfigSchema.parse(rawConfig);
-      
-      // Validate that Kali is enabled
-      if (!this.config.instances.kali.enabled) {
-        throw new ConfigError('Kali instance is not enabled in the lab configuration');
-      }
-      
-      return this.config;
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new ConfigError(`Failed to load lab configuration from ${configFile}: ${error.message}`, error);
-      }
-      throw new ConfigError(`Failed to load lab configuration from ${configFile}: Unknown error`);
+/**
+ * Check if target is in allowed CIDR ranges
+ */
+export function isTargetAllowed(target: string, allowedCidrs: string[]): boolean {
+  // For now, implement basic CIDR checking
+  // In production, you'd use a proper CIDR library
+  for (const cidr of allowedCidrs) {
+    if (isIpInCidr(target, cidr)) {
+      return true;
     }
   }
-
-  public getKaliConfig(): KaliConfig {
-    const config = this.loadConfig();
-    if (!config.instances.kali.enabled) {
-      throw new ConfigError('Kali instance is not enabled');
-    }
-    return config.instances.kali as KaliConfig;
-  }
-
-  public isTargetAllowed(target: string): boolean {
-    const config = this.loadConfig();
-    const allowedTargets = config.mcp.allowed_targets;
-    
-    // Simple CIDR check for lab network
-    for (const cidr of allowedTargets) {
-      if (this.isIpInCidr(target, cidr)) {
-        return true;
-      }
-    }
-    
-    return false;
-  }
-
-  private findConfigFile(): string {
-    // Look for config file in common locations
-    const possiblePaths = [
-      resolve(process.cwd(), 'lab_config.json'),
-      resolve(process.cwd(), '../../lab_config.json'),
-      resolve(process.cwd(), '../../../lab_config.json'),
-    ];
-
-    for (const path of possiblePaths) {
-      try {
-        readFileSync(path, 'utf-8');
-        return path;
-      } catch {
-        // Continue to next path
-      }
-    }
-
-    throw new ConfigError(
-      'Could not find lab_config.json. Please set LAB_CONFIG environment variable or ensure the file exists in the project root.'
-    );
-  }
-
-  private isIpInCidr(ip: string, cidr: string): boolean {
-    // Simple implementation for lab network validation
-    const parts = cidr.split('/');
-    if (parts.length !== 2) return false;
-    
-    const [network, prefixStr] = parts;
-    if (!network || !prefixStr) return false;
-    
-    const prefix = parseInt(prefixStr, 10);
-    
-    if (prefix === 32) {
-      return ip === network;
-    }
-    
-    // For lab subnets, do simple prefix matching
-    const networkOctets = network.split('.');
-    const ipOctets = ip.split('.');
-    
-    if (networkOctets.length !== 4 || ipOctets.length !== 4) return false;
-    
-    // Check the first 3 octets for /24 networks (typical lab setup)
-    if (prefix >= 24) {
-      return networkOctets.slice(0, 3).join('.') === ipOctets.slice(0, 3).join('.');
-    }
-    
-    return true; // Allow broader ranges for simplicity
-  }
+  return false;
 }
 
-export default ConfigManager; 
+/**
+ * Basic CIDR check (simplified implementation)
+ */
+function isIpInCidr(ip: string, cidr: string): boolean {
+  const [network, prefixLength] = cidr.split('/');
+  const prefix = parseInt(prefixLength, 10);
+  
+  const ipNum = ipToNumber(ip);
+  const networkNum = ipToNumber(network);
+  const mask = (0xffffffff << (32 - prefix)) >>> 0;
+  
+  return (ipNum & mask) === (networkNum & mask);
+}
+
+/**
+ * Convert IP address to number
+ */
+function ipToNumber(ip: string): number {
+  return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+} 

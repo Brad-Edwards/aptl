@@ -8,23 +8,38 @@
  * in the APTL (Advanced Purple Team Lab) environment.
  */
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+} from '@modelcontextprotocol/sdk/types.js';
+import { loadLabConfig, isTargetAllowed, type LabConfig } from './config.js';
+import { SSHConnectionManager } from './ssh.js';
 
-import ConfigManager, { ConfigError } from './config.js';
-import { KaliConnection, SSHError } from './ssh.js';
+// Global configuration and SSH manager
+let labConfig: LabConfig;
+let sshManager: SSHConnectionManager;
+
+// Initialize configuration and SSH manager
+async function initialize() {
+  try {
+    labConfig = await loadLabConfig();
+    sshManager = new SSHConnectionManager();
+    console.error(`[MCP] Initialized with lab: ${labConfig.lab.name}`);
+  } catch (error) {
+    console.error('[MCP] Failed to initialize:', error);
+    process.exit(1);
+  }
+}
 
 /**
  * Create MCP server with tools for Kali Linux operations
  */
 const server = new Server(
   {
-    name: "APTL Kali MCP Server",
-    version: "0.1.0",
+    name: 'kali-red-team',
+    version: '1.0.0',
   },
   {
     capabilities: {
@@ -40,54 +55,37 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "kali_info",
-        description: "Get basic system information from the Kali instance",
+        name: 'kali_info',
+        description: 'Get information about the Kali Linux instance in the lab',
         inputSchema: {
-          type: "object",
+          type: 'object',
           properties: {},
-          required: []
-        }
+        },
       },
       {
-        name: "run_command",
-        description: "Execute a command on the Kali instance",
+        name: 'run_command',
+        description: 'Execute a command on a target instance in the lab',
         inputSchema: {
-          type: "object",
-          properties: {
-            command: {
-              type: "string",
-              description: "Command to execute on Kali Linux"
-            },
-            timeout: {
-              type: "number",
-              description: "Timeout in seconds (default: 30)",
-              default: 30
-            }
-          },
-          required: ["command"]
-        }
-      },
-      {
-        name: "network_scan",
-        description: "Perform a basic network scan using nmap",
-        inputSchema: {
-          type: "object",
+          type: 'object',
           properties: {
             target: {
-              type: "string",
-              description: "Target IP or CIDR range to scan"
+              type: 'string',
+              description: 'Target IP address or hostname',
             },
-            scan_type: {
-              type: "string",
-              description: "Type of scan (quick, tcp, udp, version)",
-              enum: ["quick", "tcp", "udp", "version"],
-              default: "quick"
-            }
+            command: {
+              type: 'string',
+              description: 'Command to execute',
+            },
+            username: {
+              type: 'string',
+              description: 'SSH username (optional, will auto-detect)',
+              default: 'kali',
+            },
           },
-          required: ["target"]
-        }
-      }
-    ]
+          required: ['target', 'command'],
+        },
+      },
+    ],
   };
 });
 
@@ -95,168 +93,124 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
  * Handler for executing tools
  */
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  try {
-    // Initialize configuration and connection
-    const configManager = ConfigManager.getInstance();
-    configManager.loadConfig(); // Validates Kali is enabled
-    
-    const connection = KaliConnection.fromConfig();
+  const { name, arguments: args } = request.params;
 
-    switch (request.params.name) {
-      case "kali_info": {
-        try {
-          const result = await connection.executeCommand('uname -a && whoami && pwd');
-          
-          return {
-            content: [{
-              type: "text",
-              text: `Kali System Information:\n\n${result.stdout.trim()}\n\nConnection successful!`
-            }]
-          };
-        } catch (error) {
-          if (error instanceof SSHError) {
-            return {
-              content: [{
-                type: "text",
-                text: `Failed to connect to Kali: ${error.message}\n\nThis is expected if the lab is not currently deployed.`
-              }]
-            };
-          }
-          throw error;
-        } finally {
-          await connection.disconnect();
-        }
+  switch (name) {
+    case 'kali_info': {
+      if (!('enabled' in labConfig.instances.kali) || !labConfig.instances.kali.enabled) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Kali instance is not enabled in the current lab configuration.',
+            },
+          ],
+        };
       }
 
-      case "run_command": {
-        const command = String(request.params.arguments?.command);
-        const timeoutSec = Number(request.params.arguments?.timeout) || 30;
-        
-        if (!command) {
-          throw new Error("Command is required");
-        }
-
-        try {
-          const result = await connection.executeCommand(command, timeoutSec * 1000);
-          
-          let output = `Command: ${command}\n`;
-          output += `Exit Code: ${result.code}\n\n`;
-          
-          if (result.stdout) {
-            output += `STDOUT:\n${result.stdout}\n`;
-          }
-          
-          if (result.stderr) {
-            output += `STDERR:\n${result.stderr}\n`;
-          }
-
-          return {
-            content: [{
-              type: "text",
-              text: output
-            }]
-          };
-        } catch (error) {
-          if (error instanceof SSHError) {
-            return {
-              content: [{
-                type: "text",
-                text: `Failed to execute command: ${error.message}\n\nThis is expected if the lab is not currently deployed.`
-              }]
-            };
-          }
-          throw error;
-        } finally {
-          await connection.disconnect();
-        }
-      }
-
-      case "network_scan": {
-        const target = String(request.params.arguments?.target);
-        const scanType = String(request.params.arguments?.scan_type) || "quick";
-        
-        if (!target) {
-          throw new Error("Target is required");
-        }
-
-        // Validate target is allowed
-        if (!configManager.isTargetAllowed(target)) {
-          throw new Error(`Target ${target} is not within allowed lab networks`);
-        }
-
-        // Build nmap command based on scan type
-        let nmapCmd = "nmap";
-        switch (scanType) {
-          case "quick":
-            nmapCmd += " -T4 -F";
-            break;
-          case "tcp":
-            nmapCmd += " -sS -T4";
-            break;
-          case "udp":
-            nmapCmd += " -sU -T4 --top-ports 100";
-            break;
-          case "version":
-            nmapCmd += " -sV -T4";
-            break;
-          default:
-            throw new Error(`Unknown scan type: ${scanType}`);
-        }
-        
-        nmapCmd += ` ${target}`;
-
-        try {
-          const result = await connection.executeCommand(nmapCmd, 60000); // 60 second timeout
-          
-          let output = `Network Scan Results\n`;
-          output += `Command: ${nmapCmd}\n`;
-          output += `Target: ${target}\n`;
-          output += `Scan Type: ${scanType}\n\n`;
-          
-          if (result.stdout) {
-            output += `Results:\n${result.stdout}\n`;
-          }
-          
-          if (result.stderr) {
-            output += `Warnings/Errors:\n${result.stderr}\n`;
-          }
-
-          return {
-            content: [{
-              type: "text",
-              text: output
-            }]
-          };
-        } catch (error) {
-          if (error instanceof SSHError) {
-            return {
-              content: [{
-                type: "text",
-                text: `Failed to perform network scan: ${error.message}\n\nThis is expected if the lab is not currently deployed.`
-              }]
-            };
-          }
-          throw error;
-        } finally {
-          await connection.disconnect();
-        }
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${request.params.name}`);
-    }
-  } catch (error) {
-    if (error instanceof ConfigError) {
+      const kaliInstance = labConfig.instances.kali;
       return {
-        content: [{
-          type: "text",
-          text: `Configuration error: ${error.message}\n\nPlease ensure lab_config.json exists and Kali is enabled.`
-        }]
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              public_ip: kaliInstance.public_ip,
+              private_ip: kaliInstance.private_ip,
+              ssh_user: kaliInstance.ssh_user,
+              instance_type: kaliInstance.instance_type,
+              lab_name: labConfig.lab.name,
+              vpc_cidr: labConfig.network.vpc_cidr,
+            }, null, 2),
+          },
+        ],
       };
     }
-    
-    // Re-throw other errors for proper error handling
-    throw error;
+
+    case 'run_command': {
+      const { target, command, username = 'kali' } = args as {
+        target: string;
+        command: string;
+        username?: string;
+      };
+
+      // Validate target is allowed
+      if (!isTargetAllowed(target, labConfig.mcp.allowed_targets)) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error: Target ${target} is not in allowed network ranges: ${labConfig.mcp.allowed_targets.join(', ')}`,
+            },
+          ],
+        };
+      }
+
+      try {
+        // Determine which instance to use for SSH key
+        let sshKey: string;
+        let actualUsername: string;
+
+        // Auto-detect instance and credentials
+        if (labConfig.instances.siem.public_ip === target || labConfig.instances.siem.private_ip === target) {
+          sshKey = labConfig.instances.siem.ssh_key;
+          actualUsername = labConfig.instances.siem.ssh_user;
+        } else if (labConfig.instances.victim.public_ip === target || labConfig.instances.victim.private_ip === target) {
+          sshKey = labConfig.instances.victim.ssh_key;
+          actualUsername = labConfig.instances.victim.ssh_user;
+        } else if ('ssh_key' in labConfig.instances.kali && 
+                   (labConfig.instances.kali.public_ip === target || labConfig.instances.kali.private_ip === target)) {
+          sshKey = labConfig.instances.kali.ssh_key;
+          actualUsername = labConfig.instances.kali.ssh_user;
+        } else {
+          // Default to Kali credentials for unknown targets in allowed ranges
+          if (!('ssh_key' in labConfig.instances.kali)) {
+            throw new Error('Kali instance not available for SSH operations');
+          }
+          sshKey = labConfig.instances.kali.ssh_key;
+          actualUsername = username;
+        }
+
+        const result = await sshManager.executeCommand(
+          target,
+          actualUsername,
+          sshKey,
+          command
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                target,
+                command,
+                username: actualUsername,
+                success: true,
+                output: result,
+              }, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                target,
+                command,
+                username,
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+              }, null, 2),
+            },
+          ],
+        };
+      }
+    }
+
+    default:
+      throw new Error(`Unknown tool: ${name}`);
   }
 });
 
@@ -264,11 +218,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
  * Start the server using stdio transport
  */
 async function main() {
+  await initialize();
+  
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  console.error('[MCP] Kali Red Team server running on stdio');
 }
 
 main().catch((error) => {
-  console.error("Server error:", error);
+  console.error('[MCP] Fatal error:', error);
   process.exit(1);
 });

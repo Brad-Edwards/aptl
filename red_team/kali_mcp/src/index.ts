@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: BUSL-1.1
 
 /**
  * APTL Kali MCP Server

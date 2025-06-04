@@ -30,6 +30,28 @@ variable "key_name" {
   type        = string
 }
 
+# SIEM Selection Configuration
+variable "siem_type" {
+  description = "SIEM platform to deploy (splunk or qradar)"
+  type        = string
+  default     = "splunk"
+  validation {
+    condition     = contains(["splunk", "qradar"], var.siem_type)
+    error_message = "siem_type must be either 'splunk' or 'qradar'."
+  }
+}
+
+variable "splunk_ami" {
+  description = "AMI ID for the Splunk instance"
+  type        = string
+}
+
+variable "splunk_instance_type" {
+  description = "Instance type for the Splunk instance"
+  type        = string
+  default     = "c5.4xlarge"
+}
+
 variable "qradar_ami" {
   description = "AMI ID for the qRadar instance"
   type        = string
@@ -113,8 +135,8 @@ variable "enable_kali" {
   default     = true
 }
 
-variable "enable_qradar" {
-  description = "Whether to create the qRadar instance"
+variable "enable_siem" {
+  description = "Whether to create a SIEM instance (type controlled by siem_type variable)"
   type        = bool
   default     = true
 }

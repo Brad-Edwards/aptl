@@ -30,13 +30,13 @@ variable "key_name" {
   type        = string
 }
 
-variable "siem_ami" {
-  description = "AMI ID for the qRadar SIEM instance"
+variable "qradar_ami" {
+  description = "AMI ID for the qRadar instance"
   type        = string
 }
 
-variable "siem_instance_type" {
-  description = "Instance type for the SIEM instance"
+variable "qradar_instance_type" {
+  description = "Instance type for the qRadar instance"
   type        = string
   default     = "t3a.2xlarge"
 }
@@ -113,8 +113,8 @@ variable "enable_kali" {
   default     = true
 }
 
-variable "enable_siem" {
-  description = "Whether to create the SIEM (qRadar) instance"
+variable "enable_qradar" {
+  description = "Whether to create the qRadar instance"
   type        = bool
   default     = true
 }

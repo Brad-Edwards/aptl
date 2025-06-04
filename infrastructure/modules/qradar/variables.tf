@@ -10,13 +10,13 @@ variable "security_group_id" {
   type        = string
 }
 
-variable "siem_ami" {
-  description = "AMI ID for the qRadar SIEM instance"
+variable "qradar_ami" {
+  description = "AMI ID for the qRadar instance"
   type        = string
 }
 
-variable "siem_instance_type" {
-  description = "Instance type for the SIEM instance"
+variable "qradar_instance_type" {
+  description = "Instance type for the qRadar instance"
   type        = string
   default     = "t3a.2xlarge"
 }

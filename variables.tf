@@ -31,9 +31,21 @@ variable "key_name" {
   type        = string
 }
 
-variable "siem_ami" {
+variable "qradar_ami" {
   description = "AMI ID for the qRadar SIEM instance"
   type        = string
+}
+
+variable "splunk_ami" {
+  description = "AMI ID for the Splunk SIEM instance"
+  type        = string
+  default     = ""
+}
+
+variable "siem_type" {
+  description = "Which SIEM platform to deploy (splunk or qradar)"
+  type        = string
+  default     = "splunk"
 }
 
 variable "victim_ami" {

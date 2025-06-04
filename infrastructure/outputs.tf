@@ -12,14 +12,15 @@ output "lab_config_json" {
       environment = var.environment
     }
     instances = {
-      siem = var.enable_qradar ? {
-        public_ip     = module.qradar[0].public_ip
-        private_ip    = module.qradar[0].private_ip
+      siem = local.active_siem != null ? {
+        public_ip     = local.active_siem.public_ip
+        private_ip    = local.active_siem.private_ip
         ssh_key       = "~/.ssh/${var.key_name}"
-        ssh_user      = module.qradar[0].ssh_user
-        instance_type = module.qradar[0].instance_type
+        ssh_user      = local.active_siem.ssh_user
+        instance_type = local.active_siem.instance_type
         enabled       = true
-        ports         = module.qradar[0].ports
+        ports         = local.active_siem.ports
+        type          = var.siem_type
       } : {
         public_ip     = null
         private_ip    = null
@@ -28,6 +29,7 @@ output "lab_config_json" {
         instance_type = null
         enabled       = false
         ports         = null
+        type          = var.siem_type
       }
       victim = var.enable_victim ? {
         public_ip     = module.victim[0].public_ip
@@ -80,12 +82,13 @@ output "lab_config_json" {
 }
 
 # Individual outputs for convenience
-output "qradar_info" {
-  description = "qRadar instance information"
-  value = var.enable_qradar ? {
-    public_ip  = module.qradar[0].public_ip
-    private_ip = module.qradar[0].private_ip
-    ssh_command = "ssh -i ~/.ssh/${var.key_name} ${module.qradar[0].ssh_user}@${module.qradar[0].public_ip}"
+output "siem_info" {
+  description = "Active SIEM instance information"
+  value = local.active_siem != null ? {
+    type        = var.siem_type
+    public_ip   = local.active_siem.public_ip
+    private_ip  = local.active_siem.private_ip
+    ssh_command = "ssh -i ~/.ssh/${var.key_name} ${local.active_siem.ssh_user}@${local.active_siem.public_ip}"
   } : null
 }
 

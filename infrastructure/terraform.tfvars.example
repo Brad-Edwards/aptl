@@ -4,8 +4,18 @@ subnet_cidr       = "10.0.1.0/24"
 availability_zone = "us-east-1a"
 allowed_ip        = "YOUR_IP/32"  # Replace with your IP in CIDR notation
 key_name          = "purple-team-key"
+
+# SIEM Configuration
+siem_type = "splunk"  # Options: "splunk" (default) or "qradar"
+
+# Splunk Configuration (when siem_type = "splunk")
+splunk_ami = "ami-0b8c2bd77c5e270cf"  # RHEL 8.8 x86_64
+splunk_instance_type = "c5.4xlarge"
+
+# qRadar Configuration (when siem_type = "qradar")
 qradar_ami          = "ami-0b8c2bd77c5e270cf"  # RHEL 8.8 x86_64
 qradar_instance_type = "t3a.2xlarge"
+
 victim_ami        = "ami-0b8c2bd77c5e270cf"  # RHEL 8.8 x86_64
 victim_instance_type = "t3.micro"
 kali_ami          = "ami-XXXXXXXXXXXXXXXXX"  # Kali Linux 2024.2 x86_64
@@ -23,6 +33,6 @@ kali_instance_type = "t3.micro"
 # claude_model      = "claude-3-sonnet-20240229"    # Options: claude-3-sonnet, claude-3-haiku, etc.
 
 # Instance Configuration - Control which instances to deploy
-enable_qradar = true   # Deploy qRadar instance for log analysis
+enable_siem   = true   # Deploy SIEM instance (type controlled by siem_type variable)
 enable_victim = true   # Deploy victim instance for generating security events  
 enable_kali   = false  # Deploy Kali Linux instance for red team operations

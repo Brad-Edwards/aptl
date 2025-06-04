@@ -32,7 +32,7 @@ And this is only the beginning... SecOps agents are coming.
 
 -This project creates a purple team lab environment in AWS with:
 
-- Splunk Enterprise Security on a t3.large instance (default) or qRadar Community Edition 7.5 on t3a.2xlarge
+- Splunk Enterprise Security on a c5.4xlarge instance (default) or qRadar Community Edition 7.5 on t3a.2xlarge
 - Victim machine on t3.micro instance
 - Single VPC with both instances in same subnet
 - Security groups restricting access to your IP address only

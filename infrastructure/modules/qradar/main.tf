@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: BUSL-1.1
 
-# SIEM Instance
-resource "aws_instance" "siem" {
-  ami           = var.siem_ami
-  instance_type = var.siem_instance_type
+# qRadar Instance
+resource "aws_instance" "qradar" {
+  ami           = var.qradar_ami
+  instance_type = var.qradar_instance_type
   subnet_id     = var.subnet_id
   key_name      = var.key_name
 
@@ -153,37 +153,37 @@ resource "aws_instance" "siem" {
               EOF
 
   tags = {
-    Name        = "${var.project_name}-siem"
+    Name        = "${var.project_name}-qradar"
     Project     = var.project_name
     Environment = var.environment
   }
 }
 
 # EBS Volume for qRadar /store
-resource "aws_ebs_volume" "siem_store" {
+resource "aws_ebs_volume" "qradar_store" {
   availability_zone = var.availability_zone
   size              = 200  # GB for /store - adjust as needed
   type              = "gp3"
   
   tags = {
-    Name        = "${var.project_name}-siem-store"
+    Name        = "${var.project_name}-qradar-store"
     Project     = var.project_name
     Environment = var.environment
   }
 }
 
-resource "aws_volume_attachment" "siem_store_attachment" {
+resource "aws_volume_attachment" "qradar_store_attachment" {
   device_name = "/dev/sdf"
-  volume_id   = aws_ebs_volume.siem_store.id
-  instance_id = aws_instance.siem.id
+  volume_id   = aws_ebs_volume.qradar_store.id
+  instance_id = aws_instance.qradar.id
 }
 
-resource "aws_eip" "siem_eip" {
-  instance = aws_instance.siem.id
+resource "aws_eip" "qradar_eip" {
+  instance = aws_instance.qradar.id
   domain   = "vpc"
 
   tags = {
-    Name        = "${var.project_name}-siem-eip"
+    Name        = "${var.project_name}-qradar-eip"
     Project     = var.project_name
     Environment = var.environment
   }

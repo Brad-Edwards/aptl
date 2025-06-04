@@ -43,7 +43,7 @@ And this is only the beginning... SecOps agents are coming.
 flowchart TD
     A[Internet] --> B[Internet Gateway]
     B --> C[Public Subnet<br/>10.0.1.0/24]
-    C --> D[qRadar<br/>SIEM]
+    C --> D[SIEM<br/>(Splunk or qRadar)]
     C --> E[Victim<br/>Machine]
     C --> F[Kali Linux<br/>Red Team]
     E -.->|Logs| D
@@ -84,7 +84,13 @@ allowed_ip    = "YOUR_IP/32"  # Get your IP: curl ipinfo.io/ip
 aws_profile   = "your-aws-profile"  # Optional
 ```
 
-### 2. Get qRadar Files
+### 2a. Prepare for Splunk (default)
+
+If you selected Splunk as your SIEM, no files are needed ahead of time.
+The instance ships with an `install_splunk.sh` script that downloads the
+Splunk installer for you.
+
+### 2b. Get qRadar Files
 
 You must obtain the qRadar CE ISO file and license key before proceeding.
 
@@ -94,12 +100,6 @@ You must obtain the qRadar CE ISO file and license key before proceeding.
 4. Create files directory: `mkdir files`
 5. Place both files in the `files/` directory
 
-### 2a. Prepare for Splunk (default)
-
-If you selected Splunk as your SIEM, no files are needed ahead of time.
-The instance ships with an `install_splunk.sh` script that downloads the
-Splunk installer for you.
-
 ### 3. Deploy Infrastructure
 
 ```bash
@@ -108,7 +108,25 @@ terraform plan
 terraform apply
 ```
 
-### 5. Install qRadar
+### 4a. Install Splunk
+
+If you chose Splunk, connect to the SIEM instance and run the install script:
+
+```bash
+# Connection info is saved to lab_connections.txt
+cat lab_connections.txt
+
+# SSH to SIEM instance
+ssh -i ~/.ssh/purple-team-key ec2-user@SIEM_IP
+
+# Run the installer
+./install_splunk.sh
+```
+
+The script downloads the Splunk RPM then asks if you want to start the
+installation. Answer `y` when ready.
+
+### 4b. Install qRadar
 
 After infrastructure deployment:
 
@@ -141,24 +159,6 @@ Installation takes 1-2 hours. Choose:
 - Set passwords (don't forget them)
 
 Installation appears stuck on "Installing DSM rpms:" but it's working. Takes 30+ minutes.
-
-### 4a. Install Splunk
-
-If you chose Splunk, connect to the SIEM instance and run the install script:
-
-```bash
-# Connection info is saved to lab_connections.txt
-cat lab_connections.txt
-
-# SSH to SIEM instance
-ssh -i ~/.ssh/purple-team-key ec2-user@SIEM_IP
-
-# Run the installer
-./install_splunk.sh
-```
-
-The script downloads the Splunk RPM then asks if you want to start the
-installation. Answer `y` when ready.
 
 ## Accessing the Lab
 
@@ -338,7 +338,9 @@ This creates a true **autonomous red team vs. blue team** scenario where AI atta
 
 ## Cost Estimation
 
-- t3a.2xlarge (SIEM): ~$220/month
+- SIEM
+  - c5.4xlarge (Splunk SIEM): ~$496/month OR
+  - t3a.2xlarge (qRadar SIEM): ~$220/month
 - t3.micro (Victim): ~$7/month
 - t3.micro (Kali Linux): ~$7/month
 - Storage: ~$50/month (250GB root + 200GB /store + 30GB victim)

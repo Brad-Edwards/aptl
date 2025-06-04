@@ -205,68 +205,107 @@ resource "aws_instance" "siem" {
               # Install required packages
               sudo dnf install -y wget
               
+              SIEM_TYPE="${var.siem_type}"
+
+%{ if var.siem_type == "splunk" }
+              # Baseline OS configuration for Splunk
+              sudo hostnamectl set-hostname splunk.local
+
+              # Add hostname to /etc/hosts using private IP
+              PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+              echo "$PRIVATE_IP splunk.local" | sudo tee -a /etc/hosts
+
+              # Mark system ready
+              touch /home/ec2-user/system_ready_for_splunk
+
+              # Create Splunk installation script
+              cat > /home/ec2-user/install_splunk.sh << 'EOFSCRIPT'
+              #!/bin/bash
+
+              if [ ! -f /home/ec2-user/system_ready_for_splunk ]; then
+                echo "System not prepared for Splunk installation."
+                exit 1
+              fi
+
+              cd /home/ec2-user
+              if wget -O splunk-9.4.2-e9664af3d956.x86_64.rpm "https://download.splunk.com/products/splunk/releases/9.4.2/linux/splunk-9.4.2-e9664af3d956.x86_64.rpm"; then
+                read -p "Start Splunk install? (y/N) " ans
+                if [[ "$ans" =~ ^[Yy]$ ]]; then
+                  sudo rpm -i splunk-9.4.2-e9664af3d956.x86_64.rpm
+                else
+                  echo "Install aborted."
+                fi
+              else
+                echo "Download failed."
+                exit 1
+              fi
+              EOFSCRIPT
+              chmod +x /home/ec2-user/install_splunk.sh
+
+              echo "Splunk system ready. Run ./install_splunk.sh to begin installation."
+%{ else }
               # Baseline OS configuration for qRadar
               sudo hostnamectl set-hostname qradar.local
-              
+
               # Add hostname to /etc/hosts using private IP
               PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
               echo "$PRIVATE_IP qradar.local" | sudo tee -a /etc/hosts
-              
+
               # Disable SELinux immediately and permanently
               sudo setenforce 0 || true  # Don't fail if already disabled
               sudo sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
-              
+
               # Setup swap (8GB)
               sudo swapoff -a
               sudo dd if=/dev/zero of=/swap bs=1M count=8192
               sudo mkswap /swap
               sudo swapon /swap
               echo '/swap swap swap defaults 0 0' | sudo tee -a /etc/fstab
-              
+
               # Wait for additional EBS volume to attach
               echo "Waiting for /store volume to attach..."
               while [ ! -b /dev/nvme1n1 ] && [ ! -b /dev/xvdf ]; do
                 sleep 5
               done
-              
+
               # Determine the correct device name (newer instances use nvme, older use xvd)
               if [ -b /dev/nvme1n1 ]; then
                 STORE_DEVICE="/dev/nvme1n1"
               else
                 STORE_DEVICE="/dev/xvdf"
               fi
-              
+
               # Format and mount /store volume
               echo "Setting up /store on $STORE_DEVICE"
               sudo mkfs.ext4 -F $STORE_DEVICE
               sudo mkdir -p /store
               sudo mount $STORE_DEVICE /store
-              
+
               # Add to fstab for persistent mounting
               echo "$STORE_DEVICE /store ext4 defaults 0 0" | sudo tee -a /etc/fstab
-              
+
               # Set proper ownership and permissions
               sudo chown root:root /store
               sudo chmod 755 /store
-              
+
               # Create reboot flag to track if reboot is needed
               touch /home/ec2-user/system_ready_for_qradar
-              
+
               # Create qRadar installation script
               cat > /home/ec2-user/install_qradar.sh << 'EOFSCRIPT'
               #!/bin/bash
-              
+
               # Check if system was rebooted after initial setup
               if [ ! -f /home/ec2-user/post_reboot_setup_done ]; then
                 echo "Performing post-reboot setup..."
-                
+
                 # Verify SELinux is disabled
                 if [ "$(getenforce)" != "Disabled" ]; then
                   echo "ERROR: SELinux is still enabled. Rebooting system..."
                   sudo reboot
                   exit 1
                 fi
-                
+
                 # Verify /store is mounted
                 if ! mountpoint -q /store; then
                   echo "ERROR: /store is not mounted. Checking..."
@@ -276,44 +315,44 @@ resource "aws_instance" "siem" {
                     exit 1
                   fi
                 fi
-                
+
                 # Remove conflicting Red Hat Cloud packages that cause qRadar installation issues
                 echo "Removing conflicting cloud packages..."
                 sudo dnf remove -y redhat-cloud-client-configuration rhc insights-client || true
-                
+
                 # Clean package cache
                 sudo dnf clean all
-                
+
                 # Mark post-reboot setup as done
                 touch /home/ec2-user/post_reboot_setup_done
               fi
-              
+
               echo "System ready for qRadar installation."
               echo "Mounting ISO..."
               sudo mkdir -p /iso
               sudo mount -o loop /tmp/750-QRADAR-QRFULL-2021.06.12.20250509154206.iso /iso
-              
+
               echo "Starting qRadar setup..."
               cd /iso
               sudo ./setup
               EOFSCRIPT
               chmod +x /home/ec2-user/install_qradar.sh
-              
+
               # Create system preparation completion script
               cat > /home/ec2-user/prepare_for_qradar.sh << 'EOFSCRIPT'
               #!/bin/bash
               echo "Checking system preparation status..."
-              
+
               # Check SELinux status
               echo "SELinux status: $(getenforce)"
-              
+
               # Check /store mount
               echo "/store mount status: $(mountpoint /store && echo 'OK' || echo 'NOT MOUNTED')"
-              
+
               # Check available space
               echo "Disk space:"
               df -h / /store
-              
+
               # If SELinux is not disabled, reboot
               if [ "$(getenforce)" != "Disabled" ]; then
                 echo "SELinux not fully disabled. Rebooting system in 10 seconds..."
@@ -326,9 +365,10 @@ resource "aws_instance" "siem" {
               fi
               EOFSCRIPT
               chmod +x /home/ec2-user/prepare_for_qradar.sh
-              
+
               # Final system preparation
               echo "Initial setup complete. System may need reboot for SELinux changes."
+%{ endif }
               EOF
 
   tags = {
@@ -662,19 +702,25 @@ Victim Instance:
   SSH: ssh -i ~/.ssh/purple-team-key ec2-user@${aws_eip.victim_eip.public_ip}
   RDP: mstsc /v:${aws_eip.victim_eip.public_ip}
 
+%{ if var.siem_type == "qradar" }
 qRadar ISO Transfer:
   scp -i ~/.ssh/purple-team-key files/750-QRADAR-QRFULL-2021.06.12.20250509154206.iso ec2-user@${aws_eip.siem_eip.public_ip}:/tmp/
 
+%{ else }
+Splunk Install:
+  ssh -i ~/.ssh/purple-team-key ec2-user@${aws_eip.siem_eip.public_ip} "./install_splunk.sh"
+%{ endif }
+
 Log Forwarding Verification:
   1. SSH to victim machine and run: ./generate_test_events.sh
-  2. Login to qRadar web interface: https://${aws_eip.siem_eip.public_ip}
+  2. Login to ${local.selected_siem_name} web interface: https://${aws_eip.siem_eip.public_ip}
   3. Go to Log Activity tab and filter by Source IP: ${aws_instance.victim.private_ip}
   4. You should see logs from victim machine automatically
 
 Purple Team Testing:
   SSH to victim: ssh -i ~/.ssh/purple-team-key ec2-user@${aws_eip.victim_eip.public_ip}
   Generate events: ./generate_test_events.sh
-  Monitor in qRadar: Log Activity → Source IP filter → ${aws_instance.victim.private_ip}
+  Monitor in ${local.selected_siem_name}: Log Activity → Source IP filter → ${aws_instance.victim.private_ip}
 
 Generated: ${timestamp()}
 EOF

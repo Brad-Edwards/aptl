@@ -31,9 +31,11 @@ And this is only the beginning... SecOps agents are coming.
 This project creates a purple team lab environment in AWS with:
 
 - qRadar Community Edition 7.5 on t3a.2xlarge instance (8 vCPU, 32GB RAM)
-- Victim machine on t3.micro instance  
-- Single VPC with both instances in same subnet
-- Security groups restricting access to your IP address only
+- Victim machine on t3.micro instance
+- Kali Linux red team instance on t3.micro instance
+- Single VPC with all instances in same subnet
+- Security groups restricting external access to your IP address only
+- Model Context Protocol (MCP) server for AI-assisted red team operations
 
 ## Architecture
 
@@ -43,7 +45,10 @@ flowchart TD
     B --> C[Public Subnet<br/>10.0.1.0/24]
     C --> D[qRadar<br/>SIEM]
     C --> E[Victim<br/>Machine]
+    C --> F[Kali Linux<br/>Red Team]
     E -.->|Logs| D
+    F -.->|Attacks| E
+    F -.->|Logs| D
     
     classDef default fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
     classDef subnet fill:#f0f0f0,stroke:#000000,stroke-width:2px,color:#000000
@@ -51,7 +56,7 @@ flowchart TD
     
     class A,B default
     class C subnet
-    class D,E instances
+    class D,E,F instances
 ```
 
 ## Prerequisites
@@ -89,7 +94,16 @@ You must obtain the qRadar CE ISO file and license key before proceeding.
 4. Create files directory: `mkdir files`
 5. Place both files in the `files/` directory
 
-### 3. Deploy Infrastructure
+### 3. Subscribe to Kali Linux in AWS Marketplace
+
+1. Go to [AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-fznsw3f7mq7to?sr=0-1&ref_=beagle&applicationId=AWSMPContessa)
+2. Click "Subscribe"
+3. Wait until setup is done
+4. Click "Continue to Configuration"
+5. Copy the AMI ID, AMI Alias, and Product Code
+6. Add the values to `terraform.tfvars`
+
+### 4. Deploy Infrastructure
 
 ```bash
 terraform init
@@ -97,7 +111,7 @@ terraform plan
 terraform apply
 ```
 
-### 4. Install qRadar
+### 5. Install qRadar
 
 After infrastructure deployment:
 
@@ -143,6 +157,50 @@ Installation appears stuck on "Installing DSM rpms:" but it's working. Takes 30+
 
 - SSH: `ssh -i ~/.ssh/purple-team-key ec2-user@VICTIM_IP`
 - RDP: Use any RDP client to connect to `VICTIM_IP`
+
+### Kali Linux Red Team
+
+- SSH: `ssh -i ~/.ssh/purple-team-key kali@KALI_IP`
+
+## Kali Red Team MCP
+
+MCP server provides AI agents with controlled access to Kali tools and lab targets.
+
+```bash
+cd red_team/kali_mcp
+npm run build
+```
+
+**Cursor Setup** - Create `.cursor/mcp.json` in project root:
+
+```json
+{
+    "mcpServers": {
+        "kali-red-team": {
+            "command": "node",
+            "args": ["./red_team/kali_mcp/build/index.js"],
+            "cwd": "."
+        }
+    }
+}
+```
+
+**Cline Setup** - Add to Cline MCP settings:
+
+```json
+"kali-red-team": {
+    "command": "node",
+    "args": ["./red_team/kali_mcp/build/index.js"],
+    "cwd": "<your-path-to>/aptl"
+}
+```
+
+Available tools:
+
+- `kali_info` - Get lab instance information
+- `run_command` - Execute commands on lab targets
+
+Usage: Connect through MCP-enabled AI clients (Claude, Cline).
 
 ## Log Forwarding
 
@@ -251,7 +309,7 @@ This creates a true **autonomous red team vs. blue team** scenario where AI atta
 ### 🔜 Coming Soon (v1.1)
 
 - **Splunk Integration**: Alternative SIEM option alongside qRadar
-- **Kali MCP**: Kali LinuxModel Context Protocol integration for better AI red teaming
+- ✅ **Kali MCP**: Kali Linux Model Context Protocol integration for better AI red teaming
 - **Victim Machine Presets**: Windows, Linux, web apps, etc
 - **Suggested Exercises**: AI-driven exercises based on what you've done
 - **Challenges with Pre-Seeded SIEM Data**: Set piece challenges to practice your SIEM skills
@@ -267,9 +325,10 @@ This creates a true **autonomous red team vs. blue team** scenario where AI atta
 
 - t3a.2xlarge (SIEM): ~$220/month
 - t3.micro (Victim): ~$7/month
+- t3.micro (Kali Linux): ~$7/month
 - Storage: ~$50/month (250GB root + 200GB /store + 30GB victim)
 - Elastic IPs: $3.65/month
-- Total: ~$280/month
+- Total: ~$290/month
 
 Stop instances when not in use to save ~85% on compute costs.
 

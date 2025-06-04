@@ -43,7 +43,7 @@ And this is only the beginning... SecOps agents are coming.
 flowchart TD
     A[Internet] --> B[Internet Gateway]
     B --> C[Public Subnet<br/>10.0.1.0/24]
-    C --> D[SIEM<br/>(Splunk or qRadar)]
+    C --> D[SIEM<br/>Splunk or qRadar]
     C --> E[Victim<br/>Machine]
     C --> F[Kali Linux<br/>Red Team]
     E -.->|Logs| D

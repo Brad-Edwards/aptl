@@ -43,9 +43,9 @@ variable "splunk_ami" {
 }
 
 variable "siem_type" {
-  description = "Which SIEM platform to deploy (qradar or splunk)"
+  description = "Which SIEM platform to deploy (splunk or qradar)"
   type        = string
-  default     = "qradar"
+  default     = "splunk"
 }
 
 variable "victim_ami" {

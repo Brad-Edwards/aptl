@@ -12,7 +12,9 @@
 
 Want unlimited personalized AI-driven purple team exercises?
 
-A shoestring budget purple team lab infrastructure using AWS and Terraform, featuring IBM qRadar Community Edition 7.5.
+A shoestring budget purple team lab infrastructure using AWS and Terraform, featuring Splunk Enterprise Security or IBM qRadar Community Edition.
+
+Choose your preferred SIEM in `terraform.tfvars` before deployment.
 
 This lab assumes you have basic understanding of AWS CLI, Terraform, and Linux admin tasks.
 
@@ -28,10 +30,10 @@ And this is only the beginning... SecOps agents are coming.
 
 ## Overview
 
-This project creates a purple team lab environment in AWS with:
+-This project creates a purple team lab environment in AWS with:
 
-- qRadar Community Edition 7.5 on t3a.2xlarge instance (8 vCPU, 32GB RAM)
-- Victim machine on t3.micro instance  
+- Splunk Enterprise Security on a c5.4xlarge instance (default) or qRadar Community Edition 7.5 on t3a.2xlarge
+- Victim machine on t3.micro instance
 - Single VPC with both instances in same subnet
 - Security groups restricting access to your IP address only
 
@@ -41,9 +43,12 @@ This project creates a purple team lab environment in AWS with:
 flowchart TD
     A[Internet] --> B[Internet Gateway]
     B --> C[Public Subnet<br/>10.0.1.0/24]
-    C --> D[qRadar<br/>SIEM]
+    C --> D[SIEM<br/>Splunk or qRadar]
     C --> E[Victim<br/>Machine]
+    C --> F[Kali Linux<br/>Red Team]
     E -.->|Logs| D
+    F -.->|Attacks| E
+    F -.->|Logs| D
     
     classDef default fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
     classDef subnet fill:#f0f0f0,stroke:#000000,stroke-width:2px,color:#000000
@@ -51,7 +56,7 @@ flowchart TD
     
     class A,B default
     class C subnet
-    class D,E instances
+    class D,E,F instances
 ```
 
 ## Prerequisites
@@ -79,7 +84,13 @@ allowed_ip    = "YOUR_IP/32"  # Get your IP: curl ipinfo.io/ip
 aws_profile   = "your-aws-profile"  # Optional
 ```
 
-### 2. Get qRadar Files
+### 2a. Prepare for Splunk (default)
+
+If you selected Splunk as your SIEM, no files are needed ahead of time.
+The instance ships with an `install_splunk.sh` script that downloads the
+Splunk installer for you.
+
+### 2b. Get qRadar Files
 
 You must obtain the qRadar CE ISO file and license key before proceeding.
 
@@ -97,7 +108,25 @@ terraform plan
 terraform apply
 ```
 
-### 4. Install qRadar
+### 4a. Install Splunk
+
+If you chose Splunk, connect to the SIEM instance and run the install script:
+
+```bash
+# Connection info is saved to lab_connections.txt
+cat lab_connections.txt
+
+# SSH to SIEM instance
+ssh -i ~/.ssh/purple-team-key ec2-user@SIEM_IP
+
+# Run the installer
+./install_splunk.sh
+```
+
+The script downloads the Splunk RPM then asks if you want to start the
+installation. Answer `y` when ready.
+
+### 4b. Install qRadar
 
 After infrastructure deployment:
 
@@ -133,7 +162,7 @@ Installation appears stuck on "Installing DSM rpms:" but it's working. Takes 30+
 
 ## Accessing the Lab
 
-### qRadar SIEM
+### SIEM Access
 
 - SSH: `ssh -i ~/.ssh/purple-team-key ec2-user@SIEM_IP`
 - Web UI: `https://SIEM_IP` (after installation)
@@ -144,13 +173,57 @@ Installation appears stuck on "Installing DSM rpms:" but it's working. Takes 30+
 - SSH: `ssh -i ~/.ssh/purple-team-key ec2-user@VICTIM_IP`
 - RDP: Use any RDP client to connect to `VICTIM_IP`
 
+### Kali Linux Red Team
+
+- SSH: `ssh -i ~/.ssh/purple-team-key kali@KALI_IP`
+
+## Kali Red Team MCP
+
+MCP server provides AI agents with controlled access to Kali tools and lab targets.
+
+```bash
+cd red_team/kali_mcp
+npm run build
+```
+
+**Cursor Setup** - Create `.cursor/mcp.json` in project root:
+
+```json
+{
+    "mcpServers": {
+        "kali-red-team": {
+            "command": "node",
+            "args": ["./red_team/kali_mcp/build/index.js"],
+            "cwd": "."
+        }
+    }
+}
+```
+
+**Cline Setup** - Add to Cline MCP settings:
+
+```json
+"kali-red-team": {
+    "command": "node",
+    "args": ["./red_team/kali_mcp/build/index.js"],
+    "cwd": "<your-path-to>/aptl"
+}
+```
+
+Available tools:
+
+- `kali_info` - Get lab instance information
+- `run_command` - Execute commands on lab targets
+
+Usage: Connect through MCP-enabled AI clients (Claude, Cline).
+
 ## Log Forwarding
 
-The victim machine is automatically configured to forward logs to qRadar. No manual configuration required.
+The victim machine automatically forwards logs to the selected SIEM. No manual configuration required.
 
 ### Verify Log Forwarding
 
-1. Check qRadar Log Activity tab
+1. Check the SIEM log activity page
 2. Filter by Source IP = your victim machine IP
 3. Generate test events:
 
@@ -244,14 +317,14 @@ No red team around? You can use AI coding assistants like **Cline** or **Cursor*
    - AI adapts tactics based on what it discovers
    - Won't judge your SIEM query fails!
 
-This creates a true **autonomous red team vs. blue team** scenario where AI attacks while you monitor and tune your defenses in qRadar.
+This creates a true **autonomous red team vs. blue team** scenario where AI attacks while you monitor and tune your defenses in the SIEM.
 
 ## Roadmap
 
 ### 🔜 Coming Soon (v1.1)
 
 - **Splunk Integration**: Alternative SIEM option alongside qRadar
-- **Kali MCP**: Kali LinuxModel Context Protocol integration for better AI red teaming
+- ✅ **Kali MCP**: Kali Linux Model Context Protocol integration for better AI red teaming
 - **Victim Machine Presets**: Windows, Linux, web apps, etc
 - **Suggested Exercises**: AI-driven exercises based on what you've done
 - **Challenges with Pre-Seeded SIEM Data**: Set piece challenges to practice your SIEM skills
@@ -265,11 +338,14 @@ This creates a true **autonomous red team vs. blue team** scenario where AI atta
 
 ## Cost Estimation
 
-- t3a.2xlarge (SIEM): ~$220/month
+- SIEM
+  - c5.4xlarge (Splunk SIEM): ~$496/month OR
+  - t3a.2xlarge (qRadar SIEM): ~$220/month
 - t3.micro (Victim): ~$7/month
+- t3.micro (Kali Linux): ~$7/month
 - Storage: ~$50/month (250GB root + 200GB /store + 30GB victim)
 - Elastic IPs: $3.65/month
-- Total: ~$280/month
+- Total: ~$290/month
 
 Stop instances when not in use to save ~85% on compute costs.
 

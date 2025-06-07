@@ -125,6 +125,50 @@ resource "aws_security_group" "siem_sg" {
     security_groups = [aws_security_group.kali_sg.id]
   }
 
+  # Splunk syslog (port 5514) from victim machine - only when using Splunk
+  dynamic "ingress" {
+    for_each = var.siem_type == "splunk" ? [1] : []
+    content {
+      from_port       = 5514
+      to_port         = 5514
+      protocol        = "udp"
+      security_groups = [aws_security_group.victim_sg.id]
+    }
+  }
+
+  # Splunk syslog TCP (port 5514) from victim machine - only when using Splunk
+  dynamic "ingress" {
+    for_each = var.siem_type == "splunk" ? [1] : []
+    content {
+      from_port       = 5514
+      to_port         = 5514
+      protocol        = "tcp"
+      security_groups = [aws_security_group.victim_sg.id]
+    }
+  }
+
+  # Splunk syslog (port 5514) from Kali machine - only when using Splunk
+  dynamic "ingress" {
+    for_each = var.siem_type == "splunk" ? [1] : []
+    content {
+      from_port       = 5514
+      to_port         = 5514
+      protocol        = "udp"
+      security_groups = [aws_security_group.kali_sg.id]
+    }
+  }
+
+  # Splunk syslog TCP (port 5514) from Kali machine - only when using Splunk
+  dynamic "ingress" {
+    for_each = var.siem_type == "splunk" ? [1] : []
+    content {
+      from_port       = 5514
+      to_port         = 5514
+      protocol        = "tcp"
+      security_groups = [aws_security_group.kali_sg.id]
+    }
+  }
+
   # Allow all outbound traffic
   egress {
     from_port   = 0

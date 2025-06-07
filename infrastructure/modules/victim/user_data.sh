@@ -11,14 +11,20 @@ sudo dnf install -y telnet nc nmap-ncat bind-utils wget curl
 
 %{ if siem_private_ip != "" ~}
 # Configure rsyslog forwarding to SIEM
-echo "Configuring rsyslog forwarding to qRadar SIEM..."
+echo "Configuring rsyslog forwarding to ${siem_type} SIEM..."
 
 # Get SIEM private IP
 SIEM_IP="${siem_private_ip}"
 
-# Add rsyslog forwarding rule (TCP for reliable delivery)
-echo "# Purple Team Lab - Forward all logs to qRadar SIEM" | sudo tee -a /etc/rsyslog.conf
+%{ if siem_type == "splunk" ~}
+# Add rsyslog forwarding rule (TCP for reliable delivery) - Splunk uses port 5514
+echo "# Purple Team Lab - Forward all logs to ${siem_type} SIEM" | sudo tee -a /etc/rsyslog.conf
+echo "*.* @@$SIEM_IP:5514" | sudo tee -a /etc/rsyslog.conf
+%{ else ~}
+# Add rsyslog forwarding rule (TCP for reliable delivery) - qRadar uses port 514
+echo "# Purple Team Lab - Forward all logs to ${siem_type} SIEM" | sudo tee -a /etc/rsyslog.conf
 echo "*.* @@$SIEM_IP:514" | sudo tee -a /etc/rsyslog.conf
+%{ endif ~}
 
 # Restart rsyslog to apply changes
 sudo systemctl restart rsyslog
@@ -30,7 +36,7 @@ echo "SIEM not enabled - skipping rsyslog configuration"
 cat > /home/ec2-user/generate_test_events.sh << 'EOFSCRIPT'
 #!/bin/bash
 echo "=== Purple Team Lab - Security Event Generator ==="
-echo "Generating realistic security events for qRadar testing..."
+echo "Generating realistic security events for ${siem_type} testing..."
 %{ if siem_private_ip != "" ~}
 echo "SIEM IP: ${siem_private_ip}"
 %{ else ~}
@@ -71,8 +77,12 @@ logger -p daemon.error "PURPLE_TEST: System integrity check failed"
 
 echo ""
 echo "✅ Security events generated successfully!"
-echo "📊 Check qRadar Log Activity for events from IP: $(hostname -I | awk '{print $1}')"
+echo "📊 Check ${siem_type} Log Activity for events from IP: $(hostname -I | awk '{print $1}')"
+%{ if siem_type == "qradar" ~}
 echo "🚨 Expected offenses: Authentication failures, privilege escalation, suspicious network activity"
+%{ else ~}
+echo "🚨 Expected alerts: Authentication failures, privilege escalation, suspicious network activity"
+%{ endif ~}
 EOFSCRIPT
 chmod +x /home/ec2-user/generate_test_events.sh
 
@@ -80,7 +90,7 @@ chmod +x /home/ec2-user/generate_test_events.sh
 cat > /home/ec2-user/simulate_brute_force.sh << 'EOFSCRIPT'
 #!/bin/bash
 echo "=== Brute Force Attack Simulation ==="
-echo "Generating 20 failed SSH attempts to trigger qRadar offense..."
+echo "Generating 20 failed SSH attempts to trigger ${siem_type} alerts..."
 
 for i in {1..20}; do
   echo "Attempt $i/20..."
@@ -91,8 +101,13 @@ done
 
 echo ""
 echo "🚨 Brute force simulation complete!"
+%{ if siem_type == "qradar" ~}
 echo "📈 This should trigger 'Multiple Login Failures' offense in qRadar"
 echo "🕐 Check qRadar Offenses tab in 2-3 minutes"
+%{ else ~}
+echo "📈 This should trigger authentication alerts in Splunk"
+echo "🕐 Check Splunk Search & Reporting for auth events in 2-3 minutes"
+%{ endif ~}
 EOFSCRIPT
 chmod +x /home/ec2-user/simulate_brute_force.sh
 
@@ -123,7 +138,7 @@ logger -p daemon.warning "LATERAL_MOVEMENT: Unusual data compression activity"
 echo ""
 echo "🎯 Lateral movement simulation complete!"
 echo "🔍 This simulates advanced persistent threat (APT) behavior"
-echo "📊 Check qRadar for correlated events and potential offenses"
+echo "📊 Check ${siem_type} for correlated events and potential alerts"
 EOFSCRIPT
 chmod +x /home/ec2-user/simulate_lateral_movement.sh
 
@@ -193,7 +208,7 @@ case $1 in
 esac
 
 echo "✅ MITRE ATT&CK technique $1 simulation complete!"
-echo "📊 Check qRadar for technique-specific events and potential correlations"
+echo "📊 Check ${siem_type} for technique-specific events and potential correlations"
 EOFSCRIPT
 chmod +x /home/ec2-user/simulate_mitre_attack.sh
 
@@ -202,16 +217,25 @@ cat > /home/ec2-user/check_siem_connection.sh << 'EOFSCRIPT'
 #!/bin/bash
 echo "=== SIEM Connection Status ==="
 %{ if siem_private_ip != "" ~}
+echo "SIEM Type: ${siem_type}"
 echo "SIEM IP: ${siem_private_ip}"
 echo ""
 
 # Test network connectivity
 echo "Testing network connectivity..."
-if timeout 5 telnet ${siem_private_ip} 514 2>/dev/null | grep -q Connected; then
-  echo "✅ Network: qRadar reachable on port 514"
+%{ if siem_type == "splunk" ~}
+if timeout 5 telnet ${siem_private_ip} 5514 2>/dev/null | grep -q Connected; then
+  echo "✅ Network: ${siem_type} reachable on port 5514"
 else
-  echo "❌ Network: Cannot reach qRadar on port 514"
+  echo "❌ Network: Cannot reach ${siem_type} on port 5514"
 fi
+%{ else ~}
+if timeout 5 telnet ${siem_private_ip} 514 2>/dev/null | grep -q Connected; then
+  echo "✅ Network: ${siem_type} reachable on port 514"
+else
+  echo "❌ Network: Cannot reach ${siem_type} on port 514"
+fi
+%{ endif ~}
 
 # Check rsyslog status
 echo ""
@@ -225,17 +249,29 @@ fi
 # Check rsyslog configuration
 echo ""
 echo "Checking rsyslog configuration..."
+%{ if siem_type == "splunk" ~}
+if grep -q "@@${siem_private_ip}:5514" /etc/rsyslog.conf; then
+  echo "✅ Config: Log forwarding configured correctly"
+else
+  echo "❌ Config: Log forwarding not configured"
+fi
+%{ else ~}
 if grep -q "@@${siem_private_ip}:514" /etc/rsyslog.conf; then
   echo "✅ Config: Log forwarding configured correctly"
 else
   echo "❌ Config: Log forwarding not configured"
 fi
+%{ endif ~}
 
 # Test log generation
 echo ""
 echo "Testing log generation..."
 logger "SIEM_TEST: Connection check from $(hostname) at $(date)"
+%{ if siem_type == "qradar" ~}
 echo "✅ Test log sent (check qRadar Log Activity in 10-30 seconds)"
+%{ else ~}
+echo "✅ Test log sent (check Splunk Search in 10-30 seconds)"
+%{ endif ~}
 %{ else ~}
 echo "SIEM IP: Not configured (SIEM disabled)"
 echo ""
@@ -247,7 +283,7 @@ echo ""
 echo "=== Ready to run purple team exercises! ==="
 echo "Commands available:"
 echo "  ./generate_test_events.sh     - Generate diverse security events"
-echo "  ./simulate_brute_force.sh     - Trigger authentication offense"
+echo "  ./simulate_brute_force.sh     - Trigger authentication alerts"
 echo "  ./simulate_lateral_movement.sh - APT-style attack simulation"
 echo "  ./simulate_mitre_attack.sh T1110 - Specific MITRE ATT&CK techniques"
 EOFSCRIPT
@@ -256,7 +292,7 @@ chmod +x /home/ec2-user/check_siem_connection.sh
 echo "Purple team victim machine setup complete"
 %{ if siem_private_ip != "" ~}
 echo "Log forwarding configured to: ${siem_private_ip}:514"
-echo "Ready for testing after qRadar installation!"
+echo "Ready for testing after ${siem_type} installation!"
 %{ else ~}
 echo "SIEM disabled - local event generation ready for testing"
 %{ endif ~} 

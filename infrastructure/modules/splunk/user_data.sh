@@ -57,7 +57,7 @@ echo ""
 echo "To complete the setup:"
 echo "1. Start Splunk: sudo -u splunk /opt/splunk/bin/splunk start --accept-license"
 echo "2. Set admin password when prompted"
-echo "3. Access web interface: https://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8000"
+echo "3. Access web interface: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8000"
 echo ""
 read -p "Would you like to start Splunk now? (y/n): " -n 1 -r
 echo
@@ -66,16 +66,26 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     sudo -u splunk /opt/splunk/bin/splunk start --accept-license
     
     echo ""
-    echo "Splunk is now running!"
-    echo "Web interface: https://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8000"
-    echo "Default login: admin / (password you just set)"
+    echo "Configuring UDP syslog input on port 5514..."
+    sleep 10  # Wait for Splunk to fully start
+    
+    # Configure UDP input for syslog on port 5514
+    sudo -u splunk /opt/splunk/bin/splunk add udp 5514 -sourcetype syslog -auth admin:changeme
+    
     echo ""
-    echo "To configure log forwarding reception:"
-    echo "sudo -u splunk /opt/splunk/bin/splunk enable listen 9997"
+    echo "Splunk is now running and configured!"
+    echo "Web interface: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8000"
+    echo "Default login: admin / changeme"
+    echo ""
+    echo "UDP syslog input configured on port 5514"
+    echo "Victim and Kali machines will automatically send logs to this port"
     echo ""
 else
     echo "You can start Splunk later with:"
     echo "sudo -u splunk /opt/splunk/bin/splunk start --accept-license"
+    echo ""
+    echo "After starting, configure UDP input with:"
+    echo "sudo -u splunk /opt/splunk/bin/splunk add udp 5514 -sourcetype syslog -auth admin:yourpassword"
 fi
 EOFSCRIPT
 
@@ -95,7 +105,7 @@ if [ -d "/opt/splunk" ]; then
     echo ""
     echo "To start Splunk: sudo -u splunk /opt/splunk/bin/splunk start"
     echo "To stop Splunk: sudo -u splunk /opt/splunk/bin/splunk stop"
-    echo "Web interface: https://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8000"
+    echo "Web interface: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8000"
 else
     echo "Splunk not installed. Run: ./install_splunk.sh"
 fi

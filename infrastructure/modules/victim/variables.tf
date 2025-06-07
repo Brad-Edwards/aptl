@@ -42,4 +42,10 @@ variable "environment" {
   description = "Environment name for resource tagging"
   type        = string
   default     = "lab"
+}
+
+variable "siem_type" {
+  description = "Type of SIEM being used (splunk or qradar)"
+  type        = string
+  default     = "splunk"
 } 

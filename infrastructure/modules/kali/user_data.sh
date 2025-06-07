@@ -3,20 +3,22 @@
 exec > >(tee /var/log/user-data.log)
 exec 2>&1
 
-# Update system
+# Update system non-interactively
 echo "Updating Kali Linux system..."
-sudo apt-get update -y
-sudo apt-get upgrade -y
+export DEBIAN_FRONTEND=noninteractive
+sudo -E apt-get update -y
+sudo -E apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
 # Install additional useful tools for red team operations
 echo "Installing additional tools..."
-sudo apt-get install -y \
+sudo -E apt-get install -y \
   git \
   python3-pip \
   golang \
   docker.io \
   docker-compose \
-  kali-tools-top10
+  kali-tools-top10 \
+  bind9-dnsutils 
 
 # Enable Docker service
 sudo systemctl enable docker

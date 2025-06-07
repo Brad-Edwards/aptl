@@ -119,12 +119,14 @@ cat lab_connections.txt
 # SSH to SIEM instance
 ssh -i ~/.ssh/purple-team-key ec2-user@SIEM_IP
 
-# Run the installer
+# Run the installer - the process that creates this file can take ~5 mins to complete after the instance is ready
 ./install_splunk.sh
 ```
 
 The script downloads the Splunk RPM then asks if you want to start the
 installation. Answer `y` when ready.
+
+Connect to Splunk at http://SIEM_IP:8000 and login with the credentials you set the install process.
 
 ### 4b. Install qRadar
 
@@ -140,7 +142,7 @@ scp -i ~/.ssh/purple-team-key files/750-QRADAR-QRFULL-2021.06.12.20250509154206.
 # SSH to SIEM instance
 ssh -i ~/.ssh/purple-team-key ec2-user@SIEM_IP
 
-# Step 1: Prepare system (handles reboots if needed)
+# Step 1: Prepare system (handles reboots if needed) - take ~15 mins to complete after the instance is ready
 ./prepare_for_qradar.sh
 
 # If system reboots, wait ~2 minutes then SSH back and run prepare script again

@@ -49,6 +49,7 @@ module "network" {
   allowed_ip        = var.allowed_ip
   project_name      = var.project_name
   environment       = var.environment
+  siem_type         = var.siem_type
 }
 
 # Splunk module - conditional

@@ -32,8 +32,7 @@ sudo semanage port -a -t syslogd_port_t -p tcp 5514 2>/dev/null || true
 # Allow Splunk to bind to non-standard ports
 sudo setsebool -P httpd_can_network_connect 1 || true
 
-# Create Splunk configuration directory structure (before installation)
-sudo mkdir -p /opt/splunk/etc/system/local
+# Create Splunk configuration files in /tmp (will be moved after installation)
 
 # Create indexes.conf - defines the red team index
 cat > /tmp/indexes.conf << 'EOF'
@@ -87,11 +86,8 @@ DEST_KEY = _MetaData:Index
 FORMAT = keplerops-aptl-redteam
 EOF
 
-# Move config files to proper location (will be picked up when Splunk starts)
-sudo mv /tmp/indexes.conf /opt/splunk/etc/system/local/
-sudo mv /tmp/inputs.conf /opt/splunk/etc/system/local/
-sudo mv /tmp/props.conf /opt/splunk/etc/system/local/  
-sudo mv /tmp/transforms.conf /opt/splunk/etc/system/local/
+# Config files remain in /tmp for manual installation after Splunk is installed
+# They will be moved by the install script after Splunk is properly installed
 
 # Create Splunk installation script
 cat > /home/ec2-user/install_splunk.sh << 'EOFSCRIPT'
@@ -125,6 +121,16 @@ sudo rpm -ivh splunk-enterprise.rpm
 sudo groupadd splunk 2>/dev/null || true
 sudo useradd -g splunk -d /opt/splunk -s /bin/bash splunk 2>/dev/null || true
 sudo chown -R splunk:splunk /opt/splunk
+
+# Move pre-configured files to Splunk config directory
+if [ -f "/tmp/indexes.conf" ]; then
+    sudo mv /tmp/indexes.conf /opt/splunk/etc/system/local/
+    sudo mv /tmp/inputs.conf /opt/splunk/etc/system/local/
+    sudo mv /tmp/props.conf /opt/splunk/etc/system/local/
+    sudo mv /tmp/transforms.conf /opt/splunk/etc/system/local/
+    sudo chown splunk:splunk /opt/splunk/etc/system/local/*.conf
+    echo "Pre-configured red team logging configuration installed"
+fi
 
 echo ""
 echo "Splunk has been downloaded and installed to /opt/splunk"

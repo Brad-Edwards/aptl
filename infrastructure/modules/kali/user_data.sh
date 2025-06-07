@@ -63,8 +63,8 @@ cat > /home/kali/redteam_logging.sh << 'EOFLOGGING'
 # Red team logging function - commands
 log_redteam_command() {
     local command="$1"
-    local target="${2:-}"
-    local result="${3:-executed}"
+    local target="$${2:-}"
+    local result="$${3:-executed}"
     
 %{ if siem_type == "splunk" ~}
     # Splunk format with REDTEAM_LOG for index routing
@@ -78,9 +78,9 @@ log_redteam_command() {
 # Red team logging function - network activities
 log_redteam_network() {
     local activity="$1"
-    local target="${2:-}"
-    local ports="${3:-}"
-    local result="${4:-completed}"
+    local target="$${2:-}"
+    local ports="$${3:-}"
+    local result="$${4:-completed}"
     
 %{ if siem_type == "splunk" ~}
     logger -t "redteam-network" "REDTEAM_LOG RedTeamActivity=network RedTeamNetworkActivity=\"$activity\" RedTeamTarget=\"$target\" RedTeamPorts=\"$ports\" RedTeamResult=\"$result\" RedTeamUser=$(whoami) RedTeamHost=$(hostname)"
@@ -92,9 +92,9 @@ log_redteam_network() {
 # Red team logging function - authentication activities  
 log_redteam_auth() {
     local activity="$1"
-    local target="${2:-}"
-    local username="${3:-}"
-    local result="${4:-attempted}"
+    local target="$${2:-}"
+    local username="$${3:-}"
+    local result="$${4:-attempted}"
     
 %{ if siem_type == "splunk" ~}
     logger -t "redteam-auth" "REDTEAM_LOG RedTeamActivity=auth RedTeamAuthActivity=\"$activity\" RedTeamTarget=\"$target\" RedTeamUsername=\"$username\" RedTeamResult=\"$result\" RedTeamUser=$(whoami) RedTeamHost=$(hostname)"

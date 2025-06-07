@@ -36,7 +36,7 @@ fi
 # Download Splunk Enterprise
 echo "Downloading Splunk Enterprise..."
 cd /tmp
-wget -O splunk-enterprise.rpm "https://download.splunk.com/products/splunk/releases/9.1.2/linux/splunk-9.1.2-b6b9c8185839-linux-2.6-x86_64.rpm"
+wget -O splunk-enterprise.rpm "https://download.splunk.com/products/splunk/releases/9.4.2/linux/splunk-9.4.2-e9664af3d956.x86_64.rpm"
 
 if [ $? -ne 0 ]; then
     echo "Failed to download Splunk. Please check your internet connection."

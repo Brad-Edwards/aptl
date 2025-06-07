@@ -38,6 +38,12 @@ variable "victim_private_ip" {
   default     = ""
 }
 
+variable "siem_type" {
+  description = "Type of SIEM being used (splunk or qradar)"
+  type        = string
+  default     = "splunk"
+}
+
 variable "project_name" {
   description = "Name of the project for resource tagging"
   type        = string

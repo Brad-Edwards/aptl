@@ -120,6 +120,75 @@ resource "aws_instance" "qradar" {
               EOFSCRIPT
               chmod +x /home/ec2-user/install_qradar.sh
               
+              # Create qRadar log source configuration script  
+              cat > /home/ec2-user/configure_qradar_logsources.sh << 'EOFSCRIPT'
+              #!/bin/bash
+              echo "qRadar Log Source Configuration for APTL Red Team"
+              echo "================================================="
+              
+              # Check if qRadar is installed and running
+              if ! systemctl is-active --quiet tomcat; then
+                echo "❌ qRadar is not running. Install and start qRadar first:"
+                echo "1. ./install_qradar.sh"
+                echo "2. Complete qRadar setup via web interface"
+                echo "3. Re-run this script"
+                exit 1
+              fi
+              
+              echo "ℹ️  This script will guide you through configuring qRadar for APTL red team logging"
+              echo ""
+              echo "You'll need to complete these steps manually in the qRadar Console:"
+              echo ""
+              echo "1. CREATE RED TEAM LOG SOURCE:"
+              echo "   - Navigate to: Admin > Data Sources > Log Sources"
+              echo "   - Click 'Add'"
+              echo "   - Log Source Name: APTL-Kali-RedTeam"
+              echo "   - Log Source Type: Syslog"
+              echo "   - Protocol: Syslog"
+              echo "   - Log Source Identifier: IP address of Kali instance"
+              echo "   - Save"
+              echo ""
+              echo "2. CREATE CUSTOM PROPERTIES:"
+              echo "   - Navigate to: Admin > Data Sources > Log Source Extensions > Custom Properties"
+              echo "   - Create these custom properties:"
+              echo ""
+              echo "   Property: RedTeamActivity"
+              echo "   - Description: Type of red team activity"
+              echo "   - Property Type: String"
+              echo "   - Use in Rules: Yes"
+              echo "   - Optimized: Yes"
+              echo ""
+              echo "   Property: RedTeamCommand"  
+              echo "   - Description: Actual command executed"
+              echo "   - Property Type: String"
+              echo "   - Use in Rules: Yes"
+              echo "   - Optimized: No"
+              echo ""
+              echo "   Property: RedTeamTarget"
+              echo "   - Description: Target of red team activity"
+              echo "   - Property Type: String" 
+              echo "   - Use in Rules: Yes"
+              echo "   - Optimized: Yes"
+              echo ""
+              echo "3. CREATE PARSING RULES (optional but recommended):"
+              echo "   - Navigate to: Admin > Data Sources > Log Source Extensions > DSM Editor"
+              echo "   - Create custom parsing for REDTEAM_LOG events"
+              echo "   - Extract custom properties from log content"
+              echo ""
+              echo "4. VERIFY LOG RECEPTION:"
+              echo "   - Navigate to: Log Activity"
+              echo "   - Filter by Log Source: APTL-Kali-RedTeam"
+              echo "   - Verify red team logs are being received"
+              echo ""
+              echo "After configuration, red team activities will be separated from victim logs"
+              echo "and can be searched using:"
+              echo "- Log Source filter: APTL-Kali-RedTeam"
+              echo "- Custom Property filters: RedTeamActivity, RedTeamCommand, RedTeamTarget"
+              echo ""
+              echo "This provides equivalent functionality to Splunk's keplerops-aptl-redteam index"
+              EOFSCRIPT
+              chmod +x /home/ec2-user/configure_qradar_logsources.sh
+              
               # Create system preparation completion script
               cat > /home/ec2-user/prepare_for_qradar.sh << 'EOFSCRIPT'
               #!/bin/bash

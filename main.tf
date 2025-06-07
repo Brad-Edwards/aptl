@@ -103,17 +103,6 @@ resource "aws_security_group" "siem_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
-  # Splunk web access (port 8000) - only when using Splunk
-  dynamic "ingress" {
-    for_each = var.siem_type == "splunk" ? [1] : []
-    content {
-      from_port   = 8000
-      to_port     = 8000
-      protocol    = "tcp"
-      cidr_blocks = [var.allowed_ip]
-    }
-  }
-
   # Allow syslog from victim machine
   ingress {
     from_port       = 514

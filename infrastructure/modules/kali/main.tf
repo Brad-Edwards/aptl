@@ -17,6 +17,7 @@ resource "aws_instance" "kali" {
   user_data = templatefile("${path.module}/user_data.sh", {
     siem_private_ip   = var.siem_private_ip
     victim_private_ip = var.victim_private_ip
+    siem_type         = var.siem_type
   })
 
   tags = {

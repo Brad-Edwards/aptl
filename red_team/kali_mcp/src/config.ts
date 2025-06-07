@@ -68,7 +68,30 @@ function findTerraformRoot(): string {
   let currentDir = process.cwd();
   console.error(`[MCP] findTerraformRoot starting from: ${currentDir}`);
   
-  // Search upward for terraform files
+  // First, try known workspace locations (fixes WSL/Windows path issues)
+  const knownLocations = [
+    '/home/atomik/src/aptl',  // Expected workspace location
+    '/home/atomik/src/aptl/infrastructure',  // Direct infrastructure path
+  ];
+  
+  // Check known locations first
+  for (const location of knownLocations) {
+    console.error(`[MCP] Checking known location: ${location}`);
+    
+    if (existsSync(location)) {
+      const mainTf = resolve(location, 'main.tf');
+      const outputsTf = resolve(location, 'outputs.tf');
+      
+      console.error(`[MCP] Files exist: main.tf=${existsSync(mainTf)}, outputs.tf=${existsSync(outputsTf)}`);
+      
+      if (existsSync(mainTf) || existsSync(outputsTf)) {
+        console.error(`[MCP] Found terraform files in known location: ${location}`);
+        return location;
+      }
+    }
+  }
+  
+  // Fall back to original search logic starting from current directory
   const maxDepth = 10; // Prevent infinite loops
   let depth = 0;
   

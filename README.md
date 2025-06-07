@@ -22,6 +22,16 @@ This is a lab environment, not for production use. qRadar trial license expires 
 
 And this is only the beginning... SecOps agents are coming.
 
+## Features
+
+- Multi-SIEM support: Splunk Enterprise Security or IBM qRadar Community Edition
+- Kali Linux red team instance with pre-configured attack tools
+- Victim machine with comprehensive log forwarding to SIEM
+- Red team activity logging: structured events for commands, network activities, and authentication attempts
+- SIEM-specific log routing: `keplerops-aptl-redteam` index for Splunk, custom properties for qRadar
+- Attack simulation scripts for training exercises and correlation testing
+- Terraform automation for consistent infrastructure deployment
+
 ## DISCLAIMER
 
 - The author takes no responsibility for your use of this lab.

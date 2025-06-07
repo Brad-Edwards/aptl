@@ -15,7 +15,8 @@ sudo apt-get install -y \
   python3-pip \
   golang \
   docker.io \
-  docker-compose
+  docker-compose \
+  kali-tools-top10
 
 # Enable Docker service
 sudo systemctl enable docker

@@ -9,7 +9,7 @@ exec 2>&1
 sudo dnf update -y
 
 # Install required packages
-sudo dnf install -y wget curl
+sudo dnf install -y wget curl policycoreutils-python-utils
 
 # Set hostname
 sudo hostnamectl set-hostname splunk.local
@@ -17,6 +17,20 @@ sudo hostnamectl set-hostname splunk.local
 # Add hostname to /etc/hosts using private IP
 PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 echo "$PRIVATE_IP splunk.local" | sudo tee -a /etc/hosts
+
+# Configure SELinux for Splunk operation
+echo "Configuring SELinux for Splunk..."
+
+# Set SELinux to permissive mode to allow Splunk to bind to port 5514
+sudo setenforce 0 || true
+sudo sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
+
+# Add custom SELinux ports for Splunk syslog reception
+sudo semanage port -a -t syslogd_port_t -p udp 5514 2>/dev/null || true
+sudo semanage port -a -t syslogd_port_t -p tcp 5514 2>/dev/null || true
+
+# Allow Splunk to bind to non-standard ports
+sudo setsebool -P httpd_can_network_connect 1 || true
 
 # Create Splunk installation script
 cat > /home/ec2-user/install_splunk.sh << 'EOFSCRIPT'
@@ -66,19 +80,17 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     sudo -u splunk /opt/splunk/bin/splunk start --accept-license
     
     echo ""
-    echo "Configuring UDP syslog input on port 5514..."
-    sleep 10  # Wait for Splunk to fully start
-    
-    # Configure UDP input for syslog on port 5514
-    sudo -u splunk /opt/splunk/bin/splunk add udp 5514 -sourcetype syslog -auth admin:changeme
-    
+    echo "⚠️  IMPORTANT: Please set a secure admin password when prompted above!"
     echo ""
-    echo "Splunk is now running and configured!"
-    echo "Web interface: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8000"
-    echo "Default login: admin / changeme"
+    echo "After Splunk starts, configure UDP syslog input manually:"
+    echo "1. Login to web interface: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8000"
+    echo "2. Go to Settings > Data Inputs > UDP"
+    echo "3. Add new UDP input on port 5514, source type = syslog"
     echo ""
-    echo "UDP syslog input configured on port 5514"
-    echo "Victim and Kali machines will automatically send logs to this port"
+    echo "Or use CLI (replace 'yourpassword' with your actual password):"
+    echo "sudo -u splunk /opt/splunk/bin/splunk add udp 5514 -sourcetype syslog -auth admin:yourpassword"
+    echo ""
+    echo "🔒 For security, no default credentials are configured automatically."
     echo ""
 else
     echo "You can start Splunk later with:"
@@ -90,6 +102,83 @@ fi
 EOFSCRIPT
 
 chmod +x /home/ec2-user/install_splunk.sh
+
+# Create log input configuration script
+cat > /home/ec2-user/configure_splunk_inputs.sh << 'EOFSCRIPT'
+#!/bin/bash
+echo "Splunk Log Input Configuration"
+echo "=============================="
+
+if [ ! -d "/opt/splunk" ]; then
+    echo "❌ Splunk not installed. Run ./install_splunk.sh first."
+    exit 1
+fi
+
+# Check if Splunk is running
+if ! sudo -u splunk /opt/splunk/bin/splunk status >/dev/null 2>&1; then
+    echo "❌ Splunk is not running. Start it first:"
+    echo "sudo -u splunk /opt/splunk/bin/splunk start"
+    exit 1
+fi
+
+# Check if inputs already exist
+UDP_EXISTS=$(sudo -u splunk /opt/splunk/bin/splunk list udp 2>/dev/null | grep -q "5514" && echo "yes" || echo "no")
+TCP_EXISTS=$(sudo -u splunk /opt/splunk/bin/splunk list tcp 2>/dev/null | grep -q "5514" && echo "yes" || echo "no")
+
+if [ "$UDP_EXISTS" = "yes" ] && [ "$TCP_EXISTS" = "yes" ]; then
+    echo "✅ Both UDP and TCP inputs on port 5514 already configured"
+    exit 0
+fi
+
+echo "Configuring syslog inputs on port 5514 (UDP + TCP)..."
+echo "Please enter your Splunk admin password:"
+read -s -p "Password: " PASSWORD
+echo ""
+
+SUCCESS=true
+
+# Configure UDP input if not exists
+if [ "$UDP_EXISTS" = "no" ]; then
+    echo "Configuring UDP 5514..."
+    if sudo -u splunk /opt/splunk/bin/splunk add udp 5514 -sourcetype syslog -auth admin:"$PASSWORD" >/dev/null 2>&1; then
+        echo "✅ UDP syslog input configured on port 5514"
+    else
+        echo "❌ Failed to configure UDP input"
+        SUCCESS=false
+    fi
+else
+    echo "✅ UDP input on port 5514 already exists"
+fi
+
+# Configure TCP input if not exists
+if [ "$TCP_EXISTS" = "no" ]; then
+    echo "Configuring TCP 5514..."
+    if sudo -u splunk /opt/splunk/bin/splunk add tcp 5514 -sourcetype syslog -auth admin:"$PASSWORD" >/dev/null 2>&1; then
+        echo "✅ TCP syslog input configured on port 5514"
+    else
+        echo "❌ Failed to configure TCP input"
+        SUCCESS=false
+    fi
+else
+    echo "✅ TCP input on port 5514 already exists"
+fi
+
+if [ "$SUCCESS" = "true" ]; then
+    echo ""
+    echo "🔗 Splunk is now ready to receive logs from victim and Kali machines"
+    echo "📊 View logs: Search & Reporting > index=main"
+else
+    echo ""
+    echo "❌ Some configurations failed. Please check your password and try again."
+    echo "Or configure manually via web interface:"
+    echo "1. Go to Settings > Data Inputs > TCP"
+    echo "2. Add new TCP input on port 5514, source type = syslog"
+    echo "3. Go to Settings > Data Inputs > UDP" 
+    echo "4. Add new UDP input on port 5514, source type = syslog"
+fi
+EOFSCRIPT
+
+chmod +x /home/ec2-user/configure_splunk_inputs.sh
 
 # Create a simple status check script
 cat > /home/ec2-user/check_splunk.sh << 'EOFSCRIPT'

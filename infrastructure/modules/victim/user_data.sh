@@ -7,7 +7,19 @@ exec 2>&1
 sudo dnf update -y
 
 # Install useful packages for purple team exercises
-sudo dnf install -y telnet nc nmap-ncat bind-utils wget curl
+sudo dnf install -y telnet nc nmap-ncat bind-utils wget curl policycoreutils-python-utils
+
+# Configure SELinux for rsyslog client operations
+echo "Configuring SELinux for log forwarding..."
+
+# Allow rsyslog to make outbound network connections
+sudo setsebool -P rsyslog_client 1 || true
+
+# Add SIEM ports to allowed syslog ports
+sudo semanage port -a -t syslogd_port_t -p udp 5514 2>/dev/null || true
+sudo semanage port -a -t syslogd_port_t -p tcp 5514 2>/dev/null || true
+sudo semanage port -a -t syslogd_port_t -p udp 514 2>/dev/null || true
+sudo semanage port -a -t syslogd_port_t -p tcp 514 2>/dev/null || true
 
 %{ if siem_private_ip != "" ~}
 # Configure rsyslog forwarding to SIEM

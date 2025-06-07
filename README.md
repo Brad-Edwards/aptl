@@ -124,9 +124,16 @@ ssh -i ~/.ssh/purple-team-key ec2-user@SIEM_IP
 ```
 
 The script downloads the Splunk RPM then asks if you want to start the
-installation. Answer `y` when ready.
+installation. Answer `y` when ready and **set a secure admin password**.
 
-Connect to Splunk at http://SIEM_IP:8000 and login with the credentials you set the install process.
+After Splunk starts, configure log reception:
+
+```bash
+# Configure TCP/UDP inputs for victim logs (prompts for password)
+./configure_splunk_inputs.sh
+```
+
+Connect to Splunk at http://SIEM_IP:8000 and login with the credentials you set.
 
 ### 4b. Install qRadar
 

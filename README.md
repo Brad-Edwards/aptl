@@ -118,6 +118,13 @@ terraform plan
 terraform apply
 ```
 
+**Setup timing:**
+
+- Infrastructure deployment: 3-5 minutes
+- Instance configuration: 10-20 minutes per instance (background process)
+
+**Note**: SSH access is available immediately, but user_data scripts continue configuring instances. Scripts and tools become available once setup completes.
+
 ### 4a. Install Splunk
 
 If you chose Splunk, connect to the SIEM instance and run the install script:
@@ -419,6 +426,37 @@ terraform destroy
 This will permanently delete all resources and data.
 
 ## Troubleshooting
+
+### Instance Setup Status
+
+**Kali Instance:**
+
+```bash
+# Check if setup completed
+ls -la /home/kali/kali_setup_complete
+
+# Monitor setup progress  
+sudo tail -f /var/log/user-data.log
+
+# Check for running package installation
+ps aux | grep -E "(apt|dpkg|unattended-upgrade)"
+```
+
+**Common timing:**
+
+- Package updates: 5-15 minutes
+- Script creation: 1-2 minutes
+- Red team tools: Available after setup completes
+
+**Victim Instance:**
+
+```bash
+# Check setup status
+ls -la /home/ec2-user/victim_setup_complete
+
+# Monitor progress
+sudo tail -f /var/log/user-data.log
+```
 
 See [troubleshooting.md](troubleshooting.md) for detailed troubleshooting steps.
 

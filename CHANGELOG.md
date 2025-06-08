@@ -7,6 +7,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-06-07
+
+### Added
+
+- **Splunk Enterprise Security support**: Alternative to qRadar using c5.4xlarge instance
+  - SIEM selection via `siem_type` variable in terraform.tfvars
+  - Automated Splunk installation and configuration scripts
+  - Pre-configured `keplerops-aptl-redteam` index for red team log separation
+- **Kali red team activity logging**: Structured logging of attack commands and network activities
+  - `log_redteam_command()`, `log_redteam_network()`, `log_redteam_auth()` functions
+  - SIEM-specific rsyslog routing (port 5514 for Splunk, 514 for qRadar)
+  - Attack simulation scripts: `simulate_redteam_operations.sh`, `simulate_port_scan.sh`
+  - Structured log fields: RedTeamActivity, RedTeamCommand, RedTeamTarget, RedTeamResult
+
+### Changed
+
+- Updated Splunk version references to use current 9.4.x series downloads
+- Enhanced Kali Linux instance configuration with red team logging integration
+- Improved SIEM configuration scripts for both platforms
+
+### Fixed
+
+- Outdated Splunk download URLs causing 404 errors during installation
+- MCP server terraform path resolution issues after infrastructure reorganization
+- Template syntax errors in Kali user_data script
+
 ## [1.0.1] - 2025-06-03
 
 ### Added

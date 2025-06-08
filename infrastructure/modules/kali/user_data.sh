@@ -18,7 +18,8 @@ sudo -E apt-get install -y \
   docker.io \
   docker-compose \
   kali-tools-top10 \
-  bind9-dnsutils 
+  bind9-dnsutils \
+  sshpass 
 
 # Enable Docker service
 sudo systemctl enable docker

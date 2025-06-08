@@ -56,8 +56,13 @@ sourcetype = syslog
 index = main
 EOF
 
-# Create props.conf - defines source types for red team activities  
+# Create props.conf - applies transform to syslog and defines source types
 cat > /tmp/props.conf << 'EOF'
+# Apply redteam routing transform to all syslog entries
+[syslog]
+TRANSFORMS-redteam = redteam_routing
+
+# Red team source type definitions
 [redteam:commands]
 KV_MODE = none
 EXTRACT-command = (?<command>.*)

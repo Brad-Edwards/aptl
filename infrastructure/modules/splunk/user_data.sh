@@ -32,6 +32,68 @@ sudo semanage port -a -t syslogd_port_t -p tcp 5514 2>/dev/null || true
 # Allow Splunk to bind to non-standard ports
 sudo setsebool -P httpd_can_network_connect 1 || true
 
+# Create Splunk configuration files in /tmp (will be moved after installation)
+
+# Create indexes.conf - defines the red team index
+cat > /tmp/indexes.conf << 'EOF'
+[keplerops-aptl-redteam]
+homePath = $SPLUNK_DB/keplerops-aptl-redteam/db
+coldPath = $SPLUNK_DB/keplerops-aptl-redteam/colddb
+thawedPath = $SPLUNK_DB/keplerops-aptl-redteam/thaweddb
+maxDataSize = auto_high_volume
+maxHotBuckets = 10
+maxWarmDBCount = 300
+EOF
+
+# Create inputs.conf - configures syslog inputs with index routing
+cat > /tmp/inputs.conf << 'EOF'
+[udp://5514]
+sourcetype = syslog
+index = main
+
+[tcp://5514] 
+sourcetype = syslog
+index = main
+EOF
+
+# Create props.conf - applies transform to syslog and defines source types
+cat > /tmp/props.conf << 'EOF'
+# Apply redteam routing transform to all syslog entries
+[syslog]
+TRANSFORMS-redteam = redteam_routing
+
+# Red team source type definitions
+[redteam:commands]
+KV_MODE = none
+EXTRACT-command = (?<command>.*)
+TIME_PREFIX = ^\w+\s+\d+\s+\d+:\d+:\d+
+category = Custom
+description = Red team command execution logs
+
+[redteam:network]
+KV_MODE = none
+TIME_PREFIX = ^\w+\s+\d+\s+\d+:\d+:\d+
+category = Custom
+description = Red team network activity logs
+
+[redteam:auth]
+KV_MODE = none
+TIME_PREFIX = ^\w+\s+\d+\s+\d+:\d+:\d+
+category = Custom  
+description = Red team authentication logs
+EOF
+
+# Create transforms.conf - routes red team logs to correct index
+cat > /tmp/transforms.conf << 'EOF'
+[redteam_routing]
+REGEX = REDTEAM_LOG
+DEST_KEY = _MetaData:Index
+FORMAT = keplerops-aptl-redteam
+EOF
+
+# Config files remain in /tmp for manual installation after Splunk is installed
+# They will be moved by the install script after Splunk is properly installed
+
 # Create Splunk installation script
 cat > /home/ec2-user/install_splunk.sh << 'EOFSCRIPT'
 #!/bin/bash
@@ -64,6 +126,16 @@ sudo rpm -ivh splunk-enterprise.rpm
 sudo groupadd splunk 2>/dev/null || true
 sudo useradd -g splunk -d /opt/splunk -s /bin/bash splunk 2>/dev/null || true
 sudo chown -R splunk:splunk /opt/splunk
+
+# Move pre-configured files to Splunk config directory
+if [ -f "/tmp/indexes.conf" ]; then
+    sudo mv /tmp/indexes.conf /opt/splunk/etc/system/local/
+    sudo mv /tmp/inputs.conf /opt/splunk/etc/system/local/
+    sudo mv /tmp/props.conf /opt/splunk/etc/system/local/
+    sudo mv /tmp/transforms.conf /opt/splunk/etc/system/local/
+    sudo chown splunk:splunk /opt/splunk/etc/system/local/*.conf
+    echo "Pre-configured red team logging configuration installed"
+fi
 
 echo ""
 echo "Splunk has been downloaded and installed to /opt/splunk"

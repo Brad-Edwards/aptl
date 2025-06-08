@@ -22,6 +22,16 @@ This is a lab environment, not for production use. qRadar trial license expires 
 
 And this is only the beginning... SecOps agents are coming.
 
+## Features
+
+- Multi-SIEM support: Splunk Enterprise Security or IBM qRadar Community Edition
+- Kali Linux red team instance with pre-configured attack tools
+- Victim machine with comprehensive log forwarding to SIEM
+- Red team activity logging: structured events for commands, network activities, and authentication attempts
+- SIEM-specific log routing: `keplerops-aptl-redteam` index for Splunk, custom properties for qRadar
+- Attack simulation scripts for training exercises and correlation testing
+- Terraform automation for consistent infrastructure deployment
+
 ## DISCLAIMER
 
 - The author takes no responsibility for your use of this lab.
@@ -108,6 +118,13 @@ terraform plan
 terraform apply
 ```
 
+**Setup timing:**
+
+- Infrastructure deployment: 3-5 minutes
+- Instance configuration: 10-20 minutes per instance (background process)
+
+**Note**: SSH access is available immediately, but user_data scripts continue configuring instances. Scripts and tools become available once setup completes.
+
 ### 4a. Install Splunk
 
 If you chose Splunk, connect to the SIEM instance and run the install script:
@@ -168,6 +185,41 @@ Installation takes 1-2 hours. Choose:
 - Set passwords (don't forget them)
 
 Installation appears stuck on "Installing DSM rpms:" but it's working. Takes 30+ minutes.
+
+### 4c. Configure qRadar for Red Team Logging
+
+After qRadar installation is complete, configure it to properly separate red team activities from victim logs:
+
+```bash
+# SSH to qRadar instance
+ssh -i ~/.ssh/purple-team-key ec2-user@SIEM_IP
+
+# Run the configuration guide
+./configure_qradar_logsources.sh
+```
+
+This script provides step-by-step instructions for:
+
+1. **Creating Red Team Log Source**: Separates Kali logs from victim logs
+2. **Setting Up Custom Properties**:
+   - `RedTeamActivity` - Type of red team activity (commands/network/auth)
+   - `RedTeamCommand` - Actual command executed  
+   - `RedTeamTarget` - Target of the activity
+3. **Configuring Log Parsing**: Extract red team metadata from logs
+4. **Verifying Setup**: Ensure red team logs are properly categorized
+
+**Manual Steps Required in qRadar Console:**
+
+- Navigate to Admin > Data Sources > Log Sources
+- Create "APTL-Kali-RedTeam" log source
+- Set up custom properties for red team activity classification
+- Configure parsing rules for red team log extraction
+
+This provides equivalent functionality to Splunk's `keplerops-aptl-redteam` index, allowing you to:
+
+- Filter logs by red team vs victim activity
+- Search for specific attack types and commands
+- Correlate red team actions with SIEM detections
 
 ## Accessing the Lab
 
@@ -374,6 +426,37 @@ terraform destroy
 This will permanently delete all resources and data.
 
 ## Troubleshooting
+
+### Instance Setup Status
+
+**Kali Instance:**
+
+```bash
+# Check if setup completed
+ls -la /home/kali/kali_setup_complete
+
+# Monitor setup progress  
+sudo tail -f /var/log/user-data.log
+
+# Check for running package installation
+ps aux | grep -E "(apt|dpkg|unattended-upgrade)"
+```
+
+**Common timing:**
+
+- Package updates: 5-15 minutes
+- Script creation: 1-2 minutes
+- Red team tools: Available after setup completes
+
+**Victim Instance:**
+
+```bash
+# Check setup status
+ls -la /home/ec2-user/victim_setup_complete
+
+# Monitor progress
+sudo tail -f /var/log/user-data.log
+```
 
 See [troubleshooting.md](troubleshooting.md) for detailed troubleshooting steps.
 

@@ -109,6 +109,7 @@ module "kali" {
   key_name            = var.key_name
   siem_private_ip     = local.siem_private_ip
   victim_private_ip   = var.enable_victim ? module.victim[0].private_ip : ""
+  siem_type           = var.siem_type
   project_name        = var.project_name
   environment         = var.environment
 }

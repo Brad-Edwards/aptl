@@ -7,6 +7,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-07-24
+
+### Changed
+
+- **qRadar-Only Deployment**: Simplified SIEM selection to use qRadar Community Edition as the default and primary option
+  - Changed `siem_type` default from "splunk" to "qradar" in terraform.tfvars.example and variables.tf
+  - Updated documentation to present qRadar as the single SIEM option
+  - Preserved all Splunk infrastructure code for potential future re-enablement
+- **Documentation Updates**: Removed multi-SIEM references and Splunk-specific sections from README.md and CLAUDE.md
+  - Streamlined installation instructions to focus on qRadar workflow
+  - Updated cost estimates to reflect qRadar-only deployment (~$287/month)
+  - Removed Splunk integration from roadmap (feature already implemented but de-emphasized)
+
+### Technical Notes
+
+- All Splunk modules, variables, and conditional logic preserved in codebase
+- No breaking changes to existing terraform configuration
+- Users can still manually set `siem_type = "splunk"` if needed
+- Validation continues to accept both "splunk" and "qradar" values
+
 ## [1.1.0] - 2025-06-07
 
 ### Added

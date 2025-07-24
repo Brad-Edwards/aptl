@@ -12,9 +12,9 @@
 
 Want unlimited personalized AI-driven purple team exercises?
 
-A shoestring budget purple team lab infrastructure using AWS and Terraform, featuring Splunk Enterprise Security or IBM qRadar Community Edition.
+A shoestring budget purple team lab infrastructure using AWS and Terraform, featuring IBM qRadar Community Edition.
 
-Choose your preferred SIEM in `terraform.tfvars` before deployment.
+Lab deploys qRadar Community Edition SIEM for security event analysis.
 
 This lab assumes you have basic understanding of AWS CLI, Terraform, and Linux admin tasks.
 
@@ -24,11 +24,11 @@ And this is only the beginning... SecOps agents are coming.
 
 ## Features
 
-- Multi-SIEM support: Splunk Enterprise Security or IBM qRadar Community Edition
+- IBM qRadar Community Edition SIEM with comprehensive security analytics
 - Kali Linux red team instance with pre-configured attack tools
 - Victim machine with comprehensive log forwarding to SIEM
 - Red team activity logging: structured events for commands, network activities, and authentication attempts
-- SIEM-specific log routing: `keplerops-aptl-redteam` index for Splunk, custom properties for qRadar
+- Red team log routing: custom properties and log sources for qRadar analysis
 - Attack simulation scripts for training exercises and correlation testing
 - Terraform automation for consistent infrastructure deployment
 
@@ -42,7 +42,7 @@ And this is only the beginning... SecOps agents are coming.
 
 -This project creates a purple team lab environment in AWS with:
 
-- Splunk Enterprise Security on a c5.4xlarge instance (default) or qRadar Community Edition 7.5 on t3a.2xlarge
+- qRadar Community Edition 7.5 on t3a.2xlarge instance
 - Victim machine on t3.micro instance
 - Single VPC with both instances in same subnet
 - Security groups restricting access to your IP address only
@@ -53,7 +53,7 @@ And this is only the beginning... SecOps agents are coming.
 flowchart TD
     A[Internet] --> B[Internet Gateway]
     B --> C[Public Subnet<br/>10.0.1.0/24]
-    C --> D[SIEM<br/>Splunk or qRadar]
+    C --> D[SIEM<br/>qRadar]
     C --> E[Victim<br/>Machine]
     C --> F[Kali Linux<br/>Red Team]
     E -.->|Logs| D
@@ -94,13 +94,7 @@ allowed_ip    = "YOUR_IP/32"  # Get your IP: curl ipinfo.io/ip
 aws_profile   = "your-aws-profile"  # Optional
 ```
 
-### 2a. Prepare for Splunk (default)
-
-If you selected Splunk as your SIEM, no files are needed ahead of time.
-The instance ships with an `install_splunk.sh` script that downloads the
-Splunk installer for you.
-
-### 2b. Get qRadar Files
+### 2. Get qRadar Files
 
 You must obtain the qRadar CE ISO file and license key before proceeding.
 
@@ -125,34 +119,7 @@ terraform apply
 
 **Note**: SSH access is available immediately, but user_data scripts continue configuring instances. Scripts and tools become available once setup completes.
 
-### 4a. Install Splunk
-
-If you chose Splunk, connect to the SIEM instance and run the install script:
-
-```bash
-# Connection info is saved to lab_connections.txt
-cat lab_connections.txt
-
-# SSH to SIEM instance
-ssh -i ~/.ssh/purple-team-key ec2-user@SIEM_IP
-
-# Run the installer - the process that creates this file can take ~5 mins to complete after the instance is ready
-./install_splunk.sh
-```
-
-The script downloads the Splunk RPM then asks if you want to start the
-installation. Answer `y` when ready and **set a secure admin password**.
-
-After Splunk starts, configure log reception:
-
-```bash
-# Configure TCP/UDP inputs for victim logs (prompts for password)
-./configure_splunk_inputs.sh
-```
-
-Connect to Splunk at http://SIEM_IP:8000 and login with the credentials you set.
-
-### 4b. Install qRadar
+### 4. Install qRadar
 
 After infrastructure deployment:
 
@@ -215,7 +182,7 @@ This script provides step-by-step instructions for:
 - Set up custom properties for red team activity classification
 - Configure parsing rules for red team log extraction
 
-This provides equivalent functionality to Splunk's `keplerops-aptl-redteam` index, allowing you to:
+This red team log separation allows you to:
 
 - Filter logs by red team vs victim activity
 - Search for specific attack types and commands
@@ -384,7 +351,6 @@ This creates a true **autonomous red team vs. blue team** scenario where AI atta
 
 ### 🔜 Coming Soon (v1.1)
 
-- **Splunk Integration**: Alternative SIEM option alongside qRadar
 - ✅ **Kali MCP**: Kali Linux Model Context Protocol integration for better AI red teaming
 - **Victim Machine Presets**: Windows, Linux, web apps, etc
 - **Suggested Exercises**: AI-driven exercises based on what you've done
@@ -399,14 +365,12 @@ This creates a true **autonomous red team vs. blue team** scenario where AI atta
 
 ## Cost Estimation
 
-- SIEM
-  - c5.4xlarge (Splunk SIEM): ~$496/month OR
-  - t3a.2xlarge (qRadar SIEM): ~$220/month
+- t3a.2xlarge (qRadar SIEM): ~$220/month
 - t3.micro (Victim): ~$7/month
 - t3.micro (Kali Linux): ~$7/month
 - Storage: ~$50/month (250GB root + 200GB /store + 30GB victim)
 - Elastic IPs: $3.65/month
-- Total: ~$290/month
+- Total: ~$287/month
 
 Stop instances when not in use to save ~85% on compute costs.
 

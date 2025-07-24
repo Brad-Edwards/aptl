@@ -4,18 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-APTL (Advanced Purple Team Lab) is a purple team lab infrastructure using AWS and Terraform. It deploys Splunk Enterprise Security or IBM qRadar Community Edition SIEMs along with victim machines and Kali Linux red team instances for security training and testing.
+APTL (Advanced Purple Team Lab) is a purple team lab infrastructure using AWS and Terraform. It deploys IBM qRadar Community Edition SIEM along with victim machines and Kali Linux red team instances for security training and testing.
 
 ## Key Architecture
 
 - **Terraform Infrastructure**: Main infrastructure defined in `infrastructure/` with modular design
   - Network module: VPC, subnets, security groups
-  - SIEM modules: Splunk or qRadar (configurable via `siem_type`)
+  - SIEM module: qRadar Community Edition
   - Victim module: Target machines with log forwarding
   - Kali module: Red team instances with attack tools
 - **Red Team MCP**: TypeScript MCP server in `red_team/kali_mcp/` providing AI agents controlled access to Kali tools
 - **Log Integration**: Victim machines forward logs to SIEM via rsyslog on port 514
-- **Multi-SIEM Support**: Choose between Splunk (default) or qRadar via terraform.tfvars
+- **qRadar SIEM**: IBM qRadar Community Edition deployment via terraform
 
 ## Development Commands
 
@@ -52,7 +52,7 @@ npx @modelcontextprotocol/inspector build/index.js
 
 ### Primary Configuration
 - **terraform.tfvars**: Main configuration file (copy from terraform.tfvars.example)
-  - Set `siem_type = "splunk"` or `"qradar"`
+  - Uses `siem_type = "qradar"` (default configuration)
   - Configure `allowed_ip` to your IP in CIDR notation
   - Set instance types and deployment flags (`enable_siem`, `enable_victim`, `enable_kali`)
 
@@ -80,26 +80,24 @@ For AI agents to access Kali tools via MCP:
 - Victim machines are purpose-built targets for testing
 - Red team logging helps track attack activities for analysis
 
-### SIEM-Specific Features
-- **Splunk**: Logs route to `keplerops-aptl-redteam` index for red team activities
-- **qRadar**: Custom properties for red team activity classification
-- Both SIEMs provide equivalent purple team capabilities
+### qRadar Features
+- **Red Team Logging**: Custom properties for red team activity classification
+- **Log Sources**: Dedicated "APTL-Kali-RedTeam" log source for attack separation
+- **Custom Properties**: RedTeamActivity, RedTeamCommand, RedTeamTarget fields
 
 ### File Requirements
 - **qRadar**: Requires ISO file and license key in `files/` directory
-- **Splunk**: No pre-downloaded files needed (automatic download)
 
 ### Instance Timing
 - Infrastructure deployment: 3-5 minutes
 - Instance configuration via user_data: 10-20 minutes per instance
 - qRadar installation: 1-2 hours
-- Splunk installation: ~30 minutes
 
 ## Common Development Workflows
 
 ### Deploying Lab Infrastructure
 1. Copy and configure terraform.tfvars.example
-2. For qRadar: Place ISO and license files in `files/`
+2. Place qRadar ISO and license files in `files/`
 3. Run `terraform apply`
 4. Monitor instance setup via SSH and log files
 

@@ -6,7 +6,7 @@ allowed_ip        = "YOUR_IP/32"  # Replace with your IP in CIDR notation
 key_name          = "purple-team-key"
 
 # SIEM Configuration
-siem_type = "splunk"  # Options: "splunk" (default) or "qradar"
+siem_type = "qradar"  # Options: "splunk" or "qradar" (default)
 
 # Splunk Configuration (when siem_type = "splunk")
 splunk_ami = "ami-0b8c2bd77c5e270cf"  # RHEL 8.8 x86_64

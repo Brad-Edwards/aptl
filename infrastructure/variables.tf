@@ -34,7 +34,7 @@ variable "key_name" {
 variable "siem_type" {
   description = "SIEM platform to deploy (splunk or qradar)"
   type        = string
-  default     = "splunk"
+  default     = "qradar"
   validation {
     condition     = contains(["splunk", "qradar"], var.siem_type)
     error_message = "siem_type must be either 'splunk' or 'qradar'."

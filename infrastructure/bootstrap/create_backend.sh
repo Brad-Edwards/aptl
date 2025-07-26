@@ -13,6 +13,7 @@ fi
 echo "📤 Reading bootstrap outputs..."
 BUCKET_NAME=$(terraform output -raw bootstrap_bucket_name)
 DYNAMODB_TABLE=$(terraform output -raw dynamodb_table_name)
+AWS_REGION=$(terraform output -raw shared_bucket_region)
 
 echo "📝 Creating backend.tf..."
 cat > backend.tf << EOF
@@ -22,7 +23,7 @@ terraform {
   backend "s3" {
     bucket         = "$BUCKET_NAME"
     key            = "terraform.tfstate"
-    region         = "us-east-1"
+    region         = "$AWS_REGION"
     encrypt        = true
     dynamodb_table = "$DYNAMODB_TABLE"
   }

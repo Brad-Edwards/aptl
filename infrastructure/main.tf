@@ -10,6 +10,18 @@ terraform {
   required_version = ">= 1.2.0"
 }
 
+# Data source to read bootstrap outputs
+data "terraform_remote_state" "bootstrap" {
+  backend = "s3"
+  config = {
+    # Note: This requires bootstrap to be applied first
+    # The bucket name will be dynamically resolved from bootstrap state
+    bucket = var.bootstrap_bucket_name
+    key    = "bootstrap/terraform.tfstate"
+    region = var.aws_region
+  }
+}
+
 provider "aws" {
   region  = var.aws_region
   profile = var.aws_profile != "" ? var.aws_profile : null

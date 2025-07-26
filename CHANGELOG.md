@@ -7,6 +7,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2025-07-26
+
+### Security
+
+- **S3 Bucket Enumeration Protection**: Enhanced bootstrap infrastructure security to prevent cost exploitation attacks
+  - Added UUID-based naming for S3 bucket: `aptl-shared-${uuid}` instead of predictable `aptl-shared-storage`
+  - Added UUID-based naming for DynamoDB table: `aptl-terraform-locks-${uuid}`
+  - Implemented shared S3 bucket strategy with organized folder structure for all Terraform state
+- **Unified State Management**: Consolidated all Terraform state storage into single UUID-protected S3 bucket
+  - Bootstrap state: `s3://aptl-shared-${uuid}/bootstrap/terraform.tfstate`
+  - Main infrastructure state: `s3://aptl-shared-${uuid}/environments/dev/terraform.tfstate`
+  - Future file storage: `s3://aptl-shared-${uuid}/files/` (qRadar ISOs, etc.)
+
+### Added
+
+- **Bootstrap State Migration**: Automated migration from local to S3 state storage
+  - `migrate_bootstrap_state.sh` script for seamless state migration
+  - `setup_backend.sh` script for automated main infrastructure configuration
+  - Hard dependency enforcement: bootstrap must be applied before main infrastructure
+
+### Changed
+
+- **Required Workflow Update**: New deployment process with state migration
+  1. Deploy bootstrap with local state (`terraform apply`)
+  2. Migrate bootstrap state to S3 (`./migrate_bootstrap_state.sh`)
+  3. Configure main infrastructure (`./setup_backend.sh`)
+  4. Deploy main infrastructure (`terraform apply`)
+- **Backend Configuration**: Updated main infrastructure to use dynamic bucket names from bootstrap outputs
+- **Random Provider**: Added HashiCorp random provider to bootstrap for UUID generation
+
+### Technical Notes
+
+- All existing infrastructure remains compatible with new UUID-based naming
+- Migration scripts handle AWS profile configuration automatically
+- S3 bucket versioning and encryption preserved for all state files
+- No breaking changes to existing variable names or module interfaces
+
 ## [1.1.1] - 2025-07-24
 
 ### Changed

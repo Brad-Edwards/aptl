@@ -128,4 +128,9 @@ output "main_bucket_name" {
 output "main_dynamodb_table_name" {
   description = "DynamoDB table for main infrastructure Terraform state locking"
   value = aws_dynamodb_table.aptl_main_locks.name
+}
+
+output "main_bucket_region" {
+  description = "AWS region where the main infrastructure S3 bucket is deployed"
+  value = var.aws_region
 } 

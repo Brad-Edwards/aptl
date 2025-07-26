@@ -5,6 +5,11 @@ variable "aws_region" {
   type        = string
 }
 
+variable "bootstrap_bucket_name" {
+  description = "S3 bucket name from bootstrap (required - run bootstrap first)"
+  type        = string
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for the VPC"
   type        = string

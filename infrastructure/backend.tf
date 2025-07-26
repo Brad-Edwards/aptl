@@ -2,10 +2,11 @@
 
 terraform {
   backend "s3" {
-    bucket         = "aptl-shared-storage"
-    key            = "dev/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "aptl-terraform-locks"
+    # Note: These values must be provided via backend config or init command
+    # Run: terraform init -backend-config="bucket=<bootstrap-bucket-name>" -backend-config="dynamodb_table=<bootstrap-table-name>"
+    # Or create backend.hcl with these values from bootstrap outputs
+    key     = "environments/dev/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
   }
 } 

@@ -12,35 +12,6 @@ paths-ignore:
   - "infrastructure/modules/*/user_data.sh"  # Contains hardcoded lab passwords
   - "files/**"  # May contain test data with credentials
 
-secrets:
-  # Allow known test patterns for security lab environment
-  ignore-known-secrets: true
-  ignore-default-secrets: true
-  
-  # Whitelist specific patterns for CTF and lab scenarios
-  ignore-patterns:
-    - name: "Security Lab Test Credentials"
-      regex: '(password|secret|key|token).*["\']?(test|demo|admin|lab|ctf|victim|kali|scenario)["\']?'
-      paths:
-        - "**"
-    
-    - name: "Hardcoded Lab Passwords"
-      regex: '(None4you!|password123|admin|test)'
-      paths:
-        - "infrastructure/**"
-        - "red_team/**"
-    
-    - name: "SSH Keys and Certificates"
-      regex: '-----BEGIN.*KEY-----'
-      paths:
-        - "infrastructure/**"
-        - "red_team/**"
-    
-    - name: "qRadar License Keys"
-      regex: 'key.*Community.*Edition'
-      paths:
-        - "files/**"
-
 # GitHub monitoring configuration
 github:
   monitoring:

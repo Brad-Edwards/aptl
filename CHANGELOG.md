@@ -7,6 +7,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2025-07-26
+
+### Security
+
+- **S3 Bucket Enumeration Protection**: Enhanced infrastructure security to prevent cost exploitation attacks
+  - Implemented UUID-based naming for all S3 buckets to prevent predictable bucket enumeration
+  - Bootstrap bucket: `aptl-bootstrap-${uuid}` instead of predictable names
+  - Main infrastructure bucket: `aptl-main-${uuid}` for state storage
+  - DynamoDB tables also use UUID suffixes for consistency
+- **Separate State Storage**: Implemented isolated S3 buckets for different infrastructure components
+  - Bootstrap infrastructure manages its own state bucket
+  - Main infrastructure manages its own separate state bucket
+  - No hardcoded bucket names in repository code
+
+### Added
+
+- **State Migration Automation**: Helper scripts for seamless S3 state migration
+  - `create_backend.sh` scripts in both bootstrap and main infrastructure directories
+  - Automated backend.tf generation from terraform outputs
+  - Simplified workflow: deploy → create backend → migrate state
+
+### Changed
+
+- **Required Deployment Workflow**: Updated to use separate S3 buckets with UUID naming
+  1. Deploy bootstrap: `terraform apply` → `./create_backend.sh` → `terraform init -migrate-state`
+  2. Deploy main infrastructure: `terraform apply` → `./create_backend.sh` → `terraform init -migrate-state`
+- **Random Provider**: Added HashiCorp random provider to both bootstrap and main infrastructure
+- **Backend Configuration**: Each component creates and manages its own S3 backend
+
+### Technical Notes
+
+- All bucket names use UUIDs generated at deployment time
+- No breaking changes to existing variable names or module interfaces
+- State storage is fully isolated between bootstrap and main infrastructure
+- Migration scripts handle the complexity of moving from local to S3 state
+
 ## [1.1.1] - 2025-07-24
 
 ### Changed

@@ -117,4 +117,20 @@ output "network_info" {
     subnet_cidr = module.network.subnet_cidr
     allowed_ip  = var.allowed_ip
   }
-} 
+}
+
+# State storage outputs
+output "main_bucket_name" {
+  description = "S3 bucket for main infrastructure Terraform state"
+  value = aws_s3_bucket.aptl_main.bucket
+}
+
+output "main_dynamodb_table_name" {
+  description = "DynamoDB table for main infrastructure Terraform state locking"
+  value = aws_dynamodb_table.aptl_main_locks.name
+}
+
+output "main_bucket_region" {
+  description = "AWS region where the main infrastructure S3 bucket is deployed"
+  value = var.aws_region
+}

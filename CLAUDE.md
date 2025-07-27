@@ -21,13 +21,35 @@ APTL (Advanced Purple Team Lab) is a purple team lab infrastructure using AWS an
 
 ### Terraform Operations
 
-```bash
-# Initialize and deploy infrastructure
-terraform init
-terraform plan
-terraform apply
+#### Bootstrap Infrastructure (Required First)
 
-# Clean up all resources
+```bash
+cd infrastructure/bootstrap
+terraform init
+terraform apply
+./create_backend.sh     # Creates backend.tf with UUID bucket name
+terraform init -migrate-state   # Migrates state to S3
+```
+
+#### Main Infrastructure
+
+```bash
+cd infrastructure
+terraform init
+terraform apply
+./create_backend.sh     # Creates backend.tf with UUID bucket name  
+terraform init -migrate-state   # Migrates state to S3
+```
+
+#### Cleanup
+
+```bash
+# Destroy main infrastructure first
+cd infrastructure
+terraform destroy
+
+# Then destroy bootstrap
+cd bootstrap  
 terraform destroy
 ```
 
@@ -78,6 +100,12 @@ For AI agents to access Kali tools via MCP:
 ```
 
 ## Important Notes
+
+### CRITICAL: Terraform Commands
+
+- **NEVER EVER run terraform apply, terraform destroy, or any terraform command that modifies infrastructure**
+- Only suggest commands for the user to run themselves
+- This is a strict rule with no exceptions
 
 ### Security Context
 

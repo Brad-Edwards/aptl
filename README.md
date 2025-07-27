@@ -106,18 +106,35 @@ You must obtain the qRadar CE ISO file and license key before proceeding.
 
 ### 3. Deploy Infrastructure
 
+Infrastructure deployment requires two phases for security (UUID-based bucket naming):
+
+#### Phase 1: Bootstrap Infrastructure
+
 ```bash
+cd infrastructure/bootstrap
 terraform init
-terraform plan
 terraform apply
+./create_backend.sh           # Generates backend.tf with UUID bucket name
+terraform init -migrate-state # Migrates state to S3
+```
+
+#### Phase 2: Main Infrastructure  
+
+```bash
+cd ../
+terraform init
+terraform apply
+./create_backend.sh           # Generates backend.tf with UUID bucket name
+terraform init -migrate-state # Migrates state to S3
 ```
 
 **Setup timing:**
 
-- Infrastructure deployment: 3-5 minutes
+- Bootstrap deployment: 2-3 minutes
+- Main infrastructure deployment: 3-5 minutes  
 - Instance configuration: 10-20 minutes per instance (background process)
 
-**Note**: SSH access is available immediately, but user_data scripts continue configuring instances. Scripts and tools become available once setup completes.
+**Note**: SSH access is available immediately after main infrastructure deployment, but user_data scripts continue configuring instances. Scripts and tools become available once setup completes.
 
 ### 4. Install qRadar
 
@@ -383,7 +400,15 @@ Stop instances when not in use to save ~85% on compute costs.
 
 ## Cleanup
 
+Destroy infrastructure in reverse order:
+
 ```bash
+# Destroy main infrastructure first
+cd infrastructure
+terraform destroy
+
+# Then destroy bootstrap
+cd bootstrap
 terraform destroy
 ```
 

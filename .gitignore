@@ -369,5 +369,8 @@ Thumbs.db
 infrastructure/lab_connections.txt
 infrastructure/lab_config.json
 
+# Generated backend.tf files with hardcoded bucket names
+**/backend.tf
+
 # Log files
 *.log

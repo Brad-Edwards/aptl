@@ -1,27 +1,11 @@
 # .gitguardian.yaml
 # GitGuardian configuration for APTL security lab
-# This project contains intentional test credentials for CTF scenarios and security training
+# Only ignore specific paths with intentional test credentials
 
 version: v1
 
-# Ignore paths that contain legitimate test credentials for security lab scenarios
+# Ignore only CTF scenarios and qRadar license files
 paths-ignore:
-  - "scenarios/**"
-  - "ctf/**"
-  - "red_team/**"
-  - "infrastructure/modules/*/user_data.sh"  # Contains hardcoded lab passwords
-  - "files/**"  # May contain test data with credentials
-
-# GitHub monitoring configuration
-github:
-  monitoring:
-    # Disable monitoring for this security lab repository
-    push: false
-    pull_request: false
-    
-# Custom rules for security lab context
-custom-detectors:
-  - name: "Legitimate Lab Infrastructure"
-    description: "Credentials used for security training infrastructure"
-    regex: '(qradar|splunk|kali|victim).*["\']?[a-zA-Z0-9!@#$%^&*]{6,}["\']?'
-    validity: false  # Mark as intentionally invalid/test credentials
+  - "scenarios/**"  # CTF scenarios with test credentials
+  - "ctf/**"        # CTF scenarios with test credentials  
+  - "files/*.key"   # qRadar license files

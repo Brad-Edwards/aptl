@@ -88,3 +88,8 @@ output "dynamodb_table_name" {
   value = aws_dynamodb_table.aptl_bootstrap_locks.name
   description = "DynamoDB table for bootstrap Terraform state locking"
 }
+
+output "bootstrap_bucket_region" {
+  value = var.aws_region
+  description = "AWS region where the bootstrap S3 bucket is deployed"
+}

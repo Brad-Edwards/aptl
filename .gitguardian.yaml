@@ -1,0 +1,56 @@
+# .gitguardian.yaml
+# GitGuardian configuration for APTL security lab
+# This project contains intentional test credentials for CTF scenarios and security training
+
+version: v1
+
+# Ignore paths that contain legitimate test credentials for security lab scenarios
+paths-ignore:
+  - "scenarios/**"
+  - "ctf/**"
+  - "red_team/**"
+  - "infrastructure/modules/*/user_data.sh"  # Contains hardcoded lab passwords
+  - "files/**"  # May contain test data with credentials
+
+secrets:
+  # Allow known test patterns for security lab environment
+  ignore-known-secrets: true
+  ignore-default-secrets: true
+  
+  # Whitelist specific patterns for CTF and lab scenarios
+  ignore-patterns:
+    - name: "Security Lab Test Credentials"
+      regex: '(password|secret|key|token).*["\']?(test|demo|admin|lab|ctf|victim|kali|scenario)["\']?'
+      paths:
+        - "**"
+    
+    - name: "Hardcoded Lab Passwords"
+      regex: '(None4you!|password123|admin|test)'
+      paths:
+        - "infrastructure/**"
+        - "red_team/**"
+    
+    - name: "SSH Keys and Certificates"
+      regex: '-----BEGIN.*KEY-----'
+      paths:
+        - "infrastructure/**"
+        - "red_team/**"
+    
+    - name: "qRadar License Keys"
+      regex: 'key.*Community.*Edition'
+      paths:
+        - "files/**"
+
+# GitHub monitoring configuration
+github:
+  monitoring:
+    # Disable monitoring for this security lab repository
+    push: false
+    pull_request: false
+    
+# Custom rules for security lab context
+custom-detectors:
+  - name: "Legitimate Lab Infrastructure"
+    description: "Credentials used for security training infrastructure"
+    regex: '(qradar|splunk|kali|victim).*["\']?[a-zA-Z0-9!@#$%^&*]{6,}["\']?'
+    validity: false  # Mark as intentionally invalid/test credentials

@@ -160,6 +160,17 @@ ssh -i ~/.ssh/purple-team-key ec2-user@SIEM_IP
 ./install_qradar.sh
 ```
 
+**Note**: The installation script may end with `no server running on /tmp/tmux-0/default [exited]`. This is normal - it just means the tmux session completed. qRadar may still be running successfully.
+
+To verify qRadar is working after installation:
+
+```bash
+# Check if qRadar service is running
+sudo systemctl status hostcontext
+
+# If active (running), qRadar is working - access the web interface via HTTPS
+```
+
 Installation takes 1-2 hours. Choose:
 
 - Software installation

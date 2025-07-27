@@ -2,10 +2,10 @@
 
 terraform {
   backend "s3" {
-    bucket         = "aptl-main-d4cdc195-38f2-28ee-7f89-717079b14103"
+    bucket         = "aptl-main-c656289e-f8e1-ae4f-74d2-383e98ec44e2"
     key            = "terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true
-    dynamodb_table = "aptl-main-locks-d4cdc195-38f2-28ee-7f89-717079b14103"
+    dynamodb_table = "aptl-main-locks-c656289e-f8e1-ae4f-74d2-383e98ec44e2"
   }
 }

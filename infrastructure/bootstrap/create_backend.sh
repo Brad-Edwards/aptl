@@ -13,7 +13,7 @@ fi
 echo "📤 Reading bootstrap outputs..."
 BUCKET_NAME=$(terraform output -raw bootstrap_bucket_name)
 DYNAMODB_TABLE=$(terraform output -raw dynamodb_table_name)
-AWS_REGION=$(terraform output -raw shared_bucket_region)
+AWS_REGION=$(terraform output -raw bootstrap_bucket_region)
 
 echo "📝 Creating backend.tf..."
 cat > backend.tf << EOF

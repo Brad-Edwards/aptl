@@ -339,7 +339,7 @@ override.tf.json
 lab_connections.txt
 
 # QRadar files
-files/
+files/*
 *.iso
 *.key
 

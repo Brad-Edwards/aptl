@@ -1,0 +1,9 @@
+{
+    "mcpServers": {
+        "kali-red-team": {
+            "command": "node",
+            "args": ["./red_team/kali_mcp/build/index.js"],
+            "cwd": "/home/atomik/src/aptl"
+        }
+    }
+}

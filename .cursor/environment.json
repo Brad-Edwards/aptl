@@ -1,0 +1,4 @@
+{
+    "agentCanUpdateSnapshot": true,
+    "install": "apt-get update && apt-get install -y nodejs npm jq && cd red_team/kali_mcp && npm install && npm run build"
+}

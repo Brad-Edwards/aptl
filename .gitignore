@@ -368,9 +368,10 @@ Thumbs.db
 # Terraform output files containing IP addresses
 infrastructure/lab_connections.txt
 infrastructure/lab_config.json
+**/outputs.tf
 
 # Generated backend.tf files with hardcoded bucket names
-backend.tf
+**/backend.tf
 
 # Log files
 *.log

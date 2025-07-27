@@ -1,0 +1,50 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# DO NOT JUMP AHEAD
+
+ALWAYS follow these rules when working on this codebase:
+
+1. **ONLY do what is explicitly requested** - Do not add extra features, scripts, or files that weren't asked for
+2. **DO NOT assume what the user wants** - If unclear, ask for clarification rather than making assumptions
+3. **CHECK before going beyond the request** - If you think something additional might be helpful, ask first
+4. **STOP when the task is complete** - Don't continue adding "helpful" extras
+5. **RESPECT the user's workflow** - They know their codebase and requirements better than you do
+
+## What NOT to do:
+- Create helper scripts without being asked
+- Add complex setup procedures when simple ones exist
+- Generate documentation for features that don't exist yet
+- Modify files beyond what was specifically requested
+- Add "best practices" that weren't requested
+
+## What TO do:
+- Answer the specific question asked
+- Make only the changes explicitly requested
+- Ask for clarification when requirements are unclear
+- Keep responses focused and concise
+- Respect existing code patterns and structure
+
+**Remember: Being helpful means doing exactly what was asked, not what you think might be helpful.**
+
+# WRITING STYLE GUIDELINES
+
+ALWAYS follow these writing rules for this technical/cyber audience:
+
+## DO NOT:
+- Use marketing language, boosterism, or sales-y content
+- Write verbose explanations or "value propositions"
+- Use excessive emojis or excitement
+- Create bulleted lists with bold formatting everywhere
+- Write like you're selling something
+
+## DO:
+- Use plain, simple, direct language
+- Write for busy technical professionals
+- Be concise and to the point
+- Focus on facts and functionality
+- Remember: technical people get turned off by marketing speak
+
+**Remember: This audience wants information, not persuasion. Write documentation like you're talking to a colleague, not a prospect.**

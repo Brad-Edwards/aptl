@@ -38,6 +38,22 @@ And this is only the beginning... SecOps agents are coming.
 - You are solely responsible for whether you are in compliance with the laws of your jurisdiction
 - You are solely responsible for following the terms and conditions of any services or applications you use.
 
+### Test Credentials Notice
+
+This repository contains **intentional test credentials** for security training and CTF scenarios. These credentials are:
+
+- **Hardcoded by design** for lab functionality
+- **Not production secrets** - they are dummy/test values only
+- **Safe for educational use** in isolated lab environments
+- **Covered by GitGuardian whitelist** (see `.gitguardian.yaml`)
+
+Common test credentials used:
+- Default lab password: `None4you!`
+- Test usernames: `admin`, `test`, `demo`
+- Lab-specific keys and tokens for scenario functionality
+
+**⚠️ These are NOT real production credentials and pose no security risk.**
+
 ## Overview
 
 -This project creates a purple team lab environment in AWS with:

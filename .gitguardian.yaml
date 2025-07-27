@@ -4,8 +4,6 @@
 
 version: v1
 
-# Ignore only CTF scenarios and qRadar license files
+# Ignore only CTF scenarios (files/* already in .gitignore)
 paths-ignore:
-  - "scenarios/**"  # CTF scenarios with test credentials
-  - "ctf/**"        # CTF scenarios with test credentials  
-  - "files/*.key"   # qRadar license files
+  - "ctf_scenarios/**"  # CTF scenarios with test credentials

@@ -73,6 +73,16 @@
             "flags": 2,
             "services": ["system_users", "sudo", "cron"],
             "path": "intermediate/privilege_escalation/"
+          },
+          "cross_site_scripting": {
+            "name": "Cross-Site Scripting",
+            "description": "Reflected XSS vulnerability enabling session hijacking training",
+            "attack_vectors": ["reflected_xss", "session_hijacking", "client_side_exploitation"],
+            "skills_tested": ["xss_payload_crafting", "browser_exploitation", "web_defense_analysis"],
+            "difficulty": "4/10",
+            "flags": 1,
+            "services": ["apache2", "php"],
+            "path": "intermediate/cross_site_scripting/"
           }
         }
       },

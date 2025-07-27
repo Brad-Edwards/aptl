@@ -14,6 +14,7 @@ This directory contains CTF scenarios designed for red team MCP agent training a
 | **Intermediate** | | | | |
 | 5/10 | [SQL Injection](intermediate/sql_injection/) | Web app SQL injection and database enumeration | 20-30 min | 2 |
 | 6/10 | [Privilege Escalation](intermediate/privilege_escalation/) | Linux sudo/SUID privilege escalation vectors | 15-25 min | 2 |
+| 4/10 | [Cross-Site Scripting](intermediate/cross_site_scripting/) | Reflected XSS training and session hijacking | 15-20 min | 1 |
 | **Hard** | | | | |
 | 8/10 | [Buffer Overflow](hard/buffer_overflow/) | Stack-based buffer overflow exploitation | 45-60 min | 1 |
 | 9/10 | [Multi-Stage Attack](hard/multi_stage_attack/) | Complete APT-style attack chain simulation | 60-90 min | 4 |

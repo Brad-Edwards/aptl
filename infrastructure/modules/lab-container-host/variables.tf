@@ -61,3 +61,8 @@ variable "environment" {
   type        = string
   default     = "lab"
 }
+
+variable "aws_region" {
+  description = "AWS region for ECR authentication"
+  type        = string
+}

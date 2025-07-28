@@ -76,12 +76,21 @@ resource "aws_dynamodb_table" "aptl_main_locks" {
   }
 }
 
+# Data source for bootstrap remote state
+data "terraform_remote_state" "bootstrap" {
+  backend = "s3"
+  config = {
+    bucket = "aptl-bootstrap-7a62a0d4-83fe-d271-b97c-c2d81acdf082"
+    key    = "terraform.tfstate"
+    region = var.aws_region
+  }
+}
+
 
 # Local values for dynamic SIEM selection
 locals {
-  # Read ECR repository URL from bootstrap state
-  bootstrap_state = fileexists("${path.module}/bootstrap/terraform.tfstate") ? jsondecode(file("${path.module}/bootstrap/terraform.tfstate")) : null
-  ecr_repository_url = local.bootstrap_state != null ? local.bootstrap_state.outputs.ecr_repository_url.value : ""
+  # Get ECR repository URL from bootstrap remote state
+  ecr_repository_url = try(data.terraform_remote_state.bootstrap.outputs.ecr_repository_url, "")
 
   # Determine which SIEM is active and get its outputs
   active_siem = var.enable_siem ? (
@@ -191,6 +200,7 @@ module "lab_container_host" {
   lab_container_host_instance_type = var.lab_container_host_instance_type
   key_name                         = var.key_name
   ecr_repository_url               = local.ecr_repository_url
+  aws_region                       = var.aws_region
   siem_private_ip                  = local.siem_private_ip
   victim_private_ip                = var.enable_victim ? module.victim[0].private_ip : ""
   siem_type                        = var.siem_type
@@ -205,7 +215,7 @@ resource "local_file" "connection_info" {
 APTL Purple Team Lab Connection Info
 ====================================
 
-${local.active_siem != null ? "${upper(var.siem_type)} Instance:\n  Public IP:  ${local.active_siem.public_ip}\n  Private IP: ${local.active_siem.private_ip}\n  SSH: ssh -i ~/.ssh/${var.key_name} ${local.active_siem.ssh_user}@${local.active_siem.public_ip}\n  Web: ${var.siem_type == "qradar" ? "https" : "http"}://${local.active_siem.public_ip}${var.siem_type == "splunk" ? ":8000" : ""}\n\n" : "SIEM Instance: Disabled\n\n"}${var.enable_victim ? "Victim Instance:\n  Public IP:  ${module.victim[0].public_ip}\n  Private IP: ${module.victim[0].private_ip}\n  SSH: ssh -i ~/.ssh/${var.key_name} ec2-user@${module.victim[0].public_ip}\n  RDP: mstsc /v:${module.victim[0].public_ip}\n\n" : "Victim Instance: Disabled\n\n"}${var.enable_kali ? "Kali Red Team Instance:\n  Public IP:  ${module.kali[0].public_ip}\n  Private IP: ${module.kali[0].private_ip}\n  SSH: ssh -i ~/.ssh/${var.key_name} kali@${module.kali[0].public_ip}\n\n" : "Kali Instance: Disabled\n\n"}${var.siem_type == "qradar" && local.active_siem != null ? "qRadar ISO Transfer:\n  scp -i ~/.ssh/${var.key_name} files/750-QRADAR-QRFULL-2021.06.12.20250509154206.iso ec2-user@${local.active_siem.public_ip}:/tmp/\n\n" : ""}${var.enable_victim && local.active_siem != null ? "Log Forwarding Verification:\n  1. SSH to victim machine and run: ./generate_test_events.sh\n  2. Login to ${var.siem_type} web interface: ${var.siem_type == "qradar" ? "https" : "http"}://${local.active_siem.public_ip}${var.siem_type == "splunk" ? ":8000" : ""}\n  3. Check for logs from victim machine IP: ${module.victim[0].private_ip}\n\n" : ""}${var.enable_victim ? "Purple Team Testing:\n  SSH to victim: ssh -i ~/.ssh/${var.key_name} ec2-user@${module.victim[0].public_ip}\n  Generate events: ./generate_test_events.sh\n  ${local.active_siem != null ? "Monitor in ${var.siem_type}: Check logs for ${module.victim[0].private_ip}" : "Events will be generated locally (SIEM disabled)"}\n\n" : ""}${var.enable_kali ? "Red Team Operations:\n  SSH to Kali: ssh -i ~/.ssh/${var.key_name} kali@${module.kali[0].public_ip}\n  Run lab info: ./lab_info.sh\n  ${local.active_siem != null ? "Target SIEM: ${local.active_siem.private_ip}" : "SIEM: Disabled"}\n  ${var.enable_victim ? "Target Victim: ${module.victim[0].private_ip}" : "Victim: Disabled"}\n\n" : ""}Network Summary:
+${local.active_siem != null ? "${upper(var.siem_type)} Instance:\n  Public IP:  ${local.active_siem.public_ip}\n  Private IP: ${local.active_siem.private_ip}\n  SSH: ssh -i ~/.ssh/${var.key_name} ${local.active_siem.ssh_user}@${local.active_siem.public_ip}\n  Web: ${var.siem_type == "qradar" ? "https" : "http"}://${local.active_siem.public_ip}${var.siem_type == "splunk" ? ":8000" : ""}\n\n" : "SIEM Instance: Disabled\n\n"}${var.enable_victim ? "Victim Instance:\n  Public IP:  ${module.victim[0].public_ip}\n  Private IP: ${module.victim[0].private_ip}\n  SSH: ssh -i ~/.ssh/${var.key_name} ec2-user@${module.victim[0].public_ip}\n  RDP: mstsc /v:${module.victim[0].public_ip}\n\n" : "Victim Instance: Disabled\n\n"}${var.enable_kali ? "Kali Red Team Instance:\n  Public IP:  ${module.kali[0].public_ip}\n  Private IP: ${module.kali[0].private_ip}\n  SSH: ssh -i ~/.ssh/${var.key_name} kali@${module.kali[0].public_ip}\n\n" : "Kali Instance: Disabled\n\n"}${var.enable_lab_container_host ? "Lab Container Host:\n  Public IP:  ${module.lab_container_host[0].public_ip}\n  Private IP: ${module.lab_container_host[0].private_ip}\n  Host SSH: ssh -i ~/.ssh/${var.key_name} ec2-user@${module.lab_container_host[0].public_ip}\n  Kali Container SSH: ssh -i ~/.ssh/${var.key_name} -p 2222 kali@${module.lab_container_host[0].public_ip}\n  Container Password: kali\n\n" : "Lab Container Host: Disabled\n\n"}${var.siem_type == "qradar" && local.active_siem != null ? "qRadar ISO Transfer:\n  scp -i ~/.ssh/${var.key_name} files/750-QRADAR-QRFULL-2021.06.12.20250509154206.iso ec2-user@${local.active_siem.public_ip}:/tmp/\n\n" : ""}${var.enable_victim && local.active_siem != null ? "Log Forwarding Verification:\n  1. SSH to victim machine and run: ./generate_test_events.sh\n  2. Login to ${var.siem_type} web interface: ${var.siem_type == "qradar" ? "https" : "http"}://${local.active_siem.public_ip}${var.siem_type == "splunk" ? ":8000" : ""}\n  3. Check for logs from victim machine IP: ${module.victim[0].private_ip}\n\n" : ""}${var.enable_victim ? "Purple Team Testing:\n  SSH to victim: ssh -i ~/.ssh/${var.key_name} ec2-user@${module.victim[0].public_ip}\n  Generate events: ./generate_test_events.sh\n  ${local.active_siem != null ? "Monitor in ${var.siem_type}: Check logs for ${module.victim[0].private_ip}" : "Events will be generated locally (SIEM disabled)"}\n\n" : ""}${var.enable_kali ? "Red Team Operations:\n  SSH to Kali: ssh -i ~/.ssh/${var.key_name} kali@${module.kali[0].public_ip}\n  Run lab info: ./lab_info.sh\n  ${local.active_siem != null ? "Target SIEM: ${local.active_siem.private_ip}" : "SIEM: Disabled"}\n  ${var.enable_victim ? "Target Victim: ${module.victim[0].private_ip}" : "Victim: Disabled"}\n\n" : ""}Network Summary:
   VPC CIDR: ${module.network.vpc_cidr}
   Subnet CIDR: ${module.network.subnet_cidr}
   Your Allowed IP: ${var.allowed_ip}

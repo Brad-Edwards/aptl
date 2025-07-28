@@ -1,5 +1,5 @@
 # APTL Kali Red Team Container
-FROM kalilinux/kali-rolling:latest
+FROM kalilinux/kali-last-release:latest
 
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -13,19 +13,10 @@ RUN apt-get update --allow-insecure-repositories && \
     apt-get update && \
     apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" && \
     apt-get install -y \
-        git \
-        python3-pip \
-        golang \
+        kali-linux-core \
         kali-tools-top10 \
-        bind9-dnsutils \
-        sshpass \
         rsyslog \
         openssh-server \
-        curl \
-        wget \
-        vim \
-        nano \
-        sudo \
         && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -41,9 +32,17 @@ RUN mkdir -p /var/run/sshd && \
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
     echo 'AllowUsers kali' >> /etc/ssh/sshd_config
 
-# Set up working directory
+# Set up working directory and tool permissions
 RUN mkdir -p /home/kali/operations && \
-    chown -R kali:kali /home/kali/operations
+    chown -R kali:kali /home/kali/operations && \
+    # Create directories for common tools
+    mkdir -p /home/kali/.msf4 && \
+    mkdir -p /home/kali/.john && \
+    mkdir -p /home/kali/.hashcat && \
+    chown -R kali:kali /home/kali/.msf4 /home/kali/.john /home/kali/.hashcat && \
+    # Fix dumpcap permissions for packet capture
+    chmod 755 /usr/bin/dumpcap && \
+    setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap
 
 # Install Node.js (useful for various tools)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \

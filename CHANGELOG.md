@@ -7,6 +7,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2025-07-27
+
+### Added
+
+- **VitePress Documentation Site**: Complete documentation infrastructure with modern static site generation
+  - Professional documentation site with navigation, search, and responsive design
+  - Mermaid diagram support for architecture visualization
+  - Optimized for GitHub Pages deployment with proper base path configuration
+- **Comprehensive Documentation Restructure**: Broke down monolithic README into focused, topic-specific guides
+  - `getting-started.md` - Prerequisites, setup process, cost estimation, and security considerations
+  - `deployment.md` - Infrastructure deployment steps, timing, access details, and cleanup procedures
+  - `qradar-setup.md` - qRadar installation, configuration, and red team logging setup
+  - `red-team-mcp.md` - Kali MCP server setup, AI client configuration, and available tools
+  - `exercises.md` - Purple team exercises, MITRE ATT&CK techniques, and simulation scripts
+  - `ai-red-teaming.md` - Autonomous attack demonstrations and AI agent configuration
+  - `architecture.md` - Detailed system design, network topology, and component descriptions
+  - `troubleshooting.md` - Common issues, debugging procedures, and resolution steps
+
+### Changed
+
+- **README Focus**: Restructured main README to emphasize autonomous cyber operations purpose
+  - Clear articulation of blue team practice and autonomous cyber weapons awareness objectives
+  - Emphasis on educational demonstration of AI-driven attack capabilities
+  - Direct links to comprehensive documentation site for technical details
+  - Streamlined content removing duplication with detailed documentation pages
+- **Technical Tone**: Adjusted documentation tone to be more professional and technical
+  - Removed marketing-style language in favor of neutral, technical descriptions
+  - Maintained focus on educational and awareness objectives
+  - Improved clarity and precision in technical explanations
+
+### Technical Notes
+
+- All content functionally equivalent to original README with improved organization
+- GitHub Pages integration with proper link structure to VitePress site
+- Documentation site available at `https://brad-edwards.github.io/aptl/`
+- Preserved all commands, scripts, and technical procedures without modification
+
 ## [1.1.3] - 2025-07-26
 
 ### Added

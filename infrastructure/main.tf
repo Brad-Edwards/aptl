@@ -76,6 +76,7 @@ resource "aws_dynamodb_table" "aptl_main_locks" {
   }
 }
 
+
 # Local values for dynamic SIEM selection
 locals {
   # Determine which SIEM is active and get its outputs

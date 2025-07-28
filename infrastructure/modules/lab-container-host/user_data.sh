@@ -52,6 +52,7 @@ services:
       - SIEM_TYPE=${siem_type}
     volumes:
       - kali-operations:/home/kali/operations
+      - /home/ec2-user/.ssh:/host-ssh-keys:ro
     restart: unless-stopped
     networks:
       - lab-network

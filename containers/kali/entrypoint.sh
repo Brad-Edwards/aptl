@@ -41,6 +41,16 @@ else
     echo "rsyslog not available"
 fi
 
+# Set up SSH keys from host
+if [ -f "/host-ssh-keys/authorized_keys" ]; then
+    mkdir -p /home/kali/.ssh
+    cp /host-ssh-keys/authorized_keys /home/kali/.ssh/authorized_keys
+    chown -R kali:kali /home/kali/.ssh
+    chmod 700 /home/kali/.ssh
+    chmod 600 /home/kali/.ssh/authorized_keys
+    echo "SSH keys configured for kali user"
+fi
+
 # Start SSH service  
 if [ ! -d "/run/sshd" ]; then
     mkdir -p /run/sshd

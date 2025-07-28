@@ -75,6 +75,8 @@ resource "aws_instance" "lab_container_host" {
 
   user_data = templatefile("${path.module}/user_data.sh", {
     ecr_repository_url = var.ecr_repository_url
+    ecr_registry_url   = split("/", var.ecr_repository_url)[0]
+    aws_region         = var.aws_region
     siem_private_ip    = var.siem_private_ip
     victim_private_ip  = var.victim_private_ip
     siem_type          = var.siem_type

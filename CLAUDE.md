@@ -103,7 +103,7 @@ For AI agents to access Kali tools via MCP:
 
 ### CRITICAL: Terraform Commands
 
-- **NEVER EVER run terraform apply, terraform destroy, or any terraform command that modifies infrastructure**
+- **NEVER EVER run terraform apply, terraform destroy, terraform plan, or any terraform command**
 - Only suggest commands for the user to run themselves
 - This is a strict rule with no exceptions
 

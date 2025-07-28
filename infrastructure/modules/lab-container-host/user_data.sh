@@ -29,8 +29,8 @@ if ! command -v aws &> /dev/null; then
 fi
 
 # Configure ECR login
-AWS_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
-aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${ecr_repository_url%/*}
+ECR_REGISTRY="${ecr_registry_url}"
+aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $ECR_REGISTRY
 
 # Pull Kali container image
 echo "Pulling Kali container from ECR..."
@@ -55,6 +55,25 @@ services:
     restart: unless-stopped
     networks:
       - lab-network
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_PTRACE
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    privileged: false
+    security_opt:
+      - seccomp:unconfined
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+      nproc:
+        soft: 32768
+        hard: 32768
+    shm_size: 2gb
 
 networks:
   lab-network:

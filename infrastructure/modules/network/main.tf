@@ -214,21 +214,7 @@ resource "aws_security_group" "victim_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
-  # Allow all attacks from Kali
-  ingress {
-    from_port       = 0
-    to_port         = 0
-    protocol        = "-1"
-    security_groups = [aws_security_group.kali_sg.id]
-  }
-
-  # Allow all outbound traffic
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # Note: Cross-references to Kali SG handled by separate rules below
 
   tags = {
     Name        = "${var.project_name}-victim-sg"
@@ -251,17 +237,83 @@ resource "aws_security_group" "kali_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
-  # Allow all outbound traffic
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # Note: Outbound rules to victim and SIEM handled by separate rules below
 
   tags = {
     Name        = "${var.project_name}-kali-sg"
     Project     = var.project_name
     Environment = var.environment
   }
+}
+
+# Separate security group rules to avoid circular dependencies
+
+# Kali -> Victim attacks
+resource "aws_security_group_rule" "victim_allow_kali_attacks" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> Kali responses
+resource "aws_security_group_rule" "victim_respond_to_kali" {
+  type                     = "egress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> SIEM syslog UDP
+resource "aws_security_group_rule" "victim_syslog_udp_to_siem" {
+  type                     = "egress"
+  from_port                = 514
+  to_port                  = 514
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> SIEM syslog TCP
+resource "aws_security_group_rule" "victim_syslog_tcp_to_siem" {
+  type                     = "egress"
+  from_port                = 514
+  to_port                  = 514
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Kali -> Victim attacks
+resource "aws_security_group_rule" "kali_attack_victim" {
+  type                     = "egress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Kali -> SIEM syslog UDP
+resource "aws_security_group_rule" "kali_syslog_udp_to_siem" {
+  type                     = "egress"
+  from_port                = 514
+  to_port                  = 514
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Kali -> SIEM syslog TCP
+resource "aws_security_group_rule" "kali_syslog_tcp_to_siem" {
+  type                     = "egress"
+  from_port                = 514
+  to_port                  = 514
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
 } 

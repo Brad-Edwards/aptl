@@ -79,6 +79,10 @@ resource "aws_dynamodb_table" "aptl_main_locks" {
 
 # Local values for dynamic SIEM selection
 locals {
+  # Read ECR repository URL from bootstrap state
+  bootstrap_state = fileexists("${path.module}/bootstrap/terraform.tfstate") ? jsondecode(file("${path.module}/bootstrap/terraform.tfstate")) : null
+  ecr_repository_url = local.bootstrap_state != null ? local.bootstrap_state.outputs.ecr_repository_url.value : ""
+
   # Determine which SIEM is active and get its outputs
   active_siem = var.enable_siem ? (
     var.siem_type == "splunk" && length(module.splunk) > 0 ? {
@@ -174,6 +178,24 @@ module "kali" {
   siem_type           = var.siem_type
   project_name        = var.project_name
   environment         = var.environment
+}
+
+# Lab Container Host module - conditional
+module "lab_container_host" {
+  count  = var.enable_lab_container_host ? 1 : 0
+  source = "./modules/lab-container-host"
+
+  subnet_id                        = module.network.subnet_id
+  security_group_id                = module.network.lab_container_host_security_group_id
+  lab_container_host_ami           = var.lab_container_host_ami
+  lab_container_host_instance_type = var.lab_container_host_instance_type
+  key_name                         = var.key_name
+  ecr_repository_url               = local.ecr_repository_url
+  siem_private_ip                  = local.siem_private_ip
+  victim_private_ip                = var.enable_victim ? module.victim[0].private_ip : ""
+  siem_type                        = var.siem_type
+  project_name                     = var.project_name
+  environment                      = var.environment
 }
 
 # Connection info file (backward compatibility)

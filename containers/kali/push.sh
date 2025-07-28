@@ -4,26 +4,22 @@ set -e
 # APTL Kali Container Push Script
 echo "=== Pushing APTL Kali Red Team Container to ECR ==="
 
-# Read ECR URI from Terraform bootstrap state
-TERRAFORM_STATE="../../infrastructure/bootstrap/terraform.tfstate"
+# Read ECR URI from Terraform bootstrap output
+BOOTSTRAP_DIR="../../infrastructure/bootstrap"
 
-if [ ! -f "$TERRAFORM_STATE" ]; then
-    echo "❌ Error: Terraform state file not found at $TERRAFORM_STATE"
+if [ ! -d "$BOOTSTRAP_DIR" ]; then
+    echo "❌ Error: Bootstrap directory not found at $BOOTSTRAP_DIR"
+    exit 1
+fi
+
+echo "Getting ECR URI from Terraform output..."
+cd "$BOOTSTRAP_DIR"
+ECR_URI=$(terraform output -raw ecr_repository_url 2>/dev/null)
+cd - > /dev/null
+
+if [ -z "$ECR_URI" ]; then
+    echo "❌ Error: Could not read ECR repository URL from Terraform output."
     echo "Run terraform apply in infrastructure/bootstrap/ directory first."
-    exit 1
-fi
-
-if ! command -v jq &> /dev/null; then
-    echo "❌ Error: jq is required but not installed."
-    echo "Install with: sudo apt-get install jq"
-    exit 1
-fi
-
-ECR_URI=$(jq -r '.outputs.ecr_repository_url.value' "$TERRAFORM_STATE")
-
-if [ "$ECR_URI" = "null" ] || [ -z "$ECR_URI" ]; then
-    echo "❌ Error: Could not read ECR repository URL from Terraform state."
-    echo "Ensure ECR repository is deployed via Terraform."
     exit 1
 fi
 

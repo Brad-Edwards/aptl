@@ -38,7 +38,7 @@ SIEM_IP="${siem_private_ip}"
 %{ if siem_type == "splunk" ~}
 # Configure rsyslog for Splunk (port 5514) with red team log routing
 echo "# APTL Red Team Log Forwarding - Splunk" | sudo tee -a /etc/rsyslog.conf
-echo "# Route red team logs to keplerops-aptl-redteam index" | sudo tee -a /etc/rsyslog.conf
+echo "# Route red team logs to aptl-redteam index" | sudo tee -a /etc/rsyslog.conf
 echo ":msg, contains, \"REDTEAM_LOG\" @@$SIEM_IP:5514" | sudo tee -a /etc/rsyslog.conf
 %{ else ~}
 # Configure rsyslog for qRadar (port 514) with red team identification  
@@ -177,7 +177,7 @@ echo "✅ Red team activity simulation complete!"
 echo "📊 Check qRadar Log Activity > Filter by Log Source: APTL-Kali-RedTeam"
 echo "🔍 Look for RedTeamActivity custom properties in event details"
 %{ else ~}
-echo "📊 Check Splunk Search: index=keplerops-aptl-redteam"
+echo "📊 Check Splunk Search: index=aptl-redteam"
 echo "🔍 Filter by source_type=redteam:commands, redteam:network, redteam:auth"
 %{ endif ~}
 echo ""
@@ -220,7 +220,7 @@ echo "✅ Port scan simulation complete!"
 %{ if siem_type == "qradar" ~}
 echo "📊 Check qRadar for RedTeamActivity=network events"
 %{ else ~}
-echo "📊 Check Splunk: index=keplerops-aptl-redteam source_type=redteam:network"
+echo "📊 Check Splunk: index=aptl-redteam source_type=redteam:network"
 %{ endif ~}
 EOFPORTSCAN
 

@@ -33,4 +33,9 @@ output "victim_security_group_id" {
 output "kali_security_group_id" {
   description = "ID of the Kali security group"
   value       = aws_security_group.kali_sg.id
+}
+
+output "lab_container_host_security_group_id" {
+  description = "ID of the lab container host security group"
+  value       = aws_security_group.lab_container_host_sg.id
 } 

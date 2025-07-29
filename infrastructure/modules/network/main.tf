@@ -252,12 +252,31 @@ resource "aws_security_group" "victim_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
-  # Allow all outbound traffic
+  # Network isolation: No direct internet access for victim
+  # Specific egress rules for SIEM and internal communication handled separately below
+
+  # Allow egress for admin SSH responses
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Allow egress for web responses to admin
+  egress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Allow egress for RDP responses to admin
+  egress {
+    from_port   = 3389
+    to_port     = 3389
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
   }
 
   # Note: Cross-references to Kali SG handled by separate rules below
@@ -283,12 +302,15 @@ resource "aws_security_group" "kali_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
-  # Allow all outbound traffic
+  # Network isolation: No direct internet access for Kali
+  # Specific egress rules for victim attacks and SIEM communication handled separately below
+
+  # Allow egress for admin SSH responses
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
   }
 
   # Note: Outbound rules to victim and SIEM handled by separate rules below
@@ -342,6 +364,28 @@ resource "aws_security_group_rule" "victim_syslog_tcp_to_siem" {
   security_group_id        = aws_security_group.victim_sg.id
 }
 
+# Victim -> SIEM Splunk syslog UDP (port 5514) - only when using Splunk
+resource "aws_security_group_rule" "victim_splunk_syslog_udp_to_siem" {
+  count                    = var.siem_type == "splunk" ? 1 : 0
+  type                     = "egress"
+  from_port                = 5514
+  to_port                  = 5514
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> SIEM Splunk syslog TCP (port 5514) - only when using Splunk
+resource "aws_security_group_rule" "victim_splunk_syslog_tcp_to_siem" {
+  count                    = var.siem_type == "splunk" ? 1 : 0
+  type                     = "egress"
+  from_port                = 5514
+  to_port                  = 5514
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
 # Kali -> Victim attacks
 resource "aws_security_group_rule" "kali_attack_victim" {
   type                     = "egress"
@@ -367,6 +411,28 @@ resource "aws_security_group_rule" "kali_syslog_tcp_to_siem" {
   type                     = "egress"
   from_port                = 514
   to_port                  = 514
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Kali -> SIEM Splunk syslog UDP (port 5514) - only when using Splunk
+resource "aws_security_group_rule" "kali_splunk_syslog_udp_to_siem" {
+  count                    = var.siem_type == "splunk" ? 1 : 0
+  type                     = "egress"
+  from_port                = 5514
+  to_port                  = 5514
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Kali -> SIEM Splunk syslog TCP (port 5514) - only when using Splunk
+resource "aws_security_group_rule" "kali_splunk_syslog_tcp_to_siem" {
+  count                    = var.siem_type == "splunk" ? 1 : 0
+  type                     = "egress"
+  from_port                = 5514
+  to_port                  = 5514
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.siem_sg.id
   security_group_id        = aws_security_group.kali_sg.id

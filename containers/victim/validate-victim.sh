@@ -63,7 +63,7 @@ echo ""
 
 # Test 1: SSH Connectivity
 echo -n "1. Testing SSH connectivity... "
-if $SSH_CMD "echo 'SSH OK' >/dev/null 2>&1"; then
+if $SSH_CMD "echo 'SSH OK'"; then
     echo -e "${GREEN}PASS${NC}"
 else
     echo -e "${RED}FAIL${NC}"

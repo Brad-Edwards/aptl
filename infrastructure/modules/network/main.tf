@@ -214,6 +214,33 @@ resource "aws_security_group" "victim_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
+  # Network isolation: No direct internet access for victim
+  # Specific egress rules for SIEM and internal communication handled separately below
+
+  # Allow egress for admin SSH responses
+  egress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Allow egress for web responses to admin
+  egress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Allow egress for RDP responses to admin
+  egress {
+    from_port   = 3389
+    to_port     = 3389
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
+  }
+
   # Note: Cross-references to Kali SG handled by separate rules below
 
   tags = {
@@ -231,6 +258,17 @@ resource "aws_security_group" "kali_sg" {
 
   # SSH access from allowed IPs
   ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Network isolation: No direct internet access for Kali
+  # Specific egress rules for victim attacks and SIEM communication handled separately below
+
+  # Allow egress for admin SSH responses
+  egress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -288,6 +326,28 @@ resource "aws_security_group_rule" "victim_syslog_tcp_to_siem" {
   security_group_id        = aws_security_group.victim_sg.id
 }
 
+# Victim -> SIEM Splunk syslog UDP (port 5514) - only when using Splunk
+resource "aws_security_group_rule" "victim_splunk_syslog_udp_to_siem" {
+  count                    = var.siem_type == "splunk" ? 1 : 0
+  type                     = "egress"
+  from_port                = 5514
+  to_port                  = 5514
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> SIEM Splunk syslog TCP (port 5514) - only when using Splunk
+resource "aws_security_group_rule" "victim_splunk_syslog_tcp_to_siem" {
+  count                    = var.siem_type == "splunk" ? 1 : 0
+  type                     = "egress"
+  from_port                = 5514
+  to_port                  = 5514
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
 # Kali -> Victim attacks
 resource "aws_security_group_rule" "kali_attack_victim" {
   type                     = "egress"
@@ -316,4 +376,113 @@ resource "aws_security_group_rule" "kali_syslog_tcp_to_siem" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.siem_sg.id
   security_group_id        = aws_security_group.kali_sg.id
-} 
+}
+
+# Kali -> SIEM Splunk syslog UDP (port 5514) - only when using Splunk
+resource "aws_security_group_rule" "kali_splunk_syslog_udp_to_siem" {
+  count                    = var.siem_type == "splunk" ? 1 : 0
+  type                     = "egress"
+  from_port                = 5514
+  to_port                  = 5514
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Kali -> SIEM Splunk syslog TCP (port 5514) - only when using Splunk
+resource "aws_security_group_rule" "kali_splunk_syslog_tcp_to_siem" {
+  count                    = var.siem_type == "splunk" ? 1 : 0
+  type                     = "egress"
+  from_port                = 5514
+  to_port                  = 5514
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Lab Container Host Security Group
+resource "aws_security_group" "lab_container_host_sg" {
+  name        = "${var.project_name}-lab-container-host-sg"
+  description = "Security group for lab container host"
+  vpc_id      = aws_vpc.purple_team_vpc.id
+
+  # SSH access from allowed IPs (host access)
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Kali SSH access from allowed IPs (container access)
+  ingress {
+    from_port   = 2222
+    to_port     = 2222
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Allow all outbound traffic for ECR pulls and container communication
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "${var.project_name}-lab-container-host-sg"
+    Project     = var.project_name
+    Environment = var.environment
+  }
+}
+
+# Container -> Victim attacks (same as Kali -> Victim)
+resource "aws_security_group_rule" "victim_allow_container_attacks" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  source_security_group_id = aws_security_group.lab_container_host_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Container syslog to SIEM (UDP)
+resource "aws_security_group_rule" "container_syslog_udp_to_siem" {
+  type                     = "egress"
+  from_port                = 514
+  to_port                  = 5514
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.lab_container_host_sg.id
+}
+
+# Container syslog to SIEM (TCP)
+resource "aws_security_group_rule" "container_syslog_tcp_to_siem" {
+  type                     = "egress"
+  from_port                = 514
+  to_port                  = 5514
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.siem_sg.id
+  security_group_id        = aws_security_group.lab_container_host_sg.id
+}
+
+# Victim -> Kali reverse shells
+resource "aws_security_group_rule" "kali_allow_victim_reverse_shells" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Victim -> Lab Container Host reverse shells
+resource "aws_security_group_rule" "container_host_allow_victim_reverse_shells" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.lab_container_host_sg.id
+}

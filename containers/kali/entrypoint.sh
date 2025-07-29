@@ -9,7 +9,7 @@ if [ -n "$SIEM_PRIVATE_IP" ] && [ -n "$SIEM_TYPE" ]; then
         # Configure rsyslog for Splunk (port 5514)
         cat >> /etc/rsyslog.conf << EOF
 # APTL Red Team Log Forwarding - Splunk
-# Route red team logs to keplerops-aptl-redteam index
+# Route red team logs to aptl-redteam index
 :msg, contains, "REDTEAM_LOG" @@$SIEM_PRIVATE_IP:5514
 EOF
     else

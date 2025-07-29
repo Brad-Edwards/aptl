@@ -17,6 +17,7 @@ RUN apt-get update --allow-insecure-repositories && \
         kali-tools-top10 \
         rsyslog \
         openssh-server \
+        iputils-ping \
         && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

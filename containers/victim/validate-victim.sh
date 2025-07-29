@@ -133,7 +133,7 @@ if [ ! -z "$SIEM_IP" ]; then
     
     # Test network connectivity to SIEM
     echo -n "   - Network connectivity to SIEM... "
-    if $SSH_CMD "timeout 5 bash -c 'echo >/dev/tcp/$SIEM_IP/$SIEM_PORT' 2>/dev/null"; then
+    if $SSH_CMD "timeout 5 bash -c \"echo >/dev/tcp/$SIEM_IP/$SIEM_PORT\" 2>/dev/null"; then
         echo -e "${GREEN}REACHABLE${NC}"
     else
         echo -e "${RED}UNREACHABLE${NC}"

@@ -7,46 +7,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.8] - 2025-07-28
-
-### Added
-
-- **Base Victim Container**: Implemented Rocky Linux 9 base victim container with systemd support
-- **SSH Key Management**: Added dual SSH key delivery methods (volume mount for local dev, environment variable for AWS)
-- **Container Validation**: Created validation script with custom SSH port support for testing containers
-- **Docker Compose Configurations**: Added consistent compose files for local development and AWS deployment
-
-### Changed
-
-- **Victim Architecture**: Prepared foundation for victim container migration from VMs
-- **Security Configuration**: Implemented secure SSH defaults with key-based authentication only
-
-## [1.1.7] - 2025-07-28
-
-### Changed
-
-- **Documentation Update**: Updated all documentation to reflect containerized Kali approach instead of direct EC2 instances
-- **SIEM Index Naming**: Renamed Splunk red team index from `keplerops-aptl-redteam` to `aptl-redteam`
-- **Container Enhancement**: Added `iputils-ping` package to Kali container for basic network utilities
-
-## [1.1.6] - 2025-07-27
-
-### Added
-
-- **Container Infrastructure**: ECR repository for Kali Red Team container images in bootstrap infrastructure
-- **Kali Container**: Docker-based Kali deployment with pre-installed tools and red team logging
-- **Container Build System**: Build and push scripts for container image management
-- **SIEM Integration**: Container-based red team logging to Splunk/qRadar via rsyslog
-
-### Changed
-
-- **Infrastructure Bootstrap**: Moved ECR repository to bootstrap phase to resolve deployment timing
-- **Deployment Model**: Prepared groundwork for container-based lab instances alongside VM deployment
-
 ## [1.1.5] - 2025-07-27
 
 ### Security
 
+- **Network Isolation**: Enhanced security for AI red team operations to prevent unintended external access
+  - Removed internet gateway access from Kali and victim instances to contain automated activities
+  - Implemented internal-only communication between lab instances using security group references
+  - Preserved SIEM internet access for updates and licensing requirements
+  - Maintained admin SSH access through bastion host for troubleshooting and management
+
+### Fixed
+
+- **Network Module Dependencies**: Resolved circular dependency issues in security group configurations
+  - Separated security group rules into explicit resources to break circular references
+  - Improved terraform planning and apply reliability for network infrastructure
+  - Enhanced network module maintainability and extensibility
+
+### Technical Notes
+
+- Network isolation specifically designed for autonomous AI red team scenarios
+- Lab instances can communicate internally but cannot initiate external connections
+- SIEM maintains external connectivity for proper security monitoring functionality
+- All existing functionality preserved with enhanced security boundaries
+=======
 - **Network Isolation**: Removed internet access from Kali and victim instances to prevent AI
   red team accidents
 - **Internal Communication**: Lab instances can only communicate within VPC using security

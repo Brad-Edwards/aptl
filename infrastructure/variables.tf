@@ -147,6 +147,25 @@ variable "enable_victim" {
   default     = true
 }
 
+# Lab Container Host Configuration
+variable "lab_container_host_ami" {
+  description = "AMI ID for the lab container host (Amazon Linux 2023)"
+  type        = string
+  default     = "ami-08a6efd148b1f7504" # Amazon Linux 2023 x86_64
+}
+
+variable "lab_container_host_instance_type" {
+  description = "Instance type for the lab container host"
+  type        = string
+  default     = "t3.large"
+}
+
+variable "enable_lab_container_host" {
+  description = "Whether to create the lab container host for containerized deployments"
+  type        = bool
+  default     = true
+}
+
 variable "project_name" {
   description = "Name of the project for resource tagging"
   type        = string

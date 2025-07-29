@@ -134,3 +134,4 @@ output "main_bucket_region" {
   description = "AWS region where the main infrastructure S3 bucket is deployed"
   value = var.aws_region
 }
+

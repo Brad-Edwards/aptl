@@ -90,7 +90,7 @@ setup_rsyslog
 echo "=== Container initialization complete ==="
 
 # Execute the main command (typically systemd)
-exec "$@" &
+"$@" &
 
 # Wait for systemd to be ready, then start user sessions
 sleep 5

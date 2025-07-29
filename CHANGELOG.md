@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lab instances can communicate internally but cannot initiate external connections
 - SIEM maintains external connectivity for proper security monitoring functionality
 - All existing functionality preserved with enhanced security boundaries
+- Added explicit protocol support (TCP, UDP, ICMP, ESP, AH, GRE) and comprehensive admin access for all scenario types
 
 ## [1.1.4] - 2025-07-27
 

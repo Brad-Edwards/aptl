@@ -29,7 +29,7 @@ if ! command -v aws &> /dev/null; then
 fi
 
 # Configure ECR login
-ECR_REGISTRY="${ecr_registry_url}"
+ECR_REGISTRY=$(echo "${ecr_repository_url}" | cut -d'/' -f1)
 aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $ECR_REGISTRY
 
 # Pull Kali container image

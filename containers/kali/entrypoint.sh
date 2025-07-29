@@ -21,12 +21,36 @@ EOF
 EOF
     fi
     
+    # Validate IP addresses before substitution
+    validate_ip() {
+        if [[ $1 =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+            return 0
+        else
+            return 1
+        fi
+    }
+    
     # Update scripts with actual SIEM and victim IPs
     if [ -n "$VICTIM_PRIVATE_IP" ]; then
-        sed -i "s/\${victim_private_ip}/$VICTIM_PRIVATE_IP/g" /home/kali/*.sh
+        if validate_ip "$VICTIM_PRIVATE_IP"; then
+            sed -i "s/\${victim_private_ip}/$VICTIM_PRIVATE_IP/g" /home/kali/*.sh
+        else
+            echo "Warning: Invalid VICTIM_PRIVATE_IP format: $VICTIM_PRIVATE_IP"
+        fi
     fi
-    sed -i "s/\${siem_private_ip}/$SIEM_PRIVATE_IP/g" /home/kali/*.sh
-    sed -i "s/\${siem_type}/$SIEM_TYPE/g" /home/kali/*.sh
+    
+    if validate_ip "$SIEM_PRIVATE_IP"; then
+        sed -i "s/\${siem_private_ip}/$SIEM_PRIVATE_IP/g" /home/kali/*.sh
+    else
+        echo "Warning: Invalid SIEM_PRIVATE_IP format: $SIEM_PRIVATE_IP"
+    fi
+    
+    # SIEM_TYPE validation (only allow expected values)
+    if [[ "$SIEM_TYPE" =~ ^(splunk|qradar)$ ]]; then
+        sed -i "s/\${siem_type}/$SIEM_TYPE/g" /home/kali/*.sh
+    else
+        echo "Warning: Invalid SIEM_TYPE: $SIEM_TYPE"
+    fi
     
     echo "Red team log forwarding configured for $SIEM_TYPE"
 else

@@ -438,3 +438,23 @@ resource "aws_security_group_rule" "container_syslog_tcp_to_siem" {
   source_security_group_id = aws_security_group.siem_sg.id
   security_group_id        = aws_security_group.lab_container_host_sg.id
 }
+
+# Victim -> Kali reverse shells
+resource "aws_security_group_rule" "kali_allow_victim_reverse_shells" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Victim -> Lab Container Host reverse shells
+resource "aws_security_group_rule" "container_host_allow_victim_reverse_shells" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.lab_container_host_sg.id
+}

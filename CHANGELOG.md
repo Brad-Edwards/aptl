@@ -30,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lab instances can communicate internally but cannot initiate external connections
 - SIEM maintains external connectivity for proper security monitoring functionality
 - All existing functionality preserved with enhanced security boundaries
+=======
+- **Network Isolation**: Removed internet access from Kali and victim instances to prevent AI
+  red team accidents
+- **Internal Communication**: Lab instances can only communicate within VPC using security
+  group references
+- **SIEM Access**: Preserved internet access for SIEM updates and licensing
+
+### Fixed
+
+- Circular dependency between Kali and victim security groups using separate rule resources
 
 ## [1.1.4] - 2025-07-27
 

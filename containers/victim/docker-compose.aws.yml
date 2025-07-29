@@ -1,0 +1,40 @@
+version: '3.8'
+
+# AWS/Production compose file
+# This demonstrates how containers would be configured on the lab container host
+# Environment variables would be set via user_data or .env file
+
+services:
+  victim-base:
+    image: ${ECR_REGISTRY}/aptl-victim:latest
+    container_name: aptl-victim-base
+    hostname: victim-base
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - victim-logs:/var/log
+    environment:
+      # SSH key passed as environment variable
+      - LABADMIN_SSH_KEY=${LABADMIN_SSH_KEY}
+      # SIEM configuration
+      - SIEM_IP=${SIEM_PRIVATE_IP}
+      - SIEM_TYPE=${SIEM_TYPE:-qradar}
+      - SIEM_PORT=${SIEM_PORT:-514}
+    tmpfs:
+      - /run
+      - /tmp
+    stop_signal: SIGRTMIN+3
+    networks:
+      aptl-net:
+        ipv4_address: 172.18.1.10
+    restart: unless-stopped
+
+networks:
+  aptl-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
+
+volumes:
+  victim-logs:

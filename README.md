@@ -55,7 +55,7 @@ This lab serves two critical purposes:
 ## Technical Architecture
 
 - IBM qRadar Community Edition SIEM for enterprise-grade log analysis
-- Kali Linux red team instance with MCP-enabled AI agent access
+- Containerized Kali Linux red team instances with MCP-enabled AI agent access
 - Victim machine with comprehensive log forwarding
 - Terraform-automated AWS infrastructure deployment
 

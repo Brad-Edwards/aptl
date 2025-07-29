@@ -190,34 +190,66 @@ resource "aws_security_group" "victim_sg" {
   description = "Security group for victim machine"
   vpc_id      = aws_vpc.purple_team_vpc.id
 
-  # SSH access from allowed IPs
+  # Admin access from allowed IPs - all TCP ports for any scenario
   ingress {
-    from_port   = 22
-    to_port     = 22
+    from_port   = 0
+    to_port     = 65535
     protocol    = "tcp"
     cidr_blocks = [var.allowed_ip]
   }
 
-  # RDP access from allowed IPs
+  # Admin access from allowed IPs - all UDP ports for any scenario
   ingress {
-    from_port   = 3389
-    to_port     = 3389
-    protocol    = "tcp"
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "udp"
     cidr_blocks = [var.allowed_ip]
   }
 
-  # Web access from allowed IPs
+  # Admin access - ICMP (ping, traceroute, network diagnostics)
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Admin access - ESP (IPSec VPN)
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "50"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Admin access - AH (IPSec Authentication Header)
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "51"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Admin access - GRE (Generic Routing Encapsulation)
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "47"
+    cidr_blocks = [var.allowed_ip]
+  }
+
+  # Admin access from allowed IPs - ICMP for ping/traceroute
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
     cidr_blocks = [var.allowed_ip]
   }
 
   # Network isolation: No direct internet access for victim
   # Specific egress rules for SIEM and internal communication handled separately below
 
-  # Allow egress for admin SSH responses
+  # Allow egress for admin SSH responses only
   egress {
     from_port   = 22
     to_port     = 22
@@ -225,21 +257,7 @@ resource "aws_security_group" "victim_sg" {
     cidr_blocks = [var.allowed_ip]
   }
 
-  # Allow egress for web responses to admin
-  egress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ip]
-  }
-
-  # Allow egress for RDP responses to admin
-  egress {
-    from_port   = 3389
-    to_port     = 3389
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ip]
-  }
+  # Note: Web and RDP traffic handled by bidirectional Kali <-> Victim rules
 
   # Note: Cross-references to Kali SG handled by separate rules below
 
@@ -286,22 +304,122 @@ resource "aws_security_group" "kali_sg" {
 
 # Separate security group rules to avoid circular dependencies
 
-# Kali -> Victim attacks
-resource "aws_security_group_rule" "victim_allow_kali_attacks" {
+# Kali -> Victim attacks (TCP)
+resource "aws_security_group_rule" "victim_allow_kali_attacks_tcp" {
   type                     = "ingress"
   from_port                = 0
-  to_port                  = 0
-  protocol                 = "-1"
+  to_port                  = 65535
+  protocol                 = "tcp"
   source_security_group_id = aws_security_group.kali_sg.id
   security_group_id        = aws_security_group.victim_sg.id
 }
 
-# Victim -> Kali responses
-resource "aws_security_group_rule" "victim_respond_to_kali" {
+# Kali -> Victim attacks (UDP)
+resource "aws_security_group_rule" "victim_allow_kali_attacks_udp" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Kali -> Victim attacks (ICMP)
+resource "aws_security_group_rule" "victim_allow_kali_attacks_icmp" {
+  type                     = "ingress"
+  from_port                = -1
+  to_port                  = -1
+  protocol                 = "icmp"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Kali -> Victim attacks (ESP - IPSec)
+resource "aws_security_group_rule" "victim_allow_kali_attacks_esp" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "50"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Kali -> Victim attacks (AH - IPSec)
+resource "aws_security_group_rule" "victim_allow_kali_attacks_ah" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "51"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Kali -> Victim attacks (GRE)
+resource "aws_security_group_rule" "victim_allow_kali_attacks_gre" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "47"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> Kali responses (TCP)
+resource "aws_security_group_rule" "victim_respond_to_kali_tcp" {
+  type                     = "egress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> Kali responses (UDP)
+resource "aws_security_group_rule" "victim_respond_to_kali_udp" {
+  type                     = "egress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> Kali responses (ICMP)
+resource "aws_security_group_rule" "victim_respond_to_kali_icmp" {
+  type                     = "egress"
+  from_port                = -1
+  to_port                  = -1
+  protocol                 = "icmp"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> Kali responses (ESP)
+resource "aws_security_group_rule" "victim_respond_to_kali_esp" {
   type                     = "egress"
   from_port                = 0
   to_port                  = 0
-  protocol                 = "-1"
+  protocol                 = "50"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> Kali responses (AH)
+resource "aws_security_group_rule" "victim_respond_to_kali_ah" {
+  type                     = "egress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "51"
+  source_security_group_id = aws_security_group.kali_sg.id
+  security_group_id        = aws_security_group.victim_sg.id
+}
+
+# Victim -> Kali responses (GRE)
+resource "aws_security_group_rule" "victim_respond_to_kali_gre" {
+  type                     = "egress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "47"
   source_security_group_id = aws_security_group.kali_sg.id
   security_group_id        = aws_security_group.victim_sg.id
 }
@@ -348,12 +466,62 @@ resource "aws_security_group_rule" "victim_splunk_syslog_tcp_to_siem" {
   security_group_id        = aws_security_group.victim_sg.id
 }
 
-# Kali -> Victim attacks
-resource "aws_security_group_rule" "kali_attack_victim" {
+# Kali -> Victim attacks (TCP)
+resource "aws_security_group_rule" "kali_attack_victim_tcp" {
+  type                     = "egress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Kali -> Victim attacks (UDP)
+resource "aws_security_group_rule" "kali_attack_victim_udp" {
+  type                     = "egress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Kali -> Victim attacks (ICMP)
+resource "aws_security_group_rule" "kali_attack_victim_icmp" {
+  type                     = "egress"
+  from_port                = -1
+  to_port                  = -1
+  protocol                 = "icmp"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Kali -> Victim attacks (ESP)
+resource "aws_security_group_rule" "kali_attack_victim_esp" {
   type                     = "egress"
   from_port                = 0
   to_port                  = 0
-  protocol                 = "-1"
+  protocol                 = "50"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Kali -> Victim attacks (AH)
+resource "aws_security_group_rule" "kali_attack_victim_ah" {
+  type                     = "egress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "51"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Kali -> Victim attacks (GRE)
+resource "aws_security_group_rule" "kali_attack_victim_gre" {
+  type                     = "egress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "47"
   source_security_group_id = aws_security_group.victim_sg.id
   security_group_id        = aws_security_group.kali_sg.id
 }
@@ -467,12 +635,62 @@ resource "aws_security_group_rule" "container_syslog_tcp_to_siem" {
   security_group_id        = aws_security_group.lab_container_host_sg.id
 }
 
-# Victim -> Kali reverse shells
-resource "aws_security_group_rule" "kali_allow_victim_reverse_shells" {
+# Victim -> Kali reverse shells (TCP)
+resource "aws_security_group_rule" "kali_allow_victim_reverse_shells_tcp" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Victim -> Kali reverse shells (UDP)
+resource "aws_security_group_rule" "kali_allow_victim_reverse_shells_udp" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "udp"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Victim -> Kali reverse shells (ICMP)
+resource "aws_security_group_rule" "kali_allow_victim_reverse_shells_icmp" {
+  type                     = "ingress"
+  from_port                = -1
+  to_port                  = -1
+  protocol                 = "icmp"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Victim -> Kali reverse shells (ESP)
+resource "aws_security_group_rule" "kali_allow_victim_reverse_shells_esp" {
   type                     = "ingress"
   from_port                = 0
   to_port                  = 0
-  protocol                 = "-1"
+  protocol                 = "50"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Victim -> Kali reverse shells (AH)
+resource "aws_security_group_rule" "kali_allow_victim_reverse_shells_ah" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "51"
+  source_security_group_id = aws_security_group.victim_sg.id
+  security_group_id        = aws_security_group.kali_sg.id
+}
+
+# Victim -> Kali reverse shells (GRE)
+resource "aws_security_group_rule" "kali_allow_victim_reverse_shells_gre" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "47"
   source_security_group_id = aws_security_group.victim_sg.id
   security_group_id        = aws_security_group.kali_sg.id
 }

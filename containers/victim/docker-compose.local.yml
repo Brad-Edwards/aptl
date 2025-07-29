@@ -1,0 +1,62 @@
+version: '3.8'
+
+# Local development compose file
+# Usage: docker-compose -f docker-compose.local.yml up
+
+services:
+  victim-base:
+    build: .
+    container_name: aptl-victim-base
+    hostname: victim-base
+    privileged: true
+    volumes:
+      # Mount local SSH key for labadmin access
+      - ~/.ssh/aptl-labadmin.pub:/keys/labadmin.pub:ro
+      # Mount systemd cgroup (rw required for systemd)
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      # Persistent logs
+      - victim-logs:/var/log
+    tmpfs:
+      - /run
+      - /tmp
+    stop_signal: SIGRTMIN+3
+    networks:
+      - aptl-net
+    ports:
+      - "2222:22"   # SSH only
+
+  # Optional: Local SIEM simulator for testing log forwarding
+  rsyslog-collector:
+    image: alpine:latest
+    container_name: aptl-rsyslog-collector
+    command: |
+      sh -c "
+      apk add --no-cache rsyslog
+      cat > /etc/rsyslog.conf << 'EOF'
+      module(load=\"imudp\")
+      input(type=\"imudp\" port=\"514\")
+      module(load=\"imtcp\")
+      input(type=\"imtcp\" port=\"514\")
+      *.* /var/log/collected.log
+      EOF
+      mkdir -p /var/log
+      rsyslogd -n -f /etc/rsyslog.conf
+      "
+    volumes:
+      - syslog-data:/var/log
+    networks:
+      - aptl-net
+    ports:
+      - "514:514/udp"
+      - "514:514/tcp"
+
+networks:
+  aptl-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  victim-logs:
+  syslog-data:

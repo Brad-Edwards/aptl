@@ -124,7 +124,7 @@ if [ ! -z "$SIEM_IP" ]; then
     fi
     
     echo -n "   - Rsyslog forwarding rule... "
-    if $SSH_CMD "sudo grep -q '@@$SIEM_IP:$SIEM_PORT' /etc/rsyslog.conf /etc/rsyslog.d/*.conf 2>/dev/null"; then
+    if $SSH_CMD "sudo grep -q \"@@$SIEM_IP:$SIEM_PORT\" /etc/rsyslog.conf /etc/rsyslog.d/*.conf 2>/dev/null"; then
         echo -e "${GREEN}CONFIGURED${NC}"
     else
         echo -e "${YELLOW}NOT FOUND${NC}"

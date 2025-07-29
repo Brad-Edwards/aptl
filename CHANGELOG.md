@@ -7,6 +7,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2025-07-28
+
+### Added
+
+- **Base Victim Container**: Implemented Rocky Linux 9 base victim container with systemd support
+- **SSH Key Management**: Added dual SSH key delivery methods (volume mount for local dev, environment variable for AWS)
+- **Container Validation**: Created validation script with custom SSH port support for testing containers
+- **Docker Compose Configurations**: Added consistent compose files for local development and AWS deployment
+
+### Changed
+
+- **Victim Architecture**: Prepared foundation for victim container migration from VMs
+- **Security Configuration**: Implemented secure SSH defaults with key-based authentication only
+
 ## [1.1.7] - 2025-07-28
 
 ### Changed

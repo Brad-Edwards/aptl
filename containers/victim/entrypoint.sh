@@ -52,7 +52,7 @@ setup_labadmin_ssh() {
 
 # Function to configure rsyslog forwarding
 setup_rsyslog() {
-    if [ ! -z "$SIEM_IP" ] && [ ! -z "$SIEM_TYPE" ]; then
+    if [ -n "$SIEM_IP" ] && [ -n "$SIEM_TYPE" ]; then
         echo "Configuring rsyslog to forward to $SIEM_TYPE at $SIEM_IP..."
         
         # Determine port based on SIEM type

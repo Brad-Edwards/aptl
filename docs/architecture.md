@@ -6,7 +6,7 @@ APTL creates a purple team lab environment in AWS with:
 
 - qRadar Community Edition 7.5 on t3a.2xlarge instance
 - Victim machine on t3.micro instance
-- Kali Linux red team instance on t3.micro instance
+- Lab Container Host on t3.micro instance running containerized Kali red team instances
 - Single VPC with all instances in same subnet
 - Security groups restricting access to your IP address only
 
@@ -18,7 +18,7 @@ flowchart TD
     B --> C[Public Subnet<br/>10.0.1.0/24]
     C --> D[SIEM<br/>qRadar]
     C --> E[Victim<br/>Machine]
-    C --> F[Kali Linux<br/>Red Team]
+    C --> F[Container Host<br/>Kali Containers]
     E -.->|Logs| D
     F -.->|Attacks| E
     F -.->|Logs| D
@@ -65,15 +65,16 @@ flowchart TD
   - Test event generators
   - Vulnerable services for testing
 
-#### Kali Linux Red Team (t3.micro)
-- **Purpose**: Red team attack platform
-- **OS**: Kali Linux
+#### Lab Container Host (t3.micro)
+- **Purpose**: Docker host for containerized red team platforms
+- **OS**: Amazon Linux 2 with Docker
 - **Storage**: 30GB root volume
-- **Ports**: 22 (SSH)
+- **Ports**: 22 (SSH), 2222 (Container SSH)
 - **Features**:
-  - Pre-installed penetration testing tools
-  - MCP server for AI integration
-  - Red team activity logging
+  - Docker runtime for Kali containers
+  - Container orchestration and management
+  - SSH access to containerized Kali instances
+  - Red team activity logging from containers
 
 ### Security Groups
 
@@ -83,12 +84,13 @@ flowchart TD
 - **Syslog (514)**: Internal subnet only
 
 #### Victim Security Group
-- **SSH (22)**: Your IP + Kali instance
-- **RDP (3389)**: Your IP + Kali instance
-- **All Ports**: From Kali instance (for attack simulation)
+- **SSH (22)**: Your IP + Container Host
+- **RDP (3389)**: Your IP + Container Host
+- **All Ports**: From Container Host (for attack simulation)
 
-#### Kali Security Group
+#### Container Host Security Group
 - **SSH (22)**: Your IP only
+- **Container SSH (2222)**: Your IP only
 - **Outbound**: All traffic (for red team activities)
 
 ## Data Flow
@@ -102,15 +104,15 @@ flowchart TD
 
 ### Red Team Activities
 
-1. **Kali Instance**: Executes attacks against victim
-2. **Activity Logging**: Commands logged with metadata
-3. **SIEM Integration**: Red team logs sent to qRadar
+1. **Containerized Kali**: Executes attacks against victim from containers
+2. **Activity Logging**: Commands logged with metadata from containers
+3. **SIEM Integration**: Red team logs sent to qRadar via container host
 4. **Correlation**: Red team actions correlated with detections
 
 ### AI Integration
 
-1. **MCP Server**: Provides controlled access to Kali tools
-2. **AI Agents**: Execute red team activities via MCP
+1. **MCP Server**: Provides controlled access to containerized Kali tools
+2. **AI Agents**: Execute red team activities via MCP in containers
 3. **Safety Controls**: Validate targets and filter commands
 4. **Logging**: All AI actions logged for analysis
 
@@ -132,34 +134,34 @@ flowchart TB
             VICTIM[Victim Machine<br/>t3.micro<br/>Public + Private IP]
         end
         
-        subgraph KALISG["Kali Security Group"]
-            KALI[Kali Linux<br/>t3.micro<br/>Public + Private IP]
+        subgraph CONTAINERSG["Container Host Security Group"]
+            CONTAINERHOST[Container Host<br/>t3.micro<br/>Public + Private IP<br/>Docker + Kali Containers]
         end
         
         PubSub --> SIEM
         PubSub --> VICTIM
-        PubSub --> KALI
+        PubSub --> CONTAINERHOST
     end
     
     subgraph Storage["EBS Storage"]
         SIEMROOT[qRadar Root 250GB]
         SIEMSTORE[qRadar Store 200GB]
         VICTIMROOT[Victim Root 30GB]
-        KALIROOT[Kali Root 20GB]
+        CONTAINERROOT[Container Host Root 30GB]
     end
     
     VICTIM -.->|Syslog 514| SIEM
-    KALI -.->|Red Team Logs 514| SIEM
-    KALI -.->|Attacks| VICTIM
+    CONTAINERHOST -.->|Red Team Logs 514| SIEM
+    CONTAINERHOST -.->|Attacks| VICTIM
     
     Internet -.->|SSH/HTTPS| SIEM
     Internet -.->|SSH/RDP/HTTP| VICTIM
-    Internet -.->|SSH| KALI
+    Internet -.->|SSH/Container SSH 2222| CONTAINERHOST
     
     SIEM --- SIEMROOT
     SIEM --- SIEMSTORE
     VICTIM --- VICTIMROOT
-    KALI --- KALIROOT
+    CONTAINERHOST --- CONTAINERROOT
 ```
 
 ## Terraform Modules
@@ -184,10 +186,10 @@ flowchart TB
 - **Components**: EC2 instance, log forwarding configuration
 - **Features**: Test event generators and vulnerable services
 
-### Kali Module
-- **Purpose**: Red team platform deployment
-- **Components**: EC2 instance, penetration testing tools
-- **Features**: MCP server and red team logging
+### Lab Container Host Module
+- **Purpose**: Containerized red team platform deployment
+- **Components**: EC2 instance, Docker runtime, Kali containers
+- **Features**: Container orchestration, SSH access to containers, MCP integration
 
 ## Purple Team Scenario Workflow
 

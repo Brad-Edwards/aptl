@@ -7,6 +7,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.7] - 2025-07-28
+
+### Changed
+
+- **Documentation Update**: Updated all documentation to reflect containerized Kali approach instead of direct EC2 instances
+- **SIEM Index Naming**: Renamed Splunk red team index from `keplerops-aptl-redteam` to `aptl-redteam`
+- **Container Enhancement**: Added `iputils-ping` package to Kali container for basic network utilities
+
 ## [1.1.6] - 2025-07-27
 
 ### Added

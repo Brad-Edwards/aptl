@@ -23,14 +23,14 @@ setup_labadmin_ssh() {
     fi
     
     # Option 2: Check for environment variable (AWS/production)
-    if [ ! -z "$LABADMIN_SSH_KEY" ]; then
+    if [ -n "$LABADMIN_SSH_KEY" ]; then
         echo "Found SSH key in LABADMIN_SSH_KEY environment variable"
         echo "$LABADMIN_SSH_KEY" >> /home/labadmin/.ssh/authorized_keys
         key_added=true
     fi
     
     # Option 3: Check for file path in environment variable
-    if [ ! -z "$LABADMIN_SSH_KEY_FILE" ] && [ -f "$LABADMIN_SSH_KEY_FILE" ]; then
+    if [ -n "$LABADMIN_SSH_KEY_FILE" ] && [ -f "$LABADMIN_SSH_KEY_FILE" ]; then
         echo "Found SSH key file at $LABADMIN_SSH_KEY_FILE"
         cat "$LABADMIN_SSH_KEY_FILE" >> /home/labadmin/.ssh/authorized_keys
         key_added=true

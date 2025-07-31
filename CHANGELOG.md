@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Kali Dockerfile**: Properly bootstrap GPG keyring without insecure flags
-  - Import Kali archive key and install `kali-archive-keyring` before package operations
-  - Added multi-stage build to separate keyring setup
-  - Pinned key package versions for reproducible builds
+  - Removed dangerous `--allow-insecure-repositories` and `--allow-unauthenticated` flags
+  - Simplified keyring setup by using pre-installed keyring in base image
+  - Ensured proper keyring update before package installation
 
 ## [1.1.5] - 2025-07-28
 

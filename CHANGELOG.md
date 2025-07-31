@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.6] - 2025-07-30
 
+### Added
+
+- **Possible Game CTF Scenarios**: Added notes for possible game CTF scenarios
+  - MC bleedingpipe - picking on MC is a crime
+  - phpBB cred stuffing - picking on php is not
+  - capcom.sys driver - oldie but a goodie
+
 ### Fixed
 
 - **Kali Dockerfile**: Properly bootstrap GPG keyring without insecure flags

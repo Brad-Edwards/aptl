@@ -1,5 +1,5 @@
 # APTL Kali Red Team Container
-FROM kalilinux/kali-last-release:latest
+FROM kalilinux/kali-last-release:latest AS keyring
 
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -7,22 +7,34 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Set timezone to avoid tzdata prompts
 ENV TZ=UTC
 
-# Fix Kali GPG keys and update packages
-RUN apt-get update --allow-insecure-repositories && \
-    apt-get install -y --allow-unauthenticated kali-archive-keyring && \
+# Bootstrap Kali GPG keyring without insecure flags
+ARG KALI_KEYRING_VERSION=2023.4
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends wget gnupg && \
+    wget -q -O - https://archive.kali.org/archive-key.asc | apt-key add - && \
     apt-get update && \
+    apt-get install -y --no-install-recommends kali-archive-keyring=$KALI_KEYRING_VERSION && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+FROM kalilinux/kali-last-release:latest AS runtime
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+ARG KALI_BASE_VERSION=2023.4
+
+COPY --from=keyring /etc/apt/trusted.gpg.d/ /etc/apt/trusted.gpg.d/
+COPY --from=keyring /usr/share/keyrings/kali-archive-keyring.gpg /usr/share/keyrings/
+
+# Install base packages
+RUN apt-get update && \
     apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" && \
     apt-get install -y \
-        kali-linux-core \
-        kali-tools-top10 \
+        kali-linux-core=$KALI_BASE_VERSION \
+        kali-tools-top10=$KALI_BASE_VERSION \
         rsyslog \
         openssh-server \
-        iputils-ping \
-        && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+        iputils-ping && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Create kali user with sudo privileges
 RUN useradd -m -s /bin/bash -G sudo kali && \
     echo 'kali:kali' | chpasswd && \
     echo 'kali ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers

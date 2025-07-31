@@ -169,6 +169,44 @@ resource "aws_security_group" "siem_sg" {
     }
   }
 
+  # Allow syslog from lab container host
+  ingress {
+    from_port       = 514
+    to_port         = 514
+    protocol        = "udp"
+    security_groups = [aws_security_group.lab_container_host_sg.id]
+  }
+
+  # Allow syslog TCP from lab container host
+  ingress {
+    from_port       = 514
+    to_port         = 514
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lab_container_host_sg.id]
+  }
+
+  # Splunk syslog (port 5514) from lab container host - only when using Splunk
+  dynamic "ingress" {
+    for_each = var.siem_type == "splunk" ? [1] : []
+    content {
+      from_port       = 5514
+      to_port         = 5514
+      protocol        = "udp"
+      security_groups = [aws_security_group.lab_container_host_sg.id]
+    }
+  }
+
+  # Splunk syslog TCP (port 5514) from lab container host - only when using Splunk
+  dynamic "ingress" {
+    for_each = var.siem_type == "splunk" ? [1] : []
+    content {
+      from_port       = 5514
+      to_port         = 5514
+      protocol        = "tcp"
+      security_groups = [aws_security_group.lab_container_host_sg.id]
+    }
+  }
+
   # Allow all outbound traffic
   egress {
     from_port   = 0

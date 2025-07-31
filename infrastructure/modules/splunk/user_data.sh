@@ -36,10 +36,10 @@ sudo setsebool -P httpd_can_network_connect 1 || true
 
 # Create indexes.conf - defines the red team index
 cat > /tmp/indexes.conf << 'EOF'
-[keplerops-aptl-redteam]
-homePath = $SPLUNK_DB/keplerops-aptl-redteam/db
-coldPath = $SPLUNK_DB/keplerops-aptl-redteam/colddb
-thawedPath = $SPLUNK_DB/keplerops-aptl-redteam/thaweddb
+[aptl-redteam]
+homePath = $SPLUNK_DB/aptl-redteam/db
+coldPath = $SPLUNK_DB/aptl-redteam/colddb
+thawedPath = $SPLUNK_DB/aptl-redteam/thaweddb
 maxDataSize = auto_high_volume
 maxHotBuckets = 10
 maxWarmDBCount = 300
@@ -88,7 +88,7 @@ cat > /tmp/transforms.conf << 'EOF'
 [redteam_routing]
 REGEX = REDTEAM_LOG
 DEST_KEY = _MetaData:Index
-FORMAT = keplerops-aptl-redteam
+FORMAT = aptl-redteam
 EOF
 
 # Config files remain in /tmp for manual installation after Splunk is installed

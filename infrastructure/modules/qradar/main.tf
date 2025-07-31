@@ -185,7 +185,7 @@ resource "aws_instance" "qradar" {
               echo "- Log Source filter: APTL-Kali-RedTeam"
               echo "- Custom Property filters: RedTeamActivity, RedTeamCommand, RedTeamTarget"
               echo ""
-              echo "This provides equivalent functionality to Splunk's keplerops-aptl-redteam index"
+              echo "This provides equivalent functionality to Splunk's aptl-redteam index"
               EOFSCRIPT
               chmod +x /home/ec2-user/configure_qradar_logsources.sh
               

@@ -7,6 +7,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6] - 2025-07-30
+
+### Fixed
+
+- **Kali Dockerfile**: Properly bootstrap GPG keyring without insecure flags
+  - Import Kali archive key and install `kali-archive-keyring` before package operations
+  - Added multi-stage build to separate keyring setup
+  - Pinned key package versions for reproducible builds
+
 ## [1.1.5] - 2025-07-28
 
 ### Security

@@ -1,0 +1,1 @@
+Optional: place ysoserial.jar here if you use Java deserialization payloads.

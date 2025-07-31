@@ -78,6 +78,57 @@ resource "aws_dynamodb_table" "aptl_bootstrap_locks" {
   }
 }
 
+# ECR repository for container images
+resource "aws_ecr_repository" "kali_red_team" {
+  name                 = "aptl/kali-red-team"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Name        = "APTL Kali Red Team Container"
+    Environment = "bootstrap"
+    Purpose     = "container-registry"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "kali_red_team_policy" {
+  repository = aws_ecr_repository.kali_red_team.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep last 10 images"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["v"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 10
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Delete untagged images older than 1 day"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 1
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
 # Output the bucket name
 output "bootstrap_bucket_name" {
   value = aws_s3_bucket.aptl_bootstrap.bucket
@@ -92,4 +143,15 @@ output "dynamodb_table_name" {
 output "bootstrap_bucket_region" {
   value = var.aws_region
   description = "AWS region where the bootstrap S3 bucket is deployed"
+}
+
+# Container registry outputs
+output "ecr_repository_url" {
+  description = "ECR repository URL for Kali Red Team container"
+  value = aws_ecr_repository.kali_red_team.repository_url
+}
+
+output "ecr_repository_name" {
+  description = "ECR repository name for Kali Red Team container"
+  value = aws_ecr_repository.kali_red_team.name
 }

@@ -147,6 +147,24 @@ variable "enable_victim" {
   default     = true
 }
 
+# Capcom CTF Victim Configuration
+variable "capcom_victim_ami" {
+  description = "AMI ID for the Capcom CTF victim instance (Windows Server)"
+  type        = string
+}
+
+variable "capcom_victim_instance_type" {
+  description = "Instance type for the Capcom CTF victim instance"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "enable_capcom_victim" {
+  description = "Whether to create the Capcom CTF victim instance"
+  type        = bool
+  default     = false
+}
+
 # Lab Container Host Configuration
 variable "lab_container_host_ami" {
   description = "AMI ID for the lab container host (Amazon Linux 2023)"

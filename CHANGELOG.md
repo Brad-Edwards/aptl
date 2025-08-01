@@ -7,6 +7,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.7] - 2025-07-31
+
+### Added
+
+- **Capcom CTF Victim Module**: Added dedicated Terraform module for Capcom.sys driver exploitation CTF
+  - Windows Server victim instance with CTF-specific configuration
+  - Separate `ctfplayer` account for challenge participants
+  - CTF directories, hints, and welcome message setup
+  - Module: `infrastructure/modules/capcom-victim/`
+
 ## [1.1.6] - 2025-07-30
 
 ### Added

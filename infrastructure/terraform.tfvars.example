@@ -18,6 +18,10 @@ qradar_instance_type = "t3a.2xlarge"
 
 victim_ami        = "ami-0b8c2bd77c5e270cf"  # RHEL 8.8 x86_64
 victim_instance_type = "t3.micro"
+
+# Capcom CTF Victim Configuration
+capcom_victim_ami = "ami-0623bc4c9a53fe562"  # Windows Server AMI for Capcom.sys CTF
+capcom_victim_instance_type = "t3.medium"
 kali_ami          = "ami-XXXXXXXXXXXXXXXXX"  # Kali Linux 2024.2 x86_64
 kali_ami_alias    = "/aws/service/marketplace/prod-XXXXX/XXXXXXX"  # Kali Linux 2024.2 x86_64
 kali_product_code = "XXXXXXXXXXXXXXXXX"  # Kali Linux 2024.2 x86_64
@@ -41,3 +45,4 @@ lab_container_host_instance_type = "t3.large"
 enable_siem   = true   # Deploy SIEM instance (type controlled by siem_type variable)
 enable_victim = true   # Deploy victim instance for generating security events  
 enable_kali   = false  # Deploy Kali Linux instance for red team operations
+enable_capcom_victim = false  # Deploy Capcom.sys CTF victim instance (Windows Server)

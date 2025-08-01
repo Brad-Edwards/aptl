@@ -12,7 +12,7 @@ Write-Host "Current time: $(Get-Date)"
 Write-Host "====================================="
 
 # Set Administrator password
-$AdminPassword = ConvertTo-SecureString "ComplexP@ssw0rd123!" -AsPlainText -Force
+$AdminPassword = ConvertTo-SecureString "${admin_password}" -AsPlainText -Force
 Set-LocalUser -Name "Administrator" -Password $AdminPassword
 Write-Host "Administrator password set"
 
@@ -22,7 +22,7 @@ Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 Write-Host "RDP enabled"
 
 # Create CTF user with limited privileges
-$CTFUserPassword = ConvertTo-SecureString "CTFPlayer123!" -AsPlainText -Force
+$CTFUserPassword = ConvertTo-SecureString "${ctf_player_password}" -AsPlainText -Force
 New-LocalUser -Name "ctfplayer" -Password $CTFUserPassword -Description "CTF Player Account" -PasswordNeverExpires
 Add-LocalGroupMember -Group "Users" -Member "ctfplayer"
 Add-LocalGroupMember -Group "Remote Desktop Users" -Member "ctfplayer"
@@ -74,8 +74,8 @@ Set-Content -Path "C:\user-data-complete.txt" -Value "Capcom CTF victim initiali
 
 Write-Host "====================================="
 Write-Host "Capcom CTF victim initialization complete!"
-Write-Host "CTF Player: ctfplayer / CTFPlayer123!"
-Write-Host "Administrator: Administrator / ComplexP@ssw0rd123!"
+Write-Host "CTF Player: ctfplayer / ${ctf_player_password}"
+Write-Host "Administrator: Administrator / ${admin_password}"
 Write-Host "====================================="
 
 Stop-Transcript

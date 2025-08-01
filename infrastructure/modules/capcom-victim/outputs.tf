@@ -14,3 +14,15 @@ output "capcom_victim_private_ip" {
   description = "Private IP address of the Capcom CTF victim instance"
   value       = aws_instance.capcom_victim.private_ip
 }
+
+output "capcom_admin_password" {
+  description = "Administrator password for the Capcom CTF victim"
+  value       = var.capcom_admin_password
+  sensitive   = true
+}
+
+output "capcom_ctf_password" {
+  description = "CTF player password for the Capcom CTF victim"
+  value       = var.capcom_ctf_password
+  sensitive   = true
+}

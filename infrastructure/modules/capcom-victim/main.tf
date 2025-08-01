@@ -16,8 +16,10 @@ resource "aws_instance" "capcom_victim" {
   }
 
   user_data = templatefile("${path.module}/user_data.ps1", {
-    siem_private_ip = var.siem_private_ip
-    siem_type       = var.siem_type
+    siem_private_ip     = var.siem_private_ip
+    siem_type           = var.siem_type
+    admin_password      = var.capcom_admin_password
+    ctf_player_password = var.capcom_ctf_password
   })
 
   tags = {

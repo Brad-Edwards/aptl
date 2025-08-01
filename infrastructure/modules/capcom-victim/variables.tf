@@ -50,13 +50,11 @@ variable "environment" {
 variable "capcom_admin_password" {
   description = "Administrator password for the Capcom CTF victim"
   type        = string
-  default     = "ComplexP@ssw0rd123!"
   sensitive   = true
 }
 
 variable "capcom_ctf_password" {
   description = "CTF player password for the Capcom CTF victim"
   type        = string
-  default     = "CTFPlayer123!"
   sensitive   = true
 }

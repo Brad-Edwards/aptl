@@ -337,6 +337,7 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 lab_connections.txt
+terraform.tfvars.labs-nonprod
 
 # QRadar files
 files/*

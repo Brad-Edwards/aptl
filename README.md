@@ -6,7 +6,8 @@
 > **💡 Use at your own risk - this is a proof of concept**  
 > **🚨 Don't be stupid or you'll get yourself in trouble.**
 
-Roadmap
+## Roadmap
+
 🚧 Complete Wazuh integration  
 🚧 Re-enable full red-team agent logging  
 🚧 Blue team agent  

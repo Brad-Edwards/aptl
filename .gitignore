@@ -1,3 +1,8 @@
+# Lab runtime files
+lab_connections.txt
+*.log
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -377,3 +382,9 @@ infrastructure/lab_config.json
 
 # Log files
 *.log
+
+archive/
+
+keys/*
+
+config/wazuh_indexer_ssl_certs/*

@@ -7,6 +7,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-08-06
+
+### Changed
+
+- **Complete Architecture Overhaul**: Migrated from AWS/Terraform to local Docker deployment
+  - Replaced AWS EC2 instances with Docker containers
+  - Replaced qRadar Community Edition with Wazuh SIEM stack
+
+- **SIEM Change**: Default SIEM changed to Wazuh for low-resource open-source local deployment
+
+- **Documentation Updates**: Updated to reflect new Docker infrastructure
+  - All commands updated for Docker environment
+  - MkDocs documentation structure
+
+- **Container Architecture**: Five-container Docker Compose deployment
+
+### Removed
+
+- All AWS/Terraform infrastructure code
+- qRadar Community Edition integration
+
+### Breaking Changes
+
+- Complete deployment model change from AWS to Docker
+- Different network addressing scheme
+- New access methods (SSH port forwarding vs AWS)
+- SIEM interface change (Wazuh vs qRadar)
+
 ## [1.1.6] - 2025-07-30
 
 ### Added

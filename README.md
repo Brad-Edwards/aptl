@@ -119,6 +119,4 @@ BUSL-1.1
 
 ---
 
-## Note
-
 10-23 AI hacker shenanigans 🚓

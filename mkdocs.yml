@@ -1,0 +1,102 @@
+site_name: APTL - Advanced Purple Team Lab
+site_description: A local Docker-based purple team lab infrastructure with Wazuh SIEM, containerized victim machines, and AI-powered red team operations
+site_author: APTL Team
+repo_url: https://github.com/Brad-Edwards/aptl
+repo_name: Brad-Edwards/aptl
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.keys
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Overview: getting-started/index.md
+    - Prerequisites: getting-started/prerequisites.md
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quick-start.md
+  - Architecture:
+    - Overview: architecture/index.md
+    - Docker Compose: architecture/docker-compose.md
+    - Networking: architecture/networking.md
+  - Deployment:
+    - Overview: deployment/index.md
+    - Local Setup: deployment/local-setup.md
+    - Configuration: deployment/configuration.md
+  - Components:
+    - Wazuh SIEM: components/wazuh-siem.md
+    - Victim Containers: components/victim-containers.md
+    - Kali Red Team: components/kali-redteam.md
+    - MCP Integration: components/mcp-integration.md
+  - Usage:
+    - Exercises: usage/exercises.md
+    - AI Red Teaming: usage/ai-red-teaming.md
+    - Purple Team Scenarios: usage/purple-team-scenarios.md
+  - Troubleshooting:
+    - Overview: troubleshooting/index.md
+    - Common Issues: troubleshooting/common-issues.md
+    - Debugging: troubleshooting/debugging.md
+  - Reference:
+    - Commands: reference/commands.md
+    - API: reference/api.md
+    - Configuration: reference/configuration.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Brad-Edwards/aptl
+  version:
+    provider: mike

@@ -52,25 +52,21 @@ setup_labadmin_ssh() {
 
 # Function to configure rsyslog forwarding
 setup_rsyslog() {
-    if [ -n "$SIEM_IP" ] && [ -n "$SIEM_TYPE" ]; then
-        echo "Configuring rsyslog to forward to $SIEM_TYPE at $SIEM_IP..."
+    if [ -n "$SIEM_IP" ]; then
+        echo "Configuring rsyslog to forward to Wazuh at $SIEM_IP..."
         
-        # Determine port based on SIEM type
-        if [ "$SIEM_TYPE" = "splunk" ]; then
-            SIEM_PORT="${SIEM_PORT:-5514}"
-        else
-            SIEM_PORT="${SIEM_PORT:-514}"
-        fi
+        # Default to Wazuh syslog port
+        SIEM_PORT="${SIEM_PORT:-514}"
         
-        # Create rsyslog forwarding config
+        # Create rsyslog forwarding config for Wazuh
         cat > /etc/rsyslog.d/90-forward.conf << EOF
-# Purple Team Lab - Forward all logs to ${SIEM_TYPE} SIEM
+# Purple Team Lab - Forward all logs to Wazuh SIEM
 *.* @@${SIEM_IP}:${SIEM_PORT}
 EOF
         
-        echo "✅ Rsyslog forwarding configured to $SIEM_IP:$SIEM_PORT"
+        echo "✅ Rsyslog forwarding configured to Wazuh at $SIEM_IP:$SIEM_PORT"
     else
-        echo "ℹ️  SIEM forwarding not configured (SIEM_IP or SIEM_TYPE not set)"
+        echo "ℹ️  SIEM forwarding not configured (SIEM_IP not set)"
     fi
 }
 
@@ -90,14 +86,4 @@ setup_rsyslog
 echo "=== Container initialization complete ==="
 
 # Execute the main command (typically systemd)
-"$@" &
-
-# Wait for systemd to be ready, then start user sessions
-sleep 5
-while ! systemctl is-system-running >/dev/null 2>&1; do
-    sleep 1
-done
-systemctl start systemd-user-sessions
-
-# Keep the container running
-wait
+exec "$@"

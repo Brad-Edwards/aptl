@@ -28,7 +28,9 @@ RUN (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == system
 RUN systemctl set-default multi-user.target
 
 # Enable essential services including user sessions (removes /run/nologin)
-RUN systemctl enable rsyslog sshd systemd-user-sessions
+RUN systemctl enable rsyslog sshd systemd-user-sessions && \
+    systemctl enable systemd-user-sessions.service && \
+    ln -sf /usr/lib/systemd/system/systemd-user-sessions.service /etc/systemd/system/multi-user.target.wants/
 
 # Configure SSH (secure by default)
 RUN mkdir /var/run/sshd && \

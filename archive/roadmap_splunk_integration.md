@@ -1,4 +1,3 @@
-<!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # Roadmap: Splunk Integration (v1.1)
 

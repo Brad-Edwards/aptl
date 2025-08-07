@@ -115,7 +115,7 @@ This repository contains **intentional test credentials** for lab functionality:
 
 ## License
 
-BUSL-1.1
+MIT
 
 ---
 

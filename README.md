@@ -7,11 +7,11 @@
 > **🚨 Don't be stupid or you'll get yourself in trouble.**
 
 Roadmap
-🚧 Complete Wazuh integration
-🚧 Re-enable full red-team agent logging
-🚧 Blue team agent
-🚧 Wazuh MCP
-🚧 qRadar integration and MCP
+🚧 Complete Wazuh integration  
+🚧 Re-enable full red-team agent logging  
+🚧 Blue team agent  
+🚧 Wazuh MCP  
+🚧 qRadar integration and MCP  
 
 ---
 

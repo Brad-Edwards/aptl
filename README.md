@@ -6,13 +6,43 @@
 > **💡 Use at your own risk - this is a proof of concept**  
 > **🚨 Don't be stupid or you'll get yourself in trouble.**
 
+Roadmap
+🚧 Complete Wazuh integration
+🚧 Re-enable full red-team agent logging
+🚧 Blue team agent
+🚧 Wazuh MCP
+🚧 qRadar integration and MCP
+
 ---
+
+🚨⚠️🚨 ALWAYS monitor AI red-team agents during scenarios 🚨⚠️🚨
 
 ## What is APTL?
 
 Docker lab with Wazuh SIEM + victim containers + Kali red team platform. AI agents can control Kali via MCP for autonomous attacks.
 
-**⚠️ WARNING: This lab enables AI agents to run actual penetration testing tools. Container escape or other security issues may occur. Use only in isolated environments.**
+APTL is meant to support three use cases:
+
+- Inexpensive purple team training
+- Assessment of the capabilities autonomous cyber operations available to relatively unsophisticated attackers
+- Research
+
+## Ethics Statement
+
+Defenders and decision-makers need examples of realistic adversarial use cases to guide planning and investments. Attackers are already aware of and experimenting with AI-enabled cyber operations. This lab uses consumer grade, commodity services and basic integrations that do not advance existing capabilities. No enhancements are made to AI agents' latent knowledge and abilities beyond granted Kali access.
+
+No red-team enhancements will be added to this public repository.
+
+An autonomous cyber operations range is currently under-development as a separate project.
+
+**⚠️ WARNING: This lab enables AI agents to run actual penetration testing tools. Container escape or other security issues may occur. Monitor closely.**
+
+## What's Different
+
+- **Autonomous AI Control**: AI agents directly execute real penetration testing tools via Model Context Protocol
+- **Complete Attack Cycles Demonstrated**: Full autonomous reconnaissance → exploitation → post-exploitation without human intervention
+- **Realistic Environment**: Containerized lab with actual SIEM logging
+- **Purple Team Focus**: Purpose-built for training defenders against AI attackers
 
 ## Components
 
@@ -30,6 +60,7 @@ cd aptl
 ```
 
 **Access:**
+
 - Wazuh Dashboard: <https://localhost:443> (admin/SecretPassword)  
 - Victim SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022`
 - Kali SSH: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`

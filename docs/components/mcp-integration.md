@@ -178,43 +178,29 @@ async function handleKaliInfo(query_type?: string) {
 
 #### run_command Tool
 
-Executes validated commands on the Kali container:
+Executes commands on lab containers via SSH:
 
 ```typescript
-async function handleRunCommand(command: string, target?: string, tool?: string) {
-  // Validate command safety
-  const validationResult = await validateCommand(command);
-  if (!validationResult.safe) {
-    throw new Error(`Command validation failed: ${validationResult.reason}`);
-  }
-  
-  // Validate target if specified
-  if (target && !isValidLabTarget(target)) {
-    throw new Error(`Invalid target: ${target}. Must be within lab network 172.20.0.0/16`);
-  }
-  
-  // Log the activity
-  await logRedTeamActivity({
-    timestamp: new Date().toISOString(),
-    agent: "ai-mcp",
-    command: command,
-    target: target,
-    tool: tool || "unknown",
-    validation: validationResult
-  });
+async function handleRunCommand(command: string, target?: string, username?: string) {
+  // Select SSH credentials based on target
+  const credentials = selectCredentials(target, labConfig, username);
   
   // Execute command via SSH
-  const result = await executeOnKali(command);
+  const result = await sshManager.executeCommand(
+    target,
+    credentials.username,
+    credentials.sshKey,
+    command,
+    credentials.port
+  );
   
-  // Log the result
-  await logRedTeamResult({
-    command: command,
-    success: result.exitCode === 0,
-    output: result.stdout,
-    errors: result.stderr
-  });
-  
-  return result;
+  return {
+    target,
+    command,
+    username: credentials.username,
+    success: true,
+    output: result
+  };
 }
 ```
 
@@ -379,96 +365,6 @@ async function handleCreateDetectionRule(params: any) {
 }
 ```
 
-### Safety Controls
-
-#### Command Validation
-
-All AI-submitted commands go through safety validation:
-
-```typescript
-interface ValidationResult {
-  safe: boolean;
-  reason?: string;
-  modified_command?: string;
-}
-
-async function validateCommand(command: string): Promise<ValidationResult> {
-  // Block dangerous commands
-  const blockedPatterns = [
-    /rm\s+-rf\s+\//, // Destructive file operations
-    /dd\s+if=.*of=/, // Disk operations
-    /mkfs/, // Filesystem operations
-    /shutdown|reboot|halt/, // System control
-    /iptables.*-F/, // Firewall manipulation
-    /nc.*-e.*sh/, // Reverse shells to external
-  ];
-  
-  for (const pattern of blockedPatterns) {
-    if (pattern.test(command)) {
-      return {
-        safe: false,
-        reason: `Command contains blocked pattern: ${pattern}`
-      };
-    }
-  }
-  
-  // Validate target restrictions
-  const targetPattern = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g;
-  const targets = command.match(targetPattern);
-  
-  if (targets) {
-    for (const target of targets) {
-      if (!isValidLabTarget(target)) {
-        return {
-          safe: false,
-          reason: `Command targets external IP: ${target}`
-        };
-      }
-    }
-  }
-  
-  return { safe: true };
-}
-
-function isValidLabTarget(target: string): boolean {
-  // Only allow lab network ranges
-  const labRanges = [
-    '172.20.0.0/16',    // Primary lab network
-    '127.0.0.1',        // Localhost
-    'localhost'         // Localhost hostname
-  ];
-  
-  return labRanges.some(range => {
-    if (range.includes('/')) {
-      return isInSubnet(target, range);
-    }
-    return target === range;
-  });
-}
-```
-
-#### Target Validation
-
-Ensures AI agents can only target lab systems:
-
-```typescript
-const VALID_LAB_TARGETS = {
-  '172.20.0.10': 'wazuh.manager',
-  '172.20.0.11': 'wazuh.dashboard', 
-  '172.20.0.12': 'wazuh.indexer',
-  '172.20.0.20': 'victim',
-  '172.20.0.30': 'kali',
-  'localhost': 'host-system'
-};
-
-function validateTarget(target: string): boolean {
-  // Resolve hostname to IP if needed
-  const resolvedTarget = resolveTarget(target);
-  
-  // Check if target is in allowed list
-  return Object.keys(VALID_LAB_TARGETS).includes(resolvedTarget);
-}
-```
 
 ## Client Configuration
 
@@ -584,231 +480,68 @@ The Red Team MCP server uses a configuration file to define lab parameters:
 
 #### Blue Team Configuration
 
-The Blue Team MCP server uses a separate configuration for Wazuh API access:
+The Blue Team MCP server reads configuration that mirrors the actual docker-compose.yml deployment:
 
 ```json
-// mcp/wazuh-api-config.json
+// mcp-blue/wazuh-api-config.json
 {
+  "comment": "Configuration derived from docker-compose.yml - matches actual deployment",
   "wazuh": {
-    "api": {
+    "manager": {
       "host": "172.20.0.10",
-      "port": 55000,
+      "api_port": 55000,
       "protocol": "https",
-      "username": "wazuh-wui",
-      "password": "MyS3cr37P450r.*-",
+      "api_username": "${API_USERNAME}",
+      "api_password": "${API_PASSWORD}",
       "verify_ssl": false
     },
     "indexer": {
       "host": "172.20.0.12", 
       "port": 9200,
       "protocol": "https",
-      "username": "admin",
-      "password": "SecretPassword",
+      "username": "${INDEXER_USERNAME}",
+      "password": "${INDEXER_PASSWORD}",
       "verify_ssl": false
     },
     "dashboard": {
       "host": "172.20.0.11",
       "port": 5601,
       "protocol": "https",
-      "base_path": ""
+      "url": "https://172.20.0.11:443"
     }
+  },
+  "network": {
+    "lab_subnet": "172.20.0.0/16",
+    "gateway": "172.20.0.1"
   },
   "query_limits": {
     "max_alerts_per_query": 1000,
     "max_time_range_days": 30,
     "rate_limit_per_minute": 60
   },
-  "allowed_operations": [
-    "query_alerts",
-    "query_logs",
-    "create_detection_rule",
-    "wazuh_info"
-  ],
-  "restricted_operations": [
-    "delete_agent",
-    "restart_manager", 
-    "delete_rule",
-    "modify_configuration"
-  ],
-  "logging": {
-    "level": "info",
-    "destinations": ["console", "file"],
-    "audit_trail": true
+  "mcp": {
+    "server_name": "aptl-wazuh-blue-team",
+    "allowed_operations": [
+      "query_alerts",
+      "query_logs",
+      "create_detection_rule", 
+      "wazuh_info"
+    ],
+    "audit_enabled": true,
+    "log_level": "info"
   }
 }
 ```
 
-## AI Agent Workflows
+**Configuration Source**: The actual credential values are taken from the docker-compose.yml environment variables:
 
-### Autonomous Reconnaissance
-
-AI agents can perform comprehensive reconnaissance:
-
-```typescript
-// Example AI agent workflow
-async function autonomousRecon(target: string) {
-  const agent = new AIRedTeamAgent();
-  
-  // Get lab information
-  const labInfo = await agent.kali_info("network");
-  
-  // Network discovery
-  const nmapResult = await agent.run_command(
-    `nmap -sn ${labInfo.lab_network}`,
-    target,
-    "nmap"
-  );
-  
-  // Port scanning
-  const portScan = await agent.run_command(
-    `nmap -sV -sC ${target}`,
-    target, 
-    "nmap"
-  );
-  
-  // Web enumeration if HTTP is detected
-  if (portScan.output.includes("80/tcp open")) {
-    const webEnum = await agent.run_command(
-      `gobuster dir -u http://${target} -w /usr/share/wordlists/common.txt`,
-      target,
-      "gobuster" 
-    );
-  }
-  
-  return {
-    network_scan: nmapResult,
-    port_scan: portScan,
-    web_enumeration: webEnum
-  };
-}
-```
-
-### Vulnerability Assessment
-
-AI-driven vulnerability discovery:
-
-```typescript
-async function vulnerabilityAssessment(target: string) {
-  const agent = new AIRedTeamAgent();
-  
-  // Web vulnerability scanning
-  const niktoResult = await agent.run_command(
-    `nikto -h http://${target}`,
-    target,
-    "nikto"
-  );
-  
-  // SSL/TLS assessment if HTTPS is available
-  const sslScan = await agent.run_command(
-    `sslscan ${target}:443`,
-    target,
-    "sslscan"
-  );
-  
-  // Service-specific checks
-  const serviceChecks = await agent.run_command(
-    `nmap -sV --script vuln ${target}`,
-    target,
-    "nmap"
-  );
-  
-  return {
-    web_vulnerabilities: niktoResult,
-    ssl_assessment: sslScan,
-    service_vulnerabilities: serviceChecks
-  };
-}
-```
-
-### Adaptive Exploitation
-
-AI agents can adapt exploitation strategies based on discovered vulnerabilities:
-
-```typescript
-async function adaptiveExploitation(target: string, vulnerabilities: any[]) {
-  const agent = new AIRedTeamAgent();
-  
-  for (const vuln of vulnerabilities) {
-    if (vuln.type === "weak_credentials") {
-      // Attempt credential attacks
-      const bruteForce = await agent.run_command(
-        `hydra -l admin -P /usr/share/wordlists/common.txt ssh://${target}`,
-        target,
-        "hydra"
-      );
-      
-      if (bruteForce.success) {
-        // Log successful compromise
-        await logCompromise(target, "weak_credentials", bruteForce.output);
-        return { success: true, method: "credential_attack" };
-      }
-    }
-    
-    if (vuln.type === "web_vulnerability") {
-      // Attempt web exploitation
-      const sqlMap = await agent.run_command(
-        `sqlmap -u "http://${target}/search.php?q=test" --batch --dbs`,
-        target,
-        "sqlmap"
-      );
-      
-      if (sqlMap.output.includes("available databases")) {
-        await logCompromise(target, "sql_injection", sqlMap.output);
-        return { success: true, method: "sql_injection" };
-      }
-    }
-  }
-  
-  return { success: false, attempts: vulnerabilities.length };
-}
-```
+- `API_USERNAME` and `API_PASSWORD` from wazuh.manager service
+- `INDEXER_USERNAME` and `INDEXER_PASSWORD` from wazuh.dashboard service
+- Network addresses match the static IP assignments in docker-compose.yml
 
 ## Activity Logging
 
-### Comprehensive Logging
-
-All MCP activities are logged with detailed metadata:
-
-```typescript
-interface MCPActivityLog {
-  timestamp: string;
-  agent_id: string;
-  agent_type: "ai" | "human";
-  tool_used: string;
-  command: string;
-  target?: string;
-  validation_result: ValidationResult;
-  execution_result: {
-    success: boolean;
-    output: string;
-    errors?: string;
-    duration_ms: number;
-  };
-  context: {
-    session_id: string;
-    conversation_id?: string;
-    objective?: string;
-  };
-}
-
-async function logMCPActivity(activity: MCPActivityLog) {
-  // Log to local file
-  await appendToFile('./logs/mcp-activity.log', JSON.stringify(activity));
-  
-  // Forward to SIEM
-  await forwardToSIEM('172.20.0.10:514', {
-    facility: 'local1',
-    severity: 'info',
-    tag: 'APTL-MCP',
-    message: JSON.stringify(activity)
-  });
-  
-  // Store in database (if configured)
-  if (config.database.enabled) {
-    await database.insertActivity(activity);
-  }
-}
-```
+MCP activities are logged via standard error output and can be forwarded to the SIEM.
 
 ### SIEM Integration
 
@@ -837,58 +570,6 @@ MCP logs are forwarded to Wazuh for blue team analysis:
   </rule>
 </group>
 ```
-
-## Purple Team Scenarios
-
-### Scenario 1: AI-Driven Network Reconnaissance
-
-**AI Agent Actions:**
-```typescript
-// AI agent discovers the network
-const networkInfo = await mcp.kali_info("network");
-const discovery = await mcp.run_command("nmap -sn 172.20.0.0/24", undefined, "nmap");
-const portScan = await mcp.run_command("nmap -sV -sC 172.20.0.20", "172.20.0.20", "nmap");
-```
-
-**Blue Team Response:**
-- Monitor for network scanning patterns
-- Detect AI agent signatures in User-Agent strings
-- Correlate MCP logs with network events
-
-### Scenario 2: Autonomous Web Application Testing
-
-**AI Agent Actions:**
-```typescript
-// AI agent performs web application testing
-const dirEnum = await mcp.run_command(
-  "gobuster dir -u http://172.20.0.20 -w /usr/share/wordlists/common.txt",
-  "172.20.0.20", 
-  "gobuster"
-);
-const vulnScan = await mcp.run_command("nikto -h http://172.20.0.20", "172.20.0.20", "nikto");
-```
-
-**Blue Team Response:**
-- Detect directory brute forcing attempts
-- Monitor for web vulnerability scanner signatures
-- Track automated vs. manual attack patterns
-
-### Scenario 3: AI Credential Attack Campaign
-
-**AI Agent Actions:**
-```typescript
-// AI agent attempts credential attacks
-const sshBrute = await mcp.run_command(
-  "hydra -l admin -P /usr/share/wordlists/common.txt ssh://172.20.0.20",
-  "172.20.0.20",
-  "hydra"
-);
-```
-
-**Blue Team Response:**
-- Monitor authentication failure rates
-- Detect brute force attack patterns
-- Correlate AI decision-making with attack progression
 
 ## Performance and Monitoring
 
@@ -934,34 +615,13 @@ docker stats aptl-kali aptl-victim
 du -h logs/mcp-activity.log
 ```
 
-## Security Considerations
-
-### MCP Server Security
-
-- **Local Only**: Server binds only to localhost
-- **No External Access**: Cannot be accessed from outside the host
-- **Command Validation**: All commands validated before execution
-- **Rate Limiting**: Prevents resource exhaustion attacks
-
-### AI Agent Limitations
-
-- **Network Boundaries**: Cannot target systems outside lab network
-- **Command Restrictions**: Dangerous commands blocked at multiple levels
-- **Session Limits**: Time and resource limits on AI sessions
-- **Audit Trail**: All activities logged for forensic analysis
-
-### Lab Environment Protection
-
-- **Container Isolation**: AI actions contained within Docker network
-- **Easy Reset**: Lab can be completely reset if compromised
-- **No Persistence**: AI cannot establish persistence outside containers
-- **Monitoring**: Comprehensive logging and SIEM integration
 
 ## Troubleshooting
 
 ### MCP Server Issues
 
 1. **Server Won't Start**
+
    ```bash
    # Check Node.js version
    node --version  # Should be v18+
@@ -971,6 +631,7 @@ du -h logs/mcp-activity.log
    ```
 
 2. **Connection Issues**
+
    ```bash
    # Test SSH connectivity to Kali container
    ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023
@@ -979,10 +640,11 @@ du -h logs/mcp-activity.log
    docker compose ps kali
    ```
 
-3. **Command Validation Errors**
-   ```typescript
-   // Check validation logs
-   tail -f logs/mcp-activity.log | grep validation_result
+3. **Command Execution Errors**
+
+   ```bash
+   # Check MCP server logs
+   docker compose logs -f
    ```
 
 ### AI Agent Issues
@@ -993,104 +655,9 @@ du -h logs/mcp-activity.log
    - Restart IDE if necessary
 
 2. **Command Execution Failures**
-   - Check target validation logs
    - Verify container connectivity
-   - Review safety control violations
+   - Check SSH key authentication
 
 3. **Performance Issues**
    - Monitor resource usage on host system
    - Check container memory limits
-   - Review rate limiting configuration
-
-## Development and Extension
-
-### Adding Custom Tools
-
-Extend the MCP server with custom tools:
-
-```typescript
-// Add new tool definition
-{
-  name: "custom_exploit",
-  description: "Execute custom exploit against target",
-  inputSchema: {
-    type: "object",
-    properties: {
-      exploit_type: { type: "string", enum: ["web", "network", "service"] },
-      target: { type: "string" },
-      payload: { type: "string" }
-    }
-  }
-}
-
-// Implement tool handler
-async function handleCustomExploit(exploit_type: string, target: string, payload: string) {
-  // Validate exploit parameters
-  const validation = await validateExploit(exploit_type, target, payload);
-  if (!validation.safe) {
-    throw new Error(`Exploit validation failed: ${validation.reason}`);
-  }
-  
-  // Execute custom exploit logic
-  const result = await executeCustomExploit(exploit_type, target, payload);
-  
-  return result;
-}
-```
-
-### Custom Validation Rules
-
-Add scenario-specific validation:
-
-```typescript
-// Custom validation for specific scenarios
-function validateScenarioCommand(command: string, scenario: string): ValidationResult {
-  const scenarioRules = {
-    "web_testing": {
-      allowed_tools: ["gobuster", "nikto", "sqlmap"],
-      required_targets: ["172.20.0.20"]
-    },
-    "network_recon": {
-      allowed_tools: ["nmap", "masscan"],
-      scan_limits: { ports: 1000, hosts: 5 }
-    }
-  };
-  
-  const rules = scenarioRules[scenario];
-  if (!rules) {
-    return { safe: false, reason: "Unknown scenario" };
-  }
-  
-  // Apply scenario-specific validation
-  return validateAgainstRules(command, rules);
-}
-```
-
-## Best Practices
-
-### AI Agent Development
-
-1. **Start Simple**: Begin with basic reconnaissance before complex exploitation
-2. **Validate Inputs**: Always validate AI-generated commands and parameters
-3. **Log Everything**: Comprehensive logging is essential for learning and debugging
-4. **Test Safely**: Use the isolated lab environment for all testing
-
-### Purple Team Training
-
-1. **Progressive Scenarios**: Start with simple attacks, increase complexity gradually
-2. **Varied Approaches**: Mix AI-driven and manual attack techniques
-3. **Blue Team Focus**: Ensure defensive teams can observe and respond to AI attacks
-4. **Debrief Sessions**: Review AI decision-making and detection effectiveness
-
-### Operational Security
-
-1. **Regular Updates**: Keep MCP server and dependencies updated
-2. **Monitor Resources**: Watch for resource exhaustion during AI operations
-3. **Review Logs**: Regular review of MCP activity logs for anomalies
-4. **Backup Configs**: Maintain backups of working MCP configurations
-
-## Next Steps
-
-- **[Usage Examples](../usage/ai-red-teaming.md)** - Practical AI red team scenarios
-- **[Troubleshooting](../troubleshooting/)** - Common issues and solutions
-- **[Architecture](../architecture/)** - Understanding the overall system design

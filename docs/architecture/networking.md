@@ -53,11 +53,11 @@ flowchart TB
     F <--> G
     F <--> E
     
-    classDef host fill:#f9f9f9,stroke:#333,stroke-width:2px
-    classDef network fill:#e3f2fd,stroke:#0277bd,stroke-width:2px
-    classDef siem fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
-    classDef target fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    classDef attack fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef host fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
+    classDef network fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
+    classDef siem fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
+    classDef target fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
+    classDef attack fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
     
     class A,B host
     class C,D network
@@ -137,7 +137,6 @@ Internal communication uses container IP addresses and default ports:
 
 ```bash
 # Examples of internal communication
-curl http://172.20.0.20:80        # Kali → Victim HTTP
 ssh labadmin@172.20.0.20          # Kali → Victim SSH
 logger -h 172.20.0.10 "message"   # Victim → Wazuh syslog
 curl https://172.20.0.12:9200     # Dashboard → Indexer API
@@ -182,9 +181,8 @@ Each container exposes specific services on standard ports:
 #### Victim Container (172.20.0.20)
 ```
 22/tcp      - SSH service
-80/tcp      - HTTP service (Apache)
-21/tcp      - FTP service (vsftpd)
 ```
+
 
 #### Kali Container (172.20.0.30)
 ```
@@ -251,14 +249,14 @@ sequenceDiagram
 
 ### Traffic Isolation
 
-The Docker bridge network provides complete isolation from external networks:
+The Docker bridge network provides isolation between containers and the host network:
 
 ```bash
-# Container cannot reach external networks
-ping 8.8.8.8          # Will fail from containers
-curl google.com        # Will fail from containers
+# Containers can reach external networks (default Docker behavior)
+ping 8.8.8.8          # Will succeed from containers
+curl google.com        # Will succeed from containers
 
-# Host system remains accessible
+# Host system accessible via mapped ports
 curl localhost:443     # Wazuh Dashboard via host port
 ssh localhost -p 2022  # Victim via host port
 ```
@@ -269,7 +267,6 @@ Communication between containers is unencrypted by default but isolated:
 
 ```bash
 # Unencrypted internal communication (acceptable for lab)
-curl http://172.20.0.20:80     # HTTP traffic
 nc 172.20.0.10 514             # Syslog traffic
 
 # Encrypted communication where configured
@@ -502,10 +499,10 @@ docker exec aptl-kali cat /sys/class/net/eth0/statistics/rx_packets
 
 ### Network Attack Surface
 
-The lab network is designed to minimize attack surface while enabling realistic scenarios:
+The lab network is designed with standard Docker networking:
 
-- **No External Access**: Containers cannot reach external networks
-- **Isolated Environment**: Complete isolation from production networks  
+- **External Access**: Containers can reach external networks (standard Docker behavior)
+- **Lab Isolation**: Lab traffic isolated from host network via bridge  
 - **Controlled Exposure**: Only specific ports exposed to host system
 - **Monitoring**: All network traffic can be monitored and logged
 
@@ -541,8 +538,3 @@ Network design supports both red team operations and blue team monitoring:
 3. **Incident Response**: Procedures for network security incidents
 4. **Recovery Planning**: Network recovery and restoration procedures
 
-## Next Steps
-
-- **[Docker Compose](docker-compose.md)** - Service configuration details
-- **[Components](../components/)** - Individual component documentation
-- **[Troubleshooting](../troubleshooting/)** - Network troubleshooting guides

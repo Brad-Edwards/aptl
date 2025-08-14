@@ -122,8 +122,6 @@ services:
         ipv4_address: 172.20.0.20
     ports:
       - "2022:22"    # SSH access
-      - "8080:80"    # HTTP service
-      - "2121:21"    # FTP service
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub

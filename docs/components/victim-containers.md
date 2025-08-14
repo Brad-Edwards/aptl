@@ -1,16 +1,15 @@
 # Victim Containers
 
-The victim containers in APTL serve as realistic target systems for red team activities and security testing. They provide vulnerable services and configurations that simulate real-world environments.
+The victim container in APTL serves as a target system for red team activities and security testing. It provides a basic Rocky Linux 9 environment with SSH access and SIEM integration.
 
 ## Overview
 
-The victim container is built on Rocky Linux 9 and includes multiple services commonly found in enterprise environments. It's designed to be realistic enough for meaningful security testing while maintaining educational focus.
+The victim container is built on Rocky Linux 9 and provides SSH access for security testing. It forwards all system logs to the Wazuh SIEM for blue team monitoring.
 
 ### Key Features
 
-- **Multiple Services**: SSH, HTTP, FTP for diverse attack vectors
-- **Realistic Configuration**: Enterprise-like system setup and user management
-- **Comprehensive Logging**: All activities forwarded to Wazuh SIEM
+- **SSH Service**: OpenSSH server for remote access testing
+- **SIEM Integration**: All system logs forwarded to Wazuh SIEM
 - **Easy Reset**: Container can be destroyed and recreated quickly
 - **Isolated Environment**: Contained within Docker network for safety
 
@@ -23,20 +22,14 @@ flowchart TD
     
     subgraph "Victim Container Services"
         D[SSH Server<br/>Port 22]
-        E[HTTP Server<br/>Port 80]
-        F[FTP Server<br/>Port 21]
         G[Rsyslog<br/>Log Forwarding]
     end
     
     C --> D
-    C --> E
-    C --> F
     C --> G
     
     G --> H[Wazuh Manager<br/>172.20.0.10:514]
     I[Kali Container<br/>172.20.0.30] --> D
-    I --> E
-    I --> F
     
     classDef victim fill:#fff3e0,stroke:#e65100,stroke-width:2px
     classDef services fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
@@ -128,22 +121,16 @@ anon_mkdir_write_enable=YES
 
 ### User Configuration
 
-The container includes several user accounts for testing:
+The container includes one user account for lab access:
 
 ```bash
 # Administrative user (for lab access)
 labadmin:x:1000:1000:Lab Administrator:/home/labadmin:/bin/bash
-
-# Test users with varying security postures
-testuser:x:1001:1001:Test User:/home/testuser:/bin/bash
-admin:x:1002:1002:Admin User:/home/admin:/bin/bash
-service:x:1003:1003:Service Account:/home/service:/bin/bash
 ```
 
-**Password Policy:**
-- Some accounts have weak passwords for testing
-- Mixed password strength across accounts
-- Service accounts may have default passwords
+**Authentication:**
+- SSH key-only authentication (no passwords)
+- Key configured via volume mount or environment variable
 
 ## Network Configuration
 
@@ -158,19 +145,10 @@ service:x:1003:1003:Service Account:/home/service:/bin/bash
 | Internal Port | External Port | Service | Purpose |
 |---------------|---------------|---------|---------|
 | 22 | 2022 | SSH | Remote access and administration |
-| 80 | 8080 | HTTP | Web service testing |
-| 21 | 2121 | FTP | File transfer testing |
 
 ### Firewall Configuration
 
-The container has minimal firewall restrictions to allow testing:
-
-```bash
-# iptables rules (permissive for lab use)
-iptables -P INPUT ACCEPT
-iptables -P FORWARD ACCEPT
-iptables -P OUTPUT ACCEPT
-```
+The victim container uses default Rocky Linux firewall settings with no additional restrictions configured, allowing unrestricted communication within the Docker bridge network for lab testing purposes.
 
 ## Log Configuration
 
@@ -191,30 +169,19 @@ cron.* /var/log/cron
 
 ### Log Sources
 
-The container forwards multiple log types:
+The container forwards standard syslog data:
 
 - **Authentication**: SSH login attempts, sudo usage
 - **System Events**: Service starts/stops, system errors
-- **Network Activity**: Connection attempts, firewall logs
-- **Application Logs**: HTTP access logs, FTP transfers
 - **Security Events**: Failed authentications, privilege escalations
 
-### Custom Log Fields
+### Log Format
 
-Additional fields added for purple team analysis:
+Standard syslog format forwarded to Wazuh:
 
 ```bash
-# Example log entry with custom fields
-{
-  "timestamp": "2024-01-15T10:30:00Z",
-  "host": "victim-host",
-  "source_ip": "172.20.0.30",
-  "event_type": "ssh_login_attempt",
-  "username": "admin",
-  "success": false,
-  "victim_service": "ssh",
-  "attack_vector": "brute_force"
-}
+# Example log entry
+Jan 15 10:30:00 victim-host sshd[1234]: Failed password for labadmin from 172.20.0.30 port 45678 ssh2
 ```
 
 ## Access Methods
@@ -234,128 +201,21 @@ docker exec -it aptl-victim /bin/bash
 ```bash
 # SSH from Kali container to victim
 ssh labadmin@172.20.0.20
-
-# Test authentication with different users
-ssh testuser@172.20.0.20
-ssh admin@172.20.0.20
 ```
 
-### Web Access
+## Services
 
-```bash
-# HTTP access from host
-curl http://localhost:8080
+The victim container runs minimal services:
 
-# HTTP access from Kali container
-curl http://172.20.0.20
+- **SSH Server**: OpenSSH for remote access
+- **rsyslog**: Log forwarding to Wazuh SIEM
 
-# With custom headers for testing
-curl -H "User-Agent: APTL-Test-Agent" http://172.20.0.20
-```
+The container provides a basic Rocky Linux 9 environment suitable for security testing:
 
-### FTP Access
-
-```bash
-# FTP access from host
-ftp localhost 2121
-
-# FTP access from Kali container  
-ftp 172.20.0.20
-
-# Anonymous FTP testing
-ftp 172.20.0.20
-# Username: anonymous
-# Password: <any email address>
-```
-
-## Vulnerability Profile
-
-### Intentional Vulnerabilities
-
-The victim container includes intentional security weaknesses for educational purposes:
-
-#### Authentication Vulnerabilities
-- **Weak Passwords**: Some accounts use predictable passwords
-- **Password Reuse**: Same passwords across different services
-- **No Account Lockout**: No protection against brute force attacks
-
-#### Service Vulnerabilities
-- **Unencrypted Protocols**: HTTP and FTP without encryption
-- **Information Disclosure**: Server version information exposed
-- **Default Configurations**: Many services use insecure defaults
-
-#### System Vulnerabilities
-- **Outdated Software**: May include older package versions
-- **Permissive Permissions**: Some files/directories have loose permissions
-- **Unnecessary Services**: Services running that aren't required
-
-### Exploitation Scenarios
-
-Common attack vectors available for testing:
-
-1. **SSH Brute Force**
-   ```bash
-   # Example Kali command
-   hydra -l admin -P /usr/share/wordlists/rockyou.txt ssh://172.20.0.20
-   ```
-
-2. **Web Application Testing**
-   ```bash
-   # Directory enumeration
-   gobuster dir -u http://172.20.0.20 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
-   
-   # Vulnerability scanning
-   nikto -h http://172.20.0.20
-   ```
-
-3. **FTP Enumeration**
-   ```bash
-   # Anonymous access testing
-   ftp 172.20.0.20
-   # Login as: anonymous
-   # Password: test@example.com
-   ```
-
-## Monitoring and Detection
-
-### Log Analysis Points
-
-Key events that should generate alerts in Wazuh:
-
-#### Authentication Events
-- Multiple failed SSH login attempts
-- Successful login from unusual sources
-- Privilege escalation attempts
-
-#### Network Events
-- Port scanning activities
-- Unusual outbound connections
-- Service enumeration attempts
-
-#### File System Events
-- Unauthorized file access
-- Configuration file modifications
-- Suspicious file uploads/downloads
-
-### Sample Detection Rules
-
-```xml
-<!-- SSH Brute Force Detection -->
-<rule id="100020" level="10" frequency="5" timeframe="300">
-  <if_matched_sid>5716</if_matched_sid>
-  <same_source_ip />
-  <description>SSH brute force attack detected</description>
-  <group>authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,</group>
-</rule>
-
-<!-- Web Vulnerability Scanner Detection -->
-<rule id="100021" level="7">
-  <if_sid>31100</if_sid>
-  <match>nikto|gobuster|dirb|wpscan</match>
-  <description>Web vulnerability scanner detected</description>
-  <group>web,attack,recon,</group>
-</rule>
-```
+- **Operating System**: Rocky Linux 9 (RHEL-compatible)
+- **SSH Access**: Key-based authentication only
+- **Logging**: All system logs forwarded to Wazuh SIEM
+- **User**: Single `labadmin` user with sudo privileges
 
 ## Container Management
 
@@ -497,8 +357,3 @@ docker stats aptl-victim
 # Edit docker-compose.yml to add resource limits
 ```
 
-## Next Steps
-
-- **[Kali Red Team](kali-redteam.md)** - Red team platform configuration
-- **[MCP Integration](mcp-integration.md)** - AI agent integration
-- **[Usage Examples](../usage/exercises.md)** - Practical attack scenarios

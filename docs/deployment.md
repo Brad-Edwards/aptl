@@ -522,9 +522,3 @@ docker compose up -d wazuh.indexer
 3. **Monitoring Setup**: Implement continuous monitoring and alerting
 4. **Backup Implementation**: Set up regular data backup procedures
 
-## Next Steps
-
-- **[Getting Started](getting-started/)** - Basic lab usage and first steps
-- **[Architecture](architecture/)** - Understanding system design
-- **[Components](components/)** - Individual service configuration
-- **[Troubleshooting](troubleshooting/)** - Common issues and solutions

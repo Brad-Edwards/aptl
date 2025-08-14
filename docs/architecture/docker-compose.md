@@ -424,8 +424,3 @@ depends_on:
 
 Wait for dependencies to be healthy before starting dependent services.
 
-## Next Steps
-
-- **[Networking](networking.md)** - Detailed network configuration
-- **[Components](../components/)** - Individual service documentation
-- **[Deployment](../deployment/)** - Deployment and management

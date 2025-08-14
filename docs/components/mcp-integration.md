@@ -482,7 +482,7 @@ Configure Cursor to connect to both APTL MCP servers:
   "mcpServers": {
     "aptl-red-team": {
       "command": "node",
-      "args": ["./mcp/dist/red-team-index.js"],
+      "args": ["./mcp/dist/index.js"],
       "cwd": ".",
       "env": {
         "APTL_LAB_CONFIG": "./mcp/docker-lab-config.json"
@@ -490,7 +490,7 @@ Configure Cursor to connect to both APTL MCP servers:
     },
     "aptl-blue-team": {
       "command": "node",
-      "args": ["./mcp/dist/blue-team-index.js"],
+      "args": ["./mcp/dist/index.js"],
       "cwd": ".",
       "env": {
         "WAZUH_API_CONFIG": "./mcp/wazuh-api-config.json"
@@ -509,7 +509,7 @@ Add both APTL MCP servers to Cline's configuration:
 {
   "aptl-red-team": {
     "command": "node", 
-    "args": ["./mcp/dist/red-team-index.js"],
+    "args": ["./mcp/dist/index.js"],
     "cwd": "/path/to/aptl",
     "env": {
       "APTL_LAB_CONFIG": "./mcp/docker-lab-config.json"
@@ -517,7 +517,7 @@ Add both APTL MCP servers to Cline's configuration:
   },
   "aptl-blue-team": {
     "command": "node",
-    "args": ["./mcp/dist/blue-team-index.js"], 
+    "args": ["./mcp/dist/index.js"], 
     "cwd": "/path/to/aptl",
     "env": {
       "WAZUH_API_CONFIG": "./mcp/wazuh-api-config.json"
@@ -594,8 +594,8 @@ The Blue Team MCP server uses a separate configuration for Wazuh API access:
       "host": "172.20.0.10",
       "port": 55000,
       "protocol": "https",
-      "username": "wazuh",
-      "password": "SecretPassword",
+      "username": "wazuh-wui",
+      "password": "MyS3cr37P450r.*-",
       "verify_ssl": false
     },
     "indexer": {
@@ -620,13 +620,9 @@ The Blue Team MCP server uses a separate configuration for Wazuh API access:
   },
   "allowed_operations": [
     "query_alerts",
-    "get_agents", 
-    "vulnerability_scan",
-    "sca_results",
-    "create_rule",
-    "update_rule",
-    "get_rules",
-    "get_decoders"
+    "query_logs",
+    "create_detection_rule",
+    "wazuh_info"
   ],
   "restricted_operations": [
     "delete_agent",

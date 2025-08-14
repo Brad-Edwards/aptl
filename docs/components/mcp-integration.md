@@ -1,31 +1,33 @@
 # MCP Integration
 
-The Model Context Protocol (MCP) integration in APTL enables AI agents to autonomously conduct red team operations while maintaining safety controls and comprehensive logging. This integration transforms the lab from a manual testing environment into an AI-powered autonomous cyber operations demonstration platform.
+The Model Context Protocol (MCP) integration in APTL enables AI agents to autonomously conduct red team operations while maintaining safety controls and logging. This integration transforms the lab from a manual testing environment into an AI-powered red team demonstration platform.
 
 ## Overview
 
-MCP (Model Context Protocol) is an open protocol that enables AI agents to securely interact with external tools and systems. In APTL, the MCP server provides AI agents with controlled access to the Kali Linux container and its penetration testing tools.
+MCP (Model Context Protocol) is an open protocol that enables AI agents to securely interact with external tools and systems. APTL currently implements:
+
+1. **Red Team MCP**: Provides controlled SSH access to lab containers for penetration testing
 
 ### Key Capabilities
 
-- **Autonomous Red Team Operations**: AI agents can independently conduct reconnaissance, vulnerability assessment, and exploitation
-- **Safety Controls**: Built-in safeguards prevent misuse and ensure operations stay within lab boundaries
-- **Comprehensive Logging**: All AI actions are logged with detailed metadata for analysis
-- **Real-time Adaptation**: AI agents can adapt attack strategies based on system responses
-- **Purple Team Integration**: AI red team actions trigger blue team detection and response workflows
+- **Autonomous Red Team Operations**: AI agents can execute commands on lab containers via SSH
+- **Lab Information Access**: AI agents can query lab configuration and network details
+- **Safety Controls**: Built-in safeguards prevent operations outside lab boundaries
+- **SSH Key Management**: Automated SSH key selection and connection handling
+- **Target Validation**: Ensures commands only target allowed lab instances
 
 ## Architecture
 
 ```mermaid
 flowchart TD
     A[AI Agent<br/>Claude/ChatGPT] --> B[MCP Client<br/>IDE Integration]
-    B --> C[MCP Server<br/>APTL Lab Controller]
+    B --> C[Red Team MCP<br/>SSH Controller]
     
     subgraph "MCP Server Components"
-        D[SSH Manager]
-        E[Command Validator]  
-        F[Target Validator]
-        G[Activity Logger]
+        D[SSH Connection Manager]
+        E[Lab Configuration]  
+        F[Credential Selection]
+        G[Target Validation]
     end
     
     C --> D
@@ -40,14 +42,13 @@ flowchart TD
     end
     
     D --> H
-    E --> I
-    G --> J
+    D --> I
     
     K[Security Analyst] --> L[Wazuh Dashboard]
     L --> J
     
     classDef ai fill:#e3f2fd,stroke:#0277bd,stroke-width:2px
-    classDef mcp fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef mcp fill:#ffebee,stroke:#c62828,stroke-width:2px
     classDef lab fill:#fff3e0,stroke:#e65100,stroke-width:2px
     classDef analyst fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
     
@@ -59,19 +60,19 @@ flowchart TD
 
 ## MCP Server Implementation
 
-### Server Configuration
+### Red Team MCP Server
 
-The MCP server is implemented in TypeScript and runs locally:
+The Red Team MCP server is implemented in TypeScript and provides two tools:
 
 ```typescript
-// src/index.ts - Main MCP server entry point
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+// src/index.ts - APTL Red Team MCP Server
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 const server = new Server(
   {
-    name: "aptl-lab",
-    version: "1.0.0",
+    name: 'kali-red-team',
+    version: '1.0.0',
   },
   {
     capabilities: {
@@ -80,47 +81,42 @@ const server = new Server(
   }
 );
 
-// Register tools for AI agent access
+// Available tools for AI agents
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "kali_info",
-        description: "Get information about the lab environment and available targets",
+        name: 'kali_info',
+        description: 'Get information about the Kali Linux instance in the lab',
         inputSchema: {
-          type: "object",
-          properties: {
-            query_type: {
-              type: "string",
-              enum: ["network", "services", "containers", "status"],
-              description: "Type of information to retrieve"
-            }
-          }
-        }
+          type: 'object',
+          properties: {},
+        },
       },
       {
-        name: "run_command",
-        description: "Execute red team command on Kali container",
+        name: 'run_command',
+        description: 'Execute a command on a target instance in the lab',
         inputSchema: {
-          type: "object",
+          type: 'object',
           properties: {
-            command: {
-              type: "string",
-              description: "Command to execute (will be validated for safety)"
-            },
             target: {
-              type: "string", 
-              description: "Target IP or hostname (must be within lab network)"
+              type: 'string',
+              description: 'Target IP address or hostname',
             },
-            tool: {
-              type: "string",
-              description: "Tool being used (for logging purposes)"
-            }
+            command: {
+              type: 'string',
+              description: 'Command to execute',
+            },
+            username: {
+              type: 'string',
+              description: 'SSH username (optional, will auto-detect)',
+              default: 'kali',
+            },
           },
-          required: ["command"]
-        }
-      }
-    ]
+          required: ['target', 'command'],
+        },
+      },
+    ],
   };
 });
 ```
@@ -195,13 +191,7 @@ async function handleRunCommand(command: string, target?: string, tool?: string)
     errors: result.stderr
   });
   
-  return {
-    success: result.exitCode === 0,
-    output: result.stdout,
-    errors: result.stderr,
-    command: command,
-    target: target
-  };
+  return result;
 }
 ```
 
@@ -300,18 +290,26 @@ function validateTarget(target: string): boolean {
 
 ### Cursor IDE Setup
 
-Configure Cursor to connect to the APTL MCP server:
+Configure Cursor to connect to both APTL MCP servers:
 
 ```json
 // .cursor/mcp.json
 {
   "mcpServers": {
-    "aptl-lab": {
+    "aptl-red-team": {
       "command": "node",
-      "args": ["./mcp/dist/index.js"],
+      "args": ["./mcp/dist/red-team-index.js"],
       "cwd": ".",
       "env": {
         "APTL_LAB_CONFIG": "./mcp/docker-lab-config.json"
+      }
+    },
+    "aptl-blue-team": {
+      "command": "node",
+      "args": ["./mcp/dist/blue-team-index.js"],
+      "cwd": ".",
+      "env": {
+        "WAZUH_API_CONFIG": "./mcp/wazuh-api-config.json"
       }
     }
   }
@@ -320,25 +318,35 @@ Configure Cursor to connect to the APTL MCP server:
 
 ### Cline (VS Code) Setup
 
-Add the APTL MCP server to Cline's configuration:
+Add both APTL MCP servers to Cline's configuration:
 
 ```json
 // Cline MCP settings
 {
-  "aptl-lab": {
+  "aptl-red-team": {
     "command": "node", 
-    "args": ["./mcp/dist/index.js"],
+    "args": ["./mcp/dist/red-team-index.js"],
     "cwd": "/path/to/aptl",
     "env": {
       "APTL_LAB_CONFIG": "./mcp/docker-lab-config.json"
+    }
+  },
+  "aptl-blue-team": {
+    "command": "node",
+    "args": ["./mcp/dist/blue-team-index.js"], 
+    "cwd": "/path/to/aptl",
+    "env": {
+      "WAZUH_API_CONFIG": "./mcp/wazuh-api-config.json"
     }
   }
 }
 ```
 
-### Configuration File
+### Configuration Files
 
-The MCP server uses a configuration file to define lab parameters:
+#### Red Team Configuration
+
+The Red Team MCP server uses a configuration file to define lab parameters:
 
 ```json
 // mcp/docker-lab-config.json
@@ -386,6 +394,66 @@ The MCP server uses a configuration file to define lab parameters:
     "level": "info",
     "destinations": ["console", "file", "siem"],
     "siem_endpoint": "172.20.0.10:514"
+  }
+}
+```
+
+#### Blue Team Configuration
+
+The Blue Team MCP server uses a separate configuration for Wazuh API access:
+
+```json
+// mcp/wazuh-api-config.json
+{
+  "wazuh": {
+    "api": {
+      "host": "172.20.0.10",
+      "port": 55000,
+      "protocol": "https",
+      "username": "wazuh",
+      "password": "SecretPassword",
+      "verify_ssl": false
+    },
+    "indexer": {
+      "host": "172.20.0.12", 
+      "port": 9200,
+      "protocol": "https",
+      "username": "admin",
+      "password": "SecretPassword",
+      "verify_ssl": false
+    },
+    "dashboard": {
+      "host": "172.20.0.11",
+      "port": 5601,
+      "protocol": "https",
+      "base_path": ""
+    }
+  },
+  "query_limits": {
+    "max_alerts_per_query": 1000,
+    "max_time_range_days": 30,
+    "rate_limit_per_minute": 60
+  },
+  "allowed_operations": [
+    "query_alerts",
+    "get_agents", 
+    "vulnerability_scan",
+    "sca_results",
+    "create_rule",
+    "update_rule",
+    "get_rules",
+    "get_decoders"
+  ],
+  "restricted_operations": [
+    "delete_agent",
+    "restart_manager", 
+    "delete_rule",
+    "modify_configuration"
+  ],
+  "logging": {
+    "level": "info",
+    "destinations": ["console", "file"],
+    "audit_trail": true
   }
 }
 ```

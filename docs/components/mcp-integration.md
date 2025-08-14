@@ -1,20 +1,22 @@
 # MCP Integration
 
-The Model Context Protocol (MCP) integration in APTL enables AI agents to autonomously conduct red team operations while maintaining safety controls and logging. This integration transforms the lab from a manual testing environment into an AI-powered red team demonstration platform.
+The Model Context Protocol (MCP) integration in APTL enables AI agents to autonomously conduct both red team and blue team operations while maintaining safety controls and logging. This dual MCP architecture transforms the lab into a complete AI-powered purple team demonstration platform.
 
 ## Overview
 
-MCP (Model Context Protocol) is an open protocol that enables AI agents to securely interact with external tools and systems. APTL currently implements:
+MCP (Model Context Protocol) is an open protocol that enables AI agents to securely interact with external tools and systems. APTL implements two specialized MCP servers:
 
 1. **Red Team MCP**: Provides controlled SSH access to lab containers for penetration testing
+2. **Blue Team MCP**: Interfaces with the Wazuh SIEM API for defensive operations and investigation
 
 ### Key Capabilities
 
 - **Autonomous Red Team Operations**: AI agents can execute commands on lab containers via SSH
-- **Lab Information Access**: AI agents can query lab configuration and network details
+- **Autonomous Blue Team Operations**: AI agents can query alerts, search logs, and create detection rules
+- **Lab Information Access**: AI agents can query both lab configuration and SIEM status
 - **Safety Controls**: Built-in safeguards prevent operations outside lab boundaries
 - **SSH Key Management**: Automated SSH key selection and connection handling
-- **Target Validation**: Ensures commands only target allowed lab instances
+- **SIEM Integration**: Direct API access to Wazuh for security analysis
 
 ## Architecture
 
@@ -22,40 +24,61 @@ MCP (Model Context Protocol) is an open protocol that enables AI agents to secur
 flowchart TD
     A[AI Agent<br/>Claude/ChatGPT] --> B[MCP Client<br/>IDE Integration]
     B --> C[Red Team MCP<br/>SSH Controller]
+    B --> D[Blue Team MCP<br/>SIEM API Client]
     
-    subgraph "MCP Server Components"
-        D[SSH Connection Manager]
-        E[Lab Configuration]  
-        F[Credential Selection]
-        G[Target Validation]
+    subgraph RT ["Red Team MCP"]
+        E[SSH Connection Manager]
+        F[Lab Configuration]  
+        G[Credential Selection]
+        H[Target Validation]
     end
     
-    C --> D
+    subgraph BT ["Blue Team MCP"]
+        I[Wazuh API Client]
+        J[Indexer Query Builder]
+        K[Alert Manager]
+        L[Rule Creator]
+    end
+    
     C --> E
     C --> F
     C --> G
+    C --> H
     
-    subgraph "Lab Environment"
-        H[Kali Container<br/>172.20.0.30]
-        I[Victim Container<br/>172.20.0.20]
-        J[Wazuh SIEM<br/>172.20.0.10]
+    D --> I
+    D --> J
+    D --> K
+    D --> L
+    
+    subgraph LAB ["Lab Environment"]
+        M[Kali Container<br/>172.20.0.30]
+        N[Victim Container<br/>172.20.0.20]
+        O[Wazuh Manager<br/>172.20.0.10]
+        Q[Wazuh Indexer<br/>172.20.0.12]
+        P[Wazuh Dashboard<br/>172.20.0.11]
     end
     
-    D --> H
-    D --> I
+    E --> M
+    E --> N
     
-    K[Security Analyst] --> L[Wazuh Dashboard]
-    L --> J
+    I --> O
+    J --> Q
+    K --> O
+    L --> O
     
-    classDef ai fill:#e3f2fd,stroke:#0277bd,stroke-width:2px
-    classDef mcp fill:#ffebee,stroke:#c62828,stroke-width:2px
-    classDef lab fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    classDef analyst fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    R[Security Analyst] --> P
+    
+    classDef ai fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
+    classDef redmcp fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
+    classDef bluemcp fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
+    classDef lab fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
+    classDef analyst fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
     
     class A,B ai
-    class C,D,E,F,G mcp
-    class H,I,J lab
-    class K,L analyst
+    class C,E,F,G,H redmcp
+    class D,I,J,K,L bluemcp
+    class M,N,O,P,Q lab
+    class R analyst
 ```
 
 ## MCP Server Implementation
@@ -192,6 +215,167 @@ async function handleRunCommand(command: string, target?: string, tool?: string)
   });
   
   return result;
+}
+```
+
+### Blue Team MCP Server
+
+The Blue Team MCP server interfaces with the Wazuh SIEM API for defensive operations:
+
+```typescript
+// src/blue-team-index.ts - APTL Blue Team MCP Server
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+
+const server = new Server(
+  {
+    name: 'wazuh-blue-team',
+    version: '1.0.0',
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// Available tools for AI agents
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: 'wazuh_info',
+        description: 'Get information about the Wazuh SIEM stack in the lab',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'query_alerts',
+        description: 'Search processed Wazuh alerts with filters',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            time_range: { type: 'string', enum: ['15m', '1h', '6h', '24h', '7d'] },
+            min_level: { type: 'number', minimum: 1, maximum: 15 },
+            source_ip: { type: 'string' },
+            rule_id: { type: 'string' }
+          }
+        }
+      },
+      {
+        name: 'query_logs',
+        description: 'Search raw log data before rule processing',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            time_range: { type: 'string', enum: ['15m', '1h', '6h', '24h', '7d'] },
+            search_term: { type: 'string' },
+            source_ip: { type: 'string' },
+            log_level: { type: 'string', enum: ['debug', 'info', 'warn', 'error'] }
+          }
+        }
+      },
+      {
+        name: 'create_detection_rule',
+        description: 'Create custom Wazuh detection rule',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            rule_xml: { type: 'string' },
+            rule_description: { type: 'string' },
+            rule_level: { type: 'number', minimum: 1, maximum: 15 }
+          },
+          required: ['rule_xml']
+        }
+      }
+    ]
+  };
+});
+```
+
+#### Blue Team Tool Implementations
+
+```typescript
+// Wazuh info implementation
+async function handleWazuhInfo() {
+  const wazuhAPI = new WazuhAPIClient();
+  await wazuhAPI.authenticate();
+  
+  const managerInfo = await wazuhAPI.getManagerInfo();
+  const indexerHealth = await wazuhAPI.getIndexerHealth();
+  
+  return {
+    manager: {
+      version: managerInfo.data.version,
+      api_port: 55000,
+      status: 'active'
+    },
+    indexer: {
+      cluster_health: indexerHealth.status,
+      api_port: 9200,
+      indices: ['wazuh-alerts-*', 'wazuh-archives-*']
+    },
+    dashboard: {
+      url: 'https://172.20.0.11:443',
+      api_port: 5601
+    },
+    lab_network: '172.20.0.0/16'
+  };
+}
+
+// Alert querying implementation
+async function handleQueryAlerts(params: any) {
+  const indexerClient = new WazuhIndexerClient();
+  
+  const query = buildAlertQuery(params);
+  const results = await indexerClient.search('wazuh-alerts-*', query);
+  
+  // Log blue team activity
+  await logBlueTeamActivity({
+    action: 'query_alerts',
+    parameters: params,
+    results_count: results.hits.total.value,
+    timestamp: new Date().toISOString()
+  });
+  
+  return {
+    alert_count: results.hits.total.value,
+    alerts: results.hits.hits.map(formatAlert)
+  };
+}
+
+// Raw log querying implementation  
+async function handleQueryLogs(params: any) {
+  const indexerClient = new WazuhIndexerClient();
+  
+  const query = buildLogQuery(params);
+  const results = await indexerClient.search('wazuh-archives-*', query);
+  
+  return {
+    log_count: results.hits.total.value,
+    logs: results.hits.hits.map(formatLog)
+  };
+}
+
+// Rule creation implementation
+async function handleCreateDetectionRule(params: any) {
+  const wazuhAPI = new WazuhAPIClient();
+  await wazuhAPI.authenticate();
+  
+  // Validate XML format
+  if (!validateRuleXML(params.rule_xml)) {
+    throw new Error('Invalid rule XML format');
+  }
+  
+  const result = await wazuhAPI.createRule(params.rule_xml, 'aptl_custom_rules.xml');
+  
+  return {
+    success: true,
+    rule_file: 'aptl_custom_rules.xml',
+    restart_required: true
+  };
 }
 ```
 

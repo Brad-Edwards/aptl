@@ -38,9 +38,9 @@ flowchart TD
     J[Kali Container] --> I
     I --> E
     
-    classDef ai fill:#e8f5e8,stroke:#1b5e20
-    classDef wazuh fill:#fff3e0,stroke:#e65100
-    classDef logs fill:#ffebee,stroke:#c62828
+    classDef ai fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
+    classDef wazuh fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
+    classDef logs fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
     
     class A,B ai
     class C,D,E,F,G wazuh

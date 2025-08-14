@@ -47,10 +47,7 @@ const QueryLimitsSchema = z.object({
 
 // Schema for MCP configuration
 const MCPConfigSchema = z.object({
-  server_name: z.string(),
-  allowed_operations: z.array(z.string()),
-  audit_enabled: z.boolean(),
-  log_level: z.string()
+  server_name: z.string()
 });
 
 // Main Wazuh configuration schema
@@ -117,12 +114,6 @@ export async function loadConfig(): Promise<WazuhConfig> {
   return config;
 }
 
-/**
- * Check if operation is allowed
- */
-export function isOperationAllowed(operation: string, config: WazuhConfig): boolean {
-  return config.mcp.allowed_operations.includes(operation);
-}
 
 /**
  * Validate if host is in lab network
@@ -181,24 +172,6 @@ export function validateRuleXML(ruleXML: string): { valid: boolean; error?: stri
   // Basic XML structure validation
   if (!ruleXML.includes('<rule') || !ruleXML.includes('</rule>')) {
     return { valid: false, error: 'Rule XML must contain <rule> and </rule> tags' };
-  }
-  
-  // Check for required attributes
-  if (!ruleXML.includes('id=') || !ruleXML.includes('level=')) {
-    return { valid: false, error: 'Rule must have id and level attributes' };
-  }
-  
-  // Block dangerous rule content
-  const blockedPatterns = [
-    /<active-response>/,
-    /<command>/,
-    /<executable>/
-  ];
-  
-  for (const pattern of blockedPatterns) {
-    if (pattern.test(ruleXML)) {
-      return { valid: false, error: `Rule contains blocked pattern: ${pattern}` };
-    }
   }
   
   return { valid: true };

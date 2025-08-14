@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 import { WazuhConfig } from './config.js';
+import { Agent } from 'undici';
 
 export interface WazuhAPIError extends Error {
   statusCode?: number;
@@ -52,6 +53,9 @@ export class WazuhAPIClient {
   
   constructor(private config: WazuhConfig) {}
 
+  // Reuse a single insecure agent for lab self-signed TLS where verify_ssl is false
+  static insecureAgent = new Agent({ connect: { rejectUnauthorized: false } });
+
   /**
    * Authenticate with Wazuh API and get JWT token
    */
@@ -67,17 +71,17 @@ export class WazuhAPIClient {
     const auth = Buffer.from(`${manager.api_username}:${manager.api_password}`).toString('base64');
     
     try {
-      // Use dynamic import for node-fetch or similar HTTP client
-      // For now, implementing with built-in fetch (Node 18+)
-      const response = await fetch(url, {
+      const options: any = {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json'
-        },
-        // @ts-ignore - ignore SSL verification for lab environment
-        ...(manager.verify_ssl ? {} : { rejectUnauthorized: false })
-      });
+        }
+      };
+      if (!manager.verify_ssl) {
+        options.dispatcher = WazuhAPIClient.insecureAgent;
+      }
+      const response = await fetch(url, options);
 
       if (!response.ok) {
         throw new Error(`Authentication failed: ${response.status} ${response.statusText}`);
@@ -104,14 +108,16 @@ export class WazuhAPIClient {
     const url = `${manager.protocol}://${manager.host}:${manager.api_port}/manager/info`;
     
     try {
-      const response = await fetch(url, {
+      const options: any = {
         headers: {
           'Authorization': `Bearer ${this.token}`,
           'Content-Type': 'application/json'
-        },
-        // @ts-ignore
-        ...(manager.verify_ssl ? {} : { rejectUnauthorized: false })
-      });
+        }
+      };
+      if (!manager.verify_ssl) {
+        options.dispatcher = WazuhAPIClient.insecureAgent;
+      }
+      const response = await fetch(url, options);
 
       if (!response.ok) {
         throw new Error(`Manager info request failed: ${response.status}`);
@@ -133,16 +139,18 @@ export class WazuhAPIClient {
     const url = `${manager.protocol}://${manager.host}:${manager.api_port}/rules/files/${filename}`;
     
     try {
-      const response = await fetch(url, {
+      const options: any = {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${this.token}`,
           'Content-Type': 'application/xml'
         },
-        body: ruleXML,
-        // @ts-ignore
-        ...(manager.verify_ssl ? {} : { rejectUnauthorized: false })
-      });
+        body: ruleXML
+      };
+      if (!manager.verify_ssl) {
+        options.dispatcher = WazuhAPIClient.insecureAgent;
+      }
+      const response = await fetch(url, options);
 
       if (!response.ok) {
         throw new Error(`Rule creation failed: ${response.status}`);
@@ -169,16 +177,18 @@ export class WazuhIndexerClient {
     const auth = Buffer.from(`${indexer.username}:${indexer.password}`).toString('base64');
     
     try {
-      const response = await fetch(url, {
+      const options: any = {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(searchQuery),
-        // @ts-ignore
-        ...(indexer.verify_ssl ? {} : { rejectUnauthorized: false })
-      });
+        body: JSON.stringify(searchQuery)
+      };
+      if (!indexer.verify_ssl) {
+        options.dispatcher = WazuhAPIClient.insecureAgent;
+      }
+      const response = await fetch(url, options);
 
       if (!response.ok) {
         throw new Error(`Alert search failed: ${response.status}`);
@@ -205,16 +215,18 @@ export class WazuhIndexerClient {
     const auth = Buffer.from(`${indexer.username}:${indexer.password}`).toString('base64');
     
     try {
-      const response = await fetch(url, {
+      const options: any = {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(searchQuery),
-        // @ts-ignore
-        ...(indexer.verify_ssl ? {} : { rejectUnauthorized: false })
-      });
+        body: JSON.stringify(searchQuery)
+      };
+      if (!indexer.verify_ssl) {
+        options.dispatcher = WazuhAPIClient.insecureAgent;
+      }
+      const response = await fetch(url, options);
 
       if (!response.ok) {
         throw new Error(`Log search failed: ${response.status}`);
@@ -240,14 +252,16 @@ export class WazuhIndexerClient {
     const auth = Buffer.from(`${indexer.username}:${indexer.password}`).toString('base64');
     
     try {
-      const response = await fetch(url, {
+      const options: any = {
         headers: {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json'
-        },
-        // @ts-ignore
-        ...(indexer.verify_ssl ? {} : { rejectUnauthorized: false })
-      });
+        }
+      };
+      if (!indexer.verify_ssl) {
+        options.dispatcher = WazuhAPIClient.insecureAgent;
+      }
+      const response = await fetch(url, options);
 
       if (!response.ok) {
         throw new Error(`Cluster health request failed: ${response.status}`);

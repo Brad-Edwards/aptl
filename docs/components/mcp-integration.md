@@ -365,7 +365,6 @@ async function handleCreateDetectionRule(params: any) {
 }
 ```
 
-
 ## Client Configuration
 
 ### Cursor IDE Setup
@@ -386,10 +385,10 @@ Configure Cursor to connect to both APTL MCP servers:
     },
     "aptl-blue-team": {
       "command": "node",
-      "args": ["./mcp/dist/index.js"],
+      "args": ["./mcp-blue/build/index.js"],
       "cwd": ".",
       "env": {
-        "WAZUH_API_CONFIG": "./mcp/wazuh-api-config.json"
+        "WAZUH_API_CONFIG": "./mcp-blue/wazuh-api-config.json"
       }
     }
   }
@@ -413,10 +412,10 @@ Add both APTL MCP servers to Cline's configuration:
   },
   "aptl-blue-team": {
     "command": "node",
-    "args": ["./mcp/dist/index.js"], 
+    "args": ["./mcp-blue/build/index.js"], 
     "cwd": "/path/to/aptl",
     "env": {
-      "WAZUH_API_CONFIG": "./mcp/wazuh-api-config.json"
+      "WAZUH_API_CONFIG": "./mcp-blue/wazuh-api-config.json"
     }
   }
 }
@@ -614,7 +613,6 @@ docker stats aptl-kali aptl-victim
 # Track log file sizes
 du -h logs/mcp-activity.log
 ```
-
 
 ## Troubleshooting
 

@@ -15,7 +15,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { loadConfig, isOperationAllowed, validateQueryParams, validateRuleXML, type WazuhConfig } from './config.js';
+import { loadConfig, validateQueryParams, validateRuleXML, type WazuhConfig } from './config.js';
 import { WazuhAPIClient, WazuhIndexerClient, type AlertQuery, type LogQuery } from './wazuh-client.js';
 
 // Global configuration and clients
@@ -154,20 +154,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  // Check if operation is allowed
-  if (!isOperationAllowed(name, config)) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            error: `Operation '${name}' is not allowed by configuration`
-          }, null, 2),
-        },
-      ],
-    };
-  }
 
   switch (name) {
     case 'wazuh_info': {
@@ -413,15 +399,7 @@ async function logBlueTeamActivity(activity: {
   timestamp: string;
 }): Promise<void> {
   try {
-    // In a real implementation, this would forward to syslog or a logging service
     console.error(`[MCP-Blue] Activity: ${JSON.stringify(activity)}`);
-    
-    // TODO: Forward to SIEM via syslog
-    // await syslog({
-    //   facility: 'local2',
-    //   tag: 'APTL-BlueTeam',
-    //   message: JSON.stringify(activity)
-    // });
   } catch (error) {
     console.error('[MCP-Blue] Failed to log activity:', error);
   }

@@ -131,7 +131,7 @@ Both lab containers forward logs via rsyslog, not agents:
 
 ### Authentication
 
-JWT token-based authentication:
+JWT token-based authentication using credentials from docker-compose.yml:
 
 ```python
 import requests
@@ -141,9 +141,11 @@ from urllib3.exceptions import InsecureRequestWarning
 disable_warnings(InsecureRequestWarning)
 
 def authenticate():
+    # Credentials from docker-compose.yml wazuh.manager environment
+    # API_USERNAME=wazuh-wui, API_PASSWORD=MyS3cr37P450r.*-
     response = requests.post(
         "https://172.20.0.10:55000/security/user/authenticate",
-        auth=("wazuh-wui", "MyS3cr37P450r.*-"), 
+        auth=(API_USERNAME, API_PASSWORD), 
         verify=False
     )
     return response.json()['data']['token']
@@ -157,6 +159,8 @@ headers = {'Authorization': f'Bearer {token}'}
 Search processed alerts via Indexer:
 
 ```python
+import base64
+
 def query_alerts(time_range="1h", min_level=1, source_ip=None):
     query = {
         "query": {
@@ -176,10 +180,14 @@ def query_alerts(time_range="1h", min_level=1, source_ip=None):
             "term": {"data.srcip": source_ip}
         })
     
+    # Indexer credentials from docker-compose.yml wazuh.dashboard environment  
+    # INDEXER_USERNAME=admin, INDEXER_PASSWORD=SecretPassword
+    auth = base64.b64encode(f"{INDEXER_USERNAME}:{INDEXER_PASSWORD}".encode()).decode()
+    
     response = requests.post(
         "https://172.20.0.12:9200/wazuh-alerts-*/_search",
         headers={
-            'Authorization': 'Basic YWRtaW46U2VjcmV0UGFzc3dvcmQ=',
+            'Authorization': f'Basic {auth}',
             'Content-Type': 'application/json'
         },
         json=query,
@@ -217,10 +225,13 @@ def query_logs(time_range="1h", search_term=None, source_ip=None):
             "term": {"agent.ip": source_ip}
         })
     
+    # Same indexer credentials as alert queries
+    auth = base64.b64encode(f"{INDEXER_USERNAME}:{INDEXER_PASSWORD}".encode()).decode()
+    
     response = requests.post(
         "https://172.20.0.12:9200/wazuh-archives-*/_search",
         headers={
-            'Authorization': 'Basic YWRtaW46U2VjcmV0UGFzc3dvcmQ=',
+            'Authorization': f'Basic {auth}',
             'Content-Type': 'application/json'
         },
         json=query,
@@ -393,46 +404,6 @@ async function handleCreateDetectionRule(params: any) {
 }
 ```
 
-### Safety Controls
-
-```typescript
-// Query validation
-function validateQuery(params: any): boolean {
-  // Limit time ranges
-  const maxTimeRanges = ["15m", "1h", "6h", "24h", "7d"];
-  if (params.time_range && !maxTimeRanges.includes(params.time_range)) {
-    return false;
-  }
-  
-  // Limit result sizes
-  const maxSize = 1000;
-  if (params.size && params.size > maxSize) {
-    return false;
-  }
-  
-  return true;
-}
-
-// Rule validation
-function validateRuleXML(ruleXML: string): boolean {
-  if (!ruleXML.includes('<rule') || !ruleXML.includes('</rule>')) {
-    return false;
-  }
-  
-  if (!ruleXML.includes('id=') || !ruleXML.includes('level=')) {
-    return false;
-  }
-  
-  // Block dangerous rule content
-  const blockedPatterns = [
-    /<active-response>/,
-    /<command>/,
-    /<executable>/
-  ];
-  
-  return !blockedPatterns.some(pattern => pattern.test(ruleXML));
-}
-```
 
 ## Network Configuration
 
@@ -565,22 +536,21 @@ await syslog({
 ```bash
 # Blue team MCP server connection via IDE
 # AI agents connect through MCP client configuration
-# All operations validated and logged
 ```
 
 ### Direct API Access
 
 ```bash
-# Get authentication token
-TOKEN=$(curl -k -u wazuh-wui:MyS3cr37P450r.*- \
+# Get authentication token (using docker-compose.yml credentials)
+TOKEN=$(curl -k -u ${API_USERNAME}:${API_PASSWORD} \
   "https://172.20.0.10:55000/security/user/authenticate?raw=true")
 
 # Query alerts
 curl -k -H "Authorization: Bearer $TOKEN" \
   "https://172.20.0.10:55000/"
 
-# Search indexer
-curl -k -u admin:SecretPassword \
+# Search indexer (using docker-compose.yml indexer credentials)
+curl -k -u ${INDEXER_USERNAME}:${INDEXER_PASSWORD} \
   "https://172.20.0.12:9200/wazuh-alerts-*/_search" \
   -d '{"size":10}'
 ```
@@ -591,7 +561,7 @@ curl -k -u admin:SecretPassword \
 # Web interface
 https://localhost:443
 
-# Credentials: wazuh-wui / MyS3cr37P450r.*-
+# Credentials: From docker-compose.yml API_USERNAME / API_PASSWORD
 ```
 
 ## Troubleshooting
@@ -599,12 +569,12 @@ https://localhost:443
 ### API Issues
 
 ```bash
-# Test API authentication
-curl -k -u wazuh-wui:MyS3cr37P450r.*- \
+# Test API authentication (using docker-compose.yml credentials)
+curl -k -u ${API_USERNAME}:${API_PASSWORD} \
   "https://172.20.0.10:55000/security/user/authenticate"
 
-# Check indexer connectivity
-curl -k -u admin:SecretPassword \
+# Check indexer connectivity (using docker-compose.yml indexer credentials)
+curl -k -u ${INDEXER_USERNAME}:${INDEXER_PASSWORD} \
   "https://172.20.0.12:9200/_cluster/health"
 
 # Test dashboard
@@ -615,13 +585,13 @@ curl -k "https://172.20.0.11:5601/api/status"
 
 ```bash
 # Build and test MCP server
-cd mcp && npm run build && node dist/blue-team-index.js
+cd mcp-blue && npm run build && node build/index.js
 
 # Check MCP logs
 tail -f logs/blue-team-activity.log
 
 # Test tools
-npx @modelcontextprotocol/inspector dist/blue-team-index.js
+npx @modelcontextprotocol/inspector build/index.js
 ```
 
 ### Log Flow Issues

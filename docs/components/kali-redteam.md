@@ -258,7 +258,7 @@ local0.*    @@172.20.0.10:514
 
 ### Model Context Protocol Setup
 
-The MCP server provides AI agents with controlled SSH access to lab containers:
+The MCP server provides AI agents with SSH access to lab containers:
 
 ```typescript
 // MCP server tool definitions
@@ -298,12 +298,9 @@ await mcp.run_command("172.20.0.20", "gobuster dir -u http://172.20.0.20 -w /usr
 await mcp.kali_info();
 ```
 
-### Safety Controls
-
-MCP integration includes safety controls:
+### MCP Features
 
 - **SSH Key Management**: Automatic credential selection for targets
-- **Target Validation**: Commands validated against lab configuration
 - **Connection Management**: Automated SSH connection handling  
 - **Error Handling**: Proper error reporting for failed commands
 
@@ -572,28 +569,6 @@ if __name__ == "__main__":
     subprocess.run(["/home/kali/redteam_logging.sh", "auto_recon", "python3", target, "true"])
 ```
 
-## Security Considerations
-
-### Container Isolation
-
-- **Network Isolation**: Cannot reach external networks
-- **Process Isolation**: Runs in separate container namespace
-- **File System Isolation**: Container filesystem separate from host
-- **User Isolation**: Non-root execution within container
-
-### Lab Safety
-
-- **Target Validation**: Tools configured to only target lab ranges
-- **Activity Logging**: All operations logged for accountability
-- **Easy Reset**: Container can be destroyed and recreated
-- **No Persistence**: Attack artifacts contained within lab
-
-### Ethical Usage
-
-- **Educational Purpose**: Designed for security training and research
-- **Controlled Environment**: All activities contained within lab
-- **Audit Trail**: Comprehensive logging for review
-- **Responsible Disclosure**: Any real vulnerabilities found should be reported responsibly
 
 ## Troubleshooting
 
@@ -656,8 +631,3 @@ docker exec aptl-kali journalctl -t "APTL-RedTeam" -f
 docker exec aptl-kali journalctl -u ssh -f
 ```
 
-## Next Steps
-
-- **[MCP Integration](mcp-integration.md)** - AI agent integration details
-- **[Usage Examples](../usage/exercises.md)** - Practical red team scenarios
-- **[Wazuh SIEM](wazuh-siem.md)** - Blue team monitoring and detection

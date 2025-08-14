@@ -20,7 +20,8 @@
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "0.6.0",
-        "zod": "^3.25.49"
+        "zod": "^3.25.49",
+        "undici": "^6.19.8"
     },
     "devDependencies": {
         "@types/node": "^20.11.24",

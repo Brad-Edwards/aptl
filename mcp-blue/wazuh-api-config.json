@@ -34,14 +34,6 @@
     "rate_limit_per_minute": 60
   },
   "mcp": {
-    "server_name": "aptl-wazuh-blue-team",
-    "allowed_operations": [
-      "query_alerts",
-      "query_logs", 
-      "create_detection_rule",
-      "wazuh_info"
-    ],
-    "audit_enabled": true,
-    "log_level": "info"
+    "server_name": "aptl-wazuh-blue-team"
   }
 }

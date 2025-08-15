@@ -1,11 +1,11 @@
 {
-    "name": "aptl-kali-mcp-server",
+    "name": "aptl-wazuh-mcp-server",
     "version": "0.1.0",
-    "description": "Model Context Protocol server for APTL Kali Linux red team operations",
+    "description": "Model Context Protocol server for APTL Wazuh blue team operations",
     "private": true,
     "type": "module",
     "bin": {
-        "APTL Kali MCP Server": "./build/index.js"
+        "APTL Wazuh MCP Server": "./build/index.js"
     },
     "files": [
         "build"
@@ -20,8 +20,6 @@
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "0.6.0",
-        "@types/ssh2": "^1.15.5",
-        "ssh2": "^1.16.0",
         "zod": "^3.25.49"
     },
     "devDependencies": {

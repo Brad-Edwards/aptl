@@ -4,24 +4,48 @@
 
 - **Manager** (172.20.0.10): Log processing, rules, alerts
 - **Indexer** (172.20.0.12): OpenSearch data storage
-- **Dashboard** (172.20.0.11): Web UI at https://localhost:443
+- **Dashboard** (172.20.0.11): Web UI at <https://localhost:443>
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    A[Log Sources<br/>Victim & Kali] --> B[Wazuh Manager<br/>172.20.0.10]
-    B --> C[Wazuh Indexer<br/>172.20.0.12] 
-    C --> D[Wazuh Dashboard<br/>172.20.0.11]
-    E[Security Analyst] --> D
+    A[AI Blue Team Agent] --> B[Blue Team MCP]
+    C[AI Red Team Agent] --> D[Red Team MCP]
     
-    classDef manager fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef indexer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef dashboard fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    B --> E[Wazuh API<br/>Port 55000]
+    B --> F[Wazuh Indexer API<br/>Port 9200]
     
-    class B manager
-    class C indexer
-    class D dashboard
+    subgraph "Wazuh SIEM Stack"
+        G[Wazuh Manager<br/>172.20.0.10]
+        H[Wazuh Indexer<br/>172.20.0.12]
+        I[Wazuh Dashboard<br/>172.20.0.11]
+    end
+    
+    E --> G
+    F --> H
+    G <--> H
+    H --> I
+    
+    J[Victim Container<br/>172.20.0.20] --> K[Syslog 514/udp]
+    L[Kali Container<br/>172.20.0.30] --> K
+    B -.->|Activity Logs| K
+    D -.->|Activity Logs| K
+    K --> G
+    
+    M[Security Analyst] --> I
+    
+    classDef ai fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
+    classDef mcp fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
+    classDef wazuh fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
+    classDef logs fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
+    classDef analyst fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
+    
+    class A,C ai
+    class B,D mcp
+    class E,F,G,H,I wazuh
+    class J,K,L logs
+    class M analyst
 ```
 
 ## Wazuh Manager
@@ -33,7 +57,6 @@ The Wazuh Manager is the central component that receives, processes, and analyze
 - **Log Collection**: Receives logs via syslog (UDP 514)
 - **Event Analysis**: Real-time analysis using detection rules
 - **Correlation**: Multi-event correlation for complex attack detection
-- **Active Response**: Automated response to security threats
 - **API Access**: REST API for management and integration
 
 ### Configuration
@@ -59,26 +82,6 @@ The manager is configured via `/var/ossec/etc/ossec.conf`:
     <include>red_team_rules.xml</include>
   </rules>
 </ossec_config>
-```
-
-### Custom Rules for Purple Team
-
-APTL includes custom detection rules for purple team scenarios:
-
-```xml
-<!-- Red team activity detection -->
-<group name="red_team,">
-  <rule id="100001" level="5">
-    <decoded_as>red-team-activity</decoded_as>
-    <description>Red team activity detected</description>
-  </rule>
-  
-  <rule id="100002" level="7">
-    <if_sid>100001</if_sid>
-    <field name="red_team_tool">nmap</field>
-    <description>Red team network scanning detected</description>
-  </rule>
-</group>
 ```
 
 ### Access and Management
@@ -141,7 +144,7 @@ Wazuh automatically creates and manages indices:
 - **Container**: `wazuh.indexer`
 - **IP Address**: 172.20.0.12
 - **API Port**: 9200
-- **Default Credentials**: admin / SecretPassword
+- **Default Credentials**: admin / SecretPassword (from docker-compose.yml INDEXER_USERNAME/INDEXER_PASSWORD)
 
 ```bash
 # Check indexer health
@@ -169,6 +172,7 @@ The Wazuh Dashboard provides a comprehensive web-based security operations inter
 ### Main Interfaces
 
 #### Security Events
+
 Real-time security event monitoring and analysis.
 
 - **Events Timeline**: Chronological view of security events
@@ -177,6 +181,7 @@ Real-time security event monitoring and analysis.
 - **Export**: Export events for offline analysis
 
 #### Threat Hunting
+
 Interactive threat hunting and investigation tools.
 
 - **Search Queries**: Custom search across all security data
@@ -185,6 +190,7 @@ Interactive threat hunting and investigation tools.
 - **Alerting**: Custom alerts based on search criteria
 
 #### Compliance Dashboard
+
 Regulatory compliance monitoring and reporting.
 
 - **PCI DSS**: Payment card industry compliance
@@ -192,26 +198,10 @@ Regulatory compliance monitoring and reporting.
 - **HIPAA**: Healthcare information portability
 - **Custom Standards**: Create custom compliance frameworks
 
-### Purple Team Specific Dashboards
-
-APTL includes custom dashboards for purple team operations:
-
-#### Red Team Activity Dashboard
-- **Attack Timeline**: Chronological view of red team activities
-- **Tool Usage**: Breakdown of penetration testing tools used
-- **Target Analysis**: Which systems were targeted and how
-- **Success Rate**: Attack success vs. detection rate
-
-#### Blue Team Response Dashboard
-- **Detection Metrics**: How quickly threats were detected
-- **Response Times**: Time from detection to response
-- **Rule Effectiveness**: Which detection rules are most effective
-- **False Positives**: Analysis of false positive rates
-
 ### Access and Configuration
 
-- **URL**: https://localhost:443
-- **Default Credentials**: admin / SecretPassword
+- **URL**: <https://localhost:443>
+- **Default Credentials**: See `docker-compose.yml` API_USERNAME / API_PASSWORD environment variables
 - **Container**: `wazuh.dashboard`
 - **IP Address**: 172.20.0.11
 
@@ -250,16 +240,6 @@ The lab is configured to receive logs from multiple sources:
 </remote>
 ```
 
-### Custom Fields for Purple Team
-
-APTL adds custom fields to track purple team activities:
-
-- **red_team_activity**: Type of red team activity
-- **red_team_tool**: Tool used for the activity
-- **red_team_target**: Target of the activity
-- **red_team_success**: Whether the activity was successful
-- **blue_team_detected**: Whether blue team detected the activity
-
 ### Alert Prioritization
 
 Custom alert levels for lab scenarios:
@@ -269,20 +249,21 @@ Custom alert levels for lab scenarios:
 - **Level 7-12**: High-priority security events
 - **Level 13-15**: Critical security incidents
 
-### Integration with MCP
+### Red Team Log Integration
 
-The Wazuh SIEM integrates with the MCP server to provide AI agents with security context:
+Purple team activities generate structured logs and API interactions that are processed by Wazuh:
 
-```typescript
-// MCP server can query Wazuh for recent events
-const recentAlerts = await queryWazuh('/wazuh-alerts-*/search', {
-  query: { 
-    range: { 
-      timestamp: { gte: 'now-1h' } 
-    } 
-  }
-});
-```
+**Red Team Integration:**
+
+- **[Kali Red Team - SIEM Integration](kali-redteam.md#siem-integration)** - Custom RedTeam field definitions and logging structure
+
+**Blue Team Integration:**  
+
+- **[Wazuh Blue Team Platform](wazuh-blueteam.md)** - API access, alert queries, and blue team MCP tools
+
+**MCP Integration:**
+
+- **[MCP Integration](mcp-integration.md)** - AI agent integration architecture for both red and blue team operations
 
 ## Performance Tuning
 
@@ -344,6 +325,7 @@ docker compose up -d
 ### Common Issues
 
 1. **Indexer Won't Start**
+
    ```bash
    # Check memory settings
    docker compose logs wazuh.indexer | grep -i memory
@@ -353,6 +335,7 @@ docker compose up -d
    ```
 
 2. **Dashboard Connection Issues**
+
    ```bash
    # Check SSL certificates
    docker exec wazuh.dashboard ls -la /usr/share/wazuh-dashboard/certs/
@@ -362,6 +345,7 @@ docker compose up -d
    ```
 
 3. **No Logs Received**
+
    ```bash
    # Check manager syslog configuration
    docker exec wazuh.manager netstat -ulnp | grep 514
@@ -418,15 +402,9 @@ import requests
 response = requests.get(
     'https://localhost:55000/alerts',
     params={'level': '>=7', 'limit': 100},
-    auth=('wazuh-wui', 'MyS3cr37P450r.*-'),
+    auth=('wazuh-wui', 'WazuhPass123!'),
     verify=False
 )
 
 alerts = response.json()
 ```
-
-## Next Steps
-
-- **[Victim Containers](victim-containers.md)** - Target systems configuration
-- **[Kali Red Team](kali-redteam.md)** - Red team platform setup
-- **[MCP Integration](mcp-integration.md)** - AI agent integration

@@ -142,8 +142,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           target,
           credentials.username,
           credentials.sshKey,
-          command,
-          credentials.port
+          command
         );
 
         return {

@@ -201,7 +201,7 @@ Regulatory compliance monitoring and reporting.
 ### Access and Configuration
 
 - **URL**: <https://localhost:443>
-- **Default Credentials**: wazuh-wui / MyS3cr37P450r.*- (from docker-compose.yml API_USERNAME/API_PASSWORD)
+- **Default Credentials**: See `docker-compose.yml` API_USERNAME / API_PASSWORD environment variables
 - **Container**: `wazuh.dashboard`
 - **IP Address**: 172.20.0.11
 
@@ -402,7 +402,7 @@ import requests
 response = requests.get(
     'https://localhost:55000/alerts',
     params={'level': '>=7', 'limit': 100},
-    auth=('wazuh-wui', 'MyS3cr37P450r.*-'),
+    auth=('wazuh-wui', 'WazuhPass123!'),
     verify=False
 )
 

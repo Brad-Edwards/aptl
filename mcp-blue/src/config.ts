@@ -102,12 +102,12 @@ async function loadWazuhConfig(): Promise<WazuhConfig> {
 export async function loadConfig(): Promise<WazuhConfig> {
   const config = await loadWazuhConfig();
   
-  // Validate network addresses are in lab subnet
-  if (!isInLabNetwork(config.wazuh.manager.host, config.network.lab_subnet)) {
+  // Validate network addresses are in lab subnet (allow localhost for Docker port forwarding)
+  if (config.wazuh.manager.host !== 'localhost' && !isInLabNetwork(config.wazuh.manager.host, config.network.lab_subnet)) {
     throw new Error(`Wazuh Manager host ${config.wazuh.manager.host} is not in lab subnet ${config.network.lab_subnet}`);
   }
   
-  if (!isInLabNetwork(config.wazuh.indexer.host, config.network.lab_subnet)) {
+  if (config.wazuh.indexer.host !== 'localhost' && !isInLabNetwork(config.wazuh.indexer.host, config.network.lab_subnet)) {
     throw new Error(`Wazuh Indexer host ${config.wazuh.indexer.host} is not in lab subnet ${config.network.lab_subnet}`);
   }
   

@@ -1,9 +1,20 @@
 {
     "mcpServers": {
-        "kali-red-team": {
+        "mcp-red": {
             "command": "node",
-            "args": ["./red_team/kali_mcp/build/index.js"],
-            "cwd": "/home/atomik/src/aptl"
+            "args": ["./mcp-red/build/index.js"],
+            "cwd": "/home/atomik/src/aptl",
+            "env": {
+                "APTL_CONFIG_PATH": "/home/atomik/src/aptl/mcp-red/docker-lab-config.json"
+            }
+        },
+        "mcp-blue": {
+            "command": "node",
+            "args": ["./mcp-blue/build/index.js"],
+            "cwd": "/home/atomik/src/aptl",
+            "env": {
+                "WAZUH_API_CONFIG": "/home/atomik/src/aptl/mcp-blue/wazuh-api-config.json"
+            }
         }
     }
 }

@@ -1,0 +1,32 @@
+{
+    "name": "aptl-kali-mcp-server",
+    "version": "0.1.0",
+    "description": "Model Context Protocol server for APTL Kali Linux red team operations",
+    "private": true,
+    "type": "module",
+    "bin": {
+        "APTL Kali MCP Server": "./build/index.js"
+    },
+    "files": [
+        "build"
+    ],
+    "scripts": {
+        "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+        "prepare": "npm run build",
+        "watch": "tsc --watch",
+        "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.17.2",
+        "@types/ssh2": "^1.15.5",
+        "ssh2": "^1.16.0",
+        "zod": "^3.25.49"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.24",
+        "typescript": "^5.3.3",
+        "vitest": "^1.0.0"
+    }
+}

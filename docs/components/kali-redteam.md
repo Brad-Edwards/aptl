@@ -258,32 +258,30 @@ local0.*    @@172.20.0.10:514
 
 ### Model Context Protocol Setup
 
-The MCP server provides AI agents with controlled access to Kali tools:
+The MCP server provides AI agents with SSH access to lab containers:
 
 ```typescript
 // MCP server tool definitions
 const tools = [
   {
-    name: "run_nmap",
-    description: "Execute nmap network scan",
+    name: "kali_info",
+    description: "Get information about the Kali Linux instance in the lab",
     inputSchema: {
       type: "object",
-      properties: {
-        target: { type: "string" },
-        ports: { type: "string", default: "1-1000" },
-        options: { type: "string", default: "-sV -sC" }
-      }
+      properties: {}
     }
   },
   {
-    name: "run_gobuster", 
-    description: "Execute directory enumeration",
+    name: "run_command", 
+    description: "Execute a command on a target instance in the lab",
     inputSchema: {
       type: "object",
       properties: {
-        target: { type: "string" },
-        wordlist: { type: "string", default: "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt" }
-      }
+        target: { type: "string", description: "Target IP address or hostname" },
+        command: { type: "string", description: "Command to execute" },
+        username: { type: "string", description: "SSH username (optional)", default: "kali" }
+      },
+      required: ["target", "command"]
     }
   }
 ];
@@ -291,23 +289,20 @@ const tools = [
 
 ### AI Agent Commands
 
-AI agents can execute controlled red team operations:
+AI agents execute commands via SSH to lab containers:
 
-```bash
-# Example AI-driven commands via MCP
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "nmap -sV 172.20.0.20"
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "gobuster dir -u http://172.20.0.20 -w /usr/share/wordlists/common.txt"
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "python3 /home/kali/scripts/auto_exploit.py 172.20.0.20"
+```typescript
+// Example AI-driven commands via MCP
+await mcp.run_command("172.20.0.20", "nmap -sV 172.20.0.20", "kali");
+await mcp.run_command("172.20.0.20", "gobuster dir -u http://172.20.0.20 -w /usr/share/wordlists/common.txt", "labadmin");
+await mcp.kali_info();
 ```
 
-### Safety Controls
+### MCP Features
 
-MCP integration includes safety controls to prevent misuse:
-
-- **Target Validation**: Commands only allowed against lab IP ranges
-- **Command Filtering**: Dangerous commands blocked or sanitized  
-- **Activity Logging**: All AI actions logged with detailed metadata
-- **Time Limits**: Automatic timeout for long-running operations
+- **SSH Key Management**: Automatic credential selection for targets
+- **Connection Management**: Automated SSH connection handling  
+- **Error Handling**: Proper error reporting for failed commands
 
 ## Access Methods
 
@@ -574,28 +569,6 @@ if __name__ == "__main__":
     subprocess.run(["/home/kali/redteam_logging.sh", "auto_recon", "python3", target, "true"])
 ```
 
-## Security Considerations
-
-### Container Isolation
-
-- **Network Isolation**: Cannot reach external networks
-- **Process Isolation**: Runs in separate container namespace
-- **File System Isolation**: Container filesystem separate from host
-- **User Isolation**: Non-root execution within container
-
-### Lab Safety
-
-- **Target Validation**: Tools configured to only target lab ranges
-- **Activity Logging**: All operations logged for accountability
-- **Easy Reset**: Container can be destroyed and recreated
-- **No Persistence**: Attack artifacts contained within lab
-
-### Ethical Usage
-
-- **Educational Purpose**: Designed for security training and research
-- **Controlled Environment**: All activities contained within lab
-- **Audit Trail**: Comprehensive logging for review
-- **Responsible Disclosure**: Any real vulnerabilities found should be reported responsibly
 
 ## Troubleshooting
 
@@ -658,8 +631,3 @@ docker exec aptl-kali journalctl -t "APTL-RedTeam" -f
 docker exec aptl-kali journalctl -u ssh -f
 ```
 
-## Next Steps
-
-- **[MCP Integration](mcp-integration.md)** - AI agent integration details
-- **[Usage Examples](../usage/exercises.md)** - Practical red team scenarios
-- **[Wazuh SIEM](wazuh-siem.md)** - Blue team monitoring and detection

@@ -6,13 +6,27 @@
 > **💡 Use at your own risk - this is a proof of concept**  
 > **🚨 Don't be stupid or you'll get yourself in trouble.**
 
+## AI Agent Integration
+
+✅ **Red Team MCP**: AI agents control Kali Linux for autonomous attacks  
+✅ **Blue Team MCP**: AI agents query Wazuh SIEM for detection and analysis  
+✅ **Complete Workflow**: Red team attacks → SIEM detection → Blue team investigation  
+
+## Demo & Screenshots
+
+**AI Red Team Autonomous Reconnaissance:**
+![AI Red Team Nmap Scan](assets/images/li_test/cline_red_team_test_10.png)
+
+**Complete Attack Success:**
+![AI Red Team Victory](assets/images/li_test/cline_red_team_test_20.png)
+
+*All screen caps from this test: [AI Red Team Test (PDF)](assets/docs/ai_red_team_test.pdf)*
+
 ## Roadmap
 
-🚧 Complete Wazuh integration  
-🚧 Re-enable full red-team agent logging  
-🚧 Blue team agent  
-🚧 Wazuh MCP  
 🚧 qRadar integration and MCP  
+🚧 Advanced correlation rules  
+🚧 Multi-stage attack scenarios  
 
 ---
 
@@ -20,7 +34,7 @@
 
 ## What is APTL?
 
-Docker lab with Wazuh SIEM + victim containers + Kali red team platform. AI agents can control Kali via MCP for autonomous attacks.
+Docker lab with Wazuh SIEM + victim containers + Kali red team platform. AI agents control both red team attacks (Kali MCP) and blue team analysis (Wazuh MCP) for complete purple team exercises.
 
 APTL is meant to support three use cases:
 

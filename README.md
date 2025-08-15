@@ -22,12 +22,6 @@
 
 *All screen caps from this test: [AI Red Team Test (PDF)](assets/docs/ai_red_team_test.pdf)*
 
-## Roadmap
-
-🚧 qRadar integration and MCP  
-🚧 Advanced correlation rules  
-🚧 Multi-stage attack scenarios  
-
 ---
 
 🚨⚠️🚨 ALWAYS monitor AI red-team agents during scenarios 🚨⚠️🚨
@@ -113,7 +107,7 @@ Test: Ask your AI agent "Use kali_info to show me the lab network"
 - **AI Agents**: This lab gives AI agents access to real penetration testing tools
 - **Container Security**: No guarantees about container isolation or escape prevention
 - **Network Security**: Docker networking may not prevent all forms of network access
-- **Host Security**: Use only on dedicated/disposable systems
+- **Host Security**: Monitor the agent closely if it has cli access on your host
 - **Legal Compliance**: You are responsible for following all applicable laws
 - **Educational Use**: Intended for security research and training only
 

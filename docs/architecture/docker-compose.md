@@ -113,7 +113,7 @@ wazuh.dashboard:
     - INDEXER_USERNAME=admin
     - INDEXER_PASSWORD=SecretPassword
     - API_USERNAME=wazuh-wui
-    - API_PASSWORD=MyS3cr37P450r.*-
+    - API_PASSWORD=${API_PASSWORD}
   networks:
     aptl-network:
       ipv4_address: 172.20.0.11
@@ -121,7 +121,7 @@ wazuh.dashboard:
 
 ### Access Configuration
 
-- **Web Interface**: https://localhost:443
+- **Web Interface**: <https://localhost:443>
 - **Default Login**: admin / SecretPassword
 - **SSL Enabled**: Uses SSL certificates for HTTPS
 
@@ -328,7 +328,7 @@ Selective host mounts provide necessary configuration and system access.
 | `INDEXER_USERNAME` | OpenSearch user | `admin` |
 | `INDEXER_PASSWORD` | OpenSearch password | `SecretPassword` |
 | `API_USERNAME` | Wazuh API user | `wazuh-wui` |
-| `API_PASSWORD` | Wazuh API password | `MyS3cr37P450r.*-` |
+| `API_PASSWORD` | Wazuh API password | Set in docker-compose.yml |
 
 ## Service Dependencies
 
@@ -423,4 +423,3 @@ depends_on:
 ```
 
 Wait for dependencies to be healthy before starting dependent services.
-

@@ -8,517 +8,126 @@ cd aptl
 ./start-lab.sh
 ```
 
-Script handles:
-- SSH key generation
-- SSL certificates
-- Container startup
-- Health checks
-
-```
-==========================================
-🚀 Starting APTL Local Purple Team Lab
-==========================================
-
-📋 Step 1: Generating SSH keys...
-✅ SSH keys generated
-
-📋 Step 2: Checking system requirements...
-✅ vm.max_map_count is adequate (262144)
-
-📋 Step 3: Generating SSL certificates for Wazuh...
-✅ Certificates already exist
-
-📋 Step 4: Building and starting containers...
-✅ All containers started successfully
-
-📋 Step 5: Waiting for services to be ready...
-✅ Wazuh Indexer is ready
-✅ Wazuh Manager API is ready
-✅ SSH to victim (labadmin@localhost:2022) is ready
-✅ SSH to kali (kali@localhost:2023) is ready
-
-🎉 APTL Local Lab Started Successfully!
-```
+**Use the script.** Manual deployment is error-prone and takes longer.
 
 ## Manual Deployment
 
-### Step-by-Step Process
+**These steps are automated by `start-lab.sh`. Use the script unless troubleshooting.**
 
-For greater control or troubleshooting purposes, you can deploy manually:
+#### 1. Prerequisites
 
-#### 1. Clone Repository
+```bash
+# Check requirements
+docker --version && docker compose version
+sysctl vm.max_map_count  # Should be >= 262144
+netstat -tlnp | grep -E "(443|2022|2023|9200|55000)"  # Ports must be free
+
+# Fix vm.max_map_count if needed (Linux/WSL2)
+sudo sysctl -w vm.max_map_count=262144
+```
+
+#### 2. Setup
 
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
-```
 
-#### 2. Generate SSH Keys
-
-```bash
+# Generate SSH keys
 ./scripts/generate-ssh-keys.sh
-```
 
-This creates SSH key pairs in `~/.ssh/aptl_lab_key` for container access.
-
-#### 3. System Requirements Check
-
-```bash
-# Check Docker installation
-docker --version
-docker compose version
-
-# Verify vm.max_map_count (Linux/WSL2)
-sysctl vm.max_map_count
-# Should be >= 262144, if not:
-sudo sysctl -w vm.max_map_count=262144
-
-# Check port availability
-netstat -tlnp | grep -E "(443|2022|2023|9200|55000)"
-```
-
-#### 4. Generate SSL Certificates
-
-```bash
-# Generate certificates for Wazuh
+# Generate SSL certificates
 docker compose -f generate-indexer-certs.yml run --rm generator
+
+# Build MCP servers
+cd mcp-red && npm install && npm run build && cd ..
+cd mcp-blue && npm install && npm run build && cd ..
 ```
 
-#### 5. Build MCP Server
+#### 3. Deploy
 
 ```bash
-cd mcp
-npm install
-npm run build
-cd ..
-```
-
-#### 6. Deploy Containers
-
-```bash
-# Pull base images
-docker pull wazuh/wazuh-manager:4.12.0
-docker pull wazuh/wazuh-indexer:4.12.0
-docker pull wazuh/wazuh-dashboard:4.12.0
-docker pull kalilinux/kali-last-release:latest
-docker pull rockylinux:9
-
-# Build and start services
 docker compose up --build -d
 ```
 
-#### 7. Wait for Service Initialization
+Wait 5-10 minutes for Wazuh indexer initialization.
 
-```bash
-# Monitor service startup
-docker compose logs -f wazuh.indexer wazuh.manager wazuh.dashboard
+## Startup Times
 
-# Wait for services to be ready (automated by start-lab.sh)
-# Wazuh Indexer: 2-5 minutes
-# Wazuh Manager: 1-2 minutes  
-# Dashboard: 30 seconds after Indexer is ready
-```
+| Component | First Run | Restart |
+|-----------|-----------|---------|
+| SSL cert generation | 30s | 0s |
+| Wazuh Indexer | 2-5 min | 1-2 min |
+| Wazuh Manager | 1-2 min | 30s |
+| Dashboard | 30s | 15s |
+| Victim/Kali | 1-2 min | 30s |
+| **Total** | **5-10 min** | **3-5 min** |
 
-## Deployment Timing
-
-### Service Startup Order
-
-```mermaid
-gantt
-    title APTL Service Startup Timeline
-    dateFormat X
-    axisFormat %M:%S
-    
-    section Infrastructure
-    Docker Network Creation    :milestone, 0, 0
-    SSL Certificate Generation :cert, 0, 30
-    
-    section Core Services
-    Wazuh Indexer    :indexer, 30, 180
-    Wazuh Manager    :manager, 60, 120
-    Wazuh Dashboard  :dashboard, 180, 30
-    
-    section Lab Containers
-    Victim Container :victim, 30, 60
-    Kali Container   :kali, 30, 90
-    
-    section Verification
-    Health Checks    :health, 210, 30
-    SSH Connectivity :ssh, 240, 30
-```
-
-### Typical Deployment Times
-
-| Component | Cold Start | Warm Start | Notes |
-|-----------|------------|------------|-------|
-| **Network Setup** | 10 seconds | 5 seconds | Docker network creation |
-| **Certificate Generation** | 30 seconds | 0 seconds | Only if certificates missing |
-| **Wazuh Indexer** | 2-5 minutes | 1-2 minutes | OpenSearch initialization |
-| **Wazuh Manager** | 1-2 minutes | 30 seconds | Depends on Indexer |
-| **Wazuh Dashboard** | 30 seconds | 15 seconds | After Indexer ready |
-| **Victim Container** | 1 minute | 30 seconds | Service configuration |
-| **Kali Container** | 1-2 minutes | 45 seconds | Tool availability |
-| **Total Time** | **5-10 minutes** | **3-5 minutes** | Complete lab ready |
-
-## Configuration Options
-
-### Environment Variables
-
-Customize deployment through environment variables:
-
-```bash
-# Custom configuration example
-export WAZUH_VERSION=4.12.0
-export VICTIM_SCENARIO=web-vulnerable
-export KALI_TOOLS=full
-export LAB_NETWORK=172.20.0.0/16
-
-# Deploy with custom settings
-./start-lab.sh
-```
-
-### Docker Compose Overrides
-
-Create `docker-compose.override.yml` for custom configurations:
-
-```yaml
-# docker-compose.override.yml
-version: '3.8'
-
-services:
-  wazuh.indexer:
-    environment:
-      - "OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g"  # Increase memory
-    
-  victim:
-    ports:
-      - "3389:3389"  # Add RDP port
-    environment:
-      - ENABLE_RDP=true
-    
-  kali:
-    volumes:
-      - ./custom-tools:/home/kali/custom-tools:ro
-```
-
-### Network Configuration
-
-Modify network settings in `docker-compose.yml`:
-
-```yaml
-networks:
-  aptl-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16  # Change subnet if needed
-          gateway: 172.20.0.1
-```
-
-## Deployment Verification
-
-### Health Check Commands
-
-Verify successful deployment with these commands:
-
-```bash
-# Check container status
-docker compose ps
-
-# Verify network connectivity
-docker network inspect aptl_aptl-network
-
-# Test service endpoints
-curl -k https://localhost:443          # Wazuh Dashboard
-curl -k https://localhost:9200        # Wazuh Indexer
-curl -k https://localhost:55000       # Wazuh API
-
-# Test SSH connectivity
-ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022 "echo 'Victim OK'"
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "echo 'Kali OK'"
-```
-
-### Service Verification
-
-```bash
-# Wazuh services
-docker exec wazuh.manager /var/ossec/bin/wazuh-control status
-docker exec wazuh.indexer curl -s http://localhost:9200/_cluster/health
-
-# Container services
-docker exec aptl-victim systemctl status sshd httpd vsftpd
-docker exec aptl-kali systemctl status ssh
-```
-
-### Log Integration Test
-
-```bash
-# Generate test log from victim
-docker exec aptl-victim logger "APTL Test: Deployment verification $(date)"
-
-# Verify log appears in Wazuh
-# Check Wazuh Dashboard Events or query Indexer:
-curl -k -u admin:SecretPassword \
-  "https://localhost:9200/wazuh-alerts-*/_search?q=APTL+Test"
-```
-
-## Access and Connection
-
-### Connection Information
-
-After deployment, connection details are available:
-
-```bash
-# View connection information
-cat lab_connections.txt
-
-# Key access points:
-# Wazuh Dashboard: https://localhost:443 (admin/SecretPassword)
-# Victim SSH: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022
-# Kali SSH: ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023
-```
-
-### Service URLs
+## Access
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **Wazuh Dashboard** | https://localhost:443 | admin / SecretPassword |
-| **Wazuh Indexer** | https://localhost:9200 | admin / SecretPassword |
-| **Wazuh API** | https://localhost:55000 | wazuh-wui / MyS3cr37P450r.*- |
+| Wazuh Dashboard | <https://localhost:443> | admin / SecretPassword |
+| Wazuh Indexer | <https://localhost:9200> | admin / SecretPassword |
+| Wazuh API | <https://localhost:55000> | wazuh-wui / WazuhPass123! |
+| Victim SSH | localhost:2022 | labadmin / aptl_lab_key |
+| Kali SSH | localhost:2023 | kali / aptl_lab_key |
 
-### Container Access
+## Verification
 
 ```bash
-# SSH access (recommended)
-ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022  # Victim
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023      # Kali
+# Check status
+docker compose ps
 
-# Direct container access (debugging)
-docker exec -it aptl-victim /bin/bash
-docker exec -it aptl-kali /bin/bash
+# Test endpoints  
+curl -k https://localhost:443          # Dashboard
+curl -k https://localhost:9200        # Indexer
+ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022 "echo OK"  # Victim
+ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "echo OK"      # Kali
 ```
 
-## Management Operations
-
-### Starting and Stopping
+## Management
 
 ```bash
 # Start lab
 ./start-lab.sh
-# OR
-docker compose up -d
 
 # Stop lab
 docker compose stop
 
-# Restart lab
+# Restart
 docker compose restart
 
-# Stop and remove containers
-docker compose down
-```
-
-### Individual Service Management
-
-```bash
-# Restart specific service
-docker compose restart wazuh.manager
-
-# View service logs
-docker compose logs -f wazuh.indexer
-
-# Scale services (if supported)
-docker compose up -d --scale victim=2
-```
-
-### Data Management
-
-```bash
-# View persistent data
-docker volume ls | grep aptl
-
-# Backup data volumes
-docker run --rm -v aptl_wazuh-indexer-data:/data -v $(pwd):/backup ubuntu \
-  tar czf /backup/wazuh-data-backup.tar.gz -C /data .
-
-# Clean up all data (destructive)
+# Clean removal
 docker compose down -v
 ```
 
-## Cleanup and Removal
+## Troubleshooting
 
-### Complete Lab Removal
-
-```bash
-# Stop and remove containers with data
-docker compose down -v
-
-# Remove lab images (optional)
-docker images | grep -E "(aptl|wazuh)" | awk '{print $3}' | xargs docker rmi
-
-# Clean up Docker system
-docker system prune -f
-
-# Remove repository
-cd .. && rm -rf aptl
-```
-
-### Selective Cleanup
+### Port Conflicts
 
 ```bash
-# Remove only containers, keep images
-docker compose down
-
-# Remove specific volumes
-docker volume rm aptl_wazuh-indexer-data
-
-# Clean up unused images
-docker image prune -f
+netstat -tlnp | grep -E "(443|2022|2023|9200|55000)"
+sudo lsof -t -i:443 | xargs kill
 ```
 
-## Advanced Deployment
-
-### Multi-Host Deployment
-
-Deploy across multiple hosts using Docker Swarm or external orchestration:
-
-```yaml
-# docker-compose.swarm.yml
-version: '3.8'
-
-services:
-  wazuh.manager:
-    deploy:
-      replicas: 1
-      placement:
-        constraints: [node.role == manager]
-  
-  victim:
-    deploy:
-      replicas: 3
-      placement:
-        constraints: [node.labels.type == target]
-```
-
-### Resource Constraints
-
-Set resource limits for controlled environments:
-
-```yaml
-# Resource-constrained deployment
-services:
-  wazuh.indexer:
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 4G
-        reservations:
-          cpus: '1'
-          memory: 2G
-```
-
-### Custom Victim Scenarios
-
-Deploy different victim configurations:
+### Certificate Issues
 
 ```bash
-# Deploy specific victim scenario
-VICTIM_SCENARIO=database docker compose -f docker-compose.yml -f scenarios/database.yml up -d
-
-# Deploy multiple victim types
-docker compose -f docker-compose.yml -f scenarios/multi-victim.yml up -d
+rm -rf config/wazuh_indexer_ssl_certs
+docker compose -f generate-indexer-certs.yml run --rm generator
 ```
 
-## Troubleshooting Deployment
-
-### Common Issues
-
-1. **Port Conflicts**
-   ```bash
-   # Check port usage
-   netstat -tlnp | grep -E "(443|2022|2023|9200|55000)"
-   
-   # Kill conflicting processes
-   sudo lsof -t -i:443 | xargs kill
-   ```
-
-2. **Insufficient Resources**
-   ```bash
-   # Check available resources
-   free -h
-   df -h
-   
-   # Increase Docker memory limits (Docker Desktop)
-   # Settings → Resources → Memory: 8GB+
-   ```
-
-3. **Certificate Issues**
-   ```bash
-   # Regenerate certificates
-   rm -rf config/wazuh_indexer_ssl_certs
-   docker compose -f generate-indexer-certs.yml run --rm generator
-   ```
-
-4. **Container Build Failures**
-   ```bash
-   # Clean build cache
-   docker builder prune -f
-   
-   # Rebuild containers
-   docker compose build --no-cache
-   ```
-
-### Deployment Logs
-
-Monitor deployment progress through logs:
+### Container Build Failures
 
 ```bash
-# View all container logs
-docker compose logs -f
-
-# View specific service startup
-docker compose logs -f wazuh.indexer | grep -E "(started|ready|error)"
-
-# Monitor resource usage during startup
-docker stats
+docker builder prune -f
+docker compose build --no-cache
 ```
 
-### Recovery Procedures
+### Recovery
 
 ```bash
-# Recover from failed deployment
 docker compose down
 docker system prune -f
 ./start-lab.sh
-
-# Recover specific service
-docker compose stop wazuh.indexer
-docker compose rm -f wazuh.indexer
-docker volume rm aptl_wazuh-indexer-data
-docker compose up -d wazuh.indexer
 ```
-
-## Best Practices
-
-### Pre-Deployment
-
-1. **System Requirements**: Verify all prerequisites before deployment
-2. **Resource Planning**: Ensure adequate CPU, memory, and storage
-3. **Network Planning**: Verify port availability and network configuration
-4. **Backup Strategy**: Plan for data backup and recovery procedures
-
-### During Deployment
-
-1. **Monitor Progress**: Watch logs for errors or issues
-2. **Verify Health**: Check service health at each stage
-3. **Test Connectivity**: Verify network connectivity between components
-4. **Document Changes**: Record any customizations or modifications
-
-### Post-Deployment
-
-1. **Security Hardening**: Change default passwords and update configurations
-2. **Performance Tuning**: Optimize resource allocation based on usage
-3. **Monitoring Setup**: Implement continuous monitoring and alerting
-4. **Backup Implementation**: Set up regular data backup procedures
-

@@ -63,7 +63,7 @@ wazuh.manager:
   environment:
     - INDEXER_URL=https://wazuh.indexer:9200
     - API_USERNAME=wazuh-wui
-    - API_PASSWORD=MyS3cr37P450r.*-
+    - API_PASSWORD=${API_PASSWORD}
   networks:
     aptl-network:
       ipv4_address: 172.20.0.10
@@ -100,7 +100,7 @@ wazuh.dashboard:
     - INDEXER_USERNAME=admin
     - INDEXER_PASSWORD=SecretPassword
     - API_USERNAME=wazuh-wui
-    - API_PASSWORD=MyS3cr37P450r.*-
+    - API_PASSWORD=${API_PASSWORD}
   networks:
     aptl-network:
       ipv4_address: 172.20.0.11
@@ -121,6 +121,7 @@ Both lab containers forward logs via rsyslog, not agents:
 ```
 
 **Log Flow:**
+
 - Victim Container (172.20.0.20): System logs, application logs, SSH activity
 - Kali Container (172.20.0.30): Red team tool execution, command logs
 - Processed by Wazuh rules into alerts
@@ -142,7 +143,7 @@ disable_warnings(InsecureRequestWarning)
 
 def authenticate():
     # Credentials from docker-compose.yml wazuh.manager environment
-    # API_USERNAME=wazuh-wui, API_PASSWORD=MyS3cr37P450r.*-
+    # API_USERNAME=wazuh-wui, API_PASSWORD=WazuhPass123!
     response = requests.post(
         "https://172.20.0.10:55000/security/user/authenticate",
         auth=(API_USERNAME, API_PASSWORD), 
@@ -403,7 +404,6 @@ async function handleCreateDetectionRule(params: any) {
   };
 }
 ```
-
 
 ## Network Configuration
 

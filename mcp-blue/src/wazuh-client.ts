@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 import { WazuhConfig } from './config.js';
-import { Agent } from 'undici';
 
 export interface WazuhAPIError extends Error {
   statusCode?: number;
@@ -53,8 +52,7 @@ export class WazuhAPIClient {
   
   constructor(private config: WazuhConfig) {}
 
-  // Reuse a single insecure agent for lab self-signed TLS where verify_ssl is false
-  static insecureAgent = new Agent({ connect: { rejectUnauthorized: false } });
+
 
   /**
    * Authenticate with Wazuh API and get JWT token
@@ -71,16 +69,18 @@ export class WazuhAPIClient {
     const auth = Buffer.from(`${manager.api_username}:${manager.api_password}`).toString('base64');
     
     try {
-      const options: any = {
+      // Disable SSL verification if configured
+      if (!manager.verify_ssl) {
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+      }
+      
+      const options = {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json'
         }
       };
-      if (!manager.verify_ssl) {
-        options.dispatcher = WazuhAPIClient.insecureAgent;
-      }
       const response = await fetch(url, options);
 
       if (!response.ok) {
@@ -115,7 +115,7 @@ export class WazuhAPIClient {
         }
       };
       if (!manager.verify_ssl) {
-        options.dispatcher = WazuhAPIClient.insecureAgent;
+
       }
       const response = await fetch(url, options);
 
@@ -148,7 +148,7 @@ export class WazuhAPIClient {
         body: ruleXML
       };
       if (!manager.verify_ssl) {
-        options.dispatcher = WazuhAPIClient.insecureAgent;
+
       }
       const response = await fetch(url, options);
 
@@ -171,7 +171,7 @@ export class WazuhIndexerClient {
    */
   async searchAlerts(query: AlertQuery): Promise<QueryResult<Alert>> {
     const { indexer } = this.config.wazuh;
-    const url = `${indexer.protocol}://${indexer.host}:${indexer.port}/wazuh-alerts-*/_search`;
+    const url = `${indexer.protocol}://${indexer.host}:${indexer.port}/wazuh-alerts-4.x-*/_search`;
     
     const searchQuery = this.buildAlertQuery(query);
     const auth = Buffer.from(`${indexer.username}:${indexer.password}`).toString('base64');
@@ -186,7 +186,7 @@ export class WazuhIndexerClient {
         body: JSON.stringify(searchQuery)
       };
       if (!indexer.verify_ssl) {
-        options.dispatcher = WazuhAPIClient.insecureAgent;
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
       }
       const response = await fetch(url, options);
 
@@ -209,7 +209,7 @@ export class WazuhIndexerClient {
    */
   async searchLogs(query: LogQuery): Promise<QueryResult<LogEntry>> {
     const { indexer } = this.config.wazuh;
-    const url = `${indexer.protocol}://${indexer.host}:${indexer.port}/wazuh-archives-*/_search`;
+    const url = `${indexer.protocol}://${indexer.host}:${indexer.port}/wazuh-archives-4.x-*/_search`;
     
     const searchQuery = this.buildLogQuery(query);
     const auth = Buffer.from(`${indexer.username}:${indexer.password}`).toString('base64');
@@ -224,7 +224,7 @@ export class WazuhIndexerClient {
         body: JSON.stringify(searchQuery)
       };
       if (!indexer.verify_ssl) {
-        options.dispatcher = WazuhAPIClient.insecureAgent;
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
       }
       const response = await fetch(url, options);
 
@@ -259,7 +259,7 @@ export class WazuhIndexerClient {
         }
       };
       if (!indexer.verify_ssl) {
-        options.dispatcher = WazuhAPIClient.insecureAgent;
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
       }
       const response = await fetch(url, options);
 

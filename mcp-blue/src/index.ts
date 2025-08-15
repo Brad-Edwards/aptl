@@ -172,7 +172,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             cluster_health: clusterHealth.status,
             api_port: config.wazuh.indexer.port,
             host: config.wazuh.indexer.host,
-            indices: ['wazuh-alerts-*', 'wazuh-archives-*']
+            indices: ['wazuh-alerts-4.x-*', 'wazuh-archives-4.x-*']
           },
           dashboard: {
             url: config.wazuh.dashboard.url,

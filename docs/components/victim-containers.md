@@ -4,7 +4,8 @@ The victim containers in APTL serve as realistic target systems for red team act
 
 ## Overview
 
-The victim container is built on Rocky Linux 9 and includes multiple services commonly found in enterprise environments. It's designed to be realistic enough for meaningful security testing while maintaining educational focus.
+The primary victim container is built on Rocky Linux 9 and includes multiple services commonly found in enterprise environments. It's designed to be realistic enough for meaningful security testing while maintaining educational focus.  
+An optional second victim running **Damn Vulnerable Linux (DVL)** can also be deployed for additional training scenarios.
 
 ### Key Features
 
@@ -20,6 +21,7 @@ The victim container is built on Rocky Linux 9 and includes multiple services co
 flowchart TD
     A[Host System] --> B[Docker Port Mapping]
     B --> C[Victim Container<br/>172.20.0.20]
+    B --> J[DVL Victim<br/>172.20.0.21]
     
     subgraph "Victim Container Services"
         D[SSH Server<br/>Port 22]
@@ -34,20 +36,33 @@ flowchart TD
     C --> G
     
     G --> H[Wazuh Manager<br/>172.20.0.10:514]
+    J --> H
     I[Kali Container<br/>172.20.0.30] --> D
     I --> E
     I --> F
+    I --> J
     
     classDef victim fill:#fff3e0,stroke:#e65100,stroke-width:2px
     classDef services fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     classDef external fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
     
     class C victim
+    class J victim
     class D,E,F,G services
     class H,I external
 ```
 
 ## Container Configuration
+
+### Profiles
+
+The DVL victim is disabled by default and uses the `dvl` profile. Launch it with:
+
+```bash
+COMPOSE_PROFILES=dvl docker compose up -d
+```
+
+This keeps resource usage low when the extra target is not needed.
 
 ### Base System
 

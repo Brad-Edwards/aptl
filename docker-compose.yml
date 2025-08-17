@@ -139,6 +139,37 @@ services:
     security_opt:
       - seccomp:unconfined
 
+  # Optional Damn Vulnerable Linux Victim
+  victim-dvl:
+    build:
+      context: ./containers/victim-dvl
+      dockerfile: Dockerfile
+    container_name: aptl-victim-dvl
+    hostname: dvl-host
+    restart: unless-stopped
+    networks:
+      aptl-network:
+        ipv4_address: 172.20.0.21
+    ports:
+      - "2024:22"    # SSH access
+      - "8081:80"    # HTTP service
+      - "2122:21"    # FTP service
+    environment:
+      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ./keys:/keys:ro
+      - victim_dvl_logs:/var/log
+    tmpfs:
+      - /run
+      - /tmp
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    profiles: ["dvl"]
+
   # Kali Container - Red team attack platform  
   kali:
     build:
@@ -155,6 +186,7 @@ services:
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - VICTIM_IP=172.20.0.20
+      - VICTIM_DVL_IP=172.20.0.21
     volumes:
       - ./keys:/host-ssh-keys:ro
       - kali_operations:/home/kali/operations
@@ -191,4 +223,5 @@ volumes:
   
   # Application volumes
   victim_logs:
+  victim_dvl_logs:
   kali_operations:

@@ -49,6 +49,7 @@ An autonomous cyber operations range is currently under-development as a separat
 
 - Wazuh SIEM (172.20.0.10-12) - Log collection and analysis
 - Victim container (172.20.0.20) - Rocky Linux with SSH/HTTP/FTP
+- Optional DVL victim (172.20.0.21) - Damn Vulnerable Linux target
 - Kali container (172.20.0.30) - Attack platform with security tools
 - MCP server - Enables AI agent control of Kali tools
 
@@ -62,9 +63,10 @@ cd aptl
 
 **Access:**
 
-- Wazuh Dashboard: <https://localhost:443> (admin/SecretPassword)  
+- Wazuh Dashboard: <https://localhost:443> (admin/SecretPassword)
 - Victim SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022`
 - Kali SSH: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`
+- DVL Victim SSH (profile `dvl`): `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2024`
 
 ## Requirements
 

@@ -125,6 +125,9 @@ test_ssh() {
 # Test SSH connections
 test_ssh "victim" "2022" "labadmin" || echo "   → Victim SSH may need more time"
 test_ssh "kali" "2023" "kali" || echo "   → Kali SSH may need more time"
+if docker compose ps victim-dvl >/dev/null 2>&1; then
+    test_ssh "victim-dvl" "2024" "labadmin" || echo "   → DVL victim SSH may need more time"
+fi
 
 # Function to output to both console and file
 output_both() {
@@ -151,12 +154,18 @@ output_both ""
 output_both "🔐 SSH Access:"
 output_both "   Victim:  ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022"
 output_both "   Kali:    ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023"
+if docker compose ps victim-dvl >/dev/null 2>&1; then
+    output_both "   Victim-DVL: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2024"
+fi
 output_both ""
 output_both "🔧 Container IPs:"
 output_both "   wazuh.manager:   172.20.0.10"
 output_both "   wazuh.dashboard: 172.20.0.11" 
 output_both "   wazuh.indexer:   172.20.0.12"
-output_both "   victim:          172.20.0.20"  
+output_both "   victim:          172.20.0.20"
+if docker compose ps victim-dvl >/dev/null 2>&1; then
+    output_both "   victim-dvl:      172.20.0.21"
+fi
 output_both "   kali:            172.20.0.30"
 output_both ""
 output_both "🤖 MCP Server:"

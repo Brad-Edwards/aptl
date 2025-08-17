@@ -66,8 +66,15 @@ docker pull wazuh/wazuh-dashboard:4.12.0
 docker pull kalilinux/kali-last-release:latest
 docker pull rockylinux:9
 
+# Determine optional profiles
+JS_ENABLED=$(jq -r '.containers.juiceshop.enabled // false' mcp/docker-lab-config.json 2>/dev/null)
+profiles=()
+if [ "$JS_ENABLED" = "true" ]; then
+  profiles+=(--profile juiceshop)
+fi
+
 # Build and start services
-docker compose up --build -d
+docker compose "${profiles[@]}" up --build -d
 
 echo ""
 echo "📋 Step 5: Waiting for services to be ready..."
@@ -124,6 +131,9 @@ test_ssh() {
 
 # Test SSH connections
 test_ssh "victim" "2022" "labadmin" || echo "   → Victim SSH may need more time"
+if [ "$JS_ENABLED" = "true" ]; then
+  test_ssh "juice-shop" "2024" "labadmin" || echo "   → Juice Shop SSH may need more time"
+fi
 test_ssh "kali" "2023" "kali" || echo "   → Kali SSH may need more time"
 
 # Function to output to both console and file
@@ -149,14 +159,20 @@ output_both "   Dashboard: admin / SecretPassword"
 output_both "   API: wazuh-wui / MyS3cr37P450r.*-"
 output_both ""
 output_both "🔐 SSH Access:"
-output_both "   Victim:  ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022"
-output_both "   Kali:    ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023"
+output_both "   Victim:      ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022"
+if [ "$JS_ENABLED" = "true" ]; then
+  output_both "   Juice Shop:  ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2024"
+fi
+output_both "   Kali:        ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023"
 output_both ""
 output_both "🔧 Container IPs:"
 output_both "   wazuh.manager:   172.20.0.10"
-output_both "   wazuh.dashboard: 172.20.0.11" 
+output_both "   wazuh.dashboard: 172.20.0.11"
 output_both "   wazuh.indexer:   172.20.0.12"
-output_both "   victim:          172.20.0.20"  
+output_both "   victim:          172.20.0.20"
+if [ "$JS_ENABLED" = "true" ]; then
+  output_both "   juice-shop:     172.20.0.21"
+fi
 output_both "   kali:            172.20.0.30"
 output_both ""
 output_both "🤖 MCP Server:"

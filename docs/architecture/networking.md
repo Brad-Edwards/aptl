@@ -103,6 +103,7 @@ Static IP addresses ensure predictable network behavior:
 | Wazuh Dashboard | 172.20.0.11 | wazuh.dashboard | Web interface |
 | Wazuh Indexer | 172.20.0.12 | wazuh.indexer | Data storage |
 | Victim Container | 172.20.0.20 | victim-host | Attack target |
+| Juice Shop Container | 172.20.0.21 | juice-shop | OWASP Juice Shop |
 | Kali Container | 172.20.0.30 | kali-redteam | Attack platform |
 
 ### Reserved Address Ranges
@@ -127,6 +128,8 @@ External access to lab services through host port mapping:
 |-----------|-----------|----------------|---------|----------|
 | 443 | wazuh.dashboard | 5601 | Wazuh Dashboard | HTTPS |
 | 2022 | victim | 22 | Victim SSH | SSH |
+| 2024 | juice-shop | 22 | Juice Shop SSH | SSH |
+| 3000 | juice-shop | 3000 | Juice Shop Web | HTTP |
 | 2023 | kali | 22 | Kali SSH | SSH |
 | 9200 | wazuh.indexer | 9200 | OpenSearch API | HTTPS |
 | 55000 | wazuh.manager | 55000 | Wazuh API | HTTPS |
@@ -138,6 +141,7 @@ Internal communication uses container IP addresses and default ports:
 ```bash
 # Examples of internal communication
 curl http://172.20.0.20:80        # Kali → Victim HTTP
+curl http://172.20.0.21:3000      # Kali → Juice Shop web
 ssh labadmin@172.20.0.20          # Kali → Victim SSH
 logger -h 172.20.0.10 "message"   # Victim → Wazuh syslog
 curl https://172.20.0.12:9200     # Dashboard → Indexer API

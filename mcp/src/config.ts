@@ -9,8 +9,8 @@ import { expandTilde } from './utils.js';
 
 // Schema for individual instance configuration
 export const InstanceSchema = z.object({
-  public_ip: z.string(),
-  private_ip: z.string(),
+  public_ip: z.string().ip(),
+  private_ip: z.string().ip(),
   ssh_key: z.string(),
   ssh_user: z.string(),
   instance_type: z.string(),
@@ -53,6 +53,7 @@ const LabConfigSchema = z.object({
   instances: z.object({
     siem: z.union([InstanceSchema, DisabledInstanceSchema]),
     victim: z.union([InstanceSchema, DisabledInstanceSchema]),
+    juiceshop: z.union([InstanceSchema, DisabledInstanceSchema]),
     kali: z.union([InstanceSchema, DisabledInstanceSchema])
   }),
   network: NetworkSchema,
@@ -107,6 +108,15 @@ async function loadDockerLabConfig(): Promise<LabConfig> {
           ssh_port: dockerConfig.containers.victim.ssh_port || 22,
           enabled: dockerConfig.containers.victim.enabled !== false
         } : { enabled: false },
+        juiceshop: dockerConfig.containers?.juiceshop ? {
+          public_ip: dockerConfig.containers.juiceshop.container_ip,
+          private_ip: dockerConfig.containers.juiceshop.container_ip,
+          ssh_key: dockerConfig.containers.juiceshop.ssh_key,
+          ssh_user: dockerConfig.containers.juiceshop.ssh_user,
+          instance_type: "docker-container",
+          ssh_port: dockerConfig.containers.juiceshop.ssh_port || 22,
+          enabled: dockerConfig.containers.juiceshop.enabled !== false
+        } : { enabled: false },
         kali: dockerConfig.containers?.kali ? {
           public_ip: dockerConfig.containers.kali.container_ip,
           private_ip: dockerConfig.containers.kali.container_ip,
@@ -153,6 +163,9 @@ export async function loadLabConfig(): Promise<LabConfig> {
   }
   if ('ssh_key' in config.instances.victim && config.instances.victim.ssh_key.startsWith('~')) {
     config.instances.victim.ssh_key = expandTilde(config.instances.victim.ssh_key);
+  }
+  if ('ssh_key' in config.instances.juiceshop && config.instances.juiceshop.ssh_key.startsWith('~')) {
+    config.instances.juiceshop.ssh_key = expandTilde(config.instances.juiceshop.ssh_key);
   }
   if ('ssh_key' in config.instances.kali && config.instances.kali.ssh_key.startsWith('~')) {
     config.instances.kali.ssh_key = expandTilde(config.instances.kali.ssh_key);
@@ -209,14 +222,21 @@ export function selectCredentials(target: string, config: LabConfig, defaultUser
       username: config.instances.siem.ssh_user,
       port: config.instances.siem.ssh_port || 22
     };
-  } else if ('ssh_key' in config.instances.victim && 
+  } else if ('ssh_key' in config.instances.victim &&
              (config.instances.victim.public_ip === target || config.instances.victim.private_ip === target)) {
     return {
       sshKey: config.instances.victim.ssh_key,
       username: config.instances.victim.ssh_user,
       port: config.instances.victim.ssh_port || 22
     };
-  } else if ('ssh_key' in config.instances.kali && 
+  } else if ('ssh_key' in config.instances.juiceshop &&
+             (config.instances.juiceshop.public_ip === target || config.instances.juiceshop.private_ip === target)) {
+    return {
+      sshKey: config.instances.juiceshop.ssh_key,
+      username: config.instances.juiceshop.ssh_user,
+      port: config.instances.juiceshop.ssh_port || 22
+    };
+  } else if ('ssh_key' in config.instances.kali &&
              (config.instances.kali.public_ip === target || config.instances.kali.private_ip === target)) {
     return {
       sshKey: config.instances.kali.ssh_key,

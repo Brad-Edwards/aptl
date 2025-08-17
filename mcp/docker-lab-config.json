@@ -13,15 +13,23 @@
       "enabled": true
     },
     "victim": {
-      "container_name": "aptl-victim", 
+      "container_name": "aptl-victim",
       "container_ip": "172.20.0.20",
       "ssh_key": "~/.ssh/aptl_lab_key",
       "ssh_user": "labadmin",
       "enabled": true
     },
+    "juiceshop": {
+      "container_name": "aptl-juice-shop",
+      "container_ip": "172.20.0.21",
+      "ssh_key": "~/.ssh/aptl_lab_key",
+      "ssh_user": "labadmin",
+      "ssh_port": 2024,
+      "enabled": false
+    },
     "kali": {
       "container_name": "aptl-kali",
-      "container_ip": "localhost", 
+      "container_ip": "localhost",
       "ssh_key": "~/.ssh/aptl_lab_key",
       "ssh_user": "kali",
       "ssh_port": 2023,

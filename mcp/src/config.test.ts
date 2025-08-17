@@ -54,6 +54,15 @@ describe('selectCredentials', () => {
         ssh_port: 22,
         enabled: true
       },
+      juiceshop: {
+        public_ip: '1.2.3.7',
+        private_ip: '10.0.1.40',
+        ssh_key: '/path/to/juiceshop-key',
+        ssh_user: 'ec2-user',
+        instance_type: 't3.medium',
+        ssh_port: 22,
+        enabled: true
+      },
       kali: {
         public_ip: '1.2.3.6',
         private_ip: '10.0.1.30',
@@ -98,6 +107,15 @@ describe('selectCredentials', () => {
     const result = selectCredentials('1.2.3.5', mockConfig);
     expect(result).toEqual({
       sshKey: '/path/to/victim-key',
+      username: 'ec2-user',
+      port: 22
+    });
+  });
+
+  it('should select Juice Shop credentials for its IPs', () => {
+    const result = selectCredentials('1.2.3.7', mockConfig);
+    expect(result).toEqual({
+      sshKey: '/path/to/juiceshop-key',
       username: 'ec2-user',
       port: 22
     });

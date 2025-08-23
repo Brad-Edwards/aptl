@@ -61,7 +61,7 @@ setup_rsyslog() {
         # Create rsyslog forwarding config for Wazuh
         cat > /etc/rsyslog.d/90-forward.conf << EOF
 # Purple Team Lab - Forward all logs to Wazuh SIEM
-*.* @@${SIEM_IP}:${SIEM_PORT}
+*.* @${SIEM_IP}:${SIEM_PORT}
 EOF
         
         echo "✅ Rsyslog forwarding configured to Wazuh at $SIEM_IP:$SIEM_PORT"

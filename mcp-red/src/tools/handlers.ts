@@ -273,7 +273,24 @@ export const toolHandlers: Record<string, ToolHandler> = {
     };
 
     try {
-      const output = sshManager.getSessionOutput(session_id, lines, clear);
+      // Add validation to ensure session exists and is active
+      const session = sshManager.getSession(session_id);
+      if (!session) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: false,
+                session_id,
+                error: `Session '${session_id}' not found`
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      const output = session.getBufferedOutput(lines, clear);
 
       return {
         content: [
@@ -305,7 +322,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  close_all_sessions: async (args: any, { sshManager }: ToolContext) => {
+  close_all_sessions: async (_args: any, { sshManager }: ToolContext) => {
     try {
       const sessions = sshManager.listSessions();
       const sessionCount = sessions.length;

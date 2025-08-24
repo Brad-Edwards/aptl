@@ -485,9 +485,22 @@ export class SSHConnectionManager {
       return false;
     }
 
-    session.close();
-    this.sessions.delete(sessionId);
-    return true;
+    return new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => {
+        // Force cleanup even if 'closed' event doesn't fire
+        this.sessions.delete(sessionId);
+        resolve(true);
+      }, 3000); // 3 second timeout
+      
+      // Use once() instead of on() to avoid multiple event listeners
+      session.once('closed', () => {
+        clearTimeout(timeout);
+        this.sessions.delete(sessionId);
+        resolve(true);
+      });
+      
+      session.close();
+    });
   }
 
   /**
@@ -524,7 +537,16 @@ export class SSHConnectionManager {
   public async disconnectAll(): Promise<void> {
     const sessionPromises = Array.from(this.sessions.values()).map(session => {
       return new Promise<void>((resolve) => {
-        session.on('closed', () => resolve());
+        const timeout = setTimeout(() => {
+          resolve(); // Resolve even if 'closed' event doesn't fire
+        }, 5000); // 5 second timeout
+        
+        // Use once() instead of on() to avoid multiple event listeners
+        session.once('closed', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        
         session.close();
       });
     });
@@ -532,7 +554,16 @@ export class SSHConnectionManager {
     const connectionPromises = Array.from(this.connections.values()).map(connInfo => {
       return new Promise<void>((resolve) => {
         if (connInfo.connected) {
-          connInfo.client.on('close', () => resolve());
+          const timeout = setTimeout(() => {
+            resolve(); // Resolve even if 'close' event doesn't fire
+          }, 5000); // 5 second timeout
+          
+          // Use once() instead of on() to avoid multiple event listeners
+          connInfo.client.once('close', () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+          
           connInfo.client.end();
         } else {
           resolve();
@@ -540,8 +571,13 @@ export class SSHConnectionManager {
       });
     });
 
-    await Promise.all([...sessionPromises, ...connectionPromises]);
-    this.sessions.clear();
-    this.connections.clear();
+    try {
+      await Promise.all([...sessionPromises, ...connectionPromises]);
+    } catch (error) {
+      console.error('[SSH] Error during disconnectAll:', error);
+    } finally {
+      this.sessions.clear();
+      this.connections.clear();
+    }
   }
 } 

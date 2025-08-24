@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+
 
 import { z } from 'zod';
 import { execSync } from 'child_process';

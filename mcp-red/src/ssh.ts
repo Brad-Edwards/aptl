@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: BUSL-1.1
 
 import { Client, ClientChannel } from 'ssh2';
 import { readFileSync } from 'fs';

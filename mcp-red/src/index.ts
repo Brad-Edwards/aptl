@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 console.error(`[MCP-TOPLEVEL] Current working directory: ${process.cwd()}`);
-// SPDX-License-Identifier: BUSL-1.1
 
 /**
  * APTL Kali MCP Server

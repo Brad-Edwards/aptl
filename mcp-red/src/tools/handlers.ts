@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+
 
 import { SSHConnectionManager } from '../ssh.js';
 import { LabConfig, getKaliCredentials } from '../config.js';

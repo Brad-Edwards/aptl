@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 

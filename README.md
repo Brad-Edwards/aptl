@@ -56,7 +56,7 @@ An autonomous cyber operations range is currently under-development as a separat
 ## Components
 
 - Wazuh SIEM (172.20.0.10-12) - Log collection and analysis
-- Victim container (172.20.0.20) - Rocky Linux with SSH/HTTP/FTP
+- Victim container (172.20.0.20) - Rocky Linux with Wazuh agent integration
 - Kali container (172.20.0.30) - Attack platform with security tools
 - MCP server - Enables AI agent control of Kali tools
 

@@ -8,11 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.2] - 2025-08-23
 
+### Added
+
+- **Wazuh Agent Installation**: Added Wazuh agent (monitor only)installation to victim container
+
 ### Fixed
 
 - **Wazuh SIEM Configuration**: Fixed SIEM configuration to use correct port and IP address
   - Changed port from 514 to 1514
   - Changed IP address from 172.20.0.10 to 172.20.0.11
+
+### Removed
+
+- **Victim syslog streaming to SIEM**: Removed syslog streaming to SIEM
 
 ## [2.0.1] - 2025-08-15
 

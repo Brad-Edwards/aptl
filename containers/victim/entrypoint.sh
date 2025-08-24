@@ -70,6 +70,20 @@ EOF
     fi
 }
 
+# Function to setup Wazuh agent environment
+setup_wazuh_env() {
+    if [ -n "$SIEM_IP" ]; then
+        export WAZUH_MANAGER="$SIEM_IP"
+        echo "✅ WAZUH_MANAGER set to $WAZUH_MANAGER"
+        
+        # Create environment file for systemd service
+        echo "WAZUH_MANAGER=$WAZUH_MANAGER" > /etc/environment.wazuh
+    else
+        echo "❌ ERROR: SIEM_IP not set - Wazuh agent installation will fail"
+        exit 1
+    fi
+}
+
 # Base image has no scenario-specific setup
 # Scenario-specific users will be added by derived containers
 
@@ -82,6 +96,9 @@ setup_labadmin_ssh
 
 # Configure rsyslog if SIEM details provided
 setup_rsyslog
+
+# Setup Wazuh environment for systemd service
+setup_wazuh_env
 
 echo "=== Container initialization complete ==="
 

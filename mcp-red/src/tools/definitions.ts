@@ -13,45 +13,27 @@ export const toolDefinitions: Tool[] = [
   },
   {
     name: 'run_command',
-    description: 'Execute a command on a target instance in the lab (creates temporary session)',
+    description: 'Execute a command on the Kali instance (creates temporary session)',
     inputSchema: {
       type: 'object',
       properties: {
-        target: {
-          type: 'string',
-          description: 'Target IP address or hostname',
-        },
         command: {
           type: 'string',
-          description: 'Command to execute',
-        },
-        username: {
-          type: 'string',
-          description: 'SSH username (optional, will auto-detect)',
-          default: 'kali',
+          description: 'Command to execute on Kali',
         },
       },
-      required: ['target', 'command'],
+      required: ['command'],
     },
   },
   {
     name: 'create_session',
-    description: 'Create a new persistent SSH session',
+    description: 'Create a new persistent SSH session on Kali',
     inputSchema: {
       type: 'object',
       properties: {
         session_id: {
           type: 'string',
           description: 'Unique session identifier (optional, auto-generated if not provided)',
-        },
-        target: {
-          type: 'string',
-          description: 'Target IP address or hostname',
-        },
-        username: {
-          type: 'string',
-          description: 'SSH username (optional, will auto-detect)',
-          default: 'kali',
         },
         type: {
           type: 'string',
@@ -60,7 +42,7 @@ export const toolDefinitions: Tool[] = [
           default: 'interactive',
         },
       },
-      required: ['target'],
+      required: [],
     },
   },
   {

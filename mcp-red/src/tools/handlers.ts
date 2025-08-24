@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 import { SSHConnectionManager } from '../ssh.js';
-import { LabConfig, selectCredentials } from '../config.js';
+import { LabConfig, getKaliCredentials } from '../config.js';
 
 export interface ToolContext {
   sshManager: SSHConnectionManager;
@@ -12,7 +12,7 @@ export type ToolHandler = (args: any, context: ToolContext) => Promise<any>;
 
 export const toolHandlers: Record<string, ToolHandler> = {
   kali_info: async (args: any, { labConfig }: ToolContext) => {
-    if (!('enabled' in labConfig.instances.kali) || !labConfig.instances.kali.enabled) {
+    if (!labConfig.kali.enabled) {
       return {
         content: [
           {
@@ -23,18 +23,17 @@ export const toolHandlers: Record<string, ToolHandler> = {
       };
     }
 
-    const kaliInstance = labConfig.instances.kali;
     return {
       content: [
         {
           type: 'text',
           text: JSON.stringify({
-            public_ip: kaliInstance.public_ip,
-            private_ip: kaliInstance.private_ip,
-            ssh_user: kaliInstance.ssh_user,
-            instance_type: kaliInstance.instance_type,
+            kali_ip: labConfig.kali.public_ip,
+            ssh_user: labConfig.kali.ssh_user,
+            ssh_port: labConfig.kali.ssh_port,
             lab_name: labConfig.lab.name,
-            vpc_cidr: labConfig.network.vpc_cidr,
+            lab_network: labConfig.network.vpc_cidr,
+            note: 'Use Kali to pivot to other lab targets (victim: 172.20.0.20, wazuh: 172.20.0.10)',
           }, null, 2),
         },
       ],
@@ -42,17 +41,15 @@ export const toolHandlers: Record<string, ToolHandler> = {
   },
 
   run_command: async (args: any, { sshManager, labConfig }: ToolContext) => {
-    const { target, command, username = 'kali' } = args as {
-      target: string;
+    const { command } = args as {
       command: string;
-      username?: string;
     };
 
     try {
-      const credentials = selectCredentials(target, labConfig, username);
+      const credentials = getKaliCredentials(labConfig);
 
       const result = await sshManager.executeCommand(
-        target,
+        credentials.target,
         credentials.username,
         credentials.sshKey,
         command,
@@ -64,7 +61,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
           {
             type: 'text',
             text: JSON.stringify({
-              target,
+              target: credentials.target,
               command,
               username: credentials.username,
               success: true,
@@ -79,9 +76,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
           {
             type: 'text',
             text: JSON.stringify({
-              target,
               command,
-              username,
               success: false,
               error: error instanceof Error ? error.message : 'Unknown error',
             }, null, 2),
@@ -94,23 +89,19 @@ export const toolHandlers: Record<string, ToolHandler> = {
   create_session: async (args: any, { sshManager, labConfig }: ToolContext) => {
     const { 
       session_id,
-      target,
-      username = 'kali',
       type = 'interactive'
     } = args as {
       session_id?: string;
-      target: string;
-      username?: string;
       type?: 'interactive' | 'background';
     };
 
     try {
       const finalSessionId = session_id || `session_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      const credentials = selectCredentials(target, labConfig, username);
+      const credentials = getKaliCredentials(labConfig);
 
       const session = await sshManager.createSession(
         finalSessionId,
-        target,
+        credentials.target,
         credentials.username,
         type,
         credentials.sshKey,
@@ -129,7 +120,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
               username: sessionInfo.username,
               type: sessionInfo.type,
               created_at: sessionInfo.createdAt,
-              message: `Session '${sessionInfo.sessionId}' created successfully`
+              message: `Kali session '${sessionInfo.sessionId}' created successfully`
             }, null, 2),
           },
         ],
@@ -191,7 +182,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  list_sessions: async (args: any, { sshManager }: ToolContext) => {
+  list_sessions: async (_args: any, { sshManager }: ToolContext) => {
     try {
       const sessions = sshManager.listSessions();
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 console.error(`[MCP-Blue] Current working directory: ${process.cwd()}`);
-// SPDX-License-Identifier: BUSL-1.1
+
 
 /**
  * APTL Wazuh Blue Team MCP Server

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: BUSL-1.1
-
 import { describe, it, expect } from 'vitest';
 import { isTargetAllowed, selectCredentials, type LabConfig } from './config.js';
 

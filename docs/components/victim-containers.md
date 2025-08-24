@@ -1,15 +1,16 @@
 # Victim Containers
 
-The victim container in APTL serves as a target system for red team activities and security testing. It provides a basic Rocky Linux 9 environment with SSH access and SIEM integration.
+The victim container in APTL serves as a target system for red team activities and security testing. It provides a basic Rocky Linux 9 environment with SSH access and integrated Wazuh agent for comprehensive SIEM monitoring.
 
 ## Overview
 
-The victim container is built on Rocky Linux 9 and provides SSH access for security testing. It forwards all system logs to the Wazuh SIEM for blue team monitoring.
+The victim container is built on Rocky Linux 9 and provides SSH access for security testing. It includes an automatically configured Wazuh agent that connects directly to the Wazuh Manager for comprehensive security monitoring and log analysis.
 
 ### Key Features
 
 - **SSH Service**: OpenSSH server for remote access testing
-- **SIEM Integration**: All system logs forwarded to Wazuh SIEM
+- **Wazuh Agent Integration**: Native Wazuh agent for comprehensive monitoring
+- **Automatic Configuration**: Agent automatically configures and connects on first boot
 - **Easy Reset**: Container can be destroyed and recreated quickly
 - **Isolated Environment**: Contained within Docker network for safety
 
@@ -22,13 +23,13 @@ flowchart TD
     
     subgraph "Victim Container Services"
         D[SSH Server<br/>Port 22]
-        G[Rsyslog<br/>Log Forwarding]
+        G[Wazuh Agent<br/>Direct Connection]
     end
     
     C --> D
     C --> G
     
-    G --> H[Wazuh Manager<br/>172.20.0.10:514]
+    G --> H[Wazuh Manager<br/>172.20.0.10:1514]
     I[Kali Container<br/>172.20.0.30] --> D
     
     classDef victim fill:#fff3e0,stroke:#e65100,stroke-width:2px
@@ -150,39 +151,38 @@ labadmin:x:1000:1000:Lab Administrator:/home/labadmin:/bin/bash
 
 The victim container uses default Rocky Linux firewall settings with no additional restrictions configured, allowing unrestricted communication within the Docker bridge network for lab testing purposes.
 
-## Log Configuration
+## Wazuh Agent Configuration
 
-### Rsyslog Setup
+### Automatic Installation
 
-Comprehensive logging forwarded to Wazuh SIEM:
-
-```bash
-# /etc/rsyslog.d/90-forward.conf
-*.* @@172.20.0.10:514
-
-# Local logging maintained for debugging
-*.info;mail.none;authpriv.none;cron.none /var/log/messages
-authpriv.* /var/log/secure
-mail.* -/var/log/maillog
-cron.* /var/log/cron
-```
-
-### Log Sources
-
-The container forwards standard syslog data:
-
-- **Authentication**: SSH login attempts, sudo usage
-- **System Events**: Service starts/stops, system errors
-- **Security Events**: Failed authentications, privilege escalations
-
-### Log Format
-
-Standard syslog format forwarded to Wazuh:
+The Wazuh agent is automatically installed and configured on first boot via systemd oneshot service:
 
 ```bash
-# Example log entry
-Jan 15 10:30:00 victim-host sshd[1234]: Failed password for labadmin from 172.20.0.30 port 45678 ssh2
+# /opt/purple-team/scripts/install-wazuh.sh
+# Automatically installs and configures Wazuh agent
+# Connects to Wazuh Manager at 172.20.0.10
 ```
+
+### Agent Services
+
+The Wazuh agent runs multiple services for comprehensive monitoring:
+
+- **wazuh-agentd**: Main agent daemon for communication with manager
+- **wazuh-execd**: Active response execution daemon  
+- **wazuh-logcollector**: Log file monitoring and collection
+- **wazuh-syscheckd**: File integrity monitoring daemon
+- **wazuh-modulesd**: Additional monitoring modules
+
+### Monitored Data
+
+The agent monitors and sends comprehensive security data:
+
+- **File Integrity**: Changes to system files and directories
+- **Log Analysis**: Real-time analysis of system logs
+- **Process Monitoring**: Process creation and termination events
+- **Network Monitoring**: Network connections and activity
+- **Authentication Events**: SSH logins, sudo usage, failed authentications
+- **System Events**: Service changes, configuration modifications
 
 ## Access Methods
 
@@ -205,17 +205,19 @@ ssh labadmin@172.20.0.20
 
 ## Services
 
-The victim container runs minimal services:
+The victim container runs essential services for security testing:
 
-- **SSH Server**: OpenSSH for remote access
-- **rsyslog**: Log forwarding to Wazuh SIEM
+- **SSH Server**: OpenSSH for remote access testing
+- **Wazuh Agent**: Native Wazuh agent for comprehensive monitoring
+- **systemd**: Container initialization and service management
 
 The container provides a basic Rocky Linux 9 environment suitable for security testing:
 
 - **Operating System**: Rocky Linux 9 (RHEL-compatible)
 - **SSH Access**: Key-based authentication only
-- **Logging**: All system logs forwarded to Wazuh SIEM
+- **Security Monitoring**: Native Wazuh agent with comprehensive coverage
 - **User**: Single `labadmin` user with sudo privileges
+- **Automatic Setup**: Wazuh agent installs and connects automatically
 
 ## Container Management
 
@@ -243,13 +245,13 @@ docker compose ps victim
 
 # Check service status inside container
 docker exec aptl-victim systemctl status sshd
-docker exec aptl-victim systemctl status httpd
-docker exec aptl-victim systemctl status vsftpd
+docker exec aptl-victim /var/ossec/bin/wazuh-control status
 
 # Test service connectivity
 docker exec aptl-kali nc -zv 172.20.0.20 22
-docker exec aptl-kali nc -zv 172.20.0.20 80
-docker exec aptl-kali nc -zv 172.20.0.20 21
+
+# Verify Wazuh agent connection
+docker exec aptl-victim /var/ossec/bin/wazuh-control info
 ```
 
 ### Data Persistence
@@ -338,13 +340,19 @@ RUN echo "marketing:company2024" | chpasswd
    docker exec aptl-victim cat /etc/ssh/sshd_config | grep -E "(PasswordAuthentication|PermitRootLogin)"
    ```
 
-3. **Log Forwarding Issues**
+3. **Wazuh Agent Connection Issues**
    ```bash
-   # Test rsyslog configuration
-   docker exec aptl-victim rsyslogd -N1
+   # Check agent status
+   docker exec aptl-victim /var/ossec/bin/wazuh-control status
    
-   # Check connectivity to SIEM
-   docker exec aptl-victim telnet 172.20.0.10 514
+   # Check agent logs
+   docker exec aptl-victim tail -f /var/ossec/logs/ossec.log
+   
+   # Test connectivity to manager
+   docker exec aptl-victim nc -zv 172.20.0.10 1514
+   
+   # Restart agent services
+   docker exec aptl-victim /var/ossec/bin/wazuh-control restart
    ```
 
 ### Performance Optimization

@@ -218,20 +218,20 @@ docker compose logs wazuh.dashboard
 
 ## APTL-Specific Configuration
 
-### Log Source Configuration
+### Agent and Log Source Configuration
 
-The lab is configured to receive logs from multiple sources:
+The lab is configured to receive data from multiple sources:
 
 ```xml
-<!-- Victim container logs -->
+<!-- Wazuh agents (victim containers) -->
 <remote>
-  <connection>syslog</connection>
-  <port>514</port>
-  <protocol>udp</protocol>
-  <allowed-ips>172.20.0.20</allowed-ips>
+  <connection>secure</connection>
+  <port>1514</port>
+  <protocol>tcp</protocol>
+  <allowed-ips>172.20.0.0/16</allowed-ips>
 </remote>
 
-<!-- Kali red team logs -->
+<!-- Syslog for additional sources (Kali, etc.) -->
 <remote>
   <connection>syslog</connection> 
   <port>514</port>
@@ -344,14 +344,17 @@ docker compose up -d
    docker exec wazuh.dashboard curl -k https://wazuh.indexer:9200
    ```
 
-3. **No Logs Received**
+3. **No Data Received from Agents**
 
    ```bash
-   # Check manager syslog configuration
-   docker exec wazuh.manager netstat -ulnp | grep 514
+   # Check manager agent connections
+   docker exec wazuh.manager netstat -tlnp | grep 1514
    
-   # Test log forwarding
-   docker exec aptl-victim logger "Test message"
+   # List connected agents
+   docker exec wazuh.manager /var/ossec/bin/wazuh-control status
+   
+   # Test agent connectivity
+   docker exec aptl-victim /var/ossec/bin/wazuh-control info
    ```
 
 ### Log Analysis

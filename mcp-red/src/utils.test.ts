@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: BUSL-1.1
-
 import { describe, it, expect } from 'vitest';
 import { expandTilde } from './utils.js';
 import { homedir } from 'os';

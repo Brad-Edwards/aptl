@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 console.error(`[MCP-TOPLEVEL] Current working directory: ${process.cwd()}`);
-// SPDX-License-Identifier: BUSL-1.1
 
 /**
  * APTL Kali MCP Server
@@ -15,8 +14,10 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { loadLabConfig, isTargetAllowed, selectCredentials, type LabConfig } from './config.js';
+import { loadLabConfig, type LabConfig } from './config.js';
 import { SSHConnectionManager } from './ssh.js';
+import { toolDefinitions } from './tools/definitions.js';
+import { toolHandlers, type ToolContext } from './tools/handlers.js';
 
 // Global configuration and SSH manager
 let labConfig: LabConfig;
@@ -54,39 +55,7 @@ const server = new Server(
  */
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: [
-      {
-        name: 'kali_info',
-        description: 'Get information about the Kali Linux instance in the lab',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'run_command',
-        description: 'Execute a command on a target instance in the lab',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            target: {
-              type: 'string',
-              description: 'Target IP address or hostname',
-            },
-            command: {
-              type: 'string',
-              description: 'Command to execute',
-            },
-            username: {
-              type: 'string',
-              description: 'SSH username (optional, will auto-detect)',
-              default: 'kali',
-            },
-          },
-          required: ['target', 'command'],
-        },
-      },
-    ],
+    tools: toolDefinitions,
   };
 });
 
@@ -95,92 +64,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
  */
 server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
   const { name, arguments: args } = request.params;
-
-  switch (name) {
-    case 'kali_info': {
-      if (!('enabled' in labConfig.instances.kali) || !labConfig.instances.kali.enabled) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: 'Kali instance is not enabled in the current lab configuration.',
-            },
-          ],
-        };
-      }
-
-      const kaliInstance = labConfig.instances.kali;
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              public_ip: kaliInstance.public_ip,
-              private_ip: kaliInstance.private_ip,
-              ssh_user: kaliInstance.ssh_user,
-              instance_type: kaliInstance.instance_type,
-              lab_name: labConfig.lab.name,
-              vpc_cidr: labConfig.network.vpc_cidr,
-            }, null, 2),
-          },
-        ],
-      };
-    }
-
-    case 'run_command': {
-      const { target, command, username = 'kali' } = args as {
-        target: string;
-        command: string;
-        username?: string;
-      };
-
-      try {
-        // Determine which instance to use for SSH key
-        const credentials = selectCredentials(target, labConfig, username);
-
-        const result = await sshManager.executeCommand(
-          target,
-          credentials.username,
-          credentials.sshKey,
-          command,
-          credentials.port
-        );
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                target,
-                command,
-                username: credentials.username,
-                success: true,
-                output: result,
-              }, null, 2),
-            },
-          ],
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                target,
-                command,
-                username,
-                success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
-              }, null, 2),
-            },
-          ],
-        };
-      }
-    }
-
-    default:
-      throw new Error(`Unknown tool: ${name}`);
+  
+  const handler = toolHandlers[name];
+  if (!handler) {
+    throw new Error(`Unknown tool: ${name}`);
   }
+
+  const context: ToolContext = {
+    sshManager,
+    labConfig,
+  };
+
+  return handler(args, context);
 });
 
 /**
@@ -193,6 +88,18 @@ async function main() {
   await server.connect(transport);
   console.error('[MCP] Kali Red Team server running on stdio');
 }
+
+process.on('SIGINT', async () => {
+  console.error('[MCP] Shutting down gracefully...');
+  await sshManager.disconnectAll();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.error('[MCP] Shutting down gracefully...');
+  await sshManager.disconnectAll();
+  process.exit(0);
+});
 
 main().catch((error) => {
   console.error('[MCP] Fatal error:', error);

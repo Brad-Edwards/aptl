@@ -85,109 +85,49 @@ flowchart TD
 
 ### Red Team MCP Server
 
-The Red Team MCP server is implemented in TypeScript and provides two tools:
+The Red Team MCP server is implemented in TypeScript and provides session management and command execution tools:
 
-```typescript
-// src/index.ts - APTL Red Team MCP Server
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+Available tools:
 
-const server = new Server(
-  {
-    name: 'kali-red-team',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
-);
-
-// Available tools for AI agents
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: 'kali_info',
-        description: 'Get information about the Kali Linux instance in the lab',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'run_command',
-        description: 'Execute a command on a target instance in the lab',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            target: {
-              type: 'string',
-              description: 'Target IP address or hostname',
-            },
-            command: {
-              type: 'string',
-              description: 'Command to execute',
-            },
-            username: {
-              type: 'string',
-              description: 'SSH username (optional, will auto-detect)',
-              default: 'kali',
-            },
-          },
-          required: ['target', 'command'],
-        },
-      },
-    ],
-  };
-});
-```
+- `kali_info`: Get lab environment information
+- `run_command`: Execute command on target (temporary session)
+- `create_session`: Create persistent SSH session
+- `session_command`: Execute command in existing session
+- `list_sessions`: List active sessions
+- `get_session_output`: Get output from background session
+- `close_session`: Close specific session
+- `close_all_sessions`: Close all sessions
 
 ### Tool Implementations
 
-#### kali_info Tool
+#### Kali-Only Access
 
-Provides AI agents with lab environment information:
+The MCP server connects **only** to the Kali instance at `172.20.0.30`.
 
-```typescript
-async function handleKaliInfo(query_type?: string) {
-  const labInfo = {
-    network: {
-      lab_network: "172.20.0.0/16",
-      containers: {
-        "wazuh.manager": "172.20.0.10",
-        "wazuh.dashboard": "172.20.0.11", 
-        "wazuh.indexer": "172.20.0.12",
-        "victim": "172.20.0.20",
-        "kali": "172.20.0.30"
-      }
-    },
-    services: {
-      "172.20.0.20": ["SSH (22)", "HTTP (80)", "FTP (21)"],
-      "172.20.0.10": ["Syslog (514)", "API (55000)"],
-      "172.20.0.11": ["Dashboard (5601)"],
-      "172.20.0.12": ["OpenSearch (9200)"]
-    },
-    status: await checkLabStatus()
-  };
-  
-  return query_type ? labInfo[query_type] : labInfo;
-}
-```
+**Security Model:**
+- MCP → Kali SSH connection only
+- Agent uses Kali to pivot to other lab targets
+- No direct MCP access to victim (`172.20.0.20`) or SIEM containers
+
+**Lab Network:**
+- Kali: `172.20.0.30` (MCP access point)
+- Victim: `172.20.0.20` (target via Kali)
+- Wazuh Manager: `172.20.0.10` (target via Kali)
+- Wazuh Dashboard: `172.20.0.11` (target via Kali)
+- Wazuh Indexer: `172.20.0.12` (target via Kali)
 
 #### run_command Tool
 
-Executes commands on lab containers via SSH:
+Executes commands on Kali instance:
 
 ```typescript
-async function handleRunCommand(command: string, target?: string, username?: string) {
-  // Select SSH credentials based on target
-  const credentials = selectCredentials(target, labConfig, username);
+async function handleRunCommand(command: string) {
+  // Get Kali credentials - only allowed target
+  const credentials = getKaliCredentials(labConfig);
   
-  // Execute command via SSH
+  // Execute command on Kali via SSH
   const result = await sshManager.executeCommand(
-    target,
+    credentials.target,
     credentials.username,
     credentials.sshKey,
     command,
@@ -195,7 +135,7 @@ async function handleRunCommand(command: string, target?: string, username?: str
   );
   
   return {
-    target,
+    target: credentials.target,
     command,
     username: credentials.username,
     success: true,
@@ -425,54 +365,30 @@ Add both APTL MCP servers to Cline's configuration:
 
 #### Red Team Configuration
 
-The Red Team MCP server uses a configuration file to define lab parameters:
+The Red Team MCP server uses a simplified configuration for Kali-only access:
 
 ```json
-// mcp/docker-lab-config.json
+// docker-lab-config.json
 {
   "lab": {
     "name": "APTL Docker Lab",
-    "network": "172.20.0.0/16",
-    "containers": {
-      "kali": {
-        "ip": "172.20.0.30",
-        "ssh_port": 2023,
-        "ssh_user": "kali",
-        "ssh_key": "~/.ssh/aptl_lab_key"
-      },
-      "victim": {
-        "ip": "172.20.0.20", 
-        "ssh_port": 2022,
-        "ssh_user": "labadmin",
-        "services": ["ssh", "http", "ftp"]
-      },
-      "wazuh": {
-        "manager_ip": "172.20.0.10",
-        "dashboard_ip": "172.20.0.11",
-        "indexer_ip": "172.20.0.12"
-      }
+    "network_subnet": "172.20.0.0/16"
+  },
+  "containers": {
+    "kali": {
+      "container_ip": "172.20.0.30",
+      "ssh_port": 22,
+      "ssh_user": "kali",
+      "ssh_key": "~/.ssh/aptl_lab_key",
+      "enabled": true
     }
   },
-  "safety": {
+  "mcp": {
+    "server_name": "aptl-red-team",
     "allowed_networks": ["172.20.0.0/16"],
-    "blocked_commands": [
-      "rm -rf /",
-      "shutdown",
-      "reboot",
-      "mkfs",
-      "dd if=",
-      "iptables -F"
-    ],
-    "max_command_length": 1000,
-    "rate_limit": {
-      "commands_per_minute": 30,
-      "commands_per_hour": 500
-    }
-  },
-  "logging": {
-    "level": "info",
-    "destinations": ["console", "file", "siem"],
-    "siem_endpoint": "172.20.0.10:514"
+    "max_session_time": 3600,
+    "audit_enabled": true,
+    "log_level": "info"
   }
 }
 ```

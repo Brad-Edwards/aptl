@@ -12,6 +12,7 @@ RUN dnf install -y epel-release && \
     systemd-sysv \
     iproute \
     hostname \
+    procps-ng \
     && dnf clean all
 
 # Configure systemd for container use
@@ -56,6 +57,14 @@ RUN mkdir -p /opt/purple-team/scripts /etc/rsyslog.d
 # Copy entrypoint script
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Copy Wazuh install script
+COPY install-wazuh.sh /opt/purple-team/scripts/
+RUN chmod +x /opt/purple-team/scripts/install-wazuh.sh
+
+# Copy and enable Wazuh install service
+COPY wazuh-install.service /etc/systemd/system/
+RUN systemctl enable wazuh-install.service
 
 # Expose only SSH and syslog
 EXPOSE 22 514

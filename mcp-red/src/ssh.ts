@@ -190,38 +190,43 @@ export class PersistentSession extends EventEmitter {
 
     if (this.currentCommand) {
       this.outputData += data;
+      this.parseCommandOutput();
+    }
+  }
+
+  private parseCommandOutput(): void {
+    if (!this.currentCommand) return;
+
+    const endPattern = `${this.commandDelimiter}_END_${this.currentCommand.id}:(\\d+)`;
+    const endMatch = this.outputData.match(new RegExp(endPattern));
+    
+    if (endMatch) {
+      const exitCode = parseInt(endMatch[1], 10);
+      const startPattern = `${this.commandDelimiter}_START_${this.currentCommand.id}`;
+      const startIndex = this.outputData.indexOf(startPattern);
+      const endIndex = this.outputData.indexOf(endMatch[0]);
       
-      const endPattern = `${this.commandDelimiter}_END_${this.currentCommand.id}:(\\d+)`;
-      const endMatch = this.outputData.match(new RegExp(endPattern));
-      
-      if (endMatch) {
-        const exitCode = parseInt(endMatch[1], 10);
-        const startPattern = `${this.commandDelimiter}_START_${this.currentCommand.id}`;
-        const startIndex = this.outputData.indexOf(startPattern);
-        const endIndex = this.outputData.indexOf(endMatch[0]);
+      if (startIndex !== -1 && endIndex !== -1) {
+        const output = this.outputData.substring(
+          startIndex + startPattern.length,
+          endIndex
+        ).trim();
+
+        const lines = output.split('\n');
+        if (lines[0] === '') lines.shift();
+        if (lines[lines.length - 1] === '') lines.pop();
         
-        if (startIndex !== -1 && endIndex !== -1) {
-          const output = this.outputData.substring(
-            startIndex + startPattern.length,
-            endIndex
-          ).trim();
+        const cleanOutput = lines.join('\n');
 
-          const lines = output.split('\n');
-          if (lines[0] === '') lines.shift();
-          if (lines[lines.length - 1] === '') lines.pop();
-          
-          const cleanOutput = lines.join('\n');
-
-          this.currentCommand.resolve({
-            stdout: cleanOutput,
-            stderr: '',
-            code: exitCode,
-            signal: null
-          });
-          
-          this.currentCommand = null;
-          this.processNextCommand();
-        }
+        this.currentCommand.resolve({
+          stdout: cleanOutput,
+          stderr: '',
+          code: exitCode,
+          signal: null
+        });
+        
+        this.currentCommand = null;
+        this.processNextCommand();
       }
     }
   }

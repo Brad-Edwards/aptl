@@ -38,7 +38,7 @@ cd aptl
 # Generate SSL certificates
 docker compose -f generate-indexer-certs.yml run --rm generator
 
-# Build MCP servers
+# Build MCP servers (optional - for AI integration)
 cd mcp-red && npm install && npm run build && cd ..
 cd mcp-blue && npm install && npm run build && cd ..
 ```

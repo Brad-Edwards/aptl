@@ -15,7 +15,6 @@ else
     ECR_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/aptl/kali-red-team"
 fi
 
-# Build arguments
 BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
@@ -24,7 +23,6 @@ echo "ECR URI: $ECR_URI"
 echo "Build Date: $BUILD_DATE"
 echo "Git Commit: $GIT_COMMIT"
 
-# Build the container
 docker build \
     --build-arg BUILD_DATE="$BUILD_DATE" \
     --build-arg GIT_COMMIT="$GIT_COMMIT" \
@@ -40,7 +38,7 @@ if [ -n "$AWS_ACCOUNT_ID" ]; then
 fi
 
 echo ""
-echo "✅ Build complete!"
+echo "Build complete!"
 echo ""
 echo "Local tags:"
 echo "  - aptl/kali-red-team:latest"

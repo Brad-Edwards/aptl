@@ -1,0 +1,56 @@
+<!-- 
+Falco Integration Rules for Wazuh
+Based on https://wazuh.com/blog/cloud-native-security-with-wazuh-and-falco/
+These rules process Falco events forwarded by the Wazuh agent
+-->
+
+<group name="falco,">
+  <rule id="100600" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="output_fields.wazuh_integration">falco</field>
+    <description>Falco: run-time security logs.</description>
+    <options>no_full_log</options>
+  </rule>
+  <rule id="100601" level="4">
+    <if_sid>100600</if_sid>
+    <field name="priority">Info</field>
+    <description>"Falco Alert - " $(output)</description>
+    <options>no_full_log</options>
+  </rule>
+  <rule id="100602" level="6">
+    <if_sid>100600</if_sid>
+    <field name="priority">Notice</field>
+    <description>"Falco Alert - " $(output)</description>
+    <options>no_full_log</options>
+  </rule>
+  <rule id="100603" level="8">
+    <if_sid>100600</if_sid>
+    <field name="priority">Warning</field>
+    <description>"Falco Alert - " $(output)</description>
+    <options>no_full_log</options>
+  </rule>
+  <rule id="100604" level="10">
+    <if_sid>100600</if_sid>
+    <field name="priority">Error</field>
+    <description>"Falco Alert - " $(output)</description>
+    <options>no_full_log</options>
+  </rule>
+  <rule id="100605" level="12">
+    <if_sid>100600</if_sid>
+    <field name="priority">Critical</field>
+    <description>"Falco Alert - " $(output)</description>
+    <options>no_full_log</options>
+  </rule>
+  <rule id="100606" level="14">
+    <if_sid>100600</if_sid>
+    <field name="priority">Alert</field>
+    <description>"Falco Alert - " $(output)</description>
+    <options>no_full_log</options>
+  </rule>
+  <rule id="100607" level="16">
+    <if_sid>100600</if_sid>
+    <field name="priority">Emergency</field>
+    <description>"Falco Alert - " $(output)</description>
+    <options>no_full_log</options>
+  </rule>
+</group>

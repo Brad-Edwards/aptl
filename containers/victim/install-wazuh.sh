@@ -11,6 +11,8 @@ fi
 
 echo "Installing Wazuh agent with manager: $WAZUH_MANAGER"
 
+echo "Using agent name: $AGENT_NAME"
+
 # Set up Wazuh repository
 rpm --import https://packages.wazuh.com/key/GPG-KEY-WAZUH
 cat > /etc/yum.repos.d/wazuh.repo << EOF
@@ -23,41 +25,12 @@ baseurl=https://packages.wazuh.com/4.x/yum/
 priority=1
 EOF
 
-# Install Wazuh agent
+# Install Wazuh agent 
 WAZUH_MANAGER="$WAZUH_MANAGER" dnf install -y wazuh-agent
 
 echo "Wazuh agent installed successfully"
 
-# Configure Wazuh command monitoring for process and network monitoring
-echo "Configuring process and network monitoring..."
-# Insert monitoring config before the closing </ossec_config> tag
-sed -i '/<\/ossec_config>/i\
-\
-  <!-- Process monitoring - check every 60 seconds -->\
-  <localfile>\
-    <log_format>full_command<\/log_format>\
-    <command>ps -auxwwf<\/command>\
-    <frequency>60<\/frequency>\
-    <alias>process_list<\/alias>\
-  <\/localfile>\
-\
-  <!-- Network connections monitoring - check every 120 seconds -->\
-  <localfile>\
-    <log_format>full_command<\/log_format>\
-    <command>ss -tuln<\/command>\
-    <frequency>120<\/frequency>\
-    <alias>network_connections<\/alias>\
-  <\/localfile>\
-\
-  <!-- Command history monitoring for shell activity -->\
-  <localfile>\
-    <log_format>syslog<\/log_format>\
-    <location>\/var\/log\/bash_history.log<\/location>\
-    <alias>bash_history<\/alias>\
-  <\/localfile>\
-' /var/ossec/etc/ossec.conf
 
-echo "Process and network monitoring configured"
 
 # Configure bash history logging
 echo "Configuring bash command history logging..."
@@ -100,9 +73,7 @@ systemctl start wazuh-agent
 
 # Verify service is running
 echo "Verifying Wazuh agent service..."
-systemctl is-active wazuh-agent && echo "✅ Wazuh agent service is active" || echo "❌ Wazuh agent service failed to start"
+systemctl is-active wazuh-agent && echo "Wazuh agent service is active" || echo "Wazuh agent service failed to start"
 
 echo "=== Wazuh Agent Installation Complete ==="
 
-# Create flag file to prevent re-running
-touch /var/ossec/.installed

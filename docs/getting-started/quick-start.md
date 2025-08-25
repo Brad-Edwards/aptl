@@ -10,50 +10,26 @@ cd aptl
 
 ## Access
 
-**Wazuh Dashboard**: https://localhost:443 (admin/SecretPassword)
+**Wazuh Dashboard:** https://localhost:443 (admin/SecretPassword)
 
 **SSH Access:**
-```bash
-# Victim
-ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022
-
-# Kali
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023
-```
+- Victim: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022`
+- Kali: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`
 
 ## Test
 
+Generate test activity and view in Wazuh Dashboard:
+
 ```bash
 # Generate log from victim
-ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022
-logger "Test log entry"
+ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022 "logger 'Test log entry'"
 
 # Run scan from Kali  
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023
-nmap 172.20.0.20
+ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "nmap 172.20.0.20"
 ```
 
-View logs in Wazuh Dashboard → Security Events
+View events in Wazuh Dashboard → Security Events
 
-## MCP Setup
+## AI Integration
 
-```bash
-# Build MCP server
-cd mcp && npm install && npm run build && cd ..
-```
-
-**Configure AI client (Cursor):**
-Create `.cursor/mcp.json`:
-```json
-{
-    "mcpServers": {
-        "aptl-lab": {
-            "command": "node",
-            "args": ["./mcp/dist/index.js"],
-            "cwd": "."
-        }
-    }
-}
-```
-
-Test with AI: "Use kali_info to show me the lab network"
+For AI agent control, build and configure MCP servers. See [MCP Integration](../components/mcp-integration.md) for setup details.

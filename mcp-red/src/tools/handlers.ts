@@ -33,7 +33,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
             ssh_port: labConfig.kali.ssh_port,
             lab_name: labConfig.lab.name,
             lab_network: labConfig.network.vpc_cidr,
-            note: 'Use Kali to pivot to other lab targets (victim: 172.20.0.20, wazuh: 172.20.0.10)',
+            note: 'Use Kali for red team operations. Enumerate and attack victim targets in lab network. DO NOT attack SIEM infrastructure.',
           }, null, 2),
         },
       ],

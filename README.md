@@ -33,7 +33,7 @@ AI agents autonomously execute complete attack-defend cycles:
 
 ## What is APTL?
 
-**First working agentic purple team lab.** AI agents autonomously conduct attacks and defensive analysis through Model Context Protocol integration with Wazuh SIEM and Kali Linux containers.
+**A working agentic purple team lab.** AI agents autonomously conduct attacks and defensive analysis through Model Context Protocol integration with Wazuh SIEM and Kali Linux containers.
 
 APTL demonstrates:
 
@@ -106,6 +106,7 @@ cd mcp-red && npm install && npm run build && cd ..
 ```
 
 Configure your AI client to connect to:
+
 - Blue Team: `./mcp-blue/build/index.js`
 - Red Team: `./mcp-red/build/index.js`
 

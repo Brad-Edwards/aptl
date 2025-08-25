@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Single lab-install.service for coordinated installation
 - Add basic CTF scenario setup script for integration testing
 
+### Fixed
+
+- Streamlined documentation
+
 ## [2.0.3] - 2025-08-23
 
 ### Added

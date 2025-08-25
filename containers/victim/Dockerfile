@@ -11,8 +11,11 @@ RUN dnf install -y epel-release && \
     systemd \
     systemd-sysv \
     iproute \
+    iproute-tc \
     hostname \
     procps-ng \
+    openssh-clients \
+    net-tools \
     && dnf clean all
 
 # Configure systemd for container use
@@ -61,6 +64,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # Copy Wazuh install script
 COPY install-wazuh.sh /opt/purple-team/scripts/
 RUN chmod +x /opt/purple-team/scripts/install-wazuh.sh
+
 
 # Copy and enable Wazuh install service
 COPY wazuh-install.service /etc/systemd/system/

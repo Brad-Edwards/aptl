@@ -125,6 +125,10 @@ services:
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+    cap_add:
+      - SYS_NICE        # For process scheduling
+      - SYS_ADMIN       # Required for systemd in container
+      - SYS_RESOURCE    # For setting limits and OOM score
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - ./keys:/keys:ro
@@ -132,8 +136,6 @@ services:
     tmpfs:
       - /run
       - /tmp
-    cap_add:
-      - SYS_ADMIN
     security_opt:
       - seccomp:unconfined
 

@@ -169,8 +169,9 @@ export class PersistentSession extends EventEmitter {
     this.shell.write(wrappedCommand + '\n');
 
     if (this.currentCommand.timeout) {
+      const commandId = this.currentCommand.id;
       setTimeout(() => {
-        if (this.currentCommand?.id === this.currentCommand!.id) {
+        if (this.currentCommand?.id === commandId) {
           this.currentCommand!.reject(new SSHError(`Command timeout: ${this.currentCommand!.command}`));
           this.currentCommand = null;
           this.processNextCommand();

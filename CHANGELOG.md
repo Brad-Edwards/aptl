@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wazuh rules for processing Falco alerts by priority level (Info through Emergency)  
 - Complete ossec.conf template replacing XML sed manipulation
 - Single lab-install.service for coordinated installation
+- Add basic CTF scenario setup script for integration testing
 
 ## [2.0.3] - 2025-08-23
 

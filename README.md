@@ -1,16 +1,20 @@
 # APTL (Advanced Purple Team Lab)
 
+**Agentic purple team lab with AI-controlled red and blue team operations**
+
 > **🚧 UNDER CONSTRUCTION 🚧**  
 > **⚠️ This project is actively being developed and tested**  
 > **🔧 Documentation and features may change rapidly**  
 > **💡 Use at your own risk - this is a proof of concept**  
 > **🚨 Don't be stupid or you'll get yourself in trouble.**
 
-## AI Agent Integration
+## Agentic Purple Team Operations
 
-✅ **Red Team MCP**: AI agents control Kali Linux for autonomous attacks  
-✅ **Blue Team MCP**: AI agents query Wazuh SIEM for detection and analysis  
-✅ **Complete Workflow**: Red team attacks → SIEM detection → Blue team investigation  
+AI agents autonomously execute complete attack-defend cycles:
+
+✅ **Blue Team AI**: Query SIEM alerts, search logs, create detection rules  
+✅ **Red Team AI**: Execute reconnaissance, exploitation, post-exploitation  
+✅ **Full Automation**: Attack → Detection → Investigation → Response  
 
 ## Demo & Screenshots
 
@@ -28,13 +32,19 @@
 
 ## What is APTL?
 
-Docker lab with Wazuh SIEM + victim containers + Kali red team platform. AI agents control both red team attacks (Kali MCP) and blue team analysis (Wazuh MCP) for complete purple team exercises.
+**First working agentic purple team lab.** AI agents autonomously conduct attacks and defensive analysis through Model Context Protocol integration with Wazuh SIEM and Kali Linux containers.
 
-APTL is meant to support three use cases:
+APTL demonstrates:
 
-- Inexpensive purple team training
-- Assessment of the capabilities autonomous cyber operations available to relatively unsophisticated attackers
-- Research
+- **Autonomous purple team operations** - No human intervention required for attack-defend cycles
+- **Realistic threat simulation** - AI attackers using actual penetration testing tools
+- **Intelligent defense** - AI analysts querying real SIEM data and creating detection rules
+
+Use cases:
+
+- Research into autonomous cyber operations capabilities
+- Purple team training with AI-driven scenarios  
+- Assessment of AI threat actor capabilities
 
 ## Ethics Statement
 
@@ -48,17 +58,18 @@ An autonomous cyber operations range is currently under-development as a separat
 
 ## What's Different
 
-- **Autonomous AI Control**: AI agents directly execute real penetration testing tools via Model Context Protocol
-- **Complete Attack Cycles Demonstrated**: Full autonomous reconnaissance → exploitation → post-exploitation without human intervention
-- **Realistic Environment**: Containerized lab with actual SIEM logging
-- **Purple Team Focus**: Purpose-built for training defenders against AI attackers
+- **First Agentic Purple Team Lab**: AI agents autonomously execute both attack and defense operations
+- **Real Tool Integration**: AI agents directly control Kali Linux tools and Wazuh SIEM queries via MCP
+- **Complete Autonomous Cycles**: Full reconnaissance → exploitation → detection → investigation without human intervention
+- **Bidirectional AI Operations**: Red team AI attacks while blue team AI investigates and responds
 
 ## Components
 
 - Wazuh SIEM (172.20.0.10-12) - Log collection and analysis
 - Victim container (172.20.0.20) - Rocky Linux with Wazuh agent and Falco runtime security monitoring
 - Kali container (172.20.0.30) - Attack platform with security tools
-- MCP server - Enables AI agent control of Kali tools
+- Blue Team MCP - Enables AI agent SIEM queries, log search, and rule creation
+- Red Team MCP - Enables AI agent control of Kali tools
 
 ## Quick Start
 
@@ -83,15 +94,22 @@ cd aptl
 
 ## AI Integration (MCP)
 
-Build MCP server for AI agent control:
+Build MCP servers for AI agent control:
 
 ```bash
-cd mcp && npm install && npm run build && cd ..
+# Blue Team MCP (Wazuh SIEM)
+cd mcp-blue && npm install && npm run build && cd ..
+
+# Red Team MCP (Kali Linux)
+cd mcp-red && npm install && npm run build && cd ..
 ```
 
-Configure your AI client to connect to `./mcp/dist/index.js`
+Configure your AI client to connect to:
+- Blue Team: `./mcp-blue/build/index.js`
+- Red Team: `./mcp-red/build/index.js`
 
-Test: Ask your AI agent "Use kali_info to show me the lab network"
+Test blue team: Ask your AI agent "Use wazuh_info to show me the SIEM status"  
+Test red team: Ask your AI agent "Use kali_info to show me the lab network"
 
 ## Documentation
 

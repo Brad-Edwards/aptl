@@ -4,6 +4,7 @@
 
 > **🚧 UNDER CONSTRUCTION 🚧**  
 > **⚠️ This project is actively being developed and tested**  
+> **⚠️ Repeat after me: This is not for prod.**  
 > **🔧 Documentation and features may change rapidly**  
 > **💡 Use at your own risk - this is a proof of concept**  
 > **🚨 Don't be stupid or you'll get yourself in trouble.**

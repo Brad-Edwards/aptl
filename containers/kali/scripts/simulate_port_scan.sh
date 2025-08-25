@@ -23,5 +23,5 @@ sleep 2
 log_redteam_network "open_ports_discovered" "$TARGET" "22,80,443" "ssh,http,https_detected"
 log_redteam_command "nmap -sV -p 22,80,443 $TARGET" "$TARGET" "version_scan_completed"
 
-echo "✅ Port scan simulation complete!"
-echo "📊 Check ${siem_type} for RedTeamActivity=network events"
+echo "Port scan simulation complete"
+echo "Check ${siem_type} for RedTeamActivity=network events"

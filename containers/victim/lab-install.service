@@ -1,11 +1,11 @@
 [Unit]
-Description=Install Wazuh Agent on First Boot
+Description=Install Purple Team Lab Services on First Boot
 After=multi-user.target
-ConditionPathExists=!/var/ossec/.installed
+ConditionPathExists=!/var/ossec/.all_installed
 
 [Service]
 Type=oneshot
-ExecStart=/opt/purple-team/scripts/install-wazuh.sh
+ExecStart=/opt/purple-team/scripts/install-all.sh
 EnvironmentFile=/etc/environment.wazuh
 RemainAfterExit=yes
 StandardOutput=journal

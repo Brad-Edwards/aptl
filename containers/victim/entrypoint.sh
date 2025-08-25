@@ -40,9 +40,9 @@ setup_labadmin_ssh() {
         # Set correct permissions
         chmod 600 /home/labadmin/.ssh/authorized_keys
         chown labadmin:labadmin /home/labadmin/.ssh/authorized_keys
-        echo "✅ Labadmin SSH key configured successfully"
+        echo "Labadmin SSH key configured successfully"
     else
-        echo "⚠️  WARNING: No SSH key found for labadmin. SSH key auth will not work."
+        echo "WARNING: No SSH key found for labadmin. SSH key auth will not work."
         echo "   Expected one of:"
         echo "   - Volume mount at /keys/labadmin.pub"
         echo "   - LABADMIN_SSH_KEY environment variable"
@@ -64,9 +64,9 @@ setup_rsyslog() {
 *.* @${SIEM_IP}:${SIEM_PORT}
 EOF
         
-        echo "✅ Rsyslog forwarding configured to Wazuh at $SIEM_IP:$SIEM_PORT"
+        echo "Rsyslog forwarding configured to Wazuh at $SIEM_IP:$SIEM_PORT"
     else
-        echo "ℹ️  SIEM forwarding not configured (SIEM_IP not set)"
+        echo "SIEM forwarding not configured (SIEM_IP not set)"
     fi
 }
 
@@ -74,12 +74,12 @@ EOF
 setup_wazuh_env() {
     if [ -n "$SIEM_IP" ]; then
         export WAZUH_MANAGER="$SIEM_IP"
-        echo "✅ WAZUH_MANAGER set to $WAZUH_MANAGER"
+        echo "WAZUH_MANAGER set to $WAZUH_MANAGER"
         
         # Create environment file for systemd service
         echo "WAZUH_MANAGER=$WAZUH_MANAGER" > /etc/environment.wazuh
     else
-        echo "❌ ERROR: SIEM_IP not set - Wazuh agent installation will fail"
+        echo "ERROR: SIEM_IP not set - Wazuh agent installation will fail"
         exit 1
     fi
 }

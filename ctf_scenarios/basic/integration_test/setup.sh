@@ -22,16 +22,13 @@ if [ ! -f "$LAB_CONNECTIONS" ]; then
     exit 1
 fi
 
-# Extract SSH details for victim
 SSH_KEY=$(grep -E "Victim:.*ssh" "$LAB_CONNECTIONS" | sed -n 's/.*-i \([^ ]*\).*/\1/p' | head -1)
 SSH_USER=$(grep -E "Victim:.*ssh" "$LAB_CONNECTIONS" | sed -n 's/.*ssh -i [^ ]* \([^@]*\)@.*/\1/p' | head -1)
 SSH_HOST=$(grep -E "Victim:.*ssh" "$LAB_CONNECTIONS" | sed -n 's/.*@\([^ ]*\).*/\1/p' | head -1)
 SSH_PORT=$(grep -E "Victim:.*ssh" "$LAB_CONNECTIONS" | sed -n 's/.*-p \([0-9]*\).*/\1/p' | head -1)
 
-# Expand tilde in SSH_KEY path
 SSH_KEY="${SSH_KEY/#\~/$HOME}"
 
-# Validate extracted values
 if [ -z "$SSH_KEY" ] || [ -z "$SSH_USER" ] || [ -z "$SSH_HOST" ] || [ -z "$SSH_PORT" ]; then
     echo -e "${RED}Error: Failed to parse SSH connection details from lab_connections.txt${NC}"
     echo "Found: KEY=$SSH_KEY, USER=$SSH_USER, HOST=$SSH_HOST, PORT=$SSH_PORT"
@@ -86,10 +83,8 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "${GREEN}[+] SUID binary compiled${NC}"
 
-# 2. Deploy to victim
 echo -e "${YELLOW}[*] Deploying scenario to victim container...${NC}"
 
-# Copy files to victim
 echo "  - Copying SUID binary..."
 scp $SSH_OPTS -P "$SSH_PORT" -i "$SSH_KEY" "$SCRIPT_DIR/backup_util" "$SSH_USER@$SSH_HOST:/tmp/"
 if [ $? -ne 0 ]; then
@@ -135,9 +130,6 @@ ssh $SSH_OPTS -p "$SSH_PORT" -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" "curl -s -o /de
 # Check Wazuh agent
 echo -n "  - Wazuh agent: "
 ssh $SSH_OPTS -p "$SSH_PORT" -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" "sudo systemctl is-active --quiet wazuh-agent && echo 'OK' || echo 'FAILED (manual start may be needed)'"
-
-# Clean up local files (optional)
-# rm -f "$SCRIPT_DIR/backup_util" "$SCRIPT_DIR/vulnerable_app.py" "$SCRIPT_DIR/victim_setup.sh"
 
 echo ""
 echo -e "${GREEN}=== Scenario Deployment Complete ===${NC}"

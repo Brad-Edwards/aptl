@@ -41,6 +41,11 @@ enable_client_modding = false
 csm_restriction_flags = 62
 csm_restriction_noderange = 0
 
+# Anti-cheat settings - disabled for GameConqueror demo
+disable_anticheat = true
+anticheat_flags = 
+anticheat_movement_tolerance = 10.0
+
 # Debug and logging
 debug_log_level = action
 server_side_occlusion_culling = true

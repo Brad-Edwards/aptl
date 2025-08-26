@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== Starting Wazuh Agent Installation ==="
+echo "=== Starting Wazuh Agent Installation (Ubuntu) ==="
 
 # Verify WAZUH_MANAGER is set
 if [ -z "$WAZUH_MANAGER" ]; then
@@ -10,27 +10,23 @@ if [ -z "$WAZUH_MANAGER" ]; then
 fi
 
 echo "Installing Wazuh agent with manager: $WAZUH_MANAGER"
-
 echo "Using agent name: $AGENT_NAME"
 
-# Set up Wazuh repository
-rpm --import https://packages.wazuh.com/key/GPG-KEY-WAZUH
-cat > /etc/yum.repos.d/wazuh.repo << EOF
-[wazuh]
-gpgcheck=1
-gpgkey=https://packages.wazuh.com/key/GPG-KEY-WAZUH
-enabled=1
-name=EL-\$releasever - Wazuh
-baseurl=https://packages.wazuh.com/4.x/yum/
-priority=1
-EOF
+# Install required packages
+apt-get update
+apt-get install -y curl gnupg lsb-release
+
+# Set up Wazuh repository for Ubuntu 22.04
+curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
+echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list
+
+# Update package information
+apt-get update
 
 # Install Wazuh agent 
-WAZUH_MANAGER="$WAZUH_MANAGER" dnf install -y wazuh-agent
+WAZUH_MANAGER="$WAZUH_MANAGER" apt-get install -y wazuh-agent
 
 echo "Wazuh agent installed successfully"
-
-
 
 # Configure bash history logging
 echo "Configuring bash command history logging..."
@@ -58,7 +54,7 @@ chmod 644 /var/log/bash_history.log
 
 echo "Bash command history logging configured"
 
-# Kill any orphaned processes from RPM installation
+# Kill any orphaned processes from installation
 echo "Cleaning up any orphaned wazuh processes..."
 killall wazuh-execd wazuh-agentd wazuh-syscheckd wazuh-logcollector wazuh-modulesd 2>/dev/null || echo "No wazuh processes to kill"
 
@@ -76,4 +72,3 @@ echo "Verifying Wazuh agent service..."
 systemctl is-active wazuh-agent && echo "Wazuh agent service is active" || echo "Wazuh agent service failed to start"
 
 echo "=== Wazuh Agent Installation Complete ==="
-

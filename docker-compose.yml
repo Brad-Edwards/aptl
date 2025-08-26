@@ -140,37 +140,6 @@ services:
     security_opt:
       - seccomp:unconfined
 
-  # Capcom Victim Container - Target system for Capcom.sys driver exploit
-  capcom-victim:
-    build:
-      context: ./containers/capcom-victim
-      dockerfile: Dockerfile
-    container_name: aptl-capcom-victim
-    hostname: capcom-victim-host
-    restart: unless-stopped
-    networks:
-      aptl-network:
-        ipv4_address: 172.20.0.21
-    ports:
-      - "2024:22"    # SSH access
-    environment:
-      - SIEM_IP=172.20.0.10  # wazuh.manager
-      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
-    cap_add:
-      - SYS_NICE        # For process scheduling
-      - SYS_ADMIN       # Required for systemd in container
-      - SYS_RESOURCE    # For setting limits and OOM score
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./keys:/keys:ro
-      - capcom_victim_logs:/var/log
-    tmpfs:
-      - /run
-      - /tmp
-    security_opt:
-      - seccomp:unconfined
-    depends_on:
-      - victim
 
   # Kali Container - Red team attack platform  
   kali:
@@ -225,5 +194,4 @@ volumes:
   
   # Application volumes
   victim_logs:
-  capcom_victim_logs:
   kali_operations:

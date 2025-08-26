@@ -153,6 +153,7 @@ services:
         ipv4_address: 172.20.0.21
     ports:
       - "2024:22"    # SSH access
+      - "30000:30000" # Minetest server port
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub

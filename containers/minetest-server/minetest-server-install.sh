@@ -27,5 +27,8 @@ systemctl restart wazuh-agent
 
 echo "=== All Purple Team Lab Services Installed ==="
 
+echo "Step 4: Installing and configuring game server..."
+/opt/purple-team/scripts/setup-gameserver.sh
+
 # Create flag to prevent re-running
 touch /var/ossec/.minetest_server_installed

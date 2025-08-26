@@ -1,11 +1,11 @@
-# MCP Server
+# MCP Minetest Server
 
-MCP server for AI agent control of Kali container.
+MCP server for AI agent control of Minetest server container.
 
 ## Tools
 
-- `kali_info` - Get lab network info
-- `run_command` - Execute commands on Kali container
+- `container_info` - Get minetest-server container info
+- `run_command` - Execute commands on minetest-server container
 
 ## Quick Setup
 

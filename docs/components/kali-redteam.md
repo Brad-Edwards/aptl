@@ -53,10 +53,11 @@ See [MCP Integration](mcp-integration.md) for detailed setup instructions.
 
 ## SIEM Integration
 
-Red team activities are logged to Wazuh SIEM via rsyslog:
+Red team activities are logged to Wazuh SIEM via Wazuh agent:
 
-- **Log Destination**: Wazuh Manager (172.20.0.10:514)
-- **Format**: Structured syslog with RedTeam fields
+- **Agent Group**: `kali-redteam`
+- **Logs**: CLI commands, authentication events, system logs
+- **Destination**: Wazuh Manager (172.20.0.10:1514)
 - **Purpose**: Blue team analysis and detection training
 
 ## Access

@@ -44,7 +44,27 @@ cp -r containers/victim containers/[scenario-name]
 - Copying preserves all functionality, just requires renaming conflicts
 - Inheritance approaches miss critical setup steps
 
-### 2. Study Existing Patterns (After Copying)
+### 2. Rename All Files and References
+**CRITICAL: Must rename all victim-specific files and references**
+
+**File Renames Required:**
+```bash
+cd containers/[scenario-name]
+mv install-all.sh [scenario-name]-install.sh
+mv lab-install.service [scenario-name]-install.service  
+mv validate-victim.sh validate-[scenario-name].sh
+```
+
+**Content Updates Required:**
+- **Dockerfile**: Update COPY and RUN commands for renamed files
+- **Service file**: Update ConditionPathExists and ExecStart paths
+- **Install script**: Update agent name and completion flag path
+- **Validation script**: Update all variable names and output text
+- **Entrypoint.sh**: Update startup message text
+- **README.md**: Update container name and scenario references
+- **rebuild_container.sh**: Update service name
+
+### 3. Study Existing Patterns (After Copying)
 **Required Reading:**
 - `containers/victim/Dockerfile` - base container setup
 - `containers/victim/entrypoint.sh` - initialization logic
@@ -54,8 +74,8 @@ cp -r containers/victim containers/[scenario-name]
 
 ### 3. Network/Naming Allocation
 **Reference:** `docker-compose.yml` lines 114-142 (victim container)
-- **Next IP:** 172.20.0.21 (increment from 172.20.0.20)
-- **Next Port:** 2024 (increment from 2022)
+- **Next IP:** Check docker-compose.yml for next available IP (increment from last used)
+- **Next Port:** Check docker-compose.yml for next available port (increment from last used)
 - **Container:** `aptl-[scenario]-victim`
 - **Hostname:** `[scenario]-victim-host`
 
@@ -66,7 +86,8 @@ cp -r containers/victim containers/[scenario-name]
 - Change service name from `victim` to `[scenario]-victim`
 
 **Validation:**
-- Use existing `containers/victim/validate-victim.sh`
+- Copy and rename `containers/victim/validate-victim.sh` to `validate-[scenario]-server.sh`
+- Update all variable names and references from VICTIM_IP to [SCENARIO]_SERVER_IP
 - Add scenario-specific checks as needed
 
 **Troubleshooting:**

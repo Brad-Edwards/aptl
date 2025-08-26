@@ -1,23 +1,27 @@
-# Minetest client container using Rocky Linux 9 (RHEL-compatible)
+# Minetest client container using Ubuntu 22.04 LTS
 # Based on victim container template with minetest client capabilities
-FROM rockylinux:9
+FROM ubuntu:22.04
 
-RUN dnf install -y epel-release && \
-    dnf update -y && \
-    dnf install -y \
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y \
     rsyslog \
     openssh-server \
     sudo \
     systemd \
     systemd-sysv \
-    iproute \
-    iproute-tc \
+    iproute2 \
     hostname \
-    procps-ng \
-    openssh-clients \
+    procps \
+    openssh-client \
     net-tools \
     gnupg \
-    && dnf clean all
+    curl \
+    wget \
+    ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == systemd-tmpfiles-setup.service ] || rm -f $i; done); \
     rm -f /lib/systemd/system/multi-user.target.wants/*;\
@@ -30,18 +34,20 @@ RUN (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == system
 
 RUN systemctl set-default multi-user.target
 
-RUN systemctl enable rsyslog sshd systemd-user-sessions && \
+RUN systemctl enable rsyslog ssh systemd-user-sessions && \
     systemctl enable systemd-user-sessions.service && \
     ln -sf /usr/lib/systemd/system/systemd-user-sessions.service /etc/systemd/system/multi-user.target.wants/
 
+# Configure SSH
 RUN mkdir /var/run/sshd && \
     ssh-keygen -A && \
     sed -i 's/#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && \
     sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 
+# Create labadmin user
 RUN useradd -m -s /bin/bash labadmin && \
-    usermod -aG wheel labadmin && \
+    usermod -aG sudo labadmin && \
     echo "labadmin ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/labadmin && \
     chmod 440 /etc/sudoers.d/labadmin
 
@@ -63,6 +69,9 @@ RUN chmod +x /opt/purple-team/scripts/install-falco.sh
 COPY install-all.sh /opt/purple-team/scripts/
 RUN chmod +x /opt/purple-team/scripts/install-all.sh
 
+COPY setup-gameclient.sh /opt/purple-team/scripts/
+RUN chmod +x /opt/purple-team/scripts/setup-gameclient.sh
+
 COPY ossec.conf.template /opt/purple-team/scripts/
 
 RUN mkdir -p /etc/falco/config.d
@@ -71,8 +80,8 @@ COPY falco_custom.yaml /etc/falco/config.d/
 COPY minetest-client-install.service /etc/systemd/system/
 RUN systemctl enable minetest-client-install.service
 
-# Expose only SSH and syslog
-EXPOSE 22 514
+# Expose SSH, syslog, and RDP port
+EXPOSE 22 514 3389
 
 VOLUME ["/var/log", "/home"]
 

@@ -4,10 +4,14 @@ set -e
 echo "=== Purple Team Lab Installation Starting ==="
 
 # Check if already installed
-if [ -f /var/ossec/.minetest-client_installed ]; then
+if [ -f /opt/lab/.minetest-client_installed ]; then
     echo "All services already installed, exiting..."
     exit 0
 fi
+
+# Update package lists first
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
 
 echo "Step 1: Installing Wazuh Agent..."
 export AGENT_NAME="minetest-client-$(hostname)-$(date +%s)"
@@ -27,5 +31,9 @@ systemctl restart wazuh-agent
 
 echo "=== All Purple Team Lab Services Installed ==="
 
+echo "Step 4: Installing and configuring game client..."
+/opt/purple-team/scripts/setup-gameclient.sh
+
 # Create flag to prevent re-running
-touch /var/ossec/.minetest-client_installed
+mkdir -p /opt/lab
+touch /opt/lab/.minetest-client_installed

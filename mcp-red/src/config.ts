@@ -9,10 +9,10 @@ import { expandTilde } from './utils.js';
 
 // Schema for Kali instance configuration
 export const KaliInstanceSchema = z.object({
-  public_ip: z.string(),
-  private_ip: z.string(),
-  ssh_key: z.string(),
-  ssh_user: z.string(),
+  public_ip: z.string().ip({ version: "v4", message: "Invalid IPv4 address" }),
+  private_ip: z.string().ip({ version: "v4", message: "Invalid IPv4 address" }),
+  ssh_key: z.string().min(1, 'SSH key path cannot be empty'),
+  ssh_user: z.string().min(1, 'SSH user cannot be empty'),
   ssh_port: z.number().optional().default(22),
   enabled: z.boolean().optional().default(true)
 });
@@ -53,7 +53,15 @@ export type LabConfig = z.infer<typeof LabConfigSchema>;
 export type KaliInstance = z.infer<typeof KaliInstanceSchema>;
 
 /**
- * Load simple Docker lab configuration from JSON file
+ * Load simple Docker lab configuration from JSON file.
+ * 
+ * Reads configuration from either:
+ * - Path specified in APTL_CONFIG_PATH environment variable
+ * - Default docker-lab-config.json in current directory
+ * 
+ * @returns Validated lab configuration
+ * @throws {Error} If config file not found or Kali container missing
+ * @private
  */
 async function loadDockerLabConfig(): Promise<LabConfig> {
   const configPath = process.env.APTL_CONFIG_PATH || resolve(process.cwd(), 'docker-lab-config.json');
@@ -115,7 +123,15 @@ async function loadDockerLabConfig(): Promise<LabConfig> {
 }
 
 /**
- * Load lab configuration from Docker setup
+ * Load lab configuration from Docker setup.
+ * Expands tilde paths in SSH key configurations.
+ * 
+ * @returns Complete validated lab configuration with expanded paths
+ * @throws {Error} If configuration loading or validation fails
+ * 
+ * @example
+ * const config = await loadLabConfig();
+ * console.log(config.kali.public_ip); // '172.20.0.30'
  */
 export async function loadLabConfig(): Promise<LabConfig> {
   const config = await loadDockerLabConfig();
@@ -131,7 +147,15 @@ export async function loadLabConfig(): Promise<LabConfig> {
 
 
 /**
- * Get Kali SSH credentials - only target allowed
+ * Get Kali SSH credentials - only target allowed.
+ * 
+ * @param config - Lab configuration containing Kali instance details
+ * @returns Object containing SSH connection parameters
+ * @throws {Error} If Kali instance is disabled
+ * 
+ * @example
+ * const creds = getKaliCredentials(config);
+ * // Returns: { sshKey: '/path/to/key', username: 'kali', port: 2023, target: '172.20.0.30' }
  */
 export function getKaliCredentials(config: LabConfig): { sshKey: string; username: string; port: number; target: string } {
   if (!config.kali.enabled) {

@@ -119,4 +119,110 @@ describe('getKaliCredentials', () => {
       'Kali instance is not enabled'
     );
   });
+});
+
+describe('loadLabConfig', () => {
+  const testConfigPath = resolve(process.cwd(), 'test-docker-lab-config.json');
+  
+  afterEach(() => {
+    // Clean up test config file
+    try {
+      unlinkSync(testConfigPath);
+    } catch {
+      // File might not exist, ignore
+    }
+  });
+
+  it('should load Docker lab configuration successfully', async () => {
+    const dockerConfig = {
+      version: "1.0.0",
+      lab: {
+        name: "test-lab",
+        network_subnet: "172.20.0.0/16"
+      },
+      containers: {
+        kali: {
+          container_ip: "172.20.0.30",
+          ssh_key: "~/.ssh/test_key",
+          ssh_user: "kali",
+          ssh_port: 2023,
+          enabled: true
+        }
+      },
+      mcp: {
+        server_name: "test-mcp",
+        allowed_networks: ["172.20.0.0/16"],
+        max_session_time: 1800,
+        audit_enabled: true,
+        log_level: "debug"
+      }
+    };
+
+    writeFileSync(testConfigPath, JSON.stringify(dockerConfig, null, 2));
+    
+    // Set environment variable to use test config
+    const originalEnv = process.env.APTL_CONFIG_PATH;
+    process.env.APTL_CONFIG_PATH = testConfigPath;
+    
+    try {
+      const config = await loadLabConfig();
+      
+      expect(config.version).toBe("1.0.0");
+      expect(config.lab.name).toBe("test-lab");
+      expect(config.kali.public_ip).toBe("172.20.0.30");
+      expect(config.kali.ssh_user).toBe("kali");
+      expect(config.kali.ssh_port).toBe(2023);
+      expect(config.kali.enabled).toBe(true);
+      expect(config.mcp.server_name).toBe("test-mcp");
+    } finally {
+      // Restore original environment
+      if (originalEnv) {
+        process.env.APTL_CONFIG_PATH = originalEnv;
+      } else {
+        delete process.env.APTL_CONFIG_PATH;
+      }
+    }
+  });
+
+  it('should throw error when config file not found', async () => {
+    const originalEnv = process.env.APTL_CONFIG_PATH;
+    process.env.APTL_CONFIG_PATH = '/nonexistent/path/config.json';
+    
+    try {
+      await expect(loadLabConfig()).rejects.toThrow('Docker lab configuration not found');
+    } finally {
+      if (originalEnv) {
+        process.env.APTL_CONFIG_PATH = originalEnv;
+      } else {
+        delete process.env.APTL_CONFIG_PATH;
+      }
+    }
+  });
+
+  it('should throw error when Kali container is missing', async () => {
+    const dockerConfig = {
+      version: "1.0.0",
+      lab: {
+        name: "test-lab"
+      },
+      containers: {
+        // Missing kali container
+      }
+    };
+
+    writeFileSync(testConfigPath, JSON.stringify(dockerConfig, null, 2));
+    
+    const originalEnv = process.env.APTL_CONFIG_PATH;
+    process.env.APTL_CONFIG_PATH = testConfigPath;
+    
+    try {
+      await expect(loadLabConfig()).rejects.toThrow('Kali container configuration is required');
+    } finally {
+      if (originalEnv) {
+        process.env.APTL_CONFIG_PATH = originalEnv;
+      } else {
+        delete process.env.APTL_CONFIG_PATH;
+      }
+    }
+  });
 }); 

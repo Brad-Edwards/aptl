@@ -47,6 +47,27 @@ interface ConnectionInfo {
   connected: boolean;
 }
 
+/**
+ * Manages a persistent SSH shell session with command queuing and output buffering.
+ * 
+ * Features:
+ * - Maintains a persistent shell connection for stateful operations
+ * - Queues commands to ensure sequential execution
+ * - Buffers output for background sessions
+ * - Implements keep-alive and session timeout mechanisms
+ * - Parses command output using delimiters to separate command results
+ * 
+ * @extends EventEmitter
+ * @fires PersistentSession#closed - When the session is closed
+ * @fires PersistentSession#error - When an error occurs
+ * @fires PersistentSession#timeout - When the session times out
+ * 
+ * @example
+ * const session = new PersistentSession('session-1', '192.168.1.100', 'user', 'interactive', sshClient);
+ * await session.initialize();
+ * const result = await session.executeCommand('ls -la');
+ * console.log(result.stdout);
+ */
 export class PersistentSession extends EventEmitter {
   private shell: ClientChannel | null = null;
   private outputBuffer: string[] = [];
@@ -60,6 +81,16 @@ export class PersistentSession extends EventEmitter {
   private isInitialized = false;
   private outputData = '';
 
+  /**
+   * Creates a new persistent SSH session.
+   * 
+   * @param sessionId - Unique identifier for this session
+   * @param target - Target host IP or hostname
+   * @param username - SSH username
+   * @param type - Session type: 'interactive' for stateful operations, 'background' for long-running processes
+   * @param client - Established SSH2 client connection
+   * @param port - SSH port number (default: 22)
+   */
   constructor(
     sessionId: string,
     target: string,
@@ -87,6 +118,13 @@ export class PersistentSession extends EventEmitter {
     };
   }
 
+  /**
+   * Initializes the shell session and sets up event handlers.
+   * Must be called before executing commands.
+   * 
+   * @returns Promise that resolves when the shell is ready
+   * @throws {SSHError} If shell creation fails
+   */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
@@ -129,6 +167,15 @@ export class PersistentSession extends EventEmitter {
     });
   }
 
+  /**
+   * Executes a command in the persistent shell session.
+   * Commands are queued and executed sequentially.
+   * 
+   * @param command - The command to execute
+   * @param timeout - Command timeout in milliseconds (default: 30000)
+   * @returns Promise resolving to command result with stdout, stderr, exit code
+   * @throws {SSHError} If session is not initialized or inactive
+   */
   async executeCommand(command: string, timeout: number = 30000): Promise<CommandResult> {
     if (!this.isInitialized || !this.shell || !this.sessionInfo.isActive) {
       throw new SSHError('Session not initialized or inactive');
@@ -194,6 +241,13 @@ export class PersistentSession extends EventEmitter {
     }
   }
 
+  /**
+   * Parses accumulated output data to extract command results.
+   * Uses delimiter patterns to identify command boundaries and exit codes.
+   * Resolves the current command promise when complete output is detected.
+   * 
+   * @private
+   */
   private parseCommandOutput(): void {
     if (!this.currentCommand) return;
 
@@ -286,12 +340,39 @@ export class PersistentSession extends EventEmitter {
   }
 }
 
+/**
+ * Manages SSH connections and persistent sessions.
+ * 
+ * Features:
+ * - Connection pooling and reuse
+ * - Multiple persistent session management
+ * - Automatic connection cleanup
+ * - Session lifecycle management
+ * 
+ * @example
+ * const manager = new SSHConnectionManager();
+ * const result = await manager.executeCommand('192.168.1.100', 'user', '/path/to/key', 'ls -la');
+ * 
+ * // Or with persistent sessions
+ * const session = await manager.createSession('session-1', '192.168.1.100', 'user', 'interactive', '/path/to/key');
+ * const result = await manager.executeInSession('session-1', 'cd /tmp && pwd');
+ */
 export class SSHConnectionManager {
   private connections: Map<string, ConnectionInfo> = new Map();
   private sessions: Map<string, PersistentSession> = new Map();
 
   /**
-   * Execute a command on a target host via SSH
+   * Execute a single command on a target host via SSH.
+   * Creates a temporary connection if needed, reuses existing connections when possible.
+   * 
+   * @param host - Target host IP or hostname
+   * @param username - SSH username
+   * @param privateKeyPath - Path to SSH private key
+   * @param command - Command to execute
+   * @param port - SSH port (default: 22)
+   * @param timeout - Command timeout in milliseconds (default: 30000)
+   * @returns Command execution result
+   * @throws {SSHError} On connection or execution failure
    */
   public async executeCommand(
     host: string,
@@ -430,7 +511,17 @@ export class SSHConnectionManager {
   }
 
   /**
-   * Create a new persistent session
+   * Create a new persistent SSH session for stateful operations.
+   * Sessions maintain shell state between commands and can run in interactive or background mode.
+   * 
+   * @param sessionId - Unique session identifier
+   * @param target - Target host IP or hostname
+   * @param username - SSH username
+   * @param type - 'interactive' for stateful ops, 'background' for long-running processes
+   * @param privateKeyPath - Path to SSH private key
+   * @param port - SSH port (default: 22)
+   * @returns Initialized PersistentSession instance
+   * @throws {SSHError} If session ID already exists or connection fails
    */
   public async createSession(
     sessionId: string,
@@ -468,21 +559,29 @@ export class SSHConnectionManager {
   }
 
   /**
-   * Get an existing session by ID
+   * Get an existing session by ID.
+   * 
+   * @param sessionId - Session identifier to look up
+   * @returns PersistentSession if found, undefined otherwise
    */
   public getSession(sessionId: string): PersistentSession | undefined {
     return this.sessions.get(sessionId);
   }
 
   /**
-   * List all active sessions
+   * List all active sessions.
+   * 
+   * @returns Array of session metadata for all active sessions
    */
   public listSessions(): SessionMetadata[] {
     return Array.from(this.sessions.values()).map(session => session.getSessionInfo());
   }
 
   /**
-   * Close a specific session
+   * Close a specific session.
+   * 
+   * @param sessionId - Session identifier to close
+   * @returns true if session was found and closed, false if not found
    */
   public async closeSession(sessionId: string): Promise<boolean> {
     const session = this.sessions.get(sessionId);
@@ -509,7 +608,14 @@ export class SSHConnectionManager {
   }
 
   /**
-   * Execute a command in a specific session
+   * Execute a command in a specific session.
+   * Maintains session state between commands.
+   * 
+   * @param sessionId - Session identifier
+   * @param command - Command to execute
+   * @param timeout - Command timeout in milliseconds
+   * @returns Command execution result
+   * @throws {SSHError} If session not found
    */
   public async executeInSession(
     sessionId: string,
@@ -525,7 +631,14 @@ export class SSHConnectionManager {
   }
 
   /**
-   * Get buffered output from a background session
+   * Get buffered output from a background session.
+   * Useful for monitoring long-running processes.
+   * 
+   * @param sessionId - Session identifier
+   * @param lines - Number of recent lines to retrieve (optional)
+   * @param clear - Whether to clear the buffer after reading
+   * @returns Array of output lines
+   * @throws {SSHError} If session not found
    */
   public getSessionOutput(sessionId: string, lines?: number, clear?: boolean): string[] {
     const session = this.sessions.get(sessionId);
@@ -537,7 +650,10 @@ export class SSHConnectionManager {
   }
 
   /**
-   * Close all connections and sessions
+   * Close all connections and sessions.
+   * Gracefully shuts down all SSH connections and cleans up resources.
+   * 
+   * @returns Promise that resolves when all connections are closed
    */
   public async disconnectAll(): Promise<void> {
     const sessionPromises = Array.from(this.sessions.values()).map(session => {

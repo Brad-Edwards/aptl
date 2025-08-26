@@ -37,8 +37,35 @@ EOF
     fi
     
     echo "Red team log forwarding configured for Wazuh"
+    
+    # Configure and start Wazuh agent for red team monitoring
+    echo "Configuring Wazuh agent for red team monitoring..."
+    
+    export WAZUH_MANAGER="$SIEM_IP"
+    export AGENT_NAME="kali-redteam-$(hostname)"
+    
+    # Install Wazuh agent if not already installed
+    if [ ! -f "/var/ossec/bin/wazuh-control" ]; then
+        echo "Installing Wazuh agent..."
+        /tmp/install-wazuh-kali.sh
+    fi
+    
+    # Configure Wazuh agent
+    echo "Configuring Wazuh agent with manager: $WAZUH_MANAGER"
+    sed "s/WAZUH_MANAGER_PLACEHOLDER/$WAZUH_MANAGER/g; s/AGENT_NAME_PLACEHOLDER/$AGENT_NAME/g" \
+        /tmp/ossec-kali.conf.template > /var/ossec/etc/ossec.conf
+    
+    # Ensure log files exist
+    touch /var/log/kali_bash_history.log
+    chmod 644 /var/log/kali_bash_history.log
+    
+    # Start Wazuh agent
+    echo "Starting Wazuh agent..."
+    systemctl start wazuh-agent
+    
+    echo "Wazuh agent configured and started for red team monitoring"
 else
-    echo "SIEM not configured - skipping red team log configuration"
+    echo "SIEM_IP not configured - skipping Wazuh agent setup"
 fi
 
 # Start rsyslog

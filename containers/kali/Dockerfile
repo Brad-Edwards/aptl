@@ -19,6 +19,14 @@ RUN apt-get update && \
         iputils-ping && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install Wazuh agent and configuration files
+COPY install-wazuh-kali.sh /tmp/
+COPY ossec-kali.conf.template /tmp/
+RUN chmod +x /tmp/install-wazuh-kali.sh
+
+# Install systemd for Wazuh agent service management
+RUN apt-get update && apt-get install -y systemd systemd-sysv
+
 RUN useradd -m -s /bin/bash -G sudo kali && \
     echo 'kali:kali' | chpasswd && \
     echo 'kali ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers

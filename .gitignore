@@ -199,7 +199,6 @@ cython_debug/
 .cursorindexingignore
 .cursor/*
 !.cursor/environment.json
-!.cursor/mcp.json
 !.cursor/rules/
 
 # Node.js

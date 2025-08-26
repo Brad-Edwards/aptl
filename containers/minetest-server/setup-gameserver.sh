@@ -18,7 +18,6 @@ dnf install -y epel-release || true
 dnf install -y minetest-server
 
 echo "Step 2: Creating minetest server directories..."
-mkdir -p /opt/minetest/{worlds,games,mods}
 mkdir -p /home/labadmin/.minetest
 
 echo "Step 3: Configuring minetest server..."
@@ -34,7 +33,7 @@ max_users = 10
 port = 30000
 bind_address = 0.0.0.0
 
-# World settings
+# World settings  
 default_game = minetest_game
 
 # Security settings
@@ -66,18 +65,8 @@ chat_message_limit_per_10sec = 10
 chat_message_limit_trigger_kick = 50
 EOF
 
-echo "Step 4: Creating world and setting permissions..."
-# Create world directory
-mkdir -p /opt/minetest/worlds/demo_world
-cat > /opt/minetest/worlds/demo_world/world.mt << 'EOF'
-gameid = minetest_game
-world_name = demo_world
-enable_damage = true
-creative_mode = false
-EOF
-
-# Set proper ownership
-chown -R labadmin:labadmin /opt/minetest
+echo "Step 4: Setting permissions..."
+# Set proper ownership  
 chown -R labadmin:labadmin /home/labadmin/.minetest
 
 echo "Step 5: Creating systemd service for minetest server..."
@@ -92,7 +81,7 @@ Type=simple
 User=labadmin
 Group=labadmin
 WorkingDirectory=/opt/minetest
-ExecStart=/usr/bin/minetestserver --config /opt/minetest/minetest.conf --worldname demo_world --logfile /opt/minetest/server.log
+ExecStart=/usr/bin/minetestserver --config /opt/minetest/minetest.conf --logfile /opt/minetest/server.log
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -126,4 +115,4 @@ touch /opt/minetest/.gameserver_installed
 
 echo "Server is running on port 30000"
 echo "Logs available at: /opt/minetest/server.log"
-echo "World data at: /opt/minetest/worlds/demo_world"
+echo "World data will be created automatically in ~/.minetest/worlds/"

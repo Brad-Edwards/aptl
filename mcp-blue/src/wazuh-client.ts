@@ -46,6 +46,20 @@ export interface QueryResult<T> {
   data: T[];
 }
 
+/**
+ * Wazuh Manager API client for authentication and rule management.
+ * 
+ * Features:
+ * - JWT token authentication with automatic renewal
+ * - Manager info retrieval
+ * - Custom detection rule creation
+ * - SSL verification bypass for lab environments
+ * 
+ * @example
+ * const client = new WazuhAPIClient(config);
+ * await client.authenticate();
+ * const info = await client.getManagerInfo();
+ */
 export class WazuhAPIClient {
   private token: string | null = null;
   private tokenExpiry: number = 0;
@@ -55,7 +69,10 @@ export class WazuhAPIClient {
 
 
   /**
-   * Authenticate with Wazuh API and get JWT token
+   * Authenticate with Wazuh API and get JWT token.
+   * Automatically reuses valid tokens to avoid unnecessary API calls.
+   * 
+   * @throws {Error} If authentication fails
    */
   async authenticate(): Promise<void> {
     // Check if token is still valid
@@ -99,7 +116,10 @@ export class WazuhAPIClient {
   }
 
   /**
-   * Get information about Wazuh Manager
+   * Get information about Wazuh Manager including version and cluster details.
+   * 
+   * @returns Manager information object
+   * @throws {Error} If request fails or authentication required
    */
   async getManagerInfo(): Promise<any> {
     await this.authenticate();
@@ -130,7 +150,16 @@ export class WazuhAPIClient {
   }
 
   /**
-   * Create a custom detection rule
+   * Create a custom detection rule on the Wazuh Manager.
+   * 
+   * @param ruleXML - Complete XML rule definition
+   * @param filename - Rule file name (default: 'aptl_custom_rules.xml')
+   * @returns Rule creation response
+   * @throws {Error} If rule creation fails
+   * 
+   * @example
+   * const ruleXML = '<rule id="100001" level="10">Custom rule</rule>';
+   * await client.createRule(ruleXML, 'custom_rules.xml');
    */
   async createRule(ruleXML: string, filename: string = 'aptl_custom_rules.xml'): Promise<any> {
     await this.authenticate();
@@ -163,11 +192,35 @@ export class WazuhAPIClient {
   }
 }
 
+/**
+ * Wazuh Indexer (OpenSearch) client for searching alerts and logs.
+ * 
+ * Features:
+ * - Alert searching with filtering and sorting
+ * - Raw log searching across archives
+ * - Cluster health monitoring
+ * - Query building for OpenSearch syntax
+ * 
+ * @example
+ * const client = new WazuhIndexerClient(config);
+ * const alerts = await client.searchAlerts({ time_range: '1h', min_level: 5 });
+ */
 export class WazuhIndexerClient {
   constructor(private config: WazuhConfig) {}
 
   /**
-   * Search alerts in Wazuh indices
+   * Search alerts in Wazuh indices with filtering and sorting.
+   * 
+   * @param query - Alert query parameters
+   * @returns Search results with count and formatted alert data
+   * @throws {Error} If search request fails
+   * 
+   * @example
+   * const results = await client.searchAlerts({
+   *   time_range: '24h',
+   *   min_level: 10,
+   *   source_ip: '172.20.0.30'
+   * });
    */
   async searchAlerts(query: AlertQuery): Promise<QueryResult<Alert>> {
     const { indexer } = this.config.wazuh;
@@ -205,7 +258,17 @@ export class WazuhIndexerClient {
   }
 
   /**
-   * Search raw logs in Wazuh archives
+   * Search raw logs in Wazuh archives before rule processing.
+   * 
+   * @param query - Log query parameters
+   * @returns Search results with count and formatted log entries
+   * @throws {Error} If search request fails
+   * 
+   * @example
+   * const results = await client.searchLogs({
+   *   search_term: 'failed login',
+   *   time_range: '6h'
+   * });
    */
   async searchLogs(query: LogQuery): Promise<QueryResult<LogEntry>> {
     const { indexer } = this.config.wazuh;
@@ -243,7 +306,14 @@ export class WazuhIndexerClient {
   }
 
   /**
-   * Get cluster health from indexer
+   * Get cluster health status from Wazuh Indexer.
+   * 
+   * @returns Cluster health information including status and node count
+   * @throws {Error} If health check fails
+   * 
+   * @example
+   * const health = await client.getClusterHealth();
+   * console.log(`Cluster status: ${health.status}`);
    */
   async getClusterHealth(): Promise<any> {
     const { indexer } = this.config.wazuh;
@@ -274,7 +344,12 @@ export class WazuhIndexerClient {
   }
 
   /**
-   * Build OpenSearch query for alerts
+   * Build OpenSearch query for alert searching.
+   * Constructs bool query with filters for time range, level, source IP, and rule ID.
+   * 
+   * @param query - Alert query parameters
+   * @returns OpenSearch query object
+   * @private
    */
   private buildAlertQuery(query: AlertQuery): any {
     const filters: any[] = [];
@@ -337,7 +412,12 @@ export class WazuhIndexerClient {
   }
 
   /**
-   * Build OpenSearch query for raw logs
+   * Build OpenSearch query for log searching.
+   * Constructs bool query with filters and text matching.
+   * 
+   * @param query - Log query parameters
+   * @returns OpenSearch query object
+   * @private
    */
   private buildLogQuery(query: LogQuery): any {
     const filters: any[] = [];
@@ -401,7 +481,11 @@ export class WazuhIndexerClient {
   }
 
   /**
-   * Format alert data for consistent output
+   * Format alert data for consistent output structure.
+   * 
+   * @param source - Raw alert source from OpenSearch
+   * @returns Formatted alert object
+   * @private
    */
   private formatAlert(source: any): Alert {
     return {
@@ -416,7 +500,11 @@ export class WazuhIndexerClient {
   }
 
   /**
-   * Format log data for consistent output
+   * Format log data for consistent output structure.
+   * 
+   * @param source - Raw log source from OpenSearch
+   * @returns Formatted log entry object
+   * @private
    */
   private formatLog(source: any): LogEntry {
     return {

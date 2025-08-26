@@ -1,89 +1,93 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { InstanceSchema, DisabledInstanceSchema } from './config.js';
+import { KaliInstanceSchema } from './config.js';
 
-describe('Schema Validation', () => {
-  describe('InstanceSchema', () => {
-    it('should validate a complete instance', () => {
-      const validInstance = {
-        public_ip: '1.2.3.4',
-        private_ip: '10.0.1.10',
-        ssh_key: '/path/to/key',
-        ssh_user: 'ec2-user',
-        instance_type: 't3.large',
-        enabled: true,
-        ports: { ssh: 22, https: 443 }
-      };
+describe('KaliInstanceSchema', () => {
+  it('should validate a complete Kali instance', () => {
+    const validKali = {
+      public_ip: '172.20.0.30',
+      private_ip: '172.20.0.30',
+      ssh_key: '/path/to/key',
+      ssh_user: 'kali',
+      ssh_port: 2023,
+      enabled: true
+    };
 
-      expect(() => InstanceSchema.parse(validInstance)).not.toThrow();
-    });
-
-    it('should default enabled to true', () => {
-      const instance = {
-        public_ip: '1.2.3.4',
-        private_ip: '10.0.1.10',
-        ssh_key: '/path/to/key',
-        ssh_user: 'ec2-user',
-        instance_type: 't3.large'
-      };
-
-      const result = InstanceSchema.parse(instance);
-      expect(result.enabled).toBe(true);
-    });
-
-    it('should reject invalid IP addresses', () => {
-      const invalidInstance = {
-        public_ip: 'not-an-ip',
-        private_ip: '10.0.1.10',
-        ssh_key: '/path/to/key',
-        ssh_user: 'ec2-user',
-        instance_type: 't3.large'
-      };
-
-      expect(() => InstanceSchema.parse(invalidInstance)).toThrow();
-    });
-
-    it('should allow missing optional ports', () => {
-      const instance = {
-        public_ip: '1.2.3.4',
-        private_ip: '10.0.1.10',
-        ssh_key: '/path/to/key',
-        ssh_user: 'ec2-user',
-        instance_type: 't3.large'
-      };
-
-      expect(() => InstanceSchema.parse(instance)).not.toThrow();
-    });
+    expect(() => KaliInstanceSchema.parse(validKali)).not.toThrow();
   });
 
-  describe('DisabledInstanceSchema', () => {
-    it('should validate disabled instance', () => {
-      const disabledInstance = { enabled: false };
-      expect(() => DisabledInstanceSchema.parse(disabledInstance)).not.toThrow();
-    });
+  it('should default enabled to true', () => {
+    const kali = {
+      public_ip: '172.20.0.30',
+      private_ip: '172.20.0.30',
+      ssh_key: '/path/to/key',
+      ssh_user: 'kali'
+    };
 
-    it('should reject enabled instance', () => {
-      const enabledInstance = { enabled: true };
-      expect(() => DisabledInstanceSchema.parse(enabledInstance)).toThrow();
-    });
+    const result = KaliInstanceSchema.parse(kali);
+    expect(result.enabled).toBe(true);
   });
 
-  describe('Union Schema', () => {
-    const UnionSchema = z.union([InstanceSchema, DisabledInstanceSchema]);
+  it('should default ssh_port to 22', () => {
+    const kali = {
+      public_ip: '172.20.0.30',
+      private_ip: '172.20.0.30',
+      ssh_key: '/path/to/key',
+      ssh_user: 'kali'
+    };
 
-    it('should accept either enabled or disabled instance', () => {
-      const enabledInstance = {
-        public_ip: '1.2.3.4',
-        private_ip: '10.0.1.10',
-        ssh_key: '/path/to/key',
-        ssh_user: 'ec2-user',
-        instance_type: 't3.large'
-      };
-
-      const disabledInstance = { enabled: false };
-
-      expect(() => UnionSchema.parse(enabledInstance)).not.toThrow();
-      expect(() => UnionSchema.parse(disabledInstance)).not.toThrow();
-    });
+    const result = KaliInstanceSchema.parse(kali);
+    expect(result.ssh_port).toBe(22);
   });
-}); 
+
+  it('should reject invalid IP addresses', () => {
+    const invalidKali = {
+      public_ip: 'not-an-ip',
+      private_ip: '172.20.0.30',
+      ssh_key: '/path/to/key',
+      ssh_user: 'kali'
+    };
+
+    expect(() => KaliInstanceSchema.parse(invalidKali)).toThrow();
+  });
+
+  it('should require all mandatory fields', () => {
+    const incompleteKali = {
+      public_ip: '172.20.0.30'
+      // Missing required fields
+    };
+
+    expect(() => KaliInstanceSchema.parse(incompleteKali)).toThrow();
+  });
+
+  it('should accept custom ssh_port', () => {
+    const kaliWithCustomPort = {
+      public_ip: '172.20.0.30',
+      private_ip: '172.20.0.30',
+      ssh_key: '/path/to/key',
+      ssh_user: 'kali',
+      ssh_port: 2023
+    };
+
+    const result = KaliInstanceSchema.parse(kaliWithCustomPort);
+    expect(result.ssh_port).toBe(2023);
+  });
+});
+
+describe('Schema Error Handling', () => {
+  it('should provide meaningful error messages for invalid data', () => {
+    const invalidKali = {
+      public_ip: 'invalid-ip',
+      private_ip: '172.20.0.30',
+      ssh_key: '',
+      ssh_user: 123 // Should be string
+    };
+
+    expect(() => KaliInstanceSchema.parse(invalidKali)).toThrow();
+  });
+
+  it('should handle missing required fields', () => {
+    const emptyObject = {};
+    expect(() => KaliInstanceSchema.parse(emptyObject)).toThrow();
+  });
+});

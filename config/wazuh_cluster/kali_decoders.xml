@@ -1,0 +1,13 @@
+<decoder name="kali_commands">
+  <program_name>^kali_commands</program_name>
+</decoder>
+
+<decoder name="kali_commands_detail">
+  <parent>kali_commands</parent>
+  <regex>(\S+ \S+) KALI_USER=(\S+) PWD=(\S+) COMMAND=(.+)</regex>
+  <order>timestamp,user,pwd,command</order>
+</decoder>
+
+<decoder name="kali_auth">
+  <program_name>^kali_auth</program_name>
+</decoder>

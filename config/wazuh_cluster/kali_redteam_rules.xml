@@ -1,0 +1,51 @@
+<group name="kali_redteam">
+
+  <!-- Kali Authentication Events (Login/Logout) - No Alerts -->
+  <rule id="300001" level="3">
+    <if_group>authentication</if_group>
+    <hostname>kali-redteam</hostname>
+    <description>Kali Red Team Authentication Event</description>
+    <group>kali_auth,authentication,</group>
+  </rule>
+  
+  <!-- SSH Login Success -->
+  <rule id="300002" level="3">
+    <if_sid>5715</if_sid>
+    <hostname>kali-redteam</hostname>
+    <description>Kali Red Team SSH Login Success</description>
+    <group>kali_auth,ssh_login,</group>
+  </rule>
+
+  <!-- SSH Logout -->
+  <rule id="300003" level="3">
+    <if_sid>5502</if_sid>
+    <hostname>kali-redteam</hostname>
+    <description>Kali Red Team SSH Logout</description>
+    <group>kali_auth,ssh_logout,</group>
+  </rule>
+
+  <!-- Kali Command Execution - Information Only -->
+  <rule id="300010" level="3">
+    <decoded_as>kali_commands</decoded_as>
+    <match>KALI_USER=</match>
+    <description>Kali Red Team Command Execution</description>
+    <group>kali_command,command_execution,</group>
+  </rule>
+
+  <!-- Kali Tool Execution - Specific Tools (No Alerts) -->
+  <rule id="300011" level="3">
+    <if_sid>300010</if_sid>
+    <match>nmap|metasploit|burp|hydra|john|hashcat|gobuster|nikto</match>
+    <description>Kali Red Team Security Tool Execution</description>
+    <group>kali_command,redteam_tool,</group>
+  </rule>
+
+  <!-- System Events from Kali -->
+  <rule id="300020" level="3">
+    <decoded_as>kali_system</decoded_as>
+    <hostname>kali-redteam</hostname>
+    <description>Kali Red Team System Event</description>
+    <group>kali_system,</group>
+  </rule>
+
+</group>

@@ -1,6 +1,20 @@
 #!/bin/bash
 set -e
 
+# Function to setup Wazuh agent environment
+setup_wazuh_env() {
+    if [ -n "$SIEM_IP" ]; then
+        export WAZUH_MANAGER="$SIEM_IP"
+        echo "WAZUH_MANAGER set to $WAZUH_MANAGER"
+        
+        # Create environment file for systemd service
+        echo "WAZUH_MANAGER=$WAZUH_MANAGER" > /etc/environment.wazuh
+    else
+        echo "ERROR: SIEM_IP not set - Wazuh agent installation will fail"
+        exit 1
+    fi
+}
+
 # Configure rsyslog based on environment variables
 if [ -n "$SIEM_IP" ]; then
     echo "Configuring red team log forwarding to Wazuh SIEM..."
@@ -38,7 +52,7 @@ EOF
     
     echo "Red team log forwarding configured for Wazuh"
 else
-    echo "SIEM not configured - skipping red team log configuration"
+    echo "SIEM_IP not configured - skipping red team log configuration"
 fi
 
 # Start rsyslog
@@ -79,6 +93,9 @@ fi
 
 # Ensure proper ownership
 chown -R kali:kali /home/kali/
+
+# Setup Wazuh environment for systemd service
+setup_wazuh_env
 
 echo "=== APTL Kali Red Team Container Ready ==="
 echo "SSH: ssh kali@<container_ip>"

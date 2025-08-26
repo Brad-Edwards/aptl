@@ -38,7 +38,7 @@
   <!-- CRITICAL: Monitor all bash commands -->
   <localfile>
     <log_format>syslog</log_format>
-    <location>/var/log/kali_bash_history.log</location>
+    <location>/var/log/bash_history.log</location>
     <alias>kali_commands</alias>
   </localfile>
 

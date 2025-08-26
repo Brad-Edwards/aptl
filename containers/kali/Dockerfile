@@ -19,12 +19,7 @@ RUN apt-get update && \
         iputils-ping && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Wazuh agent and configuration files
-COPY install-wazuh-kali.sh /tmp/
-COPY ossec-kali.conf.template /tmp/
-RUN chmod +x /tmp/install-wazuh-kali.sh
-
-# Install systemd for Wazuh agent service management
+# Install systemd for services
 RUN apt-get update && apt-get install -y systemd systemd-sysv
 
 RUN useradd -m -s /bin/bash -G sudo kali && \
@@ -54,6 +49,19 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 RUN sudo -u kali ssh-keygen -t rsa -b 2048 -f /home/kali/.ssh/id_rsa -N "" && \
     chown -R kali:kali /home/kali/.ssh/
 
+# Copy installation scripts to proper location
+RUN mkdir -p /opt/kali-redteam/scripts
+COPY install-scripts/ /opt/kali-redteam/scripts/
+RUN chmod +x /opt/kali-redteam/scripts/*.sh
+
+# Copy and enable the one-time installation service
+COPY kali-lab-install.service /etc/systemd/system/
+RUN systemctl enable kali-lab-install.service
+
+# Enable SSH service for systemd
+RUN systemctl enable ssh
+
+# Copy user scripts
 COPY --chown=kali:kali scripts/ /home/kali/
 
 RUN chmod +x /home/kali/*.sh
@@ -74,4 +82,4 @@ USER root
 
 # Entrypoint will handle service startup and configuration
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["/usr/sbin/sshd", "-D"]
+CMD ["/usr/sbin/init"]

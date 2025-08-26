@@ -1,6 +1,20 @@
 #!/bin/bash
 set -e
 
+# Function to setup Wazuh agent environment
+setup_wazuh_env() {
+    if [ -n "$SIEM_IP" ]; then
+        export WAZUH_MANAGER="$SIEM_IP"
+        echo "WAZUH_MANAGER set to $WAZUH_MANAGER"
+        
+        # Create environment file for systemd service
+        echo "WAZUH_MANAGER=$WAZUH_MANAGER" > /etc/environment.wazuh
+    else
+        echo "ERROR: SIEM_IP not set - Wazuh agent installation will fail"
+        exit 1
+    fi
+}
+
 # Configure rsyslog based on environment variables
 if [ -n "$SIEM_IP" ]; then
     echo "Configuring red team log forwarding to Wazuh SIEM..."
@@ -37,35 +51,8 @@ EOF
     fi
     
     echo "Red team log forwarding configured for Wazuh"
-    
-    # Configure and start Wazuh agent for red team monitoring
-    echo "Configuring Wazuh agent for red team monitoring..."
-    
-    export WAZUH_MANAGER="$SIEM_IP"
-    export AGENT_NAME="kali-redteam-$(hostname)"
-    
-    # Install Wazuh agent if not already installed
-    if [ ! -f "/var/ossec/bin/wazuh-control" ]; then
-        echo "Installing Wazuh agent..."
-        /tmp/install-wazuh-kali.sh
-    fi
-    
-    # Configure Wazuh agent
-    echo "Configuring Wazuh agent with manager: $WAZUH_MANAGER"
-    sed "s/WAZUH_MANAGER_PLACEHOLDER/$WAZUH_MANAGER/g; s/AGENT_NAME_PLACEHOLDER/$AGENT_NAME/g" \
-        /tmp/ossec-kali.conf.template > /var/ossec/etc/ossec.conf
-    
-    # Ensure log files exist
-    touch /var/log/kali_bash_history.log
-    chmod 644 /var/log/kali_bash_history.log
-    
-    # Start Wazuh agent
-    echo "Starting Wazuh agent..."
-    systemctl start wazuh-agent
-    
-    echo "Wazuh agent configured and started for red team monitoring"
 else
-    echo "SIEM_IP not configured - skipping Wazuh agent setup"
+    echo "SIEM_IP not configured - skipping red team log configuration"
 fi
 
 # Start rsyslog
@@ -106,6 +93,9 @@ fi
 
 # Ensure proper ownership
 chown -R kali:kali /home/kali/
+
+# Setup Wazuh environment for systemd service
+setup_wazuh_env
 
 echo "=== APTL Kali Red Team Container Ready ==="
 echo "SSH: ssh kali@<container_ip>"

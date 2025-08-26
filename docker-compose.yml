@@ -140,6 +140,37 @@ services:
     security_opt:
       - seccomp:unconfined
 
+  # Minetest Server Container - Game server for memory scanning demo
+  minetest-server:
+    build:
+      context: ./containers/minetest-server
+      dockerfile: Dockerfile
+    container_name: aptl-minetest-server
+    hostname: minetest-server-host
+    restart: unless-stopped
+    networks:
+      aptl-network:
+        ipv4_address: 172.20.0.21
+    ports:
+      - "2024:22"    # SSH access
+    environment:
+      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+    cap_add:
+      - SYS_NICE        # For process scheduling
+      - SYS_ADMIN       # Required for systemd in container
+      - SYS_RESOURCE    # For setting limits and OOM score
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ./keys:/keys:ro
+      - minetest_server_logs:/var/log
+    tmpfs:
+      - /run
+      - /tmp
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      - victim
 
   # Kali Container - Red team attack platform  
   kali:
@@ -194,4 +225,5 @@ volumes:
   
   # Application volumes
   victim_logs:
+  minetest_server_logs:
   kali_operations:

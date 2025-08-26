@@ -62,6 +62,9 @@ RUN chmod +x /opt/purple-team/scripts/install-falco.sh
 COPY minetest-server-install.sh /opt/purple-team/scripts/
 RUN chmod +x /opt/purple-team/scripts/minetest-server-install.sh
 
+COPY setup-gameserver.sh /opt/purple-team/scripts/
+RUN chmod +x /opt/purple-team/scripts/setup-gameserver.sh
+
 COPY ossec.conf.template /opt/purple-team/scripts/
 
 RUN mkdir -p /etc/falco/config.d
@@ -70,8 +73,8 @@ COPY falco_custom.yaml /etc/falco/config.d/
 COPY minetest-server-install.service /etc/systemd/system/
 RUN systemctl enable minetest-server-install.service
 
-# Expose only SSH and syslog
-EXPOSE 22 514
+# Expose SSH, syslog, and minetest server port
+EXPOSE 22 514 30000
 
 VOLUME ["/var/log", "/home"]
 

@@ -387,3 +387,5 @@ archive/
 keys/*
 
 config/wazuh_indexer_ssl_certs/*
+
+notes/*

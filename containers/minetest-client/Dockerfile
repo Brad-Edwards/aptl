@@ -1,4 +1,5 @@
-# Minetest server container using Rocky Linux 9 (RHEL-compatible)
+# Minetest client container using Rocky Linux 9 (RHEL-compatible)
+# Based on victim container template with minetest client capabilities
 FROM rockylinux:9
 
 RUN dnf install -y epel-release && \
@@ -59,16 +60,16 @@ RUN chmod +x /opt/purple-team/scripts/install-wazuh.sh
 COPY install-falco.sh /opt/purple-team/scripts/
 RUN chmod +x /opt/purple-team/scripts/install-falco.sh
 
-COPY minetest-server-install.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/minetest-server-install.sh
+COPY install-all.sh /opt/purple-team/scripts/
+RUN chmod +x /opt/purple-team/scripts/install-all.sh
 
 COPY ossec.conf.template /opt/purple-team/scripts/
 
 RUN mkdir -p /etc/falco/config.d
 COPY falco_custom.yaml /etc/falco/config.d/
 
-COPY minetest-server-install.service /etc/systemd/system/
-RUN systemctl enable minetest-server-install.service
+COPY minetest-client-install.service /etc/systemd/system/
+RUN systemctl enable minetest-client-install.service
 
 # Expose only SSH and syslog
 EXPOSE 22 514

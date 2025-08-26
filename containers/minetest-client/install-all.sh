@@ -4,13 +4,13 @@ set -e
 echo "=== Purple Team Lab Installation Starting ==="
 
 # Check if already installed
-if [ -f /var/ossec/.minetest_server_installed ]; then
-    echo "Minetest server services already installed, exiting..."
+if [ -f /var/ossec/.minetest-client_installed ]; then
+    echo "All services already installed, exiting..."
     exit 0
 fi
 
 echo "Step 1: Installing Wazuh Agent..."
-export AGENT_NAME="minetest-server-$(hostname)-$(date +%s)"
+export AGENT_NAME="minetest-client-$(hostname)-$(date +%s)"
 /opt/purple-team/scripts/install-wazuh.sh
 
 echo "Step 2: Installing Falco..."
@@ -28,4 +28,4 @@ systemctl restart wazuh-agent
 echo "=== All Purple Team Lab Services Installed ==="
 
 # Create flag to prevent re-running
-touch /var/ossec/.minetest_server_installed
+touch /var/ossec/.minetest-client_installed

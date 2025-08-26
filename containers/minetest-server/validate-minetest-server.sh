@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Victim Container Validation Script
-# Run from deployment system or Kali container to verify victim is operational
+# Minetest Server Container Validation Script
+# Run from deployment system or Kali container to verify minetest-server is operational
 
 set -e
 
@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Default values
-VICTIM_IP=""
+MINETEST_SERVER_IP=""
 SSH_KEY=""
 SSH_PORT="22"
 SIEM_IP=""
@@ -21,8 +21,8 @@ VERBOSE=false
 
 # Parse arguments
 usage() {
-    echo "Usage: $0 -h <victim-ip> -k <ssh-key-path> [-p <ssh-port>] [-s <siem-ip>] [-t <siem-type>] [-v]"
-    echo "  -h: Victim host IP address"
+    echo "Usage: $0 -h <minetest-server-ip> -k <ssh-key-path> [-p <ssh-port>] [-s <siem-ip>] [-t <siem-type>] [-v]"
+    echo "  -h: Minetest server host IP address"
     echo "  -k: Path to labadmin SSH private key"
     echo "  -p: SSH port (default: 22)"
     echo "  -s: SIEM IP address (optional, for log forwarding test)"
@@ -33,7 +33,7 @@ usage() {
 
 while getopts "h:k:p:s:t:v" opt; do
     case $opt in
-        h) VICTIM_IP="$OPTARG" ;;
+        h) MINETEST_SERVER_IP="$OPTARG" ;;
         k) SSH_KEY="$OPTARG" ;;
         p) SSH_PORT="$OPTARG" ;;
         s) SIEM_IP="$OPTARG" ;;
@@ -44,8 +44,8 @@ while getopts "h:k:p:s:t:v" opt; do
 done
 
 # Validate required arguments
-if [ -z "$VICTIM_IP" ] || [ -z "$SSH_KEY" ]; then
-    echo -e "${RED}Error: Victim IP and SSH key are required${NC}"
+if [ -z "$MINETEST_SERVER_IP" ] || [ -z "$SSH_KEY" ]; then
+    echo -e "${RED}Error: Minetest server IP and SSH key are required${NC}"
     usage
 fi
 
@@ -55,10 +55,10 @@ if [ ! -f "$SSH_KEY" ]; then
 fi
 
 # SSH command alias
-SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p $SSH_PORT -i $SSH_KEY labadmin@$VICTIM_IP"
+SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p $SSH_PORT -i $SSH_KEY labadmin@$MINETEST_SERVER_IP"
 
-echo "=== APTL Victim Container Validation ==="
-echo "Target: $VICTIM_IP"
+echo "=== APTL Minetest Server Container Validation ==="
+echo "Target: $MINETEST_SERVER_IP"
 echo ""
 
 # Test 1: SSH Connectivity
@@ -67,7 +67,7 @@ if $SSH_CMD "echo 'SSH OK'"; then
     echo -e "${GREEN}PASS${NC}"
 else
     echo -e "${RED}FAIL${NC}"
-    echo "   Cannot establish SSH connection to labadmin@$VICTIM_IP"
+    echo "   Cannot establish SSH connection to labadmin@$MINETEST_SERVER_IP"
     exit 1
 fi
 
@@ -142,7 +142,7 @@ if [ ! -z "$SIEM_IP" ]; then
     
     # Send test log
     echo -n "   - Sending test log entry... "
-    TEST_MSG="VICTIM_VALIDATION: Test from $HOSTNAME at $(date +%s)"
+    TEST_MSG="MINETEST_SERVER_VALIDATION: Test from $HOSTNAME at $(date +%s)"
     $SSH_CMD "logger -p auth.info '$TEST_MSG'" 2>/dev/null
     echo -e "${GREEN}SENT${NC}"
     if [ "$VERBOSE" = true ]; then
@@ -199,4 +199,4 @@ if [ ! -z "$SIEM_IP" ]; then
 fi
 
 echo ""
-echo "Victim container at $VICTIM_IP is operational"
+echo "Minetest server container at $MINETEST_SERVER_IP is operational"

@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Minetest server container
-- Minetest client container
+- Minetest server container and MCP
+- Minetest client container and MCP
 
 ### Fixed
 

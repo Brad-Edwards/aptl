@@ -1,10 +1,10 @@
-# APTL Victim Containers
+# APTL Minetest Server Container
 
-This directory contains the containerized victim machines for the Purple Team Lab.
+This directory contains the Minetest server container for the GameConqueror memory scanning demo scenario.
 
 ## Architecture
 
-The victim containers support dual deployment modes:
+The minetest-server container supports dual deployment modes:
 1. **Local Development**: Uses volume-mounted SSH keys
 2. **AWS Production**: Uses environment variables
 
@@ -21,12 +21,12 @@ ssh-keygen -t ed25519 -f ~/.ssh/aptl-labadmin -C "labadmin@aptl"
 ### 2. Build and Run Locally
 ```bash
 # Build the base image
-docker build -t aptl-victim:latest .
+docker build -t aptl-minetest-server:latest .
 
 # Run with local compose file
 docker-compose -f docker-compose.local.yml up -d
 
-# Access victim container
+# Access minetest-server container
 ssh -i ~/.ssh/aptl-labadmin -p 2222 labadmin@localhost
 ```
 
@@ -64,24 +64,26 @@ The `entrypoint.sh` script checks for SSH keys in this order:
 
 This allows the same image to work in both environments without modification.
 
+## Environment Variables
+
+The minetest-server container uses these environment variables:
+
+- **SIEM_IP**: IP address of Wazuh Manager for log forwarding (default: 172.20.0.10)
+- **LABADMIN_SSH_KEY_FILE**: Path to SSH public key file (default: /keys/aptl_lab_key.pub)
+
+These match the standard victim container configuration for consistency.
+
 ## Container Scenarios
 
-### Base Victim
-- Standard RHEL-based system
-- SSH, HTTP, FTP services
-- Weak users (if enabled)
-
-### Web Victim
-- DVWA, WebGoat installations
-- Additional web vulnerabilities
-- PHP, MySQL services
-
-### SSH Victim
+### Minetest Server Scenario
+- Standard RHEL-based system with future Minetest server installation
+- SSH access for red team operations
+- Memory scanning targets for GameConqueror demo
 - Weak SSH configurations
 - Multiple authentication methods
 - Brute-force targets
 
-### Multi-Service Victim
+### Additional Scenarios (if implemented)
 - Multiple vulnerable services
 - Telnet, FTP, SMB
 - Simulates legacy systems
@@ -95,7 +97,7 @@ This allows the same image to work in both environments without modification.
 | `SIEM_TYPE` | Type of SIEM (qradar/splunk) | `qradar` |
 | `SIEM_PORT` | SIEM syslog port (optional) | `514` |
 | `ENABLE_WEAK_USERS` | Create users with weak passwords | `true` |
-| `SCENARIO` | Victim scenario type | `web`, `ssh`, `multi` |
+| `SCENARIO` | Container scenario type | `minetest-server` |
 
 ## Testing
 
@@ -118,29 +120,29 @@ This allows the same image to work in both environments without modification.
 ### SSH Access Issues
 ```bash
 # Check if key was properly installed
-docker exec aptl-victim-base cat /home/labadmin/.ssh/authorized_keys
+docker exec aptl-minetest-server cat /home/labadmin/.ssh/authorized_keys
 
 # Check SSH logs
-docker exec aptl-victim-base journalctl -u sshd -f
+docker exec aptl-minetest-server journalctl -u sshd -f
 ```
 
 ### Log Forwarding Issues
 ```bash
 # Check rsyslog configuration
-docker exec aptl-victim-base cat /etc/rsyslog.d/90-forward.conf
+docker exec aptl-minetest-server cat /etc/rsyslog.d/90-forward.conf
 
 # Test manual log entry
-docker exec aptl-victim-base logger "TEST: Manual log entry"
+docker exec aptl-minetest-server logger "TEST: Manual log entry"
 
 # Check rsyslog status
-docker exec aptl-victim-base systemctl status rsyslog
+docker exec aptl-minetest-server systemctl status rsyslog
 ```
 
 ### Service Issues
 ```bash
 # Check all services
-docker exec aptl-victim-base systemctl list-units --failed
+docker exec aptl-minetest-server systemctl list-units --failed
 
 # Restart a service
-docker exec aptl-victim-base systemctl restart httpd
+docker exec aptl-minetest-server systemctl restart httpd
 ```

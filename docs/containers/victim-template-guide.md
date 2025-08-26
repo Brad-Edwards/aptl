@@ -88,8 +88,7 @@ cp -r containers/victim containers/[scenario-name]
 - [ ] Plan what goes in core script vs child scripts
 
 ### Container Files
-- [ ] Dockerfile inherits from victim context
-- [ ] Custom entrypoint calls parent `entrypoint.sh`
+- [ ] Dockerfile uses copied victim files (no changes needed to entrypoint.sh)
 - [ ] One-off service file follows `lab-install.service` pattern
 - [ ] Core script follows `install-all.sh` pattern
 - [ ] Child scripts for specific components as needed

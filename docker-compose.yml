@@ -172,6 +172,38 @@ services:
     depends_on:
       - victim
 
+  # Minetest Client Container - Client for memory scanning demo
+  minetest-client:
+    build:
+      context: ./containers/minetest-client
+      dockerfile: Dockerfile
+    container_name: aptl-minetest-client
+    hostname: minetest-client-host
+    restart: unless-stopped
+    networks:
+      aptl-network:
+        ipv4_address: 172.20.0.23
+    ports:
+      - "2025:22"    # SSH access
+    environment:
+      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+    cap_add:
+      - SYS_NICE        # For process scheduling
+      - SYS_ADMIN       # Required for systemd in container
+      - SYS_RESOURCE    # For setting limits and OOM score
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ./keys:/keys:ro
+      - minetest_client_logs:/var/log
+    tmpfs:
+      - /run
+      - /tmp
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      - victim
+
   # Kali Container - Red team attack platform  
   kali:
     build:
@@ -226,4 +258,5 @@ volumes:
   # Application volumes
   victim_logs:
   minetest_server_logs:
+  minetest_client_logs:
   kali_operations:

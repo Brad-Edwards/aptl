@@ -203,8 +203,6 @@ services:
       - /tmp
     security_opt:
       - seccomp:unconfined
-    depends_on:
-      - victim
 
   # Kali Container - Red team attack platform  
   kali:

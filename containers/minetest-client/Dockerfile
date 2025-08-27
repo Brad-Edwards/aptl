@@ -87,8 +87,8 @@ COPY falco_custom.yaml /etc/falco/config.d/
 COPY minetest-client-install.service /etc/systemd/system/
 RUN systemctl enable minetest-client-install.service
 
-# Expose SSH, syslog, and RDP port
-EXPOSE 22 514 3389
+# Expose SSH, syslog, and VNC port
+EXPOSE 22 514 5901
 
 VOLUME ["/var/log", "/home"]
 

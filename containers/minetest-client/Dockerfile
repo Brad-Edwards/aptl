@@ -38,14 +38,14 @@ RUN systemctl enable rsyslog ssh systemd-user-sessions && \
     systemctl enable systemd-user-sessions.service && \
     ln -sf /usr/lib/systemd/system/systemd-user-sessions.service /etc/systemd/system/multi-user.target.wants/
 
-# Configure SSH
+# Configure SSH (keep password auth disabled for SSH)
 RUN mkdir /var/run/sshd && \
     ssh-keygen -A && \
     sed -i 's/#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && \
     sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 
-# Create labadmin user
+# Create labadmin user (SSH key auth only)
 RUN useradd -m -s /bin/bash labadmin && \
     usermod -aG sudo labadmin && \
     echo "labadmin ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/labadmin && \
@@ -54,6 +54,13 @@ RUN useradd -m -s /bin/bash labadmin && \
 RUN mkdir -p /home/labadmin/.ssh && \
     chmod 700 /home/labadmin/.ssh && \
     chown -R labadmin:labadmin /home/labadmin/.ssh
+
+# Create rdpuser for GUI access (password auth)
+RUN useradd -m -s /bin/bash rdpuser && \
+    usermod -aG sudo rdpuser && \
+    echo "rdpuser:rdppass123" | chpasswd && \
+    echo "rdpuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/rdpuser && \
+    chmod 440 /etc/sudoers.d/rdpuser
 
 RUN mkdir -p /opt/purple-team/scripts /etc/rsyslog.d
 

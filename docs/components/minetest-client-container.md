@@ -6,7 +6,7 @@ The Minetest client container provides a platform for memory scanning operations
 
 - **Base Image**: rockylinux:9
 - **Packages**: minetest, gameconqueror, xrdp
-- **User**: `labadmin` with sudo privileges
+- **User**: `labadmin` with sudo privileges, `rdpuser` with password authentication
 - **SSH**: Key-based authentication only (port 22, mapped to host 2025)
 
 See [containers/minetest-client/Dockerfile](../../containers/minetest-client/Dockerfile) for complete build configuration.

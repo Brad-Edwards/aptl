@@ -204,6 +204,40 @@ services:
     security_opt:
       - seccomp:unconfined
 
+  # Minecraft Server Container - Official Minecraft server for testing
+  minecraft-server:
+    build:
+      context: ./containers/minecraft-server
+      dockerfile: Dockerfile
+    container_name: aptl-minecraft-server
+    hostname: minecraft-server-host
+    restart: unless-stopped
+    networks:
+      aptl-network:
+        ipv4_address: 172.20.0.22
+    ports:
+      - "2026:22"     # SSH access
+      - "25565:25565" # Minecraft server port
+    environment:
+      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+    cap_add:
+      - SYS_NICE        # For process scheduling
+      - SYS_ADMIN       # Required for systemd in container
+      - SYS_RESOURCE    # For setting limits and OOM score
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ./keys:/keys:ro
+      - minecraft_server_logs:/var/log
+      - minecraft_server_data:/opt/minecraft-server
+    tmpfs:
+      - /run
+      - /tmp
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      - victim
+
   # Kali Container - Red team attack platform  
   kali:
     build:
@@ -259,4 +293,6 @@ volumes:
   victim_logs:
   minetest_server_logs:
   minetest_client_logs:
+  minecraft_server_logs:
+  minecraft_server_data:
   kali_operations:

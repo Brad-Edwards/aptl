@@ -185,8 +185,8 @@ services:
       aptl-network:
         ipv4_address: 172.20.0.23
     ports:
-      - "2025:22"    # SSH access
-      - "3390:3389"  # RDP access
+      - "2025:22"    # SSH access  
+      - "5901:5901"  # VNC access
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub

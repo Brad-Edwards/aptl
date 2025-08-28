@@ -1,0 +1,59 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+
+echo "Setting up APTL SSH access..."
+
+# Fix abc user shell for SSH login
+if grep -q "abc:x:1000:1000::/config:/bin/false" /etc/passwd; then
+    echo "Updating abc user shell to enable SSH login..."
+    sed -i 's|abc:x:1000:1000::/config:/bin/false|abc:x:1000:1000::/config:/bin/bash|' /etc/passwd
+fi
+
+# Setup SSH directory structure
+mkdir -p /config/.ssh
+chmod 700 /config/.ssh
+
+# Setup SSH keys from multiple sources
+key_added=false
+
+# Option 1: Volume-mounted key file (local dev)
+if [ -f "/keys/aptl_lab_key.pub" ]; then
+    echo "Found volume-mounted SSH key at /keys/aptl_lab_key.pub"
+    cat /keys/aptl_lab_key.pub >> /config/.ssh/authorized_keys
+    key_added=true
+fi
+
+# Option 2: Environment variable (AWS/production) 
+if [ -n "$LABADMIN_SSH_KEY" ]; then
+    echo "Found SSH key in LABADMIN_SSH_KEY environment variable"
+    echo "$LABADMIN_SSH_KEY" >> /config/.ssh/authorized_keys
+    key_added=true
+fi
+
+# Option 3: File path in environment variable
+if [ -n "$LABADMIN_SSH_KEY_FILE" ] && [ -f "$LABADMIN_SSH_KEY_FILE" ]; then
+    echo "Found SSH key file at $LABADMIN_SSH_KEY_FILE"
+    cat "$LABADMIN_SSH_KEY_FILE" >> /config/.ssh/authorized_keys
+    key_added=true
+fi
+
+if [ "$key_added" = true ]; then
+    # Set correct permissions
+    chmod 600 /config/.ssh/authorized_keys
+    lsiown abc:abc /config/.ssh/authorized_keys
+    echo "SSH key configured successfully for abc user"
+else
+    echo "WARNING: No SSH key found. SSH key auth will not work."
+    echo "   Expected one of:"
+    echo "   - Volume mount at /keys/aptl_lab_key.pub"
+    echo "   - LABADMIN_SSH_KEY environment variable"
+    echo "   - File path in LABADMIN_SSH_KEY_FILE environment variable"
+fi
+
+# Set ownership on .ssh directory
+lsiown abc:abc /config/.ssh
+
+# Generate SSH host keys if they don't exist
+ssh-keygen -A
+
+echo "APTL SSH setup complete"

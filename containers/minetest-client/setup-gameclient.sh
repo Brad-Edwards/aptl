@@ -54,6 +54,8 @@ port = 30000
 name = labuser
 # Disable sound for headless compatibility
 enable_sound = false
+# Mouse sensitivity for better control
+mouse_sensitivity = 0.05
 EOF
 chown -R labadmin:labadmin /home/labadmin/.minetest
 
@@ -66,6 +68,8 @@ port = 30000
 name = rdpuser
 # Disable sound for headless compatibility
 enable_sound = false
+# Mouse sensitivity for better control
+mouse_sensitivity = 0.05
 EOF
 chown -R rdpuser:rdpuser /home/rdpuser/.minetest
 

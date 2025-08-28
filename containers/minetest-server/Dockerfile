@@ -123,7 +123,6 @@ RUN \
     /tmp/minetest --strip-components=1 && \
   sed -i 's/# enable_ipv6 = true/enable_ipv6 = true/' /tmp/minetest/minetest.conf.example && \
   sed -i 's/# ipv6_server = false/ipv6_server = true/' /tmp/minetest/minetest.conf.example && \
-  sed -i 's/# mouse_sensitivity = 0.2/mouse_sensitivity = 0.2/' /tmp/minetest/minetest.conf.example && \
   cp /tmp/minetest/minetest.conf.example /defaults/minetest.conf && \
   cd /tmp/minetest && \
   cmake . \

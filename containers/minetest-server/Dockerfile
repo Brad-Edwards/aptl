@@ -123,6 +123,7 @@ RUN \
     /tmp/minetest --strip-components=1 && \
   sed -i 's/# enable_ipv6 = true/enable_ipv6 = true/' /tmp/minetest/minetest.conf.example && \
   sed -i 's/# ipv6_server = false/ipv6_server = true/' /tmp/minetest/minetest.conf.example && \
+  sed -i 's/# mouse_sensitivity = 0.2/mouse_sensitivity = 0.2/' /tmp/minetest/minetest.conf.example && \
   cp /tmp/minetest/minetest.conf.example /defaults/minetest.conf && \
   cd /tmp/minetest && \
   cmake . \
@@ -149,6 +150,11 @@ RUN \
   mkdir -p \
     /defaults/games && \
   cp -pr  /tmp/minetest/games/* /defaults/games/ && \
+  echo "**** download minetest_game ****" && \
+  curl -o /tmp/minetest_game.tar.gz -L \
+    "https://github.com/minetest/minetest_game/archive/refs/heads/master.tar.gz" && \
+  tar xf /tmp/minetest_game.tar.gz -C /defaults/games/ && \
+  mv /defaults/games/minetest_game-master /defaults/games/minetest_game && \
   printf "Linuxserver.io version: ${VERSION}\nBuild-date: ${BUILD_DATE}" > /build_version && \
   echo "**** cleanup ****" && \
   apk del --purge \

@@ -6,8 +6,8 @@ import { resolve } from 'path';
 describe('MinetestClientInstanceSchema', () => {
   it('should validate a complete Minetest Client instance', () => {
     const validMinetestClient = {
-      public_ip: '172.20.0.23',
-      private_ip: '172.20.0.23',
+      public_ip: '172.20.0.25',
+      private_ip: '172.20.0.25',
       ssh_key: '/path/to/key',
       ssh_user: 'labadmin',
       ssh_port: 2025,
@@ -19,8 +19,8 @@ describe('MinetestClientInstanceSchema', () => {
 
   it('should default enabled to true', () => {
     const minetestClient = {
-      public_ip: '172.20.0.23',
-      private_ip: '172.20.0.23',
+      public_ip: '172.20.0.25',
+      private_ip: '172.20.0.25',
       ssh_key: '/path/to/key',
       ssh_user: 'labadmin'
     };
@@ -31,8 +31,8 @@ describe('MinetestClientInstanceSchema', () => {
 
   it('should default ssh_port to 22', () => {
     const minetestClient = {
-      public_ip: '172.20.0.23',
-      private_ip: '172.20.0.23',
+      public_ip: '172.20.0.25',
+      private_ip: '172.20.0.25',
       ssh_key: '/path/to/key',
       ssh_user: 'labadmin'
     };
@@ -43,7 +43,7 @@ describe('MinetestClientInstanceSchema', () => {
 
   it('should require all mandatory fields', () => {
     const incomplete = {
-      public_ip: '172.20.0.23',
+      public_ip: '172.20.0.25',
       ssh_key: '/path/to/key'
     };
 
@@ -60,8 +60,8 @@ describe('getMinetestClientCredentials', () => {
       vpc_cidr: '172.20.0.0/16'
     },
     minetestClient: {
-      public_ip: '172.20.0.23',
-      private_ip: '172.20.0.23',
+      public_ip: '172.20.0.25',
+      private_ip: '172.20.0.25',
       ssh_key: '/path/to/key',
       ssh_user: 'labadmin',
       ssh_port: 2025,
@@ -88,7 +88,7 @@ describe('getMinetestClientCredentials', () => {
       sshKey: '/path/to/key',
       username: 'labadmin',
       port: 2025,
-      target: '172.20.0.23'
+      target: '172.20.0.25'
     });
   });
 
@@ -133,7 +133,7 @@ describe('loadLabConfig', () => {
       containers: {
         'minetest-client': {
           container_name: 'aptl-minetest-client',
-          container_ip: '172.20.0.23',
+          container_ip: '172.20.0.25',
           ssh_key: '~/.ssh/aptl_lab_key',
           ssh_user: 'labadmin',
           ssh_port: 2025,
@@ -160,7 +160,7 @@ describe('loadLabConfig', () => {
       expect(config.lab.name).toBe('aptl-minetest-client');
       expect(config.minetestClient.ssh_user).toBe('labadmin');
       expect(config.minetestClient.ssh_port).toBe(2025);
-      expect(config.minetestClient.public_ip).toBe('172.20.0.23');
+      expect(config.minetestClient.public_ip).toBe('172.20.0.25');
     } finally {
       unlinkSync(testConfigPath);
       delete process.env.APTL_CONFIG_PATH;

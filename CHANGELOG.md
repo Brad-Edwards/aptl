@@ -11,10 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Minetest server container and MCP
-- Minetest client container and MCP
+- Minetest client container and MCP  
+- Minecraft server container and MCP
 
 ### Fixed
 
+- Syslog streaming to SIEM is now working for application logs
 - Victim template guide instructions are now more clear
 
 ## [2.0.4] - 2025-08-24

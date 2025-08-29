@@ -186,3 +186,23 @@ Common log locations in containers:
 - Kali operations: `docker exec aptl-kali cat /home/kali/operations/activity.log`
 
 See docs/troubleshooting/ for detailed debugging procedures.
+
+## Code Cleanup Protocol
+
+When changing approaches or trying new solutions:
+1. ALWAYS clean up abandoned code before implementing new approach
+2. Remove unused imports, functions, variables from failed attempts  
+3. Delete temporary files, test code, or experimental implementations
+4. Never leave commented-out code "just in case"
+5. If approach fails, revert changes completely before trying next approach
+
+## Git Commit Protocol
+
+NEVER make commits without explicit user permission:
+1. ALWAYS ask before creating commits
+2. Show user what will be committed first
+3. Let user review changes before committing
+4. Only commit when user explicitly requests it
+5. NEVER include Claude attribution or co-authored-by tags
+
+This prevents code accumulation and maintains clean, maintainable codebase.

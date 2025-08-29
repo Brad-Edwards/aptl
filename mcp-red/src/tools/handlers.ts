@@ -3,13 +3,39 @@
 import { SSHConnectionManager } from '../ssh.js';
 import { LabConfig, getKaliCredentials } from '../config.js';
 
+/**
+ * Context provided to all tool handlers.
+ */
 export interface ToolContext {
+  /** SSH connection manager for executing commands */
   sshManager: SSHConnectionManager;
+  /** Lab configuration with network and instance details */
   labConfig: LabConfig;
 }
 
+/**
+ * Tool handler function signature.
+ * 
+ * @param args - Tool-specific arguments from MCP request
+ * @param context - Shared context with SSH manager and config
+ * @returns Tool execution result in MCP response format
+ */
 export type ToolHandler = (args: any, context: ToolContext) => Promise<any>;
 
+/**
+ * Tool handlers for MCP operations.
+ * Each handler processes specific tool requests from AI agents.
+ * 
+ * Available tools:
+ * - kali_info: Get Kali instance information
+ * - run_command: Execute single command on Kali
+ * - create_session: Create persistent SSH session
+ * - session_command: Execute command in existing session
+ * - list_sessions: List all active sessions
+ * - close_session: Close specific session
+ * - get_session_output: Get buffered output from background session
+ * - close_all_sessions: Cleanup all active sessions
+ */
 export const toolHandlers: Record<string, ToolHandler> = {
   kali_info: async (args: any, { labConfig }: ToolContext) => {
     if (!labConfig.kali.enabled) {

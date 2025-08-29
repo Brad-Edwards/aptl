@@ -1,0 +1,68 @@
+<ossec_config>
+  <client>
+    <enrollment>
+      <agent_name>AGENT_NAME_PLACEHOLDER</agent_name>
+      <groups>kali-redteam</groups>
+    </enrollment>
+    <server>
+      <address>WAZUH_MANAGER_PLACEHOLDER</address>
+    </server>
+  </client>
+
+  <client_buffer>
+    <disabled>no</disabled>
+    <queue_size>5000</queue_size>
+    <events_per_second>500</events_per_second>
+  </client_buffer>
+
+  <logging>
+    <log_format>plain</log_format>
+  </logging>
+
+  <!-- Disable noisy security scans to prevent hacking tool alerts -->
+  <rootcheck>
+    <disabled>yes</disabled>
+  </rootcheck>
+
+  <syscheck>
+    <disabled>yes</disabled>
+  </syscheck>
+
+  <!-- CRITICAL: Monitor authentication events (login/logout) -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+    <alias>kali_auth</alias>
+  </localfile>
+
+  <!-- CRITICAL: Monitor all bash commands -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/bash_history.log</location>
+    <alias>kali_commands</alias>
+  </localfile>
+
+  <!-- Monitor system events -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/syslog</location>
+    <alias>kali_system</alias>
+  </localfile>
+
+  <!-- Monitor daemon/service logs -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/daemon.log</location>
+    <alias>kali_daemon</alias>
+  </localfile>
+
+  <!-- Disable active response to prevent interference with red team tools -->
+  <active-response>
+    <disabled>yes</disabled>
+  </active-response>
+
+  <!-- Disable system inventory to reduce noise -->
+  <wodle name="syscollector">
+    <disabled>yes</disabled>
+  </wodle>
+</ossec_config>

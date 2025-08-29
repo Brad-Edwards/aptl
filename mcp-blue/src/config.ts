@@ -68,7 +68,15 @@ export type WazuhManager = z.infer<typeof WazuhManagerSchema>;
 export type WazuhIndexer = z.infer<typeof WazuhIndexerSchema>;
 
 /**
- * Load Wazuh configuration from JSON file
+ * Load Wazuh configuration from JSON file.
+ * 
+ * Reads configuration from either:
+ * - Path specified in WAZUH_API_CONFIG environment variable
+ * - Default wazuh-api-config.json in current directory
+ * 
+ * @returns Validated Wazuh configuration
+ * @throws {Error} If config file not found or validation fails
+ * @private
  */
 async function loadWazuhConfig(): Promise<WazuhConfig> {
   const configPath = process.env.WAZUH_API_CONFIG || resolve(process.cwd(), 'wazuh-api-config.json');
@@ -97,7 +105,15 @@ async function loadWazuhConfig(): Promise<WazuhConfig> {
 }
 
 /**
- * Load and validate Wazuh configuration
+ * Load and validate Wazuh configuration.
+ * Ensures hosts are within lab network (unless localhost for Docker port forwarding).
+ * 
+ * @returns Complete validated Wazuh configuration
+ * @throws {Error} If configuration loading fails or hosts are outside lab network
+ * 
+ * @example
+ * const config = await loadConfig();
+ * console.log(config.wazuh.manager.host); // '172.20.0.10'
  */
 export async function loadConfig(): Promise<WazuhConfig> {
   const config = await loadWazuhConfig();
@@ -116,7 +132,15 @@ export async function loadConfig(): Promise<WazuhConfig> {
 
 
 /**
- * Validate if host is in lab network
+ * Validate if host is in lab network using CIDR notation.
+ * 
+ * @param host - IP address to validate
+ * @param subnet - CIDR subnet (e.g., '172.20.0.0/16')
+ * @returns true if host is within subnet, false otherwise
+ * 
+ * @example
+ * isInLabNetwork('172.20.0.30', '172.20.0.0/16'); // true
+ * isInLabNetwork('192.168.1.1', '172.20.0.0/16'); // false
  */
 export function isInLabNetwork(host: string, subnet: string): boolean {
   // Basic CIDR validation - in production you'd use a proper library
@@ -131,14 +155,26 @@ export function isInLabNetwork(host: string, subnet: string): boolean {
 }
 
 /**
- * Convert IP address to number
+ * Convert IP address to 32-bit number for subnet calculations.
+ * 
+ * @param ip - IPv4 address in dotted decimal notation
+ * @returns 32-bit unsigned integer representation
+ * @private
  */
 function ipToNumber(ip: string): number {
   return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 }
 
 /**
- * Validate query parameters
+ * Validate query parameters for Wazuh searches.
+ * 
+ * @param params - Query parameters to validate
+ * @param config - Wazuh configuration for limits validation
+ * @returns Validation result with error message if invalid
+ * 
+ * @example
+ * const result = validateQueryParams({ time_range: '1h', min_level: 5 }, config);
+ * if (!result.valid) console.error(result.error);
  */
 export function validateQueryParams(params: any, config: WazuhConfig): { valid: boolean; error?: string } {
   // Validate time range
@@ -166,7 +202,14 @@ export function validateQueryParams(params: any, config: WazuhConfig): { valid: 
 }
 
 /**
- * Validate rule XML content
+ * Validate rule XML content for basic structure.
+ * 
+ * @param ruleXML - XML rule content to validate
+ * @returns Validation result with error message if invalid
+ * 
+ * @example
+ * const result = validateRuleXML('<rule id="100001">Test</rule>');
+ * if (result.valid) console.log('Rule XML is valid');
  */
 export function validateRuleXML(ruleXML: string): { valid: boolean; error?: string } {
   // Basic XML structure validation

@@ -388,4 +388,6 @@ keys/*
 
 config/wazuh_indexer_ssl_certs/*
 
-notes/*
+.cursor/mcp.json
+
+notes/

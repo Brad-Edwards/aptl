@@ -68,7 +68,7 @@ An autonomous cyber operations range is currently under-development as a separat
 
 - Wazuh SIEM (172.20.0.10-12) - Log collection and analysis
 - Victim container (172.20.0.20) - Rocky Linux with Wazuh agent and Falco runtime security monitoring
-- Kali container (172.20.0.30) - Attack platform with security tools
+- Kali container (172.20.0.30) - Attack platform with security tools, logs all red team agent's commands to the SIEM
 - Blue Team MCP - Enables AI agent SIEM queries, log search, and rule creation
 - Red Team MCP - Enables AI agent control of Kali tools
 

@@ -19,6 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Syslog streaming to SIEM is now working for application logs
 - Victim template guide instructions are now more clear
 
+## [2.0.6] - 2025-08-25
+
+### Added
+
+- Kali container Wazuh agent with CLI command logging
+
+## [2.0.5] - 2025-08-25
+
+### Added
+
+- Unit tests for mcp-red and mcp-blue
+- ESLint and Prettier for both MCP servers
+- JSDoc for key functions
+- Zod IP address validation
+
+### Fixed
+
+- Extract command parsing from handleShellOutput
+
 ## [2.0.4] - 2025-08-24
 
 ### Added

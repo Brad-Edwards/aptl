@@ -51,6 +51,7 @@ EOF
 # Create bash history log file with proper permissions
 touch /var/log/bash_history.log
 chmod 644 /var/log/bash_history.log
+chown labadmin:labadmin /var/log/bash_history.log
 
 echo "Bash command history logging configured"
 

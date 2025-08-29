@@ -142,6 +142,101 @@ services:
     security_opt:
       - seccomp:unconfined
 
+  # Minetest Server Container - Game server for memory scanning demo
+  minetest-server:
+    build:
+      context: ./containers/minetest-server
+      dockerfile: Dockerfile
+    container_name: aptl-minetest-server
+    hostname: minetest-server-host
+    restart: unless-stopped
+    networks:
+      aptl-network:
+        ipv4_address: 172.20.0.24
+    ports:
+      - "2024:22"       # SSH access
+      - "30000:30000/udp" # Minetest server port (UDP)
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - CLI_ARGS=--gameid minetest_game
+      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+    volumes:
+      - ./keys:/keys:ro
+      - minetest_config:/config/.minetest
+      - /tmp
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      - victim
+
+  # Minetest Client Container - Client for memory scanning demo
+  minetest-client:
+    build:
+      context: ./containers/minetest-client
+      dockerfile: Dockerfile
+    container_name: aptl-minetest-client
+    hostname: minetest-client-host
+    restart: unless-stopped
+    networks:
+      aptl-network:
+        ipv4_address: 172.20.0.25
+    ports:
+      - "2025:22"    # SSH access  
+      - "5901:5901"  # VNC access
+    environment:
+      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+    cap_add:
+      - SYS_NICE        # For process scheduling
+      - SYS_ADMIN       # Required for systemd in container
+      - SYS_RESOURCE    # For setting limits and OOM score
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ./keys:/keys:ro
+      - minetest_client_logs:/var/log
+    tmpfs:
+      - /run
+      - /tmp
+    security_opt:
+      - seccomp:unconfined
+
+  # Minecraft Server Container - Official Minecraft server for testing
+  minecraft-server:
+    build:
+      context: ./containers/minecraft-server
+      dockerfile: Dockerfile
+    container_name: aptl-minecraft-server
+    hostname: minecraft-server-host
+    restart: unless-stopped
+    networks:
+      aptl-network:
+        ipv4_address: 172.20.0.26
+    ports:
+      - "2026:22"     # SSH access
+      - "25565:25565" # Minecraft server port
+    environment:
+      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+    cap_add:
+      - SYS_NICE        # For process scheduling
+      - SYS_ADMIN       # Required for systemd in container
+      - SYS_RESOURCE    # For setting limits and OOM score
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ./keys:/keys:ro
+      - minecraft_server_logs:/var/log
+      - minecraft_server_data:/opt/minecraft-server
+    tmpfs:
+      - /run
+      - /tmp
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      - victim
+
   # Kali Container - Red team attack platform  
   kali:
     build:
@@ -203,5 +298,10 @@ volumes:
   
   # Application volumes
   victim_logs:
+  minetest_server_logs:
+  minetest_client_logs:
+  minetest_config:
+  minecraft_server_logs:
+  minecraft_server_data:
   kali_operations:
   kali_logs:

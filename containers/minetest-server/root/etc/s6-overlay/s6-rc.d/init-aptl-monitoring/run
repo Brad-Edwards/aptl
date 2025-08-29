@@ -1,0 +1,68 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+
+echo "Setting up APTL monitoring integration..."
+
+# Configure rsyslog forwarding if SIEM_IP is set
+if [ -n "$SIEM_IP" ]; then
+    echo "Configuring rsyslog to forward to Wazuh at $SIEM_IP..."
+    
+    # Default to Wazuh syslog port
+    SIEM_PORT="${SIEM_PORT:-514}"
+    
+    # Create rsyslog forwarding config for Wazuh
+    cat > /etc/rsyslog.d/90-forward.conf << EOF
+# Purple Team Lab - Forward all logs to Wazuh SIEM
+*.* @${SIEM_IP}:${SIEM_PORT}
+EOF
+    
+    echo "Rsyslog forwarding configured to Wazuh at $SIEM_IP:$SIEM_PORT"
+    
+    # Setup Wazuh agent installation
+    echo "Setting up Wazuh agent environment..."
+    export WAZUH_MANAGER="$SIEM_IP"
+    export AGENT_NAME="${HOSTNAME:-minetest-server}"
+    
+    # Simplified monitoring - just forward logs and setup basic security monitoring
+    echo "Setting up basic security monitoring for Alpine..."
+    
+    # Create directories for log collection
+    mkdir -p /var/log
+    
+    # Create placeholder files that Wazuh manager expects
+    touch /var/log/falco_events.json
+    touch /var/log/bash_history.log
+    
+    echo "Basic monitoring setup complete - logs will be forwarded to Wazuh"
+    
+    # Configure bash history logging
+    echo "Configuring bash command history logging..."
+    cat >> /etc/profile << 'EOF'
+
+# Enhanced bash history logging for security monitoring
+export HISTFILE=/var/log/bash_history.log
+export HISTFILESIZE=10000
+export HISTSIZE=10000
+export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "
+export PROMPT_COMMAND="history -a"
+shopt -s histappend
+
+# Function to log commands with user context
+log_command() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') USER=$USER PWD=$PWD COMMAND=$BASH_COMMAND" >> /var/log/bash_history.log 2>/dev/null || true
+}
+trap 'log_command' DEBUG
+
+EOF
+
+    # Create bash history log file with proper permissions
+    touch /var/log/bash_history.log
+    chmod 644 /var/log/bash_history.log
+    
+    echo "Bash command history logging configured"
+    
+else
+    echo "SIEM forwarding not configured (SIEM_IP not set)"
+fi
+
+echo "APTL monitoring setup complete"

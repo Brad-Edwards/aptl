@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "lab": {
+    "name": "aptl-local",
+    "network_subnet": "172.20.0.0/16"
+  },
+  "containers": {
+    "minetest-server": {
+      "container_name": "aptl-minetest-server", 
+      "container_ip": "localhost",
+      "ssh_key": "~/.ssh/aptl_lab_key",
+      "ssh_user": "labadmin",
+      "ssh_port": 2024,
+      "enabled": true
+    }
+  },
+  "mcp": {
+    "server_name": "aptl-minetest-server-mcp",
+    "allowed_networks": ["172.20.0.0/16", "127.0.0.0/8"],
+    "max_session_time": 3600,
+    "audit_enabled": true,
+    "log_level": "info"
+  }
+}

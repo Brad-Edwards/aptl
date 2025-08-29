@@ -24,16 +24,18 @@ See [containers/kali/Dockerfile](../../containers/kali/Dockerfile) for complete 
 The MCP server enables AI agents to control Kali tools remotely:
 
 **Available Tools:**
+
 - `kali_info`: Display lab network information
 - `run_command`: Execute commands on Kali container
 
 **Setup:**
+
 ```json
 {
     "mcpServers": {
         "aptl-lab": {
             "command": "node",
-            "args": ["./mcp/dist/index.js"],
+            "args": ["./mcp-red/dist/index.js"],
             "cwd": "."
         }
     }
@@ -41,6 +43,7 @@ The MCP server enables AI agents to control Kali tools remotely:
 ```
 
 **Usage:**
+
 ```bash
 # Build MCP server
 cd mcp && npm install && npm run build

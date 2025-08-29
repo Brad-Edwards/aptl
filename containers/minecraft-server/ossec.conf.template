@@ -69,12 +69,6 @@
     <alias>bash_history</alias>
   </localfile>
 
-  <!-- Monitor local syslog for Minecraft events -->
-  <localfile>
-    <log_format>syslog</log_format>
-    <location>/var/log/syslog</location>
-  </localfile>
-
   <active-response>
     <disabled>no</disabled>
   </active-response>

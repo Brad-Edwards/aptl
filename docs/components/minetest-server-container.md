@@ -13,7 +13,7 @@ See [containers/minetest-server/Dockerfile](../../containers/minetest-server/Doc
 
 ## Network Access
 
-- **Container IP**: 172.20.0.21
+- **Container IP**: 172.20.0.24
 - **SSH Access**: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2024`
 
 ## MCP Integration

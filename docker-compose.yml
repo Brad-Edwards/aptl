@@ -150,7 +150,7 @@ services:
     restart: unless-stopped
     networks:
       aptl-network:
-        ipv4_address: 172.20.0.21
+        ipv4_address: 172.20.0.24
     ports:
       - "2024:22"       # SSH access
       - "30000:30000/udp" # Minetest server port (UDP)
@@ -180,7 +180,7 @@ services:
     restart: unless-stopped
     networks:
       aptl-network:
-        ipv4_address: 172.20.0.23
+        ipv4_address: 172.20.0.25
     ports:
       - "2025:22"    # SSH access  
       - "5901:5901"  # VNC access
@@ -211,7 +211,7 @@ services:
     restart: unless-stopped
     networks:
       aptl-network:
-        ipv4_address: 172.20.0.22
+        ipv4_address: 172.20.0.26
     ports:
       - "2026:22"     # SSH access
       - "25565:25565" # Minecraft server port

@@ -49,7 +49,7 @@ echo "Step 6: Configuring Minetest client..."
 mkdir -p /home/labadmin/.minetest
 cat > /home/labadmin/.minetest/minetest.conf << 'EOF'
 # Default server connection
-address = 172.20.0.21
+address = 172.20.0.24
 port = 30000
 name = labuser
 # Disable sound for headless compatibility
@@ -63,7 +63,7 @@ chown -R labadmin:labadmin /home/labadmin/.minetest
 mkdir -p /home/rdpuser/.minetest
 cat > /home/rdpuser/.minetest/minetest.conf << 'EOF'
 # Default server connection
-address = 172.20.0.21
+address = 172.20.0.24
 port = 30000
 name = rdpuser
 # Disable sound for headless compatibility

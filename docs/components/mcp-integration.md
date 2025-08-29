@@ -15,8 +15,8 @@ flowchart TD
     C --> G[Kali Container<br/>172.20.0.30]
     D --> H[Wazuh Manager API<br/>172.20.0.10:55000]
     D --> I[Wazuh Indexer API<br/>172.20.0.12:9200]
-    E --> J[Minetest Client<br/>172.20.0.23]
-    F --> K[Minetest Server<br/>172.20.0.21]
+    E --> J[Minetest Client<br/>172.20.0.25]
+    F --> K[Minetest Server<br/>172.20.0.24]
     
     G --> L[Security Tools<br/>nmap, hydra, etc]
     H --> M[Alerts & Rules]

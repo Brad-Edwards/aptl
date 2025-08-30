@@ -15,7 +15,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { loadLabConfig, type LabConfig } from './config.js';
-import { SSHConnectionManager } from './ssh.js';
+import { SSHConnectionManager } from 'aptl-mcp-common';
 import { toolDefinitions } from './tools/definitions.js';
 import { toolHandlers, type ToolContext } from './tools/handlers.js';
 

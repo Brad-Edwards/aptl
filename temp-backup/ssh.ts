@@ -19,12 +19,14 @@ export class SSHError extends Error {
 }
 
 export type SessionType = 'interactive' | 'background';
+export type SessionMode = 'normal' | 'raw';
 
 export interface SessionMetadata {
   sessionId: string;
   target: string;
   username: string;
   type: SessionType;
+  mode: SessionMode;
   createdAt: Date;
   lastActivity: Date;
   port: number;
@@ -40,6 +42,7 @@ export interface CommandRequest {
   resolve: (result: CommandResult) => void;
   reject: (error: Error) => void;
   timeout?: number;
+  raw?: boolean;
 }
 
 interface ConnectionInfo {
@@ -60,16 +63,21 @@ export class PersistentSession extends EventEmitter {
   private isInitialized = false;
   private outputData = '';
 
+  private sessionTimeoutMs: number;
+
   constructor(
     sessionId: string,
     target: string,
     username: string,
     type: SessionType,
     client: Client,
-    port: number = 22
+    port: number = 22,
+    mode: SessionMode = 'normal',
+    timeoutMs: number = 600000 // 10 minutes default
   ) {
     super();
     this.client = client;
+    this.sessionTimeoutMs = timeoutMs;
     this.commandDelimiter = `___CMD_${Date.now()}_${Math.random().toString(36).substring(2, 11)}___`;
     
     this.sessionInfo = {
@@ -77,6 +85,7 @@ export class PersistentSession extends EventEmitter {
       target,
       username,
       type,
+      mode,
       createdAt: new Date(),
       lastActivity: new Date(),
       port,
@@ -129,11 +138,42 @@ export class PersistentSession extends EventEmitter {
     });
   }
 
-  async executeCommand(command: string, timeout: number = 30000): Promise<CommandResult> {
+  async executeCommand(command: string, timeout: number = 30000, raw?: boolean): Promise<CommandResult> {
     if (!this.isInitialized || !this.shell || !this.sessionInfo.isActive) {
       throw new SSHError('Session not initialized or inactive');
     }
 
+    // Background sessions should return immediately after queuing
+    if (this.sessionInfo.type === 'background') {
+      const commandId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      const request: CommandRequest = {
+        id: commandId,
+        command,
+        resolve: () => {}, // No-op resolve for background
+        reject: () => {}, // No-op reject for background  
+        timeout,
+        raw: raw !== undefined ? raw : this.sessionInfo.mode === 'raw'
+      };
+
+      this.commandQueue.push(request);
+      this.sessionInfo.commandHistory.push(command);
+      this.sessionInfo.lastActivity = new Date();
+      this.resetSessionTimeout();
+
+      if (!this.currentCommand) {
+        this.processNextCommand();
+      }
+
+      // Return immediately for background sessions
+      return {
+        stdout: `Command '${command}' queued in background session '${this.sessionInfo.sessionId}'`,
+        stderr: '',
+        code: 0,
+        signal: null
+      };
+    }
+
+    // Interactive sessions wait for completion
     return new Promise((resolve, reject) => {
       const commandId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
       const request: CommandRequest = {
@@ -141,7 +181,8 @@ export class PersistentSession extends EventEmitter {
         command,
         resolve,
         reject,
-        timeout
+        timeout,
+        raw: raw !== undefined ? raw : this.sessionInfo.mode === 'raw'
       };
 
       this.commandQueue.push(request);
@@ -161,22 +202,48 @@ export class PersistentSession extends EventEmitter {
     this.currentCommand = this.commandQueue.shift()!;
     this.outputData = '';
 
-    const startDelimiter = `${this.commandDelimiter}_START_${this.currentCommand.id}`;
-    const endDelimiter = `${this.commandDelimiter}_END_${this.currentCommand.id}`;
-    
-    const wrappedCommand = `echo "${startDelimiter}"; ${this.currentCommand.command}; echo "${endDelimiter}:$?"`;
-    
-    this.shell.write(wrappedCommand + '\n');
+    if (this.currentCommand.raw) {
+      // Raw mode: send command directly without wrapping
+      this.shell.write(this.currentCommand.command + '\n');
+      
+      // For raw mode, we'll use a simpler timeout-based approach
+      if (this.currentCommand.timeout) {
+        const commandId = this.currentCommand.id;
+        const timeoutDuration = this.currentCommand.timeout;
+        setTimeout(() => {
+          if (this.currentCommand?.id === commandId) {
+            // In raw mode, resolve with whatever output we've collected
+            const output = this.outputData;
+            this.currentCommand!.resolve({
+              stdout: output,
+              stderr: '',
+              code: 0, // Unknown in raw mode
+              signal: null
+            });
+            this.currentCommand = null;
+            this.processNextCommand();
+          }
+        }, timeoutDuration);
+      }
+    } else {
+      // Normal mode: use delimiter wrapping
+      const startDelimiter = `${this.commandDelimiter}_START_${this.currentCommand.id}`;
+      const endDelimiter = `${this.commandDelimiter}_END_${this.currentCommand.id}`;
+      
+      const wrappedCommand = `echo "${startDelimiter}"; ${this.currentCommand.command}; echo "${endDelimiter}:$?"`;
+      
+      this.shell.write(wrappedCommand + '\n');
 
-    if (this.currentCommand.timeout) {
-      const commandId = this.currentCommand.id;
-      setTimeout(() => {
-        if (this.currentCommand?.id === commandId) {
-          this.currentCommand!.reject(new SSHError(`Command timeout: ${this.currentCommand!.command}`));
-          this.currentCommand = null;
-          this.processNextCommand();
-        }
-      }, this.currentCommand.timeout);
+      if (this.currentCommand.timeout) {
+        const commandId = this.currentCommand.id;
+        setTimeout(() => {
+          if (this.currentCommand?.id === commandId) {
+            this.currentCommand!.reject(new SSHError(`Command timeout: ${this.currentCommand!.command}`));
+            this.currentCommand = null;
+            this.processNextCommand();
+          }
+        }, this.currentCommand.timeout);
+      }
     }
   }
 
@@ -196,6 +263,12 @@ export class PersistentSession extends EventEmitter {
 
   private parseCommandOutput(): void {
     if (!this.currentCommand) return;
+
+    // Skip parsing for raw mode commands
+    if (this.currentCommand.raw) {
+      // Raw mode output is handled by timeout in processNextCommand
+      return;
+    }
 
     const endPattern = `${this.commandDelimiter}_END_${this.currentCommand.id}:(\\d+)`;
     const endMatch = this.outputData.match(new RegExp(endPattern));
@@ -259,7 +332,7 @@ export class PersistentSession extends EventEmitter {
     this.sessionTimeout = setTimeout(() => {
       this.emit('timeout');
       this.close();
-    }, 300000); // 5 minutes timeout
+    }, this.sessionTimeoutMs);
   }
 
   close(): void {
@@ -443,14 +516,16 @@ export class SSHConnectionManager {
     username: string,
     type: SessionType,
     privateKeyPath: string,
-    port: number = 22
+    port: number = 22,
+    mode: SessionMode = 'normal',
+    timeoutMs: number = 600000 // 10 minutes default
   ): Promise<PersistentSession> {
     if (this.sessions.has(sessionId)) {
       throw new SSHError(`Session with ID '${sessionId}' already exists`);
     }
 
     const client = await this.getConnection(target, username, privateKeyPath, port);
-    const session = new PersistentSession(sessionId, target, username, type, client, port);
+    const session = new PersistentSession(sessionId, target, username, type, client, port, mode, timeoutMs);
     
     await session.initialize();
     this.sessions.set(sessionId, session);
@@ -519,14 +594,15 @@ export class SSHConnectionManager {
   public async executeInSession(
     sessionId: string,
     command: string,
-    timeout?: number
+    timeout?: number,
+    raw?: boolean
   ): Promise<CommandResult> {
     const session = this.sessions.get(sessionId);
     if (!session) {
       throw new SSHError(`Session '${sessionId}' not found`);
     }
 
-    return session.executeCommand(command, timeout);
+    return session.executeCommand(command, timeout, raw);
   }
 
   /**

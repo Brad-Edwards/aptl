@@ -1,6 +1,6 @@
 
 
-import { SSHConnectionManager } from '../ssh.js';
+import { SSHConnectionManager, SessionMetadata } from 'aptl-mcp-common';
 import { LabConfig, getMinetestClientCredentials } from '../config.js';
 
 export interface ToolContext {
@@ -86,13 +86,13 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  mc_client_create_session: async (args: any, { sshManager, labConfig }: ToolContext) => {
+  mc_client_interactive_session: async (args: any, { sshManager, labConfig }: ToolContext) => {
     const { 
       session_id,
-      type = 'interactive'
+      timeout_ms = 600000
     } = args as {
       session_id?: string;
-      type?: 'interactive' | 'background';
+      timeout_ms?: number;
     };
 
     try {
@@ -103,9 +103,11 @@ export const toolHandlers: Record<string, ToolHandler> = {
         finalSessionId,
         credentials.target,
         credentials.username,
-        type,
+        'interactive',
         credentials.sshKey,
-        credentials.port
+        credentials.port,
+        'normal',
+        timeout_ms
       );
 
       const sessionInfo = session.getSessionInfo();
@@ -118,7 +120,8 @@ export const toolHandlers: Record<string, ToolHandler> = {
               session_id: sessionInfo.sessionId,
               target: sessionInfo.target,
               username: sessionInfo.username,
-              type: sessionInfo.type,
+              type: 'interactive',
+              mode: 'normal',
               created_at: sessionInfo.createdAt,
               message: `Minetest Client session '${sessionInfo.sessionId}' created successfully`
             }, null, 2),
@@ -140,15 +143,75 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  mc_client_session_command: async (args: any, { sshManager }: ToolContext) => {
-    const { session_id, command, timeout = 30000 } = args as {
-      session_id: string;
-      command: string;
-      timeout?: number;
+  mc_client_background_session: async (args: any, { sshManager, labConfig }: ToolContext) => {
+    const { 
+      session_id,
+      raw = false,
+      timeout_ms = 600000
+    } = args as {
+      session_id?: string;
+      raw?: boolean;
+      timeout_ms?: number;
     };
 
     try {
-      const result = await sshManager.executeInSession(session_id, command, timeout);
+      const finalSessionId = session_id || `bg_session_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const credentials = getMinetestClientCredentials(labConfig);
+
+      const session = await sshManager.createSession(
+        finalSessionId,
+        credentials.target,
+        credentials.username,
+        'background',
+        credentials.sshKey,
+        credentials.port,
+        raw ? 'raw' : 'normal',
+        timeout_ms
+      );
+
+      const sessionInfo = session.getSessionInfo();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              session_id: sessionInfo.sessionId,
+              target: sessionInfo.target,
+              username: sessionInfo.username,
+              type: 'background',
+              mode: raw ? 'raw' : 'normal',
+              created_at: sessionInfo.createdAt,
+              message: `Minetest Client background session '${sessionInfo.sessionId}' created successfully${raw ? ' (raw mode for interactive programs)' : ''}`
+            }, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            }, null, 2),
+          },
+        ],
+      };
+    }
+  },
+
+  mc_client_session_command: async (args: any, { sshManager }: ToolContext) => {
+    const { session_id, command, timeout = 30000, raw } = args as {
+      session_id: string;
+      command: string;
+      timeout?: number;
+      raw?: boolean;
+    };
+
+    try {
+      const result = await sshManager.executeInSession(session_id, command, timeout, raw);
 
       return {
         content: [
@@ -192,11 +255,12 @@ export const toolHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: true,
-              sessions: sessions.map(session => ({
+              sessions: sessions.map((session: SessionMetadata) => ({
                 session_id: session.sessionId,
                 target: session.target,
                 username: session.username,
                 type: session.type,
+                mode: session.mode,
                 created_at: session.createdAt,
                 last_activity: session.lastActivity,
                 is_active: session.isActive,

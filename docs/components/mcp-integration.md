@@ -25,6 +25,10 @@ flowchart TD
     K --> P[Memory Scanning<br/>gameconqueror]
 ```
 
+## Common Library
+
+All SSH-based MCPs use `aptl-mcp-common` for session management, connection pooling, and configuration loading.
+
 ## MCP Servers
 
 **Red Team MCP** (`/mcp-red`):

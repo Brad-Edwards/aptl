@@ -26,8 +26,8 @@ export const toolDefinitions: Tool[] = [
     },
   },
   {
-    name: 'mc_client_create_session',
-    description: 'Create a new persistent SSH session on Minetest Client',
+    name: 'mc_client_interactive_session',
+    description: 'Create a persistent session that waits for each command to complete with structured output',
     inputSchema: {
       type: 'object',
       properties: {
@@ -35,11 +35,34 @@ export const toolDefinitions: Tool[] = [
           type: 'string',
           description: 'Unique session identifier (optional, auto-generated if not provided)',
         },
-        type: {
+        timeout_ms: {
+          type: 'number',
+          description: 'Session timeout in milliseconds before automatic closure (default: 600000 = 10 minutes)',
+          default: 600000,
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'mc_client_background_session',
+    description: 'Create a background session for long-running processes or interactive programs',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: {
           type: 'string',
-          enum: ['interactive', 'background'],
-          description: 'Session type: interactive for stateful operations, background for long-running processes',
-          default: 'interactive',
+          description: 'Unique session identifier (optional, auto-generated if not provided)',
+        },
+        raw: {
+          type: 'boolean',
+          description: 'Use raw mode for interactive programs (msfconsole, scanmem, gdb) that need clean stdin/stdout',
+          default: false,
+        },
+        timeout_ms: {
+          type: 'number',
+          description: 'Session timeout in milliseconds before automatic closure (default: 600000 = 10 minutes)',
+          default: 600000,
         },
       },
       required: [],
@@ -63,6 +86,11 @@ export const toolDefinitions: Tool[] = [
           type: 'number',
           description: 'Command timeout in milliseconds (default: 30000)',
           default: 30000,
+        },
+        raw: {
+          type: 'boolean',
+          description: 'Execute in raw mode (no echo wrapping, for interactive programs). Defaults to session mode',
+          default: false,
         },
       },
       required: ['session_id', 'command'],

@@ -1,6 +1,6 @@
 
 
-import { SSHConnectionManager } from '../ssh.js';
+import { SSHConnectionManager, SessionMetadata } from 'aptl-mcp-common';
 import { LabConfig, getMinetestClientCredentials } from '../config.js';
 
 export interface ToolContext {
@@ -255,7 +255,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: true,
-              sessions: sessions.map(session => ({
+              sessions: sessions.map((session: SessionMetadata) => ({
                 session_id: session.sessionId,
                 target: session.target,
                 username: session.username,

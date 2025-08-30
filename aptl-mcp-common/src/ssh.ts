@@ -1,7 +1,28 @@
 
 import { Client, ClientChannel } from 'ssh2';
-import { readFileSync } from 'fs';
+import { readFile } from 'fs/promises';
 import { EventEmitter } from 'events';
+
+// Constants for timeouts and limits
+const TIMEOUTS = {
+  DEFAULT_COMMAND: 30000,
+  DEFAULT_SESSION: 600000,
+  CONNECTION: 30000,
+  KEEP_ALIVE_INTERVAL: 30000,
+  FORCE_CLOSE: 3000,
+  SESSION_CLOSE: 5000,
+} as const;
+
+const BUFFER_LIMITS = {
+  MAX_SIZE: 10000,
+  TRIM_TO: 5000,
+} as const;
+
+const SSH_CONFIG = {
+  READY_TIMEOUT: 30000,
+  KEEPALIVE_INTERVAL: 30000,
+  KEEPALIVE_COUNT_MAX: 3,
+} as const;
 
 export interface CommandResult {
   stdout: string;
@@ -73,7 +94,7 @@ export class PersistentSession extends EventEmitter {
     client: Client,
     port: number = 22,
     mode: SessionMode = 'normal',
-    timeoutMs: number = 600000 // 10 minutes default
+    timeoutMs: number = TIMEOUTS.DEFAULT_SESSION
   ) {
     super();
     this.client = client;
@@ -133,12 +154,12 @@ export class PersistentSession extends EventEmitter {
 
         setTimeout(() => {
           resolve();
-        }, 1000);
+        }, 1000); // Shell startup delay
       });
     });
   }
 
-  async executeCommand(command: string, timeout: number = 30000, raw?: boolean): Promise<CommandResult> {
+  async executeCommand(command: string, timeout: number = TIMEOUTS.DEFAULT_COMMAND, raw?: boolean): Promise<CommandResult> {
     if (!this.isInitialized || !this.shell || !this.sessionInfo.isActive) {
       throw new SSHError('Session not initialized or inactive');
     }
@@ -250,8 +271,8 @@ export class PersistentSession extends EventEmitter {
   private handleShellOutput(data: string): void {
     if (this.sessionInfo.type === 'background') {
       this.outputBuffer.push(data);
-      if (this.outputBuffer.length > 10000) {
-        this.outputBuffer = this.outputBuffer.slice(-5000);
+      if (this.outputBuffer.length > BUFFER_LIMITS.MAX_SIZE) {
+        this.outputBuffer = this.outputBuffer.slice(-BUFFER_LIMITS.TRIM_TO);
       }
     }
 
@@ -305,7 +326,11 @@ export class PersistentSession extends EventEmitter {
   }
 
   getSessionInfo(): SessionMetadata {
-    return { ...this.sessionInfo };
+    return { 
+      ...this.sessionInfo,
+      commandHistory: [...this.sessionInfo.commandHistory],
+      environmentVars: new Map(this.sessionInfo.environmentVars)
+    };
   }
 
   getBufferedOutput(lines?: number, clear: boolean = false): string[] {
@@ -321,7 +346,7 @@ export class PersistentSession extends EventEmitter {
       if (this.shell && this.sessionInfo.isActive && this.commandQueue.length === 0 && !this.currentCommand) {
         this.shell.write('\n');
       }
-    }, 30000);
+    }, TIMEOUTS.KEEP_ALIVE_INTERVAL);
   }
 
   private resetSessionTimeout(): void {
@@ -372,7 +397,7 @@ export class SSHConnectionManager {
     privateKeyPath: string,
     command: string,
     port: number = 22,
-    timeout: number = 30000
+    timeout: number = TIMEOUTS.DEFAULT_COMMAND
   ): Promise<CommandResult> {
     const client = await this.getConnection(host, username, privateKeyPath, port);
     
@@ -461,7 +486,7 @@ export class SSHConnectionManager {
   ): Promise<Client> {
     let privateKey: Buffer;
     try {
-      privateKey = readFileSync(privateKeyPath);
+      privateKey = await readFile(privateKeyPath);
     } catch (error) {
       throw new SSHError(
         `Failed to read SSH private key from ${privateKeyPath}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -473,7 +498,7 @@ export class SSHConnectionManager {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new SSHError('Connection timeout'));
-      }, 30000);
+      }, TIMEOUTS.KEEP_ALIVE_INTERVAL);
 
       client.on('ready', () => {
         clearTimeout(timeout);
@@ -499,10 +524,10 @@ export class SSHConnectionManager {
         port,
         username,
         privateKey,
-        timeout: 30000,
-        readyTimeout: 30000,
-        keepaliveInterval: 30000,
-        keepaliveCountMax: 3,
+        timeout: SSH_CONFIG.READY_TIMEOUT,
+        readyTimeout: SSH_CONFIG.READY_TIMEOUT,
+        keepaliveInterval: SSH_CONFIG.KEEPALIVE_INTERVAL,
+        keepaliveCountMax: SSH_CONFIG.KEEPALIVE_COUNT_MAX,
       });
     });
   }
@@ -518,7 +543,7 @@ export class SSHConnectionManager {
     privateKeyPath: string,
     port: number = 22,
     mode: SessionMode = 'normal',
-    timeoutMs: number = 600000 // 10 minutes default
+    timeoutMs: number = TIMEOUTS.DEFAULT_SESSION
   ): Promise<PersistentSession> {
     if (this.sessions.has(sessionId)) {
       throw new SSHError(`Session with ID '${sessionId}' already exists`);
@@ -575,7 +600,7 @@ export class SSHConnectionManager {
         // Force cleanup even if 'closed' event doesn't fire
         this.sessions.delete(sessionId);
         resolve(true);
-      }, 3000); // 3 second timeout
+      }, TIMEOUTS.FORCE_CLOSE);
       
       // Use once() instead of on() to avoid multiple event listeners
       session.once('closed', () => {
@@ -625,7 +650,7 @@ export class SSHConnectionManager {
       return new Promise<void>((resolve) => {
         const timeout = setTimeout(() => {
           resolve(); // Resolve even if 'closed' event doesn't fire
-        }, 5000); // 5 second timeout
+        }, TIMEOUTS.SESSION_CLOSE);
         
         // Use once() instead of on() to avoid multiple event listeners
         session.once('closed', () => {
@@ -642,7 +667,7 @@ export class SSHConnectionManager {
         if (connInfo.connected) {
           const timeout = setTimeout(() => {
             resolve(); // Resolve even if 'close' event doesn't fire
-          }, 5000); // 5 second timeout
+          }, TIMEOUTS.SESSION_CLOSE);
           
           // Use once() instead of on() to avoid multiple event listeners
           connInfo.client.once('close', () => {

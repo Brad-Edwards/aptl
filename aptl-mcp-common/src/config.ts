@@ -2,7 +2,6 @@
 
 import { existsSync } from 'fs';
 import { resolve } from 'path';
-// @ts-ignore: TypeScript can't find declaration but module exists and builds correctly
 import { expandTilde } from './utils.js';
 
 // Lab configuration matching actual docker-lab-config.json structure
@@ -53,9 +52,15 @@ async function loadDockerLabConfig(configPath: string): Promise<LabConfig> {
   const configContent = await fs.readFile(configPath, 'utf8');
   const config = JSON.parse(configContent) as LabConfig;
   
-  // Validate server configuration exists
+  // Validate required configuration sections exist
   if (!config.server) {
     throw new Error('Server configuration is required in docker-lab-config.json');
+  }
+  if (!config.containers) {
+    throw new Error('Containers configuration is required in docker-lab-config.json');
+  }
+  if (!config.containers[config.server.configKey]) {
+    throw new Error(`Container '${config.server.configKey}' not found in configuration`);
   }
   
   console.error(`[MCP] Loaded Docker lab config for: ${config.lab.name}`);
@@ -85,6 +90,10 @@ export async function loadLabConfig(configPath: string): Promise<LabConfig> {
 export function getTargetCredentials(config: LabConfig): { sshKey: string; username: string; port: number; target: string } {
   const configKey = config.server.configKey;
   const container = config.containers[configKey];
+  
+  if (!container) {
+    throw new Error(`Container '${configKey}' not found in configuration`);
+  }
   
   if (!container.enabled) {
     throw new Error(`${config.server.targetName} instance is not enabled`);

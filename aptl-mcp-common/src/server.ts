@@ -11,6 +11,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  CallToolRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import { type LabConfig } from './config.js';
 import { SSHConnectionManager } from './ssh.js';
@@ -49,7 +50,7 @@ export function createMCPServer(labConfig: LabConfig) {
     };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
     const { name, arguments: args } = request.params;
     
     const handler = cachedHandlers[name];
@@ -65,6 +66,9 @@ export function createMCPServer(labConfig: LabConfig) {
     return handler(args, context);
   });
 
+  // Setup graceful shutdown handlers (once per process)
+  let handlersSetup = false;
+  
   // Return server with start method
   return {
     async start() {
@@ -72,18 +76,22 @@ export function createMCPServer(labConfig: LabConfig) {
       await server.connect(transport);
       console.error(`[MCP] ${labConfig.server.description.split(' - ')[0]} server running on stdio`);
       
-      // Setup graceful shutdown
-      process.on('SIGINT', async () => {
-        console.error('[MCP] Shutting down gracefully...');
-        await sshManager.disconnectAll();
-        process.exit(0);
-      });
-      
-      process.on('SIGTERM', async () => {
-        console.error('[MCP] Shutting down gracefully...');
-        await sshManager.disconnectAll();
-        process.exit(0);
-      });
+      // Setup graceful shutdown only once
+      if (!handlersSetup) {
+        process.on('SIGINT', async () => {
+          console.error('[MCP] Shutting down gracefully...');
+          await sshManager.disconnectAll();
+          process.exit(0);
+        });
+        
+        process.on('SIGTERM', async () => {
+          console.error('[MCP] Shutting down gracefully...');
+          await sshManager.disconnectAll();
+          process.exit(0);
+        });
+        
+        handlersSetup = true;
+      }
     }
   };
 }

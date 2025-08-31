@@ -17,6 +17,17 @@ const baseHandlers = {
     const configKey = labConfig.server.configKey;
     const container = labConfig.containers[configKey];
     
+    if (!container) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Container '${configKey}' not found in configuration`,
+          },
+        ],
+      };
+    }
+    
     if (!container.enabled) {
       return {
         content: [

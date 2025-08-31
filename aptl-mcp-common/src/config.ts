@@ -15,7 +15,6 @@ export interface LabConfig {
     toolPrefix: string;
     targetName: string;
     configKey: string;
-    envPrefix: string;
   };
   lab: {
     name: string;

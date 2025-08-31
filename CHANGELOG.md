@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Made SSH MCP servers fully configuration driven
 - Migrated SSH MCP server common code to `aptl-mcp-common` library
 
+### Fixed
+
+- Test coverage for `aptl-mcp-common` library
+
 ## [3.0.2] - 2025-08-30
 
 ### Changed

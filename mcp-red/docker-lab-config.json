@@ -6,8 +6,7 @@
     "description": "APTL Kali Red Team MCP Server - Provides AI agents with secure access to Kali Linux red team operations in the APTL (Advanced Purple Team Lab) environment.",
     "toolPrefix": "kali",
     "targetName": "Kali Linux",
-    "configKey": "kali",
-    "envPrefix": "APTL_KALI"
+    "configKey": "kali"
   },
   "lab": {
     "name": "aptl-local",

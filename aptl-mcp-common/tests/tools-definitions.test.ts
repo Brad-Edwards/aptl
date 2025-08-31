@@ -45,4 +45,37 @@ describe('generateToolDefinitions', () => {
     expect(tools[1].name).toBe('kali_run_command');
     expect(tools[0].description).toContain('Kali Linux');
   });
+
+  it('handles empty toolPrefix', () => {
+    const emptyConfig = {
+      toolPrefix: '',
+      targetName: 'Test Container'
+    };
+    
+    const tools = generateToolDefinitions(emptyConfig);
+    expect(tools[0].name).toBe('_info');
+    expect(tools[1].name).toBe('_run_command');
+  });
+
+  it('handles empty targetName', () => {
+    const emptyConfig = {
+      toolPrefix: 'test',
+      targetName: ''
+    };
+    
+    const tools = generateToolDefinitions(emptyConfig);
+    expect(tools[0].description).toContain(' instance in the lab');
+    expect(tools[1].description).toContain(' instance (creates temporary session)');
+  });
+
+  it('all tools have required properties', () => {
+    const tools = generateToolDefinitions(mockServerConfig);
+    
+    tools.forEach(tool => {
+      expect(tool.name).toBeDefined();
+      expect(tool.description).toBeDefined();
+      expect(tool.inputSchema).toBeDefined();
+      expect(tool.inputSchema.type).toBe('object');
+    });
+  });
 });

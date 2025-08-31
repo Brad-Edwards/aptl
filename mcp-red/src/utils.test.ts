@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { expandTilde } from './utils.js';
+import { expandTilde } from 'aptl-mcp-common';
 import { homedir } from 'os';
 
 describe('expandTilde', () => {

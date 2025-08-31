@@ -3,7 +3,7 @@
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 // @ts-ignore: TypeScript can't find declaration but module exists and builds correctly
-import { expandTilde } from 'aptl-mcp-common';
+import { expandTilde } from './utils.js';
 
 // Lab configuration matching actual docker-lab-config.json structure
 export interface LabConfig {
@@ -43,10 +43,7 @@ export interface LabConfig {
 /**
  * Load Docker lab configuration from JSON file
  */
-async function loadDockerLabConfig(): Promise<LabConfig> {
-  // Config is in the project root, one level up from build directory
-  const configPath = resolve(new URL('.', import.meta.url).pathname, '..', 'docker-lab-config.json');
-  
+async function loadDockerLabConfig(configPath: string): Promise<LabConfig> {
   console.error(`[MCP] Looking for Docker config at: ${configPath}`);
   
   if (!existsSync(configPath)) {
@@ -69,8 +66,8 @@ async function loadDockerLabConfig(): Promise<LabConfig> {
 /**
  * Load lab configuration from Docker setup
  */
-export async function loadLabConfig(): Promise<LabConfig> {
-  const config = await loadDockerLabConfig();
+export async function loadLabConfig(configPath: string): Promise<LabConfig> {
+  const config = await loadDockerLabConfig(configPath);
   
   // Expand tilde paths for SSH keys
   const configKey = config.server.configKey;

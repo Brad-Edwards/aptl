@@ -1,32 +1,34 @@
 
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { LabConfig } from '../config.js';
 
-export const toolDefinitions: Tool[] = [
+export function generateToolDefinitions(serverConfig: LabConfig['server']): Tool[] {
+  return [
   {
-    name: 'minetest_client_info',
-    description: 'Get information about the Minetest Client instance in the lab',
+    name: `${serverConfig.toolPrefix}_info`,
+    description: `Get information about the ${serverConfig.targetName} instance in the lab`,
     inputSchema: {
       type: 'object',
       properties: {},
     },
   },
   {
-    name: 'mc_client_run_command',
-    description: 'Execute a command on the Minetest Client instance (creates temporary session)',
+    name: `${serverConfig.toolPrefix}_run_command`,
+    description: `Execute a command on the ${serverConfig.targetName} instance (creates temporary session)`,
     inputSchema: {
       type: 'object',
       properties: {
         command: {
           type: 'string',
-          description: 'Command to execute on Minetest Client',
+          description: `Command to execute on ${serverConfig.targetName}`,
         },
       },
       required: ['command'],
     },
   },
   {
-    name: 'mc_client_interactive_session',
+    name: `${serverConfig.toolPrefix}_interactive_session`,
     description: 'Create a persistent session that waits for each command to complete with structured output',
     inputSchema: {
       type: 'object',
@@ -45,7 +47,7 @@ export const toolDefinitions: Tool[] = [
     },
   },
   {
-    name: 'mc_client_background_session',
+    name: `${serverConfig.toolPrefix}_background_session`,
     description: 'Create a background session for long-running processes or interactive programs',
     inputSchema: {
       type: 'object',
@@ -69,7 +71,7 @@ export const toolDefinitions: Tool[] = [
     },
   },
   {
-    name: 'mc_client_session_command',
+    name: `${serverConfig.toolPrefix}_session_command`,
     description: 'Execute a command in an existing persistent session',
     inputSchema: {
       type: 'object',
@@ -97,7 +99,7 @@ export const toolDefinitions: Tool[] = [
     },
   },
   {
-    name: 'mc_client_list_sessions',
+    name: `${serverConfig.toolPrefix}_list_sessions`,
     description: 'List all active persistent sessions',
     inputSchema: {
       type: 'object',
@@ -105,7 +107,7 @@ export const toolDefinitions: Tool[] = [
     },
   },
   {
-    name: 'mc_client_close_session',
+    name: `${serverConfig.toolPrefix}_close_session`,
     description: 'Close a specific persistent session',
     inputSchema: {
       type: 'object',
@@ -119,7 +121,7 @@ export const toolDefinitions: Tool[] = [
     },
   },
   {
-    name: 'mc_client_get_session_output',
+    name: `${serverConfig.toolPrefix}_get_session_output`,
     description: 'Get buffered output from a background session',
     inputSchema: {
       type: 'object',
@@ -142,11 +144,15 @@ export const toolDefinitions: Tool[] = [
     },
   },
   {
-    name: 'mc_client_close_all_sessions',
+    name: `${serverConfig.toolPrefix}_close_all_sessions`,
     description: 'Close all active persistent sessions',
     inputSchema: {
       type: 'object',
       properties: {},
     },
   },
-];
+  ];
+}
+
+// Default tool definitions for backward compatibility
+export const toolDefinitions: Tool[] = [];

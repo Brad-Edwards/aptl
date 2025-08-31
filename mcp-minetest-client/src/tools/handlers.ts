@@ -1,7 +1,7 @@
 
 
 import { SSHConnectionManager, SessionMetadata } from 'aptl-mcp-common';
-import { LabConfig, getMinetestClientCredentials } from '../config.js';
+import { LabConfig, getTargetCredentials } from '../config.js';
 
 export interface ToolContext {
   sshManager: SSHConnectionManager;
@@ -10,14 +10,19 @@ export interface ToolContext {
 
 export type ToolHandler = (args: any, context: ToolContext) => Promise<any>;
 
-export const toolHandlers: Record<string, ToolHandler> = {
-  minetest_client_info: async (args: any, { labConfig }: ToolContext) => {
-    if (!labConfig.minetestClient.enabled) {
+// Base handler functions
+const baseHandlers = {
+
+  target_info: async (args: any, { labConfig }: ToolContext) => {
+    const configKey = labConfig.server.configKey;
+    const container = labConfig.containers[configKey];
+    
+    if (!container.enabled) {
       return {
         content: [
           {
             type: 'text',
-            text: 'Minetest Client instance is not enabled in the current lab configuration.',
+            text: `${labConfig.server.targetName} instance is not enabled in the current lab configuration.`,
           },
         ],
       };
@@ -28,25 +33,26 @@ export const toolHandlers: Record<string, ToolHandler> = {
         {
           type: 'text',
           text: JSON.stringify({
-            minetest_client_ip: labConfig.minetestClient.public_ip,
-            ssh_user: labConfig.minetestClient.ssh_user,
-            ssh_port: labConfig.minetestClient.ssh_port,
+            target_ip: container.container_ip,
+            ssh_user: container.ssh_user,
+            ssh_port: container.ssh_port,
             lab_name: labConfig.lab.name,
-            lab_network: labConfig.network.vpc_cidr,
-            note: 'Use Minetest Client for memory scanning operations. Target Minetest processes in this container.',
+            lab_network: labConfig.lab.network_subnet,
+            target_name: labConfig.server.targetName,
+            note: `Use ${labConfig.server.targetName} for operations in this container.`,
           }, null, 2),
         },
       ],
     };
   },
 
-  mc_client_run_command: async (args: any, { sshManager, labConfig }: ToolContext) => {
+  run_command: async (args: any, { sshManager, labConfig }: ToolContext) => {
     const { command } = args as {
       command: string;
     };
 
     try {
-      const credentials = getMinetestClientCredentials(labConfig);
+      const credentials = getTargetCredentials(labConfig);
 
       const result = await sshManager.executeCommand(
         credentials.target,
@@ -86,7 +92,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  mc_client_interactive_session: async (args: any, { sshManager, labConfig }: ToolContext) => {
+  interactive_session: async (args: any, { sshManager, labConfig }: ToolContext) => {
     const { 
       session_id,
       timeout_ms = 600000
@@ -97,7 +103,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
 
     try {
       const finalSessionId = session_id || `session_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      const credentials = getMinetestClientCredentials(labConfig);
+      const credentials = getTargetCredentials(labConfig);
 
       const session = await sshManager.createSession(
         finalSessionId,
@@ -123,7 +129,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
               type: 'interactive',
               mode: 'normal',
               created_at: sessionInfo.createdAt,
-              message: `Minetest Client session '${sessionInfo.sessionId}' created successfully`
+              message: `${labConfig.server.targetName} session '${sessionInfo.sessionId}' created successfully`
             }, null, 2),
           },
         ],
@@ -143,7 +149,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  mc_client_background_session: async (args: any, { sshManager, labConfig }: ToolContext) => {
+  background_session: async (args: any, { sshManager, labConfig }: ToolContext) => {
     const { 
       session_id,
       raw = false,
@@ -156,7 +162,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
 
     try {
       const finalSessionId = session_id || `bg_session_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      const credentials = getMinetestClientCredentials(labConfig);
+      const credentials = getTargetCredentials(labConfig);
 
       const session = await sshManager.createSession(
         finalSessionId,
@@ -182,7 +188,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
               type: 'background',
               mode: raw ? 'raw' : 'normal',
               created_at: sessionInfo.createdAt,
-              message: `Minetest Client background session '${sessionInfo.sessionId}' created successfully${raw ? ' (raw mode for interactive programs)' : ''}`
+              message: `${labConfig.server.targetName} background session '${sessionInfo.sessionId}' created successfully${raw ? ' (raw mode for interactive programs)' : ''}`
             }, null, 2),
           },
         ],
@@ -202,7 +208,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  mc_client_session_command: async (args: any, { sshManager }: ToolContext) => {
+  session_command: async (args: any, { sshManager }: ToolContext) => {
     const { session_id, command, timeout = 30000, raw } = args as {
       session_id: string;
       command: string;
@@ -245,7 +251,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  mc_client_list_sessions: async (_args: any, { sshManager }: ToolContext) => {
+  list_sessions: async (_args: any, { sshManager }: ToolContext) => {
     try {
       const sessions = sshManager.listSessions();
 
@@ -286,7 +292,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  mc_client_close_session: async (args: any, { sshManager }: ToolContext) => {
+  close_session: async (args: any, { sshManager }: ToolContext) => {
     const { session_id } = args as { session_id: string };
 
     try {
@@ -320,7 +326,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  mc_client_get_session_output: async (args: any, { sshManager }: ToolContext) => {
+  get_session_output: async (args: any, { sshManager }: ToolContext) => {
     const { session_id, lines, clear = false } = args as {
       session_id: string;
       lines?: number;
@@ -377,7 +383,7 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  mc_client_close_all_sessions: async (_args: any, { sshManager }: ToolContext) => {
+  close_all_sessions: async (_args: any, { sshManager }: ToolContext) => {
     try {
       const sessions = sshManager.listSessions();
       const sessionCount = sessions.length;
@@ -411,3 +417,26 @@ export const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 };
+
+/**
+ * Generate tool handlers with server-specific names
+ */
+export function generateToolHandlers(serverConfig: LabConfig['server']): Record<string, ToolHandler> {
+  const handlers: Record<string, ToolHandler> = {};
+  
+  // Map server-specific tool names to base handlers
+  handlers[`${serverConfig.toolPrefix}_info`] = baseHandlers.target_info;
+  handlers[`${serverConfig.toolPrefix}_run_command`] = baseHandlers.run_command;
+  handlers[`${serverConfig.toolPrefix}_interactive_session`] = baseHandlers.interactive_session;
+  handlers[`${serverConfig.toolPrefix}_background_session`] = baseHandlers.background_session;
+  handlers[`${serverConfig.toolPrefix}_session_command`] = baseHandlers.session_command;
+  handlers[`${serverConfig.toolPrefix}_list_sessions`] = baseHandlers.list_sessions;
+  handlers[`${serverConfig.toolPrefix}_close_session`] = baseHandlers.close_session;
+  handlers[`${serverConfig.toolPrefix}_get_session_output`] = baseHandlers.get_session_output;
+  handlers[`${serverConfig.toolPrefix}_close_all_sessions`] = baseHandlers.close_all_sessions;
+  
+  return handlers;
+}
+
+// Default tool handlers for backward compatibility
+export const toolHandlers: Record<string, ToolHandler> = {};

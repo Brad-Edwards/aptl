@@ -20,6 +20,7 @@
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.17.2",
+        "aptl-mcp-common": "file:../aptl-mcp-common",
         "@types/ssh2": "^1.15.5",
         "ssh2": "^1.16.0",
         "zod": "^3.25.49"

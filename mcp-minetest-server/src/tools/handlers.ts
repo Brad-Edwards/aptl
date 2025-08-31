@@ -1,6 +1,6 @@
 
 
-import { SSHConnectionManager } from '../ssh.js';
+import { SSHConnectionManager } from 'aptl-mcp-common';
 import { LabConfig } from '../config.js';
 
 export interface ToolContext {

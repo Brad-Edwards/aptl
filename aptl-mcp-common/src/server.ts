@@ -15,20 +15,38 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { type LabConfig } from './config.js';
 import { SSHConnectionManager } from './ssh.js';
+import { HTTPClient } from './http.js';
 import { generateToolDefinitions } from './tools/definitions.js';
 import { generateToolHandlers, type ToolContext } from './tools/handlers.js';
+import { generateAPIToolDefinitions } from './tools/api-definitions.js';
+import { generateAPIToolHandlers, type APIToolContext } from './tools/api-handlers.js';
 
 /**
  * Create and configure an MCP server with the provided lab configuration
  */
 export function createMCPServer(labConfig: LabConfig) {
-  const sshManager = new SSHConnectionManager();
+  // Initialize clients based on config
+  const sshManager = labConfig.containers ? new SSHConnectionManager() : null;
+  const httpClient = labConfig.api ? new HTTPClient(labConfig.api) : null;
   
-  // Pre-generate tools and handlers
-  const cachedTools = generateToolDefinitions(labConfig.server);
-  const cachedHandlers = generateToolHandlers(labConfig.server);
+  // Pre-generate tools and handlers based on available capabilities
+  let cachedTools: any[] = [];
+  let cachedHandlers: Record<string, any> = {};
+  
+  if (sshManager) {
+    cachedTools.push(...generateToolDefinitions(labConfig.server));
+    Object.assign(cachedHandlers, generateToolHandlers(labConfig.server));
+  }
+  
+  if (httpClient) {
+    // Only include generic tools if no predefined queries exist
+    const includeGeneric = !labConfig.queries || Object.keys(labConfig.queries).length === 0;
+    cachedTools.push(...generateAPIToolDefinitions(labConfig.server, labConfig.queries, includeGeneric));
+    Object.assign(cachedHandlers, generateAPIToolHandlers(labConfig.server, labConfig.queries, includeGeneric));
+  }
   
   console.error(`[MCP] Initialized ${labConfig.server.name} with lab: ${labConfig.lab.name}`);
+  console.error(`[MCP] Available capabilities: ${sshManager ? 'SSH' : ''}${sshManager && httpClient ? ' + ' : ''}${httpClient ? 'HTTP API' : ''}`);
 
   // Create MCP server
   const server = new Server(
@@ -58,10 +76,28 @@ export function createMCPServer(labConfig: LabConfig) {
       throw new Error(`Unknown tool: ${name}`);
     }
 
-    const context: ToolContext = {
-      sshManager,
-      labConfig,
-    };
+    // Determine context type based on tool name and available clients
+    let context: ToolContext | APIToolContext;
+    
+    if (name.includes('_api_') || (labConfig.queries && Object.keys(labConfig.queries).some(q => name.endsWith(`_${q}`)))) {
+      // API tool context
+      if (!httpClient) {
+        throw new Error('API tool requested but HTTP client not configured');
+      }
+      context = {
+        httpClient,
+        labConfig,
+      } as APIToolContext;
+    } else {
+      // SSH tool context
+      if (!sshManager) {
+        throw new Error('SSH tool requested but SSH manager not configured');
+      }
+      context = {
+        sshManager,
+        labConfig,
+      } as ToolContext;
+    }
 
     return handler(args, context);
   });
@@ -80,13 +116,17 @@ export function createMCPServer(labConfig: LabConfig) {
       if (!handlersSetup) {
         process.on('SIGINT', async () => {
           console.error('[MCP] Shutting down gracefully...');
-          await sshManager.disconnectAll();
+          if (sshManager) {
+            await sshManager.disconnectAll();
+          }
           process.exit(0);
         });
         
         process.on('SIGTERM', async () => {
           console.error('[MCP] Shutting down gracefully...');
-          await sshManager.disconnectAll();
+          if (sshManager) {
+            await sshManager.disconnectAll();
+          }
           process.exit(0);
         });
         

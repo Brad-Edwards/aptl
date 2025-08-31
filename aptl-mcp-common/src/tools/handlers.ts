@@ -14,6 +14,17 @@ export type ToolHandler = (args: any, context: ToolContext) => Promise<any>;
 const baseHandlers = {
 
   target_info: async (args: any, { labConfig }: ToolContext) => {
+    if (!labConfig.containers) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `${labConfig.server.targetName} containers not configured - use API tools instead.`,
+          },
+        ],
+      };
+    }
+    
     const configKey = labConfig.server.configKey;
     const container = labConfig.containers[configKey];
     

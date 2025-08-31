@@ -2,10 +2,11 @@
 console.error(`[MCP-TOPLEVEL] Current working directory: ${process.cwd()}`);
 
 /**
- * APTL Minetest Client MCP Server
+ * APTL MCP Server
  * 
- * Provides AI agents with secure access to Minetest Client container operations
+ * Provides AI agents with secure access to container operations
  * in the APTL (Advanced Purple Team Lab) environment.
+ * Server configuration determines the specific target and capabilities.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -16,19 +17,26 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { loadLabConfig, type LabConfig } from './config.js';
 import { SSHConnectionManager } from 'aptl-mcp-common';
-import { toolDefinitions } from './tools/definitions.js';
-import { toolHandlers, type ToolContext } from './tools/handlers.js';
+import { generateToolDefinitions } from './tools/definitions.js';
+import { generateToolHandlers, type ToolContext } from './tools/handlers.js';
 
 // Global configuration and SSH manager
 let labConfig: LabConfig;
 let sshManager: SSHConnectionManager;
+let cachedTools: any[];
+let cachedHandlers: Record<string, any>;
 
 // Initialize configuration and SSH manager
 async function initialize() {
   try {
     labConfig = await loadLabConfig();
     sshManager = new SSHConnectionManager();
-    console.error(`[MCP] Initialized with lab: ${labConfig.lab.name}`);
+    
+    // Pre-generate tools and handlers after config is loaded
+    cachedTools = generateToolDefinitions(labConfig.server);
+    cachedHandlers = generateToolHandlers(labConfig.server);
+    
+    console.error(`[MCP] Initialized ${labConfig.server.name} with lab: ${labConfig.lab.name}`);
   } catch (error) {
     console.error('[MCP] Failed to initialize:', error);
     process.exit(1);
@@ -36,57 +44,67 @@ async function initialize() {
 }
 
 /**
- * Create MCP server with tools for Minetest Client operations
+ * Create MCP server with configurable tools
  */
-const server = new Server(
-  {
-    name: 'minetest-client',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {},
+let server: Server;
+
+// Initialize server after config is loaded
+function initializeServer() {
+  server = new Server(
+    {
+      name: labConfig.server.name,
+      version: labConfig.server.version,
     },
-  }
-);
+    {
+      capabilities: {
+        tools: {},
+      },
+    }
+  );
+}
 
 /**
- * Handler that lists available tools for red team operations
+ * Handler that lists available tools
  */
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: toolDefinitions,
-  };
-});
+function setupRequestHandlers() {
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    return {
+      tools: cachedTools,
+    };
+  });
+
+  server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
+    const { name, arguments: args } = request.params;
+    
+    const handler = cachedHandlers[name];
+    if (!handler) {
+      throw new Error(`Unknown tool: ${name}`);
+    }
+
+    const context: ToolContext = {
+      sshManager,
+      labConfig,
+    };
+
+    return handler(args, context);
+  });
+}
 
 /**
  * Handler for executing tools
  */
-server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
-  const { name, arguments: args } = request.params;
-  
-  const handler = toolHandlers[name];
-  if (!handler) {
-    throw new Error(`Unknown tool: ${name}`);
-  }
-
-  const context: ToolContext = {
-    sshManager,
-    labConfig,
-  };
-
-  return handler(args, context);
-});
 
 /**
  * Start the server using stdio transport
  */
 async function main() {
   await initialize();
+  initializeServer();
+  setupRequestHandlers();
   
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('[MCP] Minetest Client server running on stdio');
+  console.error(`[MCP] ${labConfig.server.description.split(' - ')[0]} server running on stdio`);
 }
 
 process.on('SIGINT', async () => {

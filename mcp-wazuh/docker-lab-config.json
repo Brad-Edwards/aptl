@@ -1,0 +1,85 @@
+{
+  "version": "1.0.0",
+  "server": {
+    "name": "wazuh-siem",
+    "version": "1.0.0",
+    "description": "APTL Wazuh SIEM MCP Server - Provides AI agents with secure access to Wazuh SIEM operations in the APTL (Advanced Purple Team Lab) environment.",
+    "toolPrefix": "wazuh",
+    "targetName": "Wazuh SIEM",
+    "configKey": "",
+    "envPrefix": "APTL_WAZUH"
+  },
+  "lab": {
+    "name": "aptl-wazuh",
+    "network_subnet": "172.20.0.0/16"
+  },
+  "api": {
+    "baseUrl": "https://localhost:9200",
+    "auth": {
+      "type": "basic",
+      "username": "admin",
+      "password": "SecretPassword"
+    },
+    "timeout": 30000,
+    "verify_ssl": false,
+    "default_headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "queries": {
+    "query_alerts": {
+      "url": "https://localhost:9200/wazuh-alerts-4.x-*/_search",
+      "method": "POST",
+      "auth": {
+        "type": "basic",
+        "username": "admin",
+        "password": "SecretPassword"
+      },
+      "verify_ssl": false,
+      "body": {
+        "query": {
+          "match_all": {}
+        },
+        "size": 100,
+        "sort": [{ "@timestamp": { "order": "desc" } }]
+      },
+      "description": "Search processed Wazuh alerts with filters. Use Elasticsearch query DSL in body parameter. Example: {\"body\": {\"query\": {\"range\": {\"@timestamp\": {\"gte\": \"now-1h\"}}}}}"
+    },
+    "query_logs": {
+      "url": "https://localhost:9200/wazuh-archives-4.x-*/_search",
+      "method": "POST",
+      "auth": {
+        "type": "basic",
+        "username": "admin",
+        "password": "SecretPassword"
+      },
+      "verify_ssl": false,
+      "body": {
+        "query": {
+          "match_all": {}
+        },
+        "size": 50,
+        "sort": [{ "@timestamp": { "order": "desc" } }]
+      },
+      "description": "Search raw log data before rule processing. Use Elasticsearch query DSL in body parameter. Example: {\"body\": {\"query\": {\"match\": {\"data.srcip\": \"192.168.1.1\"}}}}"
+    },
+    "create_detection_rule": {
+      "url": "https://localhost:55000/manager/files",
+      "method": "PUT",
+      "auth": {
+        "type": "basic",
+        "username": "wazuh-wui",
+        "password": "WazuhPass123!"
+      },
+      "verify_ssl": false,
+      "description": "Create custom Wazuh detection rule"
+    }
+  },
+  "mcp": {
+    "server_name": "aptl-wazuh-mcp",
+    "allowed_networks": ["172.20.0.0/16", "127.0.0.0/8"],
+    "max_session_time": 3600,
+    "audit_enabled": true,
+    "log_level": "info"
+  }
+}

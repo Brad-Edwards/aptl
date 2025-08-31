@@ -1,36 +1,34 @@
 {
-  "name": "aptl-mcp-common",
-  "version": "0.1.0",
-  "description": "Common library extracted from APTL MCP servers",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+    "name": "aptl-mcp-common",
+    "version": "0.1.0",
+    "description": "Common library extracted from APTL MCP servers",
+    "type": "module",
+    "main": "./build/index.js",
+    "types": "./build/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./build/index.d.ts",
+            "import": "./build/index.js"
+        }
+    },
+    "files": [
+        "build"
+    ],
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.17.2",
+        "@types/ssh2": "^1.15.5",
+        "ssh2": "^1.16.0",
+        "zod": "^3.25.49"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.24",
+        "typescript": "^5.3.3",
+        "vitest": "^1.0.0"
+    },
+    "scripts": {
+        "build": "tsc",
+        "prepare": "npm run build",
+        "test": "vitest run",
+        "test:watch": "vitest"
     }
-  },
-  "files": ["dist"],
-  "scripts": {
-    "build": "tsc",
-    "prepare": "npm run build"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.17.2",
-    "@types/ssh2": "^1.15.5",
-    "ssh2": "^1.16.0",
-    "zod": "^3.25.49"
-  },
-  "devDependencies": {
-    "@types/node": "^20.11.24",
-    "typescript": "^5.3.3",
-    "vitest": "^1.0.0"
-  },
-  "scripts": {
-    "build": "tsc",
-    "prepare": "npm run build",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  }
 }

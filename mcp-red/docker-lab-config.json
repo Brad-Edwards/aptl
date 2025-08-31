@@ -1,24 +1,18 @@
 {
   "version": "1.0.0",
+  "server": {
+    "name": "kali-red-team",
+    "version": "1.0.0",
+    "description": "APTL Kali Red Team MCP Server - Provides AI agents with secure access to Kali Linux red team operations in the APTL (Advanced Purple Team Lab) environment.",
+    "toolPrefix": "kali",
+    "targetName": "Kali Linux",
+    "configKey": "kali"
+  },
   "lab": {
     "name": "aptl-local",
     "network_subnet": "172.20.0.0/16"
   },
   "containers": {
-    "wazuh": {
-      "container_name": "aptl-wazuh",
-      "container_ip": "172.20.0.10",
-      "ssh_key": "~/.ssh/aptl_lab_key",
-      "ssh_user": "root",
-      "enabled": true
-    },
-    "victim": {
-      "container_name": "aptl-victim", 
-      "container_ip": "172.20.0.20",
-      "ssh_key": "~/.ssh/aptl_lab_key",
-      "ssh_user": "labadmin",
-      "enabled": true
-    },
     "kali": {
       "container_name": "aptl-kali",
       "container_ip": "localhost", 
@@ -29,7 +23,7 @@
     }
   },
   "mcp": {
-    "server_name": "aptl-local-mcp",
+    "server_name": "aptl-kali-red-team-mcp",
     "allowed_networks": ["172.20.0.0/16", "127.0.0.0/8"],
     "max_session_time": 3600,
     "audit_enabled": true,

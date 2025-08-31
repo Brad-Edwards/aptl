@@ -1,5 +1,13 @@
 {
   "version": "1.0.0",
+  "server": {
+    "name": "minetest-client",
+    "version": "1.0.0",
+    "description": "APTL Minetest Client MCP Server - Provides AI agents with secure access to Minetest Client container operations in the APTL (Advanced Purple Team Lab) environment.",
+    "toolPrefix": "mc_client",
+    "targetName": "Minetest Client",
+    "configKey": "minetest-client"
+  },
   "lab": {
     "name": "aptl-minetest-client",
     "network_subnet": "172.20.0.0/16"

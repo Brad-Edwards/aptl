@@ -5,7 +5,7 @@ import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { dirname, resolve } from 'path';
 // @ts-ignore: TypeScript can't find declaration but module exists and builds correctly
-import { expandTilde } from './utils.js';
+import { expandTilde } from 'aptl-mcp-common';
 
 // Schema for Kali instance configuration
 export const KaliInstanceSchema = z.object({

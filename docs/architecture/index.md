@@ -1,5 +1,7 @@
 # Lab Architecture
 
+See [Configuration Management](./config-management.md) for how environment variables and runtime settings are managed across the lab.
+
 ## Network Topology
 
 ```mermaid

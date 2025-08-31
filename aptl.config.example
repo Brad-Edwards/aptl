@@ -1,0 +1,11 @@
+version: 1
+paths:
+  data_dir: ${APT_DATA_DIR:-./data}
+
+wazuh:
+  api_port: ${WAZUH_API_PORT:-55000}
+  dashboard_port: ${WAZUH_DASHBOARD_PORT:-443}
+
+kali:
+  ssh_port: ${KALI_SSH_PORT:-2023}
+

@@ -72,6 +72,7 @@ nav:
     - Overview: architecture/index.md
     - Docker Compose: architecture/docker-compose.md
     - Networking: architecture/networking.md
+    - Config Management: architecture/config-management.md
   - Deployment:
     - Overview: deployment/index.md
     - Local Setup: deployment/local-setup.md

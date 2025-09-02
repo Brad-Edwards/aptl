@@ -1,5 +1,5 @@
-# Minetest client container using Ubuntu 22.04 LTS
-# Based on victim container template with minetest client capabilities
+# Reverse engineering container using Ubuntu 22.04 LTS
+# Based on victim container template with reverse engineering toolset
 FROM ubuntu:22.04
 
 # Prevent interactive prompts during package installation
@@ -55,13 +55,6 @@ RUN mkdir -p /home/labadmin/.ssh && \
     chmod 700 /home/labadmin/.ssh && \
     chown -R labadmin:labadmin /home/labadmin/.ssh
 
-# Create rdpuser for GUI access (password auth)
-RUN useradd -m -s /bin/bash rdpuser && \
-    usermod -aG sudo rdpuser && \
-    echo "rdpuser:rdppass123" | chpasswd && \
-    echo "rdpuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/rdpuser && \
-    chmod 440 /etc/sudoers.d/rdpuser
-
 RUN mkdir -p /opt/purple-team/scripts /etc/rsyslog.d
 
 COPY entrypoint.sh /usr/local/bin/
@@ -76,19 +69,19 @@ RUN chmod +x /opt/purple-team/scripts/install-falco.sh
 COPY install-all.sh /opt/purple-team/scripts/
 RUN chmod +x /opt/purple-team/scripts/install-all.sh
 
-COPY setup-gameclient.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/setup-gameclient.sh
+COPY setup-reverse-tools.sh /opt/purple-team/scripts/
+RUN chmod +x /opt/purple-team/scripts/setup-reverse-tools.sh
 
 COPY ossec.conf.template /opt/purple-team/scripts/
 
 RUN mkdir -p /etc/falco/config.d
 COPY falco_custom.yaml /etc/falco/config.d/
 
-COPY minetest-client-install.service /etc/systemd/system/
-RUN systemctl enable minetest-client-install.service
+COPY reverse-tools-install.service /etc/systemd/system/
+RUN systemctl enable reverse-tools-install.service
 
-# Expose SSH, syslog, and VNC port
-EXPOSE 22 514 5901
+# Expose SSH and syslog ports
+EXPOSE 22 514
 
 VOLUME ["/var/log", "/home"]
 

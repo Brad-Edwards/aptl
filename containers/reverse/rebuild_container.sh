@@ -1,4 +1,4 @@
 #!/bin/bash
-docker compose stop minetest-client
-docker compose rm -f minetest-client
-docker compose up --build -d minetest-client
+docker compose stop reverse
+docker compose rm -f reverse
+docker compose up --build -d reverse

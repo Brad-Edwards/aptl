@@ -4,7 +4,7 @@ set -e
 echo "=== Purple Team Lab Installation Starting ==="
 
 # Check if already installed
-if [ -f /opt/lab/.minetest-client_installed ]; then
+if [ -f /opt/lab/.reverse_tools_installed ]; then
     echo "All services already installed, exiting..."
     exit 0
 fi
@@ -14,7 +14,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 
 echo "Step 1: Installing Wazuh Agent..."
-export AGENT_NAME="minetest-client-$(hostname)-$(date +%s)"
+export AGENT_NAME="reverse-$(hostname)-$(date +%s)"
 /opt/purple-team/scripts/install-wazuh.sh
 
 echo "Step 2: Installing Falco..."
@@ -31,9 +31,9 @@ systemctl restart wazuh-agent
 
 echo "=== All Purple Team Lab Services Installed ==="
 
-echo "Step 4: Installing and configuring game client..."
-/opt/purple-team/scripts/setup-gameclient.sh
+echo "Step 4: Installing and configuring reverse engineering tools..."
+/opt/purple-team/scripts/setup-reverse-tools.sh
 
 # Create flag to prevent re-running
 mkdir -p /opt/lab
-touch /opt/lab/.minetest-client_installed
+touch /opt/lab/.reverse_tools_installed

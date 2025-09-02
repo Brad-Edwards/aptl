@@ -1,0 +1,21 @@
+# Copy this file to terraform.tfvars and fill in your values
+
+# Your public IP address in CIDR format (find with: curl ifconfig.me)
+# Example: "203.0.113.42/32"
+your_ip_cidr = "YOUR_IP_ADDRESS/32"
+
+# AWS region to deploy resources
+aws_region = "us-east-1"
+
+# EC2 instance type - t3.large recommended for exploit dev work
+instance_type = "t3.large"
+
+# Root disk size in GB - 100GB should be sufficient for most work
+disk_size_gb = 100
+
+# Administrator password for the Windows instance
+# Use a strong password - this will be the password for RDP login
+admin_password = "YourSecurePassword123!"
+
+# Path to your SSH public key (optional, for potential future SSH access)
+public_key_path = "~/.ssh/id_rsa.pub"

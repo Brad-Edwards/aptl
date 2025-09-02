@@ -10,6 +10,23 @@ cd aptl
 
 **Use the script.** Manual deployment is error-prone and takes longer.
 
+## Configuration
+
+Edit `aptl.json` to enable/disable containers:
+
+```json
+{
+  "containers": {
+    "wazuh": true,
+    "victim": true,
+    "kali": true,
+    "minetest_server": false,
+    "minetest_client": false,
+    "minecraft_server": false
+  }
+}
+```
+
 ## Manual Deployment
 
 **These steps are automated by `start-lab.sh`. Use the script unless troubleshooting.**

@@ -11,6 +11,41 @@ echo "=========================================="
 echo " Starting APTL Local Purple Team Lab"
 echo "=========================================="
 
+# Read configuration and build profile list
+echo ""
+echo "Reading lab configuration..."
+if [ ! -f "aptl.json" ]; then
+    echo "Error: aptl.json not found. Please create configuration file."
+    exit 1
+fi
+
+# Check if jq is available
+if ! command -v jq &> /dev/null; then
+    echo "Error: jq is required but not installed. Please install jq to parse configuration."
+    exit 1
+fi
+
+# Build profile list based on enabled containers
+PROFILES=""
+for container in wazuh victim kali minetest_server minetest_client minecraft_server; do
+    enabled=$(jq -r ".containers.${container}" aptl.json 2>/dev/null)
+    if [ "$enabled" = "true" ]; then
+        # Convert underscores to hyphens for profile names
+        profile_name=$(echo "$container" | sed 's/_/-/g')
+        PROFILES="$PROFILES --profile $profile_name"
+        echo "   Enabled: $container"
+    else
+        echo "   Disabled: $container"
+    fi
+done
+
+if [ -z "$PROFILES" ]; then
+    echo "Error: No containers enabled in aptl.json"
+    exit 1
+fi
+
+echo "   Profiles to deploy:$PROFILES"
+
 # Step 1: Generate SSH keys
 echo ""
 echo "Step 1: Generating SSH keys..."
@@ -33,7 +68,7 @@ cd ..
 # Step 1.6: Setup Wazuh MCP server
 echo ""
 echo "Step 1.6: Setting up Wazuh MCP server..."
-cd mcp-blue
+cd mcp-wazuh
 if [ ! -d "node_modules" ]; then
     echo "Installing MCP server dependencies..."
     npm install
@@ -96,7 +131,7 @@ docker pull kalilinux/kali-last-release:latest
 docker pull rockylinux:9
 
 # Build and start services
-docker compose up --build -d
+docker compose $PROFILES up --build -d
 
 echo ""
 echo "Step 5: Waiting for services to be ready..."
@@ -151,12 +186,23 @@ test_ssh() {
     fi
 }
 
-# Test SSH connections
-test_ssh "victim" "2022" "labadmin" || echo "   → Victim SSH may need more time"
-test_ssh "minetest-server" "2024" "labadmin" || echo "   → Minetest Server SSH may need more time"
-test_ssh "minetest-client" "2025" "labadmin" || echo "   → Minetest Client SSH may need more time"
-test_ssh "minecraft-server" "2026" "labadmin" || echo "   → Minecraft Server SSH may need more time"
-test_ssh "kali" "2023" "kali" || echo "   → Kali SSH may need more time"
+# Test SSH connections for enabled containers
+echo "Testing SSH connectivity for enabled containers..."
+if [ "$(jq -r '.containers.victim' aptl.json)" = "true" ]; then
+    test_ssh "victim" "2022" "labadmin" || echo "   → Victim SSH may need more time"
+fi
+if [ "$(jq -r '.containers.minetest_server' aptl.json)" = "true" ]; then
+    test_ssh "minetest-server" "2024" "labadmin" || echo "   → Minetest Server SSH may need more time"
+fi
+if [ "$(jq -r '.containers.minetest_client' aptl.json)" = "true" ]; then
+    test_ssh "minetest-client" "2025" "labadmin" || echo "   → Minetest Client SSH may need more time"
+fi
+if [ "$(jq -r '.containers.minecraft_server' aptl.json)" = "true" ]; then
+    test_ssh "minecraft-server" "2026" "labadmin" || echo "   → Minecraft Server SSH may need more time"
+fi
+if [ "$(jq -r '.containers.kali' aptl.json)" = "true" ]; then
+    test_ssh "kali" "2023" "kali" || echo "   → Kali SSH may need more time"
+fi
 
 # Function to output to both console and file
 output_both() {
@@ -181,25 +227,47 @@ output_both "   Dashboard: admin / SecretPassword"
 output_both "   API: wazuh-wui / MyS3cr37P450r.*-"
 output_both ""
 output_both "   SSH Access:"
-output_both "   Victim:          ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022"
-output_both "   Minetest Server: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2024"
-output_both "   Minetest Client: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2025"
-output_both "   Minecraft Server: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2026"
-output_both "   Kali:            ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023"
+if [ "$(jq -r '.containers.victim' aptl.json)" = "true" ]; then
+    output_both "   Victim:          ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022"
+fi
+if [ "$(jq -r '.containers.minetest_server' aptl.json)" = "true" ]; then
+    output_both "   Minetest Server: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2024"
+fi
+if [ "$(jq -r '.containers.minetest_client' aptl.json)" = "true" ]; then
+    output_both "   Minetest Client: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2025"
+fi
+if [ "$(jq -r '.containers.minecraft_server' aptl.json)" = "true" ]; then
+    output_both "   Minecraft Server: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2026"
+fi
+if [ "$(jq -r '.containers.kali' aptl.json)" = "true" ]; then
+    output_both "   Kali:            ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023"
+fi
 output_both ""
 output_both "   Container IPs:"
-output_both "   wazuh.manager:   172.20.0.10"
-output_both "   wazuh.dashboard: 172.20.0.11" 
-output_both "   wazuh.indexer:   172.20.0.12"
-output_both "   victim:          172.20.0.20"  
-output_both "   minetest-server: 172.20.0.24"
-output_both "   minetest-client: 172.20.0.25"
-output_both "   minecraft-server: 172.20.0.26"
-output_both "   kali:            172.20.0.30"
+if [ "$(jq -r '.containers.wazuh' aptl.json)" = "true" ]; then
+    output_both "   wazuh.manager:   172.20.0.10"
+    output_both "   wazuh.dashboard: 172.20.0.11" 
+    output_both "   wazuh.indexer:   172.20.0.12"
+fi
+if [ "$(jq -r '.containers.victim' aptl.json)" = "true" ]; then
+    output_both "   victim:          172.20.0.20"
+fi
+if [ "$(jq -r '.containers.minetest_server' aptl.json)" = "true" ]; then
+    output_both "   minetest-server: 172.20.0.24"
+fi
+if [ "$(jq -r '.containers.minetest_client' aptl.json)" = "true" ]; then
+    output_both "   minetest-client: 172.20.0.25"
+fi
+if [ "$(jq -r '.containers.minecraft_server' aptl.json)" = "true" ]; then
+    output_both "   minecraft-server: 172.20.0.26"
+fi
+if [ "$(jq -r '.containers.kali' aptl.json)" = "true" ]; then
+    output_both "   kali:            172.20.0.30"
+fi
 output_both ""
 output_both "   MCP Servers:"
 output_both "   Red Team Config: ./mcp-red/docker-lab-config.json"
-output_both "   Blue Team Config: ./mcp-blue/wazuh-api-config.json"
+output_both "   Blue Team Config: ./mcp-wazuh/docker-lab-config.json"
 output_both "   Status: Built and ready"
 output_both ""
 output_both "   Management Commands:"

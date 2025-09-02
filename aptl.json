@@ -1,0 +1,10 @@
+{
+    "containers": {
+        "wazuh": true,
+        "victim": true,
+        "kali": true,
+        "minetest_server": false,
+        "minetest_client": false,
+        "minecraft_server": false
+    }
+}

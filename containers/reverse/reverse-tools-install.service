@@ -1,7 +1,7 @@
 [Unit]
-Description=Install Minetest Client Lab Services on First Boot
+Description=Install Reverse Engineering Tools Lab Services on First Boot
 After=multi-user.target
-ConditionPathExists=!/var/ossec/.minetest-client_installed
+ConditionPathExists=!/var/ossec/.reverse_tools_installed
 
 [Service]
 Type=oneshot

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== Purple Team Lab Minetest Client Container Starting ==="
+echo "=== Purple Team Lab Reverse Engineering Container Starting ==="
 
 # Function to setup SSH key for labadmin
 setup_labadmin_ssh() {

@@ -278,6 +278,36 @@ services:
     security_opt:
       - seccomp:unconfined  # Required for some red team tools
 
+  # Reverse Engineering Container
+  reverse:
+    profiles: ["reverse"]
+    build:
+      context: ./containers/reverse
+      dockerfile: Dockerfile
+    container_name: aptl-reverse
+    hostname: reverse-host
+    restart: unless-stopped
+    networks:
+      aptl-network:
+        ipv4_address: 172.20.0.27
+    ports:
+      - "2027:22"    # SSH access  
+    environment:
+      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+    cap_add:
+      - SYS_NICE        # For process scheduling
+      - SYS_ADMIN       # Required for systemd in container
+      - SYS_RESOURCE    # For setting limits and OOM score
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ./keys:/keys:ro
+      - reverse_logs:/var/log
+    tmpfs:
+      - /run
+      - /tmp
+    security_opt:
+      - seccomp:unconfined
 
 networks:
   aptl-network:

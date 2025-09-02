@@ -1,0 +1,32 @@
+{
+  "version": "1.0.0",
+  "server": {
+    "name": "reverse",
+    "version": "1.0.0",
+    "description": "APTL Reverse Engineering MCP Server - Provides AI agents with secure access to Reverse Engineering operations in the APTL (Advanced Purple Team Lab) environment.",
+    "toolPrefix": "reverse",
+    "targetName": "Reverse Engineering",
+    "configKey": "reverse"
+  },
+  "lab": {
+    "name": "aptl-local",
+    "network_subnet": "172.20.0.0/16"
+  },
+  "containers": {
+    "reverse": {
+      "container_name": "aptl-reverse",
+      "container_ip": "localhost",
+      "ssh_key": "~/.ssh/aptl_lab_key",
+      "ssh_user": "reverse",
+      "ssh_port": 2023,
+      "enabled": true
+    }
+  },
+  "mcp": {
+    "server_name": "aptl-reverse-mcp",
+    "allowed_networks": ["172.20.0.0/16", "127.0.0.0/8"],
+    "max_session_time": 3600,
+    "audit_enabled": true,
+    "log_level": "info"
+  }
+}

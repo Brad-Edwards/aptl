@@ -5,6 +5,7 @@
         "kali": true,
         "minetest_server": false,
         "minetest_client": false,
-        "minecraft_server": false
+        "minecraft_server": false,
+        "reverse": true
     }
 }

@@ -27,7 +27,7 @@ fi
 
 # Build profile list based on enabled containers
 PROFILES=""
-for container in wazuh victim kali minetest_server minetest_client minecraft_server; do
+for container in wazuh victim kali minetest_server minetest_client minecraft_server reverse; do
     enabled=$(jq -r ".containers.${container}" aptl.json 2>/dev/null)
     if [ "$enabled" = "true" ]; then
         # Convert underscores to hyphens for profile names
@@ -203,6 +203,9 @@ fi
 if [ "$(jq -r '.containers.kali' aptl.json)" = "true" ]; then
     test_ssh "kali" "2023" "kali" || echo "   → Kali SSH may need more time"
 fi
+if [ "$(jq -r '.containers.reverse' aptl.json)" = "true" ]; then
+    test_ssh "reverse" "2027" "labadmin" || echo "   → Reverse SSH may need more time"
+fi
 
 # Function to output to both console and file
 output_both() {
@@ -242,6 +245,9 @@ fi
 if [ "$(jq -r '.containers.kali' aptl.json)" = "true" ]; then
     output_both "   Kali:            ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023"
 fi
+if [ "$(jq -r '.containers.reverse' aptl.json)" = "true" ]; then
+    output_both "   Reverse:         ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027"
+fi
 output_both ""
 output_both "   Container IPs:"
 if [ "$(jq -r '.containers.wazuh' aptl.json)" = "true" ]; then
@@ -264,10 +270,13 @@ fi
 if [ "$(jq -r '.containers.kali' aptl.json)" = "true" ]; then
     output_both "   kali:            172.20.0.30"
 fi
+if [ "$(jq -r '.containers.reverse' aptl.json)" = "true" ]; then
+    output_both "   reverse:         172.20.0.27"
+fi
 output_both ""
 output_both "   MCP Servers:"
 output_both "   Red Team Config: ./mcp-red/docker-lab-config.json"
-output_both "   Blue Team Config: ./mcp-wazuh/docker-lab-config.json"
+output_both "   Wazuh Team Config: ./mcp-wazuh/docker-lab-config.json"
 output_both "   Status: Built and ready"
 output_both ""
 output_both "   Management Commands:"

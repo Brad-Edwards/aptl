@@ -68,7 +68,7 @@ cd ..
 # Step 1.6: Setup Wazuh MCP server
 echo ""
 echo "Step 1.6: Setting up Wazuh MCP server..."
-cd mcp-blue
+cd mcp-wazuh
 if [ ! -d "node_modules" ]; then
     echo "Installing MCP server dependencies..."
     npm install
@@ -267,7 +267,7 @@ fi
 output_both ""
 output_both "   MCP Servers:"
 output_both "   Red Team Config: ./mcp-red/docker-lab-config.json"
-output_both "   Blue Team Config: ./mcp-blue/wazuh-api-config.json"
+output_both "   Blue Team Config: ./mcp-wazuh/docker-lab-config.json"
 output_both "   Status: Built and ready"
 output_both ""
 output_both "   Management Commands:"

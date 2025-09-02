@@ -110,6 +110,30 @@ resource "aws_security_group" "windows_re_sg" {
     cidr_blocks = [var.your_ip_cidr]
   }
 
+  # WinRM HTTP for remote PowerShell
+  ingress {
+    from_port   = 5985
+    to_port     = 5985
+    protocol    = "tcp"
+    cidr_blocks = [var.your_ip_cidr]
+  }
+
+  # WinRM HTTPS for secure remote PowerShell
+  ingress {
+    from_port   = 5986
+    to_port     = 5986
+    protocol    = "tcp"
+    cidr_blocks = [var.your_ip_cidr]
+  }
+
+  # SSH access
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.your_ip_cidr]
+  }
+
   # All outbound traffic
   egress {
     from_port   = 0

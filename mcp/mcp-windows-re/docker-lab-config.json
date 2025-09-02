@@ -1,0 +1,32 @@
+{
+    "version": "1.0.0",
+    "server": {
+        "name": "windows-re",
+        "version": "1.0.0",
+        "description": "APTL Windows Reverse Engineering MCP Server - Provides AI agents with secure access to Windows Reverse Engineering container operations in the APTL (Advanced Purple Team Lab) environment.",
+        "toolPrefix": "mc_windows_re",
+        "targetName": "Windows Reverse Engineering",
+        "configKey": "windows-re"
+    },
+    "lab": {
+        "name": "aptl-windows-re",
+        "network_subnet": "3.148.0.0/16"
+    },
+    "containers": {
+        "windows-re": {
+            "container_name": "aptl-windows-re",
+            "container_ip": "3.148.97.243",
+            "ssh_key": "~/.ssh/windows_re_key",
+            "ssh_user": "Administrator",
+            "ssh_port": 22,
+            "enabled": true
+        }
+    },
+    "mcp": {
+        "server_name": "aptl-windows-re-mcp",
+        "allowed_networks": ["172.20.0.0/16", "127.0.0.0/8", "3.148.0.0/16"],
+        "max_session_time": 3600,
+        "audit_enabled": true,
+        "log_level": "info"
+    }
+}

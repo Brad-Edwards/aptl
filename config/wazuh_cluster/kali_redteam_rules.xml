@@ -42,7 +42,7 @@
 
   <!-- System Events from Kali -->
   <rule id="300020" level="3">
-    <decoded_as>kali_system</decoded_as>
+    <decoded_as>kali_commands</decoded_as>
     <hostname>kali-redteam</hostname>
     <description>Kali Red Team System Event</description>
     <group>kali_system,</group>

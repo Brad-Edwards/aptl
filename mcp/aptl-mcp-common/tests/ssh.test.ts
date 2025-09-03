@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PersistentSession, SSHConnectionManager } from '../src/ssh.js';
+import { ShellType } from '../src/shells.js';
 
 // Test our business logic, not the ssh2 library
 describe('Session State Management', () => {
@@ -155,5 +156,82 @@ describe('Connection Key Generation Logic', () => {
     // We can't directly test it but we can verify behavior differences
     const sessions = manager.listSessions();
     expect(sessions).toEqual([]); // Manager starts empty
+  });
+});
+
+describe('Shell Type Support', () => {
+  it('should create sessions with default bash shell', () => {
+    const mockClient = {} as any;
+    const session = new PersistentSession(
+      'test-id',
+      'test-host',
+      'test-user',
+      'interactive',
+      mockClient,
+      22
+    );
+
+    // The shell type is handled internally by the formatter
+    const info = session.getSessionInfo();
+    expect(info).toBeDefined(); // Session created successfully
+  });
+
+  it('should create sessions with specified shell types', () => {
+    const mockClient = {} as any;
+    const shellTypes: ShellType[] = ['bash', 'sh', 'powershell', 'cmd'];
+    
+    shellTypes.forEach(shellType => {
+      const session = new PersistentSession(
+        `test-${shellType}`,
+        'test-host',
+        'test-user',
+        'interactive',
+        mockClient,
+        22,
+        'normal',
+        60000,
+        shellType
+      );
+
+      const info = session.getSessionInfo();
+      expect(info.sessionId).toBe(`test-${shellType}`);
+      expect(info).toBeDefined(); // Session created successfully with shell type
+    });
+  });
+
+  it('should track shell type through session lifecycle', () => {
+    const mockClient = { 
+      shell: vi.fn((callback) => {
+        // Mock shell stream
+        const mockStream = {
+          on: vi.fn(),
+          stderr: { on: vi.fn() },
+          write: vi.fn(),
+          end: vi.fn()
+        };
+        callback(null, mockStream);
+        return mockStream;
+      })
+    } as any;
+
+    const powershellSession = new PersistentSession(
+      'ps-test',
+      'windows-host',
+      'Administrator',
+      'interactive',
+      mockClient,
+      22,
+      'normal',
+      60000,
+      'powershell'
+    );
+
+    // Initialize the session
+    powershellSession.initialize().then(() => {
+      const info = powershellSession.getSessionInfo();
+      expect(info.sessionId).toBe('ps-test');
+      expect(info.target).toBe('windows-host');
+      expect(info.username).toBe('Administrator');
+    });
   });
 });

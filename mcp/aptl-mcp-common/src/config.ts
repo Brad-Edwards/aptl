@@ -27,6 +27,7 @@ export interface LabConfig {
       ssh_user: string;
       ssh_port: number;
       enabled: boolean;
+      shell?: 'bash' | 'sh' | 'powershell' | 'cmd';
     };
   };
   api?: {

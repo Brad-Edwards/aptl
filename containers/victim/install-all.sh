@@ -9,23 +9,41 @@ if [ -f /var/ossec/.all_installed ]; then
     exit 0
 fi
 
-echo "Step 1: Installing Wazuh Agent..."
+# Set agent name for Wazuh
 export AGENT_NAME="victim-$(hostname)-$(date +%s)"
-/opt/purple-team/scripts/install-wazuh.sh
 
-echo "Step 2: Installing Falco..."
-/opt/purple-team/scripts/install-falco.sh
+# Install agents based on environment variables
+echo "Agent installation configuration:"
+echo "  - Wazuh: $INSTALL_WAZUH"
+echo "  - Falco: $INSTALL_FALCO"  
+echo "  - XSIAM: $INSTALL_XSIAM"
 
-echo "Step 3: Configuring Wazuh with monitoring..."
+if [ "$INSTALL_WAZUH" = "true" ]; then
+    echo "Installing Wazuh agent..."
+    /opt/purple-team/scripts/install-wazuh.sh
+fi
 
-# Replace placeholders in template and overwrite ossec.conf
-sed -e "s/AGENT_NAME_PLACEHOLDER/$AGENT_NAME/g" \
-    -e "s/WAZUH_MANAGER_PLACEHOLDER/$WAZUH_MANAGER/g" \
-    /opt/purple-team/scripts/ossec.conf.template > /var/ossec/etc/ossec.conf
+if [ "$INSTALL_FALCO" = "true" ]; then
+    echo "Installing Falco..."
+    /opt/purple-team/scripts/install-falco.sh
+fi
 
-systemctl restart wazuh-agent
+if [ "$INSTALL_XSIAM" = "true" ]; then
+    echo "XSIAM installation not yet implemented"
+fi
+
+# Configure Wazuh with custom monitoring settings (if Wazuh was installed)
+if [ -f /var/ossec/etc/ossec.conf ] && [ -f /opt/purple-team/scripts/ossec.conf.template ]; then
+    echo "Applying custom Wazuh configuration..."
+    sed -e "s/AGENT_NAME_PLACEHOLDER/$AGENT_NAME/g" \
+        -e "s/WAZUH_MANAGER_PLACEHOLDER/$WAZUH_MANAGER/g" \
+        /opt/purple-team/scripts/ossec.conf.template > /var/ossec/etc/ossec.conf
+    
+    systemctl restart wazuh-agent || true
+fi
 
 echo "=== All Purple Team Lab Services Installed ==="
 
-# Create flag to prevent re-running
+# Mark as installed
+mkdir -p /var/ossec
 touch /var/ossec/.all_installed

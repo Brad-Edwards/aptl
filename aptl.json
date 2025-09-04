@@ -7,5 +7,20 @@
         "minetest_client": false,
         "minecraft_server": false,
         "reverse": true
+    },
+    "edr_agents": {
+        "victim": ["wazuh", "falco"],
+        "kali": ["wazuh"],
+        "reverse": ["wazuh", "falco"],
+        "minecraft_server": ["wazuh", "falco"],
+        "minetest_client": ["wazuh", "falco"],
+        "minetest_server": [],
+        "default": ["wazuh", "falco"]
+    },
+    "agent_configs": {
+        "xsiam": {
+            "installer_path": "/files/Brad-Lab-Report_sh.tar.gz",
+            "tenant_id": ""
+        }
     }
 }

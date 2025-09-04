@@ -51,33 +51,6 @@ echo ""
 echo "Step 1: Generating SSH keys..."
 ./scripts/generate-ssh-keys.sh
 
-# Step 1.5: Setup Kali MCP server
-echo ""
-echo "Step 1.5: Setting up MCP server..."
-cd mcp-red
-if [ ! -d "node_modules" ]; then
-    echo "Installing MCP server dependencies..."
-    npm install
-fi
-if [ ! -d "build" ]; then
-    echo "Building MCP server..."
-    npm run build
-fi
-cd ..
-
-# Step 1.6: Setup Wazuh MCP server
-echo ""
-echo "Step 1.6: Setting up Wazuh MCP server..."
-cd mcp-wazuh
-if [ ! -d "node_modules" ]; then
-    echo "Installing MCP server dependencies..."
-    npm install
-fi
-if [ ! -d "build" ]; then
-    echo "Building MCP server..."
-    npm run build
-fi
-cd ..
 
 # Step 2: Check system requirements
 echo ""
@@ -274,9 +247,6 @@ if [ "$(jq -r '.containers.reverse' aptl.json)" = "true" ]; then
     output_both "   reverse:         172.20.0.27"
 fi
 output_both ""
-output_both "   MCP Servers:"
-output_both "   Red Team Config: ./mcp-red/docker-lab-config.json"
-output_both "   Wazuh Team Config: ./mcp-wazuh/docker-lab-config.json"
 output_both "   Status: Built and ready"
 output_both ""
 output_both "   Management Commands:"

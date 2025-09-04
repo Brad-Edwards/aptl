@@ -343,3 +343,4 @@ volumes:
   minecraft_server_data:
   kali_operations:
   kali_logs:
+  reverse_logs:

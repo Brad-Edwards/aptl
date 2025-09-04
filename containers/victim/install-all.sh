@@ -15,7 +15,8 @@ export AGENT_NAME="victim-$(hostname)-$(date +%s)"
 # Install agents based on environment variables
 echo "Agent installation configuration:"
 echo "  - Wazuh: $INSTALL_WAZUH"
-echo "  - Falco: $INSTALL_FALCO"
+echo "  - Falco: $INSTALL_FALCO"  
+echo "  - XSIAM: $INSTALL_XSIAM"
 
 if [ "$INSTALL_WAZUH" = "true" ]; then
     echo "Installing Wazuh agent..."
@@ -27,6 +28,9 @@ if [ "$INSTALL_FALCO" = "true" ]; then
     /opt/purple-team/scripts/install-falco.sh
 fi
 
+if [ "$INSTALL_XSIAM" = "true" ]; then
+    echo "XSIAM installation not yet implemented"
+fi
 
 # Configure Wazuh with custom monitoring settings (if Wazuh was installed)
 if [ -f /var/ossec/etc/ossec.conf ] && [ -f /opt/purple-team/scripts/ossec.conf.template ]; then

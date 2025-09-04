@@ -4,10 +4,12 @@ FROM rockylinux:9
 # Build arguments for agent installation
 ARG INSTALL_WAZUH=true
 ARG INSTALL_FALCO=true
+ARG INSTALL_XSIAM=false
 
 # Set as environment variables for runtime
 ENV INSTALL_WAZUH=${INSTALL_WAZUH}
 ENV INSTALL_FALCO=${INSTALL_FALCO}
+ENV INSTALL_XSIAM=${INSTALL_XSIAM}
 
 RUN dnf install -y epel-release && \
     dnf update -y && \
@@ -56,7 +58,7 @@ RUN mkdir -p /home/labadmin/.ssh && \
     chmod 700 /home/labadmin/.ssh && \
     chown -R labadmin:labadmin /home/labadmin/.ssh
 
-RUN mkdir -p /opt/purple-team/scripts /opt/purple-team/installers /etc/rsyslog.d
+RUN mkdir -p /opt/purple-team/scripts /etc/rsyslog.d
 
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
@@ -70,7 +72,6 @@ RUN chmod +x /opt/purple-team/scripts/install-falco.sh
 
 COPY install-all.sh /opt/purple-team/scripts/
 RUN chmod +x /opt/purple-team/scripts/install-all.sh
-
 
 COPY ossec.conf.template /opt/purple-team/scripts/
 

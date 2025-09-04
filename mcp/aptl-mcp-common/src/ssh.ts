@@ -2,6 +2,7 @@
 import { Client, ClientChannel } from 'ssh2';
 import { readFile } from 'fs/promises';
 import { EventEmitter } from 'events';
+import { ShellFormatter, ShellType, createShellFormatter } from './shells.js';
 
 // Constants for timeouts and limits
 const TIMEOUTS = {
@@ -83,6 +84,7 @@ export class PersistentSession extends EventEmitter {
   private sessionTimeout: NodeJS.Timeout | null = null;
   private isInitialized = false;
   private outputData = '';
+  private shellFormatter: ShellFormatter;
 
   private sessionTimeoutMs: number;
 
@@ -94,12 +96,14 @@ export class PersistentSession extends EventEmitter {
     client: Client,
     port: number = 22,
     mode: SessionMode = 'normal',
-    timeoutMs: number = TIMEOUTS.DEFAULT_SESSION
+    timeoutMs: number = TIMEOUTS.DEFAULT_SESSION,
+    shellType: ShellType = 'bash'
   ) {
     super();
     this.client = client;
     this.sessionTimeoutMs = timeoutMs;
     this.commandDelimiter = `___CMD_${Date.now()}_${Math.random().toString(36).substring(2, 11)}___`;
+    this.shellFormatter = createShellFormatter(shellType);
     
     this.sessionInfo = {
       sessionId,
@@ -251,7 +255,11 @@ export class PersistentSession extends EventEmitter {
       const startDelimiter = `${this.commandDelimiter}_START_${this.currentCommand.id}`;
       const endDelimiter = `${this.commandDelimiter}_END_${this.currentCommand.id}`;
       
-      const wrappedCommand = `echo "${startDelimiter}"; ${this.currentCommand.command}; echo "${endDelimiter}:$?"`;
+      const wrappedCommand = this.shellFormatter.formatCommandWithDelimiters(
+        this.currentCommand.command,
+        startDelimiter,
+        endDelimiter
+      );
       
       this.shell.write(wrappedCommand + '\n');
 
@@ -291,14 +299,14 @@ export class PersistentSession extends EventEmitter {
       return;
     }
 
-    const endPattern = `${this.commandDelimiter}_END_${this.currentCommand.id}:(\\d+)`;
-    const endMatch = this.outputData.match(new RegExp(endPattern));
+    const endDelimiter = `${this.commandDelimiter}_END_${this.currentCommand.id}`;
+    const exitCode = this.shellFormatter.parseExitCode(this.outputData, endDelimiter);
     
-    if (endMatch) {
-      const exitCode = parseInt(endMatch[1], 10);
+    if (exitCode !== null) {
       const startPattern = `${this.commandDelimiter}_START_${this.currentCommand.id}`;
       const startIndex = this.outputData.indexOf(startPattern);
-      const endIndex = this.outputData.indexOf(endMatch[0]);
+      const endPattern = `${endDelimiter}:${exitCode}`;
+      const endIndex = this.outputData.indexOf(endPattern);
       
       if (startIndex !== -1 && endIndex !== -1) {
         const output = this.outputData.substring(
@@ -344,7 +352,7 @@ export class PersistentSession extends EventEmitter {
   private startKeepAlive(): void {
     this.keepAliveInterval = setInterval(() => {
       if (this.shell && this.sessionInfo.isActive && this.commandQueue.length === 0 && !this.currentCommand) {
-        this.shell.write('\n');
+        this.shell.write(this.shellFormatter.getKeepAliveCommand());
       }
     }, TIMEOUTS.KEEP_ALIVE_INTERVAL);
   }
@@ -543,14 +551,15 @@ export class SSHConnectionManager {
     privateKeyPath: string,
     port: number = 22,
     mode: SessionMode = 'normal',
-    timeoutMs: number = TIMEOUTS.DEFAULT_SESSION
+    timeoutMs: number = TIMEOUTS.DEFAULT_SESSION,
+    shellType: ShellType = 'bash'
   ): Promise<PersistentSession> {
     if (this.sessions.has(sessionId)) {
       throw new SSHError(`Session with ID '${sessionId}' already exists`);
     }
 
     const client = await this.getConnection(target, username, privateKeyPath, port);
-    const session = new PersistentSession(sessionId, target, username, type, client, port, mode, timeoutMs);
+    const session = new PersistentSession(sessionId, target, username, type, client, port, mode, timeoutMs, shellType);
     
     await session.initialize();
     this.sessions.set(sessionId, session);

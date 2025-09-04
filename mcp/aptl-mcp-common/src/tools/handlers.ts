@@ -2,10 +2,23 @@
 
 import { SSHConnectionManager, SessionMetadata } from '../ssh.js';
 import { LabConfig, getTargetCredentials } from '../config.js';
+import { ShellType } from '../shells.js';
 
 export interface ToolContext {
   sshManager: SSHConnectionManager;
   labConfig: LabConfig;
+}
+
+/**
+ * Get the shell type from lab configuration
+ */
+function getShellType(labConfig: LabConfig): ShellType {
+  if (!labConfig.containers || !labConfig.server.configKey) {
+    return 'bash'; // Default to bash
+  }
+  
+  const container = labConfig.containers[labConfig.server.configKey];
+  return (container?.shell as ShellType) || 'bash';
 }
 
 export type ToolHandler = (args: any, context: ToolContext) => Promise<any>;
@@ -135,7 +148,8 @@ const baseHandlers = {
         credentials.sshKey,
         credentials.port,
         'normal',
-        timeout_ms
+        timeout_ms,
+        getShellType(labConfig)
       );
 
       const sessionInfo = session.getSessionInfo();
@@ -194,7 +208,8 @@ const baseHandlers = {
         credentials.sshKey,
         credentials.port,
         raw ? 'raw' : 'normal',
-        timeout_ms
+        timeout_ms,
+        getShellType(labConfig)
       );
 
       const sessionInfo = session.getSessionInfo();

@@ -1,6 +1,16 @@
 # Base victim container using Rocky Linux 9 (RHEL-compatible)
 FROM rockylinux:9
 
+# Build arguments for agent installation
+ARG INSTALL_WAZUH=true
+ARG INSTALL_FALCO=true
+ARG INSTALL_XSIAM=false
+
+# Set as environment variables for runtime
+ENV INSTALL_WAZUH=${INSTALL_WAZUH}
+ENV INSTALL_FALCO=${INSTALL_FALCO}
+ENV INSTALL_XSIAM=${INSTALL_XSIAM}
+
 RUN dnf install -y epel-release && \
     dnf update -y && \
     dnf install -y \
@@ -53,6 +63,7 @@ RUN mkdir -p /opt/purple-team/scripts /etc/rsyslog.d
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# Copy container-specific scripts
 COPY install-wazuh.sh /opt/purple-team/scripts/
 RUN chmod +x /opt/purple-team/scripts/install-wazuh.sh
 

@@ -1,6 +1,6 @@
 # APTL
 
-Docker lab: Wazuh SIEM + victim containers + Kali.
+Docker lab: Wazuh SIEM + victim containers + Kali. Aurora extension adds VMs on dedicated hardware.
 
 ## Components
 
@@ -42,4 +42,5 @@ cd aptl
 - [Getting Started](getting-started/)
 - [Architecture](architecture/)
 - [Components](components/)
+- [Aurora VMs](aurora/)
 - [Troubleshooting](troubleshooting/)

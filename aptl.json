@@ -17,6 +17,16 @@
         "minetest_server": [],
         "default": ["wazuh", "falco"]
     },
+    "aurora": {
+        "config": {
+            "host": "192.168.1.72",
+            "user": "vmadmin",
+            "key": "~/.ssh/id_rsa"
+        },
+        "vms": {
+            "windows-victim": false
+        }
+    },
     "agent_configs": {
         "xsiam": {
             "installer_path": "/files/Brad-Lab-Report_sh.tar.gz",

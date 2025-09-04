@@ -257,3 +257,7 @@ output_both "   Full cleanup: docker compose down -v"
 output_both ""
 output_both "   Connection info saved to: lab_connections.txt"
 output_both ""
+
+# build all mcp servers
+echo "Building all MCP servers..."
+./mcp/build-all-mcps.sh

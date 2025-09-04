@@ -78,6 +78,8 @@ setup_wazuh_env() {
         
         # Create environment file for systemd service
         echo "WAZUH_MANAGER=$WAZUH_MANAGER" > /etc/environment.wazuh
+        echo "INSTALL_WAZUH=$INSTALL_WAZUH" >> /etc/environment.wazuh
+        echo "INSTALL_FALCO=$INSTALL_FALCO" >> /etc/environment.wazuh
     else
         echo "ERROR: SIEM_IP not set - Wazuh agent installation will fail"
         exit 1

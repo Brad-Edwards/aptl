@@ -2,6 +2,14 @@
 # Based on victim container template with minetest client capabilities
 FROM ubuntu:22.04
 
+# Build arguments for agent installation
+ARG INSTALL_WAZUH=true
+ARG INSTALL_FALCO=true
+
+# Set as environment variables for runtime
+ENV INSTALL_WAZUH=${INSTALL_WAZUH}
+ENV INSTALL_FALCO=${INSTALL_FALCO}
+
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 

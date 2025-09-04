@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.8] - 2025-09-03
+
+### Added
+
+- EDR agents are configurable
+- Demo ctf scenario files
+- Windows reverse engineering container in AWS
+- MCP common library
+- Consolidated mcps into `mcp/` directory
+
 ## [3.0.7] - 2025-09-01
 
 ### Fixed

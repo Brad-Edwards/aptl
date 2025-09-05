@@ -124,6 +124,8 @@ services:
     container_name: aptl-victim
     hostname: victim-host
     restart: unless-stopped
+    privileged: true    # Required for systemd with cgroups v2
+    cgroup: "host"      # Use host cgroup namespace for systemd
     networks:
       aptl-network:
         ipv4_address: 172.20.0.20
@@ -132,6 +134,7 @@ services:
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+      - container=docker
     cap_add:
       - SYS_NICE        # For process scheduling
       - SYS_ADMIN       # Required for systemd in container
@@ -142,6 +145,7 @@ services:
       - victim_logs:/var/log
     tmpfs:
       - /run
+      - /run/lock
       - /tmp
     security_opt:
       - seccomp:unconfined
@@ -253,6 +257,8 @@ services:
     container_name: aptl-kali
     hostname: kali-redteam
     restart: unless-stopped
+    privileged: true    # Required for systemd with cgroups v2
+    cgroup: "host"      # Use host cgroup namespace for systemd  
     networks:
       aptl-network:
         ipv4_address: 172.20.0.30
@@ -261,6 +267,7 @@ services:
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - VICTIM_IP=172.20.0.20
+      - container=docker
     volumes:
       - ./keys:/host-ssh-keys:ro
       - kali_operations:/home/kali/operations
@@ -274,6 +281,7 @@ services:
       - SYS_ADMIN    # Required for systemd/Wazuh agent
     tmpfs:
       - /run
+      - /run/lock
       - /tmp
     security_opt:
       - seccomp:unconfined  # Required for some red team tools
@@ -287,6 +295,8 @@ services:
     container_name: aptl-reverse
     hostname: reverse-host
     restart: unless-stopped
+    privileged: true    # Required for systemd with cgroups v2
+    cgroup: "host"      # Use host cgroup namespace for systemd
     networks:
       aptl-network:
         ipv4_address: 172.20.0.27
@@ -295,6 +305,7 @@ services:
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+      - container=docker
     cap_add:
       - SYS_NICE        # For process scheduling
       - SYS_ADMIN       # Required for systemd in container
@@ -305,6 +316,7 @@ services:
       - reverse_logs:/var/log
     tmpfs:
       - /run
+      - /run/lock
       - /tmp
     security_opt:
       - seccomp:unconfined

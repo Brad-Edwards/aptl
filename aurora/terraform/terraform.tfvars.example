@@ -1,0 +1,59 @@
+# Aurora Environment Configuration Example
+# Copy this to terraform.tfvars and customize
+
+environment = "aurora"
+
+# Storage Pools - customize paths as needed
+storage_pools = {
+  vm1-pool = {
+    type = "dir"
+    path = "/vm1/vms"
+  }
+  vm2-pool = {
+    type = "dir" 
+    path = "/vm2/vms"
+  }
+  vm3-pool = {
+    type = "dir"
+    path = "/vm3/vms"
+  }
+}
+
+# Networks - customize for your lab needs
+networks = {
+  # Bridge to host network (requires br0 setup)
+  aurora-bridge = {
+    mode   = "bridge"
+    bridge = "br0"
+  }
+  
+  # NAT network for VMs with internet access
+  aurora-nat = {
+    mode      = "nat"
+    domain    = "aurora.lab"
+    addresses = ["192.168.110.0/24"]
+    dhcp = {
+      enabled = true
+      start   = "192.168.110.10"
+      end     = "192.168.110.100"
+    }
+  }
+  
+  # Isolated network for secure testing
+  aurora-isolated = {
+    mode      = "none"
+    domain    = "isolated.lab" 
+    addresses = ["10.0.100.0/24"]
+    dhcp = {
+      enabled = true
+      start   = "10.0.100.10"
+      end     = "10.0.100.100" 
+    }
+  }
+}
+
+tags = {
+  Project     = "APTL"
+  Environment = "aurora"
+  ManagedBy   = "terraform"
+}

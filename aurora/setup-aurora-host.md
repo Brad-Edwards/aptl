@@ -34,40 +34,20 @@ sudo usermod -a -G libvirt,kvm vmadmin
 Create VM storage directories:
 
 ```bash
-# Single drive: Use /var/lib/libvirt/images or custom path
-sudo mkdir -p /var/lib/libvirt/aurora-vms
-sudo chown vmadmin:vmadmin /var/lib/libvirt/aurora-vms
-
 # Multiple drives: Mount to /vm1, /vm2, etc.
-# sudo mkdir -p /vm{1,2,3}/vms
-# sudo chown vmadmin:vmadmin /vm{1,2,3}/vms
-
-# Create libvirt storage pool (single drive)
-sudo -u vmadmin virsh pool-define-as aurora-pool dir - - - - /var/lib/libvirt/aurora-vms
-sudo -u vmadmin virsh pool-start aurora-pool
-sudo -u vmadmin virsh pool-autostart aurora-pool
+sudo mkdir -p /vm{1,2,3}/vms
+sudo chown vmadmin:vmadmin /vm{1,2,3}/vms
 ```
 
-## Configure Network
+## Install Terraform Libvirt Provider
 
 ```bash
-# Create VM bridge network
-sudo -u vmadmin virsh net-define /dev/stdin <<EOF
-<network>
-  <name>vm-bridge</name>
-  <forward mode='nat'/>
-  <bridge name='virbr1' stp='on' delay='0'/>
-  <ip address='192.168.100.1' netmask='255.255.255.0'>
-    <dhcp>
-      <range start='192.168.100.10' end='192.168.100.254'/>
-    </dhcp>
-  </ip>
-</network>
-EOF
-
-sudo -u vmadmin virsh net-start vm-bridge
-sudo -u vmadmin virsh net-autostart vm-bridge
+# Initialize Terraform in aurora-configs
+cd /home/vmadmin/aurora-configs/terraform
+terraform init
 ```
+
+**Note**: Storage pools and networks will be managed by Terraform configurations.
 
 ## SSH Access
 
@@ -89,17 +69,16 @@ sudo chmod 600 /home/vmadmin/.ssh/authorized_keys
 ls -la /dev/kvm
 lscpu | grep Virtualization
 
-# Check libvirt
-sudo -u vmadmin virsh pool-list
-sudo -u vmadmin virsh net-list
-
 # Test SSH from APTL host
 ssh -i ~/.ssh/aptl_aurora_key vmadmin@AURORA_IP "virsh version"
+
+# Check Terraform
+ssh -i ~/.ssh/aptl_aurora_key vmadmin@AURORA_IP "cd ~/aurora-configs/terraform && terraform version"
 ```
 
 ## Storage Layout
 
-- Single drive: All VMs in `/var/lib/libvirt/aurora-vms`
-- Multiple drives: Separate by VM type or function
+- Multiple drives: /vm1, /vm2, /vm3 for VM storage
+- Terraform manages libvirt storage pools and networks
 
 Update `aptl.json` with actual Aurora host IP.

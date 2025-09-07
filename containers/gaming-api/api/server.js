@@ -12,6 +12,10 @@ const TelemetryService = require('./services/TelemetryService');
 // Routes
 const createAuthRoutes = require('./routes/auth');
 
+// Middleware
+const createRequestLogger = require('./middleware/requestLogger');
+const createResponseLogger = require('./middleware/responseLogger');
+
 // Configuration
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -87,17 +91,9 @@ class GamingApiServer {
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true }));
 
-    // Request logging middleware
-    this.app.use((req, res, next) => {
-      const startTime = Date.now();
-      
-      res.on('finish', () => {
-        const duration = Date.now() - startTime;
-        this.telemetryService.logApiCall(req, res, duration);
-      });
-      
-      next();
-    });
+    // Comprehensive request/response logging
+    this.app.use(createRequestLogger(this.telemetryService));
+    this.app.use(createResponseLogger(this.telemetryService));
 
     // Global rate limiting
     this.app.use(async (req, res, next) => {

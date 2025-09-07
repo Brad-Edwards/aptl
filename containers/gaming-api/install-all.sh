@@ -10,7 +10,7 @@ if [ -f /var/ossec/.all_installed ]; then
 fi
 
 # Set agent name for Wazuh
-export AGENT_NAME="victim-$(hostname)-$(date +%s)"
+export AGENT_NAME="gaming-api-$(hostname)-$(date +%s)"
 
 # Install agents based on environment variables
 echo "Agent installation configuration:"

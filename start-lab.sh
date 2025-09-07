@@ -27,7 +27,7 @@ fi
 
 # Build profile list based on enabled containers
 PROFILES=""
-for container in wazuh victim kali minetest_server minetest_client minecraft_server reverse; do
+for container in wazuh victim kali gaming_api minetest_server minetest_client minecraft_server reverse; do
     enabled=$(jq -r ".containers.${container}" aptl.json 2>/dev/null)
     if [ "$enabled" = "true" ]; then
         # Convert underscores to hyphens for profile names
@@ -164,6 +164,9 @@ echo "Testing SSH connectivity for enabled containers..."
 if [ "$(jq -r '.containers.victim' aptl.json)" = "true" ]; then
     test_ssh "victim" "2022" "labadmin" || echo "   → Victim SSH may need more time"
 fi
+if [ "$(jq -r '.containers.gaming_api' aptl.json)" = "true" ]; then
+    test_ssh "gaming-api" "2021" "labadmin" || echo "   → Gaming API SSH may need more time"
+fi
 if [ "$(jq -r '.containers.minetest_server' aptl.json)" = "true" ]; then
     test_ssh "minetest-server" "2024" "labadmin" || echo "   → Minetest Server SSH may need more time"
 fi
@@ -205,6 +208,11 @@ output_both ""
 output_both "   SSH Access:"
 if [ "$(jq -r '.containers.victim' aptl.json)" = "true" ]; then
     output_both "   Victim:          ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022"
+fi
+if [ "$(jq -r '.containers.gaming_api' aptl.json)" = "true" ]; then
+    output_both "   Gaming API:      ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2021"
+    output_both "                    Gaming API: http://localhost:3000"
+    output_both "                    Health: http://localhost:3000/health"
 fi
 if [ "$(jq -r '.containers.minetest_server' aptl.json)" = "true" ]; then
     output_both "   Minetest Server: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2024"

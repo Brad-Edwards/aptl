@@ -20,7 +20,8 @@
     "jsonwebtoken": "^9.0.2",
     "rate-limiter-flexible": "^7.3.0",
     "sqlite3": "^5.1.7",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "winston-syslog": "^2.7.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

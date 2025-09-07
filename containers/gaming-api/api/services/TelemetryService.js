@@ -1,6 +1,31 @@
+const winston = require('winston');
+require('winston-syslog').Syslog;
+
 class TelemetryService {
   constructor(logger) {
     this.logger = logger;
+    this.setupSyslogTransport();
+  }
+
+  setupSyslogTransport() {
+    try {
+      // Add syslog transport for forwarding to Wazuh via rsyslog
+      // Use UDP protocol to localhost syslog daemon
+      this.logger.add(new winston.transports.Syslog({
+        host: 'localhost',
+        port: 514,
+        protocol: 'udp4',
+        facility: 'local0',
+        app_name: 'gaming-api',
+        localhost: 'gaming-api-host',
+        type: '5424' // RFC 5424 format
+      }));
+      
+      console.log('Syslog transport configured successfully');
+    } catch (error) {
+      console.error('Failed to configure syslog transport:', error.message);
+      // Continue without syslog - logs will still go to console/files
+    }
   }
 
   logAuthEvent(username, result, clientInfo, user = null, failureReason = null) {

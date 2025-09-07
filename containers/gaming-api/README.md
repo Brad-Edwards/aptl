@@ -1,6 +1,6 @@
-# APTL Victim Containers
+# APTL Gaming API Container
 
-This directory contains the containerized victim machines for the Purple Team Lab.
+This directory contains the gaming API container for the Purple Team Lab credential stuffing demo.
 
 ## Architecture
 

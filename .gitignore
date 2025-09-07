@@ -391,3 +391,6 @@ config/wazuh_indexer_ssl_certs/*
 .cursor/mcp.json
 
 notes/
+
+ctf_scenarios/gaming/behavioural_analysis/data/
+data/

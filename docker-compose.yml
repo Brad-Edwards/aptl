@@ -146,6 +146,43 @@ services:
     security_opt:
       - seccomp:unconfined
 
+  # Gaming API Container - MMO-style API for credential stuffing demo
+  gaming-api:
+    profiles: ["gaming-api"]
+    build:
+      context: ./containers/gaming-api
+      dockerfile: Dockerfile
+    container_name: aptl-gaming-api
+    hostname: gaming-api-host
+    restart: unless-stopped
+    networks:
+      aptl-network:
+        ipv4_address: 172.20.0.21
+    ports:
+      - "2021:22"    # SSH access
+      - "3000:3000"  # Gaming API port
+    environment:
+      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+      - NODE_ENV=production
+      - PORT=3000
+    cap_add:
+      - SYS_NICE        # For process scheduling
+      - SYS_ADMIN       # Required for systemd in container
+      - SYS_RESOURCE    # For setting limits and OOM score
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ./keys:/keys:ro
+      - gaming_api_logs:/var/log
+      - gaming_api_data:/opt/gaming-api/data  # SQLite database and uploads
+    tmpfs:
+      - /run
+      - /tmp
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      - wazuh.manager
+
   # Minetest Server Container - Game server for memory scanning demo
   minetest-server:
     profiles: ["minetest-server"]
@@ -336,6 +373,8 @@ volumes:
   
   # Application volumes
   victim_logs:
+  gaming_api_logs:
+  gaming_api_data:
   minetest_server_logs:
   minetest_client_logs:
   minetest_config:

@@ -26,6 +26,22 @@ import { PrismaClient } from '../generated/prisma';
               delete: jest.fn(),
               deleteMany: jest.fn(),
             },
+            game_locations: {
+              create: jest.fn(),
+              createMany: jest.fn().mockResolvedValue({ count: 0 }),
+              findMany: jest.fn(),
+              findUnique: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
+            },
+            chat_channels: {
+              create: jest.fn(),
+              createMany: jest.fn().mockResolvedValue({ count: 0 }),
+              findMany: jest.fn(),
+              findUnique: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
+            },
             $disconnect: jest.fn(),
           })),
         }));

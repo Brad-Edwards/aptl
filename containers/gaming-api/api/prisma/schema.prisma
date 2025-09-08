@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -9,4 +6,227 @@ generator client {
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
+}
+
+model character_inventory {
+  id            Int        @id @default(autoincrement())
+  character_id  Int
+  item_id       Int
+  quantity      Int?       @default(1)
+  acquired_date DateTime?  @default(now())
+  source        String?
+  items         items      @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  characters    characters @relation(fields: [character_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([character_id, item_id], map: "sqlite_autoindex_character_inventory_1")
+  @@index([character_id], map: "idx_character_inventory_char")
+}
+
+model character_progression {
+  id                Int        @id @default(autoincrement())
+  character_id      Int
+  session_id        String?
+  event_type        String
+  old_level         Int?
+  new_level         Int?
+  experience_gained Int?       @default(0)
+  gold_change       Int?       @default(0)
+  timestamp         DateTime?  @default(now())
+  details           String?
+  characters        characters @relation(fields: [character_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([character_id], map: "idx_character_progression_char")
+}
+
+model characters {
+  id                                                                    Int                      @id @default(autoincrement())
+  user_id                                                               Int
+  name                                                                  String
+  level                                                                 Int?                     @default(1)
+  class                                                                 String
+  gold                                                                  Int?                     @default(0)
+  experience                                                            Int?                     @default(0)
+  created_at                                                            DateTime?                @default(now())
+  last_played                                                           DateTime?                @default(now())
+  character_inventory                                                   character_inventory[]
+  character_progression                                                 character_progression[]
+  users                                                                 users                    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  gameplay_activities                                                   gameplay_activities[]
+  marketplace_activities                                                marketplace_activities[]
+  player_sessions                                                       player_sessions[]
+  social_activities                                                     social_activities[]
+  transaction_details_transaction_details_to_character_idTocharacters   transaction_details[]    @relation("transaction_details_to_character_idTocharacters")
+  transaction_details_transaction_details_from_character_idTocharacters transaction_details[]    @relation("transaction_details_from_character_idTocharacters")
+}
+
+model chat_channels {
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique(map: "sqlite_autoindex_chat_channels_1")
+  description       String?
+  created_at        DateTime?           @default(now())
+  social_activities social_activities[]
+}
+
+model game_locations {
+  id                Int     @id @default(autoincrement())
+  name              String  @unique(map: "sqlite_autoindex_game_locations_1")
+  type              String
+  level_requirement Int?    @default(1)
+  description       String?
+}
+
+model gameplay_activities {
+  id                Int         @id @default(autoincrement())
+  user_id           Int
+  character_id      Int?
+  session_id        String?
+  activity_type     String
+  location          String?
+  duration_minutes  Int?        @default(0)
+  experience_gained Int?        @default(0)
+  gold_earned       Int?        @default(0)
+  timestamp         DateTime?   @default(now())
+  details           String?
+  characters        characters? @relation(fields: [character_id], references: [id], onUpdate: NoAction)
+  users             users       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, session_id], map: "idx_gameplay_activities_user_session")
+}
+
+model item_categories {
+  id                    Int               @id @default(autoincrement())
+  name                  String            @unique(map: "sqlite_autoindex_item_categories_1")
+  parent_id             Int?
+  description           String?
+  item_categories       item_categories?  @relation("item_categoriesToitem_categories", fields: [parent_id], references: [id], onUpdate: NoAction)
+  other_item_categories item_categories[] @relation("item_categoriesToitem_categories")
+  items                 items[]
+}
+
+model items {
+  id                     Int                      @id @default(autoincrement())
+  name                   String
+  gold_value             Int
+  category_id            Int?
+  rarity                 String?                  @default("common")
+  item_type              String?
+  level_requirement      Int?                     @default(1)
+  character_inventory    character_inventory[]
+  item_categories        item_categories?         @relation(fields: [category_id], references: [id], onUpdate: NoAction)
+  marketplace_activities marketplace_activities[]
+  transaction_details    transaction_details[]
+}
+
+model login_history {
+  id                 Int       @id @default(autoincrement())
+  user_id            Int?
+  username           String
+  ip_address         String
+  user_agent         String?
+  login_time         DateTime? @default(now())
+  success            Boolean?  @default(true)
+  failure_reason     String?
+  geo_location       String?
+  device_fingerprint String?
+  users              users?    @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+}
+
+model marketplace_activities {
+  id           Int         @id @default(autoincrement())
+  user_id      Int
+  character_id Int?
+  session_id   String?
+  action_type  String
+  item_id      Int?
+  item_name    String?
+  price_viewed Int?
+  search_query String?
+  category     String?
+  timestamp    DateTime?   @default(now())
+  items        items?      @relation(fields: [item_id], references: [id], onUpdate: NoAction)
+  characters   characters? @relation(fields: [character_id], references: [id], onUpdate: NoAction)
+  users        users       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([item_id], map: "idx_marketplace_activities_item")
+  @@index([user_id], map: "idx_marketplace_activities_user")
+}
+
+model player_sessions {
+  id                Int         @id @default(autoincrement())
+  user_id           Int
+  character_id      Int?
+  session_id        String
+  login_time        DateTime?   @default(now())
+  logout_time       DateTime?
+  actions_count     Int?        @default(0)
+  locations_visited Int?        @default(0)
+  ip_address        String?
+  user_agent        String?
+  characters        characters? @relation(fields: [character_id], references: [id], onUpdate: NoAction)
+  users             users       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model social_activities {
+  id            Int            @id @default(autoincrement())
+  user_id       Int
+  character_id  Int?
+  session_id    String?
+  activity_type String
+  channel_id    Int?
+  channel_name  String?
+  message_count Int?           @default(1)
+  timestamp     DateTime?      @default(now())
+  chat_channels chat_channels? @relation(fields: [channel_id], references: [id], onUpdate: NoAction)
+  characters    characters?    @relation(fields: [character_id], references: [id], onUpdate: NoAction)
+  users         users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_social_activities_user")
+}
+
+model transaction_details {
+  id                                                           Int         @id @default(autoincrement())
+  transaction_id                                               Int
+  from_character_id                                            Int?
+  to_character_id                                              Int?
+  item_id                                                      Int
+  quantity                                                     Int?        @default(1)
+  unit_price                                                   Int
+  transaction_type                                             String?
+  items                                                        items       @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  characters_transaction_details_to_character_idTocharacters   characters? @relation("transaction_details_to_character_idTocharacters", fields: [to_character_id], references: [id], onUpdate: NoAction)
+  characters_transaction_details_from_character_idTocharacters characters? @relation("transaction_details_from_character_idTocharacters", fields: [from_character_id], references: [id], onUpdate: NoAction)
+
+  @@index([to_character_id], map: "idx_transaction_details_to_char")
+  @@index([from_character_id], map: "idx_transaction_details_from_char")
+}
+
+model transactions {
+  id            Int       @id @default(autoincrement())
+  from_username String
+  to_username   String
+  item_name     String
+  gold_value    Int
+  timestamp     DateTime? @default(now())
+}
+
+model users {
+  id                     Int                      @id @default(autoincrement())
+  username               String                   @unique(map: "sqlite_autoindex_users_1")
+  password_hash          String
+  email                  String                   @unique(map: "sqlite_autoindex_users_2")
+  created_at             DateTime?                @default(now())
+  last_login             DateTime?
+  is_premium             Boolean?                 @default(false)
+  account_value          Int?                     @default(0)
+  email_verified         Boolean?                 @default(false)
+  total_playtime_hours   Int?                     @default(0)
+  last_ip_address        String?
+  preferred_language     String?                  @default("en-US")
+  timezone               String?                  @default("UTC")
+  characters             characters[]
+  gameplay_activities    gameplay_activities[]
+  login_history          login_history[]
+  marketplace_activities marketplace_activities[]
+  player_sessions        player_sessions[]
+  social_activities      social_activities[]
 }

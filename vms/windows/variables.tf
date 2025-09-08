@@ -11,11 +11,10 @@ variable "proxmox_user" {
 variable "proxmox_password" {
   description = "Proxmox password"
   type        = string
-  sensitive   = true
 }
 
 variable "proxmox_tls_insecure" {
-  description = "Skip TLS verification for Proxmox API"
+  description = "Skip TLS verification"
   type        = bool
 }
 
@@ -25,13 +24,8 @@ variable "proxmox_node" {
 }
 
 variable "vm_name" {
-  description = "Name of the Windows VM"
+  description = "VM name"
   type        = string
-}
-
-variable "vm_id" {
-  description = "VM ID in Proxmox"
-  type        = number
 }
 
 variable "vm_cores" {
@@ -40,37 +34,12 @@ variable "vm_cores" {
 }
 
 variable "vm_memory" {
-  description = "RAM in MB"
+  description = "Memory in MB"
   type        = number
 }
 
-variable "disk_size" {
-  description = "Disk size (e.g., '50G')"
-  type        = string
-}
-
-variable "storage_pool" {
-  description = "Proxmox storage pool"
-  type        = string
-}
 
 variable "network_bridge" {
   description = "Network bridge name"
-  type        = string
-}
-
-variable "vm_user" {
-  description = "VM username"
-  type        = string
-}
-
-variable "vm_password" {
-  description = "VM user password"
-  type        = string
-  sensitive   = true
-}
-
-variable "ssh_public_key" {
-  description = "SSH public key"
   type        = string
 }

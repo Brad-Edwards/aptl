@@ -1,0 +1,23 @@
+[Unit]
+Description=Gaming API Server
+After=network.target
+
+[Service]
+Type=simple
+User=labadmin
+Group=labadmin
+WorkingDirectory=/opt/gaming-api
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=SIEM_IP=172.20.0.10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gaming-api
+
+[Install]
+WantedBy=multi-user.target

@@ -1,14 +1,14 @@
-output "vm_name" {
-  description = "Name of the Windows VM"
-  value       = proxmox_virtual_environment_vm.windows_vm.name
-}
-
 output "vm_id" {
-  description = "VM ID in Proxmox"
+  description = "VM ID assigned by Proxmox"
   value       = proxmox_virtual_environment_vm.windows_vm.vm_id
 }
 
-output "vm_ip_address" {
-  description = "IP address of the Windows VM (DHCP assigned)"
+output "vm_name" {
+  description = "VM name"
+  value       = proxmox_virtual_environment_vm.windows_vm.name
+}
+
+output "vm_ipv4_addresses" {
+  description = "VM IPv4 addresses"
   value       = proxmox_virtual_environment_vm.windows_vm.ipv4_addresses
 }

@@ -1,7 +1,7 @@
 import { PrismaClient } from '../../generated/prisma';
-import { BaseGenerator, GeneratorOptions } from '../types/generator';
+import { GeneratorOptions } from '../types/generator';
 
-export abstract class BaseGenerator<T> implements BaseGenerator<T> {
+export abstract class BaseGenerator<T> {
   protected prisma: PrismaClient;
 
   constructor(prisma: PrismaClient) {

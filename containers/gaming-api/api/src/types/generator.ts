@@ -18,3 +18,9 @@ export interface BaseGenerator<T> {
   saveToDatabase(data: T[]): Promise<void>;
   validateData(data: T[]): void;
 }
+
+export interface ItemCategoryData {
+  name: string;
+  description?: string;
+  parent_id?: number;
+}

@@ -51,8 +51,7 @@ CREATE TABLE character_inventory (
 -- Create game locations table
 CREATE TABLE game_locations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    location_type TEXT NOT NULL
+    name TEXT NOT NULL UNIQUE
 );
 
 -- Create sessions table

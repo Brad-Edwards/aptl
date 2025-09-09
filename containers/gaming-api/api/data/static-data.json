@@ -241,34 +241,19 @@
     ],
     "game_locations": [
         {
-            "name": "Landing",
-            "type": "hub",
-            "level_requirement": 1,
-            "description": "Main landing area for new players"
+            "name": "Landing"
         },
         {
-            "name": "Game",
-            "type": "playground",
-            "level_requirement": 1,
-            "description": "Primary game area for gameplay activities"
+            "name": "Game"
         },
         {
-            "name": "Chat",
-            "type": "social",
-            "level_requirement": 1,
-            "description": "Social chat area for player communication"
+            "name": "Chat"
         },
         {
-            "name": "Marketplace",
-            "type": "commerce",
-            "level_requirement": 1,
-            "description": "Trading and marketplace area"
+            "name": "Marketplace"
         },
         {
-            "name": "Settings",
-            "type": "utility",
-            "level_requirement": 1,
-            "description": "Player settings and configuration area"
+            "name": "Settings"
         }
     ],
     "chat_channels": [

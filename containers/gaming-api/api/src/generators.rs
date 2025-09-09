@@ -7,6 +7,7 @@ pub mod items;
 pub mod player_movement;
 pub mod sessions;
 pub mod static_data;
+pub mod transactions;
 pub mod users;
 
 use sqlx::SqlitePool;
@@ -19,6 +20,7 @@ use game_locations::GameLocationsGenerator;
 use items::ItemsGenerator;
 use player_movement::PlayerMovementGenerator;
 use sessions::SessionsGenerator;
+use transactions::TransactionsGenerator;
 use users::UserGenerator;
 use static_data::StaticDataLoader;
 
@@ -72,6 +74,11 @@ pub async fn generate_player_movement(pool: &SqlitePool) -> Result<()> {
     generator.generate().await
 }
 
+pub async fn generate_transactions(pool: &SqlitePool) -> Result<()> {
+    let generator = TransactionsGenerator::new(pool.clone());
+    generator.generate().await
+}
+
 pub async fn generate_all(pool: &SqlitePool) -> Result<()> {
     generate_account_status(pool).await?;
     generate_character_classes(pool).await?;
@@ -82,5 +89,6 @@ pub async fn generate_all(pool: &SqlitePool) -> Result<()> {
     generate_character_inventory(pool).await?;
     generate_sessions(pool).await?;
     generate_player_movement(pool).await?;
+    generate_transactions(pool).await?;
     Ok(())
 }

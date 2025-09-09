@@ -11,6 +11,7 @@ pub enum StaticDataSection {
     Users,
     CharNames,
     ClassNames,
+    TransactionTypes,
 }
 
 impl StaticDataSection {
@@ -23,6 +24,7 @@ impl StaticDataSection {
             Self::Users => "users",
             Self::CharNames => "char_names",
             Self::ClassNames => "class_names",
+            Self::TransactionTypes => "transaction_types",
         }
     }
 }
@@ -114,6 +116,15 @@ impl StaticDataLoader {
         let section = self.data[StaticDataSection::CharNames.as_str()]
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("char_names section not found"))?;
+        
+        let result: Vec<String> = serde_json::from_value(section.clone().into())?;
+        Ok(result)
+    }
+
+    pub fn get_transaction_types(&self) -> Result<Vec<String>> {
+        let section = self.data[StaticDataSection::TransactionTypes.as_str()]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("transaction_types section not found"))?;
         
         let result: Vec<String> = serde_json::from_value(section.clone().into())?;
         Ok(result)

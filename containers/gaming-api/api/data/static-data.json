@@ -5506,5 +5506,6 @@
         "Zimkaur",
         "Zimston Satanphens"
     ],
-    "class_names": ["Warrior", "Mage", "Rogue", "Archer", "Paladin", "Necromancer", "Druid", "Bard"]
+    "class_names": ["Warrior", "Mage", "Rogue", "Archer", "Paladin", "Necromancer", "Druid", "Bard"],
+    "transaction_types": ["sale", "trade", "transfer"]
 }

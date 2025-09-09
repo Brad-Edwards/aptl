@@ -18,75 +18,20 @@ impl Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize database and run migrations
-    Init,
-    /// Generate mock data for all tables
-    Seed {
-        /// Clear existing data before seeding
-        #[arg(long)]
-        clear: bool,
-    },
-    /// Generate specific data types
-    Generate {
-        /// Data type to generate (users, characters, etc.)
-        #[arg(value_enum)]
-        data_type: DataType,
-        /// Number of records to generate
-        #[arg(short, long, default_value = "10")]
-        count: usize,
-    },
-    /// Verify database integrity and relationships
-    Verify,
-}
-
-#[derive(clap::ValueEnum, Clone)]
-pub enum DataType {
-    Users,
-    Characters,
-    Items,
-    Locations,
-    Channels,
+    /// Initialize database and seed with all data
+    Run,
 }
 
 impl Commands {
     pub async fn execute(self) -> Result<()> {
         match self {
-            Commands::Init => {
-                println!("Initializing database...");
+            Commands::Run => {
+                println!("Initializing database and seeding data...");
                 crate::db::init().await?;
-                println!("Database initialized successfully!");
-            }
-            Commands::Seed { clear } => {
-                if clear {
-                    println!("Clearing existing data...");
-                }
-                println!("Seeding database with mock data...");
-                // TODO: Implement seeding
-                println!("Database seeded successfully!");
-            }
-            Commands::Generate { data_type, count } => {
-                println!("Generating {} {} records...", count, data_type.name());
-                // TODO: Implement specific generation
-                println!("Generated {} records!", count);
-            }
-            Commands::Verify => {
-                println!("Verifying database integrity...");
-                crate::db::verify().await?;
-                println!("Database verification complete!");
+                crate::generators::generate_account_status(&crate::db::get_pool().await?).await?;
+                println!("Complete!");
             }
         }
         Ok(())
-    }
-}
-
-impl DataType {
-    fn name(&self) -> &'static str {
-        match self {
-            DataType::Users => "users",
-            DataType::Characters => "characters", 
-            DataType::Items => "items",
-            DataType::Locations => "locations",
-            DataType::Channels => "channels",
-        }
     }
 }

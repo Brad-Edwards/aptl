@@ -40,28 +40,3 @@ pub async fn init() -> Result<()> {
     println!("Database initialized with {} tables", count.0);
     Ok(())
 }
-
-/// Verify database integrity
-pub async fn verify() -> Result<()> {
-    let pool = get_pool().await?;
-    
-    // Check data counts
-    let users: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
-        .fetch_one(&pool)
-        .await?;
-        
-    let characters: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM characters")
-        .fetch_one(&pool)
-        .await?;
-        
-    let items: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM items")
-        .fetch_one(&pool)
-        .await?;
-    
-    println!("Database contents:");
-    println!("   Users: {}", users.0);
-    println!("   Characters: {}", characters.0);
-    println!("   Items: {}", items.0);
-    
-    Ok(())
-}

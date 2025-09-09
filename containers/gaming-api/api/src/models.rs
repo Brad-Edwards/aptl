@@ -27,8 +27,8 @@ pub struct Character {
 pub struct Item {
     pub id: i64,
     pub name: String,
+    pub rarity: String,
     pub gold_value: i64,
-    pub item_type: Option<String>,
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]

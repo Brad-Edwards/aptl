@@ -24,219 +24,144 @@
     "item_categories": [
         {
             "name": "Weapons",
-            "description": "Combat weapons and tools",
-            "parent_id": null
+            "description": "Combat weapons and tools"
         },
         {
             "name": "Armor",
-            "description": "Protective gear and clothing",
-            "parent_id": null
+            "description": "Protective gear and clothing"
         },
         {
             "name": "Consumables",
-            "description": "Food, potions, and temporary items",
-            "parent_id": null
+            "description": "Food, potions, and temporary items"
         },
         {
             "name": "Accessories",
-            "description": "Rings, amulets, and jewelry",
-            "parent_id": null
+            "description": "Rings, amulets, and jewelry"
         },
         {
             "name": "Materials",
-            "description": "Crafting materials and components",
-            "parent_id": null
+            "description": "Crafting materials and components"
         },
         {
             "name": "Miscellaneous",
-            "description": "Other items and curiosities",
-            "parent_id": null
+            "description": "Other items and curiosities"
         }
     ],
     "items": [
         {
             "name": "Gold",
             "gold_value": 1,
-            "category": "Materials",
-            "rarity": "common",
-            "item_type": "material",
-            "level_requirement": 1
+            "rarity": "common"
         },
         {
             "name": "Iron Sword",
             "gold_value": 50,
-            "category": "Weapons",
-            "rarity": "common",
-            "item_type": "weapon",
-            "level_requirement": 1
+            "rarity": "common"
         },
         {
             "name": "Steel Sword",
             "gold_value": 150,
-            "category": "Weapons",
-            "rarity": "uncommon",
-            "item_type": "weapon",
-            "level_requirement": 5
+            "rarity": "uncommon"
         },
         {
             "name": "Magic Staff",
             "gold_value": 300,
-            "category": "Weapons",
-            "rarity": "rare",
-            "item_type": "weapon",
-            "level_requirement": 10
+            "rarity": "rare"
         },
         {
             "name": "Dragon Blade",
             "gold_value": 1000,
-            "category": "Weapons",
-            "rarity": "epic",
-            "item_type": "weapon",
-            "level_requirement": 20
+            "rarity": "epic"
         },
         {
             "name": "Leather Armor",
             "gold_value": 30,
-            "category": "Armor",
-            "rarity": "common",
-            "item_type": "armor",
-            "level_requirement": 1
+            "rarity": "common"
         },
         {
             "name": "Chain Mail",
             "gold_value": 100,
-            "category": "Armor",
-            "rarity": "uncommon",
-            "item_type": "armor",
-            "level_requirement": 5
+            "rarity": "uncommon"
         },
         {
             "name": "Plate Armor",
             "gold_value": 250,
-            "category": "Armor",
-            "rarity": "rare",
-            "item_type": "armor",
-            "level_requirement": 10
+            "rarity": "rare"
         },
         {
             "name": "Dragon Scale Armor",
             "gold_value": 800,
-            "category": "Armor",
-            "rarity": "epic",
-            "item_type": "armor",
-            "level_requirement": 20
+            "rarity": "epic"
         },
         {
             "name": "Health Potion",
             "gold_value": 10,
-            "category": "Consumables",
-            "rarity": "common",
-            "item_type": "consumable",
-            "level_requirement": 1
+            "rarity": "common"
         },
         {
             "name": "Mana Potion",
             "gold_value": 15,
-            "category": "Consumables",
-            "rarity": "common",
-            "item_type": "consumable",
-            "level_requirement": 1
+            "rarity": "common"
         },
         {
             "name": "Greater Health Potion",
             "gold_value": 50,
-            "category": "Consumables",
-            "rarity": "uncommon",
-            "item_type": "consumable",
-            "level_requirement": 5
+            "rarity": "uncommon"
         },
         {
             "name": "Elixir of Power",
             "gold_value": 200,
-            "category": "Consumables",
-            "rarity": "rare",
-            "item_type": "consumable",
-            "level_requirement": 15
+            "rarity": "rare"
         },
         {
             "name": "Iron Ring",
             "gold_value": 25,
-            "category": "Accessories",
-            "rarity": "common",
-            "item_type": "accessory",
-            "level_requirement": 1
+            "rarity": "common"
         },
         {
             "name": "Magic Amulet",
             "gold_value": 120,
-            "category": "Accessories",
-            "rarity": "uncommon",
-            "item_type": "accessory",
-            "level_requirement": 8
+            "rarity": "uncommon"
         },
         {
             "name": "Crown of Kings",
             "gold_value": 500,
-            "category": "Accessories",
-            "rarity": "epic",
-            "item_type": "accessory",
-            "level_requirement": 25
+            "rarity": "epic"
         },
         {
             "name": "Iron Ore",
             "gold_value": 5,
-            "category": "Materials",
-            "rarity": "common",
-            "item_type": "material",
-            "level_requirement": 1
+            "rarity": "common"
         },
         {
             "name": "Silver Ore",
             "gold_value": 20,
-            "category": "Materials",
-            "rarity": "uncommon",
-            "item_type": "material",
-            "level_requirement": 5
+            "rarity": "uncommon"
         },
         {
             "name": "Gold Ore",
             "gold_value": 50,
-            "category": "Materials",
-            "rarity": "rare",
-            "item_type": "material",
-            "level_requirement": 10
+            "rarity": "rare"
         },
         {
             "name": "Dragon Scale",
             "gold_value": 200,
-            "category": "Materials",
-            "rarity": "epic",
-            "item_type": "material",
-            "level_requirement": 20
+            "rarity": "epic"
         },
         {
             "name": "Old Map",
             "gold_value": 15,
-            "category": "Miscellaneous",
-            "rarity": "common",
-            "item_type": "misc",
-            "level_requirement": 1
+            "rarity": "common"
         },
         {
             "name": "Ancient Scroll",
             "gold_value": 75,
-            "category": "Miscellaneous",
-            "rarity": "rare",
-            "item_type": "misc",
-            "level_requirement": 12
+            "rarity": "rare"
         },
         {
             "name": "Mysterious Key",
             "gold_value": 30,
-            "category": "Miscellaneous",
-            "rarity": "uncommon",
-            "item_type": "misc",
-            "level_requirement": 3
+            "rarity": "uncommon"
         }
     ],
     "game_locations": [

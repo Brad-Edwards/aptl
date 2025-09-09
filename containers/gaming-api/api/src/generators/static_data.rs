@@ -46,6 +46,11 @@ pub struct StaticItem {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct StaticCharacterClass {
+    pub class_name: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct StaticUser {
     pub username: String,
     pub email: String,
@@ -89,6 +94,15 @@ impl StaticDataLoader {
             .ok_or_else(|| anyhow::anyhow!("items section not found"))?;
         
         let result: Vec<StaticItem> = serde_json::from_value(section.clone().into())?;
+        Ok(result)
+    }
+
+    pub fn get_character_classes(&self) -> Result<Vec<StaticCharacterClass>> {
+        let section = self.data[StaticDataSection::ClassNames.as_str()]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("class_names section not found"))?;
+        
+        let result: Vec<StaticCharacterClass> = serde_json::from_value(section.clone().into())?;
         Ok(result)
     }
 

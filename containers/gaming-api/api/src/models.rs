@@ -16,12 +16,18 @@ pub struct User {
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]
+pub struct CharacterClass {
+    pub id: i64,
+    pub class_name: String,
+}
+
+#[derive(FromRow, Debug, Serialize, Deserialize)]
 pub struct Character {
     pub id: i64,
     pub user_id: i64,
     pub name: String,
     pub level: i64,
-    pub class: String,
+    pub class_id: i64,
     pub created_at: Option<String>,
 }
 

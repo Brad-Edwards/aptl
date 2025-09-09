@@ -1,4 +1,5 @@
 pub mod account_status;
+pub mod character_class;
 pub mod game_locations;
 pub mod items;
 pub mod static_data;
@@ -7,6 +8,7 @@ pub mod users;
 use sqlx::SqlitePool;
 use crate::Result;
 use account_status::AccountStatusGenerator;
+use character_class::CharacterClassGenerator;
 use game_locations::GameLocationsGenerator;
 use items::ItemsGenerator;
 use users::UserGenerator;
@@ -36,8 +38,15 @@ pub async fn generate_users(pool: &SqlitePool) -> Result<()> {
     UserGenerator::new(pool.clone()).generate(&users_data).await
 }
 
+pub async fn generate_character_classes(pool: &SqlitePool) -> Result<()> {
+    let loader = StaticDataLoader::new()?;
+    let character_class_data = loader.get_character_classes()?;
+    CharacterClassGenerator::new(pool.clone()).generate(&character_class_data).await
+}
+
 pub async fn generate_all(pool: &SqlitePool) -> Result<()> {
     generate_account_status(pool).await?;
+    generate_character_classes(pool).await?;
     generate_game_locations(pool).await?;
     generate_items(pool).await?;
     generate_users(pool).await?;

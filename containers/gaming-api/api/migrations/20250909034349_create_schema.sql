@@ -5,6 +5,12 @@ CREATE TABLE account_status (
     description TEXT
 );
 
+-- Create character class lookup table
+CREATE TABLE character_class (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    class_name TEXT NOT NULL UNIQUE
+);
+
 -- Create users table
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,9 +32,10 @@ CREATE TABLE characters (
     user_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     level INTEGER DEFAULT 1,
-    class TEXT NOT NULL,
+    class_id INTEGER NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (class_id) REFERENCES character_class(id)
 );
 
 -- Create items table

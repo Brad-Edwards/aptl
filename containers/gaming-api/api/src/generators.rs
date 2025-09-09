@@ -4,6 +4,7 @@ pub mod character_inventory;
 pub mod characters;
 pub mod game_locations;
 pub mod items;
+pub mod player_movement;
 pub mod sessions;
 pub mod static_data;
 pub mod users;
@@ -16,6 +17,7 @@ use character_inventory::CharacterInventoryGenerator;
 use characters::CharactersGenerator;
 use game_locations::GameLocationsGenerator;
 use items::ItemsGenerator;
+use player_movement::PlayerMovementGenerator;
 use sessions::SessionsGenerator;
 use users::UserGenerator;
 use static_data::StaticDataLoader;
@@ -65,6 +67,11 @@ pub async fn generate_sessions(pool: &SqlitePool) -> Result<()> {
     generator.generate().await
 }
 
+pub async fn generate_player_movement(pool: &SqlitePool) -> Result<()> {
+    let generator = PlayerMovementGenerator::new(pool.clone());
+    generator.generate().await
+}
+
 pub async fn generate_all(pool: &SqlitePool) -> Result<()> {
     generate_account_status(pool).await?;
     generate_character_classes(pool).await?;
@@ -74,5 +81,6 @@ pub async fn generate_all(pool: &SqlitePool) -> Result<()> {
     generate_characters(pool).await?;
     generate_character_inventory(pool).await?;
     generate_sessions(pool).await?;
+    generate_player_movement(pool).await?;
     Ok(())
 }

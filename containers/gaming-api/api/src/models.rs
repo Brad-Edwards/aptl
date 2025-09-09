@@ -13,6 +13,7 @@ pub struct User {
     pub password_last_changed: Option<String>,
     pub first_name: String,
     pub last_name: String,
+    pub last_ip_address: String,
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]
@@ -46,23 +47,15 @@ pub struct GameLocation {
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]
-pub struct LoginHistory {
+pub struct Session {
     pub id: i64,
     pub user_id: i64,
     pub username: String,
     pub ip_address: String,
     pub login_time: Option<String>,
+    pub logout_time: Option<String>,
     pub success: bool,
     pub geo_location: Option<String>,
-}
-
-#[derive(FromRow, Debug, Serialize, Deserialize)]
-pub struct Session {
-    pub id: i64,
-    pub user_id: i64,
-    pub login_time: Option<String>,
-    pub logout_time: Option<String>,
-    pub ip_address: Option<String>,
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]

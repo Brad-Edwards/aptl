@@ -23,6 +23,7 @@ CREATE TABLE users (
     password_last_changed DATETIME,
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
+    last_ip_address TEXT NOT NULL,
     FOREIGN KEY (account_status_id) REFERENCES account_status(id)
 );
 
@@ -63,26 +64,17 @@ CREATE TABLE game_locations (
     name TEXT NOT NULL UNIQUE
 );
 
--- Create sessions table
+-- Create sessions table (includes both successful and failed login attempts)
 CREATE TABLE sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    login_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    logout_time DATETIME,
-    ip_address TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
--- Create login history table
-CREATE TABLE login_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     username TEXT NOT NULL,
     ip_address TEXT NOT NULL,
     login_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    logout_time DATETIME,
     success BOOLEAN DEFAULT 1,
     geo_location TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Create player movement table
@@ -158,8 +150,8 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_characters_user_id ON characters(user_id);
 CREATE INDEX idx_character_inventory_character_id ON character_inventory(character_id);
 CREATE INDEX idx_character_inventory_item_id ON character_inventory(item_id);
-CREATE INDEX idx_login_history_user_id ON login_history(user_id);
-CREATE INDEX idx_login_history_ip_address ON login_history(ip_address);
+CREATE INDEX idx_sessions_username ON sessions(username);
+CREATE INDEX idx_sessions_success ON sessions(success);
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX idx_player_movement_user_id ON player_movement(user_id);
 CREATE INDEX idx_player_movement_session_id ON player_movement(session_id);

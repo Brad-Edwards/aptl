@@ -28,14 +28,14 @@ impl CharactersGenerator {
             .await?;
 
         for (user_id, user_created_at) in users {
-            let char_count = rand::thread_rng().gen_range(1..=3);
+            let char_count = rand::rng().random_range(1..=3);
             
             for i in 0..char_count {
                 let name = &char_names[name_index % char_names.len()];
                 name_index += 1;
                 
-                let level = rand::thread_rng().gen_range(1..=100);
-                let class_id = rand::thread_rng().gen_range(1..=class_count);
+                let level = rand::rng().random_range(1..=100);
+                let class_id = rand::rng().random_range(1..=class_count);
                 
                 let created_at = if i == 0 {
                     user_created_at.clone()
@@ -68,7 +68,7 @@ impl CharactersGenerator {
             chrono::NaiveDateTime::parse_from_str(end, "%Y-%m-%d %H:%M:%S")
         ) {
             let duration = end_dt - start_dt;
-            let random_seconds = rand::thread_rng().gen_range(0..=duration.num_seconds());
+            let random_seconds = rand::rng().random_range(0..=duration.num_seconds());
             let random_dt = start_dt + chrono::Duration::seconds(random_seconds);
             random_dt.format("%Y-%m-%d %H:%M:%S").to_string()
         } else {

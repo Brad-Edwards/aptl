@@ -42,11 +42,19 @@ import { PrismaClient } from '../generated/prisma';
               delete: jest.fn(),
               deleteMany: jest.fn(),
             },
+            users: {
+              create: jest.fn(),
+              createMany: jest.fn().mockResolvedValue({ count: 0 }),
+              findMany: jest.fn(),
+              findUnique: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
+            },
             $disconnect: jest.fn(),
           })),
         }));
 
 // Global test utilities
-global.testUtils = {
+(global as any).testUtils = {
   createMockPrismaClient: () => new PrismaClient(),
 };

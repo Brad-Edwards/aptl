@@ -2,6 +2,7 @@
     "name": "api",
     "version": "1.0.0",
     "description": "",
+    "type": "module",
     "main": "index.js",
     "scripts": {
         "dev": "nodemon --exec ts-node src/index.ts",
@@ -11,6 +12,7 @@
         "db:push": "prisma db push",
         "db:migrate": "prisma migrate dev",
         "db:seed": "ts-node prisma/seed.ts",
+        "seed": "node --loader ts-node/esm scripts/seed-database.ts",
         "test": "jest",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage"

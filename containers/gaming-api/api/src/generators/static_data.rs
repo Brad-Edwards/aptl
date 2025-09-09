@@ -35,6 +35,11 @@ pub struct StaticAccountStatus {
     pub description: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct StaticGameLocation {
+    pub name: String,
+}
+
 pub struct StaticDataLoader {
     data: serde_json::Value,
 }
@@ -52,6 +57,15 @@ impl StaticDataLoader {
             .ok_or_else(|| anyhow::anyhow!("account_status section not found"))?;
         
         let result: Vec<StaticAccountStatus> = serde_json::from_value(section.clone().into())?;
+        Ok(result)
+    }
+
+    pub fn get_game_locations(&self) -> Result<Vec<StaticGameLocation>> {
+        let section = self.data[StaticDataSection::GameLocations.as_str()]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("game_locations section not found"))?;
+        
+        let result: Vec<StaticGameLocation> = serde_json::from_value(section.clone().into())?;
         Ok(result)
     }
 }

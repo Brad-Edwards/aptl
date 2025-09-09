@@ -35,7 +35,6 @@ pub struct Item {
 pub struct GameLocation {
     pub id: i64,
     pub name: String,
-    pub location_type: String,
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]

@@ -11,7 +11,9 @@ impl Cli {
     pub async fn run(self) -> Result<()> {
         println!("Initializing database and seeding data...");
         crate::db::init().await?;
-        crate::generators::generate_account_status(&crate::db::get_pool().await?).await?;
+        let pool = crate::db::get_pool().await?;
+        crate::generators::generate_account_status(&pool).await?;
+        crate::generators::generate_game_locations(&pool).await?;
         println!("Complete!");
         Ok(())
     }

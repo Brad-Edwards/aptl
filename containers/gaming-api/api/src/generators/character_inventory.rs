@@ -30,7 +30,7 @@ impl CharacterInventoryGenerator {
 
         for (character_id, level) in characters {
             // Give gold (scaled by level)
-            let gold_amount = rand::thread_rng().gen_range(10..=500) * (level / 10 + 1);
+            let gold_amount = rand::rng().random_range(10..=500) * (level / 10 + 1);
             
             sqlx::query("INSERT INTO character_inventory (character_id, item_id, quantity) VALUES (?, ?, ?)")
                 .bind(character_id)
@@ -41,17 +41,17 @@ impl CharacterInventoryGenerator {
 
             // Give random items (0-4 different item types, more for higher levels)
             let max_items = std::cmp::min(4, level / 25 + 1);
-            let item_count = rand::thread_rng().gen_range(0..=max_items);
+            let item_count = rand::rng().random_range(0..=max_items);
 
             let mut selected_items = Vec::new();
             for _ in 0..item_count {
                 // Pick a random item not already selected
                 let mut attempts = 0;
                 loop {
-                    let item_id = item_ids[rand::thread_rng().gen_range(0..item_ids.len())];
+                    let item_id = item_ids[rand::rng().random_range(0..item_ids.len())];
                     if !selected_items.contains(&item_id) || attempts > 10 {
                         selected_items.push(item_id);
-                        let quantity = rand::thread_rng().gen_range(1..=5);
+                        let quantity = rand::rng().random_range(1..=5);
 
                         sqlx::query("INSERT INTO character_inventory (character_id, item_id, quantity) VALUES (?, ?, ?)")
                             .bind(character_id)

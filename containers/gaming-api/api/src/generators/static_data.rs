@@ -57,6 +57,7 @@ pub struct StaticUser {
     pub created_at: String,
     pub first_name: String,
     pub last_name: String,
+    pub last_ip_address: String,
 }
 
 pub struct StaticDataLoader {

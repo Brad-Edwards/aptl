@@ -43,7 +43,7 @@ impl UserGenerator {
             let midpoint = created + (now - created) / 2;
             
             let random_time = created + chrono::Duration::seconds(
-                rand::thread_rng().gen_range(0..=(midpoint - created).num_seconds())
+                rand::rng().random_range(0..=(midpoint - created).num_seconds())
             );
             
             Some(random_time.format("%Y-%m-%d %H:%M:%S").to_string())
@@ -57,10 +57,10 @@ impl UserGenerator {
         
         for user in data {
             let account_status_id = self.generate_account_status_id();
-            let password = &passwords[rand::thread_rng().gen_range(0..passwords.len())];
+            let password = &passwords[rand::rng().random_range(0..passwords.len())];
             let password_last_changed = self.generate_password_last_changed(&user.created_at);
             
-            sqlx::query("INSERT INTO users (username, password_text, email, created_at, account_status_id, email_last_changed, password_last_changed, first_name, last_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            sqlx::query("INSERT INTO users (username, password_text, email, created_at, account_status_id, email_last_changed, password_last_changed, first_name, last_name, last_ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
                 .bind(&user.username)
                 .bind(password)
                 .bind(&user.email)
@@ -70,6 +70,7 @@ impl UserGenerator {
                 .bind(password_last_changed)
                 .bind(&user.first_name)
                 .bind(&user.last_name)
+                .bind(&user.last_ip_address)
                 .execute(&self.pool)
                 .await?;
         }

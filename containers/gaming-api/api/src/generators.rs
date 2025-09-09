@@ -2,12 +2,14 @@ pub mod account_status;
 pub mod game_locations;
 pub mod items;
 pub mod static_data;
+pub mod users;
 
 use sqlx::SqlitePool;
 use crate::Result;
 use account_status::AccountStatusGenerator;
 use game_locations::GameLocationsGenerator;
 use items::ItemsGenerator;
+use users::UserGenerator;
 use static_data::StaticDataLoader;
 
 pub async fn generate_account_status(pool: &SqlitePool) -> Result<()> {
@@ -28,9 +30,16 @@ pub async fn generate_items(pool: &SqlitePool) -> Result<()> {
     ItemsGenerator::new(pool.clone()).generate(&items_data).await
 }
 
+pub async fn generate_users(pool: &SqlitePool) -> Result<()> {
+    let loader = StaticDataLoader::new()?;
+    let users_data = loader.get_users()?;
+    UserGenerator::new(pool.clone()).generate(&users_data).await
+}
+
 pub async fn generate_all(pool: &SqlitePool) -> Result<()> {
     generate_account_status(pool).await?;
     generate_game_locations(pool).await?;
     generate_items(pool).await?;
+    generate_users(pool).await?;
     Ok(())
 }

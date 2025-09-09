@@ -1,53 +1,77 @@
-use serde::Deserialize;
 use sqlx::SqlitePool;
-use std::fs;
 use crate::Result;
+use super::static_data::StaticUser;
+use rand::Rng;
+use std::fs;
 
-#[derive(Debug, Deserialize)]
-struct StaticUser {
-    username: String,
-    email: String,
-    password_hash: String,
-    created_at: String,
-    account_value: i64,
-}
-
-#[derive(Debug, Deserialize)]
-struct StaticData {
-    users: Vec<StaticUser>,
-}
-
-pub struct UsersGenerator {
+pub struct UserGenerator {
     pool: SqlitePool,
 }
 
-impl UsersGenerator {
+impl UserGenerator {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
-    pub async fn generate(&self) -> Result<()> {
-        // Load static data
-        let data = fs::read_to_string("./data/static-data.json")?;
-        let static_data: StaticData = serde_json::from_str(&data)?;
+    fn load_passwords() -> Result<Vec<String>> {
+        let bytes = fs::read("./data/rockyou.txt")?;
+        let passwords_text = String::from_utf8_lossy(&bytes);
+        Ok(passwords_text
+            .lines()
+            .take(10000) // Only use first 10k passwords for performance
+            .map(|line| line.trim().to_string())
+            .filter(|line| !line.is_empty())
+            .collect())
+    }
 
-        // Clear existing users
-        sqlx::query("DELETE FROM users").execute(&self.pool).await?;
+    fn generate_account_status_id(&self) -> i64 {
+        let rand = rand::random::<f32>();
+        if rand < 0.8 { 1 }      // active
+        else if rand < 0.9 { 2 } // inactive
+        else if rand < 0.95 { 4 } // flagged  
+        else if rand < 0.98 { 3 } // suspended
+        else { 5 }               // banned
+    }
 
-        // Insert users
-        for user in static_data.users {
-            sqlx::query!(
-                "INSERT INTO users (username, password, email, created_at, account_value, account_status_id) 
-                 VALUES (?, ?, ?, ?, ?, ?)",
-                user.username,
-                user.password_hash, // Store as plaintext password
-                user.email,
-                user.created_at,
-                user.account_value,
-                1 // Default to 'active' status
-            )
-            .execute(&self.pool)
-            .await?;
+    fn generate_password_last_changed(&self, created_at: &str) -> Option<String> {
+        if rand::random::<f32>() < 0.5 {
+            return Some(created_at.to_string()); // 50% chance no password change
+        }
+        
+        if let Ok(created) = chrono::NaiveDateTime::parse_from_str(created_at, "%Y-%m-%d %H:%M:%S") {
+            let now = chrono::NaiveDateTime::parse_from_str("2025-09-08 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+            let midpoint = created + (now - created) / 2;
+            
+            let random_time = created + chrono::Duration::seconds(
+                rand::thread_rng().gen_range(0..=(midpoint - created).num_seconds())
+            );
+            
+            Some(random_time.format("%Y-%m-%d %H:%M:%S").to_string())
+        } else {
+            Some(created_at.to_string())
+        }
+    }
+
+    pub async fn generate(&self, data: &[StaticUser]) -> Result<()> {
+        let passwords = Self::load_passwords()?;
+        
+        for user in data {
+            let account_status_id = self.generate_account_status_id();
+            let password = &passwords[rand::thread_rng().gen_range(0..passwords.len())];
+            let password_last_changed = self.generate_password_last_changed(&user.created_at);
+            
+            sqlx::query("INSERT INTO users (username, password_text, email, created_at, account_status_id, email_last_changed, password_last_changed, first_name, last_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                .bind(&user.username)
+                .bind(password)
+                .bind(&user.email)
+                .bind(&user.created_at)
+                .bind(account_status_id)
+                .bind(&user.created_at) // email_last_changed = created_at
+                .bind(password_last_changed)
+                .bind(&user.first_name)
+                .bind(&user.last_name)
+                .execute(&self.pool)
+                .await?;
         }
 
         let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")

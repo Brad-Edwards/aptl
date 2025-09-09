@@ -9,12 +9,14 @@ CREATE TABLE account_status (
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
+    password_text TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    account_value INTEGER DEFAULT 0,
     account_status_id INTEGER NOT NULL,
     email_last_changed DATETIME,
+    password_last_changed DATETIME,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
     FOREIGN KEY (account_status_id) REFERENCES account_status(id)
 );
 

@@ -5,12 +5,14 @@ use serde::{Deserialize, Serialize};
 pub struct User {
     pub id: i64,
     pub username: String,
-    pub password: String,
+    pub password_text: String,
     pub email: String,
     pub created_at: Option<String>,
-    pub account_value: i64,
     pub account_status_id: i64,
     pub email_last_changed: Option<String>,
+    pub password_last_changed: Option<String>,
+    pub first_name: String,
+    pub last_name: String,
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]

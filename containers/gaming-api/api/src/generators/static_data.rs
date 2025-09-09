@@ -45,6 +45,15 @@ pub struct StaticItem {
     pub rarity: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct StaticUser {
+    pub username: String,
+    pub email: String,
+    pub created_at: String,
+    pub first_name: String,
+    pub last_name: String,
+}
+
 pub struct StaticDataLoader {
     data: serde_json::Value,
 }
@@ -80,6 +89,15 @@ impl StaticDataLoader {
             .ok_or_else(|| anyhow::anyhow!("items section not found"))?;
         
         let result: Vec<StaticItem> = serde_json::from_value(section.clone().into())?;
+        Ok(result)
+    }
+
+    pub fn get_users(&self) -> Result<Vec<StaticUser>> {
+        let section = self.data[StaticDataSection::Users.as_str()]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("users section not found"))?;
+        
+        let result: Vec<StaticUser> = serde_json::from_value(section.clone().into())?;
         Ok(result)
     }
 }

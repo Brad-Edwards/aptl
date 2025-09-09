@@ -102,7 +102,19 @@ impl StaticDataLoader {
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("class_names section not found"))?;
         
-        let result: Vec<StaticCharacterClass> = serde_json::from_value(section.clone().into())?;
+        let class_names: Vec<String> = serde_json::from_value(section.clone().into())?;
+        let result = class_names.into_iter()
+            .map(|name| StaticCharacterClass { class_name: name })
+            .collect();
+        Ok(result)
+    }
+
+    pub fn get_char_names(&self) -> Result<Vec<String>> {
+        let section = self.data[StaticDataSection::CharNames.as_str()]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("char_names section not found"))?;
+        
+        let result: Vec<String> = serde_json::from_value(section.clone().into())?;
         Ok(result)
     }
 

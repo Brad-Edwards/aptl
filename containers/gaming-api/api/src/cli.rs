@@ -12,8 +12,7 @@ impl Cli {
         println!("Initializing database and seeding data...");
         crate::db::init().await?;
         let pool = crate::db::get_pool().await?;
-        crate::generators::generate_account_status(&pool).await?;
-        crate::generators::generate_game_locations(&pool).await?;
+        crate::generators::generate_all(&pool).await?;
         println!("Complete!");
         Ok(())
     }

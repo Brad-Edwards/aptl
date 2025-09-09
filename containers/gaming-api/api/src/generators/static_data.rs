@@ -5,7 +5,6 @@ use crate::Result;
 #[derive(Debug)]
 pub enum StaticDataSection {
     AccountStatus,
-    ItemCategories,
     Items,
     GameLocations,
     ChatChannels,
@@ -18,7 +17,6 @@ impl StaticDataSection {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::AccountStatus => "account_status",
-            Self::ItemCategories => "item_categories", 
             Self::Items => "items",
             Self::GameLocations => "game_locations",
             Self::ChatChannels => "chat_channels",
@@ -38,6 +36,13 @@ pub struct StaticAccountStatus {
 #[derive(Debug, Deserialize)]
 pub struct StaticGameLocation {
     pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StaticItem {
+    pub name: String,
+    pub gold_value: i64,
+    pub rarity: String,
 }
 
 pub struct StaticDataLoader {
@@ -66,6 +71,15 @@ impl StaticDataLoader {
             .ok_or_else(|| anyhow::anyhow!("game_locations section not found"))?;
         
         let result: Vec<StaticGameLocation> = serde_json::from_value(section.clone().into())?;
+        Ok(result)
+    }
+
+    pub fn get_items(&self) -> Result<Vec<StaticItem>> {
+        let section = self.data[StaticDataSection::Items.as_str()]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("items section not found"))?;
+        
+        let result: Vec<StaticItem> = serde_json::from_value(section.clone().into())?;
         Ok(result)
     }
 }

@@ -33,8 +33,8 @@ CREATE TABLE characters (
 CREATE TABLE items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    gold_value INTEGER NOT NULL,
-    item_type TEXT
+    rarity TEXT NOT NULL,
+    gold_value INTEGER NOT NULL
 );
 
 -- Create character inventory junction table

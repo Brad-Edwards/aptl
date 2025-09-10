@@ -79,17 +79,6 @@ pub struct Transaction {
     pub transaction_type: String,
 }
 
-#[derive(FromRow, Debug, Serialize, Deserialize)]
-pub struct MarketplaceActivity {
-    pub id: i64,
-    pub user_id: i64,
-    pub character_id: i64,
-    pub session_id: String,
-    pub action_type: String,
-    pub item_id: Option<i64>,
-    pub transaction_id: Option<i64>,
-    pub timestamp: Option<String>,
-}
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]
 pub struct CharacterInventory {

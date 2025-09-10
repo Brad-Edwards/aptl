@@ -105,22 +105,6 @@ CREATE TABLE transactions (
     FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
 );
 
--- Create marketplace activity table
-CREATE TABLE marketplace_activity (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    character_id INTEGER NOT NULL,
-    session_id INTEGER NOT NULL,
-    action_type TEXT NOT NULL,
-    item_id INTEGER,
-    transaction_id INTEGER,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE,
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE SET NULL,
-    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
-);
 
 -- Create messages table
 CREATE TABLE messages (
@@ -157,8 +141,6 @@ CREATE INDEX idx_player_movement_user_id ON player_movement(user_id);
 CREATE INDEX idx_player_movement_session_id ON player_movement(session_id);
 CREATE INDEX idx_transactions_from_character ON transactions(from_character_id);
 CREATE INDEX idx_transactions_to_character ON transactions(to_character_id);
-CREATE INDEX idx_marketplace_activity_user_id ON marketplace_activity(user_id);
-CREATE INDEX idx_marketplace_activity_character_id ON marketplace_activity(character_id);
 CREATE INDEX idx_messages_from_user ON messages(from_user_id);
 CREATE INDEX idx_messages_to_user ON messages(to_user_id);
 CREATE INDEX idx_settings_changes_user_id ON settings_changes(user_id);

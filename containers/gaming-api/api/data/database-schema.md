@@ -87,16 +87,6 @@ erDiagram
         string transaction_type
     }
     
-    MarketplaceActivity {
-        int id PK
-        int user_id FK
-        int character_id FK
-        int session_id FK
-        string action_type
-        int item_id FK
-        int transaction_id FK
-        datetime timestamp
-    }
     
     Message {
         int id PK
@@ -122,24 +112,19 @@ erDiagram
     User ||--o{ PlayerMovement : moves
     User ||--o{ Message : sends_from
     User ||--o{ Message : receives_to
-    User ||--o{ MarketplaceActivity : performs
     User ||--o{ SettingsChange : makes
     
     Character ||--o{ CharacterInventory : has_inventory
     Character ||--o{ PlayerMovement : moves_with
     Character ||--o{ Transaction : transfers_from
     Character ||--o{ Transaction : transfers_to
-    Character ||--o{ MarketplaceActivity : acts_with
     
     Item ||--o{ CharacterInventory : stored_as
     Item ||--o{ Transaction : involves
-    Item ||--o{ MarketplaceActivity : involves
     
     GameLocation ||--o{ PlayerMovement : visited
     
     Session ||--o{ PlayerMovement : tracks
-    Session ||--o{ MarketplaceActivity : tracks
     Session ||--o{ SettingsChange : tracks
     
-    Transaction ||--o{ MarketplaceActivity : triggers
 ```

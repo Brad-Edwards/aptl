@@ -1,8 +1,0 @@
-AlphaWolf|72.34.56.12|132
-AlphaWolf|72.18.188.174|132
-BlackHoleHero|72.50.200.250|58
-BlackHoleHero|72.89.45.12|56
-BladeMaster|203.56.78.90|138
-BladeMaster|72.65.21.185|124
-ContinuousConqueror|72.34.25.144|144
-ContinuousConqueror|185.78.45.56|139

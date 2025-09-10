@@ -33,21 +33,21 @@ impl PlayerMovementGenerator {
     fn initialize_session_budgets(session_duration_minutes: i64) -> HashMap<i64, LocationBudget> {
         let mut budgets = HashMap::new();
         
-        // Game: gets 80% of session time when visited
+        // Game: gets 80% of session time when visited (location_id = 2)
         let game_time = (session_duration_minutes as f64 * 0.8) as i64;
-        budgets.insert(3, LocationBudget { total_minutes: game_time, used_minutes: 0 });
+        budgets.insert(2, LocationBudget { total_minutes: game_time, used_minutes: 0 });
         
-        // Marketplace: gets 15% of session time when visited  
+        // Marketplace: gets 15% of session time when visited (location_id = 4)
         let marketplace_time = (session_duration_minutes as f64 * 0.15) as i64;
         budgets.insert(4, LocationBudget { total_minutes: marketplace_time, used_minutes: 0 });
         
-        // Chat: gets 10% of session time when visited
+        // Chat: gets 10% of session time when visited (location_id = 3)
         let chat_time = (session_duration_minutes as f64 * 0.10) as i64;
-        budgets.insert(5, LocationBudget { total_minutes: chat_time, used_minutes: 0 });
+        budgets.insert(3, LocationBudget { total_minutes: chat_time, used_minutes: 0 });
         
-        // Settings: gets 5% of session time when visited
+        // Settings: gets 5% of session time when visited (location_id = 5)
         let settings_time = (session_duration_minutes as f64 * 0.05) as i64;
-        budgets.insert(2, LocationBudget { total_minutes: settings_time, used_minutes: 0 });
+        budgets.insert(5, LocationBudget { total_minutes: settings_time, used_minutes: 0 });
         
         budgets
     }
@@ -55,19 +55,19 @@ impl PlayerMovementGenerator {
     // Roll for next location selection with weighted probabilities
     fn roll_next_location() -> i64 {
         let rand = rand::random::<f32>();
-        if rand < 0.8 { 3 }        // Game: 80% chance
-        else if rand < 0.95 { 4 }  // Marketplace: 15% chance  
-        else if rand < 0.98 { 5 }  // Chat: 3% chance
-        else { 2 }                 // Settings: 2% chance
+        if rand < 0.8 { 2 }        // Game: 80% chance (location_id = 2)
+        else if rand < 0.95 { 4 }  // Marketplace: 15% chance (location_id = 4)
+        else if rand < 0.98 { 3 }  // Chat: 3% chance (location_id = 3)
+        else { 5 }                 // Settings: 2% chance (location_id = 5)
     }
 
     // Calculate time to spend on this visit (30-40% of location's total budget, or remaining budget)
     fn calculate_visit_time(location_id: i64, budget: &LocationBudget, session_duration: i64) -> i64 {
         let visit_percentage = match location_id {
-            3 => rand::rng().random_range(30..=40) as f64 / 100.0, // Game: 30-40%
+            2 => rand::rng().random_range(30..=40) as f64 / 100.0, // Game: 30-40%
             4 => rand::rng().random_range(3..=8) as f64 / 100.0,   // Marketplace: 3-8%  
-            5 => rand::rng().random_range(2..=5) as f64 / 100.0,   // Chat: 2-5%
-            2 => rand::rng().random_range(1..=3) as f64 / 100.0,   // Settings: 1-3%
+            3 => rand::rng().random_range(2..=5) as f64 / 100.0,   // Chat: 2-5%
+            5 => rand::rng().random_range(1..=3) as f64 / 100.0,   // Settings: 1-3%
             _ => 0.02,
         };
         
@@ -256,7 +256,7 @@ mod tests {
             
             // Simulate Game: 60% likelihood gets allocated
             let game_time = std::cmp::min(max_time, (180.0 * 0.6) as i64); // 108 -> capped at 72
-            budgets.insert(3, LocationBudget { location_id: 3, total_minutes: game_time, used_minutes: 0 });
+            budgets.insert(3, LocationBudget { total_minutes: game_time, used_minutes: 0 });
             
             budgets
         };
@@ -270,7 +270,7 @@ mod tests {
             let max_time = (30.0 * 0.4) as i64; // 12 minutes max per location
             
             let game_time = std::cmp::min(max_time, (30.0 * 0.6) as i64); // 18 -> capped at 12
-            budgets.insert(3, LocationBudget { location_id: 3, total_minutes: game_time, used_minutes: 0 });
+            budgets.insert(3, LocationBudget { total_minutes: game_time, used_minutes: 0 });
             
             budgets
         };
@@ -282,8 +282,8 @@ mod tests {
     #[test]
     fn test_destination_choice_logic() {
         let mut budgets = HashMap::new();
-        budgets.insert(3, LocationBudget { location_id: 3, total_minutes: 30, used_minutes: 0 });
-        budgets.insert(4, LocationBudget { location_id: 4, total_minutes: 10, used_minutes: 8 }); // 2 minutes left
+        budgets.insert(3, LocationBudget { total_minutes: 30, used_minutes: 0 });
+        budgets.insert(4, LocationBudget { total_minutes: 10, used_minutes: 8 }); // 2 minutes left
         
         let available: Vec<i64> = budgets.iter()
             .filter(|(_, budget)| budget.has_time_remaining())
@@ -464,8 +464,8 @@ mod tests {
             println!("  Location {}: {} times ({}%)", location_id, count, percentage);
         }
         
-        // Game (location 3) should be ~80% of selections
-        let game_percentage = *location_counts.get(&3).unwrap_or(&0) as f64 / 1000.0;
+        // Game (location 2) should be ~80% of selections
+        let game_percentage = *location_counts.get(&2).unwrap_or(&0) as f64 / 1000.0;
         assert!(game_percentage > 0.75 && game_percentage < 0.85, "Game should be selected ~80% of the time");
     }
 
@@ -475,7 +475,7 @@ mod tests {
         let marketplace_budget = LocationBudget { total_minutes: 27, used_minutes: 0 };
         
         // Test Game visit time (30-40% of 180min session = 54-72 minutes)
-        let game_visit_time = PlayerMovementGenerator::calculate_visit_time(3, &game_budget, 180);
+        let game_visit_time = PlayerMovementGenerator::calculate_visit_time(2, &game_budget, 180);
         println!("Game visit time: {} minutes (should be 54-72)", game_visit_time);
         assert!(game_visit_time >= 54 && game_visit_time <= 72);
         
@@ -514,10 +514,10 @@ mod tests {
             for (i, (user_id, session_id, location_id, timestamp)) in movements.iter().enumerate() {
                 let location_name = match location_id {
                     1 => "Landing",
-                    2 => "Settings", 
-                    3 => "Game",
+                    2 => "Game", 
+                    3 => "Chat",
                     4 => "Marketplace",
-                    5 => "Chat",
+                    5 => "Settings",
                     _ => "Unknown"
                 };
                 println!("  {}: {} at {}", i+1, location_name, timestamp);
@@ -535,8 +535,8 @@ mod tests {
             println!("Location visit counts:");
             for (location_id, count) in &location_counts {
                 let location_name = match location_id {
-                    1 => "Landing", 2 => "Settings", 3 => "Game", 
-                    4 => "Marketplace", 5 => "Chat", _ => "Unknown"
+                    1 => "Landing", 2 => "Game", 3 => "Chat", 
+                    4 => "Marketplace", 5 => "Settings", _ => "Unknown"
                 };
                 println!("  {}: {} visits", location_name, count);
             }

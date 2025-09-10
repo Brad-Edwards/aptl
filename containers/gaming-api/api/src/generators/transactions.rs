@@ -11,8 +11,8 @@ impl TransactionsGenerator {
         Self { pool }
     }
 
-    fn get_transaction_type(&self, types: &[String]) -> &str {
-        &types[rand::rng().random_range(0..types.len())]
+    fn get_transaction_type(&self, types: &[String]) -> String {
+        types[rand::rng().random_range(0..types.len())].clone()
     }
 
     fn random_transaction_time(&self) -> String {
@@ -74,7 +74,7 @@ impl TransactionsGenerator {
                 let quantity = rand::rng().random_range(1..=5);
                 let transaction_type = self.get_transaction_type(&transaction_types);
                 
-                self.create_transaction(from_char, to_char, item_id, quantity, transaction_type).await?;
+                self.create_transaction(from_char, to_char, item_id, quantity, &transaction_type).await?;
             }
         }
 

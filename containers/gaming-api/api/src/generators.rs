@@ -6,6 +6,7 @@ pub mod game_locations;
 pub mod items;
 pub mod player_movement;
 pub mod sessions;
+pub mod settings_changes;
 pub mod static_data;
 pub mod transactions;
 pub mod users;
@@ -20,6 +21,7 @@ use game_locations::GameLocationsGenerator;
 use items::ItemsGenerator;
 use player_movement::PlayerMovementGenerator;
 use sessions::SessionsGenerator;
+use settings_changes::SettingsChangesGenerator;
 use transactions::TransactionsGenerator;
 use users::UserGenerator;
 use static_data::StaticDataLoader;
@@ -79,6 +81,11 @@ pub async fn generate_transactions(pool: &SqlitePool) -> Result<()> {
     generator.generate().await
 }
 
+pub async fn generate_settings_changes(pool: &SqlitePool) -> Result<()> {
+    let generator = SettingsChangesGenerator::new(pool.clone());
+    generator.generate().await
+}
+
 pub async fn generate_all(pool: &SqlitePool) -> Result<()> {
     generate_account_status(pool).await?;
     generate_character_classes(pool).await?;
@@ -90,5 +97,6 @@ pub async fn generate_all(pool: &SqlitePool) -> Result<()> {
     generate_sessions(pool).await?;
     generate_player_movement(pool).await?;
     generate_transactions(pool).await?;
+    generate_settings_changes(pool).await?;
     Ok(())
 }

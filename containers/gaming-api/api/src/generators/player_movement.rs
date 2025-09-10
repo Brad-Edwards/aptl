@@ -10,7 +10,6 @@ pub struct PlayerMovementGenerator {
 
 #[derive(Debug)]
 struct LocationBudget {
-    location_id: i64,
     total_minutes: i64,
     used_minutes: i64,
 }
@@ -36,19 +35,19 @@ impl PlayerMovementGenerator {
         
         // Game: gets 80% of session time when visited
         let game_time = (session_duration_minutes as f64 * 0.8) as i64;
-        budgets.insert(3, LocationBudget { location_id: 3, total_minutes: game_time, used_minutes: 0 });
+        budgets.insert(3, LocationBudget { total_minutes: game_time, used_minutes: 0 });
         
         // Marketplace: gets 15% of session time when visited  
         let marketplace_time = (session_duration_minutes as f64 * 0.15) as i64;
-        budgets.insert(4, LocationBudget { location_id: 4, total_minutes: marketplace_time, used_minutes: 0 });
+        budgets.insert(4, LocationBudget { total_minutes: marketplace_time, used_minutes: 0 });
         
         // Chat: gets 10% of session time when visited
         let chat_time = (session_duration_minutes as f64 * 0.10) as i64;
-        budgets.insert(5, LocationBudget { location_id: 5, total_minutes: chat_time, used_minutes: 0 });
+        budgets.insert(5, LocationBudget { total_minutes: chat_time, used_minutes: 0 });
         
         // Settings: gets 5% of session time when visited
         let settings_time = (session_duration_minutes as f64 * 0.05) as i64;
-        budgets.insert(2, LocationBudget { location_id: 2, total_minutes: settings_time, used_minutes: 0 });
+        budgets.insert(2, LocationBudget { total_minutes: settings_time, used_minutes: 0 });
         
         budgets
     }
@@ -231,7 +230,6 @@ mod tests {
     #[test]
     fn test_location_budget_logic() {
         let budget = LocationBudget {
-            location_id: 3,
             total_minutes: 60,
             used_minutes: 20,
         };
@@ -240,7 +238,6 @@ mod tests {
         assert!(budget.has_time_remaining());
         
         let exhausted_budget = LocationBudget {
-            location_id: 3,
             total_minutes: 10,
             used_minutes: 8,
         };
@@ -474,8 +471,8 @@ mod tests {
 
     #[test]
     fn test_visit_time_calculations() {
-        let game_budget = LocationBudget { location_id: 3, total_minutes: 144, used_minutes: 0 };
-        let marketplace_budget = LocationBudget { location_id: 4, total_minutes: 27, used_minutes: 0 };
+        let game_budget = LocationBudget { total_minutes: 144, used_minutes: 0 };
+        let marketplace_budget = LocationBudget { total_minutes: 27, used_minutes: 0 };
         
         // Test Game visit time (30-40% of 180min session = 54-72 minutes)
         let game_visit_time = PlayerMovementGenerator::calculate_visit_time(3, &game_budget, 180);

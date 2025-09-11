@@ -47,6 +47,7 @@ services:
       - ./config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
       - ./config/wazuh_cluster/falco_rules.xml:/var/ossec/etc/rules/falco_rules.xml
       - ./config/wazuh_cluster/kali_redteam_rules.xml:/var/ossec/etc/rules/kali_redteam_rules.xml
+      - ./config/wazuh_cluster/gaming_auth_rules.xml:/var/ossec/etc/rules/gaming_auth_rules.xml
       - ./config/wazuh_cluster/kali_decoders.xml:/var/ossec/etc/decoders/kali_decoders.xml
     networks:
       aptl-network:

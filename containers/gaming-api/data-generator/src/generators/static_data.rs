@@ -68,7 +68,7 @@ pub struct StaticDataLoader {
 
 impl StaticDataLoader {
     pub fn new() -> Result<Self> {
-        let json_string = fs::read_to_string("./data/static-data.json")?;
+        let json_string = fs::read_to_string("../api/data/static-data.json")?;
         let data: serde_json::Value = serde_json::from_str(&json_string)?;
         Ok(Self { data })
     }

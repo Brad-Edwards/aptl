@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use serde::{Deserialize, Serialize};
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]
 pub struct User {
@@ -9,9 +9,17 @@ pub struct User {
     pub email: String,
     pub created_at: Option<String>,
     pub account_status_id: i64,
+    pub email_last_changed: Option<String>,
+    pub password_last_changed: Option<String>,
     pub first_name: String,
     pub last_name: String,
     pub last_ip_address: String,
+}
+
+#[derive(FromRow, Debug, Serialize, Deserialize)]
+pub struct CharacterClass {
+    pub id: i64,
+    pub class_name: String,
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]
@@ -22,6 +30,20 @@ pub struct Character {
     pub level: i64,
     pub class_id: i64,
     pub created_at: Option<String>,
+}
+
+#[derive(FromRow, Debug, Serialize, Deserialize)]
+pub struct Item {
+    pub id: i64,
+    pub name: String,
+    pub rarity: String,
+    pub gold_value: i64,
+}
+
+#[derive(FromRow, Debug, Serialize, Deserialize)]
+pub struct GameLocation {
+    pub id: i64,
+    pub name: String,
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]
@@ -40,7 +62,8 @@ pub struct Session {
 pub struct PlayerMovement {
     pub id: i64,
     pub user_id: i64,
-    pub session_id: i64,
+    pub character_id: Option<i64>,
+    pub session_id: String,
     pub location_id: i64,
     pub timestamp: Option<String>,
 }
@@ -56,6 +79,7 @@ pub struct Transaction {
     pub transaction_type: String,
 }
 
+
 #[derive(FromRow, Debug, Serialize, Deserialize)]
 pub struct CharacterInventory {
     pub id: i64,
@@ -65,9 +89,26 @@ pub struct CharacterInventory {
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]
-pub struct Item {
+pub struct AccountStatus {
     pub id: i64,
-    pub name: String,
-    pub rarity: String,
-    pub gold_value: i64,
+    pub status: String,
+    pub description: Option<String>,
+}
+
+#[derive(FromRow, Debug, Serialize, Deserialize)]
+pub struct Message {
+    pub id: i64,
+    pub from_user_id: i64,
+    pub to_user_id: i64,
+    pub content: String,
+    pub timestamp: Option<String>,
+}
+
+#[derive(FromRow, Debug, Serialize, Deserialize)]
+pub struct SettingsChange {
+    pub id: i64,
+    pub user_id: i64,
+    pub session_id: i64,
+    pub change_type: String,
+    pub timestamp: Option<String>,
 }

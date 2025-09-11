@@ -1,7 +1,7 @@
 use sqlx::{SqlitePool, migrate};
 use crate::Result;
 
-const DATABASE_URL: &str = "sqlite:./data/gaming.db";
+const DATABASE_URL: &str = "sqlite:../api/data/gaming.db";
 
 /// Get database connection pool
 pub async fn get_pool() -> Result<SqlitePool> {
@@ -14,17 +14,17 @@ pub async fn init() -> Result<()> {
     use std::{fs, process::Command};
     
     // Create data directory if it doesn't exist
-    fs::create_dir_all("./data")?;
+    fs::create_dir_all("../api/data")?;
     
     // Remove existing database file if it exists
-    if std::path::Path::new("./data/gaming.db").exists() {
-        fs::remove_file("./data/gaming.db")?;
+    if std::path::Path::new("../api/data/gaming.db").exists() {
+        fs::remove_file("../api/data/gaming.db")?;
         println!("Removed existing database");
     }
     
     // Create empty database file
     Command::new("touch")
-        .arg("./data/gaming.db")
+        .arg("../api/data/gaming.db")
         .output()?;
     
     let pool = get_pool().await?;

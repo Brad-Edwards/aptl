@@ -14,7 +14,7 @@ impl UserGenerator {
     }
 
     fn load_passwords() -> Result<Vec<String>> {
-        let bytes = fs::read("./data/rockyou.txt")?;
+        let bytes = fs::read("../api/data/rockyou.txt")?;
         let passwords_text = String::from_utf8_lossy(&bytes);
         Ok(passwords_text
             .lines()

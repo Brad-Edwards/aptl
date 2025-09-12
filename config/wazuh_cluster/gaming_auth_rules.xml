@@ -1,0 +1,39 @@
+<!-- Gaming API Authentication Rules -->
+<!-- Custom rules for detecting credential stuffing and authentication attacks -->
+<!-- against gaming platforms and web applications using PAM format logs -->
+
+<group name="gaming_authentication">
+
+  <!-- Credential Stuffing Detection -->
+  <rule id="100200" level="10" frequency="10" timeframe="60">
+    <if_matched_sid>2501</if_matched_sid>
+    <same_srcip />
+    <description>Gaming API: Multiple authentication failures from same IP - Potential credential stuffing</description>
+    <group>authentication_failed,attack,</group>
+    <mitre>
+      <id>T1110.004</id>
+    </mitre>
+  </rule>
+
+  <!-- High Volume Authentication Failures -->
+  <rule id="100201" level="12" frequency="10" timeframe="120">
+    <if_matched_sid>2501</if_matched_sid>
+    <same_srcip />
+    <description>Gaming API: High volume authentication failures from single source</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- Successful Login After Failed Attempts -->
+  <rule id="100202" level="12" frequency="2" timeframe="300">
+    <if_matched_sid>5501</if_matched_sid>
+    <same_srcip />
+    <if_fts />
+    <description>Gaming API: Successful login after previous failures - Potential credential stuffing success</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+</group>

@@ -49,8 +49,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(state);
 
     // Start server with ConnectInfo enabled
-    println!("🎮 Gaming API Server starting on http://0.0.0.0:8080");
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    println!("🎮 Gaming API Server starting on http://0.0.0.0:14567");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:14567").await?;
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
     
     Ok(())

@@ -88,13 +88,20 @@ RUN systemctl enable lab-install.service
 RUN mkdir -p /opt/gaming-api
 WORKDIR /opt/gaming-api
 
-# Copy gaming API source code
+# Copy gaming API source code (Rust server)
 COPY api/ /opt/gaming-api/
 RUN chown -R labadmin:labadmin /opt/gaming-api
 
-# Install Node.js dependencies as labadmin user
+# Install build dependencies for Rust
+USER root
+RUN dnf install -y gcc gcc-c++ pkgconfig make
+
+# Install Rust and build the API server
 USER labadmin
-RUN npm install
+WORKDIR /opt/gaming-api
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/home/labadmin/.cargo/bin:${PATH}"
+RUN cargo build --release
 
 # Switch back to root for systemd setup
 USER root

@@ -1,5 +1,5 @@
 [Unit]
-Description=Gaming API Server
+Description=Gaming API Server (Rust)
 After=network.target
 
 [Service]
@@ -7,11 +7,10 @@ Type=simple
 User=labadmin
 Group=labadmin
 WorkingDirectory=/opt/gaming-api
-ExecStart=/usr/bin/node server.js
+ExecStart=/opt/gaming-api/target/release/gaming-api-server
 Restart=always
 RestartSec=5
-Environment=NODE_ENV=production
-Environment=PORT=3000
+Environment=PORT=14567
 Environment=SIEM_IP=172.20.0.10
 
 # Logging

@@ -161,7 +161,7 @@ services:
         ipv4_address: 172.20.0.21
     ports:
       - "2021:22"    # SSH access
-      - "3000:3000"  # Gaming API port
+      - "14567:14567"  # Gaming API port
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub

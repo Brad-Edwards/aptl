@@ -394,3 +394,6 @@ notes/
 
 ctf_scenarios/gaming/behavioural_analysis/data/
 data/
+
+# Exception: include gaming api data
+!containers/gaming-api/api/data/

@@ -47,6 +47,7 @@ services:
       - ./config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
       - ./config/wazuh_cluster/falco_rules.xml:/var/ossec/etc/rules/falco_rules.xml
       - ./config/wazuh_cluster/kali_redteam_rules.xml:/var/ossec/etc/rules/kali_redteam_rules.xml
+      - ./config/wazuh_cluster/gaming_auth_rules.xml:/var/ossec/etc/rules/gaming_auth_rules.xml
       - ./config/wazuh_cluster/kali_decoders.xml:/var/ossec/etc/decoders/kali_decoders.xml
     networks:
       aptl-network:
@@ -160,7 +161,7 @@ services:
         ipv4_address: 172.20.0.21
     ports:
       - "2021:22"    # SSH access
-      - "3000:3000"  # Gaming API port
+      - "14567:14567"  # Gaming API port
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub

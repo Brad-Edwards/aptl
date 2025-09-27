@@ -397,3 +397,4 @@ data/
 
 # Exception: include gaming api data
 !containers/gaming-api/api/data/
+ctf_scenarios/gaming/

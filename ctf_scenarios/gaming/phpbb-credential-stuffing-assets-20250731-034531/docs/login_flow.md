@@ -1,2 +1,0 @@
-- Fetch login page → parse form_token + creation_time and keep session cookie.
-- POST creds with those fields; success usually 302 and sets phpbb3_* cookies.

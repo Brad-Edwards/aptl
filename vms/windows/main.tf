@@ -9,7 +9,7 @@ terraform {
 
 provider "proxmox" {
   endpoint = var.proxmox_api_url
-  username = var.proxmox_user
+  username = "${var.proxmox_user}@pam"
   password = var.proxmox_password
   insecure = var.proxmox_tls_insecure
 }

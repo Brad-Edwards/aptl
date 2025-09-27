@@ -1,1 +1,0 @@
-ExploitCapcom uses Capcom.sys IOCTL to get SYSTEM. Use test mode if needed.

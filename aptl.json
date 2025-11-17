@@ -3,11 +3,11 @@
         "wazuh": true,
         "victim": true,
         "kali": true,
-        "gaming_api": true,
+        "gaming_api": false,
         "minetest_server": false,
         "minetest_client": false,
         "minecraft_server": false,
-        "reverse": true
+        "reverse": false
     },
     "edr_agents": {
         "victim": ["wazuh", "falco"],

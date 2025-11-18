@@ -24,7 +24,7 @@ echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4
 apt-get update
 
 # Install Wazuh agent 
-WAZUH_MANAGER="$WAZUH_MANAGER" apt-get install -y wazuh-agent
+WAZUH_MANAGER="$WAZUH_MANAGER" apt-get install -y wazuh-agent=4.12.0-1
 
 echo "Wazuh agent installed successfully"
 

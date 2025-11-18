@@ -23,7 +23,7 @@ chmod 644 /usr/share/keyrings/wazuh.gpg
 
 # Install Wazuh agent
 apt-get update
-WAZUH_MANAGER="$WAZUH_MANAGER" apt-get install -y wazuh-agent
+WAZUH_MANAGER="$WAZUH_MANAGER" apt-get install -y wazuh-agent=4.12.0-1
 
 echo "Wazuh agent installed successfully"
 

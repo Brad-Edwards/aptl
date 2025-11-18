@@ -26,7 +26,7 @@ priority=1
 EOF
 
 # Install Wazuh agent 
-WAZUH_MANAGER="$WAZUH_MANAGER" dnf install -y wazuh-agent
+WAZUH_MANAGER="$WAZUH_MANAGER" dnf install -y wazuh-agent-4.12.0
 
 echo "Wazuh agent installed successfully"
 

@@ -15,24 +15,31 @@ setup_labadmin_ssh() {
     # Check multiple sources for SSH key in priority order
     local key_added=false
     
-    # Option 1: Check for volume-mounted key file (local dev)
-    if [ -f "/keys/labadmin.pub" ]; then
+    # Option 1: Check for file path in environment variable (most common)
+    if [ -n "$LABADMIN_SSH_KEY_FILE" ] && [ -f "$LABADMIN_SSH_KEY_FILE" ]; then
+        echo "Found SSH key file at $LABADMIN_SSH_KEY_FILE"
+        cat "$LABADMIN_SSH_KEY_FILE" >> /home/labadmin/.ssh/authorized_keys
+        key_added=true
+    fi
+    
+    # Option 2: Check for volume-mounted key file (local dev - aptl_lab_key)
+    if [ "$key_added" = false ] && [ -f "/keys/aptl_lab_key.pub" ]; then
+        echo "Found volume-mounted SSH key at /keys/aptl_lab_key.pub"
+        cat /keys/aptl_lab_key.pub >> /home/labadmin/.ssh/authorized_keys
+        key_added=true
+    fi
+    
+    # Option 3: Check for legacy volume-mounted key file (labadmin.pub)
+    if [ "$key_added" = false ] && [ -f "/keys/labadmin.pub" ]; then
         echo "Found volume-mounted SSH key at /keys/labadmin.pub"
         cat /keys/labadmin.pub >> /home/labadmin/.ssh/authorized_keys
         key_added=true
     fi
     
-    # Option 2: Check for environment variable (AWS/production)
-    if [ -n "$LABADMIN_SSH_KEY" ]; then
+    # Option 4: Check for environment variable (AWS/production)
+    if [ "$key_added" = false ] && [ -n "$LABADMIN_SSH_KEY" ]; then
         echo "Found SSH key in LABADMIN_SSH_KEY environment variable"
         echo "$LABADMIN_SSH_KEY" >> /home/labadmin/.ssh/authorized_keys
-        key_added=true
-    fi
-    
-    # Option 3: Check for file path in environment variable
-    if [ -n "$LABADMIN_SSH_KEY_FILE" ] && [ -f "$LABADMIN_SSH_KEY_FILE" ]; then
-        echo "Found SSH key file at $LABADMIN_SSH_KEY_FILE"
-        cat "$LABADMIN_SSH_KEY_FILE" >> /home/labadmin/.ssh/authorized_keys
         key_added=true
     fi
     
@@ -65,6 +72,14 @@ setup_rsyslog() {
 EOF
         
         echo "Rsyslog forwarding configured to Wazuh at $SIEM_IP:$SIEM_PORT"
+        
+        # Restart rsyslog to load the new configuration
+        if systemctl is-active rsyslog >/dev/null 2>&1; then
+            echo "Restarting rsyslog to apply forwarding configuration..."
+            systemctl restart rsyslog || echo "Warning: Failed to restart rsyslog (may not be running yet)"
+        else
+            echo "Rsyslog not yet running, will be started by systemd"
+        fi
     else
         echo "SIEM forwarding not configured (SIEM_IP not set)"
     fi

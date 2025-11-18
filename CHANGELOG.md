@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.13] - 2025-11-17
+
+### Fixed
+
+- Wazuh agent version mismatch - pinned all agents to 4.12.0 to match manager version
+
 ## [3.0.12] - 2025-09-11
 
 ### Added

@@ -20,7 +20,8 @@ sed -e "s/AGENT_NAME_PLACEHOLDER/$AGENT_NAME/g" \
     -e "s/WAZUH_MANAGER_PLACEHOLDER/$WAZUH_MANAGER/g" \
     /opt/kali-redteam/scripts/ossec.conf.template > /var/ossec/etc/ossec.conf
 
-systemctl restart wazuh-agent
+/var/ossec/bin/wazuh-control restart
+rm -f /var/ossec/var/start-script-lock
 
 echo "=== All Kali Red Team Lab Services Installed ==="
 

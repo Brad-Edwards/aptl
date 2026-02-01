@@ -131,7 +131,7 @@ echo "Waiting for Wazuh Manager API..."
 API_PASSWORD=$(grep "API_PASSWORD=" docker-compose.yml | head -1 | cut -d'=' -f2 | tr -d '"')
 timeout=120
 while [ $timeout -gt 0 ]; do
-    if curl -k -s -f https://localhost:55000 -u wazuh-wui:${API_PASSWORD} >/dev/null 2>&1; then
+    if docker exec aptl-wazuh.manager-1 curl -k -s -f https://localhost:55000 -u wazuh-wui:${API_PASSWORD} >/dev/null 2>&1; then
         echo "Wazuh Manager API is ready"
         break
     fi
@@ -200,7 +200,7 @@ output_both ""
 output_both "   Service URLs:"
 output_both "   Wazuh Dashboard: https://localhost:443"
 output_both "   Wazuh Indexer: https://localhost:9200"
-output_both "   Wazuh API: https://localhost:55000"
+output_both "   Wazuh API: https://172.20.0.10:55000 (internal only)"
 output_both ""
 output_both "   Default Credentials:"
 output_both "   Dashboard: admin / SecretPassword"

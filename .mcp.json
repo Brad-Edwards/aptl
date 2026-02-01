@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "aptl-red": {
+      "command": "node",
+      "args": ["./mcp/mcp-red/build/index.js"],
+      "cwd": "/home/atomik/src/aptl"
+    },
+    "aptl-wazuh": {
+      "command": "node",
+      "args": ["./mcp/mcp-wazuh/build/index.js"],
+      "cwd": "/home/atomik/src/aptl"
+    },
+    "aptl-ssh-control": {
+      "command": "node",
+      "args": ["./mcp/ssh-control-mcp/dist/index.js"],
+      "cwd": "/home/atomik/src/aptl"
+    }
+  }
+}

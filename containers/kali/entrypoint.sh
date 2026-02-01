@@ -1,31 +1,17 @@
 #!/bin/bash
 set -e
 
-# Function to setup Wazuh agent environment
-setup_wazuh_env() {
-    if [ -n "$SIEM_IP" ]; then
-        export WAZUH_MANAGER="$SIEM_IP"
-        echo "WAZUH_MANAGER set to $WAZUH_MANAGER"
-        
-        # Create environment file for systemd service
-        echo "WAZUH_MANAGER=$WAZUH_MANAGER" > /etc/environment.wazuh
-    else
-        echo "ERROR: SIEM_IP not set - Wazuh agent installation will fail"
-        exit 1
-    fi
-}
-
 # Configure rsyslog based on environment variables
 if [ -n "$SIEM_IP" ]; then
     echo "Configuring red team log forwarding to Wazuh SIEM..."
-    
+
     # Configure rsyslog for Wazuh (port 514)
     cat >> /etc/rsyslog.conf << EOF
 # APTL Red Team Log Forwarding - Wazuh
 # Route red team logs to Wazuh
 :msg, contains, "REDTEAM_LOG" @@$SIEM_IP:514
 EOF
-    
+
     # Validate IP addresses before substitution
     validate_ip() {
         if [[ $1 =~ ^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$ ]]; then
@@ -34,7 +20,7 @@ EOF
             return 1
         fi
     }
-    
+
     # Update scripts with actual SIEM and victim IPs
     if [ -n "$VICTIM_IP" ]; then
         if validate_ip "$VICTIM_IP"; then
@@ -43,13 +29,13 @@ EOF
             echo "Warning: Invalid VICTIM_IP format: $VICTIM_IP"
         fi
     fi
-    
+
     if validate_ip "$SIEM_IP"; then
         sed -i "s/\${siem_ip}/$SIEM_IP/g" /home/kali/*.sh
     else
         echo "Warning: Invalid SIEM_IP format: $SIEM_IP"
     fi
-    
+
     echo "Red team log forwarding configured for Wazuh"
 else
     echo "SIEM_IP not configured - skipping red team log configuration"
@@ -73,12 +59,10 @@ if [ -f "/host-ssh-keys/authorized_keys" ]; then
     echo "SSH keys configured for kali user"
 fi
 
-# Start SSH service  
-if [ ! -d "/run/sshd" ]; then
-    mkdir -p /run/sshd
-fi
-
-# Additional setup can be added here if needed
+# Start SSH daemon directly
+mkdir -p /run/sshd
+/usr/sbin/sshd
+echo "SSH daemon started"
 
 # Source red team logging functions in kali user's bashrc
 if [ -n "$SIEM_IP" ]; then
@@ -94,8 +78,24 @@ fi
 # Ensure proper ownership
 chown -R kali:kali /home/kali/
 
-# Setup Wazuh environment for systemd service
-setup_wazuh_env
+# Run first-boot Wazuh agent installation in background
+# This replaces the systemd kali-lab-install.service oneshot
+if [ -n "$SIEM_IP" ]; then
+    export WAZUH_MANAGER="$SIEM_IP"
+    echo "WAZUH_MANAGER set to $WAZUH_MANAGER"
+
+    if [ ! -f /var/ossec/.all_installed ]; then
+        echo "Starting background Wazuh agent installation..."
+        /opt/kali-redteam/scripts/install-all.sh &
+        INSTALL_PID=$!
+        echo "Wazuh install running in background (PID $INSTALL_PID)"
+    else
+        echo "Wazuh agent already installed, starting agent..."
+        /var/ossec/bin/wazuh-control start || echo "Warning: Wazuh agent failed to start (will retry on next boot)"
+    fi
+else
+    echo "WARNING: SIEM_IP not set - skipping Wazuh agent installation"
+fi
 
 echo "=== APTL Kali Red Team Container Ready ==="
 echo "SSH: ssh kali@<container_ip>"
@@ -104,5 +104,5 @@ if [ -n "$SIEM_IP" ]; then
     echo "SIEM: Wazuh ($SIEM_IP)"
 fi
 
-# Execute the main command
-exec "$@"
+# Keep container alive (replaces systemd init as PID 1 keepalive)
+exec sleep infinity

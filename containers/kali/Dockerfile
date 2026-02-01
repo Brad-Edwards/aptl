@@ -19,9 +19,6 @@ RUN apt-get update && \
         iputils-ping && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install systemd for services
-RUN apt-get update && apt-get install -y systemd systemd-sysv
-
 RUN useradd -m -s /bin/bash -G sudo kali && \
     echo 'kali:kali' | chpasswd && \
     echo 'kali ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
@@ -54,13 +51,6 @@ RUN mkdir -p /opt/kali-redteam/scripts
 COPY install-scripts/ /opt/kali-redteam/scripts/
 RUN chmod +x /opt/kali-redteam/scripts/*.sh
 
-# Copy and enable the one-time installation service
-COPY kali-lab-install.service /etc/systemd/system/
-RUN systemctl enable kali-lab-install.service
-
-# Enable SSH service for systemd
-RUN systemctl enable ssh
-
 # Copy user scripts
 COPY --chown=kali:kali scripts/ /home/kali/
 
@@ -80,6 +70,5 @@ RUN echo 'export PATH="$PATH:/usr/local/bin"' >> ~/.bashrc
 
 USER root
 
-# Entrypoint will handle service startup and configuration
+# Entrypoint handles sshd, Wazuh install, and keepalive directly
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["/usr/sbin/init"]

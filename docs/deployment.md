@@ -20,9 +20,7 @@ Edit `aptl.json` to enable/disable containers:
     "wazuh": true,
     "victim": true,
     "kali": true,
-    "minetest_server": false,
-    "minetest_client": false,
-    "minecraft_server": false
+    "reverse": false
   }
 }
 ```
@@ -56,8 +54,8 @@ cd aptl
 docker compose -f generate-indexer-certs.yml run --rm generator
 
 # Build MCP servers (optional - for AI integration)
-cd mcp-red && npm install && npm run build && cd ..
-cd mcp-blue && npm install && npm run build && cd ..
+cd mcp/mcp-red && npm install && npm run build && cd ../..
+cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
 ```
 
 #### 3. Deploy

@@ -153,6 +153,3 @@ export function generateToolDefinitions(serverConfig: LabConfig['server']): Tool
   },
   ];
 }
-
-// Default tool definitions for backward compatibility
-export const toolDefinitions: Tool[] = [];

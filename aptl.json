@@ -3,20 +3,12 @@
         "wazuh": true,
         "victim": true,
         "kali": true,
-        "gaming_api": false,
-        "minetest_server": false,
-        "minetest_client": false,
-        "minecraft_server": false,
         "reverse": false
     },
     "edr_agents": {
         "victim": ["wazuh", "falco"],
         "kali": ["wazuh"],
-        "gaming_api": ["wazuh", "falco"],
         "reverse": ["wazuh", "falco"],
-        "minecraft_server": ["wazuh", "falco"],
-        "minetest_client": ["wazuh", "falco"],
-        "minetest_server": [],
         "default": ["wazuh", "falco"]
     },
     "agent_configs": {

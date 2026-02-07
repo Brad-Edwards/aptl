@@ -19,7 +19,7 @@ mkdir -p "$HOST_SSH_DIR"
 # Generate lab SSH key pair if it doesn't exist
 if [ ! -f "$HOST_SSH_DIR/aptl_lab_key" ]; then
     echo "Generating lab SSH key pair..."
-    ssh-keygen -t rsa -b 2048 -f "$HOST_SSH_DIR/aptl_lab_key" -N "" -C "aptl-local-lab"
+    ssh-keygen -t ed25519 -f "$HOST_SSH_DIR/aptl_lab_key" -N "" -C "aptl-local-lab"
     echo "✅ Generated SSH key pair: $HOST_SSH_DIR/aptl_lab_key"
 else
     echo "✅ Lab SSH key already exists: $HOST_SSH_DIR/aptl_lab_key"

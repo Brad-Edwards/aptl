@@ -23,8 +23,8 @@ If you need to run steps individually:
 
 Build MCP servers for AI agent control:
 ```bash
-cd mcp-red && npm install && npm run build && cd ..
-cd mcp-blue && npm install && npm run build && cd ..
+cd mcp/mcp-red && npm install && npm run build && cd ../..
+cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
 ```
 
 See [MCP Integration](../components/mcp-integration.md) for configuration details.

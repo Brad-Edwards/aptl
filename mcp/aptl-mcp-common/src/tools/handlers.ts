@@ -474,6 +474,3 @@ export function generateToolHandlers(serverConfig: LabConfig['server']): Record<
   
   return handlers;
 }
-
-// Default tool handlers for backward compatibility
-export const toolHandlers: Record<string, ToolHandler> = {};

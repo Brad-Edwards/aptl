@@ -7,14 +7,14 @@ The reverse engineering container provides a platform for binary analysis and ma
 - **Base Image**: ubuntu:22.04
 - **Tools**: radare2, binutils, yara, floss, capa, upx-ucl, osslsigncode
 - **User**: `labadmin` with sudo privileges
-- **SSH**: Key-based authentication only (port 22, mapped to host 2026)
+- **SSH**: Key-based authentication only (port 22, mapped to host 2027)
 
 See [containers/reverse/Dockerfile](../../containers/reverse/Dockerfile) for complete build configuration.
 
 ## Network Access
 
 - **Container IP**: 172.20.0.27
-- **SSH Access**: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2026`
+- **SSH Access**: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`
 
 ## MCP Integration
 

@@ -1,19 +1,21 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock all dependencies
+// Mock all dependencies — use function() form so they work with `new`
 vi.mock('@modelcontextprotocol/sdk/server/index.js', () => ({
-  Server: vi.fn().mockImplementation(() => ({
-    setRequestHandler: vi.fn(),
-    connect: vi.fn().mockResolvedValue(undefined)
-  }))
+  Server: vi.fn(function () {
+    return {
+      setRequestHandler: vi.fn(),
+      connect: vi.fn().mockResolvedValue(undefined)
+    };
+  })
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
-  StdioServerTransport: vi.fn()
+  StdioServerTransport: vi.fn(function () { return {}; })
 }));
 
 vi.mock('../src/ssh.js', () => ({
-  SSHConnectionManager: vi.fn()
+  SSHConnectionManager: vi.fn(function () { return {}; })
 }));
 
 vi.mock('../src/tools/definitions.js', () => ({

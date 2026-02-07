@@ -1,14 +1,23 @@
 # Installation
 
-## Automated Setup
+## Python CLI (Recommended)
 
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
+pip install -e .
+aptl lab start
+```
+
+The CLI handles SSH keys, SSL certificates, system requirements, image pulling, container startup, service readiness checks, and connection info generation.
+
+## Bash Script (Alternative)
+
+```bash
 ./start-lab.sh
 ```
 
-The script handles SSH keys, SSL certificates, system requirements, and container startup.
+The bash script performs the same steps as the CLI.
 
 ## Manual Steps
 
@@ -17,7 +26,7 @@ If you need to run steps individually:
 1. Generate SSH keys: `./scripts/generate-ssh-keys.sh`
 2. Set vm.max_map_count (Linux/WSL2): `sudo sysctl -w vm.max_map_count=262144`
 3. Generate SSL certificates: `docker compose -f generate-indexer-certs.yml run --rm generator`
-4. Start lab: `docker compose up --build -d`
+4. Start lab: `docker compose --profile wazuh --profile victim --profile kali up --build -d`
 
 ## MCP Integration
 

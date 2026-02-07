@@ -5,6 +5,7 @@
 - 8GB RAM, 20GB disk
 - Docker Engine 20.10+
 - Docker Compose 2.0+
+- Python 3.11+ (for CLI)
 - Git
 
 ## Install Docker

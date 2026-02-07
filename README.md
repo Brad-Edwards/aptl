@@ -77,7 +77,21 @@ An autonomous cyber operations range is currently under-development as a separat
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
+
+# Option A: Python CLI (recommended)
+pip install -e .
+aptl lab start
+
+# Option B: Bash script
 ./start-lab.sh
+```
+
+Manage the lab:
+
+```bash
+aptl lab status   # Show running containers
+aptl lab stop     # Stop the lab
+aptl lab stop -v  # Stop and remove volumes
 ```
 
 **Access:**
@@ -89,6 +103,7 @@ cd aptl
 ## Requirements
 
 - Docker + Docker Compose
+- Python 3.11+ (for CLI)
 - 8GB+ RAM, 20GB+ disk
 - Linux/macOS/WSL2
 - Ports available: 443, 2022, 2023, 9200, 55000

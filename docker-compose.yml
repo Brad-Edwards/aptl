@@ -149,8 +149,8 @@ services:
   victim:
     profiles: ["victim"]
     build:
-      context: ./containers/victim
-      dockerfile: Dockerfile
+      context: ./containers
+      dockerfile: victim/Dockerfile
     container_name: aptl-victim
     hostname: victim-host
     restart: unless-stopped
@@ -235,8 +235,8 @@ services:
   reverse:
     profiles: ["reverse"]
     build:
-      context: ./containers/reverse
-      dockerfile: Dockerfile
+      context: ./containers
+      dockerfile: reverse/Dockerfile
     container_name: aptl-reverse
     hostname: reverse-host
     restart: unless-stopped

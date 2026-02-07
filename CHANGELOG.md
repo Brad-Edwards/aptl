@@ -6,25 +6,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.16] - 2026-02-06
+## [4.0.0] - 2026-02-07
+
+### Added
+
+- Python CLI (`aptl lab start|stop|status`) porting start-lab.sh to a 12-step orchestration
+- Core modules: ssh, sysreqs, credentials, certs, services, connections, lab, config, env
+- 174 unit tests covering all new modules
+- Docker image pre-pulling step before compose up for download progress visibility
+- Shared container base scripts and configs in `containers/base/`
+
+### Changed
+
+- Victim and reverse containers refactored to use shared base layer
+- MCP server entry points deduplicated via shared `startServer()` in aptl-mcp-common
+- MCP tool handlers use typed argument interfaces
+- AptlConfig now tolerates extra fields and optional lab section to match real aptl.json
 
 ### Removed
 
 - Gaming API, Minetest, and Minecraft containers and MCP servers
 - CTF scenarios
 - Stale infrastructure (Terraform configs, QRadar files)
-- Unenforced MCP config fields (allowed_networks, audit_enabled, max_session_time)
-
-### Changed
-
-- MCP tool handlers use typed argument interfaces instead of `any`
-- MCP server entry points deduplicated via shared `startServer()` in aptl-mcp-common
+- Unenforced MCP config fields
 
 ### Fixed
 
+- Regex injection in credential sync: passwords with `\1`, `$`, backslashes no longer corrupt config files
+- Missing `--build` flag in compose up caused stale container images after Dockerfile changes
+- Certificate generation reported `generated=False` when only chown failed after successful generation
+- Connection info file written world-readable; now set to 0o600
+- Missing public key existence check after ssh-keygen could crash with unhandled FileNotFoundError
+- SSH key comment mismatch: Python used `aptl-lab` vs bash `aptl-local-lab`
+- `lab_status` failed to parse NDJSON output from `docker compose ps --format json`
+- `lab stop` was a no-op because compose down ran without profile flags
 - Incorrect MCP paths throughout docs
 - Wrong doc comment in mcp-reverse
-- API handler referencing non-existent `queryConfig.endpoint` property
+- API handler referencing non-existent property
 
 ## [3.0.15] - 2026-02-03
 

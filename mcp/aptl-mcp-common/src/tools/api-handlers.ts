@@ -6,26 +6,38 @@ export interface APIToolContext {
   labConfig: LabConfig;
 }
 
-export type APIToolHandler = (args: any, context: APIToolContext) => Promise<any>;
+// Argument interfaces for API handlers
+interface APICallArgs {
+  endpoint: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  params?: Record<string, unknown>;
+  body?: unknown;
+  headers?: Record<string, string>;
+  response_type?: 'json' | 'text';
+}
 
-// Base API handler functions
+interface APIInfoArgs {}
+
+interface PredefinedQueryArgs {
+  params?: Record<string, unknown>;
+  body?: Record<string, unknown>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP SDK provides untyped args; validated by JSON Schema before reaching handlers
+export type APIToolHandler = (args: any, context: APIToolContext) => Promise<{ content: { type: string; text: string }[] }>;
+
+// Base API handler functions — each casts args to its specific interface.
+// MCP SDK validates args against the JSON Schema before handlers run.
 const baseAPIHandlers = {
-  api_call: async (args: any, { httpClient }: APIToolContext) => {
-    const { 
-      endpoint, 
-      method = 'GET', 
-      params, 
-      body, 
-      headers, 
-      response_type = 'json' 
-    } = args as {
-      endpoint: string;
-      method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-      params?: Record<string, any>;
-      body?: any;
-      headers?: Record<string, string>;
-      response_type?: 'json' | 'text';
-    };
+  api_call: async (args: APICallArgs, { httpClient }: APIToolContext) => {
+    const {
+      endpoint,
+      method = 'GET',
+      params,
+      body,
+      headers,
+      response_type = 'json'
+    } = args;
 
     try {
       const result = await httpClient.makeRequest(endpoint, method, {
@@ -66,7 +78,7 @@ const baseAPIHandlers = {
     }
   },
 
-  api_info: async (args: any, { labConfig }: APIToolContext) => {
+  api_info: async (_args: APIInfoArgs, { labConfig }: APIToolContext) => {
     return {
       content: [
         {
@@ -84,11 +96,8 @@ const baseAPIHandlers = {
     };
   },
 
-  predefined_query: async (args: any, context: APIToolContext, queryConfig: any) => {
-    const { params = {}, body = {} } = args as {
-      params?: Record<string, any>;
-      body?: any;
-    };
+  predefined_query: async (args: PredefinedQueryArgs, context: APIToolContext, queryConfig: NonNullable<LabConfig['queries']>[string]) => {
+    const { params = {}, body = {} } = args;
 
     // Merge provided params/body with template
     const finalParams = { ...queryConfig.params, ...params };
@@ -125,7 +134,7 @@ const baseAPIHandlers = {
             text: JSON.stringify({
               success: true,
               query: queryConfig.description,
-              endpoint: queryConfig.endpoint,
+              endpoint: queryConfig.url,
               method: queryConfig.method,
               status: result.status,
               data: result.data,
@@ -141,7 +150,7 @@ const baseAPIHandlers = {
             text: JSON.stringify({
               success: false,
               query: queryConfig.description,
-              endpoint: queryConfig.endpoint,
+              endpoint: queryConfig.url,
               error: error instanceof Error ? error.message : 'Unknown error',
             }, null, 2),
           },

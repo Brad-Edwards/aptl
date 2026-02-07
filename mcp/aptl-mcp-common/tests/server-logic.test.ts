@@ -58,13 +58,6 @@ describe('createMCPServer', () => {
         ssh_port: 22,
         enabled: true
       }
-    },
-    mcp: {
-      server_name: 'test-mcp',
-      allowed_networks: ['172.20.0.0/16'],
-      max_session_time: 3600,
-      audit_enabled: true,
-      log_level: 'info'
     }
   };
 

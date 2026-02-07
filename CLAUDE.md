@@ -60,7 +60,7 @@ cd containers/victim
 docker build -t aptl-victim .
 
 # Build all MCP servers
-./scripts/build-all-mcps.sh
+./mcp/build-all-mcps.sh
 
 # Build a single MCP server
 cd mcp/mcp-red
@@ -177,7 +177,7 @@ Add additional servers (`mcp-reverse`, `mcp-windows-re`, etc.) as needed for you
 ### Testing Red Team Integration
 
 1. Start lab: `./start-lab.sh`
-2. Build MCP servers: `./scripts/build-all-mcps.sh`
+2. Build MCP servers: `./mcp/build-all-mcps.sh`
 3. Configure MCP client (Cursor/Cline) with local container configuration
 4. Test with AI agents using `kali_info` and `run_command` tools
 5. Verify container connectivity: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`

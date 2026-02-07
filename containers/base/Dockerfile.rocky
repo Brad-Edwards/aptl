@@ -1,30 +1,34 @@
-# Reverse engineering container built on shared Ubuntu 22.04 base
-# Build context must be ./containers/ so both base/ and reverse/ are accessible
-FROM ubuntu:22.04
+# Shared base image for Rocky Linux 9 APTL containers
+FROM rockylinux:9
 
-# Prevent interactive prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
+# Build arguments for agent installation
+ARG INSTALL_WAZUH=true
+ARG INSTALL_FALCO=true
+ARG INSTALL_XSIAM=false
 
-# ---- Shared base layer (from containers/base/Dockerfile.ubuntu) ----
+# Set as environment variables for runtime
+ENV INSTALL_WAZUH=${INSTALL_WAZUH}
+ENV INSTALL_FALCO=${INSTALL_FALCO}
+ENV INSTALL_XSIAM=${INSTALL_XSIAM}
 
-RUN apt-get update && \
-    apt-get install -y \
+RUN dnf install -y epel-release && \
+    dnf update -y && \
+    dnf install -y \
     rsyslog \
     openssh-server \
     sudo \
     systemd \
     systemd-sysv \
-    iproute2 \
+    iproute \
+    iproute-tc \
     hostname \
-    procps \
-    openssh-client \
+    procps-ng \
+    openssh-clients \
     net-tools \
     gnupg \
-    curl \
-    wget \
-    ca-certificates \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && dnf clean all
 
+# Trim systemd for container usage
 RUN (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == systemd-tmpfiles-setup.service ] || rm -f $i; done); \
     rm -f /lib/systemd/system/multi-user.target.wants/*;\
     rm -f /etc/systemd/system/*.wants/*;\
@@ -36,18 +40,20 @@ RUN (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == system
 
 RUN systemctl set-default multi-user.target
 
-RUN systemctl enable rsyslog ssh systemd-user-sessions && \
+RUN systemctl enable rsyslog sshd systemd-user-sessions && \
     systemctl enable systemd-user-sessions.service && \
     ln -sf /usr/lib/systemd/system/systemd-user-sessions.service /etc/systemd/system/multi-user.target.wants/
 
+# Configure SSH
 RUN mkdir /var/run/sshd && \
     ssh-keygen -A && \
     sed -i 's/#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && \
     sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 
+# Create labadmin user
 RUN useradd -m -s /bin/bash labadmin && \
-    usermod -aG sudo labadmin && \
+    usermod -aG wheel labadmin && \
     echo "labadmin ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/labadmin && \
     chmod 440 /etc/sudoers.d/labadmin
 
@@ -66,30 +72,8 @@ COPY base/scripts/ossec.conf.template /opt/purple-team/scripts/
 RUN mkdir -p /etc/falco/config.d
 COPY base/falco_custom.yaml /etc/falco/config.d/
 
-# ---- Reverse-specific layer ----
-
-COPY reverse/entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/entrypoint.sh
-
-COPY reverse/install-wazuh.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/install-wazuh.sh
-
-COPY reverse/install-falco.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/install-falco.sh
-
-COPY reverse/install-all.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/install-all.sh
-
-COPY reverse/setup-reverse-tools.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/setup-reverse-tools.sh
-
-COPY reverse/reverse-tools-install.service /etc/systemd/system/
-RUN systemctl enable reverse-tools-install.service
-
 EXPOSE 22 514
 
 VOLUME ["/var/log", "/home"]
-
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 CMD ["/usr/sbin/init"]

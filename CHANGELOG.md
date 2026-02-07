@@ -13,11 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gaming API, Minetest, and Minecraft containers and MCP servers
 - CTF scenarios
 - Stale infrastructure (Terraform configs, QRadar files)
+- Unenforced MCP config fields (allowed_networks, audit_enabled, max_session_time)
+
+### Changed
+
+- MCP tool handlers use typed argument interfaces instead of `any`
+- MCP server entry points deduplicated via shared `startServer()` in aptl-mcp-common
 
 ### Fixed
 
 - Incorrect MCP paths throughout docs
-- Wrong SSH port for reverse engineering container in docs
+- Wrong doc comment in mcp-reverse
+- API handler referencing non-existent `queryConfig.endpoint` property
 
 ## [3.0.15] - 2026-02-03
 

@@ -63,13 +63,6 @@ export interface LabConfig {
       verify_ssl?: boolean;
     };
   };
-  mcp: {
-    server_name: string;
-    allowed_networks: string[];
-    max_session_time: number;
-    audit_enabled: boolean;
-    log_level: string;
-  };
 }
 
 /**

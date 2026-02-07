@@ -74,12 +74,5 @@
       "verify_ssl": false,
       "description": "Create custom Wazuh detection rule"
     }
-  },
-  "mcp": {
-    "server_name": "aptl-wazuh-mcp",
-    "allowed_networks": ["172.20.0.0/16", "127.0.0.0/8"],
-    "max_session_time": 3600,
-    "audit_enabled": true,
-    "log_level": "info"
   }
 }

@@ -59,13 +59,16 @@ docker build -t aptl-kali .
 cd containers/victim
 docker build -t aptl-victim .
 
-# Build MCP server
-cd mcp
+# Build all MCP servers
+./scripts/build-all-mcps.sh
+
+# Build a single MCP server
+cd mcp/mcp-red
 npm run build
 npm test
-npm run watch  # Development mode
 
-# Test MCP server
+# Test an MCP server with the inspector
+cd mcp/mcp-red
 npx @modelcontextprotocol/inspector dist/index.js
 ```
 
@@ -82,16 +85,27 @@ npx @modelcontextprotocol/inspector dist/index.js
 
 ### MCP Server Setup
 
-For AI agents to access lab containers via MCP:
+The MCP layer is split into multiple servers under `mcp/`, each serving a different domain:
+
+- `mcp/mcp-red/` - Kali/red team operations
+- `mcp/mcp-wazuh/` - Wazuh SIEM queries and detection rules
+- `mcp/mcp-reverse/` - Reverse engineering container
+- `mcp/mcp-windows-re/` - Windows reverse engineering
+- `mcp/aptl-mcp-common/` - Shared library (not a standalone server)
 
 **Cursor**: Create `.cursor/mcp.json`:
 
 ```json
 {
     "mcpServers": {
-        "aptl-lab": {
+        "aptl-red": {
             "command": "node",
-            "args": ["./mcp/dist/index.js"],
+            "args": ["./mcp/mcp-red/dist/index.js"],
+            "cwd": "."
+        },
+        "aptl-wazuh": {
+            "command": "node",
+            "args": ["./mcp/mcp-wazuh/dist/index.js"],
             "cwd": "."
         }
     }
@@ -101,12 +115,19 @@ For AI agents to access lab containers via MCP:
 **Cline**: Add to MCP settings:
 
 ```json
-"aptl-lab": {
+"aptl-red": {
     "command": "node",
-    "args": ["./mcp/dist/index.js"],
+    "args": ["./mcp/mcp-red/dist/index.js"],
+    "cwd": "/path/to/aptl"
+},
+"aptl-wazuh": {
+    "command": "node",
+    "args": ["./mcp/mcp-wazuh/dist/index.js"],
     "cwd": "/path/to/aptl"
 }
 ```
+
+Add additional servers (`mcp-reverse`, `mcp-windows-re`, etc.) as needed for your workflow.
 
 ## Important Notes
 
@@ -156,7 +177,7 @@ For AI agents to access lab containers via MCP:
 ### Testing Red Team Integration
 
 1. Start lab: `./start-lab.sh`
-2. Build MCP server: `cd mcp && npm run build`
+2. Build MCP servers: `./scripts/build-all-mcps.sh`
 3. Configure MCP client (Cursor/Cline) with local container configuration
 4. Test with AI agents using `kali_info` and `run_command` tools
 5. Verify container connectivity: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`

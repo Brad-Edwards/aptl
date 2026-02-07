@@ -1,9 +1,4 @@
 # .gitguardian.yaml
 # GitGuardian configuration for APTL security lab
-# Only ignore specific paths with intentional test credentials
 
 version: v1
-
-# Ignore only CTF scenarios (files/* already in .gitignore)
-paths-ignore:
-  - "ctf_scenarios/**"  # CTF scenarios with test credentials

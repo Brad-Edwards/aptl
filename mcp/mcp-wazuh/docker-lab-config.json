@@ -17,8 +17,8 @@
     "baseUrl": "https://localhost:9200",
     "auth": {
       "type": "basic",
-      "username": "admin",
-      "password": "SecretPassword"
+      "username": "${INDEXER_USERNAME}",
+      "password": "${INDEXER_PASSWORD}"
     },
     "timeout": 30000,
     "verify_ssl": false,
@@ -32,8 +32,8 @@
       "method": "POST",
       "auth": {
         "type": "basic",
-        "username": "admin",
-        "password": "SecretPassword"
+        "username": "${INDEXER_USERNAME}",
+        "password": "${INDEXER_PASSWORD}"
       },
       "verify_ssl": false,
       "body": {
@@ -50,8 +50,8 @@
       "method": "POST",
       "auth": {
         "type": "basic",
-        "username": "admin",
-        "password": "SecretPassword"
+        "username": "${INDEXER_USERNAME}",
+        "password": "${INDEXER_PASSWORD}"
       },
       "verify_ssl": false,
       "body": {
@@ -68,8 +68,8 @@
       "method": "PUT",
       "auth": {
         "type": "basic",
-        "username": "wazuh-wui",
-        "password": "WazuhPass123!"
+        "username": "${API_USERNAME}",
+        "password": "${API_PASSWORD}"
       },
       "verify_ssl": false,
       "description": "Create custom Wazuh detection rule"

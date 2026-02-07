@@ -460,7 +460,7 @@ export class SSHConnectionManager {
     privateKeyPath: string,
     port: number = 22
   ): Promise<Client> {
-    const connectionKey = `minetest-client-${username}@${host}:${port}`;
+    const connectionKey = `${username}@${host}:${port}`;
     console.error(`[SSH-CLIENT] getConnection called with key: ${connectionKey}`);
     
     if (this.connections.has(connectionKey)) {
@@ -520,7 +520,7 @@ export class SSHConnectionManager {
 
       client.on('close', () => {
         // Mark connection as disconnected
-        const connectionKey = `minetest-client-${username}@${host}:${port}`;
+        const connectionKey = `${username}@${host}:${port}`;
         const connInfo = this.connections.get(connectionKey);
         if (connInfo) {
           connInfo.connected = false;

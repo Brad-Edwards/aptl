@@ -11,6 +11,29 @@ echo "=========================================="
 echo " Starting APTL Local Purple Team Lab"
 echo "=========================================="
 
+# Load credentials from .env file
+echo ""
+echo "Loading credentials from .env..."
+if [ ! -f ".env" ]; then
+    echo "Error: .env not found. Copy .env.example to .env and fill in your values."
+    exit 1
+fi
+set -a
+source .env
+set +a
+
+# Validate required environment variables
+MISSING_VARS=""
+for var in INDEXER_USERNAME INDEXER_PASSWORD API_USERNAME API_PASSWORD; do
+    if [ -z "${!var}" ]; then
+        MISSING_VARS="$MISSING_VARS $var"
+    fi
+done
+if [ -n "$MISSING_VARS" ]; then
+    echo "Error: Required environment variables are not set in .env:$MISSING_VARS"
+    exit 1
+fi
+
 # Read configuration and build profile list
 echo ""
 echo "Reading lab configuration..."
@@ -27,7 +50,7 @@ fi
 
 # Build profile list based on enabled containers
 PROFILES=""
-for container in wazuh victim kali gaming_api minetest_server minetest_client minecraft_server reverse; do
+for container in wazuh victim kali reverse; do
     enabled=$(jq -r ".containers.${container}" aptl.json 2>/dev/null)
     if [ "$enabled" = "true" ]; then
         # Convert underscores to hyphens for profile names
@@ -65,16 +88,20 @@ else
     echo "vm.max_map_count is adequate ($current_max_map)"
 fi
 
-# Step 3: Sync Wazuh dashboard configuration
+# Step 3: Sync config files with credentials from .env
 echo ""
-echo "Step 3: Syncing Wazuh dashboard configuration..."
-API_PASSWORD=$(grep "API_PASSWORD=" docker-compose.yml | head -1 | cut -d'=' -f2)
+echo "Step 3: Syncing configuration files with .env credentials..."
 if [ -f "./config/wazuh_dashboard/wazuh.yml" ]; then
-    echo "Updating wazuh.yml with current API password..."
-    sed -i "s/password: \".*\"/password: \"$API_PASSWORD\"/" ./config/wazuh_dashboard/wazuh.yml
-    echo "Configuration synced"
+    echo "Updating wazuh.yml with API password..."
+    sed -i "s/password: \".*\"/password: \"${API_PASSWORD}\"/" ./config/wazuh_dashboard/wazuh.yml
+    echo "Dashboard configuration synced"
 else
     echo "Warning: wazuh.yml not found, dashboard may not connect properly"
+fi
+if [ -f "./config/wazuh_cluster/wazuh_manager.conf" ]; then
+    echo "Updating wazuh_manager.conf with cluster key..."
+    sed -i "s|<key>.*</key>|<key>${WAZUH_CLUSTER_KEY}</key>|" ./config/wazuh_cluster/wazuh_manager.conf
+    echo "Manager configuration synced"
 fi
 
 # Step 4: Generate SSL certificates for Wazuh
@@ -113,7 +140,7 @@ echo "Step 5: Waiting for services to be ready..."
 echo "Waiting for Wazuh Indexer to start (this can take 2-5 minutes)..."
 timeout=300
 while [ $timeout -gt 0 ]; do
-    if curl -k -s -f https://localhost:9200 -u admin:SecretPassword >/dev/null 2>&1; then
+    if curl -k -s -f https://localhost:9200 -u "${INDEXER_USERNAME}:${INDEXER_PASSWORD}" >/dev/null 2>&1; then
         echo "Wazuh Indexer is ready"
         break
     fi
@@ -128,10 +155,9 @@ fi
 
 # Wait for Wazuh Manager API
 echo "Waiting for Wazuh Manager API..."
-API_PASSWORD=$(grep "API_PASSWORD=" docker-compose.yml | head -1 | cut -d'=' -f2 | tr -d '"')
 timeout=120
 while [ $timeout -gt 0 ]; do
-    if docker exec aptl-wazuh.manager-1 curl -k -s -f https://localhost:55000 -u wazuh-wui:${API_PASSWORD} >/dev/null 2>&1; then
+    if docker exec aptl-wazuh.manager-1 curl -k -s -f https://localhost:55000 -u "${API_USERNAME}:${API_PASSWORD}" >/dev/null 2>&1; then
         echo "Wazuh Manager API is ready"
         break
     fi
@@ -165,18 +191,6 @@ echo "Testing SSH connectivity for enabled containers..."
 if [ "$(jq -r '.containers.victim' aptl.json)" = "true" ]; then
     test_ssh "victim" "2022" "labadmin" || echo "   → Victim SSH may need more time"
 fi
-if [ "$(jq -r '.containers.gaming_api' aptl.json)" = "true" ]; then
-    test_ssh "gaming-api" "2021" "labadmin" || echo "   → Gaming API SSH may need more time"
-fi
-if [ "$(jq -r '.containers.minetest_server' aptl.json)" = "true" ]; then
-    test_ssh "minetest-server" "2024" "labadmin" || echo "   → Minetest Server SSH may need more time"
-fi
-if [ "$(jq -r '.containers.minetest_client' aptl.json)" = "true" ]; then
-    test_ssh "minetest-client" "2025" "labadmin" || echo "   → Minetest Client SSH may need more time"
-fi
-if [ "$(jq -r '.containers.minecraft_server' aptl.json)" = "true" ]; then
-    test_ssh "minecraft-server" "2026" "labadmin" || echo "   → Minecraft Server SSH may need more time"
-fi
 if [ "$(jq -r '.containers.kali' aptl.json)" = "true" ]; then
     test_ssh "kali" "2023" "kali" || echo "   → Kali SSH may need more time"
 fi
@@ -203,27 +217,12 @@ output_both "   Wazuh Indexer: https://localhost:9200"
 output_both "   Wazuh API: https://172.20.0.10:55000 (internal only)"
 output_both ""
 output_both "   Default Credentials:"
-output_both "   Dashboard: admin / SecretPassword"
-API_PASSWORD=$(grep "API_PASSWORD=" docker-compose.yml | head -1 | cut -d'=' -f2 | tr -d '"')
-output_both "   API: wazuh-wui / ${API_PASSWORD}"
+output_both "   Dashboard: ${INDEXER_USERNAME} / ${INDEXER_PASSWORD}"
+output_both "   API: ${API_USERNAME} / ${API_PASSWORD}"
 output_both ""
 output_both "   SSH Access:"
 if [ "$(jq -r '.containers.victim' aptl.json)" = "true" ]; then
     output_both "   Victim:          ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022"
-fi
-if [ "$(jq -r '.containers.gaming_api' aptl.json)" = "true" ]; then
-    output_both "   Gaming API:      ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2021"
-    output_both "                    Gaming API: http://localhost:3000"
-    output_both "                    Health: http://localhost:3000/health"
-fi
-if [ "$(jq -r '.containers.minetest_server' aptl.json)" = "true" ]; then
-    output_both "   Minetest Server: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2024"
-fi
-if [ "$(jq -r '.containers.minetest_client' aptl.json)" = "true" ]; then
-    output_both "   Minetest Client: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2025"
-fi
-if [ "$(jq -r '.containers.minecraft_server' aptl.json)" = "true" ]; then
-    output_both "   Minecraft Server: ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2026"
 fi
 if [ "$(jq -r '.containers.kali' aptl.json)" = "true" ]; then
     output_both "   Kali:            ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023"
@@ -240,15 +239,6 @@ if [ "$(jq -r '.containers.wazuh' aptl.json)" = "true" ]; then
 fi
 if [ "$(jq -r '.containers.victim' aptl.json)" = "true" ]; then
     output_both "   victim:          172.20.0.20"
-fi
-if [ "$(jq -r '.containers.minetest_server' aptl.json)" = "true" ]; then
-    output_both "   minetest-server: 172.20.0.24"
-fi
-if [ "$(jq -r '.containers.minetest_client' aptl.json)" = "true" ]; then
-    output_both "   minetest-client: 172.20.0.25"
-fi
-if [ "$(jq -r '.containers.minecraft_server' aptl.json)" = "true" ]; then
-    output_both "   minecraft-server: 172.20.0.26"
 fi
 if [ "$(jq -r '.containers.kali' aptl.json)" = "true" ]; then
     output_both "   kali:            172.20.0.30"

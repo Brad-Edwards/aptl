@@ -89,7 +89,7 @@ mv validate-victim.sh validate-[scenario-name].sh
 
 ### 3. Network/Naming Allocation
 
-**Reference:** `docker-compose.yml` lines 114-142 (victim container)
+**Reference:** `docker-compose.yml` victim service block (victim container)
 
 - **Next IP:** Check docker-compose.yml for next available IP (increment from last used)
 - **Next Port:** Check docker-compose.yml for next available port (increment from last used)

@@ -21,12 +21,5 @@
       "ssh_port": 2027,
       "enabled": true
     }
-  },
-  "mcp": {
-    "server_name": "aptl-reverse-mcp",
-    "allowed_networks": ["172.20.0.0/16", "127.0.0.0/8"],
-    "max_session_time": 3600,
-    "audit_enabled": true,
-    "log_level": "info"
   }
 }

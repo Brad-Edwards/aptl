@@ -35,7 +35,7 @@ The MCP server enables AI agents to control Kali tools remotely:
     "mcpServers": {
         "aptl-lab": {
             "command": "node",
-            "args": ["./mcp-red/dist/index.js"],
+            "args": ["./mcp/mcp-red/dist/index.js"],
             "cwd": "."
         }
     }
@@ -46,10 +46,10 @@ The MCP server enables AI agents to control Kali tools remotely:
 
 ```bash
 # Build MCP server
-cd mcp && npm install && npm run build
+cd mcp/mcp-red && npm install && npm run build
 
 # Test connection
-npx @modelcontextprotocol/inspector dist/index.js
+npx @modelcontextprotocol/inspector build/index.js
 ```
 
 See [MCP Integration](mcp-integration.md) for detailed setup instructions.

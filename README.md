@@ -77,7 +77,21 @@ An autonomous cyber operations range is currently under-development as a separat
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
+
+# Option A: Python CLI (recommended)
+pip install -e .
+aptl lab start
+
+# Option B: Bash script
 ./start-lab.sh
+```
+
+Manage the lab:
+
+```bash
+aptl lab status   # Show running containers
+aptl lab stop     # Stop the lab
+aptl lab stop -v  # Stop and remove volumes
 ```
 
 **Access:**
@@ -89,6 +103,7 @@ cd aptl
 ## Requirements
 
 - Docker + Docker Compose
+- Python 3.11+ (for CLI)
 - 8GB+ RAM, 20GB+ disk
 - Linux/macOS/WSL2
 - Ports available: 443, 2022, 2023, 9200, 55000
@@ -99,18 +114,18 @@ Build MCP servers for AI agent control:
 
 ```bash
 # Blue Team MCP (Wazuh SIEM)
-cd mcp-blue && npm install && npm run build && cd ..
+cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
 
 # Red Team MCP (Kali Linux)
-cd mcp-red && npm install && npm run build && cd ..
+cd mcp/mcp-red && npm install && npm run build && cd ../..
 ```
 
 Configure your AI client to connect to:
 
-- Blue Team: `./mcp-blue/build/index.js`
-- Red Team: `./mcp-red/build/index.js`
+- Blue Team: `./mcp/mcp-wazuh/build/index.js`
+- Red Team: `./mcp/mcp-red/build/index.js`
 
-Test blue team: Ask your AI agent "Use wazuh_info to show me the SIEM status"  
+Test blue team: Ask your AI agent "Use wazuh_query_alerts to show me recent alerts"
 Test red team: Ask your AI agent "Use kali_info to show me the lab network"
 
 ## Documentation

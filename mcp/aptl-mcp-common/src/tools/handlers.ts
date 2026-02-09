@@ -16,17 +16,59 @@ function getShellType(labConfig: LabConfig): ShellType {
   if (!labConfig.containers || !labConfig.server.configKey) {
     return 'bash'; // Default to bash
   }
-  
+
   const container = labConfig.containers[labConfig.server.configKey];
   return (container?.shell as ShellType) || 'bash';
 }
 
-export type ToolHandler = (args: any, context: ToolContext) => Promise<any>;
+// Argument interfaces for each handler
+interface TargetInfoArgs {}
 
-// Base handler functions
-const baseHandlers = {
+interface RunCommandArgs {
+  command: string;
+}
 
-  target_info: async (args: any, { labConfig }: ToolContext) => {
+interface InteractiveSessionArgs {
+  session_id?: string;
+  timeout_ms?: number;
+}
+
+interface BackgroundSessionArgs {
+  session_id?: string;
+  raw?: boolean;
+  timeout_ms?: number;
+}
+
+interface SessionCommandArgs {
+  session_id: string;
+  command: string;
+  timeout?: number;
+  raw?: boolean;
+}
+
+interface ListSessionsArgs {}
+
+interface CloseSessionArgs {
+  session_id: string;
+}
+
+interface GetSessionOutputArgs {
+  session_id: string;
+  lines?: number;
+  clear?: boolean;
+}
+
+interface CloseAllSessionsArgs {}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP SDK provides untyped args; validated by JSON Schema before reaching handlers
+export type ToolHandler = (args: any, context: ToolContext) => Promise<{ content: { type: string; text: string }[] }>;
+
+// Base handler functions — each casts args to its specific interface.
+// MCP SDK validates args against the JSON Schema before handlers run,
+// so the casts are safe at runtime.
+const baseHandlers: Record<string, ToolHandler> = {
+
+  target_info: async (_args, { labConfig }) => {
     if (!labConfig.containers) {
       return {
         content: [
@@ -81,10 +123,8 @@ const baseHandlers = {
     };
   },
 
-  run_command: async (args: any, { sshManager, labConfig }: ToolContext) => {
-    const { command } = args as {
-      command: string;
-    };
+  run_command: async (args, { sshManager, labConfig }) => {
+    const { command } = args as RunCommandArgs;
 
     try {
       const credentials = getTargetCredentials(labConfig);
@@ -127,14 +167,11 @@ const baseHandlers = {
     }
   },
 
-  interactive_session: async (args: any, { sshManager, labConfig }: ToolContext) => {
-    const { 
+  interactive_session: async (args, { sshManager, labConfig }) => {
+    const {
       session_id,
       timeout_ms = 600000
-    } = args as {
-      session_id?: string;
-      timeout_ms?: number;
-    };
+    } = args as InteractiveSessionArgs;
 
     try {
       const finalSessionId = session_id || `session_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -185,16 +222,12 @@ const baseHandlers = {
     }
   },
 
-  background_session: async (args: any, { sshManager, labConfig }: ToolContext) => {
-    const { 
+  background_session: async (args, { sshManager, labConfig }) => {
+    const {
       session_id,
       raw = false,
       timeout_ms = 600000
-    } = args as {
-      session_id?: string;
-      raw?: boolean;
-      timeout_ms?: number;
-    };
+    } = args as BackgroundSessionArgs;
 
     try {
       const finalSessionId = session_id || `bg_session_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -245,13 +278,8 @@ const baseHandlers = {
     }
   },
 
-  session_command: async (args: any, { sshManager }: ToolContext) => {
-    const { session_id, command, timeout = 30000, raw } = args as {
-      session_id: string;
-      command: string;
-      timeout?: number;
-      raw?: boolean;
-    };
+  session_command: async (args, { sshManager }) => {
+    const { session_id, command, timeout = 30000, raw } = args as SessionCommandArgs;
 
     try {
       const result = await sshManager.executeInSession(session_id, command, timeout, raw);
@@ -288,7 +316,7 @@ const baseHandlers = {
     }
   },
 
-  list_sessions: async (_args: any, { sshManager }: ToolContext) => {
+  list_sessions: async (_args, { sshManager }) => {
     try {
       const sessions = sshManager.listSessions();
 
@@ -329,8 +357,8 @@ const baseHandlers = {
     }
   },
 
-  close_session: async (args: any, { sshManager }: ToolContext) => {
-    const { session_id } = args as { session_id: string };
+  close_session: async (args, { sshManager }) => {
+    const { session_id } = args as CloseSessionArgs;
 
     try {
       const closed = await sshManager.closeSession(session_id);
@@ -363,12 +391,8 @@ const baseHandlers = {
     }
   },
 
-  get_session_output: async (args: any, { sshManager }: ToolContext) => {
-    const { session_id, lines, clear = false } = args as {
-      session_id: string;
-      lines?: number;
-      clear?: boolean;
-    };
+  get_session_output: async (args, { sshManager }) => {
+    const { session_id, lines, clear = false } = args as GetSessionOutputArgs;
 
     try {
       // Add validation to ensure session exists and is active
@@ -420,7 +444,7 @@ const baseHandlers = {
     }
   },
 
-  close_all_sessions: async (_args: any, { sshManager }: ToolContext) => {
+  close_all_sessions: async (_args, { sshManager }) => {
     try {
       const sessions = sshManager.listSessions();
       const sessionCount = sessions.length;
@@ -474,6 +498,3 @@ export function generateToolHandlers(serverConfig: LabConfig['server']): Record<
   
   return handlers;
 }
-
-// Default tool handlers for backward compatibility
-export const toolHandlers: Record<string, ToolHandler> = {};

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PersistentSession, SSHConnectionManager } from '../src/ssh.js';
 import { ShellType } from '../src/shells.js';
 
@@ -199,7 +199,7 @@ describe('Shell Type Support', () => {
     });
   });
 
-  it('should track shell type through session lifecycle', () => {
+  it('should track shell type through session lifecycle', async () => {
     const mockClient = { 
       shell: vi.fn((callback) => {
         // Mock shell stream
@@ -227,11 +227,10 @@ describe('Shell Type Support', () => {
     );
 
     // Initialize the session
-    powershellSession.initialize().then(() => {
-      const info = powershellSession.getSessionInfo();
-      expect(info.sessionId).toBe('ps-test');
-      expect(info.target).toBe('windows-host');
-      expect(info.username).toBe('Administrator');
-    });
+    await powershellSession.initialize();
+    const info = powershellSession.getSessionInfo();
+    expect(info.sessionId).toBe('ps-test');
+    expect(info.target).toBe('windows-host');
+    expect(info.username).toBe('Administrator');
   });
 });

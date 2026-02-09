@@ -12,14 +12,15 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   CallToolRequest,
+  Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import { type LabConfig } from './config.js';
 import { SSHConnectionManager } from './ssh.js';
 import { HTTPClient } from './http.js';
 import { generateToolDefinitions } from './tools/definitions.js';
-import { generateToolHandlers, type ToolContext } from './tools/handlers.js';
+import { generateToolHandlers, type ToolHandler, type ToolContext } from './tools/handlers.js';
 import { generateAPIToolDefinitions } from './tools/api-definitions.js';
-import { generateAPIToolHandlers, type APIToolContext } from './tools/api-handlers.js';
+import { generateAPIToolHandlers, type APIToolHandler, type APIToolContext } from './tools/api-handlers.js';
 
 /**
  * Create and configure an MCP server with the provided lab configuration
@@ -30,8 +31,8 @@ export function createMCPServer(labConfig: LabConfig) {
   const httpClient = labConfig.api ? new HTTPClient(labConfig.api) : null;
   
   // Pre-generate tools and handlers based on available capabilities
-  let cachedTools: any[] = [];
-  let cachedHandlers: Record<string, any> = {};
+  let cachedTools: Tool[] = [];
+  let cachedHandlers: Record<string, ToolHandler | APIToolHandler> = {};
   
   if (sshManager) {
     cachedTools.push(...generateToolDefinitions(labConfig.server));
@@ -99,7 +100,8 @@ export function createMCPServer(labConfig: LabConfig) {
       } as ToolContext;
     }
 
-    return handler(args, context);
+    // Context is narrowed to the correct type above based on tool name
+    return (handler as any)(args ?? {}, context);
   });
 
   // Setup graceful shutdown handlers (once per process)

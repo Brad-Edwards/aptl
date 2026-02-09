@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}TechVault Solutions{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% if session.get('user_id') %}
+    <nav class="navbar">
+        <div class="nav-brand">TechVault Solutions</div>
+        <div class="nav-links">
+            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('search') }}">Search</a>
+            <a href="{{ url_for('upload') }}">Upload</a>
+            <a href="{{ url_for('ping_tool') }}">Network Tools</a>
+            <a href="{{ url_for('admin') }}">Admin</a>
+            <span class="nav-user">{{ session.username }} ({{ session.role }})</span>
+            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+        </div>
+    </nav>
+    {% endif %}
+    <main class="container">
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for msg in messages %}
+            <div class="flash">{{ msg }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->
+</body>
+</html>

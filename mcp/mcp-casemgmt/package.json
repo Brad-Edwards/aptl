@@ -1,0 +1,30 @@
+{
+    "name": "aptl-casemgmt-mcp-server",
+    "version": "0.1.0",
+    "description": "Model Context Protocol server for APTL Case Management operations",
+    "private": true,
+    "type": "module",
+    "bin": {
+        "APTL Case Management MCP Server": "./build/index.js"
+    },
+    "files": [
+        "build"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.build.json && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+        "prepare": "npm run build",
+        "watch": "tsc --watch",
+        "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.17.2",
+        "aptl-mcp-common": "file:../aptl-mcp-common"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.24",
+        "typescript": "^5.3.3",
+        "vitest": "^1.0.0"
+    }
+}

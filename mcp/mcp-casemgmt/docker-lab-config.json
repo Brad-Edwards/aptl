@@ -1,0 +1,93 @@
+{
+  "version": "1.0.0",
+  "server": {
+    "name": "case-management",
+    "version": "1.0.0",
+    "description": "APTL Case Management MCP Server - Provides AI agents with access to TheHive for incident case management, observable tracking, and investigation workflows.",
+    "toolPrefix": "cases",
+    "targetName": "TheHive Case Management",
+    "configKey": "",
+    "envPrefix": "APTL_CASES"
+  },
+  "lab": {
+    "name": "aptl-casemgmt",
+    "network_subnet": "172.20.0.0/24"
+  },
+  "api": {
+    "baseUrl": "http://localhost:9000",
+    "auth": {
+      "type": "apikey",
+      "header": "Authorization",
+      "value": "Bearer ${THEHIVE_API_KEY}"
+    },
+    "timeout": 30000,
+    "verify_ssl": false,
+    "default_headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "queries": {
+    "list_cases": {
+      "url": "http://localhost:9000/api/v1/query",
+      "method": "POST",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "Bearer ${THEHIVE_API_KEY}"
+      },
+      "verify_ssl": false,
+      "body": {
+        "query": [
+          {"_name": "listCase"},
+          {"_name": "sort", "_fields": [{"_createdAt": "desc"}]},
+          {"_name": "page", "from": 0, "to": 20}
+        ]
+      },
+      "description": "List recent cases from TheHive. Returns case summaries with status, severity, and assignee."
+    },
+    "create_case": {
+      "url": "http://localhost:9000/api/v1/case",
+      "method": "POST",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "Bearer ${THEHIVE_API_KEY}"
+      },
+      "verify_ssl": false,
+      "description": "Create a new incident case. Required: title, description, severity (1-4). Example: {\"body\": {\"title\": \"Suspicious Login Activity\", \"description\": \"Multiple failed logins from 172.20.4.30\", \"severity\": 2, \"tags\": [\"brute-force\", \"authentication\"]}}"
+    },
+    "add_observable": {
+      "url": "http://localhost:9000/api/v1/case/{caseId}/observable",
+      "method": "POST",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "Bearer ${THEHIVE_API_KEY}"
+      },
+      "verify_ssl": false,
+      "description": "Add an observable to a case. Required: dataType, data. Types: ip, domain, hash, filename, url, mail. Example: {\"params\": {\"caseId\": \"~123\"}, \"body\": {\"dataType\": \"ip\", \"data\": \"172.20.4.30\", \"message\": \"Attacker IP\"}}"
+    },
+    "update_case": {
+      "url": "http://localhost:9000/api/v1/case/{caseId}",
+      "method": "PATCH",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "Bearer ${THEHIVE_API_KEY}"
+      },
+      "verify_ssl": false,
+      "description": "Update case status, severity, or add notes. Example: {\"params\": {\"caseId\": \"~123\"}, \"body\": {\"status\": \"InProgress\", \"customFields\": {\"investigation-notes\": {\"string\": \"Confirmed malicious activity\"}}}}"
+    },
+    "create_alert": {
+      "url": "http://localhost:9000/api/v1/alert",
+      "method": "POST",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "Bearer ${THEHIVE_API_KEY}"
+      },
+      "verify_ssl": false,
+      "description": "Create an alert for triage. Required: title, description, type, source. Example: {\"body\": {\"title\": \"Wazuh: SQL Injection\", \"description\": \"SQLi detected on webapp\", \"type\": \"wazuh\", \"source\": \"wazuh-siem\", \"severity\": 3}}"
+    }
+  }
+}

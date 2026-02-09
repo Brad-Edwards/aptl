@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Network Tools - TechVault{% endblock %}
+{% block content %}
+<h2>Network Diagnostics</h2>
+<form method="POST">
+    <div class="form-group">
+        <label for="host">Hostname or IP</label>
+        <input type="text" id="host" name="host" placeholder="e.g. 172.20.2.11" required>
+    </div>
+    <button type="submit" class="btn-primary">Ping</button>
+</form>
+{% if result %}
+<h3>Result</h3>
+<pre class="output">{{ result }}</pre>
+{% endif %}
+{% endblock %}

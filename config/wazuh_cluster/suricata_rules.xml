@@ -1,0 +1,100 @@
+<!-- Suricata IDS Integration Rules for APTL Lab -->
+<group name="aptl,suricata,ids,">
+
+  <!-- Base Suricata alert decoder -->
+  <rule id="303000" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="event_type">alert</field>
+    <description>Suricata IDS alert</description>
+    <group>suricata,ids,</group>
+  </rule>
+
+  <!-- Suricata low severity (1-2) -->
+  <rule id="303001" level="3">
+    <if_sid>303000</if_sid>
+    <field name="alert.severity">^[12]$</field>
+    <description>Suricata IDS: $(alert.signature)</description>
+    <group>suricata,ids,</group>
+  </rule>
+
+  <!-- Suricata medium severity (3) -->
+  <rule id="303002" level="6">
+    <if_sid>303000</if_sid>
+    <field name="alert.severity">^3$</field>
+    <description>Suricata IDS (medium): $(alert.signature)</description>
+    <group>suricata,ids,</group>
+  </rule>
+
+  <!-- Suricata high severity (4+) -->
+  <rule id="303003" level="10">
+    <if_sid>303000</if_sid>
+    <field name="alert.severity">^[4-9]$</field>
+    <description>Suricata IDS (high): $(alert.signature)</description>
+    <group>suricata,ids,</group>
+  </rule>
+
+  <!-- Network scan detected -->
+  <rule id="303010" level="6">
+    <if_sid>303000</if_sid>
+    <field name="alert.category">Attempted Information Leak|attempted-recon</field>
+    <description>Network reconnaissance: $(alert.signature) from $(src_ip)</description>
+    <group>suricata,ids,recon,</group>
+  </rule>
+
+  <!-- Web attack detected by Suricata -->
+  <rule id="303020" level="10">
+    <if_sid>303000</if_sid>
+    <field name="alert.category">Web Application Attack|web-application-attack</field>
+    <description>Web attack (network): $(alert.signature) from $(src_ip)</description>
+    <group>suricata,ids,web_attack,</group>
+  </rule>
+
+  <!-- Lateral movement detected -->
+  <rule id="303030" level="10">
+    <if_sid>303000</if_sid>
+    <field name="alert.signature">Lateral Movement</field>
+    <description>Lateral movement detected: $(alert.signature)</description>
+    <group>suricata,ids,lateral_movement,</group>
+  </rule>
+
+  <!-- C2 / Trojan activity -->
+  <rule id="303040" level="12">
+    <if_sid>303000</if_sid>
+    <field name="alert.category">A Network Trojan was Detected|trojan-activity</field>
+    <description>C2/Trojan activity: $(alert.signature) from $(src_ip)</description>
+    <group>suricata,ids,c2,</group>
+  </rule>
+
+  <!-- DNS tunneling -->
+  <rule id="303050" level="10">
+    <if_sid>303000</if_sid>
+    <field name="alert.signature">DNS Tunneling|DNS Exfiltration</field>
+    <description>DNS tunneling/exfiltration: $(alert.signature)</description>
+    <group>suricata,ids,exfiltration,dns,</group>
+  </rule>
+
+  <!-- Credential theft -->
+  <rule id="303060" level="12">
+    <if_sid>303000</if_sid>
+    <field name="alert.category">credential-theft</field>
+    <description>Credential theft detected: $(alert.signature)</description>
+    <group>suricata,ids,credential_theft,</group>
+  </rule>
+
+  <!-- Suricata flow events (for network monitoring) -->
+  <rule id="303100" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="event_type">flow</field>
+    <description>Suricata network flow</description>
+    <group>suricata,flow,</group>
+  </rule>
+
+  <!-- Suricata DNS events -->
+  <rule id="303110" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="event_type">dns</field>
+    <description>Suricata DNS event</description>
+    <group>suricata,dns,</group>
+  </rule>
+
+</group>

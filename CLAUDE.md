@@ -88,7 +88,7 @@ npm test
 
 # Test an MCP server with the inspector
 cd mcp/mcp-red
-npx @modelcontextprotocol/inspector dist/index.js
+npx @modelcontextprotocol/inspector build/index.js
 ```
 
 ## Configuration
@@ -119,12 +119,12 @@ The MCP layer is split into multiple servers under `mcp/`, each serving a differ
     "mcpServers": {
         "aptl-red": {
             "command": "node",
-            "args": ["./mcp/mcp-red/dist/index.js"],
+            "args": ["./mcp/mcp-red/build/index.js"],
             "cwd": "."
         },
         "aptl-wazuh": {
             "command": "node",
-            "args": ["./mcp/mcp-wazuh/dist/index.js"],
+            "args": ["./mcp/mcp-wazuh/build/index.js"],
             "cwd": "."
         }
     }
@@ -136,12 +136,12 @@ The MCP layer is split into multiple servers under `mcp/`, each serving a differ
 ```json
 "aptl-red": {
     "command": "node",
-    "args": ["./mcp/mcp-red/dist/index.js"],
+    "args": ["./mcp/mcp-red/build/index.js"],
     "cwd": "/path/to/aptl"
 },
 "aptl-wazuh": {
     "command": "node",
-    "args": ["./mcp/mcp-wazuh/dist/index.js"],
+    "args": ["./mcp/mcp-wazuh/build/index.js"],
     "cwd": "/path/to/aptl"
 }
 ```

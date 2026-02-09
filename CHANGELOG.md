@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Wazuh Manager API port 55000 not mapped in docker-compose.yml, breaking `wazuh_create_detection_rule` MCP tool
 - Regex injection in credential sync: passwords with `\1`, `$`, backslashes no longer corrupt config files
 - Missing `--build` flag in compose up caused stale container images after Dockerfile changes
 - Certificate generation reported `generated=False` when only chown failed after successful generation

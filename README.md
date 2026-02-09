@@ -125,7 +125,7 @@ Configure your AI client to connect to:
 - Blue Team: `./mcp/mcp-wazuh/build/index.js`
 - Red Team: `./mcp/mcp-red/build/index.js`
 
-Test blue team: Ask your AI agent "Use wazuh_info to show me the SIEM status"  
+Test blue team: Ask your AI agent "Use wazuh_query_alerts to show me recent alerts"
 Test red team: Ask your AI agent "Use kali_info to show me the lab network"
 
 ## Documentation

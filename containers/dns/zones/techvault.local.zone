@@ -1,0 +1,55 @@
+$TTL 86400
+@   IN  SOA ns1.techvault.local. admin.techvault.local. (
+        2024010101  ; Serial
+        3600        ; Refresh
+        900         ; Retry
+        604800      ; Expire
+        86400       ; Minimum TTL
+)
+
+; Name servers
+@       IN  NS  ns1.techvault.local.
+
+; DNS server
+ns1     IN  A   172.20.1.22
+
+; DMZ services
+webapp      IN  A   172.20.1.20
+portal      IN  A   172.20.1.20
+www         IN  A   172.20.1.20
+mail        IN  A   172.20.1.21
+smtp        IN  A   172.20.1.21
+
+; Internal services
+dc          IN  A   172.20.2.10
+ad          IN  A   172.20.2.10
+ldap        IN  A   172.20.2.10
+db          IN  A   172.20.2.11
+postgres    IN  A   172.20.2.11
+files       IN  A   172.20.2.12
+fileshare   IN  A   172.20.2.12
+app         IN  A   172.20.2.20
+
+; Security stack
+siem        IN  A   172.20.0.10
+wazuh       IN  A   172.20.0.10
+dashboard   IN  A   172.20.0.11
+indexer     IN  A   172.20.0.12
+ids         IN  A   172.20.0.15
+suricata    IN  A   172.20.0.15
+threatintel IN  A   172.20.0.16
+misp        IN  A   172.20.0.16
+casemgmt    IN  A   172.20.0.18
+thehive     IN  A   172.20.0.18
+soar        IN  A   172.20.0.20
+shuffle     IN  A   172.20.0.20
+
+; MX records
+@       IN  MX  10  mail.techvault.local.
+
+; SRV records for AD
+_ldap._tcp          IN  SRV 0 100 389 dc.techvault.local.
+_kerberos._tcp      IN  SRV 0 100 88  dc.techvault.local.
+_kerberos._udp      IN  SRV 0 100 88  dc.techvault.local.
+_kpasswd._tcp       IN  SRV 0 100 464 dc.techvault.local.
+_kpasswd._udp       IN  SRV 0 100 464 dc.techvault.local.

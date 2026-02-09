@@ -1,0 +1,139 @@
+/* TechVault Solutions Portal */
+:root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --text-muted: #8b8fa3;
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --danger: #ef4444;
+    --success: #22c55e;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+}
+
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 2rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.nav-brand { font-weight: 700; font-size: 1.1rem; color: var(--primary); }
+.nav-links { display: flex; gap: 1.5rem; align-items: center; }
+.nav-links a { color: var(--text-muted); text-decoration: none; font-size: 0.9rem; }
+.nav-links a:hover { color: var(--text); }
+.nav-user { color: var(--text-muted); font-size: 0.85rem; }
+.btn-logout { color: var(--danger) !important; }
+
+.container { max-width: 1000px; margin: 2rem auto; padding: 0 1.5rem; }
+
+h2 { margin-bottom: 1.5rem; font-weight: 600; }
+h3 { margin: 1.5rem 0 0.75rem; font-weight: 500; color: var(--text-muted); }
+
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; margin-bottom: 0.35rem; color: var(--text-muted); font-size: 0.9rem; }
+.form-group input, .form-group textarea {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.95rem;
+}
+.form-group input:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.btn-primary {
+    padding: 0.6rem 1.5rem;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+.btn-primary:hover { background: var(--primary-hover); }
+
+.login-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+}
+.login-box {
+    background: var(--surface);
+    padding: 2.5rem;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 400px;
+    border: 1px solid var(--border);
+}
+.login-box h1 { text-align: center; margin-bottom: 0.25rem; }
+.subtitle { text-align: center; color: var(--text-muted); margin-bottom: 1.5rem; }
+.footer-text { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 1.5rem; }
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+.stat-card {
+    background: var(--surface);
+    padding: 1.25rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+.stat-card h3 { margin: 0 0 0.5rem; font-size: 0.85rem; }
+.stat-value { font-size: 1.8rem; font-weight: 700; color: var(--primary); }
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+}
+.data-table th, .data-table td {
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+}
+.data-table th { color: var(--text-muted); font-weight: 500; }
+
+.flash-messages { margin-bottom: 1rem; }
+.flash {
+    padding: 0.6rem 1rem;
+    background: var(--surface);
+    border-left: 3px solid var(--primary);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.comments-section { margin-bottom: 1.5rem; }
+.comment {
+    padding: 0.75rem 1rem;
+    background: var(--surface);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--border);
+}
+.comment-meta { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.25rem; }
+
+pre.output {
+    background: var(--surface);
+    padding: 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Search - TechVault{% endblock %}
+{% block content %}
+<h2>Search Users</h2>
+<form method="GET">
+    <div class="form-group">
+        <input type="text" name="q" value="{{ query }}" placeholder="Search by name, email, or department...">
+    </div>
+    <button type="submit" class="btn-primary">Search</button>
+</form>
+
+{% if query %}
+<h3>Results for "{{ query | safe }}"</h3>
+{% if results %}
+<table class="data-table">
+    <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Department</th></tr></thead>
+    <tbody>
+    {% for r in results %}
+    <tr><td>{{ r[0] }}</td><td>{{ r[1] }}</td><td>{{ r[2] }}</td><td>{{ r[3] }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No results found.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

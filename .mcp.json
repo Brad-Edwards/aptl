@@ -1,18 +1,38 @@
 {
   "mcpServers": {
-    "aptl-red": {
+    "aptl-red-team": {
       "command": "node",
       "args": ["./mcp/mcp-red/build/index.js"],
       "cwd": "/home/atomik/src/aptl"
     },
-    "aptl-wazuh": {
+    "aptl-blue-team": {
       "command": "node",
       "args": ["./mcp/mcp-wazuh/build/index.js"],
       "cwd": "/home/atomik/src/aptl"
     },
-    "aptl-ssh-control": {
+    "aptl-threat-intel": {
       "command": "node",
-      "args": ["./mcp/ssh-control-mcp/dist/index.js"],
+      "args": ["./mcp/mcp-threatintel/build/index.js"],
+      "cwd": "/home/atomik/src/aptl"
+    },
+    "aptl-case-mgmt": {
+      "command": "node",
+      "args": ["./mcp/mcp-casemgmt/build/index.js"],
+      "cwd": "/home/atomik/src/aptl"
+    },
+    "aptl-soar": {
+      "command": "node",
+      "args": ["./mcp/mcp-soar/build/index.js"],
+      "cwd": "/home/atomik/src/aptl"
+    },
+    "aptl-network-ids": {
+      "command": "node",
+      "args": ["./mcp/mcp-network/build/index.js"],
+      "cwd": "/home/atomik/src/aptl"
+    },
+    "aptl-reverse": {
+      "command": "node",
+      "args": ["./mcp/mcp-reverse/build/index.js"],
       "cwd": "/home/atomik/src/aptl"
     }
   }

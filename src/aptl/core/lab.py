@@ -141,7 +141,10 @@ def stop_lab(
         except (FileNotFoundError, ValueError) as exc:
             log.warning("Could not load config for profiles: %s", exc)
     if not profiles:
-        profiles = ["wazuh", "victim", "kali", "reverse"]
+        profiles = [
+            "wazuh", "victim", "kali", "reverse",
+            "enterprise", "soc", "mail", "fileshare", "dns",
+        ]
 
     cmd = build_compose_command("down", profiles=profiles)
     if remove_volumes:

@@ -1,4 +1,8 @@
 services:
+  # ==========================================================================
+  # SECURITY STACK (aptl-security network: 172.20.0.0/24)
+  # ==========================================================================
+
   # Wazuh Manager
   wazuh.manager:
     profiles: ["wazuh"]
@@ -46,6 +50,10 @@ services:
       - ./config/wazuh_cluster/falco_rules.xml:/var/ossec/etc/rules/falco_rules.xml
       - ./config/wazuh_cluster/kali_redteam_rules.xml:/var/ossec/etc/rules/kali_redteam_rules.xml
       - ./config/wazuh_cluster/kali_decoders.xml:/var/ossec/etc/decoders/kali_decoders.xml
+      - ./config/wazuh_cluster/ad_rules.xml:/var/ossec/etc/rules/ad_rules.xml
+      - ./config/wazuh_cluster/webapp_rules.xml:/var/ossec/etc/rules/webapp_rules.xml
+      - ./config/wazuh_cluster/suricata_rules.xml:/var/ossec/etc/rules/suricata_rules.xml
+      - ./config/wazuh_cluster/database_rules.xml:/var/ossec/etc/rules/database_rules.xml
     healthcheck:
       test: ["CMD-SHELL", "curl -ks https://localhost:55000 || exit 1"]
       interval: 30s
@@ -60,8 +68,12 @@ services:
       wazuh.indexer:
         condition: service_healthy
     networks:
-      aptl-network:
+      aptl-security:
         ipv4_address: 172.20.0.10
+      aptl-dmz:
+        ipv4_address: 172.20.1.10
+      aptl-internal:
+        ipv4_address: 172.20.2.30
 
   # Wazuh Indexer
   wazuh.indexer:
@@ -100,7 +112,7 @@ services:
         limits:
           memory: 2g
     networks:
-      aptl-network:
+      aptl-security:
         ipv4_address: 172.20.0.12
 
   # Wazuh Dashboard
@@ -143,21 +155,555 @@ services:
       wazuh.manager:
         condition: service_healthy
     networks:
-      aptl-network:
+      aptl-security:
         ipv4_address: 172.20.0.11
 
-  # Victim Container - Target system for attacks
+  # Suricata IDS
+  suricata:
+    profiles: ["soc"]
+    image: jasonish/suricata:7.0
+    container_name: aptl-suricata
+    hostname: suricata
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_NICE
+    volumes:
+      - ./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules:ro
+      - suricata_logs:/var/log/suricata
+    command: ["-c", "/etc/suricata/suricata.yaml", "--af-packet"]
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  # ==========================================================================
+  # SOC TOOLS (aptl-security network)
+  # ==========================================================================
+
+  # MISP - Threat Intelligence Platform
+  misp:
+    profiles: ["soc"]
+    image: ghcr.io/misp/misp-docker/misp-core:latest
+    container_name: aptl-misp
+    hostname: misp
+    restart: unless-stopped
+    ports:
+      - "8443:443"
+    environment:
+      - MYSQL_HOST=misp-db
+      - MYSQL_DATABASE=misp
+      - MYSQL_USER=misp
+      - MYSQL_PASSWORD=misp_db_password
+      - MISP_ADMIN_EMAIL=admin@techvault.local
+      - MISP_ADMIN_PASSPHRASE=MispAdmin2024!
+      - MISP_BASEURL=https://misp.techvault.local
+      - REDIS_HOST=misp-redis
+    volumes:
+      - misp_data:/var/www/MISP/app/files
+      - misp_config:/var/www/MISP/app/Config
+    healthcheck:
+      test: ["CMD-SHELL", "curl -ks https://localhost/users/login || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    depends_on:
+      misp-db:
+        condition: service_healthy
+      misp-redis:
+        condition: service_started
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.16
+
+  misp-db:
+    profiles: ["soc"]
+    image: mariadb:10.11
+    container_name: aptl-misp-db
+    restart: unless-stopped
+    environment:
+      - MYSQL_DATABASE=misp
+      - MYSQL_USER=misp
+      - MYSQL_PASSWORD=misp_db_password
+      - MYSQL_ROOT_PASSWORD=misp_root_password
+    volumes:
+      - misp_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.17
+
+  misp-redis:
+    profiles: ["soc"]
+    image: redis:7-alpine
+    container_name: aptl-misp-redis
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    networks:
+      aptl-security:
+
+  # TheHive - Case Management
+  thehive:
+    profiles: ["soc"]
+    image: strangebee/thehive:5.4
+    container_name: aptl-thehive
+    hostname: thehive
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      - JVM_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - thehive_data:/opt/thp/thehive/data
+      - thehive_index:/opt/thp/thehive/index
+    command:
+      - --secret
+      - "thehive-lab-secret-key-2024"
+      - --cql-hostnames
+      - "thehive-cassandra"
+      - --index-backend
+      - lucene
+      - --es-hostnames
+      - "thehive-es"
+      - --no-config-cortex
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/v1/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    depends_on:
+      thehive-cassandra:
+        condition: service_healthy
+      thehive-es:
+        condition: service_healthy
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.18
+
+  thehive-cassandra:
+    profiles: ["soc"]
+    image: cassandra:4.1
+    container_name: aptl-thehive-cassandra
+    restart: unless-stopped
+    environment:
+      - CASSANDRA_CLUSTER_NAME=thehive
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+    volumes:
+      - thehive_cassandra_data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    networks:
+      aptl-security:
+
+  thehive-es:
+    profiles: ["soc"]
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.24
+    container_name: aptl-thehive-es
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+    volumes:
+      - thehive_es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    networks:
+      aptl-security:
+
+  # Shuffle SOAR
+  shuffle-backend:
+    profiles: ["soc"]
+    image: ghcr.io/shuffle/shuffle-backend:latest
+    container_name: aptl-shuffle-backend
+    hostname: shuffle-backend
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      - SHUFFLE_APP_SDK_TIMEOUT=120
+      - SHUFFLE_DEFAULT_USERNAME=admin
+      - SHUFFLE_DEFAULT_PASSWORD=ShuffleAdmin2024!
+      - SHUFFLE_DEFAULT_APIKEY=shuffle-lab-api-key-2024
+      - SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200
+      - SHUFFLE_OPENSEARCH_USERNAME=admin
+      - SHUFFLE_OPENSEARCH_PASSWORD=StrongPassword123!
+    volumes:
+      - shuffle_data:/shuffle-database
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    depends_on:
+      shuffle-opensearch:
+        condition: service_healthy
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.20
+
+  shuffle-frontend:
+    profiles: ["soc"]
+    image: ghcr.io/shuffle/shuffle-frontend:latest
+    container_name: aptl-shuffle-frontend
+    restart: unless-stopped
+    ports:
+      - "3443:80"
+      - "3001:3001"
+    environment:
+      - BACKEND_HOSTNAME=shuffle-backend
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    depends_on:
+      - shuffle-backend
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.21
+
+  shuffle-orborus:
+    profiles: ["soc"]
+    image: ghcr.io/shuffle/shuffle-orborus:latest
+    container_name: aptl-shuffle-orborus
+    restart: unless-stopped
+    environment:
+      - SHUFFLE_WORKER_VERSION=latest
+      - BASE_URL=http://shuffle-backend:5001
+      - DOCKER_API_VERSION=1.40
+      - SHUFFLE_BASE_IMAGE_NAME=shuffle
+      - SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600
+      - ENVIRONMENT_NAME=APTL
+      - ORG_ID=aptl-lab
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    depends_on:
+      - shuffle-backend
+    networks:
+      aptl-security:
+
+  shuffle-opensearch:
+    profiles: ["soc"]
+    image: opensearchproject/opensearch:2.14.0
+    container_name: aptl-shuffle-opensearch
+    restart: unless-stopped
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - discovery.type=single-node
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123!
+    volumes:
+      - shuffle_opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -ks https://localhost:9200 -u admin:StrongPassword123! || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    networks:
+      aptl-security:
+
+  # Cortex - TheHive analyzer engine
+  cortex:
+    profiles: ["soc"]
+    image: thehiveproject/cortex:3.1.8
+    container_name: aptl-cortex
+    hostname: cortex
+    restart: unless-stopped
+    ports:
+      - "9001:9001"
+    environment:
+      - job_directory=/opt/cortex/jobs
+    volumes:
+      - cortex_data:/opt/cortex/jobs
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    depends_on:
+      thehive-es:
+        condition: service_healthy
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.22
+
+  # ==========================================================================
+  # ENTERPRISE DMZ (aptl-dmz network: 172.20.1.0/24)
+  # ==========================================================================
+
+  # TechVault Web Application
+  webapp:
+    profiles: ["enterprise"]
+    build:
+      context: ./containers/webapp
+      dockerfile: Dockerfile
+    container_name: aptl-webapp
+    hostname: webapp
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=172.20.2.11
+      - DB_PORT=5432
+      - DB_NAME=techvault
+      - DB_USER=techvault
+      - DB_PASSWORD=techvault_db_pass
+      - FLASK_ENV=production
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      aptl-dmz:
+        ipv4_address: 172.20.1.20
+      aptl-internal:
+        ipv4_address: 172.20.2.25
+
+  # Mail Server (docker-mailserver)
+  mailserver:
+    profiles: ["mail"]
+    image: ghcr.io/docker-mailserver/docker-mailserver:latest
+    container_name: aptl-mailserver
+    hostname: mail.techvault.local
+    domainname: techvault.local
+    restart: unless-stopped
+    ports:
+      - "25:25"
+      - "143:143"
+      - "587:587"
+      - "993:993"
+    environment:
+      - ENABLE_SPAMASSASSIN=0
+      - ENABLE_CLAMAV=0
+      - ENABLE_FAIL2BAN=0
+      - ENABLE_POSTGREY=0
+      - ENABLE_SASLAUTHD=0
+      - ONE_DIR=1
+      - DMS_DEBUG=0
+      - OVERRIDE_HOSTNAME=mail.techvault.local
+      - PERMIT_DOCKER=network
+      - SSL_TYPE=
+      - SIEM_IP=172.20.0.10
+    volumes:
+      - mailserver_data:/var/mail
+      - mailserver_state:/var/mail-state
+      - mailserver_logs:/var/log/mail
+      - ./containers/mailserver/setup.sh:/tmp/setup.sh:ro
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    networks:
+      aptl-dmz:
+        ipv4_address: 172.20.1.21
+      aptl-internal:
+        ipv4_address: 172.20.2.26
+
+  # Internal DNS Server
+  dns:
+    profiles: ["dns"]
+    build:
+      context: ./containers/dns
+      dockerfile: Dockerfile
+    container_name: aptl-dns
+    hostname: ns1.techvault.local
+    restart: unless-stopped
+    ports:
+      - "5353:53/tcp"
+      - "5353:53/udp"
+    volumes:
+      - dns_logs:/var/log/named
+    healthcheck:
+      test: ["CMD-SHELL", "dig @localhost techvault.local SOA +short || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    networks:
+      aptl-dmz:
+        ipv4_address: 172.20.1.22
+      aptl-internal:
+        ipv4_address: 172.20.2.27
+      aptl-security:
+        ipv4_address: 172.20.0.25
+
+  # ==========================================================================
+  # ENTERPRISE INTERNAL (aptl-internal network: 172.20.2.0/24)
+  # ==========================================================================
+
+  # Samba Active Directory Domain Controller
+  ad:
+    profiles: ["enterprise"]
+    build:
+      context: ./containers/ad
+      dockerfile: Dockerfile
+    container_name: aptl-ad
+    hostname: dc.techvault.local
+    restart: unless-stopped
+    environment:
+      - SAMBA_DOMAIN=TECHVAULT
+      - SAMBA_REALM=TECHVAULT.LOCAL
+      - SAMBA_ADMIN_PASSWORD=Admin123!
+      - DNS_FORWARDER=172.20.1.22
+      - SIEM_IP=172.20.0.10
+    volumes:
+      - ad_data:/var/lib/samba
+      - ad_logs:/var/log/samba
+    cap_add:
+      - SYS_ADMIN
+    healthcheck:
+      test: ["CMD-SHELL", "samba-tool domain info 127.0.0.1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    networks:
+      aptl-internal:
+        ipv4_address: 172.20.2.10
+
+  # PostgreSQL Database
+  db:
+    profiles: ["enterprise"]
+    image: postgres:16-alpine
+    container_name: aptl-db
+    hostname: db.techvault.local
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=techvault
+      - POSTGRES_USER=techvault
+      - POSTGRES_PASSWORD=techvault_db_pass
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./containers/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U techvault -d techvault"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    command: >
+      postgres
+        -c logging_collector=on
+        -c log_directory=/var/log/postgresql
+        -c log_filename=postgresql.log
+        -c log_statement=all
+        -c log_connections=on
+        -c log_disconnections=on
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      aptl-internal:
+        ipv4_address: 172.20.2.11
+
+  # Samba File Server
+  fileshare:
+    profiles: ["fileshare"]
+    build:
+      context: ./containers/fileshare
+      dockerfile: Dockerfile
+    container_name: aptl-fileshare
+    hostname: files.techvault.local
+    restart: unless-stopped
+    environment:
+      - SIEM_IP=172.20.0.10
+    volumes:
+      - fileshare_data:/srv/shares
+      - fileshare_logs:/var/log/samba
+    healthcheck:
+      test: ["CMD-SHELL", "smbclient -L localhost -N || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      aptl-internal:
+        ipv4_address: 172.20.2.12
+
+  # Victim Container - Linux Application Server
   victim:
     profiles: ["victim"]
     build:
       context: ./containers
       dockerfile: victim/Dockerfile
     container_name: aptl-victim
-    hostname: victim-host
+    hostname: app.techvault.local
     restart: unless-stopped
     networks:
-      aptl-network:
-        ipv4_address: 172.20.0.20
+      aptl-internal:
+        ipv4_address: 172.20.2.20
     ports:
       - "2022:22"    # SSH access
     environment:
@@ -190,6 +736,10 @@ services:
       wazuh.manager:
         condition: service_healthy
 
+  # ==========================================================================
+  # RED TEAM (aptl-redteam network: 172.20.4.0/24)
+  # ==========================================================================
+
   # Kali Container - Red team attack platform
   kali:
     profiles: ["kali"]
@@ -200,20 +750,22 @@ services:
     hostname: kali-redteam
     restart: unless-stopped
     networks:
-      aptl-network:
-        ipv4_address: 172.20.0.30
+      aptl-redteam:
+        ipv4_address: 172.20.4.30
+      aptl-dmz:
+        ipv4_address: 172.20.1.30
+      aptl-internal:
+        ipv4_address: 172.20.2.35
     ports:
       - "2023:22"    # SSH access for MCP
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
-      - VICTIM_IP=172.20.0.20
+      - VICTIM_IP=172.20.2.20
     volumes:
       - ./keys:/host-ssh-keys:ro
       - kali_operations:/home/kali/operations
       - kali_logs:/var/log    # Persist logs for Wazuh agent
     depends_on:
-      victim:
-        condition: service_healthy
       wazuh.manager:
         condition: service_healthy
     cap_add:
@@ -242,7 +794,7 @@ services:
     hostname: reverse-host
     restart: unless-stopped
     networks:
-      aptl-network:
+      aptl-security:
         ipv4_address: 172.20.0.27
     ports:
       - "2027:22"    # SSH access
@@ -273,13 +825,46 @@ services:
         limits:
           memory: 512m
 
+# ==========================================================================
+# NETWORKS
+# ==========================================================================
+
 networks:
-  aptl-network:
+  # Security / Management network - Wazuh, SOC tools
+  aptl-security:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: 172.20.0.0/24
           gateway: 172.20.0.1
+
+  # DMZ - Public-facing services (web, mail, DNS)
+  aptl-dmz:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.1.0/24
+          gateway: 172.20.1.1
+
+  # Internal - AD, database, file server, app server
+  aptl-internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.2.0/24
+          gateway: 172.20.2.1
+
+  # Red team - Kali attack platform
+  aptl-redteam:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.4.0/24
+          gateway: 172.20.4.1
+
+# ==========================================================================
+# VOLUMES
+# ==========================================================================
 
 volumes:
   # Wazuh volumes
@@ -297,6 +882,40 @@ volumes:
   wazuh-indexer-data:
   wazuh-dashboard-config:
   wazuh-dashboard-custom:
+
+  # Suricata
+  suricata_logs:
+
+  # MISP
+  misp_data:
+  misp_config:
+  misp_db_data:
+
+  # TheHive
+  thehive_data:
+  thehive_index:
+  thehive_cassandra_data:
+  thehive_es_data:
+
+  # Shuffle
+  shuffle_data:
+  shuffle_opensearch_data:
+
+  # Cortex
+  cortex_data:
+
+  # Enterprise services
+  ad_data:
+  ad_logs:
+  db_data:
+  fileshare_data:
+  fileshare_logs:
+  dns_logs:
+
+  # Mail server
+  mailserver_data:
+  mailserver_state:
+  mailserver_logs:
 
   # Application volumes
   victim_logs:

@@ -1,0 +1,120 @@
+{
+  "version": "1.0.0",
+  "server": {
+    "name": "network-ids",
+    "version": "1.0.0",
+    "description": "APTL Network IDS MCP Server - Provides AI agents with access to Suricata IDS alerts and network flow data via the Wazuh indexer.",
+    "toolPrefix": "network",
+    "targetName": "Suricata Network IDS",
+    "configKey": "",
+    "envPrefix": "APTL_NETWORK"
+  },
+  "lab": {
+    "name": "aptl-network",
+    "network_subnet": "172.20.0.0/24"
+  },
+  "api": {
+    "baseUrl": "https://localhost:9200",
+    "auth": {
+      "type": "basic",
+      "username": "${INDEXER_USERNAME}",
+      "password": "${INDEXER_PASSWORD}"
+    },
+    "timeout": 30000,
+    "verify_ssl": false,
+    "default_headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "queries": {
+    "query_ids_alerts": {
+      "url": "https://localhost:9200/wazuh-alerts-4.x-*/_search",
+      "method": "POST",
+      "auth": {
+        "type": "basic",
+        "username": "${INDEXER_USERNAME}",
+        "password": "${INDEXER_PASSWORD}"
+      },
+      "verify_ssl": false,
+      "body": {
+        "query": {
+          "bool": {
+            "must": [
+              {"match": {"rule.groups": "suricata"}}
+            ]
+          }
+        },
+        "size": 50,
+        "sort": [{"@timestamp": {"order": "desc"}}]
+      },
+      "description": "Query Suricata IDS alerts from Wazuh. Returns network-level detections. Filter by source IP, signature, severity. Example: {\"body\": {\"query\": {\"bool\": {\"must\": [{\"match\": {\"rule.groups\": \"suricata\"}}, {\"match\": {\"data.src_ip\": \"172.20.4.30\"}}]}}}}"
+    },
+    "query_dns_events": {
+      "url": "https://localhost:9200/wazuh-alerts-4.x-*/_search",
+      "method": "POST",
+      "auth": {
+        "type": "basic",
+        "username": "${INDEXER_USERNAME}",
+        "password": "${INDEXER_PASSWORD}"
+      },
+      "verify_ssl": false,
+      "body": {
+        "query": {
+          "bool": {
+            "must": [
+              {"match": {"rule.groups": "dns"}}
+            ]
+          }
+        },
+        "size": 100,
+        "sort": [{"@timestamp": {"order": "desc"}}]
+      },
+      "description": "Query DNS events captured by Suricata. Useful for detecting DNS tunneling, DGA, and C2 communication. Example: {\"body\": {\"query\": {\"bool\": {\"must\": [{\"match\": {\"rule.groups\": \"dns\"}}, {\"wildcard\": {\"data.dns.query.rrname\": \"*suspicious*\"}}]}}}}"
+    },
+    "query_network_flows": {
+      "url": "https://localhost:9200/wazuh-alerts-4.x-*/_search",
+      "method": "POST",
+      "auth": {
+        "type": "basic",
+        "username": "${INDEXER_USERNAME}",
+        "password": "${INDEXER_PASSWORD}"
+      },
+      "verify_ssl": false,
+      "body": {
+        "query": {
+          "bool": {
+            "must": [
+              {"exists": {"field": "data.src_ip"}}
+            ]
+          }
+        },
+        "size": 50,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "_source": ["@timestamp", "data.src_ip", "data.dest_ip", "data.src_port", "data.dest_port", "data.proto", "rule.description"]
+      },
+      "description": "Query network flow data. Shows source/destination IPs, ports, and protocols. Useful for identifying lateral movement, data exfiltration, and C2. Example: {\"body\": {\"query\": {\"bool\": {\"must\": [{\"match\": {\"data.src_ip\": \"172.20.4.30\"}}]}}}}"
+    },
+    "query_web_attacks": {
+      "url": "https://localhost:9200/wazuh-alerts-4.x-*/_search",
+      "method": "POST",
+      "auth": {
+        "type": "basic",
+        "username": "${INDEXER_USERNAME}",
+        "password": "${INDEXER_PASSWORD}"
+      },
+      "verify_ssl": false,
+      "body": {
+        "query": {
+          "bool": {
+            "must": [
+              {"match": {"rule.groups": "web_attack"}}
+            ]
+          }
+        },
+        "size": 50,
+        "sort": [{"@timestamp": {"order": "desc"}}]
+      },
+      "description": "Query web application attack alerts from both Wazuh and Suricata. Covers SQLi, XSS, command injection, IDOR. Example: {\"body\": {\"query\": {\"bool\": {\"must\": [{\"match\": {\"rule.groups\": \"web_attack\"}}, {\"range\": {\"@timestamp\": {\"gte\": \"now-1h\"}}}]}}}}"
+    }
+  }
+}

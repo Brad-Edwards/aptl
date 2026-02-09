@@ -1,0 +1,75 @@
+{
+  "version": "1.0.0",
+  "server": {
+    "name": "soar",
+    "version": "1.0.0",
+    "description": "APTL SOAR MCP Server - Provides AI agents with access to Shuffle SOAR for automated response playbooks, containment actions, and orchestration workflows.",
+    "toolPrefix": "soar",
+    "targetName": "Shuffle SOAR",
+    "configKey": "",
+    "envPrefix": "APTL_SOAR"
+  },
+  "lab": {
+    "name": "aptl-soar",
+    "network_subnet": "172.20.0.0/24"
+  },
+  "api": {
+    "baseUrl": "http://localhost:5001",
+    "auth": {
+      "type": "apikey",
+      "header": "Authorization",
+      "value": "Bearer ${SHUFFLE_API_KEY}"
+    },
+    "timeout": 30000,
+    "verify_ssl": false,
+    "default_headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "queries": {
+    "list_workflows": {
+      "url": "http://localhost:5001/api/v1/workflows",
+      "method": "GET",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "Bearer ${SHUFFLE_API_KEY}"
+      },
+      "verify_ssl": false,
+      "description": "List all available SOAR workflows/playbooks. Returns workflow names, triggers, and status."
+    },
+    "execute_workflow": {
+      "url": "http://localhost:5001/api/v1/workflows/{workflow_id}/execute",
+      "method": "POST",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "Bearer ${SHUFFLE_API_KEY}"
+      },
+      "verify_ssl": false,
+      "description": "Execute a SOAR workflow/playbook. Pass execution arguments in body. Example: {\"params\": {\"workflow_id\": \"abc-123\"}, \"body\": {\"execution_argument\": {\"alert_id\": \"wazuh-12345\", \"src_ip\": \"172.20.4.30\"}}}"
+    },
+    "get_execution": {
+      "url": "http://localhost:5001/api/v1/workflows/{workflow_id}/executions/{execution_id}",
+      "method": "GET",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "Bearer ${SHUFFLE_API_KEY}"
+      },
+      "verify_ssl": false,
+      "description": "Get the status and results of a workflow execution. Example: {\"params\": {\"workflow_id\": \"abc-123\", \"execution_id\": \"exec-456\"}}"
+    },
+    "list_executions": {
+      "url": "http://localhost:5001/api/v1/workflows/{workflow_id}/executions",
+      "method": "GET",
+      "auth": {
+        "type": "apikey",
+        "header": "Authorization",
+        "value": "Bearer ${SHUFFLE_API_KEY}"
+      },
+      "verify_ssl": false,
+      "description": "List recent executions of a workflow. Shows status, timing, and results. Example: {\"params\": {\"workflow_id\": \"abc-123\"}}"
+    }
+  }
+}

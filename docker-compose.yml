@@ -16,16 +16,17 @@ services:
       - "1514:1514"
       - "1515:1515"
       - "514:514/udp"
+      - "55000:55000"
     environment:
       - INDEXER_URL=https://wazuh.indexer:9200
-      - INDEXER_USERNAME=admin
-      - INDEXER_PASSWORD=SecretPassword
+      - INDEXER_USERNAME=${INDEXER_USERNAME}
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD}
       - FILEBEAT_SSL_VERIFICATION_MODE=full
       - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
       - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
       - SSL_KEY=/etc/ssl/filebeat.key
-      - API_USERNAME=wazuh-wui
-      - API_PASSWORD=WazuhPass123!
+      - API_USERNAME=${API_USERNAME}
+      - API_PASSWORD=${API_PASSWORD}
     volumes:
       - wazuh_api_configuration:/var/ossec/api/configuration
       - wazuh_etc:/var/ossec/etc
@@ -44,8 +45,20 @@ services:
       - ./config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
       - ./config/wazuh_cluster/falco_rules.xml:/var/ossec/etc/rules/falco_rules.xml
       - ./config/wazuh_cluster/kali_redteam_rules.xml:/var/ossec/etc/rules/kali_redteam_rules.xml
-      - ./config/wazuh_cluster/gaming_auth_rules.xml:/var/ossec/etc/rules/gaming_auth_rules.xml
       - ./config/wazuh_cluster/kali_decoders.xml:/var/ossec/etc/decoders/kali_decoders.xml
+    healthcheck:
+      test: ["CMD-SHELL", "curl -ks https://localhost:55000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    depends_on:
+      wazuh.indexer:
+        condition: service_healthy
     networks:
       aptl-network:
         ipv4_address: 172.20.0.10
@@ -76,6 +89,16 @@ services:
       - ./config/wazuh_indexer_ssl_certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem
       - ./config/wazuh_indexer/wazuh.indexer.yml:/usr/share/wazuh-indexer/opensearch.yml
       - ./config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml
+    healthcheck:
+      test: ["CMD-SHELL", "curl -ks https://localhost:9200 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
     networks:
       aptl-network:
         ipv4_address: 172.20.0.12
@@ -89,13 +112,13 @@ services:
     ports:
       - 443:5601
     environment:
-      - INDEXER_USERNAME=admin
-      - INDEXER_PASSWORD=SecretPassword
+      - INDEXER_USERNAME=${INDEXER_USERNAME}
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD}
       - WAZUH_API_URL=https://wazuh.manager
-      - DASHBOARD_USERNAME=kibanaserver
-      - DASHBOARD_PASSWORD=kibanaserver
-      - API_USERNAME=wazuh-wui
-      - API_PASSWORD=WazuhPass123!
+      - DASHBOARD_USERNAME=${DASHBOARD_USERNAME}
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
+      - API_USERNAME=${API_USERNAME}
+      - API_PASSWORD=${API_PASSWORD}
     volumes:
       - ./config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem
       - ./config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem
@@ -104,11 +127,21 @@ services:
       - ./config/wazuh_dashboard/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
       - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
       - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+    healthcheck:
+      test: ["CMD-SHELL", "curl -ks https://localhost:5601 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
     depends_on:
-      - wazuh.indexer
-    links:
-      - wazuh.indexer:wazuh.indexer
-      - wazuh.manager:wazuh.manager
+      wazuh.indexer:
+        condition: service_healthy
+      wazuh.manager:
+        condition: service_healthy
     networks:
       aptl-network:
         ipv4_address: 172.20.0.11
@@ -117,8 +150,8 @@ services:
   victim:
     profiles: ["victim"]
     build:
-      context: ./containers/victim
-      dockerfile: Dockerfile
+      context: ./containers
+      dockerfile: victim/Dockerfile
     container_name: aptl-victim
     hostname: victim-host
     restart: unless-stopped
@@ -143,145 +176,21 @@ services:
       - /tmp
     security_opt:
       - seccomp:unconfined
+    healthcheck:
+      test: ["CMD-SHELL", "ss -tlnp | grep ':22' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     depends_on:
-      - wazuh.manager  # Ensure Wazuh is ready before starting
+      wazuh.manager:
+        condition: service_healthy
 
-  # Gaming API Container - MMO-style API for credential stuffing demo
-  gaming-api:
-    profiles: ["gaming-api"]
-    build:
-      context: ./containers/gaming-api
-      dockerfile: Dockerfile
-    container_name: aptl-gaming-api
-    hostname: gaming-api-host
-    restart: unless-stopped
-    networks:
-      aptl-network:
-        ipv4_address: 172.20.0.21
-    ports:
-      - "2021:22"    # SSH access
-      - "14567:14567"  # Gaming API port
-    environment:
-      - SIEM_IP=172.20.0.10  # wazuh.manager
-      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
-      - NODE_ENV=production
-      - PORT=3000
-    cap_add:
-      - SYS_NICE        # For process scheduling
-      - SYS_ADMIN       # Required for systemd in container
-      - SYS_RESOURCE    # For setting limits and OOM score
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./keys:/keys:ro
-      - gaming_api_logs:/var/log
-      - gaming_api_data:/opt/gaming-api/data  # SQLite database and uploads
-    tmpfs:
-      - /run
-      - /tmp
-    security_opt:
-      - seccomp:unconfined
-    depends_on:
-      - wazuh.manager
-
-  # Minetest Server Container - Game server for memory scanning demo
-  minetest-server:
-    profiles: ["minetest-server"]
-    build:
-      context: ./containers/minetest-server
-      dockerfile: Dockerfile
-    container_name: aptl-minetest-server
-    hostname: minetest-server-host
-    restart: unless-stopped
-    networks:
-      aptl-network:
-        ipv4_address: 172.20.0.24
-    ports:
-      - "2024:22"       # SSH access
-      - "30000:30000/udp" # Minetest server port (UDP)
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Etc/UTC
-      - CLI_ARGS=--gameid minetest_game
-      - SIEM_IP=172.20.0.10  # wazuh.manager
-      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
-    volumes:
-      - ./keys:/keys:ro
-      - minetest_config:/config/.minetest
-      - /tmp
-    security_opt:
-      - seccomp:unconfined
-    depends_on:
-      - victim
-
-  # Minetest Client Container - Client for memory scanning demo
-  minetest-client:
-    profiles: ["minetest-client"]
-    build:
-      context: ./containers/minetest-client
-      dockerfile: Dockerfile
-    container_name: aptl-minetest-client
-    hostname: minetest-client-host
-    restart: unless-stopped
-    networks:
-      aptl-network:
-        ipv4_address: 172.20.0.25
-    ports:
-      - "2025:22"    # SSH access  
-      - "5901:5901"  # VNC access
-    environment:
-      - SIEM_IP=172.20.0.10  # wazuh.manager
-      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
-    cap_add:
-      - SYS_NICE        # For process scheduling
-      - SYS_ADMIN       # Required for systemd in container
-      - SYS_RESOURCE    # For setting limits and OOM score
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./keys:/keys:ro
-      - minetest_client_logs:/var/log
-    tmpfs:
-      - /run
-      - /tmp
-    security_opt:
-      - seccomp:unconfined
-
-  # Minecraft Server Container - Official Minecraft server for testing
-  minecraft-server:
-    profiles: ["minecraft-server"]
-    build:
-      context: ./containers/minecraft-server
-      dockerfile: Dockerfile
-    container_name: aptl-minecraft-server
-    hostname: minecraft-server-host
-    restart: unless-stopped
-    networks:
-      aptl-network:
-        ipv4_address: 172.20.0.26
-    ports:
-      - "2026:22"     # SSH access
-      - "25565:25565" # Minecraft server port
-    environment:
-      - SIEM_IP=172.20.0.10  # wazuh.manager
-      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
-    cap_add:
-      - SYS_NICE        # For process scheduling
-      - SYS_ADMIN       # Required for systemd in container
-      - SYS_RESOURCE    # For setting limits and OOM score
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./keys:/keys:ro
-      - minecraft_server_logs:/var/log
-      - minecraft_server_data:/opt/minecraft-server
-    tmpfs:
-      - /run
-      - /tmp
-    security_opt:
-      - seccomp:unconfined
-    depends_on:
-      - victim
-
-  # Kali Container - Red team attack platform  
+  # Kali Container - Red team attack platform
   kali:
     profiles: ["kali"]
     build:
@@ -303,20 +212,32 @@ services:
       - kali_operations:/home/kali/operations
       - kali_logs:/var/log    # Persist logs for Wazuh agent
     depends_on:
-      - victim
-      - wazuh.manager  # Ensure Wazuh is ready
+      victim:
+        condition: service_healthy
+      wazuh.manager:
+        condition: service_healthy
     cap_add:
       - NET_RAW      # For packet capture tools
       - NET_ADMIN    # For network manipulation tools
     security_opt:
       - seccomp:unconfined  # Required for some red team tools
+    healthcheck:
+      test: ["CMD-SHELL", "ss -tlnp | grep ':22' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 
   # Reverse Engineering Container
   reverse:
     profiles: ["reverse"]
     build:
-      context: ./containers/reverse
-      dockerfile: Dockerfile
+      context: ./containers
+      dockerfile: reverse/Dockerfile
     container_name: aptl-reverse
     hostname: reverse-host
     restart: unless-stopped
@@ -324,7 +245,7 @@ services:
       aptl-network:
         ipv4_address: 172.20.0.27
     ports:
-      - "2027:22"    # SSH access  
+      - "2027:22"    # SSH access
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
@@ -341,6 +262,16 @@ services:
       - /tmp
     security_opt:
       - seccomp:unconfined
+    healthcheck:
+      test: ["CMD-SHELL", "ss -tlnp | grep ':22' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
 networks:
   aptl-network:
@@ -366,16 +297,9 @@ volumes:
   wazuh-indexer-data:
   wazuh-dashboard-config:
   wazuh-dashboard-custom:
-  
+
   # Application volumes
   victim_logs:
-  gaming_api_logs:
-  gaming_api_data:
-  minetest_server_logs:
-  minetest_client_logs:
-  minetest_config:
-  minecraft_server_logs:
-  minecraft_server_data:
   kali_operations:
   kali_logs:
   reverse_logs:

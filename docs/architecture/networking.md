@@ -16,6 +16,7 @@ Docker bridge network providing isolated lab environment for security testing.
 | wazuh.dashboard | 172.20.0.11 | wazuh.dashboard |
 | wazuh.indexer | 172.20.0.12 | wazuh.indexer |
 | victim | 172.20.0.20 | victim-host |
+| reverse | 172.20.0.27 | reverse-host |
 | kali | 172.20.0.30 | kali-redteam |
 
 ## Host Port Mappings
@@ -25,6 +26,7 @@ Docker bridge network providing isolated lab environment for security testing.
 | 443 | dashboard:5601 | Wazuh Dashboard |
 | 2022 | victim:22 | Victim SSH |
 | 2023 | kali:22 | Kali SSH |
+| 2027 | reverse:22 | Reverse Engineering SSH |
 | 9200 | indexer:9200 | OpenSearch API |
 | 55000 | manager:55000 | Wazuh API |
 

@@ -1,3 +1,5 @@
+import https from 'node:https';
+import http from 'node:http';
 import { LabConfig } from './config.js';
 
 export interface HTTPError extends Error {
@@ -11,6 +13,9 @@ export interface HTTPResponse {
   data: any;
   text: string;
 }
+
+// Per-instance HTTPS agent that skips SSL verification, avoiding process-global mutation
+const insecureAgent = new https.Agent({ rejectUnauthorized: false });
 
 /**
  * Generic HTTP client for API operations
@@ -97,9 +102,10 @@ export class HTTPClient {
       ...options.headers,
     };
 
-    // Configure SSL verification
+    // Use node:https with per-request agent when SSL verification is disabled,
+    // avoiding the process-global NODE_TLS_REJECT_UNAUTHORIZED race condition
     if (!verify_ssl) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+      return this.makeRequestWithAgent(url, method, headers, options, timeout);
     }
 
     try {
@@ -115,38 +121,119 @@ export class HTTPClient {
 
       clearTimeout(timeoutId);
 
-      const responseText = await response.text();
-      let responseData: any;
-
-      try {
-        responseData = options.responseType === 'text' ? responseText : JSON.parse(responseText);
-      } catch {
-        responseData = responseText;
-      }
-
-      if (!response.ok) {
-        const error = new Error(`HTTP ${response.status}: ${response.statusText}`) as HTTPError;
-        error.statusCode = response.status;
-        error.response = responseData;
-        throw error;
-      }
-
-      return {
-        ok: response.ok,
-        status: response.status,
-        data: responseData,
-        text: responseText,
-      };
+      return this.parseResponse(response, options.responseType);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error(`Request timeout after ${timeout}ms`);
       }
       throw error;
-    } finally {
-      // Reset SSL verification
-      if (!verify_ssl) {
-        delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-      }
     }
+  }
+
+  /**
+   * Parse response body text into data, falling back to raw text on JSON errors.
+   */
+  private parseBody(text: string, responseType?: 'json' | 'text'): any {
+    if (responseType === 'text') return text;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+
+  /**
+   * Build an HTTPError from a status code, status text, and parsed body.
+   */
+  private buildHTTPError(status: number, statusText: string, body: any): HTTPError {
+    const error = new Error(`HTTP ${status}: ${statusText}`) as HTTPError;
+    error.statusCode = status;
+    error.response = body;
+    return error;
+  }
+
+  /**
+   * Make HTTP request using node:https with a per-request insecure agent.
+   * Used when verify_ssl is false to avoid mutating process.env.
+   */
+  private makeRequestWithAgent(
+    url: string,
+    method: string,
+    headers: Record<string, string>,
+    options: { body?: any; responseType?: 'json' | 'text' },
+    timeout: number
+  ): Promise<HTTPResponse> {
+    return new Promise((resolve, reject) => {
+      const parsed = new URL(url);
+      const transport = parsed.protocol === 'https:' ? https : http;
+      const bodyStr = options.body ? JSON.stringify(options.body) : undefined;
+
+      const reqOptions: https.RequestOptions = {
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method,
+        headers: {
+          ...headers,
+          ...(bodyStr ? { 'Content-Length': String(Buffer.byteLength(bodyStr)) } : {}),
+        },
+        timeout,
+        ...(parsed.protocol === 'https:' ? { agent: insecureAgent } : {}),
+      };
+
+      const req = transport.request(reqOptions, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => {
+          const responseText = Buffer.concat(chunks).toString();
+          const responseData = this.parseBody(responseText, options.responseType);
+          const status = res.statusCode ?? 0;
+          const ok = status >= 200 && status < 300;
+
+          if (!ok) {
+            reject(this.buildHTTPError(status, res.statusMessage ?? '', responseData));
+            return;
+          }
+
+          resolve({ ok, status, data: responseData, text: responseText });
+        });
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error(`Request timeout after ${timeout}ms`));
+      });
+
+      req.on('error', (error) => {
+        reject(error);
+      });
+
+      if (bodyStr) {
+        req.write(bodyStr);
+      }
+      req.end();
+    });
+  }
+
+  /**
+   * Parse a fetch Response into our HTTPResponse format
+   */
+  private async parseResponse(
+    response: Response,
+    responseType?: 'json' | 'text'
+  ): Promise<HTTPResponse> {
+    const responseText = await response.text();
+    const responseData = this.parseBody(responseText, responseType);
+
+    if (!response.ok) {
+      throw this.buildHTTPError(response.status, response.statusText, responseData);
+    }
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      data: responseData,
+      text: responseText,
+    };
   }
 }

@@ -1,7 +1,7 @@
 
 
-import { existsSync } from 'fs';
-import { resolve } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
 import { expandTilde } from './utils.js';
 
 // Lab configuration matching actual docker-lab-config.json structure
@@ -63,13 +63,81 @@ export interface LabConfig {
       verify_ssl?: boolean;
     };
   };
-  mcp: {
-    server_name: string;
-    allowed_networks: string[];
-    max_session_time: number;
-    audit_enabled: boolean;
-    log_level: string;
-  };
+}
+
+/**
+ * Substitute ${VAR} patterns in a string with environment variable values.
+ * Values are JSON-escaped so the result is safe to pass to JSON.parse().
+ * Returns the substituted string and a list of any unresolved variable names.
+ */
+export function substituteEnvVars(
+  content: string,
+  env: Record<string, string | undefined> = process.env
+): { result: string; missing: string[] } {
+  const missing: string[] = [];
+  const result = content.replace(/\$\{(\w+)\}/g, (_match, varName) => {
+    const value = env[varName];
+    if (value === undefined) {
+      missing.push(varName);
+      return _match;
+    }
+    // Escape characters that would break a JSON string
+    return value
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t');
+  });
+  return { result, missing };
+}
+
+/**
+ * Parse a .env file into a key-value map.
+ * Handles KEY=VALUE, KEY="VALUE", KEY='VALUE', comments, and blank lines.
+ */
+export function parseDotEnv(content: string): Record<string, string> {
+  const vars: Record<string, string> = {};
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIndex = trimmed.indexOf('=');
+    if (eqIndex === -1) continue;
+    const key = trimmed.slice(0, eqIndex).trim();
+    let val = trimmed.slice(eqIndex + 1).trim();
+    // Strip matching quotes
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    vars[key] = val;
+  }
+  return vars;
+}
+
+/**
+ * Find and load .env from the config file's directory or ancestors.
+ * Returns merged env: .env values as defaults, process.env as overrides.
+ */
+function loadEnvForConfig(configPath: string): Record<string, string | undefined> {
+  let dir = dirname(resolve(configPath));
+  // Walk up at most 5 levels looking for .env
+  for (let i = 0; i < 5; i++) {
+    const envPath = resolve(dir, '.env');
+    if (existsSync(envPath)) {
+      try {
+        const dotEnv = parseDotEnv(readFileSync(envPath, 'utf8'));
+        console.error(`[MCP] Loaded .env from: ${envPath}`);
+        // process.env overrides .env (explicit env vars take priority)
+        return { ...dotEnv, ...process.env };
+      } catch {
+        break;
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
+  }
+  return process.env;
 }
 
 /**
@@ -77,13 +145,20 @@ export interface LabConfig {
  */
 async function loadDockerLabConfig(configPath: string): Promise<LabConfig> {
   console.error(`[MCP] Looking for Docker config at: ${configPath}`);
-  
+
   if (!existsSync(configPath)) {
     throw new Error(`Docker lab configuration not found at: ${configPath}`);
   }
 
   const fs = await import('fs/promises');
-  const configContent = await fs.readFile(configPath, 'utf8');
+  const rawContent = await fs.readFile(configPath, 'utf8');
+
+  const env = loadEnvForConfig(configPath);
+  const { result: configContent, missing } = substituteEnvVars(rawContent, env);
+  if (missing.length > 0) {
+    console.error(`[MCP] Warning: unresolved environment variables: ${missing.join(', ')}`);
+  }
+
   const config = JSON.parse(configContent) as LabConfig;
   
   // Validate required configuration sections exist

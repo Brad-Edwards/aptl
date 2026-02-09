@@ -1,12 +1,13 @@
-# Base victim container using Rocky Linux 9 (RHEL-compatible)
-FROM rockylinux:9
+# Victim container built on shared Rocky Linux 9 base
+# Build context must be ./containers/ so both base/ and victim/ are accessible
+FROM rockylinux:9 AS base
 
-# Build arguments for agent installation
+# ---- Shared base layer (from containers/base/Dockerfile.rocky) ----
+
 ARG INSTALL_WAZUH=true
 ARG INSTALL_FALCO=true
 ARG INSTALL_XSIAM=false
 
-# Set as environment variables for runtime
 ENV INSTALL_WAZUH=${INSTALL_WAZUH}
 ENV INSTALL_FALCO=${INSTALL_FALCO}
 ENV INSTALL_XSIAM=${INSTALL_XSIAM}
@@ -60,28 +61,32 @@ RUN mkdir -p /home/labadmin/.ssh && \
 
 RUN mkdir -p /opt/purple-team/scripts /etc/rsyslog.d
 
-COPY entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/entrypoint.sh
+# Copy shared base scripts and configs
+COPY base/scripts/entrypoint-base.sh /opt/purple-team/scripts/
+RUN chmod +x /opt/purple-team/scripts/entrypoint-base.sh
 
-# Copy container-specific scripts
-COPY install-wazuh.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/install-wazuh.sh
-
-COPY install-falco.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/install-falco.sh
-
-COPY install-all.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/install-all.sh
-
-COPY ossec.conf.template /opt/purple-team/scripts/
+COPY base/scripts/ossec.conf.template /opt/purple-team/scripts/
 
 RUN mkdir -p /etc/falco/config.d
-COPY falco_custom.yaml /etc/falco/config.d/
+COPY base/falco_custom.yaml /etc/falco/config.d/
 
-COPY lab-install.service /etc/systemd/system/
+# ---- Victim-specific layer ----
+
+COPY victim/entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+COPY victim/install-wazuh.sh /opt/purple-team/scripts/
+RUN chmod +x /opt/purple-team/scripts/install-wazuh.sh
+
+COPY victim/install-falco.sh /opt/purple-team/scripts/
+RUN chmod +x /opt/purple-team/scripts/install-falco.sh
+
+COPY victim/install-all.sh /opt/purple-team/scripts/
+RUN chmod +x /opt/purple-team/scripts/install-all.sh
+
+COPY victim/lab-install.service /etc/systemd/system/
 RUN systemctl enable lab-install.service
 
-# Expose only SSH and syslog
 EXPOSE 22 514
 
 VOLUME ["/var/log", "/home"]

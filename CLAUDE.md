@@ -14,6 +14,7 @@ APTL (Advanced Purple Team Lab) is a local Docker-based purple team lab infrastr
   - Wazuh Dashboard: Web interface (172.20.0.11)
   - Victim Container: Target machine with services (172.20.0.20)
   - Kali Container: Red team platform (172.20.0.30)
+- **Python CLI**: `aptl` command in `src/aptl/` (typer + Pydantic) — the primary interface for lab lifecycle
 - **Red Team MCP**: TypeScript MCP server in `mcp/` providing AI agents controlled access to lab containers
 - **Log Integration**: Victim containers forward logs to Wazuh Manager via rsyslog on port 514
 - **Container Network**: Isolated Docker network (172.20.0.0/16) for all lab communications
@@ -22,27 +23,45 @@ APTL (Advanced Purple Team Lab) is a local Docker-based purple team lab infrastr
 
 ### Lab Operations
 
-#### Start Complete Lab
+#### Python CLI (Recommended)
 
 ```bash
-# Start entire lab environment (recommended)
+# Install CLI (editable mode for development)
+pip install -e .
+
+# Start entire lab environment
+aptl lab start
+
+# Check status
+aptl lab status
+
+# Stop lab
+aptl lab stop
+
+# Stop and remove all volumes
+aptl lab stop -v
+```
+
+#### Bash Script (Alternative)
+
+```bash
 ./start-lab.sh
 ```
 
 #### Manual Docker Operations
 
 ```bash
-# Start lab manually
-docker compose up -d
+# Start lab manually (must include profiles)
+docker compose --profile wazuh --profile victim --profile kali up --build -d
 
 # View service logs
 docker compose logs -f [service_name]
 
-# Stop lab
-docker compose down
+# Stop lab (must include profiles)
+docker compose --profile wazuh --profile victim --profile kali down
 
 # Cleanup (removes all data)
-docker compose down -v
+docker compose --profile wazuh --profile victim --profile kali down -v
 
 # Restart specific service
 docker compose restart [service_name]
@@ -59,14 +78,17 @@ docker build -t aptl-kali .
 cd containers/victim
 docker build -t aptl-victim .
 
-# Build MCP server
-cd mcp
+# Build all MCP servers
+./mcp/build-all-mcps.sh
+
+# Build a single MCP server
+cd mcp/mcp-red
 npm run build
 npm test
-npm run watch  # Development mode
 
-# Test MCP server
-npx @modelcontextprotocol/inspector dist/index.js
+# Test an MCP server with the inspector
+cd mcp/mcp-red
+npx @modelcontextprotocol/inspector build/index.js
 ```
 
 ## Configuration
@@ -82,16 +104,27 @@ npx @modelcontextprotocol/inspector dist/index.js
 
 ### MCP Server Setup
 
-For AI agents to access lab containers via MCP:
+The MCP layer is split into multiple servers under `mcp/`, each serving a different domain:
+
+- `mcp/mcp-red/` - Kali/red team operations
+- `mcp/mcp-wazuh/` - Wazuh SIEM queries and detection rules
+- `mcp/mcp-reverse/` - Reverse engineering container
+- `mcp/mcp-windows-re/` - Windows reverse engineering
+- `mcp/aptl-mcp-common/` - Shared library (not a standalone server)
 
 **Cursor**: Create `.cursor/mcp.json`:
 
 ```json
 {
     "mcpServers": {
-        "aptl-lab": {
+        "aptl-red": {
             "command": "node",
-            "args": ["./mcp/dist/index.js"],
+            "args": ["./mcp/mcp-red/build/index.js"],
+            "cwd": "."
+        },
+        "aptl-wazuh": {
+            "command": "node",
+            "args": ["./mcp/mcp-wazuh/build/index.js"],
             "cwd": "."
         }
     }
@@ -101,20 +134,28 @@ For AI agents to access lab containers via MCP:
 **Cline**: Add to MCP settings:
 
 ```json
-"aptl-lab": {
+"aptl-red": {
     "command": "node",
-    "args": ["./mcp/dist/index.js"],
+    "args": ["./mcp/mcp-red/build/index.js"],
+    "cwd": "/path/to/aptl"
+},
+"aptl-wazuh": {
+    "command": "node",
+    "args": ["./mcp/mcp-wazuh/build/index.js"],
     "cwd": "/path/to/aptl"
 }
 ```
+
+Add additional servers (`mcp-reverse`, `mcp-windows-re`, etc.) as needed for your workflow.
 
 ## Important Notes
 
 ### CRITICAL: Docker Operations
 
-- **Use `./start-lab.sh` for initial setup** - handles all prerequisites and startup
+- **Use `aptl lab start` for initial setup** (or `./start-lab.sh`) - handles all prerequisites and startup
+- **Use `aptl lab status` to check container status** before troubleshooting
 - **Use `docker compose` commands for manual operations** when needed
-- **Always check container status** with `docker compose ps` before troubleshooting
+- **Profile flags are required** for manual docker compose commands (see Lab Operations above)
 
 ### Security Context
 
@@ -133,6 +174,7 @@ For AI agents to access lab containers via MCP:
 ### System Requirements
 
 - **Docker**: Docker Engine and Docker Compose
+- **Python**: 3.11+ (for CLI)
 - **System**: 8GB+ RAM, 20GB+ disk space
 - **Ports**: 443, 2022, 2023, 9200, 55000 must be available
 - **OS**: Linux, macOS, or Windows with WSL2
@@ -149,14 +191,14 @@ For AI agents to access lab containers via MCP:
 ### Starting the Lab
 
 1. Clone repository and navigate to directory
-2. Run `./start-lab.sh` (handles all setup automatically)
-3. Wait for all services to become ready
-4. Access services via connection details in `lab_connections.txt`
+2. Install CLI: `pip install -e .`
+3. Run `aptl lab start` (or `./start-lab.sh` as alternative)
+4. Wait for all services to become ready
+5. Access services via connection details in `lab_connections.txt`
 
 ### Testing Red Team Integration
 
-1. Start lab: `./start-lab.sh`
-2. Build MCP server: `cd mcp && npm run build`
+1. Start lab: `aptl lab start` (MCP servers are built automatically)
 3. Configure MCP client (Cursor/Cline) with local container configuration
 4. Test with AI agents using `kali_info` and `run_command` tools
 5. Verify container connectivity: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`

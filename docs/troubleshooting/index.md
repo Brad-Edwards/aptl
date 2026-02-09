@@ -101,8 +101,8 @@ docker exec aptl-victim telnet 172.20.0.10 514
 
 **Build MCP servers:**
 ```bash
-cd mcp-red && npm install && npm run build && cd ..
-cd mcp-blue && npm install && npm run build && cd ..
+cd mcp/mcp-red && npm install && npm run build && cd ../..
+cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
 ```
 
 **Check SSH from MCP:**

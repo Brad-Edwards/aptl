@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 from aptl.core.objectives import ObjectiveResult, ObjectiveStatus
 from aptl.core.scenarios import ObserverError, WazuhAlertValidation
@@ -71,10 +72,10 @@ def _build_auth_header(username: str, password: str) -> str:
 
 def query_wazuh_alerts(
     conn: WazuhConnection,
-    query: dict,
+    query: dict[str, Any],
     index_pattern: str = "wazuh-alerts-4.x-*",
     size: int = 100,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Execute an Elasticsearch query against the Wazuh Indexer.
 
     Uses urllib.request to make an HTTPS POST with basic auth.

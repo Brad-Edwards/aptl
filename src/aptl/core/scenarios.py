@@ -7,7 +7,7 @@ error wrapping, scenario discovery, and container requirement validation.
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -228,7 +228,7 @@ class WazuhAlertValidation(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    query: dict
+    query: dict[str, Any]
     min_matches: int = Field(default=1, ge=1)
     time_window_seconds: int = Field(default=300, ge=10, le=3600)
 

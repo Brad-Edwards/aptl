@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from aptl.utils.logging import get_logger
 
@@ -45,13 +45,13 @@ class Event:
     event_type: EventType
     scenario_id: str
     timestamp: str
-    data: dict = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 def make_event(
     event_type: EventType,
     scenario_id: str,
-    data: Optional[dict] = None,
+    data: Optional[dict[str, Any]] = None,
 ) -> Event:
     """Create an event with the current UTC timestamp.
 

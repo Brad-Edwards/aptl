@@ -7,6 +7,7 @@ Wazuh Indexer, and command_output/file_exists objectives use docker exec.
 """
 
 import re
+import shlex
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -118,13 +119,12 @@ def _check_wazuh_alert(
 
     from aptl.core.observer import check_alert_objective
 
-    result = check_alert_objective(
+    return check_alert_objective(
         wazuh_conn,
         objective.wazuh_alert,
         scenario_start_time,
+        objective_id=objective_id,
     )
-    result.objective_id = objective_id
-    return result
 
 
 def _check_command_output(
@@ -185,8 +185,9 @@ def _check_file_exists(
     validation = objective.file_exists
     container = f"aptl-{validation.container}"
 
+    safe_path = shlex.quote(validation.path)
     try:
-        result = _docker_exec(container, f"cat {validation.path}")
+        result = _docker_exec(container, f"cat {safe_path}")
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as e:
         log.warning(
             "File check failed for objective '%s': %s",

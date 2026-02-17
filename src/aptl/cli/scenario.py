@@ -10,6 +10,8 @@ from rich.table import Table
 from aptl.core.events import EventLog, EventType, make_event
 from aptl.core.objectives import ObjectiveStatus, evaluate_all
 from aptl.core.scenarios import (
+    ObjectiveType,
+    ScenarioDefinition,
     ScenarioNotFoundError,
     ScenarioStateError,
     ScenarioValidationError,
@@ -17,7 +19,7 @@ from aptl.core.scenarios import (
     load_scenario,
 )
 from aptl.core.scoring import calculate_score, generate_report, write_report
-from aptl.core.session import ScenarioSession
+from aptl.core.session import ActiveSession, ScenarioSession
 from aptl.utils.logging import get_logger
 
 log = get_logger("cli.scenario")
@@ -26,21 +28,18 @@ app = typer.Typer(help="Scenario management.")
 console = Console()
 
 
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
 def _state_dir(project_dir: Path) -> Path:
     """Return the .aptl/ state directory for a project."""
     return project_dir / ".aptl"
 
 
 def _resolve_scenarios_dir(project_dir: Path, scenarios_dir: Path | None) -> Path:
-    """Resolve the scenarios directory path.
-
-    Args:
-        project_dir: The APTL project directory.
-        scenarios_dir: Explicit scenarios directory, or None to use default.
-
-    Returns:
-        Resolved path to the scenarios directory.
-    """
+    """Resolve the scenarios directory path."""
     if scenarios_dir is not None:
         return scenarios_dir
     return project_dir / "scenarios"
@@ -48,13 +47,6 @@ def _resolve_scenarios_dir(project_dir: Path, scenarios_dir: Path | None) -> Pat
 
 def _find_scenario_by_name(scenarios_dir: Path, name: str) -> Path:
     """Find a scenario file by name (with or without .yaml extension).
-
-    Args:
-        scenarios_dir: Directory to search.
-        name: Scenario name or filename.
-
-    Returns:
-        Path to the scenario file.
 
     Raises:
         ScenarioNotFoundError: If no matching file is found.
@@ -68,6 +60,122 @@ def _find_scenario_by_name(scenarios_dir: Path, name: str) -> Path:
         return candidate
 
     raise ScenarioNotFoundError(name)
+
+
+def _load_scenario_or_exit(
+    scenarios_dir: Path,
+    name: str,
+) -> ScenarioDefinition:
+    """Find and load a scenario, or exit with an error message.
+
+    Args:
+        scenarios_dir: Resolved scenarios directory.
+        name: Scenario name or filename.
+
+    Returns:
+        Loaded and validated ScenarioDefinition.
+
+    Raises:
+        typer.Exit: If the scenario cannot be found or loaded.
+    """
+    try:
+        path = _find_scenario_by_name(scenarios_dir, name)
+        return load_scenario(path)
+    except (ScenarioNotFoundError, ScenarioValidationError, FileNotFoundError) as e:
+        log.error("Failed to load scenario '%s': %s", name, e)
+        typer.echo(f"Error: {e}")
+        raise typer.Exit(code=1) from e
+
+
+def _require_active_session(
+    session_mgr: ScenarioSession,
+) -> ActiveSession:
+    """Get the active session or exit with an error.
+
+    Returns:
+        The active session.
+
+    Raises:
+        typer.Exit: If no scenario is active.
+    """
+    session = session_mgr.get_active()
+    if session is None or not session_mgr.is_active():
+        typer.echo("No active scenario.")
+        raise typer.Exit(code=1)
+    return session
+
+
+def _load_active_scenario(
+    session: ActiveSession,
+    project_dir: Path,
+    scenarios_dir: Path | None,
+) -> ScenarioDefinition:
+    """Load the scenario definition for an active session.
+
+    Args:
+        session: Active session with a scenario_id.
+        project_dir: Project directory.
+        scenarios_dir: Explicit scenarios dir, or None for default.
+
+    Returns:
+        The loaded ScenarioDefinition.
+
+    Raises:
+        typer.Exit: If the scenario cannot be loaded.
+    """
+    resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
+    return _load_scenario_or_exit(resolved_dir, session.scenario_id)
+
+
+def _find_objective(
+    scenario: ScenarioDefinition,
+    objective_id: str,
+) -> "Objective":
+    """Find an objective by ID or exit with an error.
+
+    Returns:
+        The matching Objective.
+
+    Raises:
+        typer.Exit: If the objective is not found.
+    """
+    all_objectives = scenario.objectives.all_objectives()
+    obj = next((o for o in all_objectives if o.id == objective_id), None)
+    if obj is None:
+        log.error("Objective not found: %s", objective_id)
+        typer.echo(f"Objective not found: {objective_id}")
+        raise typer.Exit(code=1)
+    return obj
+
+
+def _record_new_completions(
+    eval_result: "EvaluationResult",
+    completed_ids: set[str],
+    session_mgr: ScenarioSession,
+    event_log: EventLog,
+    scenario_id: str,
+) -> int:
+    """Record newly completed objectives in session and event log.
+
+    Returns:
+        Number of new completions recorded.
+    """
+    new_completions = 0
+    for r in eval_result.results:
+        if r.status == ObjectiveStatus.COMPLETED and r.objective_id not in completed_ids:
+            session_mgr.record_objective_complete(r.objective_id)
+            event_log.append(make_event(
+                EventType.OBJECTIVE_COMPLETED,
+                scenario_id,
+                {"objective_id": r.objective_id, "details": r.details},
+            ))
+            new_completions += 1
+    return new_completions
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
 
 
 @app.command("list")
@@ -144,13 +252,7 @@ def show(
     """Show details of a specific scenario."""
     log.info("Showing scenario: %s", name)
     resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
-
-    try:
-        path = _find_scenario_by_name(resolved_dir, name)
-        scenario = load_scenario(path)
-    except (ScenarioNotFoundError, ScenarioValidationError, FileNotFoundError) as e:
-        typer.echo(f"Error: {e}")
-        raise typer.Exit(code=1)
+    scenario = _load_scenario_or_exit(resolved_dir, name)
 
     meta = scenario.metadata
     typer.echo(f"Scenario: {meta.name}")
@@ -219,11 +321,13 @@ def validate(
     try:
         scenario = load_scenario(path)
     except FileNotFoundError as e:
+        log.error("Scenario file not found: %s", path)
         typer.echo(f"Error: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
     except ScenarioValidationError as e:
+        log.error("Scenario validation failed: %s", e)
         typer.echo(f"Validation failed: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     meta = scenario.metadata
     obj_count = len(scenario.objectives.red) + len(scenario.objectives.blue)
@@ -253,13 +357,7 @@ def start(
     """Start a scenario session."""
     log.info("Starting scenario: %s", name)
     resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
-
-    try:
-        path = _find_scenario_by_name(resolved_dir, name)
-        scenario = load_scenario(path)
-    except (ScenarioNotFoundError, ScenarioValidationError, FileNotFoundError) as e:
-        typer.echo(f"Error: {e}")
-        raise typer.Exit(code=1)
+    scenario = _load_scenario_or_exit(resolved_dir, name)
 
     state = _state_dir(project_dir)
     session_mgr = ScenarioSession(state)
@@ -272,8 +370,9 @@ def start(
     try:
         session = session_mgr.start(scenario, events_file)
     except ScenarioStateError as e:
+        log.error("Cannot start scenario: %s", e)
         typer.echo(f"Error: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     event_log = EventLog(state / session.events_file)
     event_log.append(make_event(
@@ -339,21 +438,9 @@ def evaluate(
     """Run objective evaluation against live lab state."""
     state = _state_dir(project_dir)
     session_mgr = ScenarioSession(state)
+    session = _require_active_session(session_mgr)
 
-    session = session_mgr.get_active()
-    if session is None or not session_mgr.is_active():
-        typer.echo("No active scenario to evaluate.")
-        raise typer.Exit(code=1)
-
-    # Load scenario definition
-    resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
-    try:
-        path = _find_scenario_by_name(resolved_dir, session.scenario_id)
-        scenario = load_scenario(path)
-    except (ScenarioNotFoundError, ScenarioValidationError, FileNotFoundError) as e:
-        typer.echo(f"Error loading scenario definition: {e}")
-        raise typer.Exit(code=1)
-
+    scenario = _load_active_scenario(session, project_dir, scenarios_dir)
     all_objectives = scenario.objectives.all_objectives()
     completed_ids = set(session.completed_objectives)
 
@@ -365,16 +452,9 @@ def evaluate(
 
     # Record newly completed objectives
     event_log = EventLog(state / session.events_file)
-    new_completions = 0
-    for r in eval_result.results:
-        if r.status == ObjectiveStatus.COMPLETED and r.objective_id not in completed_ids:
-            session_mgr.record_objective_complete(r.objective_id)
-            event_log.append(make_event(
-                EventType.OBJECTIVE_COMPLETED,
-                session.scenario_id,
-                {"objective_id": r.objective_id, "details": r.details},
-            ))
-            new_completions += 1
+    new_completions = _record_new_completions(
+        eval_result, completed_ids, session_mgr, event_log, session.scenario_id,
+    )
 
     event_log.append(make_event(
         EventType.EVALUATION_RUN,
@@ -427,27 +507,10 @@ def hint(
     """Reveal the next hint for an objective."""
     state = _state_dir(project_dir)
     session_mgr = ScenarioSession(state)
+    session = _require_active_session(session_mgr)
 
-    session = session_mgr.get_active()
-    if session is None or not session_mgr.is_active():
-        typer.echo("No active scenario.")
-        raise typer.Exit(code=1)
-
-    # Load scenario to find hints
-    resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
-    try:
-        path = _find_scenario_by_name(resolved_dir, session.scenario_id)
-        scenario = load_scenario(path)
-    except (ScenarioNotFoundError, ScenarioValidationError, FileNotFoundError) as e:
-        typer.echo(f"Error loading scenario definition: {e}")
-        raise typer.Exit(code=1)
-
-    # Find the objective
-    all_objectives = scenario.objectives.all_objectives()
-    obj = next((o for o in all_objectives if o.id == objective_id), None)
-    if obj is None:
-        typer.echo(f"Objective not found: {objective_id}")
-        raise typer.Exit(code=1)
+    scenario = _load_active_scenario(session, project_dir, scenarios_dir)
+    obj = _find_objective(scenario, objective_id)
 
     if not obj.hints:
         typer.echo(f"No hints available for objective '{objective_id}'.")
@@ -502,30 +565,17 @@ def complete(
     """Manually mark a MANUAL objective as complete."""
     state = _state_dir(project_dir)
     session_mgr = ScenarioSession(state)
+    session = _require_active_session(session_mgr)
 
-    session = session_mgr.get_active()
-    if session is None or not session_mgr.is_active():
-        typer.echo("No active scenario.")
-        raise typer.Exit(code=1)
-
-    # Load scenario to verify it's a manual objective
-    resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
-    try:
-        path = _find_scenario_by_name(resolved_dir, session.scenario_id)
-        scenario = load_scenario(path)
-    except (ScenarioNotFoundError, ScenarioValidationError, FileNotFoundError) as e:
-        typer.echo(f"Error loading scenario definition: {e}")
-        raise typer.Exit(code=1)
-
-    all_objectives = scenario.objectives.all_objectives()
-    obj = next((o for o in all_objectives if o.id == objective_id), None)
-    if obj is None:
-        typer.echo(f"Objective not found: {objective_id}")
-        raise typer.Exit(code=1)
-
-    from aptl.core.scenarios import ObjectiveType
+    scenario = _load_active_scenario(session, project_dir, scenarios_dir)
+    obj = _find_objective(scenario, objective_id)
 
     if obj.type != ObjectiveType.MANUAL:
+        log.warning(
+            "Attempted manual completion of non-manual objective '%s' (type=%s)",
+            objective_id,
+            obj.type.value,
+        )
         typer.echo(
             f"Objective '{objective_id}' is type '{obj.type.value}', "
             "not 'manual'. Only manual objectives can be completed manually."
@@ -566,20 +616,9 @@ def stop(
     """Stop the active scenario and generate a report."""
     state = _state_dir(project_dir)
     session_mgr = ScenarioSession(state)
+    session = _require_active_session(session_mgr)
 
-    session = session_mgr.get_active()
-    if session is None or not session_mgr.is_active():
-        typer.echo("No active scenario to stop.")
-        raise typer.Exit(code=1)
-
-    # Load scenario definition
-    resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
-    try:
-        path = _find_scenario_by_name(resolved_dir, session.scenario_id)
-        scenario = load_scenario(path)
-    except (ScenarioNotFoundError, ScenarioValidationError, FileNotFoundError) as e:
-        typer.echo(f"Error loading scenario definition: {e}")
-        raise typer.Exit(code=1)
+    scenario = _load_active_scenario(session, project_dir, scenarios_dir)
 
     # Run final evaluation
     all_objectives = scenario.objectives.all_objectives()
@@ -593,9 +632,9 @@ def stop(
 
     # Record any new completions
     event_log = EventLog(state / session.events_file)
-    for r in eval_result.results:
-        if r.status == ObjectiveStatus.COMPLETED and r.objective_id not in completed_ids:
-            session_mgr.record_objective_complete(r.objective_id)
+    _record_new_completions(
+        eval_result, completed_ids, session_mgr, event_log, session.scenario_id,
+    )
 
     # Re-read session with updated completions
     session = session_mgr.get_active()

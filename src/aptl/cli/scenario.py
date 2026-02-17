@@ -2,7 +2,6 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -11,13 +10,11 @@ from rich.table import Table
 from aptl.core.events import EventLog, EventType, make_event
 from aptl.core.objectives import ObjectiveStatus, evaluate_all
 from aptl.core.scenarios import (
-    ScenarioDefinition,
     ScenarioNotFoundError,
     ScenarioStateError,
     ScenarioValidationError,
     find_scenarios,
     load_scenario,
-    validate_scenario_containers,
 )
 from aptl.core.scoring import calculate_score, generate_report, write_report
 from aptl.core.session import ScenarioSession

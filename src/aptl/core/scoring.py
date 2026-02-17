@@ -8,7 +8,6 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from aptl.core.events import Event
 from aptl.core.objectives import ObjectiveResult, ObjectiveStatus

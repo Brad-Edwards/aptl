@@ -3,7 +3,12 @@
         "wazuh": true,
         "victim": true,
         "kali": true,
-        "reverse": false
+        "reverse": false,
+        "enterprise": true,
+        "soc": true,
+        "mail": false,
+        "fileshare": false,
+        "dns": false
     },
     "edr_agents": {
         "victim": ["wazuh", "falco"],

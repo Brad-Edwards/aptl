@@ -49,11 +49,19 @@ class ContainerSettings(BaseModel):
     victim: bool = True
     kali: bool = True
     reverse: bool = False
+    enterprise: bool = False
+    soc: bool = False
+    mail: bool = False
+    fileshare: bool = False
+    dns: bool = False
 
     def enabled_profiles(self) -> list[str]:
         """Return docker compose profile names for enabled containers."""
         profiles = []
-        for field_name in ["wazuh", "victim", "kali", "reverse"]:
+        for field_name in [
+            "wazuh", "victim", "kali", "reverse",
+            "enterprise", "soc", "mail", "fileshare", "dns",
+        ]:
             if getattr(self, field_name):
                 profiles.append(field_name)
         return profiles

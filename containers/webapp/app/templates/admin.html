@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Admin - TechVault{% endblock %}
+{% block content %}
+<h2>Administration Panel</h2>
+
+<h3>User Management</h3>
+<table class="data-table">
+    <thead>
+        <tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Active</th><th>Last Login</th></tr>
+    </thead>
+    <tbody>
+    {% for u in users %}
+        <tr>
+            <td>{{ u[0] }}</td>
+            <td>{{ u[1] }}</td>
+            <td>{{ u[2] }}</td>
+            <td>{{ u[3] }}</td>
+            <td>{{ u[4] }}</td>
+            <td>{{ u[5] or 'Never' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h3>Backup Configuration</h3>
+<table class="data-table">
+    <thead>
+        <tr><th>Type</th><th>S3 Bucket</th><th>Access Key</th><th>Secret Key</th><th>Schedule</th><th>Active</th></tr>
+    </thead>
+    <tbody>
+    {% for b in backups %}
+        <tr>
+            <td>{{ b[1] }}</td>
+            <td>{{ b[2] }}</td>
+            <td>{{ b[3] }}</td>
+            <td>{{ b[4] }}</td>
+            <td>{{ b[5] }}</td>
+            <td>{{ b[7] }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

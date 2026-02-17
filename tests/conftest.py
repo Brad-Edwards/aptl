@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
 
 
 @pytest.fixture
@@ -70,3 +71,51 @@ def mock_docker_client(mocker, mock_container):
     mock_client.containers.get.return_value = mock_container
     mocker.patch("aptl.core.lab.docker_client", return_value=mock_client)
     return mock_client
+
+
+# ---------------------------------------------------------------------------
+# Scenario fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sample_scenario_dict() -> dict:
+    """Minimal valid scenario as a dictionary."""
+    return {
+        "metadata": {
+            "id": "test-scenario",
+            "name": "Test Scenario",
+            "description": "A test scenario for unit tests",
+            "difficulty": "beginner",
+            "estimated_minutes": 10,
+        },
+        "mode": "red",
+        "containers": {"required": ["kali", "victim"]},
+        "objectives": {
+            "red": [
+                {
+                    "id": "test-obj",
+                    "description": "A test objective",
+                    "type": "manual",
+                    "points": 100,
+                }
+            ],
+            "blue": [],
+        },
+    }
+
+
+@pytest.fixture
+def sample_scenario_yaml(tmp_path: Path, sample_scenario_dict: dict) -> Path:
+    """Write a valid scenario YAML file and return its path."""
+    path = tmp_path / "test-scenario.yaml"
+    path.write_text(yaml.dump(sample_scenario_dict, default_flow_style=False))
+    return path
+
+
+@pytest.fixture
+def aptl_state_dir(tmp_path: Path) -> Path:
+    """Provide a temporary .aptl/ state directory."""
+    state_dir = tmp_path / ".aptl"
+    state_dir.mkdir()
+    return state_dir

@@ -1,0 +1,46 @@
+# APTL Lab Custom Suricata Rules
+
+# Detect nmap SYN scans
+alert tcp any any -> $HOME_NET any (msg:"APTL Nmap SYN Scan Detected"; flags:S; threshold: type threshold, track by_src, count 20, seconds 5; classtype:attempted-recon; sid:1000001; rev:1;)
+
+# Detect nmap service version detection
+alert tcp any any -> $HOME_NET any (msg:"APTL Nmap Service Probe Detected"; content:"NMAP"; nocase; classtype:attempted-recon; sid:1000002; rev:1;)
+
+# Detect SQL injection attempts in HTTP
+alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL SQL Injection Attempt - UNION SELECT"; content:"UNION"; nocase; content:"SELECT"; nocase; distance:0; within:20; classtype:web-application-attack; sid:1000010; rev:1;)
+
+alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL SQL Injection Attempt - OR 1=1"; content:"OR"; nocase; content:"1=1"; distance:0; within:10; classtype:web-application-attack; sid:1000011; rev:1;)
+
+alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL SQL Injection Attempt - Single Quote"; content:"'"; content:"--"; distance:0; within:50; classtype:web-application-attack; sid:1000012; rev:1;)
+
+# Detect XSS attempts
+alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL XSS Attempt - Script Tag"; content:"<script"; nocase; classtype:web-application-attack; sid:1000020; rev:1;)
+
+# Detect command injection
+alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL Command Injection Attempt - Pipe"; content:"|"; content:"/bin/"; distance:0; within:20; classtype:web-application-attack; sid:1000030; rev:1;)
+
+alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL Command Injection Attempt - Semicolon"; content:";"; content:"cat "; distance:0; within:30; classtype:web-application-attack; sid:1000031; rev:1;)
+
+# Detect Kerberoasting (TGS-REQ for specific SPNs)
+alert tcp any any -> $INTERNAL_NET 88 (msg:"APTL Potential Kerberoasting - Multiple TGS Requests"; threshold: type threshold, track by_src, count 5, seconds 30; classtype:credential-theft; sid:1000040; rev:1;)
+
+# Detect SMB brute force
+alert tcp any any -> $INTERNAL_NET 445 (msg:"APTL SMB Brute Force Attempt"; threshold: type threshold, track by_src, count 10, seconds 60; classtype:attempted-admin; sid:1000050; rev:1;)
+
+# Detect DNS tunneling (high volume of TXT queries)
+alert dns any any -> any any (msg:"APTL Potential DNS Tunneling - Excessive TXT Queries"; dns.query; content:"."; threshold: type threshold, track by_src, count 50, seconds 60; classtype:policy-violation; sid:1000060; rev:1;)
+
+# Detect data exfiltration via DNS (long subdomain names)
+alert dns any any -> any any (msg:"APTL Potential DNS Exfiltration - Long Query Name"; dns.query; pcre:"/^[a-zA-Z0-9]{30,}\./"; classtype:policy-violation; sid:1000061; rev:1;)
+
+# Detect lateral movement via SSH from DMZ to internal
+alert tcp $DMZ_NET any -> $INTERNAL_NET 22 (msg:"APTL Lateral Movement - SSH from DMZ to Internal"; classtype:policy-violation; sid:1000070; rev:1;)
+
+# Detect LDAP enumeration
+alert tcp any any -> $INTERNAL_NET 389 (msg:"APTL LDAP Enumeration Detected"; threshold: type threshold, track by_src, count 20, seconds 30; classtype:attempted-recon; sid:1000080; rev:1;)
+
+# Detect reverse shell (outbound connections to uncommon ports)
+alert tcp $HOME_NET any -> !$HOME_NET [4444,4445,4446,5555,6666,7777,8888,9999] (msg:"APTL Potential Reverse Shell - Outbound to Common C2 Port"; classtype:trojan-activity; sid:1000090; rev:1;)
+
+# Detect Metasploit default payloads
+alert tcp any any -> $HOME_NET any (msg:"APTL Metasploit Meterpreter Detected"; content:"|00 00 00|"; depth:4; content:"metsrv"; classtype:trojan-activity; sid:1000091; rev:1;)

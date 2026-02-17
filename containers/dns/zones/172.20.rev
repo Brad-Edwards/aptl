@@ -1,0 +1,30 @@
+$TTL 86400
+@   IN  SOA ns1.techvault.local. admin.techvault.local. (
+        2024010101  ; Serial
+        3600        ; Refresh
+        900         ; Retry
+        604800      ; Expire
+        86400       ; Minimum TTL
+)
+
+@       IN  NS  ns1.techvault.local.
+
+; Security stack (172.20.0.x)
+10.0    IN  PTR wazuh.techvault.local.
+11.0    IN  PTR dashboard.techvault.local.
+12.0    IN  PTR indexer.techvault.local.
+15.0    IN  PTR suricata.techvault.local.
+16.0    IN  PTR misp.techvault.local.
+18.0    IN  PTR thehive.techvault.local.
+20.0    IN  PTR shuffle.techvault.local.
+
+; DMZ (172.20.1.x)
+20.1    IN  PTR webapp.techvault.local.
+21.1    IN  PTR mail.techvault.local.
+22.1    IN  PTR ns1.techvault.local.
+
+; Internal (172.20.2.x)
+10.2    IN  PTR dc.techvault.local.
+11.2    IN  PTR db.techvault.local.
+12.2    IN  PTR files.techvault.local.
+20.2    IN  PTR app.techvault.local.

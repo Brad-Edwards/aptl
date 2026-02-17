@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - TechVault{% endblock %}
+{% block content %}
+<h2>Welcome, {{ username }}</h2>
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>Customers</h3>
+        <div class="stat-value">{{ customer_count }}</div>
+    </div>
+    <div class="stat-card">
+        <h3>Your Files</h3>
+        <div class="stat-value">{{ file_count }}</div>
+    </div>
+    <div class="stat-card">
+        <h3>Role</h3>
+        <div class="stat-value">{{ role }}</div>
+    </div>
+</div>
+
+<h3>Recent Activity</h3>
+<div class="comments-section">
+    {% for comment in comments %}
+    <div class="comment">
+        <div class="comment-content">{{ comment[0] | safe }}</div>
+        <div class="comment-meta">on {{ comment[1] }} at {{ comment[2] }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<h3>Add Comment</h3>
+<form method="POST" action="{{ url_for('add_comment') }}">
+    <input type="hidden" name="page" value="/dashboard">
+    <div class="form-group">
+        <textarea name="content" rows="3" placeholder="Write a comment..."></textarea>
+    </div>
+    <button type="submit" class="btn-primary">Post</button>
+</form>
+{% endblock %}

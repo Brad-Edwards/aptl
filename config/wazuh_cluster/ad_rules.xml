@@ -1,0 +1,94 @@
+<!-- Active Directory Detection Rules for APTL Lab -->
+<group name="aptl,ad,authentication,">
+
+  <!-- AD Authentication Events -->
+  <rule id="301000" level="3">
+    <decoded_as>samba</decoded_as>
+    <description>Samba AD authentication event</description>
+    <group>ad,authentication,</group>
+  </rule>
+
+  <!-- Failed AD login -->
+  <rule id="301001" level="5">
+    <if_sid>301000</if_sid>
+    <match>Authentication for user</match>
+    <match>FAILED</match>
+    <description>AD login failure: $(srcuser)</description>
+    <group>ad,authentication_failed,</group>
+  </rule>
+
+  <!-- Brute force against AD (5+ failures in 2 min) -->
+  <rule id="301002" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>301001</if_matched_sid>
+    <same_source_ip/>
+    <description>AD brute force attack detected from $(srcip)</description>
+    <group>ad,authentication_failed,brute_force,</group>
+  </rule>
+
+  <!-- Kerberos TGS request (potential Kerberoasting) -->
+  <rule id="301010" level="3">
+    <decoded_as>samba</decoded_as>
+    <match>TGS-REQ</match>
+    <description>Kerberos TGS request</description>
+    <group>ad,kerberos,</group>
+  </rule>
+
+  <!-- Multiple TGS requests (Kerberoasting indicator) -->
+  <rule id="301011" level="10" frequency="5" timeframe="60">
+    <if_matched_sid>301010</if_matched_sid>
+    <same_source_ip/>
+    <description>Potential Kerberoasting: multiple TGS requests from $(srcip)</description>
+    <group>ad,kerberos,kerberoasting,</group>
+  </rule>
+
+  <!-- LDAP enumeration -->
+  <rule id="301020" level="3">
+    <decoded_as>samba</decoded_as>
+    <match>LDAP search</match>
+    <description>LDAP search query</description>
+    <group>ad,ldap,</group>
+  </rule>
+
+  <!-- Excessive LDAP queries (enumeration) -->
+  <rule id="301021" level="8" frequency="20" timeframe="60">
+    <if_matched_sid>301020</if_matched_sid>
+    <same_source_ip/>
+    <description>LDAP enumeration detected from $(srcip)</description>
+    <group>ad,ldap,enumeration,</group>
+  </rule>
+
+  <!-- Domain Admin group modification -->
+  <rule id="301030" level="12">
+    <decoded_as>samba</decoded_as>
+    <match>Domain Admins</match>
+    <match>added</match>
+    <description>User added to Domain Admins group</description>
+    <group>ad,privilege_escalation,</group>
+  </rule>
+
+  <!-- New user created -->
+  <rule id="301031" level="5">
+    <decoded_as>samba</decoded_as>
+    <match>user create</match>
+    <description>New AD user account created</description>
+    <group>ad,account_change,</group>
+  </rule>
+
+  <!-- Service account login (unusual) -->
+  <rule id="301040" level="6">
+    <decoded_as>samba</decoded_as>
+    <match>Authentication for user svc-</match>
+    <match>succeeded</match>
+    <description>Service account interactive login: $(srcuser)</description>
+    <group>ad,authentication,service_account,</group>
+  </rule>
+
+  <!-- Password change event -->
+  <rule id="301050" level="4">
+    <decoded_as>samba</decoded_as>
+    <match>password changed</match>
+    <description>AD password changed for $(srcuser)</description>
+    <group>ad,account_change,password,</group>
+  </rule>
+
+</group>

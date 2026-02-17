@@ -1,0 +1,85 @@
+metadata:
+  id: recon-nmap-scan
+  name: "Network Reconnaissance: Nmap Service Scan"
+  description: >
+    Perform network reconnaissance against the victim machine using Nmap.
+    Discover running services and their versions. This is a beginner-level
+    exercise covering the first phase of a penetration test.
+  version: "1.0.0"
+  author: "APTL"
+  difficulty: beginner
+  estimated_minutes: 15
+  tags:
+    - reconnaissance
+    - nmap
+    - network-scanning
+  mitre_attack:
+    tactics:
+      - TA0043
+    techniques:
+      - T1046
+
+mode: red
+
+containers:
+  required:
+    - kali
+    - victim
+    - wazuh
+
+preconditions:
+  - type: file
+    container: victim
+    path: /var/www/html/flag.txt
+    content: "FLAG{recon_complete_42}"
+    description: "Plant flag for discovery"
+
+objectives:
+  red:
+    - id: port-scan
+      description: "Discover all open TCP ports on the victim (172.20.0.20)"
+      type: manual
+      points: 50
+      hints:
+        - level: 1
+          text: "Use nmap to scan the target IP"
+          point_penalty: 10
+        - level: 2
+          text: "Try: nmap -sV 172.20.0.20"
+          point_penalty: 25
+
+    - id: service-identification
+      description: "Identify the version of the SSH service running on the victim"
+      type: manual
+      points: 50
+      hints:
+        - level: 1
+          text: "Use the -sV flag with nmap for version detection"
+          point_penalty: 10
+
+    - id: find-flag
+      description: "Locate and read the flag hidden on the victim's web server"
+      type: command_output
+      points: 100
+      command_output:
+        container: kali
+        command: "cat /tmp/captured-flag.txt"
+        contains:
+          - "FLAG{recon_complete_42}"
+      hints:
+        - level: 1
+          text: "The flag is on a web server. What port do web servers typically use?"
+          point_penalty: 15
+        - level: 2
+          text: "Try: curl http://172.20.0.20/flag.txt"
+          point_penalty: 30
+
+  blue: []
+
+scoring:
+  time_bonus:
+    enabled: true
+    max_bonus: 50
+    decay_after_minutes: 10
+  passing_score: 100
+  max_score: 250

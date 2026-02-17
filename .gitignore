@@ -2,6 +2,9 @@
 lab_connections.txt
 *.log
 
+# Scenario runtime state
+.aptl/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

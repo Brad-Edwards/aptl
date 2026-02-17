@@ -1,0 +1,82 @@
+metadata:
+  id: detect-brute-force
+  name: "Blue Team: Detect SSH Brute Force"
+  description: >
+    A brute force SSH attack is occurring against the victim machine.
+    Your task is to detect the attack using Wazuh alerts and create a
+    custom detection rule for enhanced monitoring.
+  version: "1.0.0"
+  author: "APTL"
+  difficulty: intermediate
+  estimated_minutes: 30
+  tags:
+    - detection
+    - brute-force
+    - ssh
+    - wazuh-rules
+  mitre_attack:
+    tactics:
+      - TA0006
+    techniques:
+      - T1110.001
+
+mode: purple
+
+containers:
+  required:
+    - kali
+    - victim
+    - wazuh
+
+preconditions: []
+
+objectives:
+  red:
+    - id: brute-force-ssh
+      description: "Execute an SSH brute force attack against the victim"
+      type: manual
+      points: 50
+      hints:
+        - level: 1
+          text: "Use hydra to attempt SSH login with common credentials"
+          point_penalty: 10
+        - level: 2
+          text: "Try: hydra -l labadmin -P /usr/share/wordlists/rockyou.txt ssh://172.20.0.20"
+          point_penalty: 25
+
+  blue:
+    - id: detect-auth-failures
+      description: "Confirm that Wazuh is generating alerts for failed SSH logins"
+      type: wazuh_alert
+      points: 75
+      wazuh_alert:
+        query:
+          bool:
+            must:
+              - match:
+                  rule.groups: authentication_failed
+              - match:
+                  agent.ip: "172.20.0.20"
+        min_matches: 5
+        time_window_seconds: 600
+      hints:
+        - level: 1
+          text: "Check the Wazuh Dashboard for authentication alerts"
+          point_penalty: 15
+
+    - id: identify-attacker-ip
+      description: "Identify the source IP address of the brute force attack"
+      type: manual
+      points: 75
+      hints:
+        - level: 1
+          text: "Look at the srcip field in Wazuh alerts"
+          point_penalty: 15
+
+scoring:
+  time_bonus:
+    enabled: true
+    max_bonus: 50
+    decay_after_minutes: 20
+  passing_score: 150
+  max_score: 250

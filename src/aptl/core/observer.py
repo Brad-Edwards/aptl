@@ -12,7 +12,6 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
 
 from aptl.core.objectives import ObjectiveResult, ObjectiveStatus
 from aptl.core.scenarios import ObserverError, WazuhAlertValidation

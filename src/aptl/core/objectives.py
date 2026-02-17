@@ -6,6 +6,8 @@ objectives always return PENDING, wazuh_alert objectives query the
 Wazuh Indexer, and command_output/file_exists objectives use docker exec.
 """
 
+from __future__ import annotations
+
 import re
 import shlex
 import subprocess
@@ -13,9 +15,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aptl.core.observer import WazuhConnection
+    from aptl.core.scenarios import Objective
 
 log = get_logger("objectives")
 
@@ -102,8 +108,8 @@ def _check_manual(objective_id: str) -> ObjectiveResult:
 
 def _check_wazuh_alert(
     objective_id: str,
-    objective: "Objective",
-    wazuh_conn: "Optional[WazuhConnection]",
+    objective: Objective,
+    wazuh_conn: WazuhConnection | None,
     scenario_start_time: str,
 ) -> ObjectiveResult:
     """Check a wazuh_alert objective via the Wazuh Indexer.
@@ -129,7 +135,7 @@ def _check_wazuh_alert(
 
 def _check_command_output(
     objective_id: str,
-    objective: "Objective",
+    objective: Objective,
 ) -> ObjectiveResult:
     """Check a command_output objective via docker exec."""
     validation = objective.command_output
@@ -179,7 +185,7 @@ def _check_command_output(
 
 def _check_file_exists(
     objective_id: str,
-    objective: "Objective",
+    objective: Objective,
 ) -> ObjectiveResult:
     """Check a file_exists objective via docker exec."""
     validation = objective.file_exists
@@ -230,11 +236,11 @@ def _check_file_exists(
 
 
 def evaluate_objective(
-    objective: "Objective",
+    objective: Objective,
     *,
-    wazuh_conn: "Optional[WazuhConnection]" = None,
+    wazuh_conn: WazuhConnection | None = None,
     scenario_start_time: str = "",
-    project_dir: Optional[Path] = None,
+    project_dir: Path | None = None,
 ) -> ObjectiveResult:
     """Evaluate a single objective.
 
@@ -295,12 +301,12 @@ def evaluate_objective(
 
 
 def evaluate_all(
-    objectives: "list[Objective]",
+    objectives: list[Objective],
     *,
-    wazuh_conn: "Optional[WazuhConnection]" = None,
+    wazuh_conn: WazuhConnection | None = None,
     scenario_start_time: str = "",
-    project_dir: Optional[Path] = None,
-    completed_ids: Optional[set[str]] = None,
+    project_dir: Path | None = None,
+    completed_ids: set[str] | None = None,
 ) -> EvaluationResult:
     """Evaluate all objectives, skipping already-completed ones.
 

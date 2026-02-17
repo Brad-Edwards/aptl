@@ -8,8 +8,9 @@ from rich.console import Console
 from rich.table import Table
 
 from aptl.core.events import EventLog, EventType, make_event
-from aptl.core.objectives import ObjectiveStatus, evaluate_all
+from aptl.core.objectives import EvaluationResult, ObjectiveStatus, evaluate_all
 from aptl.core.scenarios import (
+    Objective,
     ObjectiveType,
     ScenarioDefinition,
     ScenarioNotFoundError,
@@ -130,7 +131,7 @@ def _load_active_scenario(
 def _find_objective(
     scenario: ScenarioDefinition,
     objective_id: str,
-) -> "Objective":
+) -> Objective:
     """Find an objective by ID or exit with an error.
 
     Returns:
@@ -149,7 +150,7 @@ def _find_objective(
 
 
 def _record_new_completions(
-    eval_result: "EvaluationResult",
+    eval_result: EvaluationResult,
     completed_ids: set[str],
     session_mgr: ScenarioSession,
     event_log: EventLog,

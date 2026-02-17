@@ -73,6 +73,57 @@ def _write_scenario(tmp_path: Path, scenario_id: str = "test-scenario") -> Path:
     return tmp_path
 
 
+def _write_mixed_scenario(tmp_path: Path) -> Path:
+    """Write a scenario with both manual and non-manual objectives."""
+    scenarios_dir = tmp_path / "scenarios"
+    scenarios_dir.mkdir(exist_ok=True)
+    data = {
+        "metadata": {
+            "id": "mixed-scenario",
+            "name": "Mixed Scenario",
+            "description": "Scenario with manual and command_output objectives",
+            "difficulty": "beginner",
+            "estimated_minutes": 10,
+        },
+        "mode": "red",
+        "containers": {"required": ["kali"]},
+        "objectives": {
+            "red": [
+                {
+                    "id": "manual-obj",
+                    "description": "Manual task",
+                    "type": "manual",
+                    "points": 50,
+                },
+                {
+                    "id": "auto-obj",
+                    "description": "Automated task",
+                    "type": "command_output",
+                    "points": 50,
+                    "command_output": {
+                        "container": "victim",
+                        "command": "echo ok",
+                        "contains": ["ok"],
+                    },
+                },
+            ],
+            "blue": [],
+        },
+        "scoring": {
+            "passing_score": 50,
+            "max_score": 100,
+            "time_bonus": {
+                "enabled": False,
+                "max_bonus": 0,
+                "decay_after_minutes": 10,
+            },
+        },
+    }
+    path = scenarios_dir / "mixed-scenario.yaml"
+    path.write_text(yaml.dump(data, default_flow_style=False))
+    return tmp_path
+
+
 def _start_session(project_dir: Path, scenario_id: str = "test-scenario") -> None:
     """Start a scenario session via the CLI."""
     result = runner.invoke(app, [
@@ -466,6 +517,22 @@ class TestCompleteCommand:
         ])
         assert result.exit_code == 1
         assert "not found" in result.output
+
+    def test_complete_rejects_non_manual_objective(self, tmp_path):
+        """Completing a command_output objective manually should be rejected."""
+        project_dir = _write_mixed_scenario(tmp_path)
+        runner.invoke(app, [
+            "start", "mixed-scenario",
+            "--project-dir", str(project_dir),
+        ])
+
+        result = runner.invoke(app, [
+            "complete", "auto-obj",
+            "--project-dir", str(project_dir),
+        ])
+        assert result.exit_code == 1
+        assert "command_output" in result.output
+        assert "not 'manual'" in result.output
 
 
 # ---------------------------------------------------------------------------

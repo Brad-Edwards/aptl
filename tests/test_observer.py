@@ -387,3 +387,47 @@ class TestCheckAlertObjective:
         )
 
         assert result.completed_at is not None
+
+    @patch("aptl.core.observer.query_wazuh_alerts")
+    def test_objective_id_set_on_completed(self, mock_query):
+        """objective_id should be set on the returned result."""
+        mock_query.return_value = [{"rule.id": "1000"}]
+
+        result = check_alert_objective(
+            _conn(),
+            _validation(),
+            "2026-02-16T14:30:00+00:00",
+            objective_id="wazuh-obj-1",
+        )
+
+        assert result.objective_id == "wazuh-obj-1"
+
+    @patch("aptl.core.observer.query_wazuh_alerts")
+    def test_objective_id_set_on_pending(self, mock_query):
+        """objective_id should be set even when result is PENDING."""
+        mock_query.return_value = []
+
+        result = check_alert_objective(
+            _conn(),
+            _validation(min_matches=5),
+            "2026-02-16T14:30:00+00:00",
+            objective_id="wazuh-obj-2",
+        )
+
+        assert result.objective_id == "wazuh-obj-2"
+        assert result.status == ObjectiveStatus.PENDING
+
+    @patch("aptl.core.observer.query_wazuh_alerts")
+    def test_objective_id_set_on_failure(self, mock_query):
+        """objective_id should be set even when the query fails."""
+        mock_query.side_effect = ObserverError("Connection refused")
+
+        result = check_alert_objective(
+            _conn(),
+            _validation(),
+            "2026-02-16T14:30:00+00:00",
+            objective_id="wazuh-obj-3",
+        )
+
+        assert result.objective_id == "wazuh-obj-3"
+        assert result.status == ObjectiveStatus.PENDING

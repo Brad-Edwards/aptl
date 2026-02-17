@@ -141,6 +141,7 @@ def check_alert_objective(
     conn: WazuhConnection,
     validation: WazuhAlertValidation,
     scenario_start_time: str,
+    objective_id: str = "",
 ) -> ObjectiveResult:
     """Check if a wazuh_alert objective has been satisfied.
 
@@ -152,6 +153,7 @@ def check_alert_objective(
         conn: Wazuh connection parameters.
         validation: The objective's WazuhAlertValidation config.
         scenario_start_time: ISO 8601 timestamp of scenario start.
+        objective_id: ID of the objective being checked.
 
     Returns:
         ObjectiveResult with COMPLETED or PENDING status.
@@ -182,16 +184,19 @@ def check_alert_objective(
             size=validation.min_matches,
         )
     except ObserverError:
-        log.warning("Wazuh alert check failed, treating as pending")
+        log.warning(
+            "Wazuh alert check failed for objective '%s', treating as pending",
+            objective_id,
+        )
         return ObjectiveResult(
-            objective_id="",
+            objective_id=objective_id,
             status=ObjectiveStatus.PENDING,
             details="Wazuh query failed",
         )
 
     if len(hits) >= validation.min_matches:
         return ObjectiveResult(
-            objective_id="",
+            objective_id=objective_id,
             status=ObjectiveStatus.COMPLETED,
             points_awarded=0,
             details=f"Matched {len(hits)} alerts (required: {validation.min_matches})",
@@ -199,7 +204,7 @@ def check_alert_objective(
         )
 
     return ObjectiveResult(
-        objective_id="",
+        objective_id=objective_id,
         status=ObjectiveStatus.PENDING,
         details=f"Matched {len(hits)} of {validation.min_matches} required alerts",
     )

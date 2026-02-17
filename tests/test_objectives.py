@@ -376,6 +376,27 @@ class TestEvaluateObjective:
 
         assert result.status == ObjectiveStatus.COMPLETED
 
+    def test_wazuh_alert_missing_config_rejected_by_schema(self):
+        """Pydantic should reject wazuh_alert type without wazuh_alert config."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        with pytest.raises(PydanticValidationError, match="wazuh_alert"):
+            _obj(obj_type=ObjectiveType.WAZUH_ALERT)
+
+    def test_command_output_missing_config_rejected_by_schema(self):
+        """Pydantic should reject command_output type without command_output config."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        with pytest.raises(PydanticValidationError, match="command_output"):
+            _obj(obj_type=ObjectiveType.COMMAND_OUTPUT)
+
+    def test_file_exists_missing_config_rejected_by_schema(self):
+        """Pydantic should reject file_exists type without file_exists config."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        with pytest.raises(PydanticValidationError, match="file_exists"):
+            _obj(obj_type=ObjectiveType.FILE_EXISTS)
+
 
 # ---------------------------------------------------------------------------
 # evaluate_all

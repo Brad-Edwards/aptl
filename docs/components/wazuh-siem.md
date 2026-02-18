@@ -115,12 +115,9 @@ Emergency      → 100607     → Level 15
 
 ## MCP Integration
 
-**Blue Team MCP Server:**
-- Query alerts and logs via APIs
-- Create custom detection rules
-- Get SIEM status and configuration
+The Blue Team MCP server (`mcp/mcp-wazuh`) enables AI agents to query alerts, search logs, and create detection rules via the Wazuh Manager and Indexer APIs.
 
-See [Wazuh Blue Team](wazuh-blueteam.md) for MCP integration details.
+See [MCP Integration](mcp-integration.md) for setup and tool details.
 
 
 ## Troubleshooting

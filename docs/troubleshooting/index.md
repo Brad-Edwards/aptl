@@ -3,17 +3,16 @@
 ## Quick Checks
 
 ```bash
-# Container status
-docker compose ps
+# Container status (CLI)
+aptl lab status
 
-# Service logs  
+# Container status (manual - profile flags required)
+docker compose --profile wazuh --profile victim --profile kali ps
+
+# Service logs
 docker compose logs wazuh.manager
 docker compose logs victim
 docker compose logs kali
-
-# Network connectivity
-docker exec aptl-kali ping 172.20.0.20
-docker exec aptl-victim ping 172.20.0.10
 ```
 
 ## Common Issues
@@ -114,9 +113,9 @@ ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "echo test"
 
 ### Complete reset
 ```bash
-docker compose down -v
+docker compose --profile wazuh --profile victim --profile kali down -v
 docker system prune -f
-./start-lab.sh
+aptl lab start
 ```
 
 ### Service reset
@@ -130,9 +129,9 @@ docker compose up -d [service_name]
 
 ### Clean rebuild
 ```bash
-docker compose down
+docker compose --profile wazuh --profile victim --profile kali down
 docker system prune -f
-docker compose up --build -d
+docker compose --profile wazuh --profile victim --profile kali up --build -d
 ```
 
 ## Platform Issues

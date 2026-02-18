@@ -7,7 +7,7 @@ The victim container serves as a target system for red team activities and secur
 - **Base Image**: rockylinux:9
 - **User**: `labadmin` with sudo privileges (NOPASSWD)
 - **SSH**: Key-based authentication only (port 22, mapped to host 2022)
-- **IP Address**: 172.20.0.20
+- **IP Address**: 172.20.2.20 (aptl-internal network)
 
 See [containers/victim/Dockerfile](../../containers/victim/Dockerfile) for complete build configuration.
 
@@ -45,9 +45,9 @@ Falco events are written to `/var/log/falco_events.json` and forwarded to Wazuh 
 
 ## Network Configuration
 
-- **Internal IP**: 172.20.0.20 (static)
+- **Internal IP**: 172.20.2.20 (aptl-internal network)
 - **SSH Port**: 22 (host port 2022)
-- **Network**: aptl_aptl-network (Docker bridge)
+- **Network**: aptl-internal (Docker bridge, 172.20.2.0/24)
 
 ## Access Methods
 

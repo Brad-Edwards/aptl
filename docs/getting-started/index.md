@@ -5,40 +5,34 @@
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
-./start-lab.sh
+pip install -e .
+aptl lab start
 ```
 
-Use the script. It handles SSH keys, SSL certificates, system requirements, and container startup.
+Alternative: `./start-lab.sh`
 
-**Note**: First run requires sudo password for SSL certificate permissions.
+Both handle SSH keys, SSL certificates, system requirements, MCP builds, and container startup. First run takes 5-10 minutes.
 
-## Lab Components
+## Access
 
 | Component | Access | Credentials |
 |-----------|--------|-------------|
-| Wazuh Dashboard | <https://localhost:443> | admin / SecretPassword |
+| Wazuh Dashboard | https://localhost:443 | admin / SecretPassword |
 | Victim (target) | SSH port 2022 | labadmin / aptl_lab_key |
 | Kali (attacker) | SSH port 2023 | kali / aptl_lab_key |
-
-## Network
-
-Isolated Docker network: `172.20.0.0/16`
-
-- `172.20.0.10` - Wazuh Manager
-- `172.20.0.11` - Wazuh Dashboard  
-- `172.20.0.12` - Wazuh Indexer
-- `172.20.0.20` - Victim
-- `172.20.0.30` - Kali
+| Reverse engineering | SSH port 2027 | labadmin / aptl_lab_key |
 
 ## Prerequisites
 
 - Docker with Compose
+- Python 3.11+ (for CLI)
 - 8GB+ RAM
 - Linux/WSL2: `vm.max_map_count >= 262144`
 
-Check [prerequisites.md](prerequisites.md) for details.
+See [Prerequisites](prerequisites.md) for details.
 
 ## Next Steps
 
-- [Installation](installation.md) - Manual deployment steps
-- [Quick Start](quick-start.md) - Basic operations
+- [Prerequisites](prerequisites.md) — System requirements
+- [Installation](installation.md) — Manual deployment steps
+- [Quick Start](quick-start.md) — Basic operations and testing

@@ -13,7 +13,7 @@ See [containers/reverse/Dockerfile](../../containers/reverse/Dockerfile) for com
 
 ## Network Access
 
-- **Container IP**: 172.20.0.27
+- **Container IP**: 172.20.0.27 (aptl-security network)
 - **SSH Access**: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`
 
 ## MCP Integration

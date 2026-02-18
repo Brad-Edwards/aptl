@@ -1,6 +1,6 @@
 # MCP Integration
 
-AI agents control lab containers via Model Context Protocol servers.
+AI agents control lab containers and SIEM via [Model Context Protocol](https://modelcontextprotocol.io/) servers.
 
 ## Architecture
 
@@ -9,53 +9,97 @@ flowchart TD
     A[AI Agent] --> B[MCP Client]
     B --> C[Red Team MCP]
     B --> D[Blue Team MCP]
+    B --> E[Reverse MCP]
 
-    C --> G[Kali Container<br/>172.20.0.30]
-    D --> H[Wazuh Manager API<br/>172.20.0.10:55000]
-    D --> I[Wazuh Indexer API<br/>172.20.0.12:9200]
-
-    G --> L[Security Tools<br/>nmap, hydra, etc]
-    H --> M[Alerts & Rules]
-    I --> N[Log Search]
+    C --> G[Kali Container<br/>SSH]
+    D --> H[Wazuh Manager API<br/>port 55000]
+    D --> I[Wazuh Indexer API<br/>port 9200]
+    E --> J[Reverse Container<br/>SSH]
 ```
 
 ## Common Library
 
-All SSH-based MCPs use `aptl-mcp-common` for session management, connection pooling, and configuration loading.
+All MCP servers use `aptl-mcp-common` for SSH session management, connection pooling, and tool generation. Tool names are auto-generated from a prefix defined in each server's `docker-lab-config.json`.
 
 ## MCP Servers
 
-**Red Team MCP** (`/mcp-red`):
+| Server | Directory | Tool Prefix | Connection |
+|--------|-----------|-------------|------------|
+| Red Team (Kali) | `mcp/mcp-red` | `kali_*` | SSH to Kali container |
+| Blue Team (Wazuh) | `mcp/mcp-wazuh` | `wazuh_*` | Wazuh Manager + Indexer APIs |
+| Reverse Engineering | `mcp/mcp-reverse` | `reverse_*` | SSH to reverse container |
+| Threat Intel | `mcp/mcp-threatintel` | `threatintel_*` | MISP API |
+| Case Management | `mcp/mcp-casemgmt` | `casemgmt_*` | TheHive API |
+| SOAR | `mcp/mcp-soar` | `soar_*` | Shuffle API |
+| Network IDS | `mcp/mcp-network` | `network_*` | Suricata |
+| Windows RE | `mcp/mcp-windows-re` | `windowsre_*` | Windows RE container |
 
-- SSH access to Kali container
-- Tools: `kali_info`, `run_command`
-- Target: 172.20.0.30
+### SSH-Based Tool Pattern (Red, Reverse)
 
-**Blue Team MCP** (`/mcp-wazuh`):
+SSH-based servers auto-generate these tools from their prefix:
 
-- Wazuh SIEM API access
-- Tools: Alert queries, log search, rule creation
-- APIs: Manager (55000), Indexer (9200)
+| Tool | Description |
+|------|-------------|
+| `{prefix}_info` | Container and network info |
+| `{prefix}_run_command` | Execute a single command |
+| `{prefix}_interactive_session` | Start an interactive session |
+| `{prefix}_background_session` | Start a background session |
+| `{prefix}_session_command` | Run command in existing session |
+| `{prefix}_list_sessions` | List active sessions |
+| `{prefix}_close_session` | Close a session |
+| `{prefix}_get_session_output` | Get session output |
+| `{prefix}_close_all_sessions` | Close all sessions |
 
-## Setup
+### API-Based Tool Pattern (Wazuh)
 
-Build MCP servers and configure your AI client to connect.
+| Tool | Description |
+|------|-------------|
+| `wazuh_api_call` | Generic API call to Wazuh |
+| `wazuh_api_info` | API endpoint info |
+| `wazuh_query_alerts` | Search processed alerts (Elasticsearch) |
+| `wazuh_query_logs` | Search raw logs (Elasticsearch) |
+| `wazuh_create_detection_rule` | Create custom detection rules |
 
-See implementation details:
+## Build
 
-- [Red Team MCP](../../mcp/mcp-red/README.md)
-- [Blue Team MCP](../../mcp/mcp-wazuh/README.md)
+MCP servers are built automatically by `aptl lab start`. To build manually:
 
-## Usage
+```bash
+./mcp/build-all-mcps.sh
+```
 
-**Red Team:**
+Or build individually:
 
-- Display lab network information
-- Execute commands on Kali container
+```bash
+cd mcp/mcp-red && npm install && npm run build
+```
 
-**Blue Team:**
+## AI Client Configuration
 
-- Query security alerts
-- Search historical logs
-- Create detection rules
-- Get SIEM status
+Configure your MCP client to connect to built servers. Example for Cursor (`.cursor/mcp.json`):
+
+```json
+{
+    "mcpServers": {
+        "aptl-red": {
+            "command": "node",
+            "args": ["./mcp/mcp-red/build/index.js"],
+            "cwd": "/path/to/aptl"
+        },
+        "aptl-wazuh": {
+            "command": "node",
+            "args": ["./mcp/mcp-wazuh/build/index.js"],
+            "cwd": "/path/to/aptl"
+        }
+    }
+}
+```
+
+Add additional servers (`mcp-reverse`, `mcp-threatintel`, etc.) as needed.
+
+## Testing
+
+```bash
+cd mcp/mcp-red
+npx @modelcontextprotocol/inspector build/index.js
+```

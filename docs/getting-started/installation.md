@@ -9,7 +9,7 @@ pip install -e .
 aptl lab start
 ```
 
-The CLI handles SSH keys, SSL certificates, system requirements, image pulling, container startup, service readiness checks, and connection info generation.
+The CLI handles SSH keys, SSL certificates, system requirements, image pulling, MCP builds, container startup, and service readiness checks.
 
 ## Bash Script (Alternative)
 
@@ -17,7 +17,7 @@ The CLI handles SSH keys, SSL certificates, system requirements, image pulling, 
 ./start-lab.sh
 ```
 
-The bash script performs the same steps as the CLI.
+Performs the same steps as the CLI.
 
 ## Manual Steps
 
@@ -28,19 +28,27 @@ If you need to run steps individually:
 3. Generate SSL certificates: `docker compose -f generate-indexer-certs.yml run --rm generator`
 4. Start lab: `docker compose --profile wazuh --profile victim --profile kali up --build -d`
 
+Profile flags are **required** for manual docker compose commands. Add more profiles as needed (e.g., `--profile reverse`).
+
 ## MCP Integration
 
-Build MCP servers for AI agent control:
+MCP servers are built automatically by `aptl lab start`. To build manually:
+
 ```bash
-cd mcp/mcp-red && npm install && npm run build && cd ../..
-cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
+./mcp/build-all-mcps.sh
 ```
 
-See [MCP Integration](../components/mcp-integration.md) for configuration details.
+See [MCP Integration](../components/mcp-integration.md) for AI client configuration.
 
 ## Verification
 
-Access lab components:
+```bash
+aptl lab status
+```
+
+Access:
+
 - Wazuh Dashboard: https://localhost:443 (admin/SecretPassword)
 - Victim SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022`
 - Kali SSH: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`
+- Reverse SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`

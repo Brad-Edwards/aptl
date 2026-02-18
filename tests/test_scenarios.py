@@ -587,12 +587,13 @@ class TestObjectiveSet:
         )
         assert len(obj_set.all_objectives()) == 2
 
-    def test_rejects_empty_both_teams(self):
-        """ObjectiveSet with no objectives should fail validation."""
+    def test_empty_both_teams_is_allowed(self):
+        """ObjectiveSet with no objectives is allowed (validated at ScenarioDefinition level)."""
         from aptl.core.scenarios import ObjectiveSet
 
-        with pytest.raises(ValidationError, match="at least one"):
-            ObjectiveSet(red=[], blue=[])
+        obj_set = ObjectiveSet(red=[], blue=[])
+        assert len(obj_set.red) == 0
+        assert len(obj_set.blue) == 0
 
     def test_rejects_duplicate_ids_across_teams(self):
         """Objective IDs must be unique across red and blue."""
@@ -1147,3 +1148,178 @@ class TestFileExistsValidation:
             contains="SUCCESS",
         )
         assert val.contains == "SUCCESS"
+
+
+# ---------------------------------------------------------------------------
+# AttackStep validation
+# ---------------------------------------------------------------------------
+
+
+class TestAttackStep:
+    """Tests for the AttackStep model."""
+
+    def test_minimal(self):
+        """Minimal AttackStep with required fields should parse."""
+        from aptl.core.scenarios import AttackStep
+
+        step = AttackStep(
+            step_number=1,
+            technique_id="T1190",
+            technique_name="Exploit App",
+            tactic="Initial Access",
+            description="Exploit the app",
+            target="webapp",
+        )
+        assert step.step_number == 1
+        assert step.commands == []
+        assert step.expected_detections == []
+
+    def test_with_detections(self):
+        """AttackStep with OCSF expected detections should parse."""
+        from aptl.core.scenarios import AttackStep
+
+        step = AttackStep(
+            step_number=1,
+            technique_id="T1190",
+            technique_name="Exploit App",
+            tactic="Initial Access",
+            description="Exploit the app",
+            target="webapp",
+            expected_detections=[
+                {
+                    "product_name": "wazuh",
+                    "analytic_uid": "302010",
+                    "severity_id": 4,
+                    "description": "SQLi detected",
+                }
+            ],
+        )
+        assert len(step.expected_detections) == 1
+        assert step.expected_detections[0].product_name == "wazuh"
+
+    def test_rejects_step_number_zero(self):
+        """Step number must be >= 1."""
+        from aptl.core.scenarios import AttackStep
+
+        with pytest.raises(ValidationError, match="step_number"):
+            AttackStep(
+                step_number=0,
+                technique_id="T1190",
+                technique_name="Exploit",
+                tactic="Initial Access",
+                description="Desc",
+                target="webapp",
+            )
+
+
+# ---------------------------------------------------------------------------
+# ScenarioDefinition with steps
+# ---------------------------------------------------------------------------
+
+
+class TestScenarioDefinitionWithSteps:
+    """Tests for ScenarioDefinition with attack steps."""
+
+    def test_valid_steps_only(self, sample_scenario_with_steps_dict):
+        """A scenario with only steps (no objectives) should be valid."""
+        from aptl.core.scenarios import ScenarioDefinition
+
+        scenario = ScenarioDefinition(**sample_scenario_with_steps_dict)
+        assert len(scenario.steps) == 2
+        assert scenario.steps[0].technique_id == "T1595.002"
+        assert scenario.attack_chain == "Recon -> Exploit -> Exfil"
+
+    def test_valid_steps_and_objectives(self, sample_scenario_with_steps_dict):
+        """A scenario with both steps and objectives should be valid."""
+        from aptl.core.scenarios import ScenarioDefinition
+
+        data = dict(sample_scenario_with_steps_dict)
+        data["objectives"] = {
+            "red": [
+                {"id": "obj-r", "description": "Red", "type": "manual", "points": 50}
+            ],
+            "blue": [],
+        }
+        scenario = ScenarioDefinition(**data)
+        assert len(scenario.steps) == 2
+        assert len(scenario.objectives.red) == 1
+
+    def test_rejects_empty_no_steps_no_objectives(self):
+        """A scenario with neither steps nor objectives should fail."""
+        from aptl.core.scenarios import ScenarioDefinition
+
+        with pytest.raises(ValidationError, match="steps or objectives"):
+            ScenarioDefinition(
+                metadata={
+                    "id": "empty-test",
+                    "name": "Empty",
+                    "description": "No content",
+                    "difficulty": "beginner",
+                    "estimated_minutes": 10,
+                },
+                mode="purple",
+                containers={"required": ["kali"]},
+            )
+
+    def test_rejects_duplicate_step_numbers(self):
+        """Duplicate step numbers should fail validation."""
+        from aptl.core.scenarios import ScenarioDefinition
+
+        with pytest.raises(ValidationError, match="step numbers must be unique"):
+            ScenarioDefinition(
+                metadata={
+                    "id": "dup-steps",
+                    "name": "Duplicate Steps",
+                    "description": "Has duplicate step numbers",
+                    "difficulty": "beginner",
+                    "estimated_minutes": 10,
+                },
+                mode="purple",
+                containers={"required": ["kali"]},
+                steps=[
+                    {
+                        "step_number": 1,
+                        "technique_id": "T1001",
+                        "technique_name": "A",
+                        "tactic": "Recon",
+                        "description": "First",
+                        "target": "victim",
+                    },
+                    {
+                        "step_number": 1,
+                        "technique_id": "T1002",
+                        "technique_name": "B",
+                        "tactic": "Recon",
+                        "description": "Duplicate",
+                        "target": "victim",
+                    },
+                ],
+            )
+
+    def test_objectives_default_empty(self):
+        """When objectives is not provided, it defaults to empty ObjectiveSet."""
+        from aptl.core.scenarios import ScenarioDefinition
+
+        scenario = ScenarioDefinition(
+            metadata={
+                "id": "steps-only",
+                "name": "Steps Only",
+                "description": "Steps-only scenario",
+                "difficulty": "beginner",
+                "estimated_minutes": 10,
+            },
+            mode="purple",
+            containers={"required": ["kali"]},
+            steps=[
+                {
+                    "step_number": 1,
+                    "technique_id": "T1001",
+                    "technique_name": "Scan",
+                    "tactic": "Recon",
+                    "description": "Scan things",
+                    "target": "victim",
+                },
+            ],
+        )
+        assert len(scenario.objectives.red) == 0
+        assert len(scenario.objectives.blue) == 0

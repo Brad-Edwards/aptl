@@ -13,6 +13,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from aptl.core.config import AptlConfig
+from aptl.core.detection import ExpectedDetection
 from aptl.utils.logging import get_logger
 
 log = get_logger("scenarios")
@@ -316,13 +317,6 @@ class ObjectiveSet(BaseModel):
     blue: list[Objective] = []
 
     @model_validator(mode="after")
-    def validate_not_empty(self) -> "ObjectiveSet":
-        """Scenario must have at least one objective."""
-        if not self.red and not self.blue:
-            raise ValueError("Scenario must have at least one objective")
-        return self
-
-    @model_validator(mode="after")
     def validate_unique_ids(self) -> "ObjectiveSet":
         """Objective IDs must be unique across red and blue."""
         all_ids = [o.id for o in self.red] + [o.id for o in self.blue]
@@ -361,6 +355,24 @@ class ScoringConfig(BaseModel):
     max_score: int = Field(default=0, ge=0)
 
 
+class AttackStep(BaseModel):
+    """A single attack step combining technique info with expected detections."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step_number: int = Field(ge=1)
+    technique_id: str
+    technique_name: str
+    tactic: str
+    description: str
+    target: str
+    commands: list[str] = []
+    prerequisites: list[str] = []
+    expected_detections: list[ExpectedDetection] = []
+    investigation_hints: list[str] = []
+    remediation: list[str] = []
+
+
 class ScenarioDefinition(BaseModel):
     """Complete scenario definition loaded from a YAML file."""
 
@@ -370,12 +382,26 @@ class ScenarioDefinition(BaseModel):
     mode: ScenarioMode
     containers: ContainerRequirements
     preconditions: list[Precondition] = []
-    objectives: ObjectiveSet
+    objectives: ObjectiveSet = Field(default_factory=lambda: ObjectiveSet(red=[], blue=[]))
     scoring: ScoringConfig = ScoringConfig()
+    attack_chain: str = ""
+    steps: list[AttackStep] = []
+
+    @model_validator(mode="after")
+    def validate_has_content(self) -> "ScenarioDefinition":
+        """Scenario must have steps or objectives (or both)."""
+        has_steps = bool(self.steps)
+        has_objectives = bool(self.objectives.red or self.objectives.blue)
+        if not has_steps and not has_objectives:
+            raise ValueError("Scenario must have steps or objectives (or both)")
+        return self
 
     @model_validator(mode="after")
     def validate_mode_has_objectives(self) -> "ScenarioDefinition":
         """Scenario mode must match the objectives provided."""
+        has_objectives = bool(self.objectives.red or self.objectives.blue)
+        if not has_objectives:
+            return self
         if self.mode == ScenarioMode.RED and not self.objectives.red:
             raise ValueError("Red mode scenario must have red objectives")
         if self.mode == ScenarioMode.BLUE and not self.objectives.blue:
@@ -385,6 +411,16 @@ class ScenarioDefinition(BaseModel):
                 raise ValueError(
                     "Purple mode scenario must have at least one objective"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_step_numbers_unique(self) -> "ScenarioDefinition":
+        """Attack step numbers must be unique."""
+        if not self.steps:
+            return self
+        numbers = [s.step_number for s in self.steps]
+        if len(numbers) != len(set(numbers)):
+            raise ValueError("Attack step numbers must be unique")
         return self
 
 

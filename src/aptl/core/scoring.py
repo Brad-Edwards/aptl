@@ -73,6 +73,7 @@ class ScenarioReport:
     objective_results: list[dict] = field(default_factory=list)
     events: list[dict] = field(default_factory=list)
     hints_used: dict[str, int] = field(default_factory=dict)
+    detection_coverage: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +257,7 @@ def generate_report(
     results: list[ObjectiveResult],
     events: list[Event],
     score: ScoreBreakdown,
+    detection_coverage: dict | None = None,
 ) -> ScenarioReport:
     """Generate a structured after-action report.
 
@@ -288,6 +290,7 @@ def generate_report(
         objective_results=[_serialize_objective_result(r) for r in results],
         events=[_serialize_event(e) for e in events],
         hints_used=dict(session.hints_used),
+        detection_coverage=detection_coverage,
     )
 
     log.info(

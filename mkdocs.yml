@@ -70,29 +70,21 @@ nav:
     - Quick Start: getting-started/quick-start.md
   - Architecture:
     - Overview: architecture/index.md
-    - Docker Compose: architecture/docker-compose.md
     - Networking: architecture/networking.md
-  - Deployment:
-    - Overview: deployment/index.md
-    - Local Setup: deployment/local-setup.md
-    - Configuration: deployment/configuration.md
+  - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md
     - Victim Containers: components/victim-containers.md
     - Kali Red Team: components/kali-redteam.md
+    - Reverse Engineering: components/reverse-engineering-container.md
     - MCP Integration: components/mcp-integration.md
   - Usage:
-    - Exercises: usage/exercises.md
-    - AI Red Teaming: usage/ai-red-teaming.md
-    - Purple Team Scenarios: usage/purple-team-scenarios.md
-  - Troubleshooting:
-    - Overview: troubleshooting/index.md
-    - Common Issues: troubleshooting/common-issues.md
-    - Debugging: troubleshooting/debugging.md
+    - Scenarios: usage/scenarios.md
   - Reference:
-    - Commands: reference/commands.md
-    - API: reference/api.md
-    - Configuration: reference/configuration.md
+    - CLI: reference/cli.md
+  - Containers:
+    - Victim Template Guide: containers/victim-template-guide.md
+  - Troubleshooting: troubleshooting/index.md
 
 extra:
   social:

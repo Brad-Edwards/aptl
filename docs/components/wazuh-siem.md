@@ -12,8 +12,8 @@ The Wazuh SIEM stack provides security monitoring and analysis for the APTL lab 
 
 ```mermaid
 flowchart TD
-    J[Victim Container<br/>172.20.0.20] --> |Agent 1514| G[Wazuh Manager<br/>172.20.0.10]
-    L[Kali Container<br/>172.20.0.30] --> |Agent 1514| G
+    J[Victim Container<br/>172.20.2.20] --> |Agent 1514| G[Wazuh Manager<br/>172.20.0.10]
+    L[Kali Container<br/>172.20.4.30] --> |Agent 1514| G
     
     G <--> H[Wazuh Indexer<br/>172.20.0.12]
     H --> I[Wazuh Dashboard<br/>172.20.0.11]

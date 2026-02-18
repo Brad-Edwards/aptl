@@ -143,7 +143,7 @@ docker compose -f generate-indexer-certs.yml run --rm generator
 
 ```bash
 docker builder prune -f
-docker compose build --no-cache
+docker compose --profile wazuh --profile victim --profile kali build --no-cache
 ```
 
 ### Recovery

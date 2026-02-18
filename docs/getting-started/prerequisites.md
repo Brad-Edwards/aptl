@@ -29,7 +29,7 @@ echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
 
 **Check ports available:**
 ```bash
-netstat -tlnp | grep -E "(443|2022|2023|9200|55000)"
+netstat -tlnp | grep -E "(443|2022|2023|2027|9200|55000)"
 ```
 
 ## Verify

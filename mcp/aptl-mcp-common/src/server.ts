@@ -21,6 +21,9 @@ import { generateToolDefinitions } from './tools/definitions.js';
 import { generateToolHandlers, type ToolHandler, type ToolContext } from './tools/handlers.js';
 import { generateAPIToolDefinitions } from './tools/api-definitions.js';
 import { generateAPIToolHandlers, type APIToolHandler, type APIToolContext } from './tools/api-handlers.js';
+import { getLogger } from './logger.js';
+
+const log = getLogger('mcp.server');
 
 /**
  * Create and configure an MCP server with the provided lab configuration
@@ -46,8 +49,16 @@ export function createMCPServer(labConfig: LabConfig) {
     Object.assign(cachedHandlers, generateAPIToolHandlers(labConfig.server, labConfig.queries, includeGeneric));
   }
   
-  console.error(`[MCP] Initialized ${labConfig.server.name} with lab: ${labConfig.lab.name}`);
-  console.error(`[MCP] Available capabilities: ${sshManager ? 'SSH' : ''}${sshManager && httpClient ? ' + ' : ''}${httpClient ? 'HTTP API' : ''}`);
+  const capabilities = [
+    sshManager ? 'SSH' : null,
+    httpClient ? 'HTTP API' : null
+  ].filter(Boolean).join(' + ') || 'none';
+  
+  log.info('Initialized MCP server', {
+    server: labConfig.server.name,
+    lab: labConfig.lab.name,
+    capabilities
+  });
 
   // Create MCP server
   const server = new Server(
@@ -112,12 +123,16 @@ export function createMCPServer(labConfig: LabConfig) {
     async start() {
       const transport = new StdioServerTransport();
       await server.connect(transport);
-      console.error(`[MCP] ${labConfig.server.description.split(' - ')[0]} server running on stdio`);
+      const serverDesc = labConfig.server.description.split(' - ')[0];
+      log.info('MCP server running', {
+        server: serverDesc,
+        transport: 'stdio'
+      });
       
       // Setup graceful shutdown only once
       if (!handlersSetup) {
         process.on('SIGINT', async () => {
-          console.error('[MCP] Shutting down gracefully...');
+          log.info('Shutting down gracefully (SIGINT)');
           if (sshManager) {
             await sshManager.disconnectAll();
           }
@@ -125,7 +140,7 @@ export function createMCPServer(labConfig: LabConfig) {
         });
         
         process.on('SIGTERM', async () => {
-          console.error('[MCP] Shutting down gracefully...');
+          log.info('Shutting down gracefully (SIGTERM)');
           if (sshManager) {
             await sshManager.disconnectAll();
           }

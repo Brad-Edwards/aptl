@@ -2,9 +2,11 @@
 /**
  * APTL Wazuh SIEM MCP Server
  */
-import { startServer } from 'aptl-mcp-common';
+import { startServer, getLogger } from 'aptl-mcp-common';
+
+const log = getLogger('mcp.wazuh');
 
 startServer(import.meta.url).catch((error) => {
-  console.error('[MCP] Fatal error:', error);
+  log.error('Fatal error starting MCP server', error);
   process.exit(1);
 });

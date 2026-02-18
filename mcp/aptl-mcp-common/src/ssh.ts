@@ -3,6 +3,9 @@ import { Client, ClientChannel } from 'ssh2';
 import { readFile } from 'fs/promises';
 import { EventEmitter } from 'events';
 import { ShellFormatter, ShellType, createShellFormatter } from './shells.js';
+import { getLogger } from './logger.js';
+
+const log = getLogger('mcp.ssh');
 
 // Constants for timeouts and limits
 const TIMEOUTS = {
@@ -461,24 +464,27 @@ export class SSHConnectionManager {
     port: number = 22
   ): Promise<Client> {
     const connectionKey = `${username}@${host}:${port}`;
-    console.error(`[SSH-CLIENT] getConnection called with key: ${connectionKey}`);
+    log.debug('Getting SSH connection', { connectionKey });
     
     if (this.connections.has(connectionKey)) {
       const connInfo = this.connections.get(connectionKey)!;
       if (connInfo.connected) {
-        console.error(`[SSH-CLIENT] Reusing existing connection for: ${connectionKey}`);
+        log.debug('Reusing existing SSH connection', { connectionKey });
         return connInfo.client;
       }
       // Connection is dead, remove it
-      console.error(`[SSH-CLIENT] Removing dead connection for: ${connectionKey}`);
+      log.debug('Removing dead SSH connection', { connectionKey });
       this.connections.delete(connectionKey);
     }
 
     // Create new connection
-    console.error(`[SSH-CLIENT] Creating new connection for: ${connectionKey}`);
+    log.debug('Creating new SSH connection', { connectionKey });
     const client = await this.createConnection(host, username, privateKeyPath, port);
     this.connections.set(connectionKey, { client, connected: true });
-    console.error(`[SSH-CLIENT] Connection cache now has ${this.connections.size} connections`);
+    log.debug('Updated SSH connection cache', { 
+      connectionKey,
+      totalConnections: this.connections.size 
+    });
     
     return client;
   }
@@ -569,12 +575,12 @@ export class SSHConnectionManager {
     });
 
     session.on('error', (error) => {
-      console.error(`[SSH] Session ${sessionId} error:`, error);
+      log.error('SSH session error', error, { sessionId });
       this.sessions.delete(sessionId);
     });
 
     session.on('timeout', () => {
-      console.error(`[SSH] Session ${sessionId} timed out`);
+      log.warn('SSH session timeout', { sessionId });
       this.sessions.delete(sessionId);
     });
 
@@ -694,7 +700,7 @@ export class SSHConnectionManager {
     try {
       await Promise.all([...sessionPromises, ...connectionPromises]);
     } catch (error) {
-      console.error('[SSH] Error during disconnectAll:', error);
+      log.error('Error during disconnectAll', error as Error);
     } finally {
       this.sessions.clear();
       this.connections.clear();

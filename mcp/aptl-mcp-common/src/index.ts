@@ -24,6 +24,9 @@ export { HTTPClient, type HTTPResponse, type HTTPError } from './http.js';
 export { generateAPIToolDefinitions } from './tools/api-definitions.js';
 export { generateAPIToolHandlers, type APIToolContext } from './tools/api-handlers.js';
 
+// Export logging functionality
+export { getLogger, Logger, type LogLevel } from './logger.js';
+
 /**
  * Standard entry point for all APTL MCP servers.
  * Loads docker-lab-config.json relative to the calling module's directory.

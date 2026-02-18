@@ -3,6 +3,9 @@
 import { existsSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { expandTilde } from './utils.js';
+import { getLogger } from './logger.js';
+
+const log = getLogger('mcp.config');
 
 // Lab configuration matching actual docker-lab-config.json structure
 export interface LabConfig {
@@ -126,7 +129,7 @@ function loadEnvForConfig(configPath: string): Record<string, string | undefined
     if (existsSync(envPath)) {
       try {
         const dotEnv = parseDotEnv(readFileSync(envPath, 'utf8'));
-        console.error(`[MCP] Loaded .env from: ${envPath}`);
+        log.info('Loaded .env file', { path: envPath });
         // process.env overrides .env (explicit env vars take priority)
         return { ...dotEnv, ...process.env };
       } catch {
@@ -144,7 +147,7 @@ function loadEnvForConfig(configPath: string): Record<string, string | undefined
  * Load Docker lab configuration from JSON file
  */
 async function loadDockerLabConfig(configPath: string): Promise<LabConfig> {
-  console.error(`[MCP] Looking for Docker config at: ${configPath}`);
+  log.debug('Looking for Docker config', { path: configPath });
 
   if (!existsSync(configPath)) {
     throw new Error(`Docker lab configuration not found at: ${configPath}`);
@@ -156,7 +159,7 @@ async function loadDockerLabConfig(configPath: string): Promise<LabConfig> {
   const env = loadEnvForConfig(configPath);
   const { result: configContent, missing } = substituteEnvVars(rawContent, env);
   if (missing.length > 0) {
-    console.error(`[MCP] Warning: unresolved environment variables: ${missing.join(', ')}`);
+    log.warn('Unresolved environment variables', { variables: missing });
   }
 
   const config = JSON.parse(configContent) as LabConfig;
@@ -176,7 +179,7 @@ async function loadDockerLabConfig(configPath: string): Promise<LabConfig> {
     throw new Error(`Container '${config.server.configKey}' not found in configuration`);
   }
   
-  console.error(`[MCP] Loaded Docker lab config for: ${config.lab.name}`);
+  log.info('Loaded Docker lab config', { lab: config.lab.name });
   return config;
 }
 

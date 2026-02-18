@@ -104,6 +104,8 @@ export function parseDotEnv(content: string): Record<string, string> {
     const eqIndex = trimmed.indexOf('=');
     if (eqIndex === -1) continue;
     const key = trimmed.slice(0, eqIndex).trim();
+    // Guard against prototype pollution via __proto__, constructor, or prototype keys
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
     let val = trimmed.slice(eqIndex + 1).trim();
     // Strip matching quotes
     if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {

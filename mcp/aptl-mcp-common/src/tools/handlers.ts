@@ -1,5 +1,6 @@
 
 
+import { randomUUID } from 'crypto';
 import { SSHConnectionManager, SessionMetadata } from '../ssh.js';
 import { LabConfig, getTargetCredentials } from '../config.js';
 import { ShellType } from '../shells.js';
@@ -174,7 +175,7 @@ const baseHandlers: Record<string, ToolHandler> = {
     } = args as InteractiveSessionArgs;
 
     try {
-      const finalSessionId = session_id || `session_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const finalSessionId = session_id || `session_${randomUUID()}`;
       const credentials = getTargetCredentials(labConfig);
 
       const session = await sshManager.createSession(
@@ -230,7 +231,7 @@ const baseHandlers: Record<string, ToolHandler> = {
     } = args as BackgroundSessionArgs;
 
     try {
-      const finalSessionId = session_id || `bg_session_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const finalSessionId = session_id || `bg_session_${randomUUID()}`;
       const credentials = getTargetCredentials(labConfig);
 
       const session = await sshManager.createSession(

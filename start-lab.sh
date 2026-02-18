@@ -91,16 +91,25 @@ fi
 # Step 3: Sync config files with credentials from .env
 echo ""
 echo "Step 3: Syncing configuration files with .env credentials..."
+
+# Helper: escape a string for use as the replacement in sed s||| expressions.
+# Backslash-escapes the sed special chars: \ | &
+sed_escape() {
+    printf '%s\n' "$1" | sed -e 's/[\\|&]/\\&/g'
+}
+
 if [ -f "./config/wazuh_dashboard/wazuh.yml" ]; then
     echo "Updating wazuh.yml with API password..."
-    sed -i "s/password: \".*\"/password: \"${API_PASSWORD}\"/" ./config/wazuh_dashboard/wazuh.yml
+    ESCAPED_API_PASSWORD="$(sed_escape "$API_PASSWORD")"
+    sed -i "s|password: \".*\"|password: \"${ESCAPED_API_PASSWORD}\"|" ./config/wazuh_dashboard/wazuh.yml
     echo "Dashboard configuration synced"
 else
     echo "Warning: wazuh.yml not found, dashboard may not connect properly"
 fi
 if [ -f "./config/wazuh_cluster/wazuh_manager.conf" ]; then
     echo "Updating wazuh_manager.conf with cluster key..."
-    sed -i "s|<key>.*</key>|<key>${WAZUH_CLUSTER_KEY}</key>|" ./config/wazuh_cluster/wazuh_manager.conf
+    ESCAPED_CLUSTER_KEY="$(sed_escape "$WAZUH_CLUSTER_KEY")"
+    sed -i "s|<key>.*</key>|<key>${ESCAPED_CLUSTER_KEY}</key>|" ./config/wazuh_cluster/wazuh_manager.conf
     echo "Manager configuration synced"
 fi
 

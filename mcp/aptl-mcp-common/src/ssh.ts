@@ -2,6 +2,7 @@
 import { Client, ClientChannel } from 'ssh2';
 import { readFile } from 'fs/promises';
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 import { ShellFormatter, ShellType, createShellFormatter } from './shells.js';
 
 // Constants for timeouts and limits
@@ -102,7 +103,7 @@ export class PersistentSession extends EventEmitter {
     super();
     this.client = client;
     this.sessionTimeoutMs = timeoutMs;
-    this.commandDelimiter = `___CMD_${Date.now()}_${Math.random().toString(36).substring(2, 11)}___`;
+    this.commandDelimiter = `___CMD_${randomUUID()}___`;
     this.shellFormatter = createShellFormatter(shellType);
     
     this.sessionInfo = {
@@ -170,7 +171,7 @@ export class PersistentSession extends EventEmitter {
 
     // Background sessions should return immediately after queuing
     if (this.sessionInfo.type === 'background') {
-      const commandId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      const commandId = randomUUID();
       const request: CommandRequest = {
         id: commandId,
         command,
@@ -200,7 +201,7 @@ export class PersistentSession extends EventEmitter {
 
     // Interactive sessions wait for completion
     return new Promise((resolve, reject) => {
-      const commandId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      const commandId = randomUUID();
       const request: CommandRequest = {
         id: commandId,
         command,

@@ -197,9 +197,9 @@ services:
       - MYSQL_HOST=misp-db
       - MYSQL_DATABASE=misp
       - MYSQL_USER=misp
-      - MYSQL_PASSWORD=misp_db_password
+      - MYSQL_PASSWORD=${MISP_DB_PASSWORD}
       - MISP_ADMIN_EMAIL=admin@techvault.local
-      - MISP_ADMIN_PASSPHRASE=MispAdmin2024!
+      - MISP_ADMIN_PASSPHRASE=${MISP_ADMIN_PASSWORD}
       - MISP_BASEURL=https://misp.techvault.local
       - REDIS_HOST=misp-redis
     volumes:
@@ -232,8 +232,8 @@ services:
     environment:
       - MYSQL_DATABASE=misp
       - MYSQL_USER=misp
-      - MYSQL_PASSWORD=misp_db_password
-      - MYSQL_ROOT_PASSWORD=misp_root_password
+      - MYSQL_PASSWORD=${MISP_DB_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MISP_DB_ROOT_PASSWORD}
     volumes:
       - misp_db_data:/var/lib/mysql
     healthcheck:
@@ -278,7 +278,7 @@ services:
       - thehive_index:/opt/thp/thehive/index
     command:
       - --secret
-      - "thehive-lab-secret-key-2024"
+      - "${THEHIVE_SECRET}"
       - --cql-hostnames
       - "thehive-cassandra"
       - --index-backend
@@ -365,11 +365,11 @@ services:
     environment:
       - SHUFFLE_APP_SDK_TIMEOUT=120
       - SHUFFLE_DEFAULT_USERNAME=admin
-      - SHUFFLE_DEFAULT_PASSWORD=ShuffleAdmin2024!
-      - SHUFFLE_DEFAULT_APIKEY=shuffle-lab-api-key-2024
+      - SHUFFLE_DEFAULT_PASSWORD=${SHUFFLE_ADMIN_PASSWORD}
+      - SHUFFLE_DEFAULT_APIKEY=${SHUFFLE_API_KEY}
       - SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200
       - SHUFFLE_OPENSEARCH_USERNAME=admin
-      - SHUFFLE_OPENSEARCH_PASSWORD=StrongPassword123!
+      - SHUFFLE_OPENSEARCH_PASSWORD=${SHUFFLE_OPENSEARCH_PASSWORD}
     volumes:
       - shuffle_data:/shuffle-database
       - /var/run/docker.sock:/var/run/docker.sock
@@ -436,11 +436,11 @@ services:
     environment:
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - discovery.type=single-node
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123!
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${SHUFFLE_OPENSEARCH_PASSWORD}
     volumes:
       - shuffle_opensearch_data:/usr/share/opensearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -ks https://localhost:9200 -u admin:StrongPassword123! || exit 1"]
+      test: ["CMD-SHELL", "curl -ks https://localhost:9200 -u admin:$${OPENSEARCH_INITIAL_ADMIN_PASSWORD} || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -497,7 +497,7 @@ services:
       - DB_PORT=5432
       - DB_NAME=techvault
       - DB_USER=techvault
-      - DB_PASSWORD=techvault_db_pass
+      - DB_PASSWORD=${DB_PASSWORD}
       - FLASK_ENV=production
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
@@ -606,7 +606,7 @@ services:
     environment:
       - SAMBA_DOMAIN=TECHVAULT
       - SAMBA_REALM=TECHVAULT.LOCAL
-      - SAMBA_ADMIN_PASSWORD=Admin123!
+      - SAMBA_ADMIN_PASSWORD=${AD_ADMIN_PASSWORD}
       - DNS_FORWARDER=172.20.1.22
       - SIEM_IP=172.20.0.10
     volumes:
@@ -638,7 +638,7 @@ services:
     environment:
       - POSTGRES_DB=techvault
       - POSTGRES_USER=techvault
-      - POSTGRES_PASSWORD=techvault_db_pass
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./containers/db/init:/docker-entrypoint-initdb.d:ro

@@ -37,6 +37,29 @@ All SSH-based MCPs use `aptl-mcp-common` for session management, connection pool
 - Tools: Alert queries, log search, rule creation
 - APIs: Manager (55000), Indexer (9200)
 
+## Structured Logging
+
+All MCP servers use ECS-compliant structured logging compatible with Wazuh/Elasticsearch ingestion.
+
+**Environment Variables:**
+
+- `APTL_LOG_LEVEL`: Set log level (`debug`, `info`, `warn`, `error`). Default: `info`
+- `APTL_LOG_FORMAT`: Set to `json` for ECS-compliant JSON logs. Default: plain text
+
+**Examples:**
+
+Plain text (default):
+```bash
+node mcp/mcp-red/build/index.js
+# 2026-02-18 16:14:37 [INFO ] mcp.server: Initialized MCP server
+```
+
+JSON for SIEM ingestion:
+```bash
+APTL_LOG_FORMAT=json APTL_LOG_LEVEL=debug node mcp/mcp-red/build/index.js
+# {"@timestamp":"2026-02-18T16:14:37.096Z","log.level":"INFO","log.logger":"mcp.server","message":"Initialized MCP server","service.name":"aptl-mcp","ecs.version":"8.11.0"}
+```
+
 ## Setup
 
 Build MCP servers and configure your AI client to connect.

@@ -31,9 +31,13 @@ def sync_dashboard_config(config_path: Path, api_password: str) -> None:
 
     Raises:
         FileNotFoundError: If config_path does not exist.
+        ValueError: If api_password is empty or None.
     """
     if not config_path.exists():
         raise FileNotFoundError(f"Dashboard config not found: {config_path}")
+    
+    if not api_password or not api_password.strip():
+        raise ValueError("API password cannot be empty")
 
     content = config_path.read_text()
 
@@ -59,7 +63,7 @@ def sync_manager_config(config_path: Path, cluster_key: str) -> None:
 
     Args:
         config_path: Path to the wazuh_manager.conf file.
-        cluster_key: The real cluster key to inject.
+        cluster_key: The real cluster key to inject (can be empty).
 
     Raises:
         FileNotFoundError: If config_path does not exist.

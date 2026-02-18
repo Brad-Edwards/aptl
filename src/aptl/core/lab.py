@@ -94,6 +94,14 @@ def start_lab(
         LabResult indicating success or failure.
     """
     profiles = config.containers.enabled_profiles()
+    
+    # Defensive: Ensure at least one container profile is enabled
+    if not profiles:
+        return LabResult(
+            success=False,
+            error="No container profiles enabled in configuration",
+        )
+    
     cmd = build_compose_command("up", profiles)
 
     log.info("Starting lab with profiles: %s", profiles)

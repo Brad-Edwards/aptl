@@ -1,11 +1,13 @@
 """Main entry point for the APTL CLI."""
 
+import logging
 from typing import Optional
 
 import typer
 
 import aptl
 from aptl.cli import lab, config, container, scenario
+from aptl.utils.logging import setup_logging
 
 app = typer.Typer(
     name="aptl",
@@ -35,5 +37,13 @@ def main(
         callback=_version_callback,
         is_eager=True,
     ),
+    log_level: str = typer.Option(
+        "INFO",
+        "--log-level",
+        help="Logging level (DEBUG, INFO, WARNING, ERROR).",
+        envvar="APTL_LOG_LEVEL",
+    ),
 ) -> None:
     """Advanced Purple Team Lab CLI."""
+    level = getattr(logging, log_level.upper(), logging.INFO)
+    setup_logging(level=level)

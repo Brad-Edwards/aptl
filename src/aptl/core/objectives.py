@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 
 log = get_logger("objectives")
 
+# Constants for docker exec timeouts
+DEFAULT_DOCKER_EXEC_TIMEOUT = 30  # seconds
+
 
 class ObjectiveStatus(str, Enum):
     """Status of an objective evaluation."""
@@ -73,7 +76,7 @@ class EvaluationResult:
 # ---------------------------------------------------------------------------
 
 
-def _docker_exec(container: str, command: str, timeout: int = 30) -> subprocess.CompletedProcess:
+def _docker_exec(container: str, command: str, timeout: int = DEFAULT_DOCKER_EXEC_TIMEOUT) -> subprocess.CompletedProcess:
     """Run a command inside a Docker container.
 
     Args:
@@ -139,6 +142,16 @@ def _check_command_output(
 ) -> ObjectiveResult:
     """Check a command_output objective via docker exec."""
     validation = objective.command_output
+    
+    # Defensive: Ensure command_output validation is present
+    if validation is None:
+        log.error("Objective '%s' missing command_output validation", objective_id)
+        return ObjectiveResult(
+            objective_id=objective_id,
+            status=ObjectiveStatus.FAILED,
+            details="Missing command_output validation configuration",
+        )
+    
     container = f"aptl-{validation.container}"
 
     try:
@@ -189,6 +202,16 @@ def _check_file_exists(
 ) -> ObjectiveResult:
     """Check a file_exists objective via docker exec."""
     validation = objective.file_exists
+    
+    # Defensive: Ensure file_exists validation is present
+    if validation is None:
+        log.error("Objective '%s' missing file_exists validation", objective_id)
+        return ObjectiveResult(
+            objective_id=objective_id,
+            status=ObjectiveStatus.FAILED,
+            details="Missing file_exists validation configuration",
+        )
+    
     container = f"aptl-{validation.container}"
 
     safe_path = shlex.quote(validation.path)

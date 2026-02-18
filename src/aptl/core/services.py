@@ -14,6 +14,12 @@ from aptl.utils.logging import get_logger
 
 log = get_logger("services")
 
+# Constants for service checks
+DEFAULT_CURL_TIMEOUT = 10  # seconds for curl operations
+MANAGER_API_TIMEOUT = 15  # seconds for manager API checks
+SSH_CONNECTION_TIMEOUT = 10  # seconds for SSH connectivity tests
+SSH_CONNECT_TIMEOUT = 5  # seconds for SSH connection establishment
+
 
 @dataclass
 class ServiceResult:
@@ -55,6 +61,9 @@ def wait_for_service(
                 log.info("%s is ready (%.1fs)", service_name, elapsed)
                 return ServiceResult(ready=True, elapsed_seconds=elapsed)
         except Exception as exc:
+            # Broadly catch all exceptions from check_fn callbacks to continue polling.
+            # Check functions may raise various errors (network, subprocess, etc.)
+            # and we want to retry until timeout rather than fail immediately.
             log.debug("%s check raised %s: %s", service_name, type(exc).__name__, exc)
 
         now = time.monotonic()
@@ -92,7 +101,7 @@ def check_indexer_ready(url: str, username: str, password: str) -> bool:
             ],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=DEFAULT_CURL_TIMEOUT,
         )
         return result.returncode == 0
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
@@ -125,7 +134,7 @@ def check_manager_api_ready(
             ],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=MANAGER_API_TIMEOUT,
         )
         return result.returncode == 0
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
@@ -152,7 +161,7 @@ def test_ssh_connection(
             [
                 "ssh",
                 "-i", str(key_path),
-                "-o", "ConnectTimeout=5",
+                "-o", f"ConnectTimeout={SSH_CONNECT_TIMEOUT}",
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "BatchMode=yes",
                 "-p", str(port),
@@ -161,7 +170,7 @@ def test_ssh_connection(
             ],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=SSH_CONNECTION_TIMEOUT,
         )
         return result.returncode == 0
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:

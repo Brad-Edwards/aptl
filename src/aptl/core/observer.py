@@ -114,8 +114,8 @@ def query_wazuh_alerts(
         body_text = ""
         try:
             body_text = e.read().decode("utf-8", errors="replace")
-        except Exception:
-            pass
+        except (UnicodeDecodeError, OSError) as decode_err:
+            log.debug("Failed to read error response body: %s", decode_err)
         raise ObserverError(
             f"Wazuh query failed with HTTP {e.code}: {body_text}"
         ) from e

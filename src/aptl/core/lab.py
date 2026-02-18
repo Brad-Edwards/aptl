@@ -12,6 +12,8 @@ from functools import partial
 from pathlib import Path
 from typing import Optional
 
+import yaml
+
 from aptl.core.certs import ensure_ssl_certs
 from aptl.core.config import AptlConfig, find_config, load_config
 from aptl.core.connections import generate_connection_info, write_connection_file
@@ -28,6 +30,8 @@ from aptl.core.sysreqs import check_max_map_count
 from aptl.utils.logging import get_logger
 
 log = get_logger("lab")
+
+WAZUH_IMAGE_VERSION = "4.12.0"
 
 
 @dataclass
@@ -207,6 +211,42 @@ def lab_status(
     return LabStatus(running=running, containers=containers)
 
 
+def _check_bind_mounts(project_dir: Path) -> list[str]:
+    """Check that bind-mount source paths exist as files, not root-owned dirs.
+
+    Parses docker-compose.yml for relative bind mounts (``./`` prefix) and
+    verifies that each source path exists. Returns a list of error messages
+    for any missing sources so the caller can fail early instead of letting
+    Docker silently create root-owned directories.
+    """
+    compose_path = project_dir / "docker-compose.yml"
+    if not compose_path.exists():
+        log.debug("No docker-compose.yml found, skipping bind-mount check")
+        return []
+
+    try:
+        data = yaml.safe_load(compose_path.read_text())
+    except yaml.YAMLError as e:
+        return [f"Failed to parse docker-compose.yml: {e}"]
+
+    errors: list[str] = []
+    services = data.get("services", {}) if isinstance(data, dict) else {}
+    for svc_name, svc_def in services.items():
+        if not isinstance(svc_def, dict):
+            continue
+        for vol in svc_def.get("volumes", []):
+            if isinstance(vol, str) and vol.startswith("./"):
+                src = vol.split(":")[0]
+                src_path = (project_dir / src).resolve()
+                if not src_path.exists():
+                    errors.append(
+                        f"Service '{svc_name}': bind-mount source "
+                        f"'{src}' does not exist. Create it before "
+                        f"starting the lab to avoid root-owned directories."
+                    )
+    return errors
+
+
 def orchestrate_lab_start(project_dir: Path) -> LabResult:
     """Orchestrate the complete lab startup process.
 
@@ -318,12 +358,23 @@ def orchestrate_lab_start(project_dir: Path) -> LabResult:
             error=f"Certificate generation failed: {cert_result.error}",
         )
 
+    # Step 6b: Check bind-mount sources
+    log.info("Step 6b: Checking bind-mount sources...")
+    mount_errors = _check_bind_mounts(project_dir)
+    if mount_errors:
+        for err in mount_errors:
+            log.error("Bind-mount issue: %s", err)
+        return LabResult(
+            success=False,
+            error="Bind-mount pre-flight failed:\n" + "\n".join(mount_errors),
+        )
+
     # Step 7: Pre-pull container images (non-critical)
     log.info("Step 7: Pre-pulling container images...")
     images = [
-        "wazuh/wazuh-manager:4.9.2",
-        "wazuh/wazuh-indexer:4.9.2",
-        "wazuh/wazuh-dashboard:4.9.2",
+        f"wazuh/wazuh-manager:{WAZUH_IMAGE_VERSION}",
+        f"wazuh/wazuh-indexer:{WAZUH_IMAGE_VERSION}",
+        f"wazuh/wazuh-dashboard:{WAZUH_IMAGE_VERSION}",
     ]
     for image in images:
         try:

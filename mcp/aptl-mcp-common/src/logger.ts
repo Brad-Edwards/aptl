@@ -131,7 +131,9 @@ const loggers = new Map<string, Logger>();
 
 export function getLogger(name: string): Logger {
   // Check for log level from environment
-  const logLevel = (process.env.APTL_LOG_LEVEL?.toLowerCase() || 'info') as LogLevel;
+  const envLevel = process.env.APTL_LOG_LEVEL?.toLowerCase();
+  const validLevels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+  const logLevel = (validLevels.includes(envLevel as LogLevel) ? envLevel : 'info') as LogLevel;
   const useJson = process.env.APTL_LOG_FORMAT?.toLowerCase() === 'json';
   
   const key = `${name}:${logLevel}:${useJson}`;

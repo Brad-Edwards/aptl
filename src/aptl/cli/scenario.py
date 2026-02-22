@@ -204,10 +204,11 @@ def list_scenarios(
         return
 
     table = Table(title="Available Scenarios")
-    table.add_column("ID", style="cyan")
+    table.add_column("ID", style="cyan", no_wrap=True)
     table.add_column("Name")
     table.add_column("Difficulty", style="green")
     table.add_column("Mode", style="yellow")
+    table.add_column("Steps", justify="right")
     table.add_column("Tags")
 
     for path in paths:
@@ -219,6 +220,7 @@ def list_scenarios(
                 meta.name,
                 meta.difficulty.value,
                 scenario.mode.value,
+                str(len(scenario.steps)),
                 ", ".join(meta.tags),
             )
         except (ScenarioValidationError, FileNotFoundError) as e:
@@ -226,6 +228,7 @@ def list_scenarios(
             table.add_row(
                 path.stem,
                 f"[red]ERROR: {e}[/red]",
+                "",
                 "",
                 "",
                 "",
@@ -300,6 +303,41 @@ def show(
                 f"({obj.points} pts, {obj.type.value}){hints_label}"
             )
 
+    if scenario.steps:
+        typer.echo("")
+        if scenario.attack_chain:
+            typer.echo(f"Attack Chain: {scenario.attack_chain}")
+        typer.echo("")
+        typer.echo("Attack Steps:")
+        for step in scenario.steps:
+            typer.echo(
+                f"  Step {step.step_number}: [{step.technique_id}] "
+                f"{step.technique_name} ({step.tactic})"
+            )
+            typer.echo(f"    Target: {step.target}")
+            typer.echo(f"    {step.description}")
+
+            if step.commands:
+                typer.echo("    Commands:")
+                for cmd in step.commands:
+                    typer.echo(f"      $ {cmd}")
+
+            if step.expected_detections:
+                typer.echo("    Expected Detections:")
+                for det in step.expected_detections:
+                    uid_info = f" (rule {det.analytic_uid})" if det.analytic_uid else ""
+                    typer.echo(
+                        f"      [{det.product_name}] {det.description}"
+                        f"{uid_info} - {det.severity_id.name}"
+                    )
+
+            if step.investigation_hints:
+                typer.echo("    Investigation Hints:")
+                for ih in step.investigation_hints:
+                    typer.echo(f"      - {ih}")
+
+            typer.echo("")
+
     scoring = scenario.scoring
     typer.echo("")
     typer.echo("Scoring:")
@@ -332,10 +370,11 @@ def validate(
 
     meta = scenario.metadata
     obj_count = len(scenario.objectives.red) + len(scenario.objectives.blue)
+    step_count = len(scenario.steps)
     typer.echo(
         f"Valid: {meta.name} ({meta.id}) - "
         f"{meta.difficulty.value}, {scenario.mode.value} mode, "
-        f"{obj_count} objectives"
+        f"{obj_count} objectives, {step_count} steps"
     )
 
 

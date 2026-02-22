@@ -168,6 +168,48 @@ class TestExampleScenarios:
         total = sum(o.points for o in scenario.objectives.all_objectives())
         assert total == 200
 
+    def test_webapp_compromise_loads(self):
+        """Converted webapp-compromise.yaml should load as unified scenario."""
+        path = SCENARIOS_DIR / "webapp-compromise.yaml"
+        if not path.exists():
+            pytest.skip("Converted playbook not present")
+        scenario = load_scenario(path)
+        assert scenario.metadata.id == "webapp-compromise"
+        assert len(scenario.steps) == 6
+        assert scenario.attack_chain == "Recon -> SQLi -> DB Access -> Privesc -> Data Exfil"
+        assert scenario.steps[0].technique_id == "T1595.002"
+
+    def test_ad_domain_compromise_loads(self):
+        """Converted ad-domain-compromise.yaml should load as unified scenario."""
+        path = SCENARIOS_DIR / "ad-domain-compromise.yaml"
+        if not path.exists():
+            pytest.skip("Converted playbook not present")
+        scenario = load_scenario(path)
+        assert scenario.metadata.id == "ad-domain-compromise"
+        assert len(scenario.steps) == 5
+        assert scenario.steps[0].expected_detections[0].product_name == "wazuh"
+
+    def test_lateral_movement_loads(self):
+        """Converted lateral-movement-data-theft.yaml should load as unified scenario."""
+        path = SCENARIOS_DIR / "lateral-movement-data-theft.yaml"
+        if not path.exists():
+            pytest.skip("Converted playbook not present")
+        scenario = load_scenario(path)
+        assert scenario.metadata.id == "lateral-movement-data-theft"
+        assert len(scenario.steps) == 5
+
+    def test_find_scenarios_discovers_all(self):
+        """find_scenarios should discover all 5 scenario files."""
+        if not SCENARIOS_DIR.exists():
+            pytest.skip("Scenarios directory not found")
+        paths = find_scenarios(SCENARIOS_DIR)
+        names = [p.stem for p in paths]
+        assert "recon-nmap-scan" in names
+        assert "detect-brute-force" in names
+        assert "webapp-compromise" in names
+        assert "ad-domain-compromise" in names
+        assert "lateral-movement-data-theft" in names
+
 
 # ---------------------------------------------------------------------------
 # CLI integration with real scenario files
@@ -186,13 +228,14 @@ class TestCLIWithExampleScenarios:
         if not SCENARIOS_DIR.exists():
             pytest.skip("Scenarios directory not found")
 
-        result = runner.invoke(app, [
+        wide_runner = CliRunner(env={"COLUMNS": "200"})
+        result = wide_runner.invoke(app, [
             "list",
             "--scenarios-dir", str(SCENARIOS_DIR),
         ])
         assert result.exit_code == 0
         assert "recon-nmap-scan" in result.output
-        assert "detect-brute-f" in result.output  # Rich may truncate the ID
+        assert "detect-brute-force" in result.output
         assert "beginner" in result.output
         assert "intermediate" in result.output
 
@@ -248,7 +291,7 @@ class TestFullLifecycle:
     def _setup_project(tmp_path: Path) -> Path:
         """Create a project dir with a test scenario."""
         scenarios_dir = tmp_path / "scenarios"
-        scenarios_dir.mkdir()
+        scenarios_dir.mkdir(parents=True)
 
         data = {
             "metadata": {

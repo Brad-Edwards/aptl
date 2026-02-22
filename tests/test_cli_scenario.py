@@ -26,7 +26,7 @@ runner = CliRunner()
 def _write_scenario(tmp_path: Path, scenario_id: str = "test-scenario") -> Path:
     """Write a valid scenario YAML file and return the parent dir."""
     scenarios_dir = tmp_path / "scenarios"
-    scenarios_dir.mkdir(exist_ok=True)
+    scenarios_dir.mkdir(parents=True, exist_ok=True)
     data = {
         "metadata": {
             "id": scenario_id,
@@ -76,7 +76,7 @@ def _write_scenario(tmp_path: Path, scenario_id: str = "test-scenario") -> Path:
 def _write_mixed_scenario(tmp_path: Path) -> Path:
     """Write a scenario with both manual and non-manual objectives."""
     scenarios_dir = tmp_path / "scenarios"
-    scenarios_dir.mkdir(exist_ok=True)
+    scenarios_dir.mkdir(parents=True, exist_ok=True)
     data = {
         "metadata": {
             "id": "mixed-scenario",
@@ -692,3 +692,96 @@ class TestStopCommand:
             "--project-dir", str(project_dir),
         ])
         assert "No active scenario" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Attack step display tests
+# ---------------------------------------------------------------------------
+
+
+def _write_step_scenario(tmp_path: Path) -> Path:
+    """Write a unified scenario with attack steps and return project dir."""
+    scenarios_dir = tmp_path / "scenarios"
+    scenarios_dir.mkdir(parents=True, exist_ok=True)
+    data = {
+        "metadata": {
+            "id": "step-scenario",
+            "name": "Step Scenario",
+            "description": "A scenario with attack steps",
+            "difficulty": "intermediate",
+            "estimated_minutes": 20,
+            "tags": ["test"],
+            "mitre_attack": {
+                "tactics": ["Reconnaissance"],
+                "techniques": ["T1595.002"],
+            },
+        },
+        "mode": "purple",
+        "containers": {"required": ["kali"]},
+        "attack_chain": "Recon -> Exploit",
+        "steps": [
+            {
+                "step_number": 1,
+                "technique_id": "T1595.002",
+                "technique_name": "Active Scanning",
+                "tactic": "Reconnaissance",
+                "description": "Scan the target",
+                "target": "victim",
+                "commands": ["nmap -sV 172.20.0.20"],
+                "expected_detections": [
+                    {
+                        "product_name": "wazuh",
+                        "analytic_uid": "1000001",
+                        "severity_id": 3,
+                        "description": "Port scan detected",
+                    }
+                ],
+                "investigation_hints": ["Check Suricata alerts"],
+            },
+        ],
+    }
+    path = scenarios_dir / "step-scenario.yaml"
+    path.write_text(yaml.dump(data, default_flow_style=False))
+    return tmp_path
+
+
+class TestStepDisplay:
+    """Tests for attack step display in scenario CLI commands."""
+
+    def test_list_shows_step_count(self, tmp_path):
+        project_dir = _write_step_scenario(tmp_path)
+        result = runner.invoke(app, [
+            "list",
+            "--project-dir", str(project_dir),
+        ])
+        assert result.exit_code == 0
+        assert "step-scenario" in result.output
+        assert "1" in result.output  # step count
+
+    def test_show_displays_attack_steps(self, tmp_path):
+        project_dir = _write_step_scenario(tmp_path)
+        result = runner.invoke(app, [
+            "show", "step-scenario",
+            "--project-dir", str(project_dir),
+        ])
+        assert result.exit_code == 0
+        assert "Attack Chain: Recon -> Exploit" in result.output
+        assert "Attack Steps:" in result.output
+        assert "Step 1" in result.output
+        assert "T1595.002" in result.output
+        assert "Active Scanning" in result.output
+        assert "Reconnaissance" in result.output
+        assert "nmap -sV 172.20.0.20" in result.output
+        assert "Expected Detections:" in result.output
+        assert "Port scan detected" in result.output
+        assert "Investigation Hints:" in result.output
+
+    def test_validate_shows_step_count(self, tmp_path):
+        project_dir = _write_step_scenario(tmp_path)
+        result = runner.invoke(app, [
+            "validate",
+            str(project_dir / "scenarios" / "step-scenario.yaml"),
+        ])
+        assert result.exit_code == 0
+        assert "0 objectives" in result.output
+        assert "1 steps" in result.output

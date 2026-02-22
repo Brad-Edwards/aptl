@@ -33,6 +33,11 @@ class TestEventType:
             "alert_matched",
             "hint_requested",
             "evaluation_run",
+            "experiment_started",
+            "experiment_snapshot",
+            "experiment_collected",
+            "experiment_exported",
+            "experiment_reset",
         }
         actual = {e.value for e in EventType}
         assert actual == expected

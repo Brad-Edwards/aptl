@@ -29,6 +29,11 @@ class EventType(str, Enum):
     ALERT_MATCHED = "alert_matched"
     HINT_REQUESTED = "hint_requested"
     EVALUATION_RUN = "evaluation_run"
+    EXPERIMENT_STARTED = "experiment_started"
+    EXPERIMENT_SNAPSHOT = "experiment_snapshot"
+    EXPERIMENT_COLLECTED = "experiment_collected"
+    EXPERIMENT_EXPORTED = "experiment_exported"
+    EXPERIMENT_RESET = "experiment_reset"
 
 
 @dataclass

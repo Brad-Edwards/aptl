@@ -119,3 +119,66 @@ def aptl_state_dir(tmp_path: Path) -> Path:
     state_dir = tmp_path / ".aptl"
     state_dir.mkdir()
     return state_dir
+
+
+# ---------------------------------------------------------------------------
+# Unified scenario with attack steps fixture
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sample_scenario_with_steps_dict() -> dict:
+    """Valid unified scenario with attack steps + OCSF detections."""
+    return {
+        "metadata": {
+            "id": "test-unified",
+            "name": "Test Unified Scenario",
+            "description": "A unified scenario with steps and OCSF detections",
+            "difficulty": "intermediate",
+            "estimated_minutes": 30,
+            "tags": ["test"],
+            "mitre_attack": {
+                "tactics": ["Reconnaissance", "Initial Access"],
+                "techniques": ["T1595.002", "T1190"],
+            },
+        },
+        "mode": "purple",
+        "containers": {"required": ["kali", "wazuh"]},
+        "attack_chain": "Recon -> Exploit -> Exfil",
+        "steps": [
+            {
+                "step_number": 1,
+                "technique_id": "T1595.002",
+                "technique_name": "Active Scanning",
+                "tactic": "Reconnaissance",
+                "description": "Scan the target network",
+                "target": "victim",
+                "commands": ["nmap -sV 172.20.0.20"],
+                "prerequisites": [],
+                "expected_detections": [
+                    {
+                        "product_name": "wazuh",
+                        "analytic_uid": "1000001",
+                        "severity_id": 3,
+                        "description": "Port scan detected",
+                        "max_detection_time_seconds": 30,
+                    }
+                ],
+                "investigation_hints": ["Check Suricata alerts"],
+                "remediation": ["Log the activity"],
+            },
+            {
+                "step_number": 2,
+                "technique_id": "T1190",
+                "technique_name": "Exploit Public-Facing Application",
+                "tactic": "Initial Access",
+                "description": "Exploit SQL injection vulnerability",
+                "target": "webapp",
+                "commands": ["sqlmap -u http://target/page?id=1"],
+                "prerequisites": ["T1595.002"],
+                "expected_detections": [],
+                "investigation_hints": [],
+                "remediation": [],
+            },
+        ],
+    }

@@ -105,15 +105,6 @@ With a domain-joined Windows endpoint, these attack techniques become possible:
 
 ## MCP Integration
 
-Add to `.mcp.json` or `.cursor/mcp.json`:
-```json
-{
-  "aptl-windows-victim": {
-    "command": "node",
-    "args": ["./mcp/mcp-windows-re/build/index.js"],
-    "cwd": "/path/to/aptl"
-  }
-}
-```
-
-Update `mcp/mcp-windows-re/docker-lab-config.json` with the VM's IP address.
+No dedicated MCP server exists for this VM. Use the Red Team MCP (`mcp-red`) to
+interact with the Windows target from the Kali container via standard offensive
+tooling (e.g., Impacket, CrackMapExec, Evil-WinRM).

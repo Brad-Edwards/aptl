@@ -18,7 +18,7 @@
     "auth": {
       "type": "apikey",
       "header": "Authorization",
-      "value": "${MISP_API_KEY}"
+      "apiKey": "${MISP_API_KEY}"
     },
     "timeout": 30000,
     "verify_ssl": false,
@@ -34,7 +34,7 @@
       "auth": {
         "type": "apikey",
         "header": "Authorization",
-        "value": "${MISP_API_KEY}"
+        "apiKey": "${MISP_API_KEY}"
       },
       "verify_ssl": false,
       "body": {
@@ -49,7 +49,7 @@
       "auth": {
         "type": "apikey",
         "header": "Authorization",
-        "value": "${MISP_API_KEY}"
+        "apiKey": "${MISP_API_KEY}"
       },
       "verify_ssl": false,
       "body": {
@@ -64,7 +64,7 @@
       "auth": {
         "type": "apikey",
         "header": "Authorization",
-        "value": "${MISP_API_KEY}"
+        "apiKey": "${MISP_API_KEY}"
       },
       "verify_ssl": false,
       "description": "Add a new indicator of compromise to MISP. Required fields: event_id, type, value. Example: {\"body\": {\"event_id\": 1, \"type\": \"ip-dst\", \"value\": \"10.0.0.1\", \"comment\": \"C2 server\"}}"
@@ -75,7 +75,7 @@
       "auth": {
         "type": "apikey",
         "header": "Authorization",
-        "value": "${MISP_API_KEY}"
+        "apiKey": "${MISP_API_KEY}"
       },
       "verify_ssl": false,
       "body": {

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * APTL Windows Reverse Engineering MCP Server
+ * APTL Indexer MCP Server
+ * Minimal server: raw ES DSL queries + detection rule writing
  */
 import { startServer } from 'aptl-mcp-common';
 

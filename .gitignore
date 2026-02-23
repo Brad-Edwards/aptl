@@ -2,6 +2,9 @@
 lab_connections.txt
 *.log
 
+# Notes directory
+notes/
+
 # Scenario runtime state
 .aptl/
 

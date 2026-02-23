@@ -1,0 +1,61 @@
+{
+  "version": "1.0.0",
+  "server": {
+    "name": "indexer",
+    "version": "1.0.0",
+    "description": "APTL Indexer MCP Server - Raw Elasticsearch DSL queries against the Wazuh Indexer and detection rule management via the Wazuh Manager API.",
+    "toolPrefix": "indexer",
+    "targetName": "Wazuh Indexer",
+    "configKey": "",
+    "envPrefix": "APTL_INDEXER"
+  },
+  "lab": {
+    "name": "aptl-indexer",
+    "network_subnet": "172.20.0.0/16"
+  },
+  "api": {
+    "baseUrl": "https://localhost:9200",
+    "auth": {
+      "type": "basic",
+      "username": "${INDEXER_USERNAME}",
+      "password": "${INDEXER_PASSWORD}"
+    },
+    "timeout": 30000,
+    "verify_ssl": false,
+    "default_headers": {
+      "Content-Type": "application/json"
+    }
+  },
+  "queries": {
+    "query": {
+      "url": "https://localhost:9200/{index}/_search",
+      "method": "POST",
+      "auth": {
+        "type": "basic",
+        "username": "${INDEXER_USERNAME}",
+        "password": "${INDEXER_PASSWORD}"
+      },
+      "verify_ssl": false,
+      "params": {
+        "index": "wazuh-alerts-4.x-*"
+      },
+      "body": {
+        "query": { "match_all": {} },
+        "size": 100,
+        "sort": [{ "@timestamp": { "order": "desc" } }]
+      },
+      "description": "Run raw Elasticsearch DSL queries against the Wazuh Indexer. Supports any valid ES query DSL. Override the index pattern via params.index. Examples: {\"body\": {\"query\": {\"bool\": {\"must\": [{\"match\": {\"rule.id\": \"302010\"}}]}}, \"size\": 5}} or {\"params\": {\"index\": \"wazuh-archives-4.x-*\"}, \"body\": {\"query\": {\"match\": {\"data.srcip\": \"172.20.1.30\"}}}}"
+    },
+    "create_rule": {
+      "url": "https://localhost:55000/rules/files/local_rules.xml",
+      "method": "PUT",
+      "auth": {
+        "type": "basic",
+        "username": "${API_USERNAME}",
+        "password": "${API_PASSWORD}"
+      },
+      "verify_ssl": false,
+      "description": "Create or update custom Wazuh detection rules by writing to local_rules.xml via the Manager API. The body should contain the rule XML content. Example: {\"body\": {\"content\": \"<group name=\\\"custom,\\\">\\n  <rule id=\\\"100001\\\" level=\\\"10\\\">\\n    <description>Custom detection rule</description>\\n  </rule>\\n</group>\"}}"
+    }
+  }
+}

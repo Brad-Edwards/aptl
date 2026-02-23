@@ -3,6 +3,8 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
+import sys
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -203,38 +205,53 @@ def list_scenarios(
         typer.echo(f"No scenarios found in {resolved_dir}")
         return
 
-    table = Table(title="Available Scenarios")
-    table.add_column("ID", style="cyan", no_wrap=True)
-    table.add_column("Name")
-    table.add_column("Difficulty", style="green")
-    table.add_column("Mode", style="yellow")
-    table.add_column("Steps", justify="right")
-    table.add_column("Tags")
+    if sys.stdout.isatty():
+        table = Table(title="Available Scenarios")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Name")
+        table.add_column("Difficulty", style="green")
+        table.add_column("Mode", style="yellow")
+        table.add_column("Steps", justify="right")
+        table.add_column("Tags")
 
-    for path in paths:
-        try:
-            scenario = load_scenario(path)
-            meta = scenario.metadata
-            table.add_row(
-                meta.id,
-                meta.name,
-                meta.difficulty.value,
-                scenario.mode.value,
-                str(len(scenario.steps)),
-                ", ".join(meta.tags),
-            )
-        except (ScenarioValidationError, FileNotFoundError) as e:
-            log.warning("Skipping invalid scenario %s: %s", path.name, e)
-            table.add_row(
-                path.stem,
-                f"[red]ERROR: {e}[/red]",
-                "",
-                "",
-                "",
-                "",
-            )
+        for path in paths:
+            try:
+                scenario = load_scenario(path)
+                meta = scenario.metadata
+                table.add_row(
+                    meta.id,
+                    meta.name,
+                    meta.difficulty.value,
+                    scenario.mode.value,
+                    str(len(scenario.steps)),
+                    ", ".join(meta.tags),
+                )
+            except (ScenarioValidationError, FileNotFoundError) as e:
+                log.warning("Skipping invalid scenario %s: %s", path.name, e)
+                table.add_row(
+                    path.stem,
+                    f"[red]ERROR: {e}[/red]",
+                    "",
+                    "",
+                    "",
+                    "",
+                )
 
-    console.print(table)
+        console.print(table)
+    else:
+        # Plain text output for non-interactive use (pipes, tests)
+        for path in paths:
+            try:
+                scenario = load_scenario(path)
+                meta = scenario.metadata
+                typer.echo(
+                    f"{meta.id}\t{meta.name}\t"
+                    f"{meta.difficulty.value}\t{scenario.mode.value}\t"
+                    f"{len(scenario.steps)}\t{', '.join(meta.tags)}"
+                )
+            except (ScenarioValidationError, FileNotFoundError) as e:
+                log.warning("Skipping invalid scenario %s: %s", path.name, e)
+                typer.echo(f"{path.stem}\tERROR: {e}")
 
 
 @app.command()

@@ -6,6 +6,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.1] - 2026-02-22
+
+### Added
+
+- Full SOC stack integration: MISP threat intel, TheHive case management, Shuffle SOAR, Suricata IDS
+- Enterprise infrastructure: Samba AD DC, PostgreSQL database, vulnerable webapp, file server
+- 7 MCP servers operational: kali-ssh, reverse-sandbox-ssh, shuffle, indexer, wazuh, misp, thehive
+- Automated test suites: `test_smoke.py` (20 tests) and `test_range_integration.py` (40 tests)
+- Seed scripts for MISP (IOCs, attack patterns) and Shuffle (Alert-to-Case workflow)
+- Range smoke test protocol with 3 validation layers (automated pytest, agent MCP, manual fallback)
+- Prime scenario specification for research data collection (`scenarios/prime-scenario.md`)
+
+### Fixed
+
+- Wazuh `rules_summary` error 1201 caused by malformed decoder XML files
+- TheHive 401 Unauthorized from org mismatch (`admin` -> `APTL`) in MCP config
+- MISP `search_misp` Tag KeyError from PyMISP response format change
+- MISP `get_misp_stats` calling non-existent `misp.stats()` method
+- Indexer `params.index` override silently ignored due to hardcoded URL (added `{index}` template)
+- Shuffle SOAR MCP built against non-existent single-execution API endpoint
+- MCP common `api-handlers.ts` URL parameter substitution for `{key}` placeholders
+
+### Removed
+
+- `mcp-windows-re` server (container not deployed, functionality covered by reverse-sandbox-ssh)
+
 ## [4.0.0] - 2026-02-07
 
 ### Added

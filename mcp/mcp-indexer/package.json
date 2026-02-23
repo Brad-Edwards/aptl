@@ -1,11 +1,11 @@
 {
-    "name": "aptl-windows-re-mcp-server",
+    "name": "aptl-indexer-mcp-server",
     "version": "0.1.0",
-    "description": "Model Context Protocol server for APTL Windows Reverse Engineering operations",
+    "description": "Minimal MCP server for raw Wazuh Indexer queries and detection rule management",
     "private": true,
     "type": "module",
     "bin": {
-        "aptl-windows-re-mcp-server": "./build/index.js"
+        "APTL Indexer MCP Server": "./build/index.js"
     },
     "files": [
         "build"
@@ -16,7 +16,11 @@
         "watch": "tsc --watch",
         "inspector": "npx @modelcontextprotocol/inspector build/index.js",
         "test": "vitest run",
-        "test:watch": "vitest"
+        "test:watch": "vitest",
+        "lint": "eslint src/**/*.ts",
+        "lint:fix": "eslint src/**/*.ts --fix",
+        "format": "prettier --write src/**/*.ts",
+        "format:check": "prettier --check src/**/*.ts"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.17.2",
@@ -25,6 +29,10 @@
     },
     "devDependencies": {
         "@types/node": "^20.11.24",
+        "@typescript-eslint/eslint-plugin": "^8.41.0",
+        "@typescript-eslint/parser": "^8.41.0",
+        "eslint": "^9.34.0",
+        "prettier": "^3.6.2",
         "typescript": "^5.3.3",
         "vitest": "^1.0.0"
     }

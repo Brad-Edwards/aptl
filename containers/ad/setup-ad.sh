@@ -40,10 +40,29 @@ EOF
     # Provision users and groups
     /opt/provision-users.sh
 
+    # Save smb.conf to volume so it survives container rebuilds
+    cp /etc/samba/smb.conf /var/lib/samba/smb.conf.provisioned
+
     touch "$PROVISIONED_MARKER"
     echo "=== Samba AD DC provisioned ==="
 else
     echo "=== Samba AD DC already provisioned, starting ==="
+    # Restore provisioned smb.conf if the container was rebuilt
+    if [ -f /var/lib/samba/smb.conf.provisioned ]; then
+        cp /var/lib/samba/smb.conf.provisioned /etc/samba/smb.conf
+        echo "Restored AD DC smb.conf from volume"
+    fi
+    # Restore Kerberos config
+    if [ -f /var/lib/samba/private/krb5.conf ]; then
+        cp /var/lib/samba/private/krb5.conf /etc/krb5.conf
+    fi
+fi
+
+# Configure rsyslog forwarding (always, in case container was rebuilt)
+if [ -n "$SIEM_IP" ]; then
+    cat > /etc/rsyslog.d/90-forward.conf <<EOF
+*.* @${SIEM_IP}:514
+EOF
 fi
 
 # Start services via supervisord

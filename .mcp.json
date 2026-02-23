@@ -1,39 +1,66 @@
 {
   "mcpServers": {
-    "aptl-red-team": {
-      "command": "node",
+    "kali-ssh": {
+      "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
       "args": ["./mcp/mcp-red/build/index.js"],
       "cwd": "/home/atomik/src/aptl"
     },
-    "aptl-blue-team": {
-      "command": "node",
-      "args": ["./mcp/mcp-wazuh/build/index.js"],
-      "cwd": "/home/atomik/src/aptl"
-    },
-    "aptl-threat-intel": {
-      "command": "node",
-      "args": ["./mcp/mcp-threatintel/build/index.js"],
-      "cwd": "/home/atomik/src/aptl"
-    },
-    "aptl-case-mgmt": {
-      "command": "node",
-      "args": ["./mcp/mcp-casemgmt/build/index.js"],
-      "cwd": "/home/atomik/src/aptl"
-    },
-    "aptl-soar": {
-      "command": "node",
-      "args": ["./mcp/mcp-soar/build/index.js"],
-      "cwd": "/home/atomik/src/aptl"
-    },
-    "aptl-network-ids": {
-      "command": "node",
-      "args": ["./mcp/mcp-network/build/index.js"],
-      "cwd": "/home/atomik/src/aptl"
-    },
-    "aptl-reverse": {
-      "command": "node",
+    "reverse-sandbox-ssh": {
+      "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
       "args": ["./mcp/mcp-reverse/build/index.js"],
       "cwd": "/home/atomik/src/aptl"
+    },
+    "shuffle": {
+      "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
+      "args": ["./mcp/mcp-soar/build/index.js"],
+      "cwd": "/home/atomik/src/aptl",
+      "env": {
+        "SHUFFLE_API_KEY": "31a211c4-ea5c-4a49-b022-5e2434e758a7"
+      }
+    },
+    "indexer": {
+      "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
+      "args": ["./mcp/mcp-indexer/build/index.js"],
+      "cwd": "/home/atomik/src/aptl",
+      "env": {
+        "INDEXER_USERNAME": "admin",
+        "INDEXER_PASSWORD": "SecretPassword",
+        "API_USERNAME": "wazuh-wui",
+        "API_PASSWORD": "WazuhPass123!"
+      }
+    },
+    "wazuh": {
+      "command": "/home/atomik/src/aptl/tools/bin/mcp-server-wazuh",
+      "env": {
+        "WAZUH_API_HOST": "localhost",
+        "WAZUH_API_PORT": "55000",
+        "WAZUH_API_USERNAME": "wazuh-wui",
+        "WAZUH_API_PASSWORD": "WazuhPass123!",
+        "WAZUH_INDEXER_HOST": "localhost",
+        "WAZUH_INDEXER_PORT": "9200",
+        "WAZUH_INDEXER_USERNAME": "admin",
+        "WAZUH_INDEXER_PASSWORD": "SecretPassword",
+        "WAZUH_VERIFY_SSL": "false",
+        "RUST_LOG": "warn"
+      }
+    },
+    "misp": {
+      "command": "/home/atomik/src/aptl/tools/misp-mcp-server/.venv/bin/python",
+      "args": ["/home/atomik/src/aptl/tools/misp-mcp-server/misp_server.py"],
+      "env": {
+        "MISP_URL": "https://localhost:8443",
+        "MISP_API_KEY": "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw",
+        "MISP_VERIFY_SSL": "False"
+      }
+    },
+    "thehive": {
+      "command": "/home/atomik/src/aptl/tools/bin/thehivemcp",
+      "args": ["--transport", "stdio"],
+      "env": {
+        "THEHIVE_URL": "http://localhost:9000",
+        "THEHIVE_API_KEY": "e2RJy66b8sF421sPv8bFX5Nn7uMgJkMi",
+        "THEHIVE_ORGANISATION": "APTL"
+      }
     }
   }
 }

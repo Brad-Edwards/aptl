@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__aptl-reverse__reverse_info",
+      "mcp__aptl-soar__soar_get_execution",
+      "mcp__aptl-case-mgmt__cases_update_case",
+      "mcp__aptl-reverse__reverse_run_command",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git clone:*)"
+    ]
+  }
+}

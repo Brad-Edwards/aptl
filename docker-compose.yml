@@ -50,10 +50,14 @@ services:
       - ./config/wazuh_cluster/falco_rules.xml:/var/ossec/etc/rules/falco_rules.xml
       - ./config/wazuh_cluster/kali_redteam_rules.xml:/var/ossec/etc/rules/kali_redteam_rules.xml
       - ./config/wazuh_cluster/kali_decoders.xml:/var/ossec/etc/decoders/kali_decoders.xml
+      - ./config/wazuh_cluster/samba_decoders.xml:/var/ossec/etc/decoders/samba_decoders.xml
+      - ./config/wazuh_cluster/postgresql_decoders.xml:/var/ossec/etc/decoders/postgresql_decoders.xml
       - ./config/wazuh_cluster/ad_rules.xml:/var/ossec/etc/rules/ad_rules.xml
       - ./config/wazuh_cluster/webapp_rules.xml:/var/ossec/etc/rules/webapp_rules.xml
       - ./config/wazuh_cluster/suricata_rules.xml:/var/ossec/etc/rules/suricata_rules.xml
       - ./config/wazuh_cluster/database_rules.xml:/var/ossec/etc/rules/database_rules.xml
+      - ./config/wazuh_cluster/patch-rule-path.py:/docker-entrypoint-initdb.d/patch-rule-path.py:ro
+    entrypoint: ["/bin/bash", "-c", "python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init"]
     healthcheck:
       test: ["CMD-SHELL", "curl -ks https://localhost:55000 || exit 1"]
       interval: 30s
@@ -171,8 +175,8 @@ services:
       - NET_RAW
       - SYS_NICE
     volumes:
-      - ./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
-      - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules:ro
+      - ./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml
+      - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules
       - suricata_logs:/var/log/suricata
     command: ["-c", "/etc/suricata/suricata.yaml", "--af-packet"]
     deploy:
@@ -198,9 +202,10 @@ services:
       - MYSQL_DATABASE=misp
       - MYSQL_USER=misp
       - MYSQL_PASSWORD=misp_db_password
-      - MISP_ADMIN_EMAIL=admin@techvault.local
-      - MISP_ADMIN_PASSPHRASE=MispAdmin2024!
-      - MISP_BASEURL=https://misp.techvault.local
+      - ADMIN_EMAIL=admin@admin.test
+      - ADMIN_PASSWORD=admin
+      - ADMIN_KEY=JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw
+      - BASE_URL=https://localhost
       - REDIS_HOST=misp-redis
     volumes:
       - misp_data:/var/www/MISP/app/files
@@ -255,6 +260,7 @@ services:
     image: redis:7-alpine
     container_name: aptl-misp-redis
     restart: unless-stopped
+    command: redis-server --requirepass redispassword
     deploy:
       resources:
         limits:
@@ -278,7 +284,7 @@ services:
       - thehive_index:/opt/thp/thehive/index
     command:
       - --secret
-      - "thehive-lab-secret-key-2024"
+      - "aptl-thehive-lab-secret-key-2024-purple"
       - --cql-hostnames
       - "thehive-cassandra"
       - --index-backend
@@ -287,7 +293,7 @@ services:
       - "thehive-es"
       - --no-config-cortex
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/v1/status || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/status || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 10
@@ -366,10 +372,11 @@ services:
       - SHUFFLE_APP_SDK_TIMEOUT=120
       - SHUFFLE_DEFAULT_USERNAME=admin
       - SHUFFLE_DEFAULT_PASSWORD=ShuffleAdmin2024!
-      - SHUFFLE_DEFAULT_APIKEY=shuffle-lab-api-key-2024
+      - SHUFFLE_DEFAULT_APIKEY=31a211c4-ea5c-4a49-b022-5e2434e758a7
       - SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200
       - SHUFFLE_OPENSEARCH_USERNAME=admin
       - SHUFFLE_OPENSEARCH_PASSWORD=StrongPassword123!
+      - SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true
     volumes:
       - shuffle_data:/shuffle-database
       - /var/run/docker.sock:/var/run/docker.sock
@@ -409,14 +416,20 @@ services:
     image: ghcr.io/shuffle/shuffle-orborus:latest
     container_name: aptl-shuffle-orborus
     restart: unless-stopped
+    hostname: shuffle-orborus
     environment:
-      - SHUFFLE_WORKER_VERSION=latest
+      - SHUFFLE_APP_SDK_TIMEOUT=300
+      - ENVIRONMENT_NAME=Shuffle
+      - ORG_ID=Shuffle
       - BASE_URL=http://shuffle-backend:5001
-      - DOCKER_API_VERSION=1.40
-      - SHUFFLE_BASE_IMAGE_NAME=shuffle
+      - DOCKER_API_VERSION=1.44
+      - SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:latest
       - SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600
-      - ENVIRONMENT_NAME=APTL
-      - ORG_ID=aptl-lab
+      - SHUFFLE_STATS_DISABLED=true
+      - SHUFFLE_LOGS_DISABLED=true
+      - SHUFFLE_SKIP_PIPELINES=true
+      - ORBORUS_CONTAINER_NAME=aptl-shuffle-orborus
+      - CLEANUP=false
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     deploy:
@@ -499,6 +512,7 @@ services:
       - DB_USER=techvault
       - DB_PASSWORD=techvault_db_pass
       - FLASK_ENV=production
+      - SIEM_IP=172.20.2.30
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
       interval: 15s
@@ -608,7 +622,7 @@ services:
       - SAMBA_REALM=TECHVAULT.LOCAL
       - SAMBA_ADMIN_PASSWORD=Admin123!
       - DNS_FORWARDER=172.20.1.22
-      - SIEM_IP=172.20.0.10
+      - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
     volumes:
       - ad_data:/var/lib/samba
       - ad_logs:/var/log/samba
@@ -651,7 +665,7 @@ services:
     command: >
       postgres
         -c logging_collector=on
-        -c log_directory=/var/log/postgresql
+        -c log_directory=pg_log
         -c log_filename=postgresql.log
         -c log_statement=all
         -c log_connections=on
@@ -707,12 +721,13 @@ services:
     ports:
       - "2022:22"    # SSH access
     environment:
-      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
     cap_add:
       - SYS_NICE        # For process scheduling
       - SYS_ADMIN       # Required for systemd in container
       - SYS_RESOURCE    # For setting limits and OOM score
+    cgroup: host
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - ./keys:/keys:ro
@@ -759,7 +774,7 @@ services:
     ports:
       - "2023:22"    # SSH access for MCP
     environment:
-      - SIEM_IP=172.20.0.10  # wazuh.manager
+      - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
       - VICTIM_IP=172.20.2.20
     volumes:
       - ./keys:/host-ssh-keys:ro

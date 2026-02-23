@@ -109,7 +109,10 @@ The MCP layer is split into multiple servers under `mcp/`, each serving a differ
 - `mcp/mcp-red/` - Kali/red team operations
 - `mcp/mcp-wazuh/` - Wazuh SIEM queries and detection rules
 - `mcp/mcp-reverse/` - Reverse engineering container
-- `mcp/mcp-windows-re/` - Windows reverse engineering
+- `mcp/mcp-threatintel/` - MISP threat intelligence
+- `mcp/mcp-casemgmt/` - TheHive case management
+- `mcp/mcp-soar/` - Shuffle SOAR workflows
+- `mcp/mcp-network/` - Suricata IDS / network analysis
 - `mcp/aptl-mcp-common/` - Shared library (not a standalone server)
 
 **Cursor**: Create `.cursor/mcp.json`:
@@ -146,7 +149,7 @@ The MCP layer is split into multiple servers under `mcp/`, each serving a differ
 }
 ```
 
-Add additional servers (`mcp-reverse`, `mcp-windows-re`, etc.) as needed for your workflow.
+Add additional servers (`mcp-reverse`, `mcp-threatintel`, etc.) as needed for your workflow.
 
 ## Important Notes
 
@@ -248,3 +251,5 @@ NEVER make commits without explicit user permission:
 5. NEVER include Claude attribution or co-authored-by tags
 
 This prevents code accumulation and maintains clean, maintainable codebase.
+
+DO NOT assume you can skip fixing pre-existing issues or bugs. If you see a problem, tell the user and ask if they want you to fix it.

@@ -8,6 +8,11 @@ import pytest
 import yaml
 
 
+# ---------------------------------------------------------------------------
+# Unit test fixtures
+# ---------------------------------------------------------------------------
+
+
 @pytest.fixture
 def tmp_config_dir(tmp_path: Path) -> Path:
     """Provide a temporary directory for config files."""

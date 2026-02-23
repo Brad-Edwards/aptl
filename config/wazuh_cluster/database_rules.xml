@@ -17,12 +17,12 @@
     <group>database,brute_force,</group>
   </rule>
 
-  <!-- PostgreSQL connection from unexpected source -->
+  <!-- PostgreSQL connection from known attacker IPs -->
   <rule id="304010" level="8">
     <decoded_as>postgresql_log</decoded_as>
     <match>connection received</match>
-    <srcip>!172.20.1.20|!172.20.2.20</srcip>
-    <description>PostgreSQL connection from unexpected source: $(srcip)</description>
+    <srcip>172.20.4.30</srcip>
+    <description>PostgreSQL connection from red team IP: $(srcip)</description>
     <group>database,unauthorized_access,</group>
   </rule>
 

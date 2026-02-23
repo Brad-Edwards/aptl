@@ -1,0 +1,4 @@
+# Downloaded MCP server binaries and cloned repos
+# These are installed per-machine, not committed
+bin/
+misp-mcp-server/

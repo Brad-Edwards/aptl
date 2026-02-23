@@ -6,10 +6,10 @@ if [ -n "$SIEM_IP" ]; then
     echo "Configuring red team log forwarding to Wazuh SIEM..."
 
     # Configure rsyslog for Wazuh (port 514)
-    cat >> /etc/rsyslog.conf << EOF
-# APTL Red Team Log Forwarding - Wazuh
-# Route red team logs to Wazuh
-:msg, contains, "REDTEAM_LOG" @@$SIEM_IP:514
+    # Forward all syslog to Wazuh manager for SIEM visibility
+    mkdir -p /etc/rsyslog.d
+    cat > /etc/rsyslog.d/90-forward.conf << EOF
+*.* @$SIEM_IP:514
 EOF
 
     # Validate IP addresses before substitution

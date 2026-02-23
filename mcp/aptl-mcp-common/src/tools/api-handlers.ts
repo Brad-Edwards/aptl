@@ -103,6 +103,18 @@ const baseAPIHandlers = {
     const finalParams = { ...queryConfig.params, ...params };
     const finalBody = queryConfig.body ? { ...queryConfig.body, ...body } : body;
 
+    // Substitute {key} path parameters in URL and remove them from query params
+    let url = queryConfig.url;
+    const queryParams: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(finalParams)) {
+      const placeholder = `{${key}}`;
+      if (url.includes(placeholder)) {
+        url = url.replace(placeholder, encodeURIComponent(String(value)));
+      } else {
+        queryParams[key] = value;
+      }
+    }
+
     try {
       // Use per-query auth if specified, otherwise fall back to default client
       let result;
@@ -114,14 +126,14 @@ const baseAPIHandlers = {
           verify_ssl: queryConfig.verify_ssl !== false
         };
         const queryClient = new HTTPClient(queryAPIConfig);
-        result = await queryClient.makeRequest(queryConfig.url, queryConfig.method, {
-          params: finalParams,
+        result = await queryClient.makeRequest(url, queryConfig.method, {
+          params: queryParams,
           body: finalBody,
           responseType: queryConfig.response_type || 'json',
         });
       } else {
-        result = await context.httpClient.makeRequest(queryConfig.url, queryConfig.method, {
-          params: finalParams,
+        result = await context.httpClient.makeRequest(url, queryConfig.method, {
+          params: queryParams,
           body: finalBody,
           responseType: queryConfig.response_type || 'json',
         });
@@ -134,7 +146,7 @@ const baseAPIHandlers = {
             text: JSON.stringify({
               success: true,
               query: queryConfig.description,
-              endpoint: queryConfig.url,
+              endpoint: url,
               method: queryConfig.method,
               status: result.status,
               data: result.data,

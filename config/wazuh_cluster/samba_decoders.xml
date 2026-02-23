@@ -1,0 +1,12 @@
+<!-- Samba AD Decoders for APTL Lab -->
+<decoder name="samba">
+  <program_name>^samba</program_name>
+  <regex>(\S+)\s+(\S+)\s+(.+)</regex>
+  <order>srcuser,srcip,extra_data</order>
+</decoder>
+
+<decoder name="samba_smbd">
+  <program_name>^smbd</program_name>
+  <regex>(\S+)\s+(\S+)\s+(.+)</regex>
+  <order>srcuser,srcip,extra_data</order>
+</decoder>

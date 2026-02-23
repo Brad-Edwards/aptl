@@ -1,0 +1,12 @@
+<!-- PostgreSQL Log Decoders for APTL Lab -->
+<decoder name="postgresql_log">
+  <program_name>^postgres</program_name>
+  <regex>(\S+)@(\S+)\s+(.+)</regex>
+  <order>srcuser,srcip,extra_data</order>
+</decoder>
+
+<decoder name="postgresql_log_ts">
+  <prematch>^\d+-\d+-\d+ \d+:\d+:\d+</prematch>
+  <regex>(\S+)@(\S+)\s+(.+)</regex>
+  <order>srcuser,srcip,extra_data</order>
+</decoder>

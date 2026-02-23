@@ -1,3 +1,4 @@
+<!-- Kali Red Team Decoders for APTL Lab -->
 <decoder name="kali_commands">
   <program_name>^kali_commands</program_name>
 </decoder>

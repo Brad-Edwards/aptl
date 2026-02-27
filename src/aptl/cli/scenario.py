@@ -1,7 +1,10 @@
 """CLI commands for scenario management."""
 
+import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 import sys
 
@@ -9,11 +12,12 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from aptl.core.config import AptlConfig, find_config, load_config
 from aptl.core.events import EventLog, EventType, make_event
-from aptl.core.objectives import EvaluationResult, ObjectiveStatus, evaluate_all
+from aptl.core.flags import collect_flags
+from aptl.core.run_assembler import assemble_run
+from aptl.core.runstore import LocalRunStore
 from aptl.core.scenarios import (
-    Objective,
-    ObjectiveType,
     ScenarioDefinition,
     ScenarioNotFoundError,
     ScenarioStateError,
@@ -21,7 +25,6 @@ from aptl.core.scenarios import (
     find_scenarios,
     load_scenario,
 )
-from aptl.core.scoring import calculate_score, generate_report, write_report
 from aptl.core.session import ActiveSession, ScenarioSession
 from aptl.utils.logging import get_logger
 
@@ -128,52 +131,6 @@ def _load_active_scenario(
     """
     resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
     return _load_scenario_or_exit(resolved_dir, session.scenario_id)
-
-
-def _find_objective(
-    scenario: ScenarioDefinition,
-    objective_id: str,
-) -> Objective:
-    """Find an objective by ID or exit with an error.
-
-    Returns:
-        The matching Objective.
-
-    Raises:
-        typer.Exit: If the objective is not found.
-    """
-    all_objectives = scenario.objectives.all_objectives()
-    obj = next((o for o in all_objectives if o.id == objective_id), None)
-    if obj is None:
-        log.error("Objective not found: %s", objective_id)
-        typer.echo(f"Objective not found: {objective_id}")
-        raise typer.Exit(code=1)
-    return obj
-
-
-def _record_new_completions(
-    eval_result: EvaluationResult,
-    completed_ids: set[str],
-    session_mgr: ScenarioSession,
-    event_log: EventLog,
-    scenario_id: str,
-) -> int:
-    """Record newly completed objectives in session and event log.
-
-    Returns:
-        Number of new completions recorded.
-    """
-    new_completions = 0
-    for r in eval_result.results:
-        if r.status == ObjectiveStatus.COMPLETED and r.objective_id not in completed_ids:
-            session_mgr.record_objective_complete(r.objective_id)
-            event_log.append(make_event(
-                EventType.OBJECTIVE_COMPLETED,
-                scenario_id,
-                {"objective_id": r.objective_id, "details": r.details},
-            ))
-            new_completions += 1
-    return new_completions
 
 
 # ---------------------------------------------------------------------------
@@ -355,16 +312,7 @@ def show(
 
             typer.echo("")
 
-    scoring = scenario.scoring
-    typer.echo("")
-    typer.echo("Scoring:")
-    typer.echo(f"  Max Score:      {scoring.max_score}")
-    typer.echo(f"  Passing Score:  {scoring.passing_score}")
-    if scoring.time_bonus.enabled:
-        typer.echo(
-            f"  Time Bonus:     up to {scoring.time_bonus.max_bonus} pts "
-            f"(decays after {scoring.time_bonus.decay_after_minutes} min)"
-        )
+    typer.echo(f"  Description:  {meta.description.strip()}")
 
 
 @app.command()
@@ -431,18 +379,47 @@ def start(
         typer.echo(f"Error: {e}")
         raise typer.Exit(code=1) from e
 
+    # Generate run_id and store in session
+    run_id = uuid4().hex
+    session.run_id = run_id
+    session_mgr._write(session)
+
+    # Set trace directory for MCP servers and clean stale traces
+    trace_dir = state / "traces"
+    if trace_dir.exists():
+        shutil.rmtree(trace_dir)
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["APTL_TRACE_DIR"] = str(trace_dir)
+
+    # Collect CTF flags from running containers
+    flags = collect_flags()
+    if flags:
+        session.flags = flags
+        session_mgr._write(session)
+        flag_count = sum(len(v) for v in flags.values())
+        log.info("Captured %d flags from %d containers", flag_count, len(flags))
+    else:
+        log.warning("No CTF flags collected (containers may not be running)")
+
     event_log = EventLog(state / session.events_file)
     event_log.append(make_event(
         EventType.SCENARIO_STARTED,
         scenario.metadata.id,
-        {"mode": scenario.mode.value},
+        {
+            "mode": scenario.mode.value,
+            "flags_collected": len(flags),
+            "run_id": run_id,
+        },
     ))
 
     typer.echo(f"Started scenario: {scenario.metadata.name}")
     typer.echo(f"  ID:         {scenario.metadata.id}")
+    typer.echo(f"  Run ID:     {run_id}")
     typer.echo(f"  Mode:       {scenario.mode.value}")
     typer.echo(f"  Objectives: {len(scenario.objectives.all_objectives())}")
+    typer.echo(f"  Flags:      {sum(len(v) for v in flags.values())} captured")
     typer.echo(f"  Events:     {session.events_file}")
+    typer.echo(f"  Traces:     {trace_dir}")
 
 
 @app.command()
@@ -471,188 +448,12 @@ def status(
 
     typer.echo(f"Active scenario: {session.scenario_id}")
     typer.echo(f"  State:       {session.state.value}")
+    if session.run_id:
+        typer.echo(f"  Run ID:      {session.run_id}")
     typer.echo(f"  Started:     {session.started_at}")
     typer.echo(f"  Elapsed:     {minutes}m {seconds}s")
     typer.echo(f"  Completed:   {len(session.completed_objectives)} objectives")
     typer.echo(f"  Hints used:  {len(session.hints_used)}")
-
-
-@app.command()
-def evaluate(
-    project_dir: Path = typer.Option(
-        Path("."),
-        "--project-dir",
-        "-d",
-        help="Path to the APTL project directory.",
-    ),
-    scenarios_dir: Path | None = typer.Option(
-        None,
-        "--scenarios-dir",
-        "-s",
-        help="Path to scenarios directory. Defaults to <project-dir>/scenarios.",
-    ),
-) -> None:
-    """Run objective evaluation against live lab state."""
-    state = _state_dir(project_dir)
-    session_mgr = ScenarioSession(state)
-    session = _require_active_session(session_mgr)
-
-    scenario = _load_active_scenario(session, project_dir, scenarios_dir)
-    all_objectives = scenario.objectives.all_objectives()
-    completed_ids = set(session.completed_objectives)
-
-    eval_result = evaluate_all(
-        all_objectives,
-        scenario_start_time=session.started_at,
-        completed_ids=completed_ids,
-    )
-
-    # Record newly completed objectives
-    event_log = EventLog(state / session.events_file)
-    new_completions = _record_new_completions(
-        eval_result, completed_ids, session_mgr, event_log, session.scenario_id,
-    )
-
-    event_log.append(make_event(
-        EventType.EVALUATION_RUN,
-        session.scenario_id,
-        {"new_completions": new_completions},
-    ))
-
-    # Display results
-    table = Table(title="Evaluation Results")
-    table.add_column("Objective", style="cyan")
-    table.add_column("Status")
-    table.add_column("Details")
-
-    for r in eval_result.results:
-        status_style = "green" if r.status == ObjectiveStatus.COMPLETED else "yellow"
-        table.add_row(
-            r.objective_id,
-            f"[{status_style}]{r.status.value}[/{status_style}]",
-            r.details,
-        )
-
-    console.print(table)
-
-    completed_count = sum(
-        1 for r in eval_result.results if r.status == ObjectiveStatus.COMPLETED
-    )
-    typer.echo(
-        f"\n{completed_count}/{len(eval_result.results)} objectives completed"
-    )
-    if eval_result.all_complete:
-        typer.echo("All objectives complete! Run 'aptl scenario stop' to finish.")
-
-
-@app.command()
-def hint(
-    objective_id: str = typer.Argument(help="Objective ID to get a hint for."),
-    project_dir: Path = typer.Option(
-        Path("."),
-        "--project-dir",
-        "-d",
-        help="Path to the APTL project directory.",
-    ),
-    scenarios_dir: Path | None = typer.Option(
-        None,
-        "--scenarios-dir",
-        "-s",
-        help="Path to scenarios directory. Defaults to <project-dir>/scenarios.",
-    ),
-) -> None:
-    """Reveal the next hint for an objective."""
-    state = _state_dir(project_dir)
-    session_mgr = ScenarioSession(state)
-    session = _require_active_session(session_mgr)
-
-    scenario = _load_active_scenario(session, project_dir, scenarios_dir)
-    obj = _find_objective(scenario, objective_id)
-
-    if not obj.hints:
-        typer.echo(f"No hints available for objective '{objective_id}'.")
-        return
-
-    # Find the next hint level
-    current_level = session.hints_used.get(objective_id, 0)
-    next_hint = None
-    for h in sorted(obj.hints, key=lambda x: x.level):
-        if h.level > current_level:
-            next_hint = h
-            break
-
-    if next_hint is None:
-        typer.echo(f"All hints already revealed for '{objective_id}'.")
-        return
-
-    # Record and display
-    session_mgr.record_hint(objective_id, next_hint.level)
-
-    event_log = EventLog(state / session.events_file)
-    event_log.append(make_event(
-        EventType.HINT_REQUESTED,
-        session.scenario_id,
-        {"objective_id": objective_id, "level": next_hint.level},
-    ))
-
-    penalty_note = ""
-    if next_hint.point_penalty > 0:
-        penalty_note = f" (-{next_hint.point_penalty} pts)"
-
-    typer.echo(f"Hint (level {next_hint.level}/{len(obj.hints)}){penalty_note}:")
-    typer.echo(f"  {next_hint.text}")
-
-
-@app.command()
-def complete(
-    objective_id: str = typer.Argument(help="Objective ID to mark as complete."),
-    project_dir: Path = typer.Option(
-        Path("."),
-        "--project-dir",
-        "-d",
-        help="Path to the APTL project directory.",
-    ),
-    scenarios_dir: Path | None = typer.Option(
-        None,
-        "--scenarios-dir",
-        "-s",
-        help="Path to scenarios directory. Defaults to <project-dir>/scenarios.",
-    ),
-) -> None:
-    """Manually mark a MANUAL objective as complete."""
-    state = _state_dir(project_dir)
-    session_mgr = ScenarioSession(state)
-    session = _require_active_session(session_mgr)
-
-    scenario = _load_active_scenario(session, project_dir, scenarios_dir)
-    obj = _find_objective(scenario, objective_id)
-
-    if obj.type != ObjectiveType.MANUAL:
-        log.warning(
-            "Attempted manual completion of non-manual objective '%s' (type=%s)",
-            objective_id,
-            obj.type.value,
-        )
-        typer.echo(
-            f"Objective '{objective_id}' is type '{obj.type.value}', "
-            "not 'manual'. Only manual objectives can be completed manually."
-        )
-        raise typer.Exit(code=1)
-
-    if objective_id in session.completed_objectives:
-        typer.echo(f"Objective '{objective_id}' is already completed.")
-        return
-
-    session_mgr.record_objective_complete(objective_id)
-
-    event_log = EventLog(state / session.events_file)
-    event_log.append(make_event(
-        EventType.OBJECTIVE_COMPLETED,
-        session.scenario_id,
-        {"objective_id": objective_id, "manual": True},
-    ))
-
-    typer.echo(f"Objective '{objective_id}' marked as complete.")
 
 
 @app.command()
@@ -670,94 +471,70 @@ def stop(
         help="Path to scenarios directory. Defaults to <project-dir>/scenarios.",
     ),
 ) -> None:
-    """Stop the active scenario and generate a report."""
+    """Stop the active scenario and assemble the run archive."""
     state = _state_dir(project_dir)
     session_mgr = ScenarioSession(state)
     session = _require_active_session(session_mgr)
 
     scenario = _load_active_scenario(session, project_dir, scenarios_dir)
 
-    # Run final evaluation
-    all_objectives = scenario.objectives.all_objectives()
-    completed_ids = set(session.completed_objectives)
-
-    eval_result = evaluate_all(
-        all_objectives,
-        scenario_start_time=session.started_at,
-        completed_ids=completed_ids,
-    )
-
-    # Record any new completions
-    event_log = EventLog(state / session.events_file)
-    _record_new_completions(
-        eval_result, completed_ids, session_mgr, event_log, session.scenario_id,
-    )
-
-    # Re-read session with updated completions
-    session = session_mgr.get_active()
-
     # Log stop event
+    event_log = EventLog(state / session.events_file)
     event_log.append(make_event(
         EventType.SCENARIO_STOPPED,
         session.scenario_id,
     ))
 
-    # Calculate score
+    # Calculate duration
     started = datetime.fromisoformat(session.started_at)
     elapsed = (datetime.now(timezone.utc) - started).total_seconds()
-
-    score = calculate_score(
-        all_objectives,
-        eval_result.results,
-        scenario.scoring,
-        elapsed,
-        session.hints_used,
-    )
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
 
     # Finish session
     finished_session = session_mgr.finish()
 
-    # Read events and generate report
+    # Read events
     events = event_log.read_all()
-    report = generate_report(scenario, finished_session, eval_result.results, events, score)
 
-    # Write report
-    reports_dir = state / "reports"
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
-    report_path = reports_dir / f"{session.scenario_id}_{ts}.json"
-    write_report(report, report_path)
+    # Assemble experiment run directory (if run_id was set)
+    run_dir = None
+    if session.run_id:
+        try:
+            config_path = find_config(project_dir)
+            config = load_config(config_path) if config_path else AptlConfig()
+
+            local_path = Path(config.run_storage.local_path)
+            if not local_path.is_absolute():
+                local_path = project_dir / local_path
+
+            store = LocalRunStore(local_path)
+
+            resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
+            scenario_path = _find_scenario_by_name(
+                resolved_dir, session.scenario_id
+            )
+
+            run_dir = assemble_run(
+                store=store,
+                run_id=session.run_id,
+                session=finished_session,
+                scenario=scenario,
+                scenario_path=scenario_path,
+                events=events,
+                config=config,
+            )
+        except Exception as e:
+            log.error("Failed to assemble run: %s", e)
+            typer.echo(f"Warning: Run assembly failed: {e}")
 
     # Clear session
     session_mgr.clear()
 
     # Display summary
     typer.echo(f"Scenario stopped: {scenario.metadata.name}")
-    typer.echo("")
-
-    table = Table(title="Final Results")
-    table.add_column("Objective", style="cyan")
-    table.add_column("Status")
-    table.add_column("Points")
-
-    for r in eval_result.results:
-        obj = next((o for o in all_objectives if o.id == r.objective_id), None)
-        points = obj.points if obj and r.status == ObjectiveStatus.COMPLETED else 0
-        status_style = "green" if r.status == ObjectiveStatus.COMPLETED else "red"
-        table.add_row(
-            r.objective_id,
-            f"[{status_style}]{r.status.value}[/{status_style}]",
-            str(points),
-        )
-
-    console.print(table)
-
-    typer.echo("")
-    typer.echo(f"Score: {score.total}/{score.max_possible}")
-    if score.time_bonus > 0:
-        typer.echo(f"  Time bonus:     +{score.time_bonus}")
-    if score.hint_penalties > 0:
-        typer.echo(f"  Hint penalties: -{score.hint_penalties}")
-
-    result_text = "[green]PASS[/green]" if score.passing else "[red]FAIL[/red]"
-    console.print(f"Result: {result_text}")
-    typer.echo(f"Report: {report_path}")
+    typer.echo(f"  Duration: {minutes}m {seconds}s")
+    flag_count = sum(len(v) for v in session.flags.values())
+    typer.echo(f"  Flags:    {flag_count}")
+    if run_dir:
+        typer.echo(f"  Run:      {run_dir}")

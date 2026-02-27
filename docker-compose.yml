@@ -38,6 +38,7 @@ services:
       - wazuh_queue:/var/ossec/queue
       - wazuh_var_multigroups:/var/ossec/var/multigroups
       - wazuh_integrations:/var/ossec/integrations
+      - ./config/wazuh_cluster/custom-shuffle:/var/ossec/integrations/custom-shuffle
       - wazuh_active_response:/var/ossec/active-response/bin
       - wazuh_agentless:/var/ossec/agentless
       - wazuh_wodles:/var/ossec/wodles
@@ -751,6 +752,48 @@ services:
       wazuh.manager:
         condition: service_healthy
 
+  # Workstation Container - Developer Linux Workstation
+  workstation:
+    profiles: ["enterprise"]
+    build:
+      context: ./containers
+      dockerfile: workstation/Dockerfile
+    container_name: aptl-workstation
+    hostname: ws01.techvault.local
+    restart: unless-stopped
+    networks:
+      aptl-internal:
+        ipv4_address: 172.20.2.40
+    ports:
+      - "2028:22"    # SSH access
+    environment:
+      - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
+      - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
+    cap_add:
+      - SYS_NICE        # For process scheduling
+      - SYS_ADMIN       # Required for systemd in container
+      - SYS_RESOURCE    # For setting limits and OOM score
+    cgroup: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ./keys:/keys:ro
+      - workstation_logs:/var/log
+    tmpfs:
+      - /run
+      - /tmp
+    security_opt:
+      - seccomp:unconfined
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "ss -tlnp | grep ':22' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+
   # ==========================================================================
   # RED TEAM (aptl-redteam network: 172.20.4.0/24)
   # ==========================================================================
@@ -934,6 +977,7 @@ volumes:
 
   # Application volumes
   victim_logs:
+  workstation_logs:
   kali_operations:
   kali_logs:
   reverse_logs:

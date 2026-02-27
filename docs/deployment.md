@@ -5,10 +5,11 @@
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
-./start-lab.sh
+pip install -e .
+aptl lab start
 ```
 
-**Use the script.** Manual deployment is error-prone and takes longer.
+**Use the CLI.** Manual deployment is error-prone and takes longer.
 
 ## Configuration
 
@@ -54,15 +55,16 @@ cd aptl
 docker compose -f generate-indexer-certs.yml run --rm generator
 
 # Build MCP servers (optional - for AI integration)
-cd mcp/mcp-red && npm install && npm run build && cd ../..
-cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
+./mcp/build-all-mcps.sh
 ```
 
 #### 3. Deploy
 
 ```bash
-docker compose up --build -d
+docker compose --profile wazuh --profile victim --profile kali up --build -d
 ```
+
+**Note:** Profile flags are required for manual docker compose commands.
 
 Wait 5-10 minutes for Wazuh indexer initialization.
 
@@ -103,17 +105,23 @@ ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "echo OK"      # Kali
 ## Management
 
 ```bash
-# Start lab
-./start-lab.sh
+# Start lab (recommended)
+aptl lab start
+
+# Check status
+aptl lab status
 
 # Stop lab
-docker compose stop
+aptl lab stop
 
-# Restart
-docker compose restart
+# Stop and remove all volumes
+aptl lab stop -v
 
-# Clean removal
-docker compose down -v
+# Manual stop (requires profile flags)
+docker compose --profile wazuh --profile victim --profile kali stop
+
+# Manual clean removal
+docker compose --profile wazuh --profile victim --profile kali down -v
 ```
 
 ## Troubleshooting

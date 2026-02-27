@@ -10,6 +10,10 @@
         "fileshare": false,
         "dns": false
     },
+    "run_storage": {
+        "backend": "local",
+        "local_path": "./runs"
+    },
     "edr_agents": {
         "victim": ["wazuh", "falco"],
         "kali": ["wazuh"],

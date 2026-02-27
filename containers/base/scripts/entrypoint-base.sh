@@ -101,6 +101,54 @@ setup_wazuh_env() {
     fi
 }
 
+# Generate CTF flag files with signed tokens.
+# Usage: generate_flags <hostname> <user_flag_path> <user_owner>
+#   - hostname:       short name used in the flag (e.g. "victim")
+#   - user_flag_path: absolute path for the user-level flag file
+#   - user_owner:     owner:group for user flag (e.g. "labadmin:labadmin")
+#   Root flag is always placed at /root/root.txt (600, root:root).
+generate_flags() {
+    local hostname="$1"
+    local user_flag_path="$2"
+    local user_owner="$3"
+    local root_flag_path="/root/root.txt"
+    local key="${APTL_FLAG_KEY:-aptl-flag-key-2024}"
+
+    for level in user root; do
+        local nonce
+        nonce=$(od -A n -t x1 -N 16 /dev/urandom | tr -d ' \n')
+        local flag="APTL{${level}_${hostname}_${nonce}}"
+        local sig
+        sig=$(printf '%s' "${key}:${hostname}:${level}:${nonce}" | md5sum | awk '{print $1}')
+        local token="aptl:v1:${hostname}:${level}:${nonce}:${sig}"
+
+        local dest
+        if [ "$level" = "user" ]; then
+            dest="$user_flag_path"
+        else
+            dest="$root_flag_path"
+        fi
+
+        mkdir -p "$(dirname "$dest")"
+        cat > "$dest" <<EOF
+===== APTL CTF Flag =====
+Flag:  ${flag}
+Token: ${token}
+==========================
+EOF
+
+        if [ "$level" = "user" ]; then
+            chown "$user_owner" "$dest"
+            chmod 644 "$dest"
+        else
+            chown root:root "$dest"
+            chmod 600 "$dest"
+        fi
+    done
+
+    echo "CTF flags generated for ${hostname}"
+}
+
 # Common entrypoint main sequence - call from container entrypoint.sh
 run_common_entrypoint() {
     echo "Container hostname: $(hostname)"

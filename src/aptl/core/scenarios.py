@@ -366,6 +366,7 @@ class AttackStep(BaseModel):
     tactic: str
     description: str
     target: str
+    vulnerability: str = ""
     commands: list[str] = []
     prerequisites: list[str] = []
     expected_detections: list[ExpectedDetection] = []
@@ -386,6 +387,7 @@ class ScenarioDefinition(BaseModel):
     scoring: ScoringConfig = ScoringConfig()
     attack_chain: str = ""
     steps: list[AttackStep] = []
+    defenses: dict | None = None
 
     @model_validator(mode="after")
     def validate_has_content(self) -> "ScenarioDefinition":

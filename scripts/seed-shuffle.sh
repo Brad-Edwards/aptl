@@ -4,12 +4,14 @@ set -euo pipefail
 # =============================================================================
 # APTL Shuffle SOAR Seed Script
 # =============================================================================
-# Seeds Shuffle with a basic "Alert to Case" workflow that receives alert
-# webhooks and creates corresponding TheHive cases.
+# Seeds Shuffle with an "Alert to Case" workflow that receives alert
+# webhooks, enriches the source IP via MISP threat intel lookup, then
+# creates a corresponding TheHive case with enrichment data.
 #
 # Prerequisites:
 #   - Shuffle backend running (aptl-shuffle-backend / localhost:5001)
 #   - TheHive running (aptl-thehive / localhost:9000)
+#   - MISP running (aptl-misp / localhost:8443)
 #   - THEHIVE_API_KEY env var set
 #
 # Usage:
@@ -25,16 +27,34 @@ set -euo pipefail
 SHUFFLE_URL="${SHUFFLE_URL:-http://localhost:5001}"
 SHUFFLE_API_KEY="${SHUFFLE_API_KEY:-31a211c4-ea5c-4a49-b022-5e2434e758a7}"
 THEHIVE_INTERNAL_URL="http://172.20.0.18:9000"
+MISP_INTERNAL_URL="https://172.20.0.16"
+MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
 WORKFLOW_NAME="APTL Alert to Case"
 
 # ---------------------------------------------------------------------------
 # Preflight checks
 # ---------------------------------------------------------------------------
-THEHIVE_API_KEY="${THEHIVE_API_KEY:-e2RJy66b8sF421sPv8bFX5Nn7uMgJkMi}"
+
+# Auto-provision TheHive API key if not set in env
+if [ -z "${THEHIVE_API_KEY:-}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
+        THEHIVE_API_KEY=$("$SCRIPT_DIR/thehive-apikey.sh" 2>/dev/null) || true
+    fi
+fi
+THEHIVE_API_KEY="${THEHIVE_API_KEY:-}"
+
+if [ -z "$THEHIVE_API_KEY" ]; then
+    echo "WARNING: THEHIVE_API_KEY not set and auto-provision failed."
+    echo "The Shuffle workflow will be created but TheHive integration may not work."
+    echo "Set THEHIVE_API_KEY or run: export THEHIVE_API_KEY=\$(./scripts/thehive-apikey.sh)"
+    THEHIVE_API_KEY="PLACEHOLDER-SET-ME"
+fi
 
 echo "=== APTL Shuffle SOAR Seed ==="
 echo "Shuffle URL:  ${SHUFFLE_URL}"
 echo "TheHive URL:  ${THEHIVE_INTERNAL_URL}"
+echo "MISP URL:     ${MISP_INTERNAL_URL}"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -100,27 +120,44 @@ echo ""
 # Build and create workflow
 # ---------------------------------------------------------------------------
 TRIGGER_ID="trigger-webhook-$(date +%s)"
-ACTION_ID="action-create-case-$(date +%s)"
+MISP_ACTION_ID="action-misp-lookup-$(date +%s)"
+CASE_ACTION_ID="action-create-case-$(date +%s)"
 
 read -r -d '' WORKFLOW_JSON << ENDJSON || true
 {
     "name": "${WORKFLOW_NAME}",
-    "description": "Receives alert webhook, creates TheHive case",
+    "description": "Receives Wazuh alert webhook, enriches source IP via MISP, creates TheHive case",
     "start": "${TRIGGER_ID}",
     "actions": [
         {
-            "id": "${ACTION_ID}",
+            "id": "${MISP_ACTION_ID}",
+            "app_name": "http",
+            "app_version": "1.4.0",
+            "name": "POST",
+            "label": "misp_ip_lookup",
+            "environment": "Shuffle",
+            "position": {"x": 450, "y": 200},
+            "parameters": [
+                {"name": "url", "value": "${MISP_INTERNAL_URL}/attributes/restSearch"},
+                {"name": "method", "value": "POST"},
+                {"name": "headers", "value": "Authorization: ${MISP_API_KEY}\nContent-Type: application/json\nAccept: application/json"},
+                {"name": "body", "value": "{\"value\": \"\$exec.data.srcip\", \"type\": \"ip-src\", \"returnFormat\": \"json\"}"},
+                {"name": "verify_ssl", "value": "false"}
+            ]
+        },
+        {
+            "id": "${CASE_ACTION_ID}",
             "app_name": "http",
             "app_version": "1.4.0",
             "name": "POST",
             "label": "create_thehive_case",
             "environment": "Shuffle",
-            "position": {"x": 600, "y": 200},
+            "position": {"x": 750, "y": 200},
             "parameters": [
                 {"name": "url", "value": "${THEHIVE_INTERNAL_URL}/api/v1/case"},
                 {"name": "method", "value": "POST"},
                 {"name": "headers", "value": "Authorization: Bearer ${THEHIVE_API_KEY}\nContent-Type: application/json"},
-                {"name": "body", "value": "{\"title\": \"\$exec.title\", \"description\": \"\$exec.description\", \"severity\": 2}"},
+                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh Alert Details:\\n- Rule: \$exec.rule.id (\$exec.rule.description)\\n- Level: \$exec.rule.level\\n- Source IP: \$exec.data.srcip\\n- Agent: \$exec.agent.name\\n- Timestamp: \$exec.timestamp\\n\\nMISP Enrichment:\\n\$misp_ip_lookup\", \"severity\": 3}"},
                 {"name": "verify_ssl", "value": "false"}
             ]
         }
@@ -133,14 +170,20 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
             "trigger_type": "WEBHOOK",
             "status": "running",
             "environment": "Shuffle",
-            "position": {"x": 200, "y": 200},
+            "position": {"x": 150, "y": 200},
             "parameters": []
         }
     ],
     "branches": [
         {
             "source_id": "${TRIGGER_ID}",
-            "destination_id": "${ACTION_ID}",
+            "destination_id": "${MISP_ACTION_ID}",
+            "conditions": [],
+            "has_errors": false
+        },
+        {
+            "source_id": "${MISP_ACTION_ID}",
+            "destination_id": "${CASE_ACTION_ID}",
             "conditions": [],
             "has_errors": false
         }
@@ -209,6 +252,10 @@ print(json.dumps(wf))
             "${SHUFFLE_URL}/api/v1/workflows/${CREATED_ID}" > /dev/null
 
         echo "  Start node set to trigger: ${REAL_TRIGGER_ID}"
+
+        # Write webhook URL for Wazuh integration
+        echo "http://shuffle-backend:5001/api/v1/hooks/${REAL_TRIGGER_ID}" > /tmp/aptl_shuffle_webhook_url
+        echo "  Webhook URL written to /tmp/aptl_shuffle_webhook_url"
     fi
 else
     echo "ERROR: Failed to create workflow (HTTP ${CREATE_CODE})."
@@ -225,7 +272,12 @@ echo "=== Shuffle Seed Complete ==="
 echo ""
 echo "Workflow:     ${WORKFLOW_NAME}"
 echo "Workflow ID:  ${CREATED_ID}"
-echo "Description:  Receives alert webhook -> creates TheHive case"
+echo "Description:  Webhook -> MISP IP lookup -> TheHive case"
+echo ""
+echo "Pipeline:     Wazuh alert -> Shuffle webhook"
+echo "              -> MISP source IP enrichment (${MISP_INTERNAL_URL})"
+echo "              -> TheHive case creation (${THEHIVE_INTERNAL_URL})"
 echo ""
 echo "TheHive:      ${THEHIVE_INTERNAL_URL}"
+echo "MISP:         ${MISP_INTERNAL_URL}"
 echo "Shuffle UI:   http://localhost:3443"

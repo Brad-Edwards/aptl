@@ -132,6 +132,11 @@ samba-tool user create former.employee 'OldPassword1' \
     --description="Account should have been deleted in Q2" 2>/dev/null || true
 # Note: account is enabled (should be disabled - vulnerability)
 
+echo "=== Configuring account lockout policy ==="
+samba-tool domain passwordsettings set --account-lockout-threshold=10 2>/dev/null || true
+samba-tool domain passwordsettings set --account-lockout-duration=30 2>/dev/null || true
+samba-tool domain passwordsettings set --reset-account-lockout-after=15 2>/dev/null || true
+
 echo "=== TechVault AD users provisioned ==="
 echo ""
 echo "Intentional weaknesses:"

@@ -58,7 +58,7 @@
       "args": ["--transport", "stdio"],
       "env": {
         "THEHIVE_URL": "http://localhost:9000",
-        "THEHIVE_API_KEY": "e2RJy66b8sF421sPv8bFX5Nn7uMgJkMi",
+        "THEHIVE_API_KEY": "pJlEoFzNzET0+bk3canHnjKTo5JTnNq4",
         "THEHIVE_ORGANISATION": "APTL"
       }
     }

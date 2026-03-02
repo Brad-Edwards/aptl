@@ -3,18 +3,25 @@
     "kali-ssh": {
       "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
       "args": ["./mcp/mcp-red/build/index.js"],
-      "cwd": "/home/atomik/src/aptl"
+      "cwd": "/home/atomik/src/aptl",
+      "env": {
+        "APTL_TRACE_DIR": "/home/atomik/src/aptl/.aptl/traces"
+      }
     },
     "reverse-sandbox-ssh": {
       "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
       "args": ["./mcp/mcp-reverse/build/index.js"],
-      "cwd": "/home/atomik/src/aptl"
+      "cwd": "/home/atomik/src/aptl",
+      "env": {
+        "APTL_TRACE_DIR": "/home/atomik/src/aptl/.aptl/traces"
+      }
     },
     "shuffle": {
       "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
       "args": ["./mcp/mcp-soar/build/index.js"],
       "cwd": "/home/atomik/src/aptl",
       "env": {
+        "APTL_TRACE_DIR": "/home/atomik/src/aptl/.aptl/traces",
         "SHUFFLE_API_KEY": "31a211c4-ea5c-4a49-b022-5e2434e758a7"
       }
     },
@@ -23,6 +30,7 @@
       "args": ["./mcp/mcp-indexer/build/index.js"],
       "cwd": "/home/atomik/src/aptl",
       "env": {
+        "APTL_TRACE_DIR": "/home/atomik/src/aptl/.aptl/traces",
         "INDEXER_USERNAME": "admin",
         "INDEXER_PASSWORD": "SecretPassword",
         "API_USERNAME": "wazuh-wui",
@@ -58,7 +66,7 @@
       "args": ["--transport", "stdio"],
       "env": {
         "THEHIVE_URL": "http://localhost:9000",
-        "THEHIVE_API_KEY": "pJlEoFzNzET0+bk3canHnjKTo5JTnNq4",
+        "THEHIVE_API_KEY": "/rO2t6hkXuJNIZviHOhCnERMlr07blq3",
         "THEHIVE_ORGANISATION": "APTL"
       }
     }

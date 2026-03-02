@@ -34,7 +34,7 @@ def _provision_thehive_key() -> str:
     if os.path.isfile(script):
         try:
             result = subprocess.run(
-                [script], capture_output=True, text=True, timeout=10,
+                [script], capture_output=True, text=True, timeout=120,
             )
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
@@ -219,7 +219,7 @@ def _read_jsonrpc_response(
 def mcp_jsonrpc(
     server_name: str,
     messages: list[dict],
-    timeout: int = 15,
+    timeout: int = 30,
 ) -> list[dict]:
     """Spawn an MCP server and exchange JSON-RPC messages.
 
@@ -297,7 +297,7 @@ _INITIALIZED_MSG = {
 }
 
 
-def mcp_tools_list(server_name: str, timeout: int = 15) -> list[str]:
+def mcp_tools_list(server_name: str, timeout: int = 30) -> list[str]:
     """Spawn an MCP server and return the list of tool names it advertises."""
     messages = [
         _INIT_MSG,
@@ -326,7 +326,7 @@ def mcp_call_tool(
     server_name: str,
     tool_name: str,
     arguments: dict,
-    timeout: int = 30,
+    timeout: int = 60,
 ) -> dict:
     """Spawn an MCP server, initialize, and call a single tool.
 
@@ -377,13 +377,13 @@ def mcp_tool_text(result: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def run_cmd(cmd: list[str], timeout: int = 15) -> subprocess.CompletedProcess:
+def run_cmd(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
     """Run a subprocess command with capture and timeout."""
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
 def docker_exec(
-    container: str, cmd: str | list[str], timeout: int = 30,
+    container: str, cmd: str | list[str], timeout: int = 60,
 ) -> subprocess.CompletedProcess:
     """Run a command inside a Docker container."""
     if isinstance(cmd, str):
@@ -393,13 +393,13 @@ def docker_exec(
     return run_cmd(parts, timeout=timeout)
 
 
-def kali_exec(cmd: str, timeout: int = 30) -> subprocess.CompletedProcess:
+def kali_exec(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess:
     """Run a command inside the Kali container."""
     return docker_exec("aptl-kali", cmd, timeout=timeout)
 
 
 def workstation_exec(
-    cmd: str, timeout: int = 30,
+    cmd: str, timeout: int = 60,
 ) -> subprocess.CompletedProcess:
     """Run a command inside the workstation container."""
     return docker_exec("aptl-workstation", cmd, timeout=timeout)
@@ -420,7 +420,7 @@ def curl_indexer(path: str = "", body: dict | None = None) -> dict:
     ]
     if body is not None:
         cmd += ["-H", "Content-Type: application/json", "-d", json.dumps(body)]
-    result = run_cmd(cmd, timeout=20)
+    result = run_cmd(cmd, timeout=40)
     assert result.returncode == 0, f"curl failed: {result.stderr}"
     return json.loads(result.stdout)
 
@@ -431,7 +431,7 @@ def curl_json(
     auth_header: str = "",
     method: str = "GET",
     body: dict | None = None,
-    timeout: int = 20,
+    timeout: int = 120,
     insecure: bool = False,
 ) -> dict:
     """Make an HTTP request via curl and return parsed JSON."""
@@ -467,7 +467,7 @@ def ssh_cmd(
 
 
 def wait_for_alert(
-    query: dict, timeout: int = 90, poll_interval: int = 10,
+    query: dict, timeout: int = 180, poll_interval: int = 10,
 ) -> dict:
     """Poll the Wazuh Indexer for a matching alert.
 

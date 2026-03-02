@@ -17,9 +17,9 @@ alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL SQL Injection Attempt
 alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL XSS Attempt - Script Tag"; content:"<script"; nocase; classtype:web-application-attack; sid:1000020; rev:1;)
 
 # Detect command injection
-alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL Command Injection Attempt - Pipe"; content:"|"; content:"/bin/"; distance:0; within:20; classtype:web-application-attack; sid:1000030; rev:1;)
+alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL Command Injection Attempt - Pipe"; content:"|7c|"; content:"/bin/"; distance:0; within:20; classtype:web-application-attack; sid:1000030; rev:1;)
 
-alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL Command Injection Attempt - Semicolon"; content:";"; content:"cat "; distance:0; within:30; classtype:web-application-attack; sid:1000031; rev:1;)
+alert http any any -> $HTTP_SERVERS $HTTP_PORTS (msg:"APTL Command Injection Attempt - Semicolon"; content:"|3b|"; content:"cat "; distance:0; within:30; classtype:web-application-attack; sid:1000031; rev:1;)
 
 # Detect Kerberoasting (TGS-REQ for specific SPNs)
 alert tcp any any -> $INTERNAL_NET 88 (msg:"APTL Potential Kerberoasting - Multiple TGS Requests"; threshold: type threshold, track by_src, count 5, seconds 30; classtype:credential-theft; sid:1000040; rev:1;)

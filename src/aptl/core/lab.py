@@ -247,7 +247,10 @@ def _check_bind_mounts(project_dir: Path) -> list[str]:
     return errors
 
 
-def orchestrate_lab_start(project_dir: Path) -> LabResult:
+def orchestrate_lab_start(
+    project_dir: Path,
+    skip_seed: bool = False,
+) -> LabResult:
     """Orchestrate the complete lab startup process.
 
     This is the Python equivalent of start-lab.sh. It performs all steps
@@ -264,9 +267,11 @@ def orchestrate_lab_start(project_dir: Path) -> LabResult:
      10. Test SSH connectivity
      11. Generate connection info
      12. Build MCP servers
+     13. Seed SOC tools (via seed-prime.sh)
 
     Args:
         project_dir: Root directory of the APTL project.
+        skip_seed: If True, skip SOC tool seeding (Step 13).
 
     Returns:
         LabResult indicating overall success or failure.
@@ -391,9 +396,17 @@ def orchestrate_lab_start(project_dir: Path) -> LabResult:
         except (FileNotFoundError, OSError) as exc:
             log.warning("Failed to pull %s: %s", image, exc)
 
-    # Step 8: Start containers
+    # Step 8: Start containers (retry once if SOC dependencies need more time)
     log.info("Step 8: Starting containers...")
     start_result = start_lab(config, project_dir=project_dir)
+    if not start_result.success and config.containers.soc:
+        log.warning(
+            "Initial compose up failed (SOC dependencies may still be "
+            "initializing). Waiting 60s and retrying..."
+        )
+        import time
+        time.sleep(60)
+        start_result = start_lab(config, project_dir=project_dir)
     if not start_result.success:
         log.error("Lab start failed: %s", start_result.error)
         return LabResult(
@@ -477,6 +490,35 @@ def orchestrate_lab_start(project_dir: Path) -> LabResult:
             log.warning("Failed to build MCP servers: %s", exc)
     else:
         log.warning("MCP build script not found at %s", mcp_script)
+
+    # Step 13: Seed SOC tools (non-critical)
+    if skip_seed:
+        log.info("Step 13: Skipping SOC seeding (--skip-seed)")
+    else:
+        log.info("Step 13: Seeding SOC tools...")
+        seed_script = project_dir / "scripts" / "seed-prime.sh"
+        if seed_script.exists() and config.containers.soc:
+            try:
+                seed_result = subprocess.run(
+                    [str(seed_script)],
+                    capture_output=True,
+                    text=True,
+                    cwd=project_dir,
+                    timeout=1200,
+                )
+                if seed_result.returncode != 0:
+                    log.warning("SOC seeding had errors: %s", seed_result.stderr)
+                else:
+                    log.info("SOC tools seeded successfully")
+            except subprocess.TimeoutExpired:
+                log.warning("SOC seeding timed out (non-fatal)")
+            except (FileNotFoundError, OSError) as exc:
+                log.warning("Failed to seed SOC tools: %s", exc)
+        else:
+            if not seed_script.exists():
+                log.debug("SOC seed script not found at %s", seed_script)
+            elif not config.containers.soc:
+                log.debug("SOC profile not enabled, skipping seed")
 
     log.info("APTL lab started successfully!")
     return LabResult(success=True, message="Lab started successfully")

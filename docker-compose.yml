@@ -170,7 +170,6 @@ services:
     container_name: aptl-suricata
     hostname: suricata
     restart: unless-stopped
-    network_mode: host
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -179,11 +178,18 @@ services:
       - ./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml
       - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules
       - suricata_logs:/var/log/suricata
-    command: ["-c", "/etc/suricata/suricata.yaml", "--af-packet"]
+    command: ["-c", "/etc/suricata/suricata.yaml", "--pcap"]
     deploy:
       resources:
         limits:
           memory: 1g
+    networks:
+      aptl-dmz:
+        ipv4_address: 172.20.1.50
+      aptl-internal:
+        ipv4_address: 172.20.2.50
+      aptl-security:
+        ipv4_address: 172.20.0.50
 
   # ==========================================================================
   # SOC TOOLS (aptl-security network)
@@ -215,8 +221,8 @@ services:
       test: ["CMD-SHELL", "curl -ks https://localhost/users/login || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 180s
+      retries: 15
+      start_period: 300s
     deploy:
       resources:
         limits:
@@ -246,8 +252,8 @@ services:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 15
+      start_period: 300s
     deploy:
       resources:
         limits:
@@ -297,8 +303,8 @@ services:
       test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/status || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 120s
+      retries: 15
+      start_period: 300s
     deploy:
       resources:
         limits:
@@ -327,8 +333,8 @@ services:
       test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 120s
+      retries: 15
+      start_period: 300s
     deploy:
       resources:
         limits:
@@ -344,19 +350,19 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     volumes:
       - thehive_es_data:/usr/share/elasticsearch/data
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 300s
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 1g
     networks:
       aptl-security:
 
@@ -455,10 +461,10 @@ services:
       - shuffle_opensearch_data:/usr/share/opensearch/data
     healthcheck:
       test: ["CMD-SHELL", "curl -ks https://localhost:9200 -u admin:StrongPassword123! || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 300s
     deploy:
       resources:
         limits:
@@ -819,6 +825,16 @@ services:
     environment:
       - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
       - VICTIM_IP=172.20.2.20
+    extra_hosts:
+      - "techvault.local:172.20.2.10"
+      - "dc.techvault.local:172.20.2.10"
+      - "TECHVAULT.LOCAL:172.20.2.10"
+      - "DC.TECHVAULT.LOCAL:172.20.2.10"
+      - "db.techvault.local:172.20.2.11"
+      - "files.techvault.local:172.20.2.12"
+      - "mail.techvault.local:172.20.1.21"
+      - "ws01.techvault.local:172.20.2.22"
+      - "ns1.techvault.local:172.20.2.27"
     volumes:
       - ./keys:/host-ssh-keys:ro
       - kali_operations:/home/kali/operations

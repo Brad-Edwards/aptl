@@ -147,7 +147,7 @@ class TestLabStartCommand:
         result = runner.invoke(app, ["lab", "start", "--project-dir", str(tmp_path)])
 
         assert result.exit_code == 0
-        mock_orchestrate.assert_called_once_with(tmp_path)
+        mock_orchestrate.assert_called_once_with(tmp_path, skip_seed=False)
 
 
 class TestLabStopCommand:

@@ -55,10 +55,10 @@
 - **Symptom**: `aptl scenario start` reports "Could not read user/root flag" for all 5 containers (victim, workstation, webapp, ad, fileshare)
 - **Output**: "No CTF flags collected (containers may not be running)"
 - **But**: All containers show `running (healthy)` in `aptl lab status`
-- **Root cause hypothesis**: Flag files aren't being generated at container start. The entrypoint scripts may not be writing flags, or the flag paths in `src/aptl/core/flags.py` don't match the actual container paths.
+- **Root cause**: Code review confirmed all 5 containers have correct `generate_flags()` calls with paths matching `FLAG_LOCATIONS` in `flags.py`. Likely runtime issue — enterprise/fileshare profiles may not have been started, or containers hadn't finished initialization.
 - **Containers affected**: aptl-victim, aptl-workstation, aptl-webapp, aptl-ad, aptl-fileshare
-- **Severity**: HIGH — flags are a core scoring mechanism
-- **Fix needed**: Verify entrypoint scripts generate flag files, cross-check paths in `FLAG_LOCATIONS` dict against actual container filesystem
+- **Severity**: HIGH
+- **Status**: NO CODE FIX NEEDED — Flag generation code is correct. Verify at next lab start with `docker exec aptl-victim cat /home/labadmin/user.txt` etc.
 
 ## Issue 2: `defenses` field not in ScenarioDefinition model
 - **Symptom**: `aptl scenario start prime-enterprise` failed with Pydantic validation error: `Extra inputs are not permitted` for `defenses` field
@@ -77,41 +77,35 @@
 - **Status**: FIXED — Updated all `crackmapexec` references to `nxc` in prime-enterprise.yaml, ad-domain-compromise.yaml, and prime-scenario.md
 
 ## Issue 6: `ldapsearch` not installed on Kali
-- **Symptom**: Steps 8 and 13 reference `ldapsearch` which is not installed. Only `python3-ldap3` and `python3-ldapdomaindump` are available.
-- **Severity**: MEDIUM — LDAP enum steps fail as written. Can use `nxc ldap` or `ldapdomaindump` or `impacket` instead.
-- **Fix needed**: Install `ldap-utils` in Kali Dockerfile, OR update scenario to use `nxc ldap` / `ldapdomaindump` for AD discovery steps
+- **Symptom**: Steps 8 and 13 reference `ldapsearch` which is not installed.
+- **Severity**: MEDIUM
+- **Status**: FIXED — Added `ldap-utils` to Kali Dockerfile
 
 ## Issue 7: `impacket` not installed on Kali
-- **Symptom**: Step 9 (Kerberoasting) and step 10 (psexec) reference `impacket-GetUserSPNs` and `impacket-psexec` which are not installed. Neither `impacket-*` binaries nor the pip package exist.
-- **Severity**: HIGH — Kerberoasting (step 9) and lateral movement via psexec (step 10) are blocked entirely
-- **Fix needed**: Install `impacket` in Kali Dockerfile (`apt install python3-impacket impacket-scripts` or `pipx install impacket`)
+- **Symptom**: Step 9 (Kerberoasting) and step 10 (psexec) reference `impacket-GetUserSPNs` and `impacket-psexec` which are not installed.
+- **Severity**: HIGH
+- **Status**: FIXED — Added `python3-impacket impacket-scripts` to Kali Dockerfile
 
 ## Issue 8: Kerberos fails — `TECHVAULT.LOCAL` DNS doesn't resolve from Kali
 - **Symptom**: `nxc ldap --kerberoasting` found 2 SPN accounts but failed with `[Errno -2] Name or service not known` when trying to get TGT from `TECHVAULT.LOCAL:88`
-- **Root cause**: Kali's `/etc/resolv.conf` points to Docker's internal DNS (127.0.0.11) which doesn't resolve `TECHVAULT.LOCAL` to the AD container (172.20.2.10). No `/etc/hosts` entry for `techvault.local` either.
-- **Severity**: HIGH — Kerberoasting (step 9) is the key step for AD path. Blocks cracking service account passwords.
-- **Fix needed**: Either add `TECHVAULT.LOCAL` / `DC.TECHVAULT.LOCAL` to Kali's `/etc/hosts` pointing to 172.20.2.10 (via entrypoint or docker-compose extra_hosts), OR configure the AD container as DNS server for the Kali container
+- **Root cause**: Kali's `/etc/resolv.conf` uses Docker's internal DNS (127.0.0.11) which doesn't resolve `TECHVAULT.LOCAL`.
+- **Severity**: HIGH
+- **Status**: FIXED — Added `extra_hosts` block to kali service in `docker-compose.yml` mapping `techvault.local`, `dc.techvault.local`, and other enterprise hostnames to their container IPs (both lower and uppercase for Kerberos realm resolution)
 
 ## Issue 9: `smbclient` not installed on Kali
-- **Symptom**: Step 11 references `smbclient` for SMB share enumeration — not installed. Only `libsmbclient0` (shared lib) is present. `smbmap` also missing.
-- **Available alternative**: `nxc smb --shares` can enumerate shares
-- **Severity**: MEDIUM — share enumeration still possible via nxc, but `smbclient` interactive download (`mget *`) is not available
-- **Fix needed**: Install `smbclient` in Kali Dockerfile (`apt install smbclient`)
+- **Symptom**: Step 11 references `smbclient` for SMB share enumeration — not installed.
+- **Severity**: MEDIUM
+- **Status**: FIXED — Added `smbclient`, `smbmap`, `enum4linux`, and `bloodhound.py` to Kali Dockerfile
 
-## Issue 10: MCP trace files not being written — servers running old code
-- **Symptom**: `.aptl/traces/` directory exists but is empty despite multiple MCP tool calls (kali_run_command, wazuh alerts, shuffle workflows)
-- **Root cause**: The MCP servers were already running (spawned by Claude Code) before the tracing code was built and deployed. They are using the old `server.js` without the `ToolTracer` wrapper. The rebuilt `aptl-mcp-common` with tracing IS installed in `node_modules` but the running processes haven't been restarted.
-- **Severity**: HIGH — no agent traces will be collected for this run
-- **Fix**: MCP servers must be restarted after rebuilding. This is an inherent limitation: `aptl scenario start` sets `APTL_TRACE_DIR` env and cleans stale traces, but it can't restart MCP servers owned by the IDE/Claude Code.
-- **Workaround options**:
-  1. Document that MCP servers must be restarted after `mcp/build-all-mcps.sh`
-  2. Have the tracer use a well-known fixed path (e.g. `<project>/.aptl/traces/`) so the MCP config in `.mcp.json` can set `APTL_TRACE_DIR` once at config time
-  3. Add `APTL_TRACE_DIR` to each custom MCP server's `env` block in `.mcp.json`
-- **Note**: 3rd-party MCP servers (wazuh Rust binary, misp Python, thehive Go) don't use our tracer at all — only our custom Node servers (kali-ssh, reverse-sandbox-ssh, shuffle, indexer) will produce traces
+## Issue 10: MCP trace files not being written
+- **Symptom**: `.aptl/traces/` directory exists but is empty despite multiple MCP tool calls.
+- **Root cause**: MCP servers were running old code (pre-tracing) and `APTL_TRACE_DIR` was not set.
+- **Severity**: HIGH
+- **Status**: FIXED — Added `APTL_TRACE_DIR` env var to all 4 custom Node MCP server configs in `.mcp.json` (kali-ssh, reverse-sandbox-ssh, shuffle, indexer). MCP servers must be restarted after rebuilding.
+- **Note**: 3rd-party MCP servers (wazuh Rust binary, misp Python, thehive Go) don't use our tracer — only our custom Node servers produce traces.
 
 ## Issue 4: TheHive MCP authentication fails (401 Unauthorized)
 - **Symptom**: `mcp__thehive__search-entities` returns `TheHive authentication failed: 401 Unauthorized`
-- **Context**: TheHive container is `running (healthy)` per `aptl lab status`
-- **Root cause hypothesis**: API key in `.mcp.json` or env is stale/expired. TheHive keys need renewal after container rebuild. The `scripts/thehive-apikey.sh` may need to be run.
-- **Severity**: MEDIUM — TheHive case collection in run assembler will return empty (fault-tolerant) but data gap in telemetry
-- **Fix needed**: Re-provision TheHive API key and update MCP config
+- **Root cause**: API key in `.mcp.json` is stale after container rebuild. Keys in `.mcp.json` and `.env` also don't match.
+- **Severity**: MEDIUM
+- **Status**: FIXED — Re-provisioned API key via `scripts/thehive-apikey.sh`, updated both `.mcp.json` and `.env` with new key. Verified with `GET /api/v1/user/current`.

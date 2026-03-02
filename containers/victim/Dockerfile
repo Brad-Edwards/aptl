@@ -40,6 +40,12 @@ RUN (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == system
 
 RUN systemctl set-default multi-user.target
 
+# Override rsyslog service to disable namespace restrictions (incompatible with Docker)
+# Override rsyslog service to disable security restrictions (incompatible with Docker)
+RUN mkdir -p /etc/systemd/system/rsyslog.service.d && \
+    printf '[Service]\nRestrictNamespaces=false\nRestrictAddressFamilies=\nProtectKernelTunables=no\nProtectKernelModules=no\nProtectControlGroups=no\nProtectHome=no\nMemoryDenyWriteExecute=no\nNoNewPrivileges=no\nLockPersonality=no\nRestrictSUIDSGID=no\nSystemCallFilter=\nSystemCallArchitectures=\n' \
+    > /etc/systemd/system/rsyslog.service.d/docker-override.conf
+
 RUN systemctl enable rsyslog sshd systemd-user-sessions && \
     systemctl enable systemd-user-sessions.service && \
     ln -sf /usr/lib/systemd/system/systemd-user-sessions.service /etc/systemd/system/multi-user.target.wants/

@@ -69,6 +69,11 @@ class TestContainerHealth:
         "aptl-suricata",
     ], ids=["misp", "thehive", "shuffle", "suricata"])
     def test_soc_container_running(self, name):
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            if container_running(name):
+                return
+            time.sleep(10)
         assert container_running(name), f"{name} is not running"
 
 
@@ -129,7 +134,8 @@ class TestWazuhPipeline:
             "logger", "-t", "smoketest", tag,
         ])
 
-        deadline = time.monotonic() + 60
+        time.sleep(20)  # Let rsyslog establish connection
+        deadline = time.monotonic() + 240
         while time.monotonic() < deadline:
             time.sleep(5)
             result = docker_exec(
@@ -145,7 +151,7 @@ class TestWazuhPipeline:
             ):
                 return
 
-        pytest.fail(f"Log '{tag}' not in archives within 60s")
+        pytest.fail(f"Log '{tag}' not in archives within 240s")
 
 
 # -------------------------------------------------------------------

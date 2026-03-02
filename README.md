@@ -9,15 +9,41 @@
 > **💡 Use at your own risk - this is a proof of concept**  
 > **🚨 Don't be stupid or you'll get yourself in trouble.**
 
-## Agentic Purple Team Operations
+## What is APTL?
 
-AI agents autonomously execute complete attack-defend cycles:
+A Docker-based purple team lab. One command brings up an isolated network with enterprise target infrastructure, a red team attack platform, a full SOC stack, and AI agent integration -- everything needed to run realistic attack-defend cycles.
 
-✅ **Blue Team AI**: Query SIEM alerts, search logs, create detection rules  
-✅ **Red Team AI**: Execute reconnaissance, exploitation, post-exploitation  
-✅ **Full Automation**: Attack → Detection → Investigation → Response  
+**Target Infrastructure** -- a fictional company called TechVault Solutions, deployed as containers:
 
-## Demo & Screenshots
+- Samba AD domain controller (`techvault.local` with user accounts, SPNs, groups)
+- PostgreSQL database with seeded customer data and intentional vulnerabilities
+- Vulnerable web application (SQLi, XSS, IDOR, command injection)
+- Samba file server with department shares and planted credentials
+- DNS server (Bind9 for internal resolution and C2 detection)
+- Email server (Postfix + Dovecot for phishing simulations)
+- Rocky Linux victim with SSH, Wazuh agent, Falco eBPF runtime monitoring, sudo misconfigurations
+
+**Red Team** -- Kali Linux container with kali-tools-top10, every command logged to the SIEM. AI agents control it via MCP.
+
+**SOC Stack** -- detection, investigation, and response:
+
+- Wazuh SIEM (manager + indexer + dashboard) collecting logs from all containers
+- Suricata IDS for network-level detection (C2, lateral movement, exfiltration)
+- MISP threat intelligence platform with IOC feeds
+- TheHive case management with Cortex analyzers for automated enrichment
+- Shuffle SOAR for automated response playbooks
+
+**Malware Analysis** -- reverse engineering container (Ubuntu) with radare2, yara, capa, FLOSS for binary analysis during blue team investigations.
+
+**AI Agent Layer** -- MCP servers giving AI agents programmatic control across all of the above: red team ops, SIEM queries, threat intel, case management, SOAR playbooks, network IDS, and reverse engineering.
+
+**Scenario Engine** -- YAML-defined attack scenarios with MITRE ATT&CK mapping. Each run captures all telemetry (Wazuh alerts, Suricata events, TheHive cases, MISP correlations, SOAR executions, container logs, MCP traces) into a self-contained archive for post-hoc analysis.
+
+**Python CLI** (`aptl`) -- lab lifecycle, scenario execution, and run management.
+
+**Use cases:** autonomous cyber operations research, purple team training, AI threat actor assessment.
+
+## Demo
 
 **AI Red Team Autonomous Reconnaissance:**
 ![AI Red Team Nmap Scan](assets/images/li_test/cline_red_team_test_10.png)
@@ -29,23 +55,7 @@ AI agents autonomously execute complete attack-defend cycles:
 
 ---
 
-🚨⚠️🚨 ALWAYS monitor AI red-team agents during scenarios 🚨⚠️🚨
-
-## What is APTL?
-
-**A working agentic purple team lab.** AI agents autonomously conduct attacks and defensive analysis through Model Context Protocol integration with Wazuh SIEM and Kali Linux containers.
-
-APTL demonstrates:
-
-- **Autonomous purple team operations** - No human intervention required for attack-defend cycles
-- **Realistic threat simulation** - AI attackers using actual penetration testing tools
-- **Intelligent defense** - AI analysts querying real SIEM data and creating detection rules
-
-Use cases:
-
-- Research into autonomous cyber operations capabilities
-- Purple team training with AI-driven scenarios  
-- Assessment of AI threat actor capabilities
+ALWAYS monitor AI red-team agents during scenarios.
 
 ## Ethics Statement
 
@@ -57,20 +67,32 @@ An autonomous cyber operations range is currently under-development as a separat
 
 **⚠️ WARNING: This lab enables AI agents to run actual penetration testing tools. Container escape or other security issues may occur. Monitor closely.**
 
-## What's Different
+## Architecture
 
-- **First Agentic Purple Team Lab**: AI agents autonomously execute both attack and defense operations
-- **Real Tool Integration**: AI agents directly control Kali Linux tools and Wazuh SIEM queries via MCP
-- **Complete Autonomous Cycles**: Full reconnaissance → exploitation → detection → investigation without human intervention
-- **Bidirectional AI Operations**: Red team AI attacks while blue team AI investigates and responds
-
-## Components
-
-- Wazuh SIEM (172.20.0.10-12) - Log collection and analysis
-- Victim container (172.20.0.20) - Rocky Linux with Wazuh agent and Falco runtime security monitoring
-- Kali container (172.20.0.30) - Attack platform with security tools, logs all red team agent's commands to the SIEM
-- Blue Team MCP - Enables AI agent SIEM queries, log search, and rule creation
-- Red Team MCP - Enables AI agent control of Kali tools
+```
+┌──── Red Team (172.20.4.0/24) ─┐   ┌──── DMZ (172.20.1.0/24) ──────────────┐
+│  Kali (.30)                    │──>│  Web App (.20/.25)   Mail (.21)        │
+│  pentest tools, MCP-controlled │   │  DNS (.13)                             │
+└────────────────────────────────┘   └──────────────┬────────────────────────-┘
+                                                    │ pivot
+                                     ┌──── Internal (172.20.2.0/24) ─────────┐
+                                     │  Samba AD DC (.10)  PostgreSQL (.11)   │
+                                     │  File Server (.12)  Linux App Server   │
+                                     └──────────────┬────────────────────────-┘
+                                                    │ logs
+┌──── Security (172.20.0.0/24) ──────────────────────────────────────────────┐
+│  Wazuh Manager (.10)  Indexer (.12)  Dashboard (.11)                       │
+│  Suricata IDS (.19)   MISP (.15)     TheHive (.16) + Cortex (.18)         │
+│  Shuffle SOAR (.17)   Reverse Engineering (.27)                            │
+└──────────────────────────────────┬─────────────────────────────────────────┘
+                                   │
+┌──── MCP Server Layer ────────────────────────────────────────────────────-─┐
+│  mcp-red       mcp-wazuh      mcp-network     mcp-threatintel             │
+│  mcp-reverse   mcp-casemgmt   mcp-soar        aptl-mcp-common             │
+└──────────────────────────────────┬─────────────────────────────────────────┘
+                                   │
+                              AI Agents
+```
 
 ## Quick Start
 
@@ -96,9 +118,10 @@ aptl lab stop -v  # Stop and remove volumes
 
 **Access:**
 
-- Wazuh Dashboard: <https://localhost:443> (admin/SecretPassword)  
+- Wazuh Dashboard: <https://localhost:443> (admin/SecretPassword)
 - Victim SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022`
 - Kali SSH: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`
+- Reverse Engineering SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`
 
 ## Requirements
 
@@ -106,34 +129,61 @@ aptl lab stop -v  # Stop and remove volumes
 - Python 3.11+ (for CLI)
 - 8GB+ RAM, 20GB+ disk
 - Linux/macOS/WSL2
-- Ports available: 443, 2022, 2023, 9200, 55000
+- Ports available: 443, 2022, 2023, 2027, 9200, 55000
 
 ## AI Integration (MCP)
 
-Build MCP servers for AI agent control:
+Build all MCP servers:
 
 ```bash
-# Blue Team MCP (Wazuh SIEM)
-cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
-
-# Red Team MCP (Kali Linux)
-cd mcp/mcp-red && npm install && npm run build && cd ../..
+./mcp/build-all-mcps.sh
 ```
 
-Configure your AI client to connect to:
+Or build individually:
 
-- Blue Team: `./mcp/mcp-wazuh/build/index.js`
-- Red Team: `./mcp/mcp-red/build/index.js`
+```bash
+cd mcp/mcp-red && npm install && npm run build && cd ../..
+cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
+```
 
-Test blue team: Ask your AI agent "Use wazuh_query_alerts to show me recent alerts"
+Configure your AI client (Claude Code, Cursor, Cline) to connect to the server entry points at `./mcp/<server>/build/index.js`. See [MCP Integration](docs/components/mcp-integration.md) for full setup.
+
 Test red team: Ask your AI agent "Use kali_info to show me the lab network"
+Test blue team: Ask your AI agent "Use wazuh_query_alerts to show me recent alerts"
 
 ## Documentation
 
-- [Getting Started](docs/getting-started/) - Setup and prerequisites
-- [Architecture](docs/architecture/) - Network design and components  
-- [Components](docs/components/) - Individual service details
-- [Troubleshooting](docs/troubleshooting/) - Common issues and fixes
+**Getting Started:**
+- [Installation](docs/getting-started/installation.md)
+- [Prerequisites](docs/getting-started/prerequisites.md)
+- [Quick Start Guide](docs/getting-started/quick-start.md)
+
+**Architecture:**
+- [Overview](docs/architecture/index.md) -- Network topology, container layout, data flow
+- [Networking](docs/architecture/networking.md)
+- [Enterprise Infrastructure](docs/architecture/enterprise-infrastructure.md) -- TechVault design rationale
+
+**Components:**
+- [Wazuh SIEM](docs/components/wazuh-siem.md)
+- [Kali Red Team](docs/components/kali-redteam.md)
+- [Victim Containers](docs/components/victim-containers.md)
+- [Reverse Engineering](docs/components/reverse-engineering-container.md)
+- [MCP Integration](docs/components/mcp-integration.md)
+
+**Scenarios & Runs:**
+- [SOC Architecture Spec](docs/specs/soc-feature-spec.md) -- Scenario engine, run archives, collectors
+
+**Testing:**
+- [Smoke Test Plan](docs/testing/smoke-test-plan.md)
+
+**Reference:**
+- [TechVault Company Profile](docs/reference/techvault-company-profile.md)
+- [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md)
+- [Container Template Guide](docs/containers/victim-template-guide.md)
+
+**Operations:**
+- [Troubleshooting](docs/troubleshooting/)
+- [Known Issues](docs/known-issues/uat-findings-2026-02-23.md)
 
 ## Security Warnings
 

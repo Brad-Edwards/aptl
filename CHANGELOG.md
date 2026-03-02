@@ -6,6 +6,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-03-02
+
+### Added
+
+- TechVault Enterprise prime research scenario (`scenarios/prime-enterprise.yaml`) — 11-step attack chain with full MITRE ATT&CK mapping
+- Automated SOC tool seeding in `aptl lab start` (Step 13) via `scripts/seed-prime.sh`
+- `--skip-seed` flag on `aptl lab start` to bypass SOC provisioning
+- Seed scripts: `seed-misp.sh` (threat intel IOCs), `seed-shuffle.sh` (SOAR workflows), `thehive-apikey.sh` (API key provisioning)
+- Workstation container with planted credential artifacts (SSH keys, .pgpass, .env, credentials.json, bash history)
+- Run assembler and collector modules for post-scenario data collection
+- MISP MCP server virtualenv with pymisp and mcp[cli]
+- 587 tests (up from ~174), including full end-to-end SOC pipeline validation
+
+### Fixed
+
+- Suricata crash-loop: missing `SMTP_SERVERS`/`TELNET_SERVERS` vars in suricata.yaml; `eth0` interface not found in host mode. Switched to pcap mode on Docker networks
+- Suricata local rules: unescaped pipe and semicolon chars in content matches
+- TheHive-ES memory starvation: 256MB JVM heap in 512MB container caused Cassandra query timeouts. Doubled heap to 512MB, container limit to 1GB
+- All SOC healthchecks standardized to `start_period: 300s`, `retries: 15` for reliable cold starts
+- Wazuh Manager entrypoint patched to fix rule path loading (`patch-rule-path.py`)
+- TheHive API key provisioning timeout (was 10s, takes ~24s on first run)
+
+### Changed
+
+- All test timeouts doubled across helpers, smoke tests, and integration tests for infrastructure reliability
+- Suricata moved from `network_mode: host` to Docker networks (dmz, internal, security) with pcap capture
+
 ## [4.0.1] - 2026-02-22
 
 ### Added

@@ -27,11 +27,16 @@ def start(
         "-d",
         help="Path to the APTL project directory.",
     ),
+    skip_seed: bool = typer.Option(
+        False,
+        "--skip-seed",
+        help="Skip SOC tool seeding after startup.",
+    ),
 ) -> None:
     """Start the APTL lab environment."""
     log.info("Starting lab from %s", project_dir)
 
-    result = orchestrate_lab_start(project_dir)
+    result = orchestrate_lab_start(project_dir, skip_seed=skip_seed)
 
     if result.success:
         typer.echo("Lab started successfully.")

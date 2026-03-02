@@ -25,6 +25,36 @@ echo "============================================="
 echo ""
 
 # ---------------------------------------------------------------------------
+# 0. Wait for SOC tools to be healthy
+# ---------------------------------------------------------------------------
+echo "[0/6] Waiting for SOC tools to be healthy..."
+
+for svc in aptl-thehive aptl-misp aptl-shuffle-backend; do
+    max_wait=600
+    elapsed=0
+    while [ $elapsed -lt $max_wait ]; do
+        status=$(docker inspect "$svc" --format '{{.State.Health.Status}}' 2>/dev/null) || status="not found"
+        if [ "$status" = "healthy" ] || [ "$status" = "not found" ]; then
+            break
+        fi
+        if [ $((elapsed % 30)) -eq 0 ]; then
+            echo "  Waiting for $svc ($status)... ${elapsed}s / ${max_wait}s"
+        fi
+        sleep 10
+        elapsed=$((elapsed + 10))
+    done
+    if [ "$status" = "healthy" ]; then
+        echo "  $svc is healthy"
+    elif [ "$status" = "not found" ]; then
+        echo "  $svc not running (skipping)"
+    else
+        echo "  WARNING: $svc still not healthy after ${max_wait}s, will attempt anyway"
+    fi
+done
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # 1. Provision TheHive API key
 # ---------------------------------------------------------------------------
 echo "[1/6] Provisioning TheHive API key..."
@@ -51,7 +81,7 @@ INDEXER_URL="${INDEXER_URL:-https://localhost:9200}"
 INDEXER_USER="${INDEXER_USERNAME:-admin}"
 INDEXER_PASS="${INDEXER_PASSWORD:-SecretPassword}"
 
-max_wait=300
+max_wait=600
 elapsed=0
 while [ $elapsed -lt $max_wait ]; do
     status=$(curl -ks -u "$INDEXER_USER:$INDEXER_PASS" \

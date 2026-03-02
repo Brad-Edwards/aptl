@@ -253,8 +253,16 @@ print(json.dumps(wf))
 
         echo "  Start node set to trigger: ${REAL_TRIGGER_ID}"
 
-        # Write webhook URL for Wazuh integration
-        echo "http://shuffle-backend:5001/api/v1/hooks/${REAL_TRIGGER_ID}" > /tmp/aptl_shuffle_webhook_url
+        # Register and start the webhook trigger (Shuffle requires explicit registration)
+        echo "  Registering webhook trigger..."
+        curl -s -X POST \
+            -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"Alert Webhook\", \"id\": \"${REAL_TRIGGER_ID}\", \"type\": \"webhook\", \"workflow\": \"${CREATED_ID}\", \"start\": \"${REAL_TRIGGER_ID}\", \"status\": \"running\", \"environment\": \"Shuffle\"}" \
+            "${SHUFFLE_URL}/api/v1/hooks/new" > /dev/null
+
+        # Write webhook URL for Wazuh integration (Shuffle uses webhook_ prefix)
+        echo "http://shuffle-backend:5001/api/v1/hooks/webhook_${REAL_TRIGGER_ID}" > /tmp/aptl_shuffle_webhook_url
         echo "  Webhook URL written to /tmp/aptl_shuffle_webhook_url"
     fi
 else

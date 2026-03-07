@@ -91,7 +91,7 @@ mv validate-victim.sh validate-[scenario-name].sh
 
 **Reference:** `docker-compose.yml` victim service block (victim container)
 
-- **Next IP:** Check docker-compose.yml for next available IP (increment from last used)
+- **Next IP:** Check docker-compose.yml for next available IP in the aptl-internal network (172.20.2.0/24)
 - **Next Port:** Check docker-compose.yml for next available port (increment from last used)
 - **Container:** `aptl-[scenario]-victim`
 - **Hostname:** `[scenario]-victim-host`
@@ -128,7 +128,7 @@ mv validate-victim.sh validate-[scenario-name].sh
 ### Pre-Implementation
 
 - [ ] Read all reference files listed above
-- [ ] Identify next available IP (172.20.0.X) and port
+- [ ] Identify next available IP (172.20.2.X on aptl-internal) and port
 - [ ] Plan what goes in core script vs child scripts
 
 ### Container Files
@@ -162,7 +162,7 @@ docker compose -p aptl ps
 - [ ] SSH connectivity: `ssh -i ~/.ssh/aptl_lab_key -p [PORT] labadmin@localhost`
 - [ ] Service status: `docker exec aptl-[scenario]-victim systemctl status [scenario]-install.service`
 - [ ] Installation flag: `docker exec aptl-[scenario]-victim test -f /var/ossec/.[scenario]_installed`
-- [ ] Kali connectivity: `ssh kali@localhost -p 2023 "ping -c 2 172.20.0.[X]"`
+- [ ] Kali connectivity: `ssh kali@localhost -p 2023 "ping -c 2 172.20.2.[X]"`
 - [ ] Wazuh agent registered: Check agent ID in Wazuh manager logs
 - [ ] CLI logging: Run commands, verify in `/var/ossec/logs/alerts/alerts.json`
 - [ ] Falco events: Look for JSON entries with command details

@@ -12,8 +12,8 @@ The Wazuh SIEM stack provides security monitoring and analysis for the APTL lab 
 
 ```mermaid
 flowchart TD
-    J[Victim Container<br/>172.20.0.20] --> |Agent 1514| G[Wazuh Manager<br/>172.20.0.10]
-    L[Kali Container<br/>172.20.0.30] --> |Agent 1514| G
+    J[Victim Container<br/>172.20.2.20] --> |Agent 1514| G[Wazuh Manager<br/>172.20.0.10]
+    L[Kali Container<br/>172.20.4.30] --> |Agent 1514| G
 
     G <--> H[Wazuh Indexer<br/>172.20.0.12]
     H --> I[Wazuh Dashboard<br/>172.20.0.11]
@@ -29,8 +29,8 @@ flowchart TD
 ## Wazuh Manager
 
 **Configuration:**
-- **Container**: `wazuh.manager`
-- **IP**: 172.20.0.10
+- **Container**: `aptl-wazuh-manager`
+- **IP**: 172.20.0.10 (security), 172.20.1.10 (dmz), 172.20.2.30 (internal)
 - **Ports**: 1514 (agents), 514 (syslog), 55000 (API)
 
 **Key Features:**
@@ -42,10 +42,10 @@ flowchart TD
 **Management:**
 ```bash
 # Check manager status
-docker exec wazuh.manager /var/ossec/bin/wazuh-control status
+docker exec aptl-wazuh-manager /var/ossec/bin/wazuh-control status
 
 # View real-time logs
-docker exec wazuh.manager tail -f /var/ossec/logs/ossec.log
+docker exec aptl-wazuh-manager tail -f /var/ossec/logs/ossec.log
 
 # API access
 curl -k -u wazuh-wui:WazuhPass123! https://localhost:55000/
@@ -54,7 +54,7 @@ curl -k -u wazuh-wui:WazuhPass123! https://localhost:55000/
 ## Wazuh Indexer
 
 **Configuration:**
-- **Container**: `wazuh.indexer`
+- **Container**: `aptl-wazuh-indexer`
 - **IP**: 172.20.0.12
 - **Port**: 9200
 - **Credentials**: admin/SecretPassword
@@ -84,7 +84,7 @@ curl -k -u admin:SecretPassword https://localhost:9200/wazuh-alerts-*/_search
 ## Wazuh Dashboard
 
 **Configuration:**
-- **Container**: `wazuh.dashboard`
+- **Container**: `aptl-wazuh-dashboard`
 - **IP**: 172.20.0.11
 - **URL**: https://localhost:443
 - **Credentials**: admin/SecretPassword
@@ -125,7 +125,7 @@ Emergency      → 100607     → Level 15
 - Create custom detection rules
 - Get SIEM status and configuration
 
-See [Wazuh Blue Team](wazuh-blueteam.md) for MCP integration details.
+See [MCP Integration](mcp-integration.md) for details.
 
 
 ## Troubleshooting
@@ -133,10 +133,10 @@ See [Wazuh Blue Team](wazuh-blueteam.md) for MCP integration details.
 **Manager Issues:**
 ```bash
 # Check agent connections
-docker exec wazuh.manager /var/ossec/bin/wazuh-control info
+docker exec aptl-wazuh-manager /var/ossec/bin/wazuh-control info
 
 # Check active agents
-docker exec wazuh.manager /var/ossec/bin/agent_control -l
+docker exec aptl-wazuh-manager /var/ossec/bin/agent_control -l
 ```
 
 **Indexer Issues:**
@@ -154,5 +154,5 @@ curl -k -u admin:SecretPassword https://localhost:9200/_cat/indices?v
 curl -k https://localhost:443/status
 
 # Check connectivity to indexer
-docker exec wazuh.dashboard curl -k https://wazuh.indexer:9200
+docker exec aptl-wazuh-dashboard curl -k https://wazuh.indexer:9200
 ```

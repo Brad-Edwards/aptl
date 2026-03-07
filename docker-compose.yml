@@ -44,7 +44,7 @@ services:
       - wazuh_wodles:/var/ossec/wodles
       - filebeat_etc:/etc/filebeat
       - filebeat_var:/var/lib/filebeat
-      - ./config/wazuh_cluster/filebeat_wazuh_module.yml:/etc/filebeat/modules.d/wazuh.yml:ro
+      - ./config/wazuh_cluster/filebeat_wazuh_module.yml:/tmp/filebeat-override.yml:ro
       - ./config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem
       - ./config/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/filebeat.pem
       - ./config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key
@@ -59,7 +59,7 @@ services:
       - ./config/wazuh_cluster/suricata_rules.xml:/var/ossec/etc/rules/suricata_rules.xml
       - ./config/wazuh_cluster/database_rules.xml:/var/ossec/etc/rules/database_rules.xml
       - ./config/wazuh_cluster/patch-rule-path.py:/docker-entrypoint-initdb.d/patch-rule-path.py:ro
-    entrypoint: ["/bin/bash", "-c", "python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init"]
+    entrypoint: ["/bin/bash", "-c", "cp /tmp/filebeat-override.yml /etc/filebeat/filebeat.yml && chown root:root /etc/filebeat/filebeat.yml && python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init"]
     healthcheck:
       test: ["CMD-SHELL", "curl -ks https://localhost:55000 || exit 1"]
       interval: 30s

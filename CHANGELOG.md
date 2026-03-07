@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.1] - 2026-03-07
+
+### Added
+
+- S3 export for experiment run data — `aptl runs export` packages runs as tar.gz with SHA-256 checksums, optional S3 upload via `--s3-bucket` with metadata tags (#157)
+- `aptl[s3]` optional dependency group for boto3
+
 ## [4.1.0] - 2026-03-02
 
 ### Added

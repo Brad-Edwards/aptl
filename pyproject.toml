@@ -18,6 +18,9 @@ dependencies = [
 aptl = "aptl.cli.main:app"
 
 [project.optional-dependencies]
+s3 = [
+    "boto3>=1.28.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-mock>=3.12.0",

@@ -10,8 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Range snapshot capture in experiment runs — records software versions, container state, Wazuh rules inventory, network config, and config file hashes as `snapshot.json` (#156)
 - S3 export for experiment run data — `aptl runs export` packages runs as tar.gz with SHA-256 checksums, optional S3 upload via `--s3-bucket` with metadata tags (#157)
 - `aptl[s3]` optional dependency group for boto3
+
+### Fixed
+
+- Snapshot used wrong container names (`aptl-wazuh-manager` → `aptl-wazuh.manager-1`) causing all Wazuh data to be empty
+- Snapshot indexer version read from non-existent file; now extracted from opensearch jar filename
 
 ## [4.1.0] - 2026-03-02
 

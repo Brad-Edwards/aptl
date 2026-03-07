@@ -2,12 +2,12 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { LabConfig } from '../config.js';
 
 export function generateAPIToolDefinitions(
-  serverConfig: LabConfig['server'], 
+  serverConfig: LabConfig['server'],
   queries?: LabConfig['queries'],
   includeGenericTools: boolean = true
 ): Tool[] {
   const tools: Tool[] = [];
-  
+
   if (includeGenericTools) {
     tools.push(
       // Generic API call tool
@@ -77,7 +77,7 @@ export function generateAPIToolDefinitions(
               description: 'Override or add query parameters',
             },
             body: {
-              type: 'object', 
+              type: 'object',
               description: 'Override or add request body data',
             },
           },

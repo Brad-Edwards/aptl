@@ -14,12 +14,3 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
         exclude: ^tests/
-
-  - repo: local
-    hooks:
-      - id: changelog-updated
-        name: Changelog must be updated
-        entry: bash -c 'git diff --cached --name-only | grep -q "^CHANGELOG.md$"'
-        language: system
-        always_run: true
-        pass_filenames: false

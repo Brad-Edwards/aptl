@@ -51,7 +51,7 @@ baseurl=https://packages.wazuh.com/4.x/yum/
 priority=1
 EOF
 
-# Install Wazuh agent 
+# Install Wazuh agent
 WAZUH_MANAGER="$WAZUH_MANAGER" dnf install -y wazuh-agent-4.12.0
 
 echo "Wazuh agent installed successfully"
@@ -142,4 +142,3 @@ else
 fi
 
 echo "=== Wazuh Agent Installation Complete ==="
-

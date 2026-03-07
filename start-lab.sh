@@ -175,7 +175,7 @@ test_ssh() {
     local container=$1
     local port=$2
     local user=$3
-    
+
     if ssh -i ~/.ssh/aptl_lab_key -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
            ${user}@localhost -p ${port} "echo 'SSH OK'" 2>/dev/null; then
         echo "SSH to $container ($user@localhost:$port) is ready"
@@ -234,7 +234,7 @@ output_both ""
 output_both "   Container IPs:"
 if [ "$(jq -r '.containers.wazuh' aptl.json)" = "true" ]; then
     output_both "   wazuh.manager:   172.20.0.10"
-    output_both "   wazuh.dashboard: 172.20.0.11" 
+    output_both "   wazuh.dashboard: 172.20.0.11"
     output_both "   wazuh.indexer:   172.20.0.12"
 fi
 if [ "$(jq -r '.containers.victim' aptl.json)" = "true" ]; then

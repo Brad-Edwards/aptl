@@ -16,7 +16,7 @@ describe('HTTPClient', () => {
       baseUrl: 'https://api.example.com',
       auth: { type: 'basic' as const, username: 'user', password: 'pass' }
     };
-    
+
     const client = new HTTPClient(config);
     expect(client).toBeDefined();
   });
@@ -30,7 +30,7 @@ describe('HTTPClient', () => {
       baseUrl: 'https://api.example.com',
       auth: { type: 'basic' as const, username: 'user', password: 'pass' }
     };
-    
+
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -39,7 +39,7 @@ describe('HTTPClient', () => {
 
     const client = new HTTPClient(config);
     await client.makeRequest('/test');
-    
+
     const expectedAuth = Buffer.from('user:pass').toString('base64');
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.example.com/test',
@@ -56,7 +56,7 @@ describe('HTTPClient', () => {
       baseUrl: 'https://api.example.com',
       auth: { type: 'bearer' as const, token: 'abc123' }
     };
-    
+
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -65,7 +65,7 @@ describe('HTTPClient', () => {
 
     const client = new HTTPClient(config);
     await client.makeRequest('/test');
-    
+
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.example.com/test',
       expect.objectContaining({
@@ -81,7 +81,7 @@ describe('HTTPClient', () => {
       baseUrl: 'https://api.example.com',
       auth: { type: 'bearer' as const, token: 'abc123' }
     };
-    
+
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -92,7 +92,7 @@ describe('HTTPClient', () => {
     await client.makeRequest('/search', 'GET', {
       params: { q: 'test', limit: 10 }
     });
-    
+
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.example.com/search?q=test&limit=10',
       expect.any(Object)
@@ -104,7 +104,7 @@ describe('HTTPClient', () => {
       baseUrl: 'https://api.example.com',
       auth: { type: 'bearer' as const, token: 'abc123' }
     };
-    
+
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 404,
@@ -113,7 +113,7 @@ describe('HTTPClient', () => {
     } as any);
 
     const client = new HTTPClient(config);
-    
+
     await expect(client.makeRequest('/missing')).rejects.toThrow('HTTP 404: Not Found');
   });
 
@@ -123,7 +123,7 @@ describe('HTTPClient', () => {
       auth: { type: 'bearer' as const, token: 'abc123' },
       timeout: 100
     };
-    
+
     mockFetch.mockImplementationOnce(() => {
       const controller = new AbortController();
       setTimeout(() => controller.abort(), 50);
@@ -131,7 +131,7 @@ describe('HTTPClient', () => {
     });
 
     const client = new HTTPClient(config);
-    
+
     await expect(client.makeRequest('/slow')).rejects.toThrow('Request timeout after 100ms');
   });
 });

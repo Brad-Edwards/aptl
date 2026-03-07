@@ -95,7 +95,7 @@ Wait 5-10 minutes for Wazuh indexer initialization.
 # Check status
 docker compose ps
 
-# Test endpoints  
+# Test endpoints
 curl -k https://localhost:443          # Dashboard
 curl -k https://localhost:9200        # Indexer
 ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022 "echo OK"  # Victim

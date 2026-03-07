@@ -13,7 +13,7 @@ describe('generateToolHandlers', () => {
 
   it('generates handler map with correct tool names', () => {
     const handlers = generateToolHandlers(mockServerConfig);
-    
+
     expect(handlers['test_info']).toBeDefined();
     expect(handlers['test_run_command']).toBeDefined();
     expect(handlers['test_interactive_session']).toBeDefined();
@@ -31,9 +31,9 @@ describe('generateToolHandlers', () => {
       targetName: 'Kali Linux',
       configKey: 'kali'
     };
-    
+
     const handlers = generateToolHandlers(kaliConfig);
-    
+
     expect(handlers['kali_info']).toBeDefined();
     expect(handlers['kali_run_command']).toBeDefined();
   });
@@ -56,7 +56,7 @@ describe('generateToolHandlers', () => {
       targetName: 'Test',
       configKey: 'test'
     };
-    
+
     const handlers = generateToolHandlers(emptyConfig);
     expect(handlers['_info']).toBeDefined();
     expect(handlers['_run_command']).toBeDefined();
@@ -91,7 +91,7 @@ describe('handler execution logic', () => {
   it('target_info returns container info when enabled', async () => {
     const handlers = generateToolHandlers({ toolPrefix: 'test', targetName: 'Test', configKey: 'test-container' });
     const result = await handlers['test_info']({}, mockContext);
-    
+
     expect(result.content[0].text).toContain('172.20.0.50');
     expect(result.content[0].text).toContain('testuser');
     expect(result.content[0].text).toContain('test-lab');
@@ -107,10 +107,10 @@ describe('handler execution logic', () => {
         }
       }
     };
-    
+
     const disabledContext = { ...mockContext, labConfig: disabledConfig };
     const handlers = generateToolHandlers({ toolPrefix: 'test', targetName: 'Test Container', configKey: 'test-container' });
-    
+
     const result = await handlers['test_info']({}, disabledContext);
     expect(result.content[0].text).toContain('not enabled');
   });

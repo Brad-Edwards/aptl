@@ -15,7 +15,7 @@ export AGENT_NAME="victim-$(hostname)-$(date +%s)"
 # Install agents based on environment variables
 echo "Agent installation configuration:"
 echo "  - Wazuh: $INSTALL_WAZUH"
-echo "  - Falco: $INSTALL_FALCO"  
+echo "  - Falco: $INSTALL_FALCO"
 echo "  - XSIAM: $INSTALL_XSIAM"
 
 if [ "$INSTALL_WAZUH" = "true" ]; then
@@ -38,7 +38,7 @@ if [ -f /var/ossec/etc/ossec.conf ] && [ -f /opt/purple-team/scripts/ossec.conf.
     sed -e "s/AGENT_NAME_PLACEHOLDER/$AGENT_NAME/g" \
         -e "s/WAZUH_MANAGER_PLACEHOLDER/$WAZUH_MANAGER/g" \
         /opt/purple-team/scripts/ossec.conf.template > /var/ossec/etc/ossec.conf
-    
+
     systemctl restart wazuh-agent || true
 fi
 

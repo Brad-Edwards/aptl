@@ -56,7 +56,17 @@ WAZUH_MANAGER="$WAZUH_MANAGER" dnf install -y wazuh-agent-4.12.0
 
 echo "Wazuh agent installed successfully"
 
-
+# Apply custom ossec.conf from template to enable /var/log/secure monitoring
+if [ -f /opt/purple-team/scripts/ossec.conf.template ]; then
+    echo "Applying custom ossec.conf from template..."
+    sed -e "s/AGENT_NAME_PLACEHOLDER/${AGENT_NAME:-victim}/g" \
+        -e "s/WAZUH_MANAGER_PLACEHOLDER/${WAZUH_MANAGER}/g" \
+        /opt/purple-team/scripts/ossec.conf.template > /var/ossec/etc/ossec.conf
+    echo "Custom ossec.conf applied (includes /var/log/secure monitoring)"
+else
+    echo "WARNING: ossec.conf.template not found, using default agent config"
+    echo "   /var/log/secure may not be monitored"
+fi
 
 # Configure bash history logging
 echo "Configuring bash command history logging..."

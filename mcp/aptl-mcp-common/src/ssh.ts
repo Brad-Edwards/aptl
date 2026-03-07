@@ -299,17 +299,20 @@ export class PersistentSession extends EventEmitter {
       return;
     }
 
+    // Strip carriage returns to normalize line endings before parsing
+    const normalizedOutput = this.outputData.replace(/\r/g, '');
+
     const endDelimiter = `${this.commandDelimiter}_END_${this.currentCommand.id}`;
-    const exitCode = this.shellFormatter.parseExitCode(this.outputData, endDelimiter);
-    
+    const exitCode = this.shellFormatter.parseExitCode(normalizedOutput, endDelimiter);
+
     if (exitCode !== null) {
       const startPattern = `${this.commandDelimiter}_START_${this.currentCommand.id}`;
-      const startIndex = this.outputData.indexOf(startPattern);
+      const startIndex = normalizedOutput.indexOf(startPattern);
       const endPattern = `${endDelimiter}:${exitCode}`;
-      const endIndex = this.outputData.indexOf(endPattern);
+      const endIndex = normalizedOutput.indexOf(endPattern);
       
       if (startIndex !== -1 && endIndex !== -1) {
-        const output = this.outputData.substring(
+        const output = normalizedOutput.substring(
           startIndex + startPattern.length,
           endIndex
         ).trim();
@@ -317,8 +320,12 @@ export class PersistentSession extends EventEmitter {
         const lines = output.split('\n');
         if (lines[0] === '') lines.shift();
         if (lines[lines.length - 1] === '') lines.pop();
-        
-        const cleanOutput = lines.join('\n');
+
+        // Filter out lines containing internal command delimiters or command echo
+        const delimiter = this.commandDelimiter;
+        const filteredLines = lines.filter(line => !line.includes(delimiter));
+
+        const cleanOutput = filteredLines.join('\n');
 
         this.currentCommand.resolve({
           stdout: cleanOutput,

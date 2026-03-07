@@ -294,7 +294,7 @@ class RunManifest(TypedDict):
 {
   "lab": {
     "name": "aptl",
-    "network_subnet": "172.20.0.0/16"
+    "network_subnet": "172.20.0.0/24"
   },
   "containers": {
     "wazuh": true,

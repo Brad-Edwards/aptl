@@ -35,7 +35,7 @@ Generate test activity and view in Wazuh Dashboard:
 ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022 "logger 'Test log entry'"
 
 # Run scan from Kali
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "nmap 172.20.0.20"
+ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "nmap 172.20.2.20"
 ```
 
 View events in Wazuh Dashboard → Security Events

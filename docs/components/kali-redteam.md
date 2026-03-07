@@ -13,8 +13,9 @@ See [containers/kali/Dockerfile](../../containers/kali/Dockerfile) for complete 
 
 ## Network Access
 
-- **Container IP**: 172.20.0.30
-- **Target Access**: Full network access to victim container (172.20.0.20)
+- **Container IPs**: 172.20.4.30 (redteam), 172.20.1.30 (dmz), 172.20.2.35 (internal)
+- **Networks**: aptl-redteam, aptl-dmz, aptl-internal
+- **Target Access**: DMZ (webapp 172.20.1.20, mail 172.20.1.21, DNS 172.20.1.22) and internal (AD 172.20.2.10, DB 172.20.2.11, victim 172.20.2.20)
 - **SSH Access**: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`
 
 ## MCP Integration
@@ -35,7 +36,7 @@ The MCP server enables AI agents to control Kali tools remotely:
     "mcpServers": {
         "aptl-lab": {
             "command": "node",
-            "args": ["./mcp/mcp-red/dist/index.js"],
+            "args": ["./mcp/mcp-red/build/index.js"],
             "cwd": "."
         }
     }

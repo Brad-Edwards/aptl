@@ -1,14 +1,14 @@
-Minimum Viable Enterprise + Agentic SOC
+# Minimum Viable Enterprise + Agentic SOC
 
-Where We Are
+> **Status**: Design document. Phases 1-3 are implemented. Phase 4 and the Windows VM (172.20.3.0/24 Endpoints subnet) are not yet implemented. Network topology, container IPs, and SOC tooling described below reflect the current running lab. The Endpoints subnet and Caldera remain planned.
 
-APTL today is a solid foundation: Wazuh SIEM, one Linux victim (Rocky, with SSH + a trivial PHP shell), Kali, a reverse engineering container, and MCP servers that let agents run commands and query the SIEM. The Python CLI handles lab lifecycle. The code is clean and well-structured.
+## Where We Started
 
-But the attack surface is paper-thin. There's one host with one exploitable service. There's no identity infrastructure, no real applications, no email, no database, no network segmentation. On the blue side, Wazuh ingests logs and you can query alerts and create rules, but there's no threat intel platform, no case management, no automated response, no network IDS.
+APTL started as Wazuh SIEM, one Linux victim, Kali, a reverse engineering container, and MCP servers. The Python CLI handles lab lifecycle.
 
-An agentic red team has nothing interesting to attack. An agentic blue team has almost nothing to investigate.
+The gap: one host with one exploitable service. No identity infrastructure, no real applications, no email, no database, no network segmentation. On the blue side, no threat intel platform, no case management, no automated response, no network IDS.
 
-The Core Design Question
+## The Core Design Question
 
 What's the smallest set of infrastructure and applications that lets you exercise the most common enterprise attack chains, with enough telemetry that an agentic SOC has real work to do?
 
@@ -50,8 +50,8 @@ graph TB
         LinuxSrv["Linux App Server<br/>Rocky Linux"]
     end
 
-    subgraph endpoints [Endpoints - 172.20.3.0/24]
-        WinVM["Windows 11<br/>AD-joined, VM"]
+    subgraph endpoints [Endpoints - 172.20.3.0/24 NOT IMPLEMENTED]
+        WinVM["Windows 11<br/>AD-joined, VM<br/>PLANNED"]
     end
 
     subgraph security [Security Stack - 172.20.0.0/24]
@@ -213,9 +213,9 @@ What: Windows 11 joined to techvault.local, logged in as a TechVault employee. H
 
 Telemetry: Windows Event Logs, Sysmon, PowerShell logging, Wazuh agent -> SIEM.
 
-Network Segmentation
+## Network Segmentation
 
-Current APTL uses a flat /16. A minimum viable enterprise needs at least 3 zones:
+The lab uses 4 Docker bridge networks (implemented):
 
 
 
@@ -229,7 +229,7 @@ Internal (172.20.2.0/24): AD, database, file server, app server -- reachable fro
 
 
 
-Endpoints (172.20.3.0/24): Windows VM -- reachable from internal
+Endpoints (172.20.3.0/24): Windows VM -- planned, not yet implemented
 
 
 
@@ -375,7 +375,7 @@ mcp-reverse (binary analysis) -- keep
 
 
 
-mcp-windows-re (Windows RE) -- keep
+mcp-indexer (Wazuh Indexer queries) -- keep
 
 New MCP Servers Needed
 
@@ -806,4 +806,3 @@ Network IDS: Suricata (better community rules, JSON output, Wazuh integration) v
 
 
 Windows: Required for Phase 3 or skip entirely? Without Windows, you lose AD-joined endpoint attacks, but Phases 1-2 still work.
-

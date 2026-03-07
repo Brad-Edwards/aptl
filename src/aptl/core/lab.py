@@ -434,7 +434,7 @@ def orchestrate_lab_start(
         manager_result = wait_for_service(
             check_fn=partial(
                 check_manager_api_ready,
-                container_name="aptl-wazuh.manager-1",
+                container_name="aptl-wazuh-manager",
                 username=env.api_username,
                 password=env.api_password,
             ),

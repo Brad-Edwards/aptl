@@ -157,7 +157,7 @@ fi
 echo "Waiting for Wazuh Manager API..."
 timeout=120
 while [ $timeout -gt 0 ]; do
-    if docker exec aptl-wazuh.manager-1 curl -k -s -f https://localhost:55000 -u "${API_USERNAME}:${API_PASSWORD}" >/dev/null 2>&1; then
+    if docker exec aptl-wazuh-manager curl -k -s -f https://localhost:55000 -u "${API_USERNAME}:${API_PASSWORD}" >/dev/null 2>&1; then
         echo "Wazuh Manager API is ready"
         break
     fi

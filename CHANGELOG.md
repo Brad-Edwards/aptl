@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] - 2026-03-07
+
+### Added
+
+- SonarCloud integration for continuous code quality analysis — `sonar-project.properties` and `.github/workflows/sonarcloud.yml` (#165)
+
 ## [4.1.3] - 2026-03-07
 
 ### Fixed
@@ -245,7 +251,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Minetest server container and MCP
-- Minetest client container and MCP  
+- Minetest client container and MCP
 - Minecraft server container and MCP
 
 ### Fixed
@@ -277,7 +283,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Falco runtime security monitoring with Modern eBPF in victim containers
-- Wazuh rules for processing Falco alerts by priority level (Info through Emergency)  
+- Wazuh rules for processing Falco alerts by priority level (Info through Emergency)
 - Complete ossec.conf template replacing XML sed manipulation
 - Single lab-install.service for coordinated installation
 - Add basic CTF scenario setup script for integration testing

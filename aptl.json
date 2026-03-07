@@ -7,8 +7,12 @@
         "enterprise": true,
         "soc": true,
         "mail": false,
-        "fileshare": false,
-        "dns": false
+        "fileshare": true,
+        "dns": true
+    },
+    "run_storage": {
+        "backend": "local",
+        "local_path": "./runs"
     },
     "edr_agents": {
         "victim": ["wazuh", "falco"],

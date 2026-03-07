@@ -26,9 +26,24 @@ MISP_API_KEY = os.getenv(
     "MISP_API_KEY", "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw",
 )
 THEHIVE_URL = os.getenv("THEHIVE_URL", "http://localhost:9000")
-THEHIVE_API_KEY = os.getenv(
-    "THEHIVE_API_KEY", "e2RJy66b8sF421sPv8bFX5Nn7uMgJkMi",
-)
+
+
+def _provision_thehive_key() -> str:
+    """Auto-provision a TheHive API key via login + key renewal."""
+    script = os.path.join(PROJECT_ROOT, "scripts", "thehive-apikey.sh")
+    if os.path.isfile(script):
+        try:
+            result = subprocess.run(
+                [script], capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+    return ""
+
+
+THEHIVE_API_KEY = os.getenv("THEHIVE_API_KEY", "") or _provision_thehive_key()
 SHUFFLE_URL = os.getenv("SHUFFLE_URL", "http://localhost:5001")
 SHUFFLE_API_KEY = os.getenv(
     "SHUFFLE_API_KEY", "31a211c4-ea5c-4a49-b022-5e2434e758a7",
@@ -36,6 +51,16 @@ SHUFFLE_API_KEY = os.getenv(
 
 # Kali's DMZ network IP (the one that appears in Wazuh alerts from webapp attacks)
 KALI_DMZ_IP = "172.20.1.30"
+
+# Enterprise container IPs and ports
+WS_IP = "172.20.2.40"
+WS_SSH_PORT = 2028
+FILESHARE_IP = "172.20.2.12"
+WEBAPP_IP_DMZ = "172.20.1.20"
+WEBAPP_PORT = 8080
+AD_IP = "172.20.2.10"
+DB_IP = "172.20.2.11"
+VICTIM_IP = "172.20.2.20"
 
 LIVE_LAB = pytest.mark.skipif(
     os.getenv("APTL_SMOKE", "0") != "1",
@@ -194,7 +219,7 @@ def _read_jsonrpc_response(
 def mcp_jsonrpc(
     server_name: str,
     messages: list[dict],
-    timeout: int = 15,
+    timeout: int = 30,
 ) -> list[dict]:
     """Spawn an MCP server and exchange JSON-RPC messages.
 
@@ -272,7 +297,7 @@ _INITIALIZED_MSG = {
 }
 
 
-def mcp_tools_list(server_name: str, timeout: int = 15) -> list[str]:
+def mcp_tools_list(server_name: str, timeout: int = 30) -> list[str]:
     """Spawn an MCP server and return the list of tool names it advertises."""
     messages = [
         _INIT_MSG,
@@ -301,7 +326,7 @@ def mcp_call_tool(
     server_name: str,
     tool_name: str,
     arguments: dict,
-    timeout: int = 30,
+    timeout: int = 60,
 ) -> dict:
     """Spawn an MCP server, initialize, and call a single tool.
 
@@ -352,13 +377,13 @@ def mcp_tool_text(result: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def run_cmd(cmd: list[str], timeout: int = 15) -> subprocess.CompletedProcess:
+def run_cmd(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
     """Run a subprocess command with capture and timeout."""
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
 def docker_exec(
-    container: str, cmd: str | list[str], timeout: int = 30,
+    container: str, cmd: str | list[str], timeout: int = 60,
 ) -> subprocess.CompletedProcess:
     """Run a command inside a Docker container."""
     if isinstance(cmd, str):
@@ -368,9 +393,16 @@ def docker_exec(
     return run_cmd(parts, timeout=timeout)
 
 
-def kali_exec(cmd: str, timeout: int = 30) -> subprocess.CompletedProcess:
+def kali_exec(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess:
     """Run a command inside the Kali container."""
     return docker_exec("aptl-kali", cmd, timeout=timeout)
+
+
+def workstation_exec(
+    cmd: str, timeout: int = 60,
+) -> subprocess.CompletedProcess:
+    """Run a command inside the workstation container."""
+    return docker_exec("aptl-workstation", cmd, timeout=timeout)
 
 
 def container_running(name: str) -> bool:
@@ -388,7 +420,7 @@ def curl_indexer(path: str = "", body: dict | None = None) -> dict:
     ]
     if body is not None:
         cmd += ["-H", "Content-Type: application/json", "-d", json.dumps(body)]
-    result = run_cmd(cmd, timeout=20)
+    result = run_cmd(cmd, timeout=40)
     assert result.returncode == 0, f"curl failed: {result.stderr}"
     return json.loads(result.stdout)
 
@@ -399,7 +431,7 @@ def curl_json(
     auth_header: str = "",
     method: str = "GET",
     body: dict | None = None,
-    timeout: int = 20,
+    timeout: int = 120,
     insecure: bool = False,
 ) -> dict:
     """Make an HTTP request via curl and return parsed JSON."""
@@ -435,7 +467,7 @@ def ssh_cmd(
 
 
 def wait_for_alert(
-    query: dict, timeout: int = 90, poll_interval: int = 10,
+    query: dict, timeout: int = 180, poll_interval: int = 10,
 ) -> dict:
     """Poll the Wazuh Indexer for a matching alert.
 

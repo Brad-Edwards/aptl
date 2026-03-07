@@ -67,6 +67,17 @@ class ContainerSettings(BaseModel):
         return profiles
 
 
+class RunStorageConfig(BaseModel):
+    """Configuration for experiment run storage."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    backend: str = "local"          # "local" or "s3" (s3 deferred)
+    local_path: str = "./runs"      # Relative to project dir
+    s3_bucket: str | None = None    # Future
+    s3_prefix: str = "runs/"        # Future
+
+
 class AptlConfig(BaseModel):
     """Top-level APTL configuration."""
 
@@ -74,6 +85,7 @@ class AptlConfig(BaseModel):
 
     lab: LabSettings = LabSettings(name="aptl")
     containers: ContainerSettings = ContainerSettings()
+    run_storage: RunStorageConfig = RunStorageConfig()
 
 
 def load_config(path: Path) -> AptlConfig:

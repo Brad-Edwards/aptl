@@ -17,6 +17,7 @@ import {
 import { type LabConfig } from './config.js';
 import { SSHConnectionManager } from './ssh.js';
 import { HTTPClient } from './http.js';
+import { ToolTracer } from './tracing.js';
 import { generateToolDefinitions } from './tools/definitions.js';
 import { generateToolHandlers, type ToolHandler, type ToolContext } from './tools/handlers.js';
 import { generateAPIToolDefinitions } from './tools/api-definitions.js';
@@ -26,9 +27,10 @@ import { generateAPIToolHandlers, type APIToolHandler, type APIToolContext } fro
  * Create and configure an MCP server with the provided lab configuration
  */
 export function createMCPServer(labConfig: LabConfig) {
-  // Initialize clients based on config
+  // Initialize clients and tracer based on config
   const sshManager = labConfig.containers ? new SSHConnectionManager() : null;
   const httpClient = labConfig.api ? new HTTPClient(labConfig.api) : null;
+  const tracer = new ToolTracer(labConfig.server.name);
   
   // Pre-generate tools and handlers based on available capabilities
   let cachedTools: Tool[] = [];
@@ -101,7 +103,7 @@ export function createMCPServer(labConfig: LabConfig) {
     }
 
     // Context is narrowed to the correct type above based on tool name
-    return (handler as any)(args ?? {}, context);
+    return tracer.trace(name, args ?? {}, () => (handler as any)(args ?? {}, context));
   });
 
   // Setup graceful shutdown handlers (once per process)

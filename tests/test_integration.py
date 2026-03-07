@@ -14,14 +14,12 @@ from typer.testing import CliRunner
 
 from aptl.cli.scenario import app
 from aptl.core.events import EventLog, EventType
-from aptl.core.objectives import ObjectiveStatus
 from aptl.core.scenarios import (
     ScenarioDefinition,
     ScenarioMode,
     find_scenarios,
     load_scenario,
 )
-from aptl.core.scoring import ScoreBreakdown, calculate_score
 from aptl.core.session import ScenarioSession, SessionState
 
 runner = CliRunner()
@@ -282,8 +280,8 @@ class TestCLIWithExampleScenarios:
 class TestFullLifecycle:
     """End-to-end test of the complete scenario lifecycle.
 
-    Uses a purpose-built scenario with manual objectives to test:
-    start -> status -> hint -> complete -> evaluate -> stop
+    Uses a purpose-built scenario to test:
+    start -> status -> stop
     without requiring Docker or Wazuh.
     """
 
@@ -303,36 +301,16 @@ class TestFullLifecycle:
             },
             "mode": "red",
             "containers": {"required": ["kali"]},
-            "objectives": {
-                "red": [
-                    {
-                        "id": "obj-one",
-                        "description": "First objective",
-                        "type": "manual",
-                        "points": 60,
-                        "hints": [
-                            {"level": 1, "text": "Hint one", "point_penalty": 5},
-                            {"level": 2, "text": "Hint two", "point_penalty": 10},
-                        ],
-                    },
-                    {
-                        "id": "obj-two",
-                        "description": "Second objective",
-                        "type": "manual",
-                        "points": 40,
-                    },
-                ],
-                "blue": [],
-            },
-            "scoring": {
-                "passing_score": 50,
-                "max_score": 100,
-                "time_bonus": {
-                    "enabled": False,
-                    "max_bonus": 0,
-                    "decay_after_minutes": 10,
+            "steps": [
+                {
+                    "step_number": 1,
+                    "technique_id": "T1595.002",
+                    "technique_name": "Active Scanning",
+                    "tactic": "Reconnaissance",
+                    "description": "Scan the target",
+                    "target": "victim",
                 },
-            },
+            ],
         }
 
         (scenarios_dir / "integration-test.yaml").write_text(
@@ -366,7 +344,7 @@ class TestFullLifecycle:
         assert "scenario_started" in content
 
     def test_status_shows_progress(self, tmp_path):
-        """AC-4: status shows elapsed time and completion state."""
+        """AC-4: status shows elapsed time."""
         project = self._setup_project(tmp_path)
         runner.invoke(app, [
             "start", "integration-test",
@@ -380,86 +358,13 @@ class TestFullLifecycle:
         assert "integration-test" in result.output
         assert "active" in result.output
         assert "Elapsed" in result.output
-        assert "Completed:   0" in result.output
 
-    def test_hint_reveals_progressively(self, tmp_path):
-        """AC-6: hints reveal progressively and record penalties."""
+    def test_stop_scenario(self, tmp_path):
+        """AC-7: stop ends the scenario and assembles run archive."""
         project = self._setup_project(tmp_path)
         runner.invoke(app, [
             "start", "integration-test",
             "--project-dir", str(project),
-        ])
-
-        # First hint
-        result = runner.invoke(app, [
-            "hint", "obj-one", "--project-dir", str(project),
-        ])
-        assert "Hint one" in result.output
-        assert "level 1/2" in result.output
-        assert "-5 pts" in result.output
-
-        # Second hint
-        result = runner.invoke(app, [
-            "hint", "obj-one", "--project-dir", str(project),
-        ])
-        assert "Hint two" in result.output
-        assert "level 2/2" in result.output
-
-        # No more hints
-        result = runner.invoke(app, [
-            "hint", "obj-one", "--project-dir", str(project),
-        ])
-        assert "All hints already revealed" in result.output
-
-        # Session records hint level
-        session_data = json.loads(
-            (project / ".aptl" / "session.json").read_text()
-        )
-        assert session_data["hints_used"]["obj-one"] == 2
-
-    def test_complete_and_evaluate(self, tmp_path):
-        """AC-5: evaluate updates session state with completions."""
-        project = self._setup_project(tmp_path)
-        runner.invoke(app, [
-            "start", "integration-test",
-            "--project-dir", str(project),
-        ])
-
-        # Complete first objective
-        result = runner.invoke(app, [
-            "complete", "obj-one", "--project-dir", str(project),
-        ])
-        assert "marked as complete" in result.output
-
-        # Evaluate shows 1/2
-        result = runner.invoke(app, [
-            "evaluate", "--project-dir", str(project),
-        ])
-        assert "1/2" in result.output
-
-        # Status shows 1 completed
-        result = runner.invoke(app, [
-            "status", "--project-dir", str(project),
-        ])
-        assert "Completed:   1" in result.output
-
-    def test_stop_generates_report_with_score(self, tmp_path):
-        """AC-7: stop generates report with score, time bonus, penalties."""
-        project = self._setup_project(tmp_path)
-        runner.invoke(app, [
-            "start", "integration-test",
-            "--project-dir", str(project),
-        ])
-
-        # Use a hint and complete both objectives
-        runner.invoke(app, [
-            "hint", "obj-one", "--project-dir", str(project),
-        ])
-        runner.invoke(app, [
-            "complete", "obj-one", "--project-dir", str(project),
-        ])
-        runner.invoke(app, [
-            "complete", "obj-two", "--project-dir", str(project),
         ])
 
         result = runner.invoke(app, [
@@ -467,21 +372,7 @@ class TestFullLifecycle:
         ])
         assert result.exit_code == 0
         assert "Scenario stopped" in result.output
-        assert "Score: 95/100" in result.output  # 100 - 5 hint penalty
-        assert "Report:" in result.output
-
-        # Report file exists and has correct contents
-        reports = list((project / ".aptl" / "reports").glob("*.json"))
-        assert len(reports) == 1
-        report = json.loads(reports[0].read_text())
-
-        assert report["scenario_id"] == "integration-test"
-        assert report["score"]["total"] == 95
-        assert report["score"]["hint_penalties"] == 5
-        assert report["score"]["passing"] is True
-        assert report["hints_used"] == {"obj-one": 1}
-        assert len(report["objective_results"]) == 2
-        assert len(report["events"]) > 0
+        assert "Duration:" in result.output
 
     def test_session_cleared_after_stop(self, tmp_path):
         """After stop, session should be cleared for a new scenario."""
@@ -507,8 +398,8 @@ class TestFullLifecycle:
         ])
         assert result.exit_code == 0
 
-    def test_event_log_records_full_timeline(self, tmp_path):
-        """Events log should capture the full scenario timeline."""
+    def test_event_log_records_timeline(self, tmp_path):
+        """Events log should capture the scenario timeline."""
         project = self._setup_project(tmp_path)
         runner.invoke(app, [
             "start", "integration-test",
@@ -522,15 +413,6 @@ class TestFullLifecycle:
         events_path = project / ".aptl" / session_data["events_file"]
 
         runner.invoke(app, [
-            "hint", "obj-one", "--project-dir", str(project),
-        ])
-        runner.invoke(app, [
-            "complete", "obj-one", "--project-dir", str(project),
-        ])
-        runner.invoke(app, [
-            "evaluate", "--project-dir", str(project),
-        ])
-        runner.invoke(app, [
             "stop", "--project-dir", str(project),
         ])
 
@@ -540,45 +422,4 @@ class TestFullLifecycle:
         event_types = [e.event_type for e in events]
 
         assert EventType.SCENARIO_STARTED in event_types
-        assert EventType.HINT_REQUESTED in event_types
-        assert EventType.OBJECTIVE_COMPLETED in event_types
-        assert EventType.EVALUATION_RUN in event_types
         assert EventType.SCENARIO_STOPPED in event_types
-
-    def test_fail_scenario_below_passing_score(self, tmp_path):
-        """Stopping with insufficient points should show FAIL."""
-        project = self._setup_project(tmp_path)
-        runner.invoke(app, [
-            "start", "integration-test",
-            "--project-dir", str(project),
-        ])
-
-        # Complete only obj-two (40 points) - below passing_score of 50
-        runner.invoke(app, [
-            "complete", "obj-two", "--project-dir", str(project),
-        ])
-
-        result = runner.invoke(app, [
-            "stop", "--project-dir", str(project),
-        ])
-        assert "Score: 40/100" in result.output
-        assert "FAIL" in result.output
-
-    def test_pass_scenario_at_threshold(self, tmp_path):
-        """Completing enough points to meet passing_score shows PASS."""
-        project = self._setup_project(tmp_path)
-        runner.invoke(app, [
-            "start", "integration-test",
-            "--project-dir", str(project),
-        ])
-
-        # Complete obj-one (60 points) - meets passing_score of 50
-        runner.invoke(app, [
-            "complete", "obj-one", "--project-dir", str(project),
-        ])
-
-        result = runner.invoke(app, [
-            "stop", "--project-dir", str(project),
-        ])
-        assert "Score: 60/100" in result.output
-        assert "PASS" in result.output

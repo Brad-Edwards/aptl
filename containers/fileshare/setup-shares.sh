@@ -124,8 +124,34 @@ echo -e "FileShare2024!\nFileShare2024!" | smbpasswd -a -s svc-fileshare 2>/dev/
 
 echo "=== File shares configured ==="
 
+# Generate CTF flags
+_APTL_FLAG_KEY="${APTL_FLAG_KEY:-aptl-flag-key-2024}"
+for _level in user root; do
+    _nonce=$(od -A n -t x1 -N 16 /dev/urandom | tr -d ' \n')
+    _flag="APTL{${_level}_fileshare_${_nonce}}"
+    _sig=$(printf '%s' "${_APTL_FLAG_KEY}:fileshare:${_level}:${_nonce}" | md5sum | awk '{print $1}')
+    _token="aptl:v1:fileshare:${_level}:${_nonce}:${_sig}"
+    if [ "$_level" = "user" ]; then
+        _dest="/srv/shares/shared/user-flag.txt"
+    else
+        _dest="/root/root.txt"
+    fi
+    cat > "$_dest" <<FLAGEOF
+===== APTL CTF Flag =====
+Flag:  ${_flag}
+Token: ${_token}
+==========================
+FLAGEOF
+    if [ "$_level" = "user" ]; then
+        chmod 644 "$_dest"
+    else
+        chmod 600 "$_dest"
+    fi
+done
+echo "CTF flags generated for fileshare"
+
 # Start rsyslog in background
 rsyslogd
 
 # Start samba
-exec smbd --foreground --no-process-group --log-stdout
+exec smbd --foreground --no-process-group --debug-stdout

@@ -186,3 +186,60 @@ def run_path(
         raise typer.Exit(code=1)
 
     typer.echo(str(store.get_run_path(matches[0])))
+
+
+def _resolve_run_id(store: LocalRunStore, run_id: str) -> str:
+    """Resolve a run ID prefix to a full run ID."""
+    all_runs = store.list_runs()
+    matches = [r for r in all_runs if r.startswith(run_id)]
+    if not matches:
+        typer.echo(f"No run found matching '{run_id}'")
+        raise typer.Exit(code=1)
+    if len(matches) > 1:
+        typer.echo(f"Ambiguous run ID '{run_id}', matches: {', '.join(matches[:5])}")
+        raise typer.Exit(code=1)
+    return matches[0]
+
+
+@app.command("export")
+def export_run(
+    run_id: str = typer.Argument(help="Run UUID (full or prefix)."),
+    project_dir: Path = typer.Option(
+        Path("."),
+        "--project-dir",
+        "-d",
+        help="Path to the APTL project directory.",
+    ),
+    output_dir: Path = typer.Option(
+        Path("./exports"),
+        "--output-dir",
+        "-o",
+        help="Directory to write the export archive to.",
+    ),
+    s3_bucket: str = typer.Option(
+        None,
+        "--s3-bucket",
+        help="S3 bucket for remote export.",
+    ),
+    s3_prefix: str = typer.Option(
+        "runs/",
+        "--s3-prefix",
+        help="S3 key prefix for remote export.",
+    ),
+) -> None:
+    """Export a run as a tar.gz archive, optionally to S3."""
+    store = _get_store(project_dir)
+    resolved_id = _resolve_run_id(store, run_id)
+
+    from aptl.core.exporter import export_local, export_s3
+
+    if s3_bucket:
+        try:
+            uri = export_s3(store, resolved_id, s3_bucket, s3_prefix, output_dir)
+            typer.echo(f"Exported to S3: {uri}")
+        except ImportError as e:
+            typer.echo(f"Error: {e}")
+            raise typer.Exit(code=1)
+    else:
+        archive = export_local(store, resolved_id, output_dir)
+        typer.echo(f"Exported to: {archive}")

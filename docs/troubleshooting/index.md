@@ -116,7 +116,7 @@ ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "echo test"
 ```bash
 docker compose down -v
 docker system prune -f
-./start-lab.sh
+aptl lab start
 ```
 
 ### Service reset

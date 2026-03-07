@@ -2,7 +2,7 @@
 
 Wraps docker compose commands for starting, stopping, and checking lab status.
 All Docker interactions go through subprocess calls to docker compose.
-Includes the full orchestration of lab startup (equivalent of start-lab.sh).
+Includes the full orchestration of lab startup.
 """
 
 import json
@@ -253,8 +253,7 @@ def orchestrate_lab_start(
 ) -> LabResult:
     """Orchestrate the complete lab startup process.
 
-    This is the Python equivalent of start-lab.sh. It performs all steps
-    in order:
+    Performs all steps in order:
       1. Load and validate .env
       2. Load and validate aptl.json config
       3. Generate SSH keys

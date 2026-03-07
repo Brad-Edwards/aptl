@@ -5,10 +5,11 @@
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
-./start-lab.sh
+pip install -e .
+aptl lab start
 ```
 
-Use the script. It handles SSH keys, SSL certificates, system requirements, and container startup.
+The CLI handles SSH keys, SSL certificates, system requirements, and container startup.
 
 **Note**: First run requires sudo password for SSL certificate permissions.
 

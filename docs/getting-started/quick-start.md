@@ -6,12 +6,8 @@
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
 
-# Option A: Python CLI (recommended)
 pip install -e .
 aptl lab start
-
-# Option B: Bash script
-./start-lab.sh
 ```
 
 ## Manage Lab

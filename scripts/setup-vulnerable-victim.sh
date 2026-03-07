@@ -23,7 +23,7 @@ echo "🔄 Creating fresh container..."
 cd "$(dirname "$0")/.." || exit 1
 if ! docker compose --profile wazuh --profile victim up -d victim >/dev/null 2>&1; then
     echo "❌ Error: Failed to create container"
-    echo "   Make sure Wazuh services are running: ./start-lab.sh"
+    echo "   Make sure Wazuh services are running: aptl lab start"
     exit 1
 fi
 

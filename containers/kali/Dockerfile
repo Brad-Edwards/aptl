@@ -19,6 +19,17 @@ RUN apt-get update && \
         iputils-ping && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# AD/Enterprise attack tools for TechVault scenario
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3-impacket impacket-scripts \
+        ldap-utils \
+        smbclient \
+        smbmap \
+        enum4linux \
+        bloodhound.py && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 RUN useradd -m -s /bin/bash -G sudo kali && \
     echo 'kali:kali' | chpasswd && \
     echo 'kali ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers

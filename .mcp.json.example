@@ -1,28 +1,32 @@
 {
   "mcpServers": {
     "kali-ssh": {
-      "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
+      "command": "node",
       "args": ["./mcp/mcp-red/build/index.js"],
-      "cwd": "/home/atomik/src/aptl"
+      "env": {
+        "APTL_TRACE_DIR": "./.aptl/traces"
+      }
     },
     "reverse-sandbox-ssh": {
-      "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
+      "command": "node",
       "args": ["./mcp/mcp-reverse/build/index.js"],
-      "cwd": "/home/atomik/src/aptl"
+      "env": {
+        "APTL_TRACE_DIR": "./.aptl/traces"
+      }
     },
     "shuffle": {
-      "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
+      "command": "node",
       "args": ["./mcp/mcp-soar/build/index.js"],
-      "cwd": "/home/atomik/src/aptl",
       "env": {
-        "SHUFFLE_API_KEY": "31a211c4-ea5c-4a49-b022-5e2434e758a7"
+        "APTL_TRACE_DIR": "./.aptl/traces",
+        "SHUFFLE_API_KEY": "<run seed-shuffle.sh or check Shuffle UI>"
       }
     },
     "indexer": {
-      "command": "/home/atomik/.nvm/versions/node/v22.21.1/bin/node",
+      "command": "node",
       "args": ["./mcp/mcp-indexer/build/index.js"],
-      "cwd": "/home/atomik/src/aptl",
       "env": {
+        "APTL_TRACE_DIR": "./.aptl/traces",
         "INDEXER_USERNAME": "admin",
         "INDEXER_PASSWORD": "SecretPassword",
         "API_USERNAME": "wazuh-wui",
@@ -30,7 +34,7 @@
       }
     },
     "wazuh": {
-      "command": "/home/atomik/src/aptl/tools/bin/mcp-server-wazuh",
+      "command": "./tools/bin/mcp-server-wazuh",
       "env": {
         "WAZUH_API_HOST": "localhost",
         "WAZUH_API_PORT": "55000",
@@ -45,20 +49,20 @@
       }
     },
     "misp": {
-      "command": "/home/atomik/src/aptl/tools/misp-mcp-server/.venv/bin/python",
-      "args": ["/home/atomik/src/aptl/tools/misp-mcp-server/misp_server.py"],
+      "command": "./tools/misp-mcp-server/.venv/bin/python",
+      "args": ["./tools/misp-mcp-server/misp_server.py"],
       "env": {
         "MISP_URL": "https://localhost:8443",
-        "MISP_API_KEY": "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw",
+        "MISP_API_KEY": "<check MISP UI or .env>",
         "MISP_VERIFY_SSL": "False"
       }
     },
     "thehive": {
-      "command": "/home/atomik/src/aptl/tools/bin/thehivemcp",
+      "command": "./tools/bin/thehivemcp",
       "args": ["--transport", "stdio"],
       "env": {
         "THEHIVE_URL": "http://localhost:9000",
-        "THEHIVE_API_KEY": "e2RJy66b8sF421sPv8bFX5Nn7uMgJkMi",
+        "THEHIVE_API_KEY": "<run scripts/thehive-apikey.sh>",
         "THEHIVE_ORGANISATION": "APTL"
       }
     }

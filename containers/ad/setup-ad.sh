@@ -65,5 +65,32 @@ if [ -n "$SIEM_IP" ]; then
 EOF
 fi
 
+# Generate CTF flags
+_APTL_FLAG_KEY="${APTL_FLAG_KEY:-aptl-flag-key-2024}"
+for _level in user root; do
+    _nonce=$(od -A n -t x1 -N 16 /dev/urandom | tr -d ' \n')
+    _flag="APTL{${_level}_ad_${_nonce}}"
+    _sig=$(printf '%s' "${_APTL_FLAG_KEY}:ad:${_level}:${_nonce}" | md5sum | awk '{print $1}')
+    _token="aptl:v1:ad:${_level}:${_nonce}:${_sig}"
+    if [ "$_level" = "user" ]; then
+        _dest="/opt/flags/user.txt"
+        mkdir -p /opt/flags
+    else
+        _dest="/root/root.txt"
+    fi
+    cat > "$_dest" <<FLAGEOF
+===== APTL CTF Flag =====
+Flag:  ${_flag}
+Token: ${_token}
+==========================
+FLAGEOF
+    if [ "$_level" = "user" ]; then
+        chmod 644 "$_dest"
+    else
+        chmod 600 "$_dest"
+    fi
+done
+echo "CTF flags generated for ad"
+
 # Start services via supervisord
 exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf

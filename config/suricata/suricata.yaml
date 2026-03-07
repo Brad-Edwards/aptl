@@ -9,13 +9,32 @@ vars:
     INTERNAL_NET: "[172.20.2.0/24]"
     DNS_SERVERS: "[172.20.1.22]"
     HTTP_SERVERS: "[172.20.1.20]"
+    SMTP_SERVERS: "$HOME_NET"
     SQL_SERVERS: "[172.20.2.11]"
+    TELNET_SERVERS: "$HOME_NET"
+    AIM_SERVERS: "$EXTERNAL_NET"
+    DC_SERVERS: "[172.20.2.10]"
+    DNP3_SERVER: "$HOME_NET"
+    DNP3_CLIENT: "$HOME_NET"
+    MODBUS_SERVER: "$HOME_NET"
+    MODBUS_CLIENT: "$HOME_NET"
+    ENIP_SERVER: "$HOME_NET"
+    ENIP_CLIENT: "$HOME_NET"
 
   port-groups:
     HTTP_PORTS: "80,8080"
+    SHELLCODE_PORTS: "!80"
+    ORACLE_PORTS: "1521"
     SSH_PORTS: "22"
     DNS_PORTS: "53"
     SQL_PORTS: "5432"
+    DNP3_PORTS: "20000"
+    MODBUS_PORTS: "502"
+    FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
+    FTP_PORTS: "21"
+    GENEVE_PORTS: "6081"
+    VXLAN_PORTS: "4789"
+    TEREDO_PORTS: "3544"
 
 default-log-dir: /var/log/suricata/
 
@@ -47,11 +66,8 @@ outputs:
       enabled: yes
       filename: fast.log
 
-af-packet:
-  - interface: eth0
-    cluster-id: 99
-    cluster-type: cluster_flow
-    defrag: yes
+pcap:
+  - interface: any
 
 pcap-file:
   checksum-checks: auto

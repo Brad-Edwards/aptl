@@ -1,0 +1,9 @@
+#!/bin/sh
+ALERT_FILE="$1"
+WEBHOOK_FILE="/var/ossec/etc/shuffle_webhook_url"
+[ -f "$WEBHOOK_FILE" ] || exit 0
+HOOK_URL=$(cat "$WEBHOOK_FILE")
+[ -n "$HOOK_URL" ] || exit 0
+curl -s -X POST "$HOOK_URL" -H "Content-Type: application/json" \
+    -d @"$ALERT_FILE" -o /dev/null --max-time 10 2>/dev/null
+exit 0

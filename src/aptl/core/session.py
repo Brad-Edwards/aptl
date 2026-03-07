@@ -41,6 +41,7 @@ class ActiveSession:
         events_file: Relative path to the events JSONL file within .aptl/.
         hints_used: Map of objective_id to highest hint level revealed.
         completed_objectives: List of objective IDs that have been completed.
+        flags: CTF flags captured at scenario start, keyed by container name.
     """
 
     scenario_id: str
@@ -49,6 +50,8 @@ class ActiveSession:
     events_file: str
     hints_used: dict[str, int] = field(default_factory=dict)
     completed_objectives: list[str] = field(default_factory=list)
+    flags: dict[str, dict[str, dict]] = field(default_factory=dict)
+    run_id: str = ""
 
 
 def _serialize_session(session: ActiveSession) -> dict:
@@ -85,6 +88,8 @@ def _deserialize_session(data: dict) -> ActiveSession:
             events_file=data["events_file"],
             hints_used=data.get("hints_used", {}),
             completed_objectives=data.get("completed_objectives", []),
+            flags=data.get("flags", {}),
+            run_id=data.get("run_id", ""),
         )
     except (KeyError, ValueError) as e:
         raise ValueError(f"Malformed session data: {e}") from e

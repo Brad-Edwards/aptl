@@ -44,6 +44,7 @@ services:
       - wazuh_wodles:/var/ossec/wodles
       - filebeat_etc:/etc/filebeat
       - filebeat_var:/var/lib/filebeat
+      - ./config/wazuh_cluster/filebeat_wazuh_module.yml:/etc/filebeat/modules.d/wazuh.yml:ro
       - ./config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem
       - ./config/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/filebeat.pem
       - ./config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key

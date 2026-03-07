@@ -79,10 +79,10 @@ const baseHandlers: Record<string, ToolHandler> = {
         ],
       };
     }
-    
+
     const configKey = labConfig.server.configKey;
     const container = labConfig.containers[configKey];
-    
+
     if (!container) {
       return {
         content: [
@@ -93,7 +93,7 @@ const baseHandlers: Record<string, ToolHandler> = {
         ],
       };
     }
-    
+
     if (!container.enabled) {
       return {
         content: [
@@ -448,7 +448,7 @@ const baseHandlers: Record<string, ToolHandler> = {
     try {
       const sessions = sshManager.listSessions();
       const sessionCount = sessions.length;
-      
+
       await sshManager.disconnectAll();
 
       return {
@@ -484,7 +484,7 @@ const baseHandlers: Record<string, ToolHandler> = {
  */
 export function generateToolHandlers(serverConfig: LabConfig['server']): Record<string, ToolHandler> {
   const handlers: Record<string, ToolHandler> = {};
-  
+
   // Map server-specific tool names to base handlers
   handlers[`${serverConfig.toolPrefix}_info`] = baseHandlers.target_info;
   handlers[`${serverConfig.toolPrefix}_run_command`] = baseHandlers.run_command;
@@ -495,6 +495,6 @@ export function generateToolHandlers(serverConfig: LabConfig['server']): Record<
   handlers[`${serverConfig.toolPrefix}_close_session`] = baseHandlers.close_session;
   handlers[`${serverConfig.toolPrefix}_get_session_output`] = baseHandlers.get_session_output;
   handlers[`${serverConfig.toolPrefix}_close_all_sessions`] = baseHandlers.close_all_sessions;
-  
+
   return handlers;
 }

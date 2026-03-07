@@ -6,7 +6,7 @@ This directory contains the reverse engineering container for the Purple Team La
 
 The reverse engineering container provides a comprehensive malware analysis and binary reverse engineering environment with tools for:
 
-- Binary analysis and disassembly  
+- Binary analysis and disassembly
 - String extraction and pattern matching
 - Capability analysis and signature generation
 - Memory dump analysis
@@ -16,7 +16,7 @@ The reverse engineering container provides a comprehensive malware analysis and 
 
 Built on Ubuntu 22.04 LTS with:
 
-- SSH access (labadmin user)  
+- SSH access (labadmin user)
 - Wazuh SIEM agent integration
 - Falco runtime security monitoring
 - Systemd service management
@@ -44,7 +44,7 @@ Built on Ubuntu 22.04 LTS with:
 ```
 /home/labadmin/reverse-workspace/
 ├── samples/     # Binary samples for analysis
-├── analysis/    # Analysis output and reports  
+├── analysis/    # Analysis output and reports
 ├── output/      # Generated signatures and IOCs
 ├── scripts/     # Custom analysis scripts
 └── rules/       # YARA rules and detection patterns
@@ -81,7 +81,7 @@ yara_scan rules/basic_indicators.yar samples/malware.exe
 ## Network Configuration
 
 - **Container IP**: 172.20.0.26
-- **SSH Port**: 2026  
+- **SSH Port**: 2026
 - **SIEM Integration**: Logs forwarded to wazuh.manager (172.20.0.10)
 
 ## Services
@@ -92,7 +92,7 @@ All containers include the standardized service stack:
 
 - **SSH Server**: Remote access and MCP integration
 - **Wazuh Agent**: SIEM telemetry and alerts
-- **Falco**: Runtime security monitoring  
+- **Falco**: Runtime security monitoring
 - **Rsyslog**: Log forwarding to SIEM
 
 ### Environment Variables

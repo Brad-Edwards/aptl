@@ -15,7 +15,7 @@
   "containers": {
     "kali": {
       "container_name": "aptl-kali",
-      "container_ip": "localhost", 
+      "container_ip": "localhost",
       "ssh_key": "~/.ssh/aptl_lab_key",
       "ssh_user": "kali",
       "ssh_port": 2023,

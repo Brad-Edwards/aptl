@@ -7,16 +7,16 @@ flowchart TD
     subgraph "Host System"
         H[Host Ports<br/>443, 2022, 2023, 9200, 55000]
     end
-    
+
     subgraph "Docker Network 172.20.0.0/16"
         WM[Wazuh Manager<br/>172.20.0.10]
-        WD[Wazuh Dashboard<br/>172.20.0.11] 
+        WD[Wazuh Dashboard<br/>172.20.0.11]
         WI[Wazuh Indexer<br/>172.20.0.12]
         V[Victim Container<br/>172.20.0.20]
         K[Kali Container<br/>172.20.0.30]
         R[Reverse Engineering Container<br/>172.20.0.27]
     end
-    
+
     H --> WD
     H --> V
     H --> K
@@ -33,7 +33,7 @@ flowchart TD
         MCP[MCP Servers]
         AI[AI Agents]
     end
-    
+
     AI --> MCP
     MCP --> K
     MCP --> WM
@@ -79,7 +79,7 @@ flowchart TD
 **Wazuh SIEM:**
 
 - Manager: Log processing, rules, alerts
-- Indexer: OpenSearch data storage  
+- Indexer: OpenSearch data storage
 - Dashboard: Web interface
 
 **Lab Environment:**

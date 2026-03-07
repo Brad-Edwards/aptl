@@ -1,0 +1,12 @@
+# Wazuh Filebeat module - enables both alerts and archives indexing
+# Mounted into the Wazuh manager container to override the default module config
+# which only enables the alerts fileset.
+#
+# Archives require logall_json=yes in ossec.conf (already configured).
+# See: https://documentation.wazuh.com/current/user-manual/manager/wazuh-archives.html
+
+- module: wazuh
+  alerts:
+    enabled: true
+  archives:
+    enabled: true

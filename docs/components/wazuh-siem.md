@@ -64,6 +64,11 @@ curl -k -u wazuh-wui:WazuhPass123! https://localhost:55000/
 - Automatic index management (wazuh-alerts-*, wazuh-archives-*)
 - RESTful API for queries
 
+**Archive Indices:**
+The `wazuh-archives-4.x-*` indices store all raw log data (before rule processing). This requires:
+1. `<logall>yes</logall>` and `<logall_json>yes</logall_json>` in the manager's `ossec.conf` (enabled by default)
+2. Filebeat's wazuh module configured with the `archives` fileset enabled (see `config/wazuh_cluster/filebeat_wazuh_module.yml`)
+
 **Management:**
 ```bash
 # Check indexer status

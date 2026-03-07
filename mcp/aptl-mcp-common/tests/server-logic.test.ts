@@ -73,9 +73,9 @@ describe('createMCPServer', () => {
     const handlers = await import('../src/tools/handlers.js');
     const mockGenDefs = vi.spyOn(definitions, 'generateToolDefinitions').mockReturnValue([]);
     const mockGenHandlers = vi.spyOn(handlers, 'generateToolHandlers').mockReturnValue({});
-    
+
     createMCPServer(mockConfig);
-    
+
     expect(mockGenDefs).toHaveBeenCalledWith(mockConfig.server);
     expect(mockGenHandlers).toHaveBeenCalledWith(mockConfig.server);
   });
@@ -83,9 +83,9 @@ describe('createMCPServer', () => {
   it('creates SSH manager', async () => {
     const ssh = await import('../src/ssh.js');
     const mockSSH = vi.spyOn(ssh, 'SSHConnectionManager');
-    
+
     createMCPServer(mockConfig);
-    
+
     expect(mockSSH).toHaveBeenCalled();
   });
 
@@ -99,7 +99,7 @@ describe('createMCPServer', () => {
         targetName: 'Kali Linux'
       }
     };
-    
+
     const server = createMCPServer(kaliConfig);
     expect(server).toBeDefined();
   });

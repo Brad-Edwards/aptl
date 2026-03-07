@@ -32,7 +32,7 @@ export class HTTPClient {
    */
   private buildAuthHeaders(): Record<string, string> {
     const { auth } = this.config!;
-    
+
     switch (auth.type) {
       case 'basic':
         if (!auth.username || !auth.password) {
@@ -40,25 +40,25 @@ export class HTTPClient {
         }
         const basicAuth = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
         return { 'Authorization': `Basic ${basicAuth}` };
-        
+
       case 'bearer':
         if (!auth.token) {
           throw new Error('Token required for bearer auth');
         }
         return { 'Authorization': `Bearer ${auth.token}` };
-        
+
       case 'apikey':
         if (!auth.apiKey || !auth.header) {
           throw new Error('API key and header name required for API key auth');
         }
         return { [auth.header]: auth.apiKey };
-        
+
       case 'custom':
         if (!auth.header || !auth.token) {
           throw new Error('Header name and token required for custom auth');
         }
         return { [auth.header]: auth.token };
-        
+
       default:
         return {};
     }
@@ -78,7 +78,7 @@ export class HTTPClient {
     } = {}
   ): Promise<HTTPResponse> {
     const { baseUrl, timeout = 30000, verify_ssl = true, default_headers = {} } = this.config!;
-    
+
     // Build URL with params - handle both full URLs and endpoint paths
     let url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
     if (options.params) {

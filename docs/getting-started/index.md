@@ -25,7 +25,7 @@ Use the script. It handles SSH keys, SSL certificates, system requirements, and 
 Isolated Docker network: `172.20.0.0/16`
 
 - `172.20.0.10` - Wazuh Manager
-- `172.20.0.11` - Wazuh Dashboard  
+- `172.20.0.11` - Wazuh Dashboard
 - `172.20.0.12` - Wazuh Indexer
 - `172.20.0.20` - Victim
 - `172.20.0.30` - Kali

@@ -5,7 +5,7 @@ The Wazuh SIEM stack provides security monitoring and analysis for the APTL lab 
 ## Components
 
 - **Manager** (172.20.0.10): Log processing, rules, alerts
-- **Indexer** (172.20.0.12): OpenSearch data storage  
+- **Indexer** (172.20.0.12): OpenSearch data storage
 - **Dashboard** (172.20.0.11): Web UI at https://localhost:443
 
 ## Data Flow
@@ -14,15 +14,15 @@ The Wazuh SIEM stack provides security monitoring and analysis for the APTL lab 
 flowchart TD
     J[Victim Container<br/>172.20.0.20] --> |Agent 1514| G[Wazuh Manager<br/>172.20.0.10]
     L[Kali Container<br/>172.20.0.30] --> |Agent 1514| G
-    
+
     G <--> H[Wazuh Indexer<br/>172.20.0.12]
     H --> I[Wazuh Dashboard<br/>172.20.0.11]
-    
+
     B[Blue Team MCP] --> E[Wazuh API<br/>Port 55000]
     B --> F[Indexer API<br/>Port 9200]
     E --> G
     F --> H
-    
+
     M[Security Analyst] --> I
 ```
 
@@ -35,7 +35,7 @@ flowchart TD
 
 **Key Features:**
 - Agent connections (TCP 1514)
-- Syslog reception (UDP 514) 
+- Syslog reception (UDP 514)
 - Event analysis and correlation
 - Falco integration via custom rules (100600-100607)
 

@@ -2,11 +2,11 @@
 
 **Agentic purple team lab with AI-controlled red and blue team operations**
 
-> **🚧 UNDER CONSTRUCTION 🚧**  
-> **⚠️ This project is actively being developed and tested**  
-> **⚠️ Repeat after me: This is not for prod.**  
-> **🔧 Documentation and features may change rapidly**  
-> **💡 Use at your own risk - this is a proof of concept**  
+> **🚧 UNDER CONSTRUCTION 🚧**
+> **⚠️ This project is actively being developed and tested**
+> **⚠️ Repeat after me: This is not for prod.**
+> **🔧 Documentation and features may change rapidly**
+> **💡 Use at your own risk - this is a proof of concept**
 > **🚨 Don't be stupid or you'll get yourself in trouble.**
 
 ## What is APTL?

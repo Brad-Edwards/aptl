@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { 
-  createShellFormatter, 
-  BashShellFormatter, 
+import {
+  createShellFormatter,
+  BashShellFormatter,
   PowerShellFormatter,
   CmdShellFormatter,
-  ShellType 
+  ShellType
 } from '../src/shells.js';
 
 describe('Shell Formatters', () => {
@@ -15,7 +15,7 @@ describe('Shell Formatters', () => {
       const command = 'ls -la';
       const startDelimiter = 'START_123';
       const endDelimiter = 'END_123';
-      
+
       const result = formatter.formatCommandWithDelimiters(command, startDelimiter, endDelimiter);
       expect(result).toBe('echo "START_123"; ls -la; echo "END_123:$?"');
     });
@@ -24,7 +24,7 @@ describe('Shell Formatters', () => {
       const command = 'echo "hello world"';
       const startDelimiter = 'START_123';
       const endDelimiter = 'END_123';
-      
+
       const result = formatter.formatCommandWithDelimiters(command, startDelimiter, endDelimiter);
       expect(result).toBe('echo "START_123"; echo "hello world"; echo "END_123:$?"');
     });
@@ -36,10 +36,10 @@ describe('Shell Formatters', () => {
     it('should parse exit code from output', () => {
       const output = 'some output\nEND_123:0\nmore output';
       expect(formatter.parseExitCode(output, 'END_123')).toBe(0);
-      
+
       const failedOutput = 'some output\nEND_123:1\nmore output';
       expect(formatter.parseExitCode(failedOutput, 'END_123')).toBe(1);
-      
+
       const noCodeOutput = 'some output without exit code';
       expect(formatter.parseExitCode(noCodeOutput, 'END_123')).toBeNull();
     });
@@ -56,7 +56,7 @@ describe('Shell Formatters', () => {
       const command = 'Get-ChildItem';
       const startDelimiter = 'START_123';
       const endDelimiter = 'END_123';
-      
+
       const result = formatter.formatCommandWithDelimiters(command, startDelimiter, endDelimiter);
       expect(result).toBe('Write-Output "START_123"; Get-ChildItem; Write-Output "END_123:$LASTEXITCODE"');
     });
@@ -65,7 +65,7 @@ describe('Shell Formatters', () => {
       const command = 'Write-Host "hello world"';
       const startDelimiter = 'START_123';
       const endDelimiter = 'END_123';
-      
+
       const result = formatter.formatCommandWithDelimiters(command, startDelimiter, endDelimiter);
       expect(result).toBe('Write-Output "START_123"; Write-Host "hello world"; Write-Output "END_123:$LASTEXITCODE"');
     });
@@ -77,10 +77,10 @@ describe('Shell Formatters', () => {
     it('should parse exit code from output', () => {
       const output = 'some output\nEND_123:0\nmore output';
       expect(formatter.parseExitCode(output, 'END_123')).toBe(0);
-      
+
       const failedOutput = 'some output\nEND_123:1\nmore output';
       expect(formatter.parseExitCode(failedOutput, 'END_123')).toBe(1);
-      
+
       const noCodeOutput = 'some output without exit code';
       expect(formatter.parseExitCode(noCodeOutput, 'END_123')).toBeNull();
     });
@@ -97,7 +97,7 @@ describe('Shell Formatters', () => {
       const command = 'dir';
       const startDelimiter = 'START_123';
       const endDelimiter = 'END_123';
-      
+
       const result = formatter.formatCommandWithDelimiters(command, startDelimiter, endDelimiter);
       expect(result).toBe('echo START_123 & dir & echo %ERRORLEVEL% > NUL & echo END_123:%ERRORLEVEL%');
     });
@@ -106,7 +106,7 @@ describe('Shell Formatters', () => {
       const command = 'cd C:\\Users && dir';
       const startDelimiter = 'START_123';
       const endDelimiter = 'END_123';
-      
+
       const result = formatter.formatCommandWithDelimiters(command, startDelimiter, endDelimiter);
       expect(result).toBe('echo START_123 & cd C:\\Users && dir & echo %ERRORLEVEL% > NUL & echo END_123:%ERRORLEVEL%');
     });
@@ -118,10 +118,10 @@ describe('Shell Formatters', () => {
     it('should parse exit code from output', () => {
       const output = 'some output\nEND_123:0\nmore output';
       expect(formatter.parseExitCode(output, 'END_123')).toBe(0);
-      
+
       const failedOutput = 'some output\nEND_123:1\nmore output';
       expect(formatter.parseExitCode(failedOutput, 'END_123')).toBe(1);
-      
+
       const noCodeOutput = 'some output without exit code';
       expect(formatter.parseExitCode(noCodeOutput, 'END_123')).toBeNull();
     });
@@ -173,7 +173,7 @@ describe('Shell Formatters', () => {
         const command = 'Get-Process | Where-Object {$_.CPU -gt 100}';
         const startDelimiter = 'START_123';
         const endDelimiter = 'END_123';
-        
+
         const result = formatter.formatCommandWithDelimiters(command, startDelimiter, endDelimiter);
         expect(result).toContain('Get-Process | Where-Object {$_.CPU -gt 100}');
       });
@@ -183,7 +183,7 @@ describe('Shell Formatters', () => {
 $processes | Sort-Object CPU -Descending | Select-Object -First 5`;
         const startDelimiter = 'START_123';
         const endDelimiter = 'END_123';
-        
+
         const result = formatter.formatCommandWithDelimiters(command, startDelimiter, endDelimiter);
         expect(result).toContain('Write-Output "START_123"');
         expect(result).toContain('Write-Output "END_123:$LASTEXITCODE"');
@@ -197,7 +197,7 @@ $processes | Sort-Object CPU -Descending | Select-Object -First 5`;
         const command = 'echo %USERNAME% %COMPUTERNAME%';
         const startDelimiter = 'START_123';
         const endDelimiter = 'END_123';
-        
+
         const result = formatter.formatCommandWithDelimiters(command, startDelimiter, endDelimiter);
         expect(result).toContain('echo %USERNAME% %COMPUTERNAME%');
       });
@@ -206,11 +206,10 @@ $processes | Sort-Object CPU -Descending | Select-Object -First 5`;
         const command = 'dir C:\\ && echo Success || echo Failed';
         const startDelimiter = 'START_123';
         const endDelimiter = 'END_123';
-        
+
         const result = formatter.formatCommandWithDelimiters(command, startDelimiter, endDelimiter);
         expect(result).toContain('dir C:\\ && echo Success || echo Failed');
       });
     });
   });
 });
-

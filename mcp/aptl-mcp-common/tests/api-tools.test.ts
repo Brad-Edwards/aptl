@@ -10,7 +10,7 @@ describe('generateAPIToolDefinitions', () => {
 
   it('generates basic API tools', () => {
     const tools = generateAPIToolDefinitions(mockServerConfig);
-    
+
     expect(tools).toHaveLength(2);
     expect(tools[0].name).toBe('wazuh_api_call');
     expect(tools[1].name).toBe('wazuh_api_info');
@@ -30,9 +30,9 @@ describe('generateAPIToolDefinitions', () => {
         description: 'Search log data'
       }
     };
-    
+
     const tools = generateAPIToolDefinitions(mockServerConfig, queries);
-    
+
     expect(tools).toHaveLength(4); // 2 basic + 2 queries
     expect(tools[2].name).toBe('wazuh_recent_alerts');
     expect(tools[3].name).toBe('wazuh_search_logs');
@@ -44,9 +44,9 @@ describe('generateAPIToolDefinitions', () => {
       toolPrefix: 'splunk',
       targetName: 'Splunk Enterprise'
     };
-    
+
     const tools = generateAPIToolDefinitions(splunkConfig);
-    
+
     expect(tools[0].name).toBe('splunk_api_call');
     expect(tools[0].description).toContain('Splunk Enterprise');
   });
@@ -60,7 +60,7 @@ describe('generateAPIToolHandlers', () => {
 
   it('generates handler map with correct tool names', () => {
     const handlers = generateAPIToolHandlers(mockServerConfig);
-    
+
     expect(handlers['wazuh_api_call']).toBeDefined();
     expect(handlers['wazuh_api_info']).toBeDefined();
     expect(typeof handlers['wazuh_api_call']).toBe('function');
@@ -74,9 +74,9 @@ describe('generateAPIToolHandlers', () => {
         description: 'Get recent alerts'
       }
     };
-    
+
     const handlers = generateAPIToolHandlers(mockServerConfig, queries);
-    
+
     expect(handlers['wazuh_recent_alerts']).toBeDefined();
     expect(typeof handlers['wazuh_recent_alerts']).toBe('function');
   });
@@ -86,9 +86,9 @@ describe('generateAPIToolHandlers', () => {
       toolPrefix: 'elastic',
       targetName: 'Elasticsearch'
     };
-    
+
     const handlers = generateAPIToolHandlers(elasticConfig);
-    
+
     expect(handlers['elastic_api_call']).toBeDefined();
     expect(handlers['elastic_api_info']).toBeDefined();
   });

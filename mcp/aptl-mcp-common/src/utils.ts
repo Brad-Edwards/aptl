@@ -14,4 +14,4 @@ export function expandTilde(filePath: string): string {
     return resolve(homedir(), filePath.slice(2));
   }
   return filePath;
-} 
+}

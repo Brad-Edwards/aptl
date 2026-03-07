@@ -137,7 +137,7 @@ echo "[5/6] Configuring Wazuh -> Shuffle integration..."
 WEBHOOK_FILE="/tmp/aptl_shuffle_webhook_url"
 if [ -f "$WEBHOOK_FILE" ]; then
     WEBHOOK_URL=$(cat "$WEBHOOK_FILE")
-    docker exec aptl-wazuh.manager-1 bash -c \
+    docker exec aptl-wazuh-manager bash -c \
         "echo '${WEBHOOK_URL}' > /var/ossec/etc/shuffle_webhook_url"
     echo "  Webhook URL written to Wazuh manager: ${WEBHOOK_URL}"
 else

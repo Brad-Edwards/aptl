@@ -7,7 +7,7 @@ The victim container serves as a target system for red team activities and secur
 - **Base Image**: rockylinux:9
 - **User**: `labadmin` with sudo privileges (NOPASSWD)
 - **SSH**: Key-based authentication only (port 22, mapped to host 2022)
-- **IP Address**: 172.20.0.20
+- **IP Address**: 172.20.2.20 (aptl-internal network)
 
 See [containers/victim/Dockerfile](../../containers/victim/Dockerfile) for complete build configuration.
 
@@ -17,9 +17,9 @@ See [containers/victim/Dockerfile](../../containers/victim/Dockerfile) for compl
 
 The container runs dual security monitoring:
 
-1. **Wazuh Agent**: Connects to manager at 172.20.0.10:1514
+1. **Wazuh Agent**: Connects to manager at 172.20.2.30:1514 (manager's internal network interface)
 2. **Falco Runtime Security**: Modern eBPF syscall monitoring
-3. **rsyslog**: Forwards system logs to 172.20.0.10:514
+3. **rsyslog**: Forwards system logs to 172.20.2.30:514
 
 **Installation Scripts:**
 - [install-all.sh](../../containers/victim/install-all.sh) - Main installer
@@ -45,9 +45,8 @@ Falco events are written to `/var/log/falco_events.json` and forwarded to Wazuh 
 
 ## Network Configuration
 
-- **Internal IP**: 172.20.0.20 (static)
+- **Internal IP**: 172.20.2.20 (static, aptl-internal network)
 - **SSH Port**: 22 (host port 2022)
-- **Network**: aptl_aptl-network (Docker bridge)
 
 ## Access Methods
 
@@ -89,7 +88,7 @@ docker exec aptl-victim /var/ossec/bin/wazuh-control status
 docker exec aptl-victim tail -f /var/ossec/logs/ossec.log
 
 # Test connectivity
-docker exec aptl-victim nc -zv 172.20.0.10 1514
+docker exec aptl-victim nc -zv 172.20.2.30 1514
 ```
 
 **Falco Issues:**

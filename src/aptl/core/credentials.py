@@ -1,8 +1,7 @@
 """Config file credential syncing.
 
 Replaces placeholder credentials in Wazuh configuration files with
-real values from the .env file. Equivalent to the sed commands in
-start-lab.sh.
+real values from the .env file.
 """
 
 import re

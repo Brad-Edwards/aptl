@@ -6,14 +6,14 @@
 # Container status
 docker compose ps
 
-# Service logs  
+# Service logs
 docker compose logs wazuh.manager
 docker compose logs victim
 docker compose logs kali
 
 # Network connectivity
-docker exec aptl-kali ping 172.20.0.20
-docker exec aptl-victim ping 172.20.0.10
+docker exec aptl-kali ping 172.20.2.20
+docker exec aptl-victim ping 172.20.2.30
 ```
 
 ## Common Issues
@@ -94,7 +94,7 @@ docker exec aptl-victim systemctl status rsyslog
 
 **Test syslog connectivity:**
 ```bash
-docker exec aptl-victim telnet 172.20.0.10 514
+docker exec aptl-victim telnet 172.20.2.30 514
 ```
 
 ### MCP issues
@@ -116,7 +116,7 @@ ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "echo test"
 ```bash
 docker compose down -v
 docker system prune -f
-./start-lab.sh
+aptl lab start
 ```
 
 ### Service reset

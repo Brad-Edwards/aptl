@@ -53,6 +53,12 @@ def stop(
         "-v",
         help="Also remove Docker volumes (full cleanup).",
     ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip confirmation prompt when removing volumes.",
+    ),
     project_dir: Path = typer.Option(
         Path("."),
         "--project-dir",
@@ -61,6 +67,19 @@ def stop(
     ),
 ) -> None:
     """Stop the APTL lab environment."""
+    if volumes and not yes:
+        typer.echo(
+            "\n  WARNING: This will destroy all lab data including:\n"
+            "    - Wazuh SIEM indexes and configuration\n"
+            "    - MISP threat intelligence data\n"
+            "    - TheHive cases and analysis\n"
+            "    - Shuffle SOAR workflows\n"
+            "    - All container logs and state\n"
+        )
+        if not typer.confirm("  Continue?", default=False):
+            typer.echo("Aborted.")
+            raise typer.Exit(code=0)
+
     log.info("Stopping lab (volumes=%s)", volumes)
 
     result = stop_lab(remove_volumes=volumes, project_dir=project_dir)

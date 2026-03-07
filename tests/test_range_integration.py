@@ -55,9 +55,9 @@ from tests.helpers import (
 # -------------------------------------------------------------------
 
 ALL_CONTAINERS = [
-    "aptl-wazuh.manager-1",
-    "aptl-wazuh.indexer-1",
-    "aptl-wazuh.dashboard-1",
+    "aptl-wazuh-manager",
+    "aptl-wazuh-indexer",
+    "aptl-wazuh-dashboard",
     "aptl-victim",
     "aptl-kali",
     "aptl-webapp",
@@ -117,7 +117,7 @@ class TestDetectionPipeline:
         while time.monotonic() < deadline:
             time.sleep(5)
             result = docker_exec(
-                "aptl-wazuh.manager-1",
+                "aptl-wazuh-manager",
                 [
                     "grep", "-c", tag,
                     "/var/ossec/logs/archives/archives.log",
@@ -145,7 +145,7 @@ class TestDetectionPipeline:
         while time.monotonic() < deadline:
             time.sleep(5)
             result = docker_exec(
-                "aptl-wazuh.manager-1",
+                "aptl-wazuh-manager",
                 [
                     "grep", "-c", tag,
                     "/var/ossec/logs/archives/archives.log",
@@ -163,7 +163,7 @@ class TestDetectionPipeline:
     def test_wazuh_agents_registered(self):
         """Wazuh Manager API shows registered agents."""
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             f'curl -ks -u {API_USER}:"{API_PASS}" '
             "https://localhost:55000/security/user/authenticate",
             timeout=30,
@@ -176,7 +176,7 @@ class TestDetectionPipeline:
         assert token, "Failed to get auth token"
 
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             f'curl -ks -H "Authorization: Bearer {token}" '
             "https://localhost:55000/agents?limit=50",
             timeout=30,
@@ -1063,7 +1063,7 @@ class TestDefensiveStack:
     def test_wazuh_rule_file_mounted(self, rule_file):
         """Custom Wazuh rule file is present in the manager."""
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             f"test -f /var/ossec/etc/rules/{rule_file} && echo OK",
         )
         assert "OK" in result.stdout, (
@@ -1073,7 +1073,7 @@ class TestDefensiveStack:
     def test_wazuh_rules_included_in_config(self):
         """ossec.conf references all custom rule files."""
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             "cat /var/ossec/etc/ossec.conf",
         )
         for rule_file in REQUIRED_WAZUH_RULES:
@@ -1084,7 +1084,7 @@ class TestDefensiveStack:
     def test_wazuh_no_rule_parse_errors(self):
         """Manager loaded rules without parse errors."""
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             "grep -i 'error.*rule' "
             "/var/ossec/logs/ossec.log 2>/dev/null || echo CLEAN",
         )
@@ -1108,7 +1108,7 @@ class TestDefensiveStack:
     def test_wazuh_rule_id_defined(self, rule_id, desc):
         """Key detection rule ID exists in mounted rule files."""
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             f'grep -r \'id="{rule_id}"\' /var/ossec/etc/rules/',
         )
         assert result.returncode == 0, (
@@ -1166,7 +1166,7 @@ class TestDefensiveStack:
     def test_wazuh_active_response_configured(self):
         """Wazuh active response is enabled (not commented out)."""
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             "grep -c '<active-response>' /var/ossec/etc/ossec.conf",
         )
         assert result.returncode == 0, (
@@ -1180,7 +1180,7 @@ class TestDefensiveStack:
     def test_wazuh_active_response_ssh_brute_force(self):
         """Active response references SSH brute force rule 5763."""
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             "grep '5763' /var/ossec/etc/ossec.conf",
         )
         assert result.returncode == 0, (
@@ -1191,7 +1191,7 @@ class TestDefensiveStack:
     def test_wazuh_shuffle_integration_configured(self):
         """ossec.conf has custom-shuffle integration for level 10+."""
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             "grep -A5 'custom-shuffle' /var/ossec/etc/ossec.conf",
         )
         assert result.returncode == 0, (
@@ -1205,7 +1205,7 @@ class TestDefensiveStack:
     def test_shuffle_integration_script_exists(self):
         """custom-shuffle script exists and is executable in manager."""
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             "test -x /var/ossec/integrations/custom-shuffle && echo OK",
         )
         assert "OK" in result.stdout, (
@@ -1245,7 +1245,7 @@ class TestDefensiveStack:
     def test_wazuh_decoders_for_enterprise(self):
         """Custom decoders are mounted for enterprise log sources."""
         result = docker_exec(
-            "aptl-wazuh.manager-1",
+            "aptl-wazuh-manager",
             "ls /var/ossec/etc/decoders/",
         )
         for decoder in ["kali_decoders.xml",

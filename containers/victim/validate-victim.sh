@@ -115,14 +115,14 @@ fi
 # Test 5: Check rsyslog configuration
 if [ ! -z "$SIEM_IP" ]; then
     echo "5. Checking SIEM log forwarding configuration:"
-    
+
     # Determine expected port
     if [ "$SIEM_TYPE" = "splunk" ]; then
         SIEM_PORT="5514"
     else
         SIEM_PORT="514"
     fi
-    
+
     echo -n "   - Rsyslog forwarding rule... "
     if $SSH_CMD "sudo grep -q \"@@$SIEM_IP:$SIEM_PORT\" /etc/rsyslog.conf /etc/rsyslog.d/*.conf 2>/dev/null"; then
         echo -e "${GREEN}CONFIGURED${NC}"
@@ -130,7 +130,7 @@ if [ ! -z "$SIEM_IP" ]; then
         echo -e "${YELLOW}NOT FOUND${NC}"
         echo "     Expected: *.* @@$SIEM_IP:$SIEM_PORT"
     fi
-    
+
     # Test network connectivity to SIEM
     echo -n "   - Network connectivity to SIEM... "
     if $SSH_CMD "timeout 5 bash -c \"echo >/dev/tcp/$SIEM_IP/$SIEM_PORT\" 2>/dev/null"; then
@@ -139,7 +139,7 @@ if [ ! -z "$SIEM_IP" ]; then
         echo -e "${RED}UNREACHABLE${NC}"
         echo "     Cannot connect to $SIEM_IP:$SIEM_PORT"
     fi
-    
+
     # Send test log
     echo -n "   - Sending test log entry... "
     TEST_MSG="VICTIM_VALIDATION: Test from $HOSTNAME at $(date +%s)"
@@ -175,7 +175,7 @@ fi
 echo -n "7. Checking if running in container... "
 if $SSH_CMD "grep -q docker /proc/1/cgroup 2>/dev/null || [ -f /.dockerenv ]" 2>/dev/null; then
     echo -e "${GREEN}YES${NC}"
-    
+
     # Check for systemd
     echo -n "   - Systemd as init... "
     if $SSH_CMD "ps -p 1 -o comm=" 2>/dev/null | grep -q "systemd"; then

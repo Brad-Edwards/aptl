@@ -9,7 +9,7 @@ describe('generateToolDefinitions', () => {
 
   it('generates tools with correct names using toolPrefix', () => {
     const tools = generateToolDefinitions(mockServerConfig);
-    
+
     expect(tools[0].name).toBe('test_info');
     expect(tools[1].name).toBe('test_run_command');
     expect(tools[2].name).toBe('test_interactive_session');
@@ -23,7 +23,7 @@ describe('generateToolDefinitions', () => {
 
   it('generates descriptions using targetName', () => {
     const tools = generateToolDefinitions(mockServerConfig);
-    
+
     expect(tools[0].description).toContain('Test Container');
     expect(tools[1].description).toContain('Test Container');
   });
@@ -38,9 +38,9 @@ describe('generateToolDefinitions', () => {
       toolPrefix: 'kali',
       targetName: 'Kali Linux'
     };
-    
+
     const tools = generateToolDefinitions(kaliConfig);
-    
+
     expect(tools[0].name).toBe('kali_info');
     expect(tools[1].name).toBe('kali_run_command');
     expect(tools[0].description).toContain('Kali Linux');
@@ -51,7 +51,7 @@ describe('generateToolDefinitions', () => {
       toolPrefix: '',
       targetName: 'Test Container'
     };
-    
+
     const tools = generateToolDefinitions(emptyConfig);
     expect(tools[0].name).toBe('_info');
     expect(tools[1].name).toBe('_run_command');
@@ -62,7 +62,7 @@ describe('generateToolDefinitions', () => {
       toolPrefix: 'test',
       targetName: ''
     };
-    
+
     const tools = generateToolDefinitions(emptyConfig);
     expect(tools[0].description).toContain(' instance in the lab');
     expect(tools[1].description).toContain(' instance (creates temporary session)');
@@ -70,7 +70,7 @@ describe('generateToolDefinitions', () => {
 
   it('all tools have required properties', () => {
     const tools = generateToolDefinitions(mockServerConfig);
-    
+
     tools.forEach(tool => {
       expect(tool.name).toBeDefined();
       expect(tool.description).toBeDefined();

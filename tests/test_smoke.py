@@ -39,9 +39,9 @@ class TestContainerHealth:
     """Core containers are running and healthy."""
 
     @pytest.mark.parametrize("name", [
-        "aptl-wazuh.manager-1",
-        "aptl-wazuh.indexer-1",
-        "aptl-wazuh.dashboard-1",
+        "aptl-wazuh-manager",
+        "aptl-wazuh-indexer",
+        "aptl-wazuh-dashboard",
     ], ids=["wazuh-manager", "wazuh-indexer", "wazuh-dashboard"])
     def test_wazuh_stack_running(self, name):
         assert container_running(name), f"{name} is not running"
@@ -117,7 +117,7 @@ class TestWazuhPipeline:
 
     def test_manager_api_responds(self):
         result = run_cmd([
-            "docker", "exec", "aptl-wazuh.manager-1",
+            "docker", "exec", "aptl-wazuh-manager",
             "curl", "-ks", "https://localhost:55000",
         ])
         assert result.returncode == 0
@@ -139,7 +139,7 @@ class TestWazuhPipeline:
         while time.monotonic() < deadline:
             time.sleep(5)
             result = docker_exec(
-                "aptl-wazuh.manager-1",
+                "aptl-wazuh-manager",
                 [
                     "grep", "-c", tag,
                     "/var/ossec/logs/archives/archives.log",

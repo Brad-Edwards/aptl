@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.2] - 2026-03-07
+
+### Fixed
+
+- Victim container missing sshd log monitoring — ossec.conf template with `/var/log/secure` localfile entry now applied before agent starts (#139)
+
 ## [4.1.1] - 2026-03-07
 
 ### Added
@@ -16,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Victim container missing sshd log monitoring — ossec.conf template with `/var/log/secure` localfile entry now applied before agent starts (#139)
 - Snapshot used wrong container names (`aptl-wazuh-manager` → `aptl-wazuh.manager-1`) causing all Wazuh data to be empty
 - Snapshot indexer version read from non-existent file; now extracted from opensearch jar filename
 

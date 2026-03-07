@@ -11,14 +11,6 @@ aptl lab start
 
 The CLI handles SSH keys, SSL certificates, system requirements, image pulling, container startup, service readiness checks, and connection info generation.
 
-## Bash Script (Alternative)
-
-```bash
-./start-lab.sh
-```
-
-The bash script performs the same steps as the CLI.
-
 ## Manual Steps
 
 If you need to run steps individually:

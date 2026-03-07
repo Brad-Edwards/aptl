@@ -28,7 +28,7 @@ Edit `aptl.json` to enable/disable containers:
 
 ## Manual Deployment
 
-**These steps are automated by `start-lab.sh`. Use the script unless troubleshooting.**
+**These steps are automated by `aptl lab start`. Use the CLI unless troubleshooting.**
 
 #### 1. Prerequisites
 
@@ -152,5 +152,5 @@ docker compose build --no-cache
 ```bash
 docker compose down
 docker system prune -f
-./start-lab.sh
+aptl lab start
 ```

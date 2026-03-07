@@ -6,6 +6,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2026-03-07
+
+### Fixed
+
+- Documentation technical accuracy review across all 25 docs (#81):
+  - Fixed wrong IPs throughout: victim 172.20.0.20→172.20.2.20, kali 172.20.0.30→172.20.4.30, Suricata .19→.50, MISP .15→.16, TheHive .16→.18, Cortex .18→.22, Shuffle .17→.20/.21, DNS .13→.22
+  - Replaced flat 172.20.0.0/16 network references with correct 4-subnet architecture (security, dmz, internal, redteam)
+  - Fixed `docker exec wazuh.manager` → `docker exec aptl-wazuh-manager` (and indexer/dashboard) in wazuh-siem.md
+  - Fixed MCP server path `dist/index.js` → `build/index.js` in kali-redteam.md
+  - Fixed broken link to nonexistent `wazuh-blueteam.md` in wazuh-siem.md
+  - Fixed nonexistent `aptl_aptl-network` network name in victim-containers.md
+  - Added missing `mcp-indexer` to README architecture diagram
+  - Replaced `mcp-windows-re` (nonexistent) with `mcp-indexer` in enterprise-infrastructure.md
+  - Marked 172.20.3.0/24 Endpoints subnet and Windows VM as not yet implemented in enterprise-infrastructure.md
+  - Rewrote networking.md and architecture/index.md to reflect actual multi-network topology
+  - Rewrote mcp-integration.md to include all 8 MCP servers
+  - Fixed victim-template-guide.md IP subnet references
+
 ## [4.3.1] - 2026-03-07
 
 ### Added

@@ -31,7 +31,7 @@ The container runs dual security monitoring:
 
 **Wazuh Agent:**
 - File integrity monitoring
-- Authentication events (SSH, sudo)
+- Authentication events via `/var/log/secure` (SSH, sudo)
 - System logs and command history
 
 **Falco eBPF:**

@@ -97,7 +97,7 @@ Verify the 4 Docker networks exist with correct subnets.
 | NET-02 | DMZ network exists | `aptl-dmz` with 172.20.1.0/24 | `docker network inspect aptl_aptl-dmz` |
 | NET-03 | Internal network exists | `aptl-internal` with 172.20.2.0/24 | `docker network inspect aptl_aptl-internal` |
 | NET-04 | Red team network exists | `aptl-redteam` with 172.20.4.0/24 | `docker network inspect aptl_aptl-redteam` |
-| NET-05 | Wazuh manager on 3 networks | Connected to security + dmz + internal | `docker inspect aptl-wazuh.manager-1 --format '{{json .NetworkSettings.Networks}}' \| jq 'keys'` |
+| NET-05 | Wazuh manager on 3 networks | Connected to security + dmz + internal | `docker inspect aptl-wazuh-manager --format '{{json .NetworkSettings.Networks}}' \| jq 'keys'` |
 | NET-06 | Kali on dmz + redteam + internal | Connected to all three attack networks | `docker inspect aptl-kali --format '{{json .NetworkSettings.Networks}}' \| jq 'keys'` |
 | NET-07 | Webapp on dmz + internal | Connected to both (for DB access) | `docker inspect aptl-webapp --format '{{json .NetworkSettings.Networks}}' \| jq 'keys'` |
 | NET-08 | DB only on internal | Only on aptl-internal | `docker inspect aptl-db --format '{{json .NetworkSettings.Networks}}' \| jq 'keys'` |
@@ -113,8 +113,8 @@ Verify every container starts and passes its health check.
 
 | ID | Test | Expected | How |
 |----|------|----------|-----|
-| SVC-01 | Wazuh Manager healthy | Status: healthy | `docker inspect aptl-wazuh.manager-1 --format '{{.State.Health.Status}}'` |
-| SVC-02 | Wazuh Indexer healthy | Status: healthy | `docker inspect aptl-wazuh.indexer-1 --format '{{.State.Health.Status}}'` |
+| SVC-01 | Wazuh Manager healthy | Status: healthy | `docker inspect aptl-wazuh-manager --format '{{.State.Health.Status}}'` |
+| SVC-02 | Wazuh Indexer healthy | Status: healthy | `docker inspect aptl-wazuh-indexer --format '{{.State.Health.Status}}'` |
 | SVC-03 | Wazuh Dashboard healthy | Status: healthy, HTTPS on port 443 | `curl -ks https://localhost:443 \| head -1` |
 | SVC-04 | Wazuh API responds | 200 on port 55000 | `curl -ks https://localhost:55000 -u $API_USERNAME:$API_PASSWORD` |
 | SVC-05 | Indexer API responds | 200 on port 9200 | `curl -ks https://localhost:9200 -u $INDEXER_USERNAME:$INDEXER_PASSWORD` |
@@ -217,7 +217,7 @@ Run each attack from section 3, then verify the corresponding Wazuh alert fires.
 | BLUE-04 | AD brute force detected | Run 5+ failed LDAP logins from Kali | Alert with rule group "brute_force" | Query alerts matching `rule.id: 301002` |
 | BLUE-05 | AD enumeration detected | RED-22/RED-23 (multiple LDAP queries) | Alert with rule group "enumeration" | Query alerts matching `rule.id: 301021` |
 | BLUE-06 | DB auth failure detected | Attempt psql with wrong password | Alert for PostgreSQL auth failure | Query alerts matching `rule.id: 304000` |
-| BLUE-07 | New Wazuh rules loaded | Check rule files mounted | ad_rules, webapp_rules, suricata_rules, database_rules all present | `docker exec aptl-wazuh.manager-1 ls /var/ossec/etc/rules/` |
+| BLUE-07 | New Wazuh rules loaded | Check rule files mounted | ad_rules, webapp_rules, suricata_rules, database_rules all present | `docker exec aptl-wazuh-manager ls /var/ossec/etc/rules/` |
 
 ### 4b. Suricata IDS (via mcp-network)
 
@@ -342,12 +342,12 @@ Verify the new rule files are syntactically valid and loaded by the manager.
 
 | ID | Test | Expected | How |
 |----|------|----------|-----|
-| RULE-01 | ad_rules.xml mounted | File exists in manager | `docker exec aptl-wazuh.manager-1 cat /var/ossec/etc/rules/ad_rules.xml \| head -3` |
-| RULE-02 | webapp_rules.xml mounted | File exists | `docker exec aptl-wazuh.manager-1 cat /var/ossec/etc/rules/webapp_rules.xml \| head -3` |
-| RULE-03 | suricata_rules.xml mounted | File exists | `docker exec aptl-wazuh.manager-1 cat /var/ossec/etc/rules/suricata_rules.xml \| head -3` |
-| RULE-04 | database_rules.xml mounted | File exists | `docker exec aptl-wazuh.manager-1 cat /var/ossec/etc/rules/database_rules.xml \| head -3` |
-| RULE-05 | Manager config includes new rules | All 4 rule_include lines present | `docker exec aptl-wazuh.manager-1 grep rule_include /var/ossec/etc/ossec.conf` |
-| RULE-06 | No rule loading errors | Manager starts without rule parse errors | `docker exec aptl-wazuh.manager-1 grep -i 'error.*rule' /var/ossec/logs/ossec.log \| tail -5` (should be empty or unrelated) |
+| RULE-01 | ad_rules.xml mounted | File exists in manager | `docker exec aptl-wazuh-manager cat /var/ossec/etc/rules/ad_rules.xml \| head -3` |
+| RULE-02 | webapp_rules.xml mounted | File exists | `docker exec aptl-wazuh-manager cat /var/ossec/etc/rules/webapp_rules.xml \| head -3` |
+| RULE-03 | suricata_rules.xml mounted | File exists | `docker exec aptl-wazuh-manager cat /var/ossec/etc/rules/suricata_rules.xml \| head -3` |
+| RULE-04 | database_rules.xml mounted | File exists | `docker exec aptl-wazuh-manager cat /var/ossec/etc/rules/database_rules.xml \| head -3` |
+| RULE-05 | Manager config includes new rules | All 4 rule_include lines present | `docker exec aptl-wazuh-manager grep rule_include /var/ossec/etc/ossec.conf` |
+| RULE-06 | No rule loading errors | Manager starts without rule parse errors | `docker exec aptl-wazuh-manager grep -i 'error.*rule' /var/ossec/logs/ossec.log \| tail -5` (should be empty or unrelated) |
 
 ---
 

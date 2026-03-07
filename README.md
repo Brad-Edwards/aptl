@@ -109,7 +109,7 @@ Manage the lab:
 ```bash
 aptl lab status   # Show running containers
 aptl lab stop     # Stop the lab
-aptl lab stop -v  # Stop and remove volumes
+aptl lab stop -v  # DESTROYS ALL DATA (Wazuh indexes, MISP, TheHive, configs)
 ```
 
 **Access:**

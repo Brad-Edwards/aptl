@@ -61,7 +61,7 @@
         "size": 50,
         "sort": [{ "@timestamp": { "order": "desc" } }]
       },
-      "description": "Search raw log data before rule processing. Use Elasticsearch query DSL in body parameter. Example: {\"body\": {\"query\": {\"match\": {\"data.srcip\": \"192.168.1.1\"}}}}"
+      "description": "Search raw log data (archives) before rule processing. Requires logall_json=yes in ossec.conf and the archives fileset enabled in the Filebeat wazuh module. Use Elasticsearch query DSL in body parameter. Example: {\"body\": {\"query\": {\"match\": {\"data.srcip\": \"192.168.1.1\"}}}}"
     },
     "create_detection_rule": {
       "url": "https://localhost:55000/manager/files",

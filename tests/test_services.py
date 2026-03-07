@@ -257,7 +257,7 @@ class TestCheckManagerApiReady:
         )
 
         assert check_manager_api_ready(
-            container_name="aptl-wazuh.manager-1",
+            container_name="aptl-wazuh-manager",
             username="admin",
             password="secret",
         ) is True
@@ -272,7 +272,7 @@ class TestCheckManagerApiReady:
         )
 
         assert check_manager_api_ready(
-            container_name="aptl-wazuh.manager-1",
+            container_name="aptl-wazuh-manager",
             username="admin",
             password="secret",
         ) is False
@@ -287,7 +287,7 @@ class TestCheckManagerApiReady:
         )
 
         check_manager_api_ready(
-            container_name="aptl-wazuh.manager-1",
+            container_name="aptl-wazuh-manager",
             username="admin",
             password="secret",
         )
@@ -295,7 +295,7 @@ class TestCheckManagerApiReady:
         cmd = mock_run.call_args[0][0]
         assert "docker" in cmd
         assert "exec" in cmd
-        assert "aptl-wazuh.manager-1" in cmd
+        assert "aptl-wazuh-manager" in cmd
         assert "curl" in cmd
 
 

@@ -2,11 +2,11 @@
 
 **Agentic purple team lab with AI-controlled red and blue team operations**
 
-> **🚧 UNDER CONSTRUCTION 🚧**  
-> **⚠️ This project is actively being developed and tested**  
-> **⚠️ Repeat after me: This is not for prod.**  
-> **🔧 Documentation and features may change rapidly**  
-> **💡 Use at your own risk - this is a proof of concept**  
+> **🚧 UNDER CONSTRUCTION 🚧**
+> **⚠️ This project is actively being developed and tested**
+> **⚠️ Repeat after me: This is not for prod.**
+> **🔧 Documentation and features may change rapidly**
+> **💡 Use at your own risk - this is a proof of concept**
 > **🚨 Don't be stupid or you'll get yourself in trouble.**
 
 ## What is APTL?
@@ -72,23 +72,23 @@ An autonomous cyber operations range is currently under-development as a separat
 ```
 ┌──── Red Team (172.20.4.0/24) ─┐   ┌──── DMZ (172.20.1.0/24) ──────────────┐
 │  Kali (.30)                    │──>│  Web App (.20/.25)   Mail (.21)        │
-│  pentest tools, MCP-controlled │   │  DNS (.13)                             │
+│  pentest tools, MCP-controlled │   │  DNS (.22)                             │
 └────────────────────────────────┘   └──────────────┬────────────────────────-┘
                                                     │ pivot
                                      ┌──── Internal (172.20.2.0/24) ─────────┐
                                      │  Samba AD DC (.10)  PostgreSQL (.11)   │
-                                     │  File Server (.12)  Linux App Server   │
+                                     │  File Server (.12)  Victim (.20)       │
                                      └──────────────┬────────────────────────-┘
                                                     │ logs
 ┌──── Security (172.20.0.0/24) ──────────────────────────────────────────────┐
 │  Wazuh Manager (.10)  Indexer (.12)  Dashboard (.11)                       │
-│  Suricata IDS (.19)   MISP (.15)     TheHive (.16) + Cortex (.18)         │
-│  Shuffle SOAR (.17)   Reverse Engineering (.27)                            │
+│  Suricata IDS (.50)   MISP (.16)     TheHive (.18) + Cortex (.22)         │
+│  Shuffle SOAR (.20/.21)              Reverse Engineering (.27)             │
 └──────────────────────────────────┬─────────────────────────────────────────┘
                                    │
 ┌──── MCP Server Layer ────────────────────────────────────────────────────-─┐
-│  mcp-red       mcp-wazuh      mcp-network     mcp-threatintel             │
-│  mcp-reverse   mcp-casemgmt   mcp-soar        aptl-mcp-common             │
+│  mcp-red       mcp-wazuh      mcp-indexer     mcp-network                  │
+│  mcp-reverse   mcp-casemgmt   mcp-soar        mcp-threatintel              │
 └──────────────────────────────────┬─────────────────────────────────────────┘
                                    │
                               AI Agents
@@ -100,12 +100,8 @@ An autonomous cyber operations range is currently under-development as a separat
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
 
-# Option A: Python CLI (recommended)
 pip install -e .
 aptl lab start
-
-# Option B: Bash script
-./start-lab.sh
 ```
 
 Manage the lab:
@@ -113,7 +109,7 @@ Manage the lab:
 ```bash
 aptl lab status   # Show running containers
 aptl lab stop     # Stop the lab
-aptl lab stop -v  # Stop and remove volumes
+aptl lab stop -v  # DESTROYS ALL DATA (Wazuh indexes, MISP, TheHive, configs)
 ```
 
 **Access:**

@@ -106,7 +106,7 @@ def _get_software_versions() -> SoftwareVersions:
 
     # Wazuh manager version from container
     wm_out = _run_cmd([
-        "docker", "exec", "aptl-wazuh.manager-1",
+        "docker", "exec", "aptl-wazuh-manager",
         "/var/ossec/bin/wazuh-control", "info", "-v",
     ])
     if wm_out:
@@ -114,7 +114,7 @@ def _get_software_versions() -> SoftwareVersions:
 
     # Wazuh indexer version (extract from opensearch jar filename)
     wi_out = _run_cmd([
-        "docker", "exec", "aptl-wazuh.indexer-1",
+        "docker", "exec", "aptl-wazuh-indexer",
         "bash", "-c",
         "ls /usr/share/wazuh-indexer/lib/opensearch-[0-9]*.jar 2>/dev/null | head -1",
     ])
@@ -188,7 +188,7 @@ def _get_wazuh_rules_snapshot() -> WazuhRulesSnapshot:
 
     # Count total rules
     rule_count = _run_cmd([
-        "docker", "exec", "aptl-wazuh.manager-1",
+        "docker", "exec", "aptl-wazuh-manager",
         "bash", "-c",
         "find /var/ossec/ruleset/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
     ])
@@ -197,7 +197,7 @@ def _get_wazuh_rules_snapshot() -> WazuhRulesSnapshot:
 
     # Count custom rules
     custom_count = _run_cmd([
-        "docker", "exec", "aptl-wazuh.manager-1",
+        "docker", "exec", "aptl-wazuh-manager",
         "bash", "-c",
         "find /var/ossec/etc/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
     ])
@@ -206,7 +206,7 @@ def _get_wazuh_rules_snapshot() -> WazuhRulesSnapshot:
 
     # List custom rule files
     custom_files = _run_cmd([
-        "docker", "exec", "aptl-wazuh.manager-1",
+        "docker", "exec", "aptl-wazuh-manager",
         "bash", "-c",
         "ls /var/ossec/etc/rules/*.xml 2>/dev/null",
     ])
@@ -217,7 +217,7 @@ def _get_wazuh_rules_snapshot() -> WazuhRulesSnapshot:
 
     # Count total decoders
     decoder_count = _run_cmd([
-        "docker", "exec", "aptl-wazuh.manager-1",
+        "docker", "exec", "aptl-wazuh-manager",
         "bash", "-c",
         "find /var/ossec/ruleset/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
     ])
@@ -226,7 +226,7 @@ def _get_wazuh_rules_snapshot() -> WazuhRulesSnapshot:
 
     # Count custom decoders
     custom_dec = _run_cmd([
-        "docker", "exec", "aptl-wazuh.manager-1",
+        "docker", "exec", "aptl-wazuh-manager",
         "bash", "-c",
         "find /var/ossec/etc/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
     ])

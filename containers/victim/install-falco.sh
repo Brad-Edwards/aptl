@@ -14,7 +14,7 @@ echo "Setting up Falco repository..."
 rpm --import https://falco.org/repo/falcosecurity-packages.asc
 cat > /etc/yum.repos.d/falco.repo << 'EOF'
 [falco]
-name=Falco repository  
+name=Falco repository
 baseurl=https://download.falco.org/packages/rpm
 gpgcheck=1
 gpgkey=https://falco.org/repo/falcosecurity-packages.asc

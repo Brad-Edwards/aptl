@@ -20,7 +20,7 @@ describe('getTargetCredentials', () => {
     } as any;
 
     const creds = getTargetCredentials(config);
-    
+
     expect(creds.sshKey).toBe('/path/to/key');
     expect(creds.username).toBe('testuser');
     expect(creds.port).toBe(2022);
@@ -61,7 +61,7 @@ describe('getTargetCredentials', () => {
     } as any;
 
     const creds = getTargetCredentials(config);
-    
+
     expect(creds.target).toBe('172.20.0.30');
     expect(creds.username).toBe('kali');
     expect(creds.sshKey).toBe('/kali/key');
@@ -93,7 +93,7 @@ describe('getTargetCredentials', () => {
     } as any;
 
     const creds = getTargetCredentials(config);
-    
+
     expect(creds.target).toBe('172.20.0.20');
     expect(creds.username).toBe('labadmin');
   });

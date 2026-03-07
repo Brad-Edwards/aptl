@@ -6,6 +6,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2026-03-07
+
+### Fixed
+
+- Documentation technical accuracy review across all 25 docs (#81):
+  - Fixed wrong IPs throughout: victim 172.20.0.20→172.20.2.20, kali 172.20.0.30→172.20.4.30, Suricata .19→.50, MISP .15→.16, TheHive .16→.18, Cortex .18→.22, Shuffle .17→.20/.21, DNS .13→.22
+  - Replaced flat 172.20.0.0/16 network references with correct 4-subnet architecture (security, dmz, internal, redteam)
+  - Fixed `docker exec wazuh.manager` → `docker exec aptl-wazuh-manager` (and indexer/dashboard) in wazuh-siem.md
+  - Fixed MCP server path `dist/index.js` → `build/index.js` in kali-redteam.md
+  - Fixed broken link to nonexistent `wazuh-blueteam.md` in wazuh-siem.md
+  - Fixed nonexistent `aptl_aptl-network` network name in victim-containers.md
+  - Added missing `mcp-indexer` to README architecture diagram
+  - Replaced `mcp-windows-re` (nonexistent) with `mcp-indexer` in enterprise-infrastructure.md
+  - Marked 172.20.3.0/24 Endpoints subnet and Windows VM as not yet implemented in enterprise-infrastructure.md
+  - Rewrote networking.md and architecture/index.md to reflect actual multi-network topology
+  - Rewrote mcp-integration.md to include all 8 MCP servers
+  - Fixed victim-template-guide.md IP subnet references
+
+## [4.3.1] - 2026-03-07
+
+### Added
+
+- Data loss confirmation prompt when running `aptl lab stop -v` — warns about volume destruction and requires explicit confirmation; skip with `--yes`/`-y` (#171)
+
+## [4.3.0] - 2026-03-07
+
+### Added
+
+- Static consistency tests (`tests/test_consistency.py`) validating docker-compose.yml container names, code references, profile config, and MCP build script coverage (#170)
+
+## [4.2.3] - 2026-03-07
+
+### Fixed
+
+- `mcp/build-all-mcps.sh` only built 4 of 8 MCP servers — added mcp-wazuh, mcp-casemgmt, mcp-network, mcp-threatintel (#169)
+
+## [4.2.2] - 2026-03-07
+
+### Removed
+
+- `start-lab.sh` — replaced by Python CLI `aptl lab start`; updated all documentation references (#168)
+
+## [4.2.1] - 2026-03-07
+
+### Fixed
+
+- Wazuh services missing explicit `container_name` in docker-compose.yml — auto-generated names broke when repo cloned to non-`aptl` directory; updated all script and code references (#167)
+
+## [4.2.0] - 2026-03-07
+
+### Added
+
+- SonarCloud integration for continuous code quality analysis — `sonar-project.properties` and `.github/workflows/sonarcloud.yml` (#165)
+
 ## [4.1.3] - 2026-03-07
 
 ### Fixed
@@ -245,7 +299,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Minetest server container and MCP
-- Minetest client container and MCP  
+- Minetest client container and MCP
 - Minecraft server container and MCP
 
 ### Fixed
@@ -277,7 +331,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Falco runtime security monitoring with Modern eBPF in victim containers
-- Wazuh rules for processing Falco alerts by priority level (Info through Emergency)  
+- Wazuh rules for processing Falco alerts by priority level (Info through Emergency)
 - Complete ossec.conf template replacing XML sed manipulation
 - Single lab-install.service for coordinated installation
 - Add basic CTF scenario setup script for integration testing

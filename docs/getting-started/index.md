@@ -5,10 +5,11 @@
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
-./start-lab.sh
+pip install -e .
+aptl lab start
 ```
 
-Use the script. It handles SSH keys, SSL certificates, system requirements, and container startup.
+The CLI handles SSH keys, SSL certificates, system requirements, and container startup.
 
 **Note**: First run requires sudo password for SSL certificate permissions.
 
@@ -22,13 +23,12 @@ Use the script. It handles SSH keys, SSL certificates, system requirements, and 
 
 ## Network
 
-Isolated Docker network: `172.20.0.0/16`
+Four isolated Docker networks:
 
-- `172.20.0.10` - Wazuh Manager
-- `172.20.0.11` - Wazuh Dashboard  
-- `172.20.0.12` - Wazuh Indexer
-- `172.20.0.20` - Victim
-- `172.20.0.30` - Kali
+- **Security** (172.20.0.0/24): Wazuh Manager (.10), Dashboard (.11), Indexer (.12), MISP (.16), TheHive (.18), Cortex (.22), Shuffle (.20/.21), Suricata (.50)
+- **DMZ** (172.20.1.0/24): Web App (.20), Mail (.21), DNS (.22)
+- **Internal** (172.20.2.0/24): AD DC (.10), PostgreSQL (.11), File Server (.12), Victim (.20), Workstation (.40)
+- **Red Team** (172.20.4.0/24): Kali (.30)
 
 ## Prerequisites
 

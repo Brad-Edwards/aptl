@@ -106,7 +106,7 @@ This allows the same image to work in both environments without modification.
 - [ ] Logs are being generated
 - [ ] Rsyslog collector receives logs (if enabled)
 
-### Production Testing Checklist  
+### Production Testing Checklist
 - [ ] Container pulls from ECR
 - [ ] SSH key from environment variable works
 - [ ] Logs forward to SIEM

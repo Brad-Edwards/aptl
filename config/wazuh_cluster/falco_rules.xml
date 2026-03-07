@@ -1,4 +1,4 @@
-<!-- 
+<!--
 Falco Integration Rules for Wazuh
 Based on https://wazuh.com/blog/cloud-native-security-with-wazuh-and-falco/
 These rules process Falco events forwarded by the Wazuh agent

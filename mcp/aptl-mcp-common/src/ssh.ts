@@ -104,7 +104,7 @@ export class PersistentSession extends EventEmitter {
     this.sessionTimeoutMs = timeoutMs;
     this.commandDelimiter = `___CMD_${Date.now()}_${Math.random().toString(36).substring(2, 11)}___`;
     this.shellFormatter = createShellFormatter(shellType);
-    
+
     this.sessionInfo = {
       sessionId,
       target,
@@ -175,7 +175,7 @@ export class PersistentSession extends EventEmitter {
         id: commandId,
         command,
         resolve: () => {}, // No-op resolve for background
-        reject: () => {}, // No-op reject for background  
+        reject: () => {}, // No-op reject for background
         timeout,
         raw: raw !== undefined ? raw : this.sessionInfo.mode === 'raw'
       };
@@ -230,7 +230,7 @@ export class PersistentSession extends EventEmitter {
     if (this.currentCommand.raw) {
       // Raw mode: send command directly without wrapping
       this.shell.write(this.currentCommand.command + '\n');
-      
+
       // For raw mode, we'll use a simpler timeout-based approach
       if (this.currentCommand.timeout) {
         const commandId = this.currentCommand.id;
@@ -254,13 +254,13 @@ export class PersistentSession extends EventEmitter {
       // Normal mode: use delimiter wrapping
       const startDelimiter = `${this.commandDelimiter}_START_${this.currentCommand.id}`;
       const endDelimiter = `${this.commandDelimiter}_END_${this.currentCommand.id}`;
-      
+
       const wrappedCommand = this.shellFormatter.formatCommandWithDelimiters(
         this.currentCommand.command,
         startDelimiter,
         endDelimiter
       );
-      
+
       this.shell.write(wrappedCommand + '\n');
 
       if (this.currentCommand.timeout) {
@@ -310,7 +310,7 @@ export class PersistentSession extends EventEmitter {
       const startIndex = normalizedOutput.indexOf(startPattern);
       const endPattern = `${endDelimiter}:${exitCode}`;
       const endIndex = normalizedOutput.indexOf(endPattern);
-      
+
       if (startIndex !== -1 && endIndex !== -1) {
         const output = normalizedOutput.substring(
           startIndex + startPattern.length,
@@ -333,7 +333,7 @@ export class PersistentSession extends EventEmitter {
           code: exitCode,
           signal: null
         });
-        
+
         this.currentCommand = null;
         this.processNextCommand();
       }
@@ -341,7 +341,7 @@ export class PersistentSession extends EventEmitter {
   }
 
   getSessionInfo(): SessionMetadata {
-    return { 
+    return {
       ...this.sessionInfo,
       commandHistory: [...this.sessionInfo.commandHistory],
       environmentVars: new Map(this.sessionInfo.environmentVars)
@@ -368,7 +368,7 @@ export class PersistentSession extends EventEmitter {
     if (this.sessionTimeout) {
       clearTimeout(this.sessionTimeout);
     }
-    
+
     this.sessionTimeout = setTimeout(() => {
       this.emit('timeout');
       this.close();
@@ -387,12 +387,12 @@ export class PersistentSession extends EventEmitter {
       clearInterval(this.keepAliveInterval);
       this.keepAliveInterval = null;
     }
-    
+
     if (this.sessionTimeout) {
       clearTimeout(this.sessionTimeout);
       this.sessionTimeout = null;
     }
-    
+
     this.sessionInfo.isActive = false;
     this.currentCommand = null;
     this.commandQueue = [];
@@ -415,7 +415,7 @@ export class SSHConnectionManager {
     timeout: number = TIMEOUTS.DEFAULT_COMMAND
   ): Promise<CommandResult> {
     const client = await this.getConnection(host, username, privateKeyPath, port);
-    
+
     return new Promise((resolve, reject) => {
       let stdout = '';
       let stderr = '';
@@ -469,7 +469,7 @@ export class SSHConnectionManager {
   ): Promise<Client> {
     const connectionKey = `${username}@${host}:${port}`;
     console.error(`[SSH-CLIENT] getConnection called with key: ${connectionKey}`);
-    
+
     if (this.connections.has(connectionKey)) {
       const connInfo = this.connections.get(connectionKey)!;
       if (connInfo.connected) {
@@ -486,7 +486,7 @@ export class SSHConnectionManager {
     const client = await this.createConnection(host, username, privateKeyPath, port);
     this.connections.set(connectionKey, { client, connected: true });
     console.error(`[SSH-CLIENT] Connection cache now has ${this.connections.size} connections`);
-    
+
     return client;
   }
 
@@ -567,7 +567,7 @@ export class SSHConnectionManager {
 
     const client = await this.getConnection(target, username, privateKeyPath, port);
     const session = new PersistentSession(sessionId, target, username, type, client, port, mode, timeoutMs, shellType);
-    
+
     await session.initialize();
     this.sessions.set(sessionId, session);
 
@@ -617,14 +617,14 @@ export class SSHConnectionManager {
         this.sessions.delete(sessionId);
         resolve(true);
       }, TIMEOUTS.FORCE_CLOSE);
-      
+
       // Use once() instead of on() to avoid multiple event listeners
       session.once('closed', () => {
         clearTimeout(timeout);
         this.sessions.delete(sessionId);
         resolve(true);
       });
-      
+
       session.close();
     });
   }
@@ -667,13 +667,13 @@ export class SSHConnectionManager {
         const timeout = setTimeout(() => {
           resolve(); // Resolve even if 'closed' event doesn't fire
         }, TIMEOUTS.SESSION_CLOSE);
-        
+
         // Use once() instead of on() to avoid multiple event listeners
         session.once('closed', () => {
           clearTimeout(timeout);
           resolve();
         });
-        
+
         session.close();
       });
     });
@@ -684,13 +684,13 @@ export class SSHConnectionManager {
           const timeout = setTimeout(() => {
             resolve(); // Resolve even if 'close' event doesn't fire
           }, TIMEOUTS.SESSION_CLOSE);
-          
+
           // Use once() instead of on() to avoid multiple event listeners
           connInfo.client.once('close', () => {
             clearTimeout(timeout);
             resolve();
           });
-          
+
           connInfo.client.end();
         } else {
           resolve();
@@ -707,4 +707,4 @@ export class SSHConnectionManager {
       this.connections.clear();
     }
   }
-} 
+}

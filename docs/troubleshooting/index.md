@@ -6,7 +6,7 @@
 # Container status
 docker compose ps
 
-# Service logs  
+# Service logs
 docker compose logs wazuh.manager
 docker compose logs victim
 docker compose logs kali

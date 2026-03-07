@@ -53,7 +53,7 @@ The goal is to create enough realistic online presence that an AI agent can:
 
 Example Team:
 1. Sarah Mitchell - CEO & Co-Founder
-2. James Rodriguez - CTO & Co-Founder  
+2. James Rodriguez - CTO & Co-Founder
 3. Emily Chen - Lead DevOps Engineer
 4. Michael Thompson - Senior Developer
 5. Jessica Williams - Customer Success Manager

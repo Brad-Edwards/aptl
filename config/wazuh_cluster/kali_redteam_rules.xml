@@ -7,7 +7,7 @@
     <description>Kali Red Team Authentication Event</description>
     <group>kali_auth,authentication,</group>
   </rule>
-  
+
   <!-- SSH Login Success -->
   <rule id="300002" level="3">
     <if_sid>5715</if_sid>

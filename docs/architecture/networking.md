@@ -4,14 +4,14 @@ Docker bridge network providing isolated lab environment for security testing.
 
 ## Network Configuration
 
-**Network:** 172.20.0.0/16 (aptl-network)  
-**Gateway:** 172.20.0.1  
-**Driver:** bridge  
+**Network:** 172.20.0.0/16 (aptl-network)
+**Gateway:** 172.20.0.1
+**Driver:** bridge
 
 ## Container IPs
 
 | Container | IP | Hostname |
-|-----------|----|---------| 
+|-----------|----|---------|
 | wazuh.manager | 172.20.0.10 | wazuh.manager |
 | wazuh.dashboard | 172.20.0.11 | wazuh.dashboard |
 | wazuh.indexer | 172.20.0.12 | wazuh.indexer |

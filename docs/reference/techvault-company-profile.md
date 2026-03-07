@@ -6,8 +6,8 @@
 
 ## Company Overview
 
-**Company Name:** TechVault Solutions  
-**Industry:** Cloud Security & Data Management SaaS  
+**Company Name:** TechVault Solutions
+**Industry:** Cloud Security & Data Management SaaS
 **Purpose:** Realistic fictional company infrastructure for penetration testing and security research
 
 ---
@@ -23,7 +23,7 @@
   - Services: Cloud backup, encryption services, compliance monitoring, secure file sharing
   - Company Size: 25-50 employees
   - Revenue Tier: $5M-$10M ARR (simulated)
-  
+
 - **Organizational Structure:**
   - Executive Team: CEO, CTO, CFO, VP Sales
   - Engineering: Dev team (5-7), DevOps (2-3)
@@ -45,11 +45,11 @@
 
 ### 2.1 Domain Registration
 - **Primary Domain:** techvault-solutions.com (or similar available)
-- **Email Setup:** 
+- **Email Setup:**
   - info@techvault-solutions.com
   - support@techvault-solutions.com
   - Individual employee emails (firstname.lastname@)
-  
+
 - **DNS Configuration:**
   - SPF record: `v=spf1 include:amazonses.com ~all`
   - DKIM: AWS SES configuration
@@ -67,7 +67,7 @@
   - Blog (industry insights, company news)
   - Resources (white papers, case studies)
   - Privacy Policy & Terms of Service
-  
+
 - **Features:**
   - Customer login portal
   - Live chat widget (simulated)
@@ -132,24 +132,24 @@
   - `techvault-public-backups` - Public read/write enabled
   - Bucket policy allowing anonymous access
   - Unencrypted data at rest
-  
+
 - **Weak EC2 Configurations:**
   - Instance with SSH open to 0.0.0.0/0
   - Outdated software (Ubuntu 18.04 with known CVEs)
   - Web server with directory listing enabled
   - Exposed .git directory
-  
+
 - **Security Group Issues:**
   - RDS security group allowing 0.0.0.0/0 on port 5432
   - Application server with unnecessary ports open
   - No egress filtering
-  
+
 - **Application Vulnerabilities:**
   - Admin panel at /admin with weak credentials (admin/Admin123!)
   - API endpoints without rate limiting
   - Unvalidated redirects
   - Exposed environment variables
-  
+
 - **IAM Misconfigurations:**
   - User with AdministratorAccess but no MFA
   - Service account with overly broad S3 permissions
@@ -162,7 +162,7 @@
   - Deployed but with limited rules
   - SQL injection protection (disabled for testing)
   - Rate limiting (set high for testing)
-  
+
 - **GuardDuty:** Enabled (to detect testing activities)
 - **AWS Config:** Enabled (to track misconfigurations)
 - **Secrets Manager:** For some credentials (not all - some hardcoded)
@@ -248,12 +248,12 @@
 
 ### 4.3 Operational Details
 
-- **Physical Address:** 
+- **Physical Address:**
   - 123 Innovation Drive, Suite 400
   - San Francisco, CA 94103
   - (Use virtual office service or clearly fictional)
 
-- **Phone Number:** 
+- **Phone Number:**
   - Main: (555) 847-2683 (spells VAULT on keypad)
   - Support: (555) 847-2684
   - (Google Voice or VoIP.ms)
@@ -776,7 +776,7 @@ Choose a starting point based on priority:
 
 ---
 
-**Project Status:** Planning Phase  
-**Last Updated:** 2024  
-**Owner:** Security Research Team  
+**Project Status:** Planning Phase
+**Last Updated:** 2024
+**Owner:** Security Research Team
 **Classification:** Internal Testing Environment

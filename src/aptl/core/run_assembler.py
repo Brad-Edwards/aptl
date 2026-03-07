@@ -23,6 +23,7 @@ from aptl.core.events import Event
 from aptl.core.runstore import LocalRunStore, RunManifest
 from aptl.core.scenarios import ScenarioDefinition
 from aptl.core.session import ActiveSession
+from aptl.core.snapshot import capture_snapshot
 from aptl.utils.logging import get_logger
 
 log = get_logger("run_assembler")
@@ -77,6 +78,13 @@ def assemble_run(
     # 1. Create run directory
     run_dir = store.create_run(run_id)
     log.info("Assembling run %s at %s", run_id, run_dir)
+
+    # 1b. Capture range snapshot
+    try:
+        snapshot = capture_snapshot(config_dir=scenario_path.parent)
+        store.write_json(run_id, "snapshot.json", snapshot.to_dict())
+    except Exception:
+        log.exception("Failed to capture range snapshot")
 
     # 2. Write flags
     store.write_json(run_id, "flags.json", session.flags)

@@ -8,7 +8,7 @@ when a service is unavailable and never raise.
 
 import json
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from aptl.utils.logging import get_logger
@@ -170,7 +170,10 @@ def collect_thehive_cases(
             },
             {
                 "_name": "filter",
-                "_gte": {"_field": "_createdAt", "_value": start_iso},
+                "_and": [
+                    {"_gte": {"_field": "_createdAt", "_value": start_iso}},
+                    {"_lte": {"_field": "_createdAt", "_value": end_iso}},
+                ],
             },
         ],
     }
@@ -225,6 +228,24 @@ def collect_misp_events(
         return []
 
     events = data.get("response", []) if isinstance(data, dict) else []
+
+    # Post-filter by end time — MISP timestamp param only supports lower bound
+    end_dt = datetime.fromisoformat(end_iso)
+    filtered = []
+    for evt in events:
+        evt_data = evt.get("Event", evt)
+        ts_str = evt_data.get("timestamp", "")
+        if ts_str:
+            try:
+                evt_dt = datetime.fromtimestamp(int(ts_str), tz=timezone.utc)
+                if evt_dt <= end_dt:
+                    filtered.append(evt)
+            except (ValueError, OSError):
+                filtered.append(evt)
+        else:
+            filtered.append(evt)
+    events = filtered
+
     log.info("Collected %d MISP events", len(events))
     return events
 

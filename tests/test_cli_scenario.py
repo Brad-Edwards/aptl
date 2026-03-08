@@ -74,6 +74,60 @@ def _write_scenario(tmp_path: Path, scenario_id: str = "test-scenario") -> Path:
 
 
 
+def _write_config(project_dir: Path, containers: dict | None = None) -> Path:
+    """Write an aptl.json config file and return the path."""
+    config = {"lab": {"name": "aptl"}}
+    if containers is not None:
+        config["containers"] = containers
+    config_path = project_dir / "aptl.json"
+    config_path.write_text(json.dumps(config))
+    return config_path
+
+
+def _write_scenario_with_containers(
+    tmp_path: Path,
+    scenario_id: str = "test-scenario",
+    required: list[str] | None = None,
+) -> Path:
+    """Write a scenario YAML with specific required containers."""
+    scenarios_dir = tmp_path / "scenarios"
+    scenarios_dir.mkdir(parents=True, exist_ok=True)
+    data = {
+        "metadata": {
+            "id": scenario_id,
+            "name": "Test Scenario",
+            "description": "A test scenario for CLI tests",
+            "difficulty": "beginner",
+            "estimated_minutes": 10,
+        },
+        "mode": "red",
+        "containers": {"required": required or ["kali"]},
+        "objectives": {
+            "red": [
+                {
+                    "id": "obj-a",
+                    "description": "Do something",
+                    "type": "manual",
+                    "points": 50,
+                },
+            ],
+            "blue": [],
+        },
+        "scoring": {
+            "passing_score": 50,
+            "max_score": 50,
+            "time_bonus": {
+                "enabled": False,
+                "max_bonus": 0,
+                "decay_after_minutes": 10,
+            },
+        },
+    }
+    path = scenarios_dir / f"{scenario_id}.yaml"
+    path.write_text(yaml.dump(data, default_flow_style=False))
+    return tmp_path
+
+
 def _start_session(project_dir: Path, scenario_id: str = "test-scenario") -> None:
     """Start a scenario session via the CLI."""
     result = runner.invoke(app, [
@@ -235,6 +289,69 @@ class TestStartCommand:
             "--project-dir", str(tmp_path),
         ])
         assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# start command — container validation
+# ---------------------------------------------------------------------------
+
+
+class TestStartContainerValidation:
+    """Tests for container profile validation when starting a scenario."""
+
+    def test_start_fails_when_required_profile_disabled(self, tmp_path):
+        """Scenario requiring soc should fail when soc is disabled."""
+        project_dir = _write_scenario_with_containers(
+            tmp_path, required=["kali", "soc"]
+        )
+        _write_config(project_dir, containers={"kali": True, "soc": False})
+        result = runner.invoke(app, [
+            "start", "test-scenario",
+            "--project-dir", str(project_dir),
+        ])
+        assert result.exit_code == 1
+        assert "soc" in result.output
+        assert "disabled profiles" in result.output
+
+    def test_start_succeeds_when_all_profiles_enabled(self, tmp_path):
+        """Scenario requiring kali should succeed when kali is enabled."""
+        project_dir = _write_scenario_with_containers(
+            tmp_path, required=["kali"]
+        )
+        _write_config(project_dir, containers={"kali": True})
+        result = runner.invoke(app, [
+            "start", "test-scenario",
+            "--project-dir", str(project_dir),
+        ])
+        assert result.exit_code == 0
+        assert "Started scenario" in result.output
+
+    def test_start_succeeds_with_no_config_file(self, tmp_path):
+        """Scenario requiring kali (on by default) works without aptl.json."""
+        project_dir = _write_scenario_with_containers(
+            tmp_path, required=["kali"]
+        )
+        # No aptl.json — defaults apply (kali=True)
+        result = runner.invoke(app, [
+            "start", "test-scenario",
+            "--project-dir", str(project_dir),
+        ])
+        assert result.exit_code == 0
+        assert "Started scenario" in result.output
+
+    def test_error_lists_all_missing_profiles(self, tmp_path):
+        """Error message should list every disabled profile."""
+        project_dir = _write_scenario_with_containers(
+            tmp_path, required=["kali", "soc", "enterprise"]
+        )
+        # Default config: soc=False, enterprise=False
+        result = runner.invoke(app, [
+            "start", "test-scenario",
+            "--project-dir", str(project_dir),
+        ])
+        assert result.exit_code == 1
+        assert "soc" in result.output
+        assert "enterprise" in result.output
 
 
 # ---------------------------------------------------------------------------

@@ -197,6 +197,31 @@ class TestLabStopCommand:
         assert result.exit_code == 0
         mock_stop.assert_called_once_with(remove_volumes=True, project_dir=Path("."))
 
+    def test_stop_volumes_shows_warning(self, runner, mocker):
+        """stop --volumes without --yes should show data loss warning."""
+        from aptl.cli.main import app
+
+        mocker.patch("aptl.cli.lab.stop_lab")
+
+        result = runner.invoke(app, ["lab", "stop", "--volumes"], input="n\n")
+
+        assert "WARNING" in result.output
+        assert "Aborted" in result.output
+
+    def test_stop_volumes_confirm_proceeds(self, runner, mocker):
+        """stop --volumes with confirmation should proceed."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+
+        mocker.patch(
+            "aptl.cli.lab.stop_lab",
+            return_value=LabResult(success=True, message="Lab stopped"),
+        )
+
+        result = runner.invoke(app, ["lab", "stop", "--volumes"], input="y\n")
+
+        assert result.exit_code == 0
+
 
 class TestLabStatusCommand:
     """Tests for the aptl lab status CLI command."""
@@ -233,3 +258,43 @@ class TestLabStatusCommand:
 
         assert result.exit_code == 0
         assert "not running" in result.stdout.lower()
+
+    def test_status_shows_container_health(self, runner, mocker):
+        """status should display container health when available."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabStatus
+
+        mocker.patch(
+            "aptl.cli.lab.lab_status",
+            return_value=LabStatus(
+                running=True,
+                containers=[
+                    {"Name": "aptl-victim", "State": "running", "Health": "healthy"},
+                ],
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "status"])
+
+        assert result.exit_code == 0
+        assert "aptl-victim" in result.output
+        assert "healthy" in result.output
+
+    def test_status_shows_error_when_not_running(self, runner, mocker):
+        """status should display error message when not running."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabStatus
+
+        mocker.patch(
+            "aptl.cli.lab.lab_status",
+            return_value=LabStatus(
+                running=False,
+                containers=[],
+                error="docker daemon not running",
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "status"])
+
+        assert "not running" in result.stdout.lower()
+        assert "docker daemon not running" in result.output

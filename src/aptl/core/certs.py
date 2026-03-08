@@ -65,6 +65,18 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             capture_output=True,
             text=True,
             cwd=project_dir,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        log.error(
+            "Certificate generation timed out after 300s. "
+            "This may indicate a stuck container or slow image pull."
+        )
+        return CertResult(
+            success=False,
+            generated=False,
+            certs_dir=certs_dir,
+            error="Certificate generation timed out after 300s",
         )
     except (FileNotFoundError, OSError) as exc:
         log.error("Failed to run docker compose: %s", exc)
@@ -92,10 +104,19 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
     gid = os.getgid()
     try:
         perm_result = subprocess.run(
-            ["sudo", "chown", "-R", f"{uid}:{gid}", str(certs_dir)],
+            ["sudo", "-n", "chown", "-R", f"{uid}:{gid}", str(certs_dir)],
             capture_output=True,
             text=True,
             cwd=project_dir,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        log.error("Permission fix timed out after 30s")
+        return CertResult(
+            success=False,
+            generated=True,
+            certs_dir=certs_dir,
+            error="Permission fix timed out after 30s",
         )
     except (FileNotFoundError, OSError) as exc:
         log.error("Failed to fix certificate permissions: %s", exc)
@@ -107,7 +128,15 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
         )
 
     if perm_result.returncode != 0:
-        error_msg = perm_result.stderr.strip() or "Permission fix failed"
+        stderr = perm_result.stderr.strip()
+        if "a password is required" in stderr or "sudo:" in stderr:
+            error_msg = (
+                f"sudo requires a password — run "
+                f"'sudo chown -R {uid}:{gid} {certs_dir}' manually "
+                f"or configure passwordless sudo for chown"
+            )
+        else:
+            error_msg = stderr or "Permission fix failed"
         log.error("Failed to fix permissions: %s", error_msg)
         return CertResult(
             success=False,

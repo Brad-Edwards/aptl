@@ -222,7 +222,7 @@ services:
       - misp_data:/var/www/MISP/app/files
       - misp_config:/var/www/MISP/app/Config
     healthcheck:
-      test: ["CMD-SHELL", "curl -ks https://localhost/users/login || exit 1"]
+      test: ["CMD-SHELL", "curl -ksf https://localhost/users/login || (nginx -s reload 2>/dev/null; exit 1)"]
       interval: 30s
       timeout: 10s
       retries: 15

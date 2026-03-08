@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.1] - 2026-03-08
+
+### Fixed
+
+- `ensure_ssl_certs()` hangs forever when sudo requires a password — added `sudo -n` (non-interactive) flag so it fails immediately instead of prompting (#194)
+- `ensure_ssl_certs()` subprocess calls had no timeouts — added `timeout=300` for docker compose cert generation and `timeout=30` for sudo chown (#194)
+- Improved error messages when sudo requires a password, with actionable guidance to run chown manually or configure passwordless sudo
+- MISP healthcheck passed on 503 "MISP is loading..." because `curl -ks` without `-f` succeeds on any HTTP response — added `-f` flag and nginx reload on failure to recover from stale PHP-FPM socket after entrypoint init
+
 ## [4.6.0] - 2026-03-08
 
 ### Added

@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.3] - 2026-03-08
+
+### Fixed
+
+- TheHive case collector missing `end_iso` upper bound — queries now use `_and` with both `_gte` and `_lte` filters on `_createdAt` so results exclude cases created after the scenario ended (#196)
+- MISP event collector missing `end_iso` upper bound — added client-side post-filter on event timestamps since MISP `restSearch` only supports a lower-bound `timestamp` parameter (#196)
+
 ## [4.6.2] - 2026-03-08
 
 ### Fixed

@@ -14,8 +14,11 @@ log = get_logger("credentials")
 # Matches: password: "anything" (with optional surrounding whitespace)
 _PASSWORD_PATTERN = re.compile(r'(password:\s*)"[^"]*"')
 
-# Matches: <key>anything</key>
-_KEY_PATTERN = re.compile(r"<key>[^<]*</key>")
+# Matches: <key>anything</key> only inside a <cluster>...</cluster> block
+_CLUSTER_KEY_PATTERN = re.compile(
+    r"(<cluster>.*?)<key>[^<]*</key>(.*?</cluster>)",
+    re.DOTALL,
+)
 
 
 def sync_dashboard_config(config_path: Path, api_password: str) -> None:
@@ -68,15 +71,18 @@ def sync_manager_config(config_path: Path, cluster_key: str) -> None:
 
     content = config_path.read_text()
 
-    new_content, count = _KEY_PATTERN.subn(
-        lambda _: f"<key>{cluster_key}</key>", content
+    new_content, count = _CLUSTER_KEY_PATTERN.subn(
+        lambda m: f"{m.group(1)}<key>{cluster_key}</key>{m.group(2)}", content
     )
 
     if count == 0:
         log.warning(
-            "No <key> pattern found in %s; file left unchanged", config_path
+            "No <cluster><key> pattern found in %s; file left unchanged",
+            config_path,
         )
     else:
-        log.info("Replaced %d <key> occurrence(s) in %s", count, config_path)
+        log.info(
+            "Replaced %d cluster <key> occurrence(s) in %s", count, config_path
+        )
 
     config_path.write_text(new_content)

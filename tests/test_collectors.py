@@ -231,6 +231,47 @@ class TestCollectTheHiveCases:
         )
         assert len(result) == 2
 
+    @patch("aptl.core.collectors._curl_json")
+    def test_query_includes_end_iso_upper_bound(self, mock_curl):
+        mock_curl.return_value = []
+        end = "2025-01-01T23:59:59+00:00"
+
+        collect_thehive_cases(
+            "2025-01-01T00:00:00+00:00",
+            end,
+            api_key="test-key",
+        )
+
+        body = mock_curl.call_args[1]["body"]
+        filter_clause = body["query"][1]
+        assert "_and" in filter_clause
+        lte_found = any(
+            "_lte" in clause and clause["_lte"]["_value"] == end
+            for clause in filter_clause["_and"]
+        )
+        assert lte_found, "Query must include _lte filter with end_iso"
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_query_bounds_both_start_and_end(self, mock_curl):
+        mock_curl.return_value = [
+            {"_id": "in-window", "_createdAt": "2025-01-01T12:00:00+00:00"},
+        ]
+        start = "2025-01-01T00:00:00+00:00"
+        end = "2025-01-01T23:59:59+00:00"
+
+        collect_thehive_cases(start, end, api_key="test-key")
+
+        body = mock_curl.call_args[1]["body"]
+        filter_clause = body["query"][1]
+        and_clauses = filter_clause["_and"]
+        gte_found = any(
+            "_gte" in c and c["_gte"]["_value"] == start for c in and_clauses
+        )
+        lte_found = any(
+            "_lte" in c and c["_lte"]["_value"] == end for c in and_clauses
+        )
+        assert gte_found and lte_found
+
 
 class TestCollectMISPEvents:
     """Tests for MISP event collection."""
@@ -245,7 +286,7 @@ class TestCollectMISPEvents:
 
     @patch("aptl.core.collectors._curl_json")
     def test_returns_events(self, mock_curl):
-        mock_curl.return_value = {"response": [{"Event": {"id": "1"}}]}
+        mock_curl.return_value = {"response": [{"Event": {"id": "1", "timestamp": "1735689600"}}]}
 
         result = collect_misp_events(
             "2025-01-01T00:00:00+00:00",
@@ -253,6 +294,41 @@ class TestCollectMISPEvents:
             api_key="test-key",
         )
         assert len(result) == 1
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_filters_events_after_end_time(self, mock_curl):
+        # 1735689600 = 2025-01-01T00:00:00 UTC (in window)
+        # 1735776000 = 2025-01-02T00:00:00 UTC (after window)
+        mock_curl.return_value = {
+            "response": [
+                {"Event": {"id": "1", "timestamp": "1735689600"}},
+                {"Event": {"id": "2", "timestamp": "1735776000"}},
+            ]
+        }
+
+        result = collect_misp_events(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
+            api_key="test-key",
+        )
+        assert len(result) == 1
+        assert result[0]["Event"]["id"] == "1"
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_keeps_events_without_timestamp(self, mock_curl):
+        mock_curl.return_value = {
+            "response": [
+                {"Event": {"id": "1"}},
+                {"Event": {"id": "2", "timestamp": ""}},
+            ]
+        }
+
+        result = collect_misp_events(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
+            api_key="test-key",
+        )
+        assert len(result) == 2
 
 
 class TestCollectShuffleExecutions:

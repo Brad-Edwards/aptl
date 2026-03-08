@@ -192,7 +192,7 @@ class TestLabStopCommand:
             return_value=LabResult(success=True, message="Lab stopped"),
         )
 
-        result = runner.invoke(app, ["lab", "stop", "--volumes"])
+        result = runner.invoke(app, ["lab", "stop", "--volumes", "--yes"])
 
         assert result.exit_code == 0
         mock_stop.assert_called_once_with(remove_volumes=True, project_dir=Path("."))

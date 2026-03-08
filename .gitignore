@@ -1,5 +1,4 @@
 # Lab runtime files
-lab_connections.txt
 *.log
 
 # Notes directory
@@ -346,7 +345,6 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
-lab_connections.txt
 
 # QRadar files
 files/*
@@ -378,8 +376,7 @@ build/
 .DS_Store
 Thumbs.db
 
-# Terraform output files containing IP addresses
-infrastructure/lab_connections.txt
+# Terraform output files
 infrastructure/lab_config.json
 
 # Generated backend.tf files with hardcoded bucket names

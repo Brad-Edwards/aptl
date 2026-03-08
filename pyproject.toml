@@ -39,3 +39,6 @@ source = ["aptl"]
 
 [tool.coverage.report]
 show_missing = true
+
+[tool.coverage.xml]
+output = "coverage.xml"

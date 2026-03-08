@@ -1,0 +1,34 @@
+
+==========================================
+  APTL Local Lab Started Successfully!
+==========================================
+
+   Service URLs:
+   Wazuh Dashboard: https://localhost:443
+   Wazuh Indexer: https://localhost:9200
+   Wazuh API: https://172.20.0.10:55000 (internal only)
+
+   Default Credentials:
+   Dashboard: admin / SecretPassword
+   API: wazuh-wui / WazuhPass123!
+
+   SSH Access:
+   Victim:          ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022
+   Kali:            ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023
+
+   Container IPs:
+   wazuh.manager:   172.20.0.10
+   wazuh.dashboard: 172.20.0.11
+   wazuh.indexer:   172.20.0.12
+   victim:          172.20.0.20
+   kali:            172.20.0.30
+
+   Status: Built and ready
+
+   Management Commands:
+   View logs:    docker compose logs -f [service]
+   Stop lab:     docker compose down
+   Restart:      docker compose restart [service]
+   Full cleanup: docker compose down -v
+
+   Connection info saved to: lab_connections.txt

@@ -434,8 +434,6 @@ def orchestrate_lab_start(
             check_fn=partial(
                 check_manager_api_ready,
                 container_name="aptl-wazuh-manager",
-                username=env.api_username,
-                password=env.api_password,
             ),
             timeout=120,
             interval=5,

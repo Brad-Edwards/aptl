@@ -1,5 +1,6 @@
 """CLI commands for lab lifecycle management."""
 
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -99,9 +100,36 @@ def status(
         "-d",
         help="Path to the APTL project directory.",
     ),
+    output_json: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Output full range snapshot as JSON.",
+    ),
+    output_file: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write JSON output to file instead of stdout.",
+    ),
 ) -> None:
     """Show the current lab status."""
     log.info("Checking lab status")
+
+    if output_json or output_file:
+        from aptl.core.snapshot import capture_snapshot
+
+        snapshot = capture_snapshot(config_dir=project_dir)
+        data = json.dumps(snapshot.to_dict(), indent=2)
+
+        if output_file:
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            output_file.write_text(data)
+            output_file.chmod(0o600)
+            typer.echo(f"Snapshot written to {output_file}")
+        else:
+            typer.echo(data)
+        return
 
     current = lab_status(project_dir=project_dir)
 

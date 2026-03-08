@@ -6,6 +6,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.0] - 2026-03-08
+
+### Added
+
+- `aptl lab status --json` flag to output full range snapshot as JSON (#93)
+- `aptl lab status --output FILE` flag to write JSON snapshot to file with 0600 permissions (#93)
+- Per-container network IPs and port mappings in range snapshot
+- Service endpoint discovery (Dashboard, Indexer, API) from running containers
+- SSH endpoint discovery (victim, kali, reverse) from running containers
+
+### Changed
+
+- Lab orchestration step 11 now captures a range snapshot instead of generating a static text file
+- SSH connectivity tests (step 10) now retry with `wait_for_service` (60s timeout, 5s interval) instead of single-shot
+
+### Removed
+
+- `connections.py` module — replaced by runtime snapshot with real Docker data
+- `test_connections.py` — replaced by `test_snapshot_status.py`
+- `lab_connections.txt` references from `.gitignore` and docs
+
+### Fixed
+
+- `check_manager_api_ready` always failed — `curl -f` exits 22 on 401, but Wazuh API uses token auth so root endpoint always returns 401 with basic auth. Now checks for any HTTP response instead
+- SSH connectivity tests ran before containers were healthy, always reported failure
+- `test_cli.py::test_stop_with_volumes_flag` now passes `--yes` to bypass data loss confirmation prompt
+
 ## [4.4.0] - 2026-03-07
 
 ### Fixed

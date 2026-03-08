@@ -248,12 +248,27 @@ class TestCheckManagerApiReady:
     """Tests for the Wazuh Manager API readiness check."""
 
     def test_returns_true_on_successful_check(self, mocker):
-        """Should return True when docker exec curl succeeds."""
+        """Should return True when API responds with any HTTP status."""
         from aptl.core.services import check_manager_api_ready
 
         mocker.patch(
             "aptl.core.services.subprocess.run",
-            return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            return_value=MagicMock(returncode=0, stdout="401", stderr=""),
+        )
+
+        assert check_manager_api_ready(
+            container_name="aptl-wazuh-manager",
+            username="admin",
+            password="secret",
+        ) is True
+
+    def test_returns_true_on_200(self, mocker):
+        """Should return True when API responds with 200."""
+        from aptl.core.services import check_manager_api_ready
+
+        mocker.patch(
+            "aptl.core.services.subprocess.run",
+            return_value=MagicMock(returncode=0, stdout="200", stderr=""),
         )
 
         assert check_manager_api_ready(
@@ -263,12 +278,27 @@ class TestCheckManagerApiReady:
         ) is True
 
     def test_returns_false_on_failure(self, mocker):
-        """Should return False when docker exec curl fails."""
+        """Should return False when docker command fails."""
         from aptl.core.services import check_manager_api_ready
 
         mocker.patch(
             "aptl.core.services.subprocess.run",
             return_value=MagicMock(returncode=1, stdout="", stderr="Error"),
+        )
+
+        assert check_manager_api_ready(
+            container_name="aptl-wazuh-manager",
+            username="admin",
+            password="secret",
+        ) is False
+
+    def test_returns_false_on_no_http_response(self, mocker):
+        """Should return False when curl gets no HTTP response."""
+        from aptl.core.services import check_manager_api_ready
+
+        mocker.patch(
+            "aptl.core.services.subprocess.run",
+            return_value=MagicMock(returncode=7, stdout="000", stderr=""),
         )
 
         assert check_manager_api_ready(
@@ -283,7 +313,7 @@ class TestCheckManagerApiReady:
 
         mock_run = mocker.patch(
             "aptl.core.services.subprocess.run",
-            return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            return_value=MagicMock(returncode=0, stdout="401", stderr=""),
         )
 
         check_manager_api_ready(
@@ -294,9 +324,9 @@ class TestCheckManagerApiReady:
 
         cmd = mock_run.call_args[0][0]
         assert "docker" in cmd
-        assert "exec" in cmd
         assert "aptl-wazuh-manager" in cmd
         assert "curl" in cmd
+        assert "-f" not in cmd
 
 
 class TestSSHConnection:

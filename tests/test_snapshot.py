@@ -11,6 +11,8 @@ from aptl.core.snapshot import (
     WazuhRulesSnapshot,
     NetworkSnapshot,
     RangeSnapshot,
+    ServiceEndpoint,
+    SSHEndpoint,
     capture_snapshot,
     _hash_config_files,
 )
@@ -47,15 +49,21 @@ class TestDataclasses:
             status="Up 5 minutes (healthy)",
             health="healthy",
             labels={"com.docker.compose.service": "victim"},
+            networks={"aptl_aptl-internal": "172.20.2.20"},
+            ports=["0.0.0.0:2022->22/tcp"],
         )
         d = asdict(cs)
         assert d["name"] == "aptl-victim"
         assert d["health"] == "healthy"
         assert d["labels"]["com.docker.compose.service"] == "victim"
+        assert d["networks"]["aptl_aptl-internal"] == "172.20.2.20"
+        assert len(d["ports"]) == 1
 
     def test_container_snapshot_defaults(self):
         cs = ContainerSnapshot()
         assert cs.labels == {}
+        assert cs.networks == {}
+        assert cs.ports == []
         assert cs.name == ""
 
     def test_wazuh_rules_snapshot(self):
@@ -151,11 +159,15 @@ class TestCaptureSnapshot:
     ):
         mock_sw.return_value = SoftwareVersions(python_version="3.11.5")
         mock_containers.return_value = [
-            ContainerSnapshot(name="aptl-victim", image="aptl/victim:latest"),
+            ContainerSnapshot(
+                name="aptl-victim",
+                image="aptl/victim:latest",
+                status="Up 5 minutes",
+            ),
         ]
         mock_wazuh.return_value = WazuhRulesSnapshot(total_rules=100)
         mock_networks.return_value = [
-            NetworkSnapshot(name="aptl_default", subnet="172.20.0.0/16"),
+            NetworkSnapshot(name="aptl_aptl-internal", subnet="172.20.2.0/24"),
         ]
 
         (tmp_path / "aptl.json").write_text("{}")
@@ -169,6 +181,9 @@ class TestCaptureSnapshot:
         assert snap.wazuh_rules.total_rules == 100
         assert len(snap.networks) == 1
         assert "aptl.json" in snap.config_hashes
+        # SSH endpoints derived from running containers
+        assert len(snap.ssh) == 1
+        assert snap.ssh[0].port == 2022
 
     @patch("aptl.core.snapshot._get_network_snapshots")
     @patch("aptl.core.snapshot._get_wazuh_rules_snapshot")
@@ -188,3 +203,5 @@ class TestCaptureSnapshot:
         assert "timestamp" in loaded
         assert "software" in loaded
         assert "containers" in loaded
+        assert "services" in loaded
+        assert "ssh" in loaded

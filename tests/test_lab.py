@@ -329,18 +329,12 @@ class TestOrchestrateLabStart:
             return_value=ServiceResult(ready=True, elapsed_seconds=10.0),
         )
 
-        # Mock SSH connection tests
-        mocks["test_ssh"] = mocker.patch(
-            "aptl.core.lab.test_ssh_connection",
-            return_value=True,
+        # Mock snapshot capture
+        from aptl.core.snapshot import RangeSnapshot
+        mocks["capture_snapshot"] = mocker.patch(
+            "aptl.core.lab.capture_snapshot",
+            return_value=RangeSnapshot(),
         )
-
-        # Mock connection info
-        mocks["gen_info"] = mocker.patch(
-            "aptl.core.lab.generate_connection_info",
-            return_value="Connection info text",
-        )
-        mocks["write_info"] = mocker.patch("aptl.core.lab.write_connection_file")
 
         # Mock MCP build subprocess
         mocks["mcp_subprocess"] = mocker.patch(
@@ -363,8 +357,7 @@ class TestOrchestrateLabStart:
         mocks["sysreqs"].assert_called_once()
         mocks["certs"].assert_called_once()
         mocks["start"].assert_called_once()
-        mocks["gen_info"].assert_called_once()
-        mocks["write_info"].assert_called_once()
+        mocks["capture_snapshot"].assert_called_once()
 
     def test_stops_on_env_loading_failure(self, mocker, tmp_path):
         """Should fail early if .env loading fails."""
@@ -435,15 +428,20 @@ class TestOrchestrateLabStart:
     def test_continues_past_ssh_test_failure(self, mocker, tmp_path):
         """Should continue (with warning) when SSH connection test fails."""
         from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.services import ServiceResult
 
         mocks = self._patch_all_steps(mocker, tmp_path)
-        mocks["test_ssh"].return_value = False
+        # wait_for_service is used for indexer, manager, and now SSH —
+        # return not-ready to simulate SSH timeout
+        mocks["wait_indexer"].return_value = ServiceResult(
+            ready=False, elapsed_seconds=60.0, error="SSH timed out"
+        )
 
         result = orchestrate_lab_start(tmp_path)
 
-        # Overall should still succeed
+        # Overall should still succeed (SSH/service waits are non-critical)
         assert result.success is True
-        mocks["gen_info"].assert_called_once()
+        mocks["capture_snapshot"].assert_called_once()
 
     def test_continues_past_mcp_build_failure(self, mocker, tmp_path):
         """Should continue (with warning) when MCP build fails."""
@@ -507,7 +505,7 @@ class TestOrchestrateLabStart:
         result = orchestrate_lab_start(tmp_path)
 
         assert result.success is False
-        mocks["gen_info"].assert_not_called()
+        mocks["capture_snapshot"].assert_not_called()
 
     def test_continues_when_credential_sync_fails(self, mocker, tmp_path):
         """Should warn and continue when credential sync raises (C6)."""

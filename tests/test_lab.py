@@ -162,6 +162,40 @@ class TestLabStop:
 
         assert result.success is False
 
+    def test_stop_uses_all_profiles_when_no_config(self, mock_subprocess, tmp_path):
+        """stop_lab should fall back to all profiles when no aptl.json exists."""
+        from aptl.core.lab import stop_lab
+
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        result = stop_lab(project_dir=tmp_path)
+
+        assert result.success is True
+        cmd_args = mock_subprocess.call_args[0][0]
+        # Should include all fallback profiles
+        assert "wazuh" in cmd_args
+        assert "victim" in cmd_args
+        assert "kali" in cmd_args
+        assert "soc" in cmd_args
+
+    def test_stop_uses_config_profiles_when_available(self, mock_subprocess, tmp_path):
+        """stop_lab should load profiles from aptl.json when present."""
+        import json
+        from aptl.core.lab import stop_lab
+
+        (tmp_path / "aptl.json").write_text(json.dumps({
+            "lab": {"name": "test"},
+            "containers": {"victim": True, "kali": False, "wazuh": True},
+        }))
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        result = stop_lab(project_dir=tmp_path)
+
+        assert result.success is True
+        cmd_args = mock_subprocess.call_args[0][0]
+        assert "victim" in cmd_args
+        assert "wazuh" in cmd_args
+
 
 class TestLabStatus:
     """Tests for lab status checking."""
@@ -195,6 +229,49 @@ class TestLabStatus:
         assert status.running is False
         assert len(status.containers) == 0
 
+    def test_status_parses_ndjson_output(self, mock_subprocess):
+        """lab_status should handle NDJSON (one JSON object per line)."""
+        from aptl.core.lab import lab_status
+
+        ndjson = (
+            '{"Name":"aptl-victim","State":"running","Health":"healthy"}\n'
+            '{"Name":"aptl-kali","State":"running","Health":"healthy"}'
+        )
+        mock_subprocess.return_value = MagicMock(
+            returncode=0, stdout=ndjson, stderr=""
+        )
+
+        status = lab_status()
+
+        assert status.running is True
+        assert len(status.containers) == 2
+
+    def test_status_handles_empty_stdout(self, mock_subprocess):
+        """lab_status should handle empty output."""
+        from aptl.core.lab import lab_status
+
+        mock_subprocess.return_value = MagicMock(
+            returncode=0, stdout="", stderr=""
+        )
+
+        status = lab_status()
+
+        assert status.running is False
+        assert len(status.containers) == 0
+
+    def test_status_handles_invalid_json(self, mock_subprocess):
+        """lab_status should handle malformed JSON output."""
+        from aptl.core.lab import lab_status
+
+        mock_subprocess.return_value = MagicMock(
+            returncode=0, stdout="not json at all", stderr=""
+        )
+
+        status = lab_status()
+
+        assert status.running is False
+        assert "parse" in status.error.lower()
+
     def test_status_handles_compose_failure(self, mock_subprocess):
         """If docker compose ps fails, status should handle gracefully."""
         from aptl.core.lab import lab_status
@@ -207,6 +284,64 @@ class TestLabStatus:
 
         assert status.running is False
         assert "docker not found" in status.error
+
+
+class TestCheckBindMounts:
+    """Tests for _check_bind_mounts."""
+
+    def test_returns_empty_when_no_compose_file(self, tmp_path):
+        from aptl.core.lab import _check_bind_mounts
+
+        assert _check_bind_mounts(tmp_path) == []
+
+    def test_returns_empty_when_all_sources_exist(self, tmp_path):
+        from aptl.core.lab import _check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  web:\n"
+            "    volumes:\n"
+            "      - ./config:/etc/config\n"
+        )
+        (tmp_path / "config").mkdir()
+
+        assert _check_bind_mounts(tmp_path) == []
+
+    def test_reports_missing_bind_mount_source(self, tmp_path):
+        from aptl.core.lab import _check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  web:\n"
+            "    volumes:\n"
+            "      - ./missing_dir:/etc/config\n"
+        )
+
+        errors = _check_bind_mounts(tmp_path)
+        assert len(errors) == 1
+        assert "missing_dir" in errors[0]
+        assert "web" in errors[0]
+
+    def test_ignores_non_relative_volumes(self, tmp_path):
+        from aptl.core.lab import _check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  web:\n"
+            "    volumes:\n"
+            "      - named_volume:/data\n"
+        )
+
+        assert _check_bind_mounts(tmp_path) == []
+
+    def test_handles_invalid_yaml(self, tmp_path):
+        from aptl.core.lab import _check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text("{{invalid yaml")
+
+        errors = _check_bind_mounts(tmp_path)
+        assert len(errors) == 1
+        assert "parse" in errors[0].lower() or "Failed" in errors[0]
 
 
 class TestOrchestrateLabStart:
@@ -329,18 +464,12 @@ class TestOrchestrateLabStart:
             return_value=ServiceResult(ready=True, elapsed_seconds=10.0),
         )
 
-        # Mock SSH connection tests
-        mocks["test_ssh"] = mocker.patch(
-            "aptl.core.lab.test_ssh_connection",
-            return_value=True,
+        # Mock snapshot capture
+        from aptl.core.snapshot import RangeSnapshot
+        mocks["capture_snapshot"] = mocker.patch(
+            "aptl.core.lab.capture_snapshot",
+            return_value=RangeSnapshot(),
         )
-
-        # Mock connection info
-        mocks["gen_info"] = mocker.patch(
-            "aptl.core.lab.generate_connection_info",
-            return_value="Connection info text",
-        )
-        mocks["write_info"] = mocker.patch("aptl.core.lab.write_connection_file")
 
         # Mock MCP build subprocess
         mocks["mcp_subprocess"] = mocker.patch(
@@ -363,8 +492,7 @@ class TestOrchestrateLabStart:
         mocks["sysreqs"].assert_called_once()
         mocks["certs"].assert_called_once()
         mocks["start"].assert_called_once()
-        mocks["gen_info"].assert_called_once()
-        mocks["write_info"].assert_called_once()
+        mocks["capture_snapshot"].assert_called_once()
 
     def test_stops_on_env_loading_failure(self, mocker, tmp_path):
         """Should fail early if .env loading fails."""
@@ -435,15 +563,20 @@ class TestOrchestrateLabStart:
     def test_continues_past_ssh_test_failure(self, mocker, tmp_path):
         """Should continue (with warning) when SSH connection test fails."""
         from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.services import ServiceResult
 
         mocks = self._patch_all_steps(mocker, tmp_path)
-        mocks["test_ssh"].return_value = False
+        # wait_for_service is used for indexer, manager, and now SSH —
+        # return not-ready to simulate SSH timeout
+        mocks["wait_indexer"].return_value = ServiceResult(
+            ready=False, elapsed_seconds=60.0, error="SSH timed out"
+        )
 
         result = orchestrate_lab_start(tmp_path)
 
-        # Overall should still succeed
+        # Overall should still succeed (SSH/service waits are non-critical)
         assert result.success is True
-        mocks["gen_info"].assert_called_once()
+        mocks["capture_snapshot"].assert_called_once()
 
     def test_continues_past_mcp_build_failure(self, mocker, tmp_path):
         """Should continue (with warning) when MCP build fails."""
@@ -507,7 +640,7 @@ class TestOrchestrateLabStart:
         result = orchestrate_lab_start(tmp_path)
 
         assert result.success is False
-        mocks["gen_info"].assert_not_called()
+        mocks["capture_snapshot"].assert_not_called()
 
     def test_continues_when_credential_sync_fails(self, mocker, tmp_path):
         """Should warn and continue when credential sync raises (C6)."""

@@ -38,6 +38,8 @@ class ContainerSnapshot:
     status: str = ""
     health: str = ""
     labels: dict[str, str] = field(default_factory=dict)
+    networks: dict[str, str] = field(default_factory=dict)
+    ports: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -62,6 +64,30 @@ class NetworkSnapshot:
 
 
 @dataclass
+class ServiceEndpoint:
+    """A host-accessible service endpoint."""
+
+    name: str = ""
+    url: str = ""
+    host: str = "localhost"
+    port: int = 0
+    protocol: str = ""
+    credentials: str = ""
+
+
+@dataclass
+class SSHEndpoint:
+    """An SSH-accessible container."""
+
+    name: str = ""
+    host: str = "localhost"
+    port: int = 0
+    user: str = ""
+    key_path: str = "~/.ssh/aptl_lab_key"
+    command: str = ""
+
+
+@dataclass
 class RangeSnapshot:
     """Complete point-in-time snapshot of the lab range."""
 
@@ -71,6 +97,8 @@ class RangeSnapshot:
     wazuh_rules: WazuhRulesSnapshot = field(default_factory=WazuhRulesSnapshot)
     networks: list[NetworkSnapshot] = field(default_factory=list)
     config_hashes: dict[str, str] = field(default_factory=dict)
+    services: list[ServiceEndpoint] = field(default_factory=list)
+    ssh: list[SSHEndpoint] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Convert to a JSON-serializable dictionary."""
@@ -137,8 +165,10 @@ def _get_software_versions() -> SoftwareVersions:
 
 
 def _get_container_snapshots() -> list[ContainerSnapshot]:
-    """Snapshot all aptl- containers."""
-    fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}"
+    """Snapshot all aptl- containers with network IPs and port mappings."""
+    import json as _json
+
+    fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
     out = _run_cmd([
         "docker", "ps", "-a", "--filter", "name=aptl-", "--format", fmt,
     ])
@@ -147,11 +177,16 @@ def _get_container_snapshots() -> list[ContainerSnapshot]:
 
     snapshots = []
     for line in out.splitlines():
-        parts = line.split("\t", 4)
+        parts = line.split("\t", 5)
         if len(parts) < 5:
             continue
 
-        name, image, image_id, status, labels_str = parts
+        name = parts[0]
+        image = parts[1]
+        image_id = parts[2]
+        status = parts[3]
+        labels_str = parts[4]
+        ports_str = parts[5] if len(parts) > 5 else ""
 
         # Parse health from status string
         health = ""
@@ -170,6 +205,27 @@ def _get_container_snapshots() -> list[ContainerSnapshot]:
                     k, v = pair.split("=", 1)
                     labels[k.strip()] = v.strip()
 
+        # Parse port mappings
+        ports = [p.strip() for p in ports_str.split(",") if p.strip()] if ports_str else []
+
+        # Get per-network IPs via docker inspect
+        networks: dict[str, str] = {}
+        inspect_out = _run_cmd([
+            "docker", "inspect", name,
+            "--format", "{{json .NetworkSettings.Networks}}",
+        ])
+        if inspect_out:
+            try:
+                net_data = _json.loads(inspect_out)
+                if isinstance(net_data, dict):
+                    for net_name, net_cfg in net_data.items():
+                        if isinstance(net_cfg, dict):
+                            ip = net_cfg.get("IPAddress", "")
+                            if ip:
+                                networks[net_name] = ip
+            except _json.JSONDecodeError:
+                pass
+
         snapshots.append(ContainerSnapshot(
             name=name,
             image=image,
@@ -177,6 +233,8 @@ def _get_container_snapshots() -> list[ContainerSnapshot]:
             status=status,
             health=health,
             labels=labels,
+            networks=networks,
+            ports=ports,
         ))
 
     return snapshots
@@ -302,6 +360,51 @@ def _hash_config_files(config_dir: Path | None = None) -> dict[str, str]:
     return hashes
 
 
+def _get_service_endpoints(containers: list[ContainerSnapshot]) -> list[ServiceEndpoint]:
+    """Derive host-accessible service endpoints from container port mappings."""
+    endpoints = []
+    # Map container names to known services
+    service_map = {
+        "aptl-wazuh-dashboard": ("Wazuh Dashboard", "https", 443, "admin/SecretPassword"),
+        "aptl-wazuh-indexer": ("Wazuh Indexer", "https", 9200, "admin/SecretPassword"),
+        "aptl-wazuh-manager": ("Wazuh API", "https", 55000, "wazuh-wui/WazuhPass123!"),
+    }
+    running_names = {c.name for c in containers if "Up" in c.status}
+    for cname, (label, proto, port, creds) in service_map.items():
+        if cname in running_names:
+            endpoints.append(ServiceEndpoint(
+                name=label,
+                url=f"{proto}://localhost:{port}",
+                host="localhost",
+                port=port,
+                protocol=proto,
+                credentials=creds,
+            ))
+    return endpoints
+
+
+def _get_ssh_endpoints(containers: list[ContainerSnapshot]) -> list[SSHEndpoint]:
+    """Derive SSH endpoints from running containers."""
+    ssh_map = {
+        "aptl-victim": ("Victim", 2022, "labadmin"),
+        "aptl-kali": ("Kali", 2023, "kali"),
+        "aptl-reverse": ("Reverse Engineering", 2027, "labadmin"),
+    }
+    endpoints = []
+    running_names = {c.name for c in containers if "Up" in c.status}
+    for cname, (label, port, user) in ssh_map.items():
+        if cname in running_names:
+            cmd = f"ssh -i ~/.ssh/aptl_lab_key {user}@localhost -p {port}"
+            endpoints.append(SSHEndpoint(
+                name=label,
+                host="localhost",
+                port=port,
+                user=user,
+                command=cmd,
+            ))
+    return endpoints
+
+
 def capture_snapshot(config_dir: Path | None = None) -> RangeSnapshot:
     """Capture a complete snapshot of the current lab state.
 
@@ -316,13 +419,16 @@ def capture_snapshot(config_dir: Path | None = None) -> RangeSnapshot:
 
     log.info("Capturing range snapshot")
 
+    containers = _get_container_snapshots()
     snapshot = RangeSnapshot(
         timestamp=datetime.now(timezone.utc).isoformat(),
         software=_get_software_versions(),
-        containers=_get_container_snapshots(),
+        containers=containers,
         wazuh_rules=_get_wazuh_rules_snapshot(),
         networks=_get_network_snapshots(),
         config_hashes=_hash_config_files(config_dir),
+        services=_get_service_endpoints(containers),
+        ssh=_get_ssh_endpoints(containers),
     )
 
     log.info(

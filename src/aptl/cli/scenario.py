@@ -24,6 +24,7 @@ from aptl.core.scenarios import (
     ScenarioValidationError,
     find_scenarios,
     load_scenario,
+    validate_scenario_containers,
 )
 from aptl.core.session import ActiveSession, ScenarioSession
 from aptl.utils.logging import get_logger
@@ -363,6 +364,18 @@ def start(
     log.info("Starting scenario: %s", name)
     resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
     scenario = _load_scenario_or_exit(resolved_dir, name)
+
+    # Validate required containers are enabled
+    config_path = find_config(project_dir)
+    config = load_config(config_path) if config_path else AptlConfig()
+    missing = validate_scenario_containers(scenario, config)
+    if missing:
+        typer.echo(
+            f"Error: Scenario '{scenario.metadata.id}' requires disabled profiles: "
+            f"{', '.join(missing)}\n"
+            f"Enable them in aptl.json or start the lab with the required profiles."
+        )
+        raise typer.Exit(code=1)
 
     state = _state_dir(project_dir)
     session_mgr = ScenarioSession(state)

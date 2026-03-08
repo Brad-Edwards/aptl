@@ -258,8 +258,6 @@ class TestCheckManagerApiReady:
 
         assert check_manager_api_ready(
             container_name="aptl-wazuh-manager",
-            username="admin",
-            password="secret",
         ) is True
 
     def test_returns_true_on_200(self, mocker):
@@ -273,8 +271,6 @@ class TestCheckManagerApiReady:
 
         assert check_manager_api_ready(
             container_name="aptl-wazuh-manager",
-            username="admin",
-            password="secret",
         ) is True
 
     def test_returns_false_on_failure(self, mocker):
@@ -288,8 +284,6 @@ class TestCheckManagerApiReady:
 
         assert check_manager_api_ready(
             container_name="aptl-wazuh-manager",
-            username="admin",
-            password="secret",
         ) is False
 
     def test_returns_false_on_no_http_response(self, mocker):
@@ -303,8 +297,6 @@ class TestCheckManagerApiReady:
 
         assert check_manager_api_ready(
             container_name="aptl-wazuh-manager",
-            username="admin",
-            password="secret",
         ) is False
 
     def test_uses_docker_exec(self, mocker):
@@ -318,8 +310,6 @@ class TestCheckManagerApiReady:
 
         check_manager_api_ready(
             container_name="aptl-wazuh-manager",
-            username="admin",
-            password="secret",
         )
 
         cmd = mock_run.call_args[0][0]

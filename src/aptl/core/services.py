@@ -100,34 +100,35 @@ def check_indexer_ready(url: str, username: str, password: str) -> bool:
         return False
 
 
-def check_manager_api_ready(
-    container_name: str, username: str, password: str
-) -> bool:
+def check_manager_api_ready(container_name: str) -> bool:
     """Check if the Wazuh Manager API is responding inside the container.
 
     Uses ``docker exec`` to run curl inside the manager container.
+    The Wazuh API uses token-based auth, so the root endpoint returns
+    401 with basic auth — any HTTP response (including 401) means
+    the API is up and listening.
 
     Args:
         container_name: Docker container name for the manager.
-        username: API authentication username.
-        password: API authentication password.
 
     Returns:
-        True if the API responds successfully, False otherwise.
+        True if the API responds with any HTTP status, False otherwise.
     """
     try:
         result = subprocess.run(
             [
                 "docker", "exec", container_name,
-                "curl", "-k", "-s", "-f",
+                "curl", "-k", "-s", "-o", "/dev/null",
+                "-w", "%{http_code}",
                 "https://localhost:55000",
-                "-u", f"{username}:{password}",
             ],
             capture_output=True,
             text=True,
             timeout=15,
         )
-        return result.returncode == 0
+        # Any HTTP response means the API is listening
+        status = result.stdout.strip()
+        return result.returncode == 0 and status.isdigit() and int(status) > 0
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
         log.debug("Manager API check failed: %s", exc)
         return False

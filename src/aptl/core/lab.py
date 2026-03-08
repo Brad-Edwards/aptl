@@ -16,7 +16,6 @@ import yaml
 
 from aptl.core.certs import ensure_ssl_certs
 from aptl.core.config import AptlConfig, find_config, load_config
-from aptl.core.connections import generate_connection_info, write_connection_file
 from aptl.core.credentials import sync_dashboard_config, sync_manager_config
 from aptl.core.env import EnvVars, env_vars_from_dict, load_dotenv
 from aptl.core.services import (
@@ -25,6 +24,7 @@ from aptl.core.services import (
     test_ssh_connection,
     wait_for_service,
 )
+from aptl.core.snapshot import capture_snapshot
 from aptl.core.ssh import ensure_ssh_keys
 from aptl.core.sysreqs import check_max_map_count
 from aptl.utils.logging import get_logger
@@ -434,8 +434,6 @@ def orchestrate_lab_start(
             check_fn=partial(
                 check_manager_api_ready,
                 container_name="aptl-wazuh-manager",
-                username=env.api_username,
-                password=env.api_password,
             ),
             timeout=120,
             interval=5,
@@ -456,19 +454,33 @@ def orchestrate_lab_start(
         ssh_tests.append(("reverse", 2027, "labadmin"))
 
     for name, port, user in ssh_tests:
-        ok = test_ssh_connection(
-            host="localhost", port=port, user=user, key_path=key_path
+        ssh_wait = wait_for_service(
+            check_fn=partial(
+                test_ssh_connection,
+                host="localhost",
+                port=port,
+                user=user,
+                key_path=key_path,
+            ),
+            timeout=60,
+            interval=5,
+            service_name=f"SSH ({name})",
         )
-        if ok:
+        if ssh_wait.ready:
             log.info("SSH to %s is ready", name)
         else:
-            log.warning("SSH to %s not ready yet (may need more time)", name)
+            log.warning("SSH to %s not ready after %ds", name, int(ssh_wait.elapsed_seconds))
 
-    # Step 11: Generate connection info
-    log.info("Step 11: Generating connection info...")
-    info = generate_connection_info(config, env)
-    write_connection_file(info, project_dir / "lab_connections.txt")
-    log.info("\n%s", info)
+    # Step 11: Capture range snapshot
+    log.info("Step 11: Capturing range snapshot...")
+    snapshot = capture_snapshot(config_dir=project_dir)
+    log.info(
+        "Range: %d containers, %d networks, %d services, %d SSH endpoints",
+        len(snapshot.containers),
+        len(snapshot.networks),
+        len(snapshot.services),
+        len(snapshot.ssh),
+    )
 
     # Step 12: Build MCP servers (non-critical)
     log.info("Step 12: Building MCP servers...")

@@ -74,6 +74,33 @@ From the VM (run PowerShell as Administrator):
 .\setup-sysmon.ps1
 ```
 
+### 3b. Install Reverse Engineering Tools (Optional)
+
+For malware analysis and reverse engineering workloads, install the full RE tool suite:
+
+```powershell
+# Install everything in dependency order (~30-60 min, ~20-25 GB disk)
+.\setup-re-tools.ps1
+
+# Or install individual tools as needed:
+.\setup-vs-buildtools.ps1    # VS 2022 Build Tools (C++ workload, Windows 11 SDK, Spectre libs)
+.\setup-wdk.ps1              # Windows Driver Kit (requires VS Build Tools)
+.\setup-ghidra.ps1           # Ghidra decompiler + AdoptOpenJDK 17
+.\setup-x64dbg.ps1           # x64dbg/x32dbg debugger
+.\setup-sysinternals.ps1     # Full Sysinternals Suite (Process Monitor, Explorer, Autoruns, etc.)
+.\setup-python-re.ps1        # Python 3.12 + pefile, yara-python, capstone, unicorn, keystone, floss, capa
+```
+
+**Dependency note:** `setup-wdk.ps1` requires VS Build Tools — run `setup-vs-buildtools.ps1` first.
+All other tools are independent and can be installed in any order.
+
+The orchestrator supports skip flags to exclude components:
+```powershell
+.\setup-re-tools.ps1 -SkipWdk -SkipBuildTools
+```
+
+A reboot may be required after VS Build Tools or WDK installation.
+
 ### 4. Verify Integration
 
 From Kali container:
@@ -83,6 +110,29 @@ ssh labadmin@172.20.3.10
 
 # Test RDP
 xfreerdp /v:172.20.3.10 /u:jessica.williams /p:password123 /d:TECHVAULT
+```
+
+RE tools verification (if installed):
+```powershell
+# VS Build Tools
+Test-Path "C:\BuildTools\VC\Tools\MSVC\"
+
+# WDK
+Test-Path "C:\Program Files (x86)\Windows Kits\10\Include\"
+
+# Ghidra
+Test-Path "C:\Tools\Ghidra\ghidraRun.bat"
+java --version
+
+# x64dbg
+Test-Path "C:\Tools\x64dbg\release\x64\x64dbg.exe"
+
+# Sysinternals
+procmon.exe /AcceptEula /Terminate  # quick smoke test
+
+# Python RE
+python --version
+python -c "import pefile, yara, capstone, unicorn, keystone; print('RE libs OK')"
 ```
 
 From Wazuh Dashboard:

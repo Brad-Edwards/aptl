@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.0] - 2026-03-08
+
+### Added
+
+- Windows RE workstation setup scripts for automated tool installation (#116):
+  - `setup-vs-buildtools.ps1` — Visual Studio 2022 Build Tools with C++ workload, Windows 11 SDK, Spectre-mitigated libraries
+  - `setup-wdk.ps1` — Windows Driver Kit for kernel driver analysis (requires VS Build Tools)
+  - `setup-ghidra.ps1` — Ghidra decompiler/disassembler with AdoptOpenJDK 17
+  - `setup-x64dbg.ps1` — x64dbg/x32dbg debugger (portable)
+  - `setup-sysinternals.ps1` — Full Sysinternals Suite with auto-EULA acceptance
+  - `setup-python-re.ps1` — Python 3.12 with RE libraries (pefile, yara-python, capstone, unicorn, keystone-engine, floss, capa)
+  - `setup-re-tools.ps1` — Orchestrator that runs all tools in dependency order with summary report
+
 ## [4.5.0] - 2026-03-08
 
 ### Added

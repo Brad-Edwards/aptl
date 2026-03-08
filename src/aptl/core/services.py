@@ -100,9 +100,7 @@ def check_indexer_ready(url: str, username: str, password: str) -> bool:
         return False
 
 
-def check_manager_api_ready(
-    container_name: str, username: str, password: str
-) -> bool:
+def check_manager_api_ready(container_name: str) -> bool:
     """Check if the Wazuh Manager API is responding inside the container.
 
     Uses ``docker exec`` to run curl inside the manager container.
@@ -112,8 +110,6 @@ def check_manager_api_ready(
 
     Args:
         container_name: Docker container name for the manager.
-        username: API authentication username.
-        password: API authentication password.
 
     Returns:
         True if the API responds with any HTTP status, False otherwise.

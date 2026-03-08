@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `check_manager_api_ready` always failed — `curl -f` exits 22 on 401, but Wazuh API uses token auth so root endpoint always returns 401 with basic auth. Now checks for any HTTP response instead
 - SSH connectivity tests ran before containers were healthy, always reported failure
 - `test_cli.py::test_stop_with_volumes_flag` now passes `--yes` to bypass data loss confirmation prompt
+- SonarCloud reported 0% coverage — CI workflow never ran pytest before scanning. Added Python setup, dependency install, and `pytest --cov` step to `sonarcloud.yml`
+- Added `[tool.coverage.xml]` output config to `pyproject.toml` so `coverage.xml` is generated for SonarQube
 
 ## [4.4.0] - 2026-03-07
 

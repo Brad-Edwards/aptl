@@ -13,6 +13,7 @@ from rich.console import Console
 from rich.table import Table
 
 from aptl.core.config import AptlConfig, find_config, load_config
+from aptl.core.env import load_dotenv
 from aptl.core.events import EventLog, EventType, make_event
 from aptl.core.flags import collect_flags
 from aptl.core.run_assembler import assemble_run
@@ -509,6 +510,15 @@ def stop(
 
     # Read events
     events = event_log.read_all()
+
+    # Load .env into os.environ so collectors in assemble_run() can
+    # read credentials via os.getenv() (issue #184).
+    env_path = project_dir / ".env"
+    try:
+        raw_env = load_dotenv(env_path)
+        os.environ.update(raw_env)
+    except FileNotFoundError:
+        log.warning(".env not found at %s; collectors will use defaults", env_path)
 
     # Assemble experiment run directory (if run_id was set)
     run_dir = None

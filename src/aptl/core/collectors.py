@@ -36,7 +36,7 @@ def _curl_json(
     auth_header: str | None = None,
     body: dict | None = None,
     insecure: bool = False,
-    timeout: int = 20,
+    timeout: int = 120,
 ) -> dict | list | None:
     """Make an HTTP request via curl and return parsed JSON, or None."""
     cmd = ["curl", "-sf", url]

@@ -161,24 +161,98 @@ class TestSyncManagerConfig:
         content = config_file.read_text()
         assert "<other>value</other>" in content
 
-    def test_replaces_multiple_key_elements(self, tmp_path):
-        """If there are multiple <key> elements, all should be replaced."""
+    def test_replaces_cluster_key_only(self, tmp_path):
+        """Only <key> elements inside <cluster> blocks should be replaced."""
         from aptl.core.credentials import sync_manager_config
 
         config_file = tmp_path / "wazuh_manager.conf"
         config_file.write_text(
             '<cluster>\n'
             '  <key>first_key</key>\n'
-            '  <key>second_key</key>\n'
             '</cluster>\n'
         )
 
         sync_manager_config(config_file, "unified_key")
 
         content = config_file.read_text()
-        assert content.count('<key>unified_key</key>') == 2
+        assert '<key>unified_key</key>' in content
         assert 'first_key' not in content
-        assert 'second_key' not in content
+
+    def test_preserves_ssl_key_element(self, tmp_path):
+        """<key> inside <indexer><ssl> must NOT be touched (#183)."""
+        from aptl.core.credentials import sync_manager_config
+
+        config_file = tmp_path / "wazuh_manager.conf"
+        config_file.write_text(
+            '<ossec_config>\n'
+            '  <indexer>\n'
+            '    <ssl>\n'
+            '      <key>/etc/filebeat/certs/filebeat-key.pem</key>\n'
+            '    </ssl>\n'
+            '  </indexer>\n'
+            '  <cluster>\n'
+            '    <key>old_cluster_key</key>\n'
+            '  </cluster>\n'
+            '</ossec_config>\n'
+        )
+
+        sync_manager_config(config_file, "new_cluster_key")
+
+        content = config_file.read_text()
+        # SSL key path must be untouched
+        assert '<key>/etc/filebeat/certs/filebeat-key.pem</key>' in content
+        # Cluster key must be replaced
+        assert '<key>new_cluster_key</key>' in content
+        assert 'old_cluster_key' not in content
+
+    def test_real_config_structure(self, tmp_path):
+        """Mirror actual wazuh_manager.conf structure with both key elements."""
+        from aptl.core.credentials import sync_manager_config
+
+        config_file = tmp_path / "wazuh_manager.conf"
+        config_file.write_text(
+            '<ossec_config>\n'
+            '  <indexer>\n'
+            '    <enabled>yes</enabled>\n'
+            '    <hosts>\n'
+            '      <host>https://wazuh.indexer:9200</host>\n'
+            '    </hosts>\n'
+            '    <ssl>\n'
+            '      <certificate_authorities>\n'
+            '        <ca>/etc/filebeat/certs/root-ca.pem</ca>\n'
+            '      </certificate_authorities>\n'
+            '      <certificate>/etc/filebeat/certs/filebeat.pem</certificate>\n'
+            '      <key>/etc/filebeat/certs/filebeat-key.pem</key>\n'
+            '    </ssl>\n'
+            '  </indexer>\n'
+            '\n'
+            '  <cluster>\n'
+            '    <name>wazuh</name>\n'
+            '    <node_name>master</node_name>\n'
+            '    <node_type>master</node_type>\n'
+            '    <key>placeholder_cluster_key</key>\n'
+            '    <port>1516</port>\n'
+            '    <bind_addr>0.0.0.0</bind_addr>\n'
+            '    <nodes>\n'
+            '      <node>NODE_IP</node>\n'
+            '    </nodes>\n'
+            '    <hidden>no</hidden>\n'
+            '    <disabled>yes</disabled>\n'
+            '  </cluster>\n'
+            '</ossec_config>\n'
+        )
+
+        sync_manager_config(config_file, "real_secret_key_123")
+
+        content = config_file.read_text()
+        # SSL key path preserved
+        assert '<key>/etc/filebeat/certs/filebeat-key.pem</key>' in content
+        # Cluster key replaced
+        assert '<key>real_secret_key_123</key>' in content
+        assert 'placeholder_cluster_key' not in content
+        # Other cluster elements preserved
+        assert '<name>wazuh</name>' in content
+        assert '<port>1516</port>' in content
 
     def test_empty_cluster_key_allowed(self, tmp_path):
         """Should allow setting an empty cluster key."""

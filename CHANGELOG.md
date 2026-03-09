@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.6] - 2026-03-08
+
+### Fixed
+
+- `aptl scenario stop` did not load project `.env` into `os.environ` before calling `assemble_run()` — collectors for Wazuh Indexer, TheHive, MISP, and Shuffle got empty-string fallbacks for API keys and silently skipped data collection, losing SOC telemetry (#184)
+- Collector HTTP timeout was 20s — MISP and TheHive regularly exceed this on cold queries, causing silent data loss; raised to 120s to match test helper timeouts (#184)
+
+## [4.6.5] - 2026-03-08
+
+### Fixed
+
+- `sync_manager_config()` cluster key regex vulnerable to polynomial backtracking (ReDoS) — replaced `re.DOTALL` regex with linear-time string search for `<cluster>` blocks (#183)
+
+## [4.6.4] - 2026-03-08
+
+### Fixed
+
+- `sync_manager_config()` corrupted TLS config by replacing all `<key>` elements — regex now scoped to only match `<key>` inside `<cluster>` blocks, leaving `<indexer><ssl><key>` untouched (#183)
+
 ## [4.6.3] - 2026-03-08
 
 ### Fixed

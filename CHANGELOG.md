@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `aptl scenario stop` did not load project `.env` into `os.environ` before calling `assemble_run()` — collectors for Wazuh Indexer, TheHive, MISP, and Shuffle got empty-string fallbacks for API keys and silently skipped data collection, losing SOC telemetry (#184)
+- Collector HTTP timeout was 20s — MISP and TheHive regularly exceed this on cold queries, causing silent data loss; raised to 120s to match test helper timeouts (#184)
 
 ## [4.6.5] - 2026-03-08
 

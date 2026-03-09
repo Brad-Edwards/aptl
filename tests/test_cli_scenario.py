@@ -466,6 +466,57 @@ class TestStopCommand:
         ])
         assert "No active scenario" in result.output
 
+    def test_stop_loads_dotenv_before_assembly(self, tmp_path):
+        """Verify .env is loaded into os.environ before assemble_run()."""
+        project_dir = _write_scenario(tmp_path)
+        _start_session(project_dir)
+
+        # Write a .env file with known values
+        env_file = project_dir / ".env"
+        env_file.write_text(
+            "INDEXER_USERNAME=admin\n"
+            "INDEXER_PASSWORD=secret123\n"
+            "THEHIVE_API_KEY=hive-key-abc\n"
+        )
+
+        captured_env = {}
+
+        original_assemble = None
+
+        def _spy_assemble(**kwargs):
+            """Capture os.environ at the moment assemble_run is called."""
+            import os as _os
+            captured_env["INDEXER_USERNAME"] = _os.environ.get("INDEXER_USERNAME")
+            captured_env["INDEXER_PASSWORD"] = _os.environ.get("INDEXER_PASSWORD")
+            captured_env["THEHIVE_API_KEY"] = _os.environ.get("THEHIVE_API_KEY")
+            return tmp_path / "runs" / "fake-run"
+
+        with patch("aptl.cli.scenario.assemble_run", side_effect=_spy_assemble):
+            result = runner.invoke(app, [
+                "stop",
+                "--project-dir", str(project_dir),
+            ])
+
+        assert result.exit_code == 0
+        assert captured_env["INDEXER_USERNAME"] == "admin"
+        assert captured_env["INDEXER_PASSWORD"] == "secret123"
+        assert captured_env["THEHIVE_API_KEY"] == "hive-key-abc"
+
+    def test_stop_warns_on_missing_dotenv(self, tmp_path, caplog):
+        """Verify graceful handling when .env doesn't exist."""
+        project_dir = _write_scenario(tmp_path)
+        _start_session(project_dir)
+
+        # Do NOT create a .env file
+        assert not (project_dir / ".env").exists()
+
+        result = runner.invoke(app, [
+            "stop",
+            "--project-dir", str(project_dir),
+        ])
+        assert result.exit_code == 0
+        assert "Scenario stopped" in result.output
+
 
 # ---------------------------------------------------------------------------
 # Attack step display tests

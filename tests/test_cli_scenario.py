@@ -5,6 +5,8 @@ core modules to avoid requiring a running lab environment.
 """
 
 import json
+import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -14,6 +16,7 @@ import yaml
 from typer.testing import CliRunner
 
 from aptl.cli.scenario import app
+from tests.helpers import LIVE_LAB
 
 runner = CliRunner()
 
@@ -465,6 +468,144 @@ class TestStopCommand:
             "--project-dir", str(project_dir),
         ])
         assert "No active scenario" in result.output
+
+    def test_stop_loads_dotenv_before_assembly(self, tmp_path):
+        """Verify .env is loaded into os.environ before assemble_run()."""
+        project_dir = _write_scenario(tmp_path)
+        _start_session(project_dir)
+
+        # Write a .env file with known values
+        env_file = project_dir / ".env"
+        env_file.write_text(
+            "INDEXER_USERNAME=admin\n"
+            "INDEXER_PASSWORD=secret123\n"
+            "THEHIVE_API_KEY=hive-key-abc\n"
+        )
+
+        captured_env = {}
+
+        original_assemble = None
+
+        def _spy_assemble(**kwargs):
+            """Capture os.environ at the moment assemble_run is called."""
+            import os as _os
+            captured_env["INDEXER_USERNAME"] = _os.environ.get("INDEXER_USERNAME")
+            captured_env["INDEXER_PASSWORD"] = _os.environ.get("INDEXER_PASSWORD")
+            captured_env["THEHIVE_API_KEY"] = _os.environ.get("THEHIVE_API_KEY")
+            return tmp_path / "runs" / "fake-run"
+
+        with patch("aptl.cli.scenario.assemble_run", side_effect=_spy_assemble):
+            result = runner.invoke(app, [
+                "stop",
+                "--project-dir", str(project_dir),
+            ])
+
+        assert result.exit_code == 0
+        assert captured_env["INDEXER_USERNAME"] == "admin"
+        assert captured_env["INDEXER_PASSWORD"] == "secret123"
+        assert captured_env["THEHIVE_API_KEY"] == "hive-key-abc"
+
+    def test_stop_warns_on_missing_dotenv(self, tmp_path, caplog):
+        """Verify graceful handling when .env doesn't exist."""
+        project_dir = _write_scenario(tmp_path)
+        _start_session(project_dir)
+
+        # Do NOT create a .env file
+        assert not (project_dir / ".env").exists()
+
+        result = runner.invoke(app, [
+            "stop",
+            "--project-dir", str(project_dir),
+        ])
+        assert result.exit_code == 0
+        assert "Scenario stopped" in result.output
+
+    @LIVE_LAB
+    def test_stop_collects_soc_telemetry(self, tmp_path, caplog):
+        """Smoke: scenario stop loads .env and collectors query services.
+
+        Requires a running lab (APTL_SMOKE=1).  Copies the project .env
+        into a temp project dir, runs start/stop, and verifies that:
+        1. The run directory is created with a manifest.
+        2. No collector skipped due to empty API keys (the #184 bug).
+        3. At least one key-gated collector (TheHive, MISP, Shuffle)
+           successfully queried its service — proving the credentials
+           from .env actually worked, not just that they were present.
+        """
+        import logging
+
+        project_dir = _write_scenario(tmp_path)
+
+        # Copy real .env so collectors get actual API keys
+        real_env = Path(__file__).resolve().parent.parent / ".env"
+        assert real_env.exists(), f"Project .env not found at {real_env}"
+        shutil.copy(real_env, project_dir / ".env")
+
+        # Start scenario
+        _start_session(project_dir)
+
+        # Read session to get run_id
+        session_data = json.loads(
+            (project_dir / ".aptl" / "session.json").read_text()
+        )
+        run_id = session_data["run_id"]
+        assert run_id, "Session should have a run_id"
+
+        # Stop scenario — this triggers assemble_run with .env loaded
+        with caplog.at_level(logging.DEBUG, logger="aptl.collectors"):
+            result = runner.invoke(app, [
+                "stop",
+                "--project-dir", str(project_dir),
+            ])
+        assert result.exit_code == 0
+        assert "Scenario stopped" in result.output
+
+        # Verify run directory was created with manifest
+        run_dir = project_dir / "runs" / run_id
+        assert run_dir.is_dir(), f"Run directory not created: {run_dir}"
+        assert (run_dir / "manifest.json").exists(), "Missing manifest.json"
+
+        # No collector must have skipped due to missing API keys.
+        # These skip messages mean os.getenv() returned "" — the #184 bug.
+        skip_messages = [
+            "No TheHive API key, skipping",
+            "No MISP API key, skipping",
+            "No Shuffle API key, skipping",
+        ]
+        for skip_msg in skip_messages:
+            assert skip_msg not in caplog.text, (
+                f"Collector skipped with empty API key: '{skip_msg}' — "
+                ".env was not loaded into os.environ before assemble_run()"
+            )
+
+        # At least one key-gated collector must have successfully queried
+        # its service.  A success log like "Collected 0 MISP events" means
+        # the HTTP request worked with the .env credential (even if 0
+        # results due to the short scenario window).  "Failed to query"
+        # means the key was present but the service didn't respond —
+        # that proves the key was loaded but not that it's valid.
+        #
+        # Collector log patterns (from collectors.py):
+        #   success: "Collected %d TheHive cases"
+        #   failure: "Failed to query TheHive cases"
+        #   skipped: "No TheHive API key, skipping case collection"
+        gated_collectors = {
+            "TheHive cases": "Failed to query TheHive cases",
+            "MISP events": "Failed to query MISP events",
+            "Shuffle executions": "Failed to query Shuffle executions",
+        }
+        succeeded = [
+            name for name, fail_msg in gated_collectors.items()
+            if f"Collected " in caplog.text
+            and name in caplog.text
+            and fail_msg not in caplog.text
+        ]
+        assert succeeded, (
+            "No key-gated collector successfully queried its service. "
+            "All collectors either skipped or failed HTTP requests. "
+            "Ensure at least one SOC service (TheHive, MISP, Shuffle) "
+            f"is healthy.\nCollector logs:\n{caplog.text}"
+        )
 
 
 # ---------------------------------------------------------------------------

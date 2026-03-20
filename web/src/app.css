@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+
+@theme {
+	/* APTL Purple Team palette */
+	--color-aptl-bg: #1a1d23;
+	--color-aptl-surface: #23272f;
+	--color-aptl-surface-hover: #2a2f38;
+	--color-aptl-border: #333842;
+	--color-aptl-text: #e2e8f0;
+	--color-aptl-text-muted: #94a3b8;
+
+	/* Accent colors */
+	--color-aptl-indigo: #6366f1;
+	--color-aptl-indigo-hover: #818cf8;
+	--color-aptl-violet: #a855f7;
+	--color-aptl-teal: #14b8a6;
+	--color-aptl-red: #ef4444;
+	--color-aptl-green: #22c55e;
+	--color-aptl-amber: #f59e0b;
+
+	/* Typography */
+	--font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+body {
+	background-color: var(--color-aptl-bg);
+	color: var(--color-aptl-text);
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}

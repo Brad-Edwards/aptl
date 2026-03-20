@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.9.0] - 2026-03-20
+
+### Added
+
+- Notebook-style web UI Phase 1 MVP (SYS-010, ADR-011) (#219):
+  - FastAPI backend (`src/aptl/api/`) wrapping existing `aptl.core` modules — no domain logic duplication
+  - REST endpoints: `GET /api/lab/status`, `POST /api/lab/start`, `POST /api/lab/stop`, `GET /api/scenarios`, `GET /api/scenarios/{id}`, `GET /api/config`, `GET /api/health`
+  - SSE endpoint `GET /api/lab/events` for real-time container status updates
+  - SvelteKit frontend (`web/`) with Tailwind CSS v4, dark theme (indigo/violet/teal palette)
+  - Lab Home page with container status grid, start/stop controls, scenario listing with difficulty/mode badges
+  - `aptl web serve` CLI command to start the API server on port 8400
+  - `web` optional dependency group: FastAPI, uvicorn, sse-starlette, httpx
+  - Docker Compose `web` profile with `aptl-web-api` (172.20.0.40:8400) and `aptl-web-ui` (172.20.0.41:3000) services
+  - Backend tests (`test_api_lab.py`, `test_api_scenarios.py`, `test_api_config.py`) and frontend API tests
+  - ADR-011 status: proposed -> accepted
+
 ## [4.8.0] - 2026-03-20
 
 ### Added

@@ -58,6 +58,7 @@
 					<button
 						onclick={handleStop}
 						disabled={actionPending}
+						aria-label="Stop lab environment"
 						class="rounded-lg bg-aptl-red/10 px-4 py-2 text-sm font-medium text-aptl-red transition-colors hover:bg-aptl-red/20 disabled:opacity-50"
 					>
 						{actionPending ? 'Stopping...' : 'Stop Lab'}
@@ -66,6 +67,7 @@
 					<button
 						onclick={handleStart}
 						disabled={actionPending}
+						aria-label="Start lab environment"
 						class="rounded-lg bg-aptl-indigo px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-aptl-indigo-hover disabled:opacity-50"
 					>
 						{actionPending ? 'Starting...' : 'Start Lab'}
@@ -82,7 +84,7 @@
 			</div>
 		{/if}
 
-		{#if $labStatus.error && !actionError}
+		{#if $labStatus.error != null && !actionError}
 			<div
 				class="mb-4 rounded-lg border border-aptl-amber/20 bg-aptl-amber/5 p-3 text-sm text-aptl-amber"
 			>
@@ -91,10 +93,11 @@
 		{/if}
 
 		{#if $labLoading}
-			<div class="flex items-center justify-center py-12">
+			<div class="flex items-center justify-center py-12" role="status" aria-label="Loading lab status">
 				<div
 					class="h-8 w-8 animate-spin rounded-full border-2 border-aptl-indigo border-t-transparent"
 				></div>
+				<span class="sr-only">Loading lab status</span>
 			</div>
 		{:else}
 			<ContainerGrid containers={$labStatus.containers} />

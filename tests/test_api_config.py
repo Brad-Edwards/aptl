@@ -11,17 +11,20 @@ pytest.importorskip("fastapi", reason="Web dependencies not installed")
 
 
 @pytest.fixture
-def api_client():
-    """Create a FastAPI test client."""
+def api_client(tmp_path):
+    """Create a FastAPI test client with DI override for project_dir."""
+    from aptl.api.deps import get_project_dir
     from aptl.api.main import app
     from starlette.testclient import TestClient
 
-    return TestClient(app)
+    app.dependency_overrides[get_project_dir] = lambda: tmp_path
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
 
 
 class TestConfigEndpoint:
-    @patch("aptl.api.routers.config.get_project_dir")
-    def test_returns_config(self, mock_dir, api_client, tmp_path):
+    def test_returns_config(self, api_client, tmp_path):
         config = {
             "lab": {"name": "test-lab", "network_subnet": "172.20.0.0/16"},
             "containers": {
@@ -32,7 +35,6 @@ class TestConfigEndpoint:
             },
         }
         (tmp_path / "aptl.json").write_text(json.dumps(config))
-        mock_dir.return_value = tmp_path
 
         response = api_client.get("/api/config")
 
@@ -43,16 +45,25 @@ class TestConfigEndpoint:
         assert data["containers"]["wazuh"] is True
         assert data["containers"]["victim"] is True
 
-    @patch("aptl.api.routers.config.get_project_dir")
-    def test_returns_defaults_when_no_config(self, mock_dir, api_client, tmp_path):
-        mock_dir.return_value = tmp_path
-
+    def test_returns_defaults_when_no_config(self, api_client):
         response = api_client.get("/api/config")
 
         assert response.status_code == 200
         data = response.json()
         assert data["lab_name"] == "aptl"
         assert data["run_storage_backend"] == "local"
+
+    def test_dynamic_container_list(self, api_client):
+        """Config endpoint returns all ContainerSettings fields dynamically."""
+        from aptl.core.config import ContainerSettings
+
+        response = api_client.get("/api/config")
+
+        assert response.status_code == 200
+        data = response.json()
+        # Every field in ContainerSettings should appear in the response
+        for field_name in ContainerSettings.model_fields:
+            assert field_name in data["containers"], f"Missing container: {field_name}"
 
 
 class TestGetProjectDir:
@@ -73,3 +84,12 @@ class TestGetProjectDir:
             os.environ.pop("APTL_PROJECT_DIR", None)
             result = get_project_dir()
             assert result == Path.cwd()
+
+    def test_raises_503_for_nonexistent_dir(self):
+        from aptl.api.deps import get_project_dir
+        from fastapi import HTTPException
+
+        with patch.dict(os.environ, {"APTL_PROJECT_DIR": "/no/such/path"}):
+            with pytest.raises(HTTPException) as exc_info:
+                get_project_dir()
+            assert exc_info.value.status_code == 503

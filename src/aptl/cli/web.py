@@ -12,6 +12,7 @@ def serve(
     host: str = typer.Option("127.0.0.1", help="Bind address."),
     port: int = typer.Option(8400, help="Bind port."),
     reload: bool = typer.Option(False, help="Enable auto-reload for development."),
+    workers: int = typer.Option(1, help="Number of uvicorn workers."),
     project_dir: Optional[str] = typer.Option(
         None,
         help="Project directory (default: current directory).",
@@ -39,4 +40,8 @@ def serve(
         host=host,
         port=port,
         reload=reload,
+        workers=workers,
+        log_level="info",
+        timeout_keep_alive=65,
+        access_log=True,
     )

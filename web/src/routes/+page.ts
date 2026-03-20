@@ -1,4 +1,3 @@
-import { getScenarios } from '$lib/api';
 import type { ScenarioSummary } from '$lib/types';
 
 export async function load({ fetch }): Promise<{ scenarios: ScenarioSummary[] }> {

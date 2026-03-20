@@ -1,5 +1,7 @@
 """API response models for the APTL web interface."""
 
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -65,7 +67,7 @@ class LabStatusResponse(BaseModel):
 
     running: bool
     containers: list[ContainerInfo] = []
-    error: str = ""
+    error: Optional[str] = None
 
 
 class LabActionResponse(BaseModel):
@@ -73,7 +75,7 @@ class LabActionResponse(BaseModel):
 
     success: bool
     message: str = ""
-    error: str = ""
+    error: Optional[str] = None
 
 
 class ScenarioSummary(BaseModel):

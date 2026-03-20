@@ -12,7 +12,7 @@ describe('API client', () => {
 	});
 
 	it('getLabStatus fetches /api/lab/status', async () => {
-		const data = { running: true, containers: [], error: '' };
+		const data = { running: true, containers: [], error: null };
 		mockFetch.mockResolvedValueOnce({
 			ok: true,
 			json: () => Promise.resolve(data)
@@ -24,7 +24,7 @@ describe('API client', () => {
 	});
 
 	it('startLab posts to /api/lab/start', async () => {
-		const data = { success: true, message: 'started', error: '' };
+		const data = { success: true, message: 'started', error: null };
 		mockFetch.mockResolvedValueOnce({
 			ok: true,
 			json: () => Promise.resolve(data)
@@ -36,7 +36,7 @@ describe('API client', () => {
 	});
 
 	it('stopLab posts to /api/lab/stop', async () => {
-		const data = { success: true, message: 'stopped', error: '' };
+		const data = { success: true, message: 'stopped', error: null };
 		mockFetch.mockResolvedValueOnce({
 			ok: true,
 			json: () => Promise.resolve(data)
@@ -77,5 +77,16 @@ describe('API client', () => {
 		});
 
 		await expect(getLabStatus()).rejects.toThrow('API error 500');
+	});
+
+	it('truncates long error text to 500 characters', async () => {
+		const longText = 'x'.repeat(1000);
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 500,
+			text: () => Promise.resolve(longText)
+		});
+
+		await expect(getLabStatus()).rejects.toThrow(/\.\.\.$/);
 	});
 });

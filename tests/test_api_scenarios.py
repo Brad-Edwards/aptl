@@ -10,12 +10,16 @@ pytest.importorskip("fastapi", reason="Web dependencies not installed")
 
 
 @pytest.fixture
-def api_client():
-    """Create a FastAPI test client."""
+def api_client(tmp_path):
+    """Create a FastAPI test client with DI override for project_dir."""
+    from aptl.api.deps import get_project_dir
     from aptl.api.main import app
     from starlette.testclient import TestClient
 
-    return TestClient(app)
+    app.dependency_overrides[get_project_dir] = lambda: tmp_path
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -78,10 +82,7 @@ def scenarios_dir(tmp_path):
 
 
 class TestListScenarios:
-    @patch("aptl.api.routers.scenarios.get_project_dir")
-    def test_returns_all_scenarios(self, mock_dir, api_client, scenarios_dir):
-        mock_dir.return_value = scenarios_dir.parent
-
+    def test_returns_all_scenarios(self, api_client, scenarios_dir):
         response = api_client.get("/api/scenarios")
 
         assert response.status_code == 200
@@ -91,10 +92,7 @@ class TestListScenarios:
         assert "recon-nmap" in ids
         assert "brute-force" in ids
 
-    @patch("aptl.api.routers.scenarios.get_project_dir")
-    def test_returns_scenario_details(self, mock_dir, api_client, scenarios_dir):
-        mock_dir.return_value = scenarios_dir.parent
-
+    def test_returns_scenario_details(self, api_client, scenarios_dir):
         response = api_client.get("/api/scenarios")
 
         data = response.json()
@@ -105,10 +103,7 @@ class TestListScenarios:
         assert nmap["estimated_minutes"] == 15
         assert "kali" in nmap["containers_required"]
 
-    @patch("aptl.api.routers.scenarios.get_project_dir")
-    def test_returns_empty_list_when_no_scenarios(self, mock_dir, api_client, tmp_path):
-        mock_dir.return_value = tmp_path
-
+    def test_returns_empty_list_when_no_scenarios(self, api_client):
         response = api_client.get("/api/scenarios")
 
         assert response.status_code == 200
@@ -116,10 +111,7 @@ class TestListScenarios:
 
 
 class TestGetScenario:
-    @patch("aptl.api.routers.scenarios.get_project_dir")
-    def test_returns_full_scenario(self, mock_dir, api_client, scenarios_dir):
-        mock_dir.return_value = scenarios_dir.parent
-
+    def test_returns_full_scenario(self, api_client, scenarios_dir):
         response = api_client.get("/api/scenarios/recon-nmap")
 
         assert response.status_code == 200
@@ -127,10 +119,7 @@ class TestGetScenario:
         assert data["metadata"]["id"] == "recon-nmap"
         assert data["mode"] == "red"
 
-    @patch("aptl.api.routers.scenarios.get_project_dir")
-    def test_returns_404_for_unknown(self, mock_dir, api_client, scenarios_dir):
-        mock_dir.return_value = scenarios_dir.parent
-
+    def test_returns_404_for_unknown(self, api_client, scenarios_dir):
         response = api_client.get("/api/scenarios/nonexistent")
 
         assert response.status_code == 404
@@ -168,10 +157,7 @@ class TestInvalidScenarios:
 
         return sdir
 
-    @patch("aptl.api.routers.scenarios.get_project_dir")
-    def test_list_skips_invalid_scenarios(self, mock_dir, api_client, scenarios_dir_with_invalid):
-        mock_dir.return_value = scenarios_dir_with_invalid.parent
-
+    def test_list_skips_invalid_scenarios(self, api_client, scenarios_dir_with_invalid):
         response = api_client.get("/api/scenarios")
 
         assert response.status_code == 200
@@ -180,10 +166,7 @@ class TestInvalidScenarios:
         assert "valid-scenario" in ids
         assert "broken" not in ids
 
-    @patch("aptl.api.routers.scenarios.get_project_dir")
-    def test_get_returns_404_for_invalid_scenario(self, mock_dir, api_client, scenarios_dir_with_invalid):
-        mock_dir.return_value = scenarios_dir_with_invalid.parent
-
+    def test_get_returns_404_for_invalid_scenario(self, api_client, scenarios_dir_with_invalid):
         response = api_client.get("/api/scenarios/broken")
 
         assert response.status_code == 404

@@ -1,6 +1,7 @@
 """Tests for config API endpoints."""
 
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -52,3 +53,23 @@ class TestConfigEndpoint:
         data = response.json()
         assert data["lab_name"] == "aptl"
         assert data["run_storage_backend"] == "local"
+
+
+class TestGetProjectDir:
+    """Test the get_project_dir dependency directly."""
+
+    def test_returns_env_var_when_set(self, tmp_path):
+        from aptl.api.deps import get_project_dir
+
+        with patch.dict(os.environ, {"APTL_PROJECT_DIR": str(tmp_path)}):
+            result = get_project_dir()
+            assert result == tmp_path
+
+    def test_returns_cwd_when_env_not_set(self):
+        from aptl.api.deps import get_project_dir
+
+        with patch.dict(os.environ, {}, clear=True):
+            # Remove APTL_PROJECT_DIR if present
+            os.environ.pop("APTL_PROJECT_DIR", None)
+            result = get_project_dir()
+            assert result == Path.cwd()

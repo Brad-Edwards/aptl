@@ -134,3 +134,56 @@ class TestGetScenario:
         response = api_client.get("/api/scenarios/nonexistent")
 
         assert response.status_code == 404
+
+
+class TestInvalidScenarios:
+    """Verify that invalid scenario files are skipped gracefully."""
+
+    @pytest.fixture
+    def scenarios_dir_with_invalid(self, tmp_path):
+        """Scenarios dir with one valid and one invalid scenario."""
+        sdir = tmp_path / "scenarios"
+        sdir.mkdir()
+
+        valid = {
+            "metadata": {
+                "id": "valid-scenario",
+                "name": "Valid",
+                "description": "A valid scenario",
+                "difficulty": "beginner",
+                "estimated_minutes": 10,
+                "tags": [],
+            },
+            "mode": "red",
+            "containers": {"required": ["kali"]},
+            "objectives": {
+                "red": [{"id": "scan-target", "description": "Scan", "type": "manual", "points": 100}],
+                "blue": [],
+            },
+        }
+        (sdir / "valid.yaml").write_text(yaml.dump(valid))
+
+        # Invalid: missing required fields
+        (sdir / "broken.yaml").write_text("metadata:\n  id: broken\n")
+
+        return sdir
+
+    @patch("aptl.api.routers.scenarios.get_project_dir")
+    def test_list_skips_invalid_scenarios(self, mock_dir, api_client, scenarios_dir_with_invalid):
+        mock_dir.return_value = scenarios_dir_with_invalid.parent
+
+        response = api_client.get("/api/scenarios")
+
+        assert response.status_code == 200
+        data = response.json()
+        ids = [s["id"] for s in data]
+        assert "valid-scenario" in ids
+        assert "broken" not in ids
+
+    @patch("aptl.api.routers.scenarios.get_project_dir")
+    def test_get_returns_404_for_invalid_scenario(self, mock_dir, api_client, scenarios_dir_with_invalid):
+        mock_dir.return_value = scenarios_dir_with_invalid.parent
+
+        response = api_client.get("/api/scenarios/broken")
+
+        assert response.status_code == 404

@@ -1,11 +1,15 @@
 import type { AppConfig, LabActionResponse, LabStatus, ScenarioSummary } from './types';
 
 const BASE = '/api';
+const MAX_ERROR_TEXT_LENGTH = 500;
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 	const res = await fetch(`${BASE}${path}`, init);
 	if (!res.ok) {
-		const text = await res.text();
+		let text = await res.text();
+		if (text.length > MAX_ERROR_TEXT_LENGTH) {
+			text = text.slice(0, MAX_ERROR_TEXT_LENGTH) + '...';
+		}
 		throw new Error(`API error ${res.status}: ${text}`);
 	}
 	return res.json() as Promise<T>;
@@ -36,11 +40,17 @@ export async function getConfig(): Promise<AppConfig> {
 }
 
 /** Create an SSE connection to the lab events stream. */
-export function subscribeLabEvents(onMessage: (status: LabStatus) => void): EventSource {
+export function subscribeLabEvents(
+	onMessage: (status: LabStatus) => void,
+	onError?: (event: Event) => void
+): EventSource {
 	const es = new EventSource(`${BASE}/lab/events`);
 	es.addEventListener('lab_status', (event) => {
 		const data = JSON.parse((event as MessageEvent).data) as LabStatus;
 		onMessage(data);
 	});
+	if (onError) {
+		es.onerror = onError;
+	}
 	return es;
 }

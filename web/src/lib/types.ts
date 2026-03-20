@@ -12,14 +12,14 @@ export interface ContainerInfo {
 export interface LabStatus {
 	running: boolean;
 	containers: ContainerInfo[];
-	error: string;
+	error: string | null;
 }
 
 /** Lab action response (start/stop). */
 export interface LabActionResponse {
 	success: boolean;
 	message: string;
-	error: string;
+	error: string | null;
 }
 
 /** Scenario summary for listing. */

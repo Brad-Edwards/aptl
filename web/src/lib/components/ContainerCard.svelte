@@ -25,6 +25,15 @@
 		return 'bg-aptl-text-muted';
 	});
 
+	const statusLabel = $derived.by(() => {
+		if (container.state === 'running') {
+			if (container.health === 'healthy') return 'healthy';
+			if (container.health === 'unhealthy') return 'unhealthy';
+			return 'running';
+		}
+		return 'stopped';
+	});
+
 	const displayName = $derived(
 		container.name.replace(/^aptl-/, '').replace(/-\d+$/, '')
 	);
@@ -36,7 +45,7 @@
 	<div class="flex items-start justify-between">
 		<div class="min-w-0 flex-1">
 			<div class="flex items-center gap-2">
-				<span class="h-2 w-2 rounded-full {dotColor}"></span>
+				<span class="h-2 w-2 rounded-full {dotColor}" role="img" aria-label="Status: {statusLabel}"></span>
 				<h3 class="truncate text-sm font-medium text-aptl-text">
 					{displayName}
 				</h3>

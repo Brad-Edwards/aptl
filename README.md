@@ -151,6 +151,15 @@ cd web && npm install && npm run dev
 docker compose --profile web up --build
 ```
 
+### Security Considerations
+
+The API container (`aptl-web-api`) requires access to the Docker socket (`/var/run/docker.sock`) to manage lab containers. This grants the container full Docker API access on the host. Mitigations:
+
+- The web UI is designed for **localhost-only** use — do not expose it to untrusted networks.
+- CORS is restricted to `localhost:3000` and `localhost:5173`.
+- No authentication is implemented; this is appropriate for a local lab tool, not internet-facing services.
+- Consider running with `--userns-remap` if your threat model requires reduced container privilege.
+
 ## AI Integration (MCP)
 
 Build all MCP servers:

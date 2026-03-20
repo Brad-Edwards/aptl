@@ -7,6 +7,8 @@
 </script>
 
 <div
+	role="status"
+	aria-label="Lab is {running ? 'running' : 'stopped'}"
 	class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium
 		{running
 		? 'bg-aptl-green/10 text-aptl-green'

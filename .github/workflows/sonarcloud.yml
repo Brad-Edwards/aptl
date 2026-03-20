@@ -27,9 +27,14 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Run TypeScript tests with coverage
+      - name: Run MCP TypeScript tests with coverage
         run: |
           cd mcp/aptl-mcp-common
+          npm install
+          npx vitest run --coverage
+      - name: Run web frontend tests with coverage
+        run: |
+          cd web
           npm install
           npx vitest run --coverage
       - name: SonarCloud Scan

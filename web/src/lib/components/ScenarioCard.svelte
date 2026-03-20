@@ -29,7 +29,7 @@
 			case 'advanced':
 				return 'bg-aptl-red/10 text-aptl-red';
 			case 'expert':
-				return 'bg-aptl-red/10 text-aptl-red';
+				return 'bg-aptl-violet/10 text-aptl-violet';
 			default:
 				return 'bg-aptl-text-muted/10 text-aptl-text-muted';
 		}

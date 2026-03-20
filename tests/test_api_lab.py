@@ -10,14 +10,16 @@ pytest.importorskip("fastapi", reason="Web dependencies not installed")
 
 
 @pytest.fixture
-def api_client():
-    """Create a FastAPI test client."""
+def api_client(tmp_path):
+    """Create a FastAPI test client with DI override for project_dir."""
+    from aptl.api.deps import get_project_dir
     from aptl.api.main import app
-
-    # Import here to avoid issues if httpx/fastapi not installed
     from starlette.testclient import TestClient
 
-    return TestClient(app)
+    app.dependency_overrides[get_project_dir] = lambda: tmp_path
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
 
 
 class TestHealthEndpoint:
@@ -29,11 +31,9 @@ class TestHealthEndpoint:
 
 class TestLabStatus:
     @patch("aptl.api.routers.lab.core_lab_status")
-    @patch("aptl.api.routers.lab.get_project_dir")
-    def test_returns_running_status(self, mock_dir, mock_status, api_client, tmp_path):
+    def test_returns_running_status(self, mock_status, api_client):
         from aptl.core.lab import LabStatus
 
-        mock_dir.return_value = tmp_path
         mock_status.return_value = LabStatus(
             running=True,
             containers=[
@@ -50,11 +50,9 @@ class TestLabStatus:
         assert data["containers"][0]["name"] == "aptl-victim"
 
     @patch("aptl.api.routers.lab.core_lab_status")
-    @patch("aptl.api.routers.lab.get_project_dir")
-    def test_returns_stopped_status(self, mock_dir, mock_status, api_client, tmp_path):
+    def test_returns_stopped_status(self, mock_status, api_client):
         from aptl.core.lab import LabStatus
 
-        mock_dir.return_value = tmp_path
         mock_status.return_value = LabStatus(running=False, containers=[])
 
         response = api_client.get("/api/lab/status")
@@ -65,11 +63,9 @@ class TestLabStatus:
         assert data["containers"] == []
 
     @patch("aptl.api.routers.lab.core_lab_status")
-    @patch("aptl.api.routers.lab.get_project_dir")
-    def test_returns_error(self, mock_dir, mock_status, api_client, tmp_path):
+    def test_returns_error(self, mock_status, api_client):
         from aptl.core.lab import LabStatus
 
-        mock_dir.return_value = tmp_path
         mock_status.return_value = LabStatus(
             running=False, error="docker not found"
         )
@@ -80,14 +76,23 @@ class TestLabStatus:
         data = response.json()
         assert data["error"] == "docker not found"
 
+    @patch("aptl.api.routers.lab.core_lab_status")
+    def test_error_field_is_null_when_no_error(self, mock_status, api_client):
+        from aptl.core.lab import LabStatus
+
+        mock_status.return_value = LabStatus(running=True, containers=[])
+
+        response = api_client.get("/api/lab/status")
+
+        data = response.json()
+        assert data["error"] is None
+
 
 class TestLabStart:
     @patch("aptl.api.routers.lab.orchestrate_lab_start")
-    @patch("aptl.api.routers.lab.get_project_dir")
-    def test_start_success(self, mock_dir, mock_start, api_client, tmp_path):
+    def test_start_success(self, mock_start, api_client):
         from aptl.core.lab import LabResult
 
-        mock_dir.return_value = tmp_path
         mock_start.return_value = LabResult(success=True, message="Lab started")
 
         response = api_client.post("/api/lab/start")
@@ -98,11 +103,9 @@ class TestLabStart:
         assert data["message"] == "Lab started"
 
     @patch("aptl.api.routers.lab.orchestrate_lab_start")
-    @patch("aptl.api.routers.lab.get_project_dir")
-    def test_start_failure(self, mock_dir, mock_start, api_client, tmp_path):
+    def test_start_failure(self, mock_start, api_client):
         from aptl.core.lab import LabResult
 
-        mock_dir.return_value = tmp_path
         mock_start.return_value = LabResult(
             success=False, error="Missing .env"
         )
@@ -114,14 +117,34 @@ class TestLabStart:
         assert data["success"] is False
         assert "Missing .env" in data["error"]
 
+    @patch("aptl.api.routers.lab.orchestrate_lab_start")
+    def test_start_timeout(self, mock_start, api_client):
+        """Lab start returns error when orchestration exceeds timeout."""
+        from aptl.core.lab import LabResult
+
+        # Simulate a function that takes forever
+        import time
+        def slow_start(project_dir):
+            time.sleep(10)
+            return LabResult(success=True, message="done")
+
+        mock_start.side_effect = slow_start
+
+        # Patch the timeout to something small for the test
+        with patch("aptl.api.routers.lab.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+            response = api_client.post("/api/lab/start")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert "timed out" in data["error"]
+
 
 class TestLabStop:
     @patch("aptl.api.routers.lab.core_stop_lab")
-    @patch("aptl.api.routers.lab.get_project_dir")
-    def test_stop_success(self, mock_dir, mock_stop, api_client, tmp_path):
+    def test_stop_success(self, mock_stop, api_client):
         from aptl.core.lab import LabResult
 
-        mock_dir.return_value = tmp_path
         mock_stop.return_value = LabResult(success=True, message="Lab stopped")
 
         response = api_client.post("/api/lab/stop")
@@ -131,11 +154,9 @@ class TestLabStop:
         assert data["success"] is True
 
     @patch("aptl.api.routers.lab.core_stop_lab")
-    @patch("aptl.api.routers.lab.get_project_dir")
-    def test_stop_failure(self, mock_dir, mock_stop, api_client, tmp_path):
+    def test_stop_failure(self, mock_stop, api_client):
         from aptl.core.lab import LabResult
 
-        mock_dir.return_value = tmp_path
         mock_stop.return_value = LabResult(
             success=False, error="compose down failed"
         )
@@ -147,6 +168,39 @@ class TestLabStop:
         assert data["success"] is False
 
 
+class TestProjectDirValidation:
+    def test_nonexistent_project_dir_returns_503(self):
+        """When APTL_PROJECT_DIR points to nonexistent dir, API returns 503."""
+        from aptl.api.deps import get_project_dir
+        from aptl.api.main import app
+        from starlette.testclient import TestClient
+        from pathlib import Path
+
+        app.dependency_overrides[get_project_dir] = lambda: (_ for _ in ()).throw(
+            __import__("fastapi").HTTPException(
+                status_code=503,
+                detail="Project directory does not exist: /nonexistent",
+            )
+        )
+        try:
+            client = TestClient(app, raise_server_exceptions=False)
+            response = client.get("/api/lab/status")
+            assert response.status_code == 503
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_nonexistent_project_dir_via_env(self):
+        """get_project_dir raises 503 for nonexistent env path."""
+        from aptl.api.deps import get_project_dir
+        from unittest.mock import patch as _patch
+        import os
+
+        with _patch.dict(os.environ, {"APTL_PROJECT_DIR": "/no/such/path"}):
+            with pytest.raises(Exception) as exc_info:
+                get_project_dir()
+            assert "503" in str(exc_info.value.status_code)
+
+
 async def _noop_sleep(_seconds):
     """Instant replacement for asyncio.sleep in tests."""
 
@@ -156,14 +210,14 @@ class TestLabEventGenerator:
 
     @patch("aptl.api.routers.lab.asyncio.sleep", _noop_sleep)
     @patch("aptl.api.routers.lab._build_status_response")
-    def test_emits_initial_status(self, mock_build):
+    def test_emits_initial_status(self, mock_build, tmp_path):
         from aptl.api.routers.lab import _lab_event_generator
         from aptl.api.schemas import LabStatusResponse
 
         mock_build.return_value = LabStatusResponse(running=False, containers=[])
 
         async def run():
-            gen = _lab_event_generator()
+            gen = _lab_event_generator(tmp_path)
             event = await gen.__anext__()
             await gen.aclose()
             return event
@@ -175,13 +229,13 @@ class TestLabEventGenerator:
 
     @patch("aptl.api.routers.lab.asyncio.sleep", _noop_sleep)
     @patch("aptl.api.routers.lab._build_status_response")
-    def test_emits_on_state_change(self, mock_build):
+    def test_emits_on_state_change(self, mock_build, tmp_path):
         from aptl.api.routers.lab import _lab_event_generator
         from aptl.api.schemas import ContainerInfo, LabStatusResponse
 
         call_count = 0
 
-        def changing_status():
+        def changing_status(project_dir):
             nonlocal call_count
             call_count += 1
             if call_count <= 1:
@@ -194,7 +248,7 @@ class TestLabEventGenerator:
         mock_build.side_effect = changing_status
 
         async def run():
-            gen = _lab_event_generator()
+            gen = _lab_event_generator(tmp_path)
             first = await gen.__anext__()
             second = await gen.__anext__()
             await gen.aclose()
@@ -207,13 +261,13 @@ class TestLabEventGenerator:
 
     @patch("aptl.api.routers.lab.asyncio.sleep", _noop_sleep)
     @patch("aptl.api.routers.lab._build_status_response")
-    def test_emits_error_event(self, mock_build):
+    def test_emits_error_event(self, mock_build, tmp_path):
         from aptl.api.routers.lab import _lab_event_generator
 
         mock_build.side_effect = RuntimeError("docker daemon not running")
 
         async def run():
-            gen = _lab_event_generator()
+            gen = _lab_event_generator(tmp_path)
             event = await gen.__anext__()
             await gen.aclose()
             return event
@@ -224,7 +278,7 @@ class TestLabEventGenerator:
 
     @patch("aptl.api.routers.lab.asyncio.sleep", _noop_sleep)
     @patch("aptl.api.routers.lab._build_status_response")
-    def test_skips_duplicate_status(self, mock_build):
+    def test_skips_duplicate_status(self, mock_build, tmp_path):
         from aptl.api.routers.lab import _lab_event_generator
         from aptl.api.schemas import LabStatusResponse
 
@@ -232,7 +286,7 @@ class TestLabEventGenerator:
         mock_build.return_value = LabStatusResponse(running=False, containers=[])
 
         async def run():
-            gen = _lab_event_generator()
+            gen = _lab_event_generator(tmp_path)
             event1 = await gen.__anext__()
             # Second __anext__ should NOT yield because state didn't change.
             # It will loop and sleep forever, so we time it out.
@@ -248,12 +302,33 @@ class TestLabEventGenerator:
         got_second = asyncio.run(run())
         assert got_second is False
 
-    def test_lab_events_endpoint_returns_sse(self):
+    @patch("aptl.api.routers.lab.asyncio.sleep", _noop_sleep)
+    @patch("aptl.api.routers.lab._build_status_response")
+    def test_circuit_breaker_terminates_after_max_errors(self, mock_build, tmp_path):
+        """SSE generator terminates after MAX_CONSECUTIVE_ERRORS."""
+        from aptl.api.routers.lab import _lab_event_generator, MAX_CONSECUTIVE_ERRORS
+
+        mock_build.side_effect = RuntimeError("persistent failure")
+
+        async def run():
+            gen = _lab_event_generator(tmp_path)
+            events = []
+            async for event in gen:
+                events.append(event)
+            return events
+
+        events = asyncio.run(run())
+        assert len(events) == MAX_CONSECUTIVE_ERRORS
+        assert all(e["event"] == "error" for e in events)
+
+    def test_lab_events_endpoint_returns_sse(self, tmp_path):
         """Verify the endpoint function returns an EventSourceResponse."""
         from aptl.api.routers.lab import lab_events
+        from aptl.api.deps import get_project_dir
         from sse_starlette.sse import EventSourceResponse
 
-        result = asyncio.run(lab_events())
+        # Call with project_dir directly (simulating Depends injection)
+        result = asyncio.run(lab_events(project_dir=tmp_path))
         assert isinstance(result, EventSourceResponse)
 
 

@@ -4,10 +4,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from aptl.api.routers import config, lab, scenarios
+from aptl.utils.logging import get_logger, setup_logging
+
+log = get_logger("api")
 
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    setup_logging()
+    log.info("Creating APTL web API application")
+
     app = FastAPI(
         title="APTL Web API",
         description="Advanced Purple Team Lab — Web Interface API",
@@ -21,8 +27,8 @@ def create_app() -> FastAPI:
             "http://localhost:5173",
         ],
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "Accept"],
     )
 
     app.include_router(lab.router, prefix="/api")

@@ -36,6 +36,7 @@ jobs:
         run: |
           cd web
           npm install
+          npx svelte-kit sync
           npx vitest run --coverage
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v7

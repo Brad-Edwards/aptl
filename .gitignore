@@ -25,6 +25,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!web/src/lib/
+!web/tests/lib/
 lib64/
 parts/
 sdist/
@@ -246,6 +248,9 @@ bower_components
 
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
+
+# SvelteKit generated
+.svelte-kit/
 
 # Dependency directories
 node_modules/

@@ -1,4 +1,4 @@
-[![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=Brad-Edwards_aptl&token=4dd88be3421d6d030a4615b86ac8ab0e3c9eb4d3)](https://sonarcloud.io/summary/new_code?id=Brad-Edwards_aptl)  
+[![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=Brad-Edwards_aptl&token=4dd88be3421d6d030a4615b86ac8ab0e3c9eb4d3)](https://sonarcloud.io/summary/new_code?id=Brad-Edwards_aptl)
 
 # APTL (Advanced Purple Team Lab)
 
@@ -128,6 +128,28 @@ aptl lab stop -v  # DESTROYS ALL DATA (Wazuh indexes, MISP, TheHive, configs)
 - 8GB+ RAM, 20GB+ disk
 - Linux/macOS/WSL2
 - Ports available: 443, 2022, 2023, 2027, 9200, 55000
+
+## Web UI
+
+An optional web interface provides a notebook-style workbench for lab management and scenario execution. Phase 1 covers Lab Home with container status and scenario listing.
+
+```bash
+# Install web dependencies
+pip install -e ".[web]"
+
+# Start the API server
+aptl web serve
+
+# In another terminal, start the frontend dev server
+cd web && npm install && npm run dev
+```
+
+**Access:** <http://localhost:5173> (dev) or <http://localhost:3000> (production)
+
+**Docker Compose:**
+```bash
+docker compose --profile web up --build
+```
 
 ## AI Integration (MCP)
 

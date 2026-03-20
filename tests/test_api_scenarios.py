@@ -6,6 +6,8 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+pytest.importorskip("fastapi", reason="Web dependencies not installed")
+
 
 @pytest.fixture
 def api_client():

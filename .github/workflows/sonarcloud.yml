@@ -23,6 +23,15 @@ jobs:
         run: |
           coverage run -m pytest tests/ -q -k "not integration"
           coverage xml -o coverage.xml
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run TypeScript tests with coverage
+        run: |
+          cd mcp/aptl-mcp-common
+          npm install
+          npx vitest run --coverage
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v5
         env:

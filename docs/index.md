@@ -43,6 +43,9 @@ aptl lab start
 - [MCP Integration](components/mcp-integration.md)
 - [Reverse Engineering](components/reverse-engineering-container.md)
 
+### Architecture Decision Records
+- [ADR Index](adrs/README.md) -- Why we built it this way
+
 ### Scenarios & Runs
 - [SOC Architecture Spec](specs/soc-feature-spec.md) — Scenario engine, run archives, collectors
 

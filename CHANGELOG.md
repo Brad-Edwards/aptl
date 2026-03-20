@@ -6,6 +6,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.7.0] - 2026-03-20
+
+### Changed
+
+- Upgraded CI actions to Node.js 24-compatible versions: `actions/checkout@v6`, `actions/setup-python@v6`, `actions/setup-node@v6` (#211)
+- Migrated from deprecated `SonarSource/sonarcloud-github-action` to `SonarSource/sonarqube-scan-action@v7` (#211)
+
+## [4.6.8] - 2026-03-20
+
+### Fixed
+
+- SonarCloud quality gate failing with 0% TypeScript coverage — CI workflow now runs vitest with coverage in `mcp/aptl-mcp-common/` before the SonarCloud scan, generating `lcov.info` that the existing sonar config already expects (#211)
+- Added `mcp/aptl-mcp-common/tests` to `sonar.tests` so SonarCloud recognizes TS test files as test sources
+- Fixed SonarCloud "can't be indexed twice" error — `mcp/**/tests/**` added to `sonar.exclusions` so test files under `mcp/` are excluded from source analysis while still indexed via `sonar.tests` (#211)
+
+## [4.6.7] - 2026-03-08
+
+### Fixed
+
+- Persistent SSH sessions stranded callers on close/timeout — `cleanup()` now rejects all pending command promises and clears per-command timeouts (#189)
+
 ## [4.6.6] - 2026-03-08
 
 ### Fixed

@@ -6,10 +6,16 @@ disable-model-invocation: true
 
 # GitHub Workflow Monitor
 
-## Step 1: Find the GitHub Actions workflow run associated with the current branch. Use the gh cli.
+Use the `gh` for GitHub operations.
 
-## Step 2: Monitor the workflow run for failures.
+## Step 1: Switch to plan mode.
 
-## Step 3: If the workflow run fails, propose a fix.
+## Step 2: Check current branch.
 
-## Step 4: If the workflow run succeeds, report the status.
+## Step 3: If the branch is not green, find the GitHub Actions workflow run associated with the current branch. Use the gh cli.
+
+## Step 4: Monitor the workflow run for failures.
+
+## Step 5: If the workflow run fails, propose a fix.
+
+## Step 6: If the workflow run succeeds, report the status.

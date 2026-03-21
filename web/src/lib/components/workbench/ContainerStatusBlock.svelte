@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { labStatus } from '$lib/stores/lab';
+	import { stateColor } from '$lib/container-state';
 	import type { ContainerInfo } from '$lib/types';
 
 	interface Props {
@@ -10,21 +11,12 @@
 
 	const filteredContainers = $derived.by(() => {
 		const all: ContainerInfo[] = $labStatus.containers;
-		const nameSet = new Set(containers);
-		// Build a map: for containers present in store, use their data;
-		// for missing ones, show as unknown
 		return containers.map((name) => {
 			const found = all.find((c) => c.name === name);
 			if (found) return found;
 			return { name, state: 'unknown', status: '', health: '', image: '', ports: [] };
 		});
 	});
-
-	function stateColor(state: string): string {
-		if (state === 'running') return 'bg-aptl-green';
-		if (state === 'exited' || state === 'dead') return 'bg-aptl-red';
-		return 'bg-aptl-amber';
-	}
 </script>
 
 <div class="flex flex-wrap gap-2">

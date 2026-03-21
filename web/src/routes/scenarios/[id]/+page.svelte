@@ -16,7 +16,7 @@
 <WorkbenchStatusBar scenario={data.scenario} />
 
 <div class="mx-auto max-w-5xl space-y-6 px-6 py-8">
-	{#each blocks as block, i (i)}
+	{#each blocks as block (block.key)}
 		{#if block.type === 'narrative'}
 			<NarrativeBlock content={block.content} />
 		{:else if block.type === 'container-status'}

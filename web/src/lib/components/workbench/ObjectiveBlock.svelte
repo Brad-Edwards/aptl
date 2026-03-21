@@ -10,14 +10,12 @@
 
 	let { objective, team }: Props = $props();
 
-	const accentColor = $derived(team === 'red' ? 'aptl-violet' : 'aptl-teal');
 	const borderClass = $derived(
 		team === 'red' ? 'border-aptl-violet/30' : 'border-aptl-teal/30'
 	);
 	const badgeBg = $derived(
 		team === 'red' ? 'bg-aptl-violet/10 text-aptl-violet' : 'bg-aptl-teal/10 text-aptl-teal'
 	);
-	const typeBadge = $derived(`bg-${accentColor}/10 text-${accentColor}`);
 </script>
 
 <div class="rounded-lg border {borderClass} bg-aptl-surface p-4">
@@ -39,7 +37,7 @@
 		<div class="mt-3">
 			<SiemQueryBlock
 				query={objective.wazuh_alert.query}
-				description="Wazuh alert query (min {objective.wazuh_alert.min_matches} match{objective.wazuh_alert.min_matches === 1 ? '' : 'es'} in {objective.wazuh_alert.time_window_seconds}s)"
+				description={`Wazuh alert query (min ${objective.wazuh_alert.min_matches} match${objective.wazuh_alert.min_matches === 1 ? '' : 'es'} in ${objective.wazuh_alert.time_window_seconds}s)`}
 				product_name="wazuh"
 			/>
 		</div>

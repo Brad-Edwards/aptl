@@ -262,16 +262,16 @@ class TestStartCommand:
         assert data["scenario_id"] == "test-scenario"
         assert data["state"] == "active"
 
-    def test_start_creates_events_file(self, tmp_path):
+    def test_start_creates_trace_context(self, tmp_path):
         project_dir = _write_scenario(tmp_path)
         runner.invoke(app, [
             "start", "test-scenario",
             "--project-dir", str(project_dir),
         ])
-        events_dir = project_dir / ".aptl" / "events"
-        assert events_dir.exists()
-        event_files = list(events_dir.glob("*.jsonl"))
-        assert len(event_files) == 1
+        ctx_file = project_dir / ".aptl" / "trace-context.json"
+        assert ctx_file.exists()
+        data = json.loads(ctx_file.read_text())
+        assert len(data["trace_id"]) == 32
 
     def test_start_rejects_double_start(self, tmp_path):
         project_dir = _write_scenario(tmp_path)

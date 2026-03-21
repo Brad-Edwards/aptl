@@ -950,6 +950,69 @@ services:
         limits:
           memory: 256m
 
+  # ==========================================================================
+  # OBSERVABILITY STACK (OpenTelemetry)
+  # ==========================================================================
+
+  aptl-otel-collector:
+    profiles: ["otel"]
+    container_name: aptl-otel-collector
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    restart: unless-stopped
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./config/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.50
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  aptl-tempo:
+    profiles: ["otel"]
+    container_name: aptl-tempo
+    image: grafana/tempo:2.7.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "3200:3200"
+    volumes:
+      - ./config/otel/tempo-config.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.51
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  aptl-grafana-otel:
+    profiles: ["otel"]
+    container_name: aptl-grafana-otel
+    image: grafana/grafana:11.6.0
+    restart: unless-stopped
+    ports:
+      - "3100:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - ./config/otel/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/tempo.yaml:ro
+      - grafana_otel_data:/var/lib/grafana
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.52
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
 # ==========================================================================
 # NETWORKS
 # ==========================================================================
@@ -1048,3 +1111,7 @@ volumes:
   kali_operations:
   kali_logs:
   reverse_logs:
+
+  # OpenTelemetry
+  tempo_data:
+  grafana_otel_data:

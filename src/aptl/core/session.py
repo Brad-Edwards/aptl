@@ -38,7 +38,7 @@ class ActiveSession:
         scenario_id: ID of the active scenario.
         state: Current lifecycle state.
         started_at: ISO 8601 UTC timestamp of when the session started.
-        events_file: Relative path to the events JSONL file within .aptl/.
+        trace_id: Hex trace ID for OpenTelemetry distributed tracing.
         hints_used: Map of objective_id to highest hint level revealed.
         completed_objectives: List of objective IDs that have been completed.
         flags: CTF flags captured at scenario start, keyed by container name.
@@ -47,7 +47,7 @@ class ActiveSession:
     scenario_id: str
     state: SessionState
     started_at: str
-    events_file: str
+    trace_id: str = ""
     hints_used: dict[str, int] = field(default_factory=dict)
     completed_objectives: list[str] = field(default_factory=list)
     flags: dict[str, dict[str, dict]] = field(default_factory=dict)
@@ -85,7 +85,7 @@ def _deserialize_session(data: dict) -> ActiveSession:
             scenario_id=data["scenario_id"],
             state=SessionState(data["state"]),
             started_at=data["started_at"],
-            events_file=data["events_file"],
+            trace_id=data.get("trace_id", ""),
             hints_used=data.get("hints_used", {}),
             completed_objectives=data.get("completed_objectives", []),
             flags=data.get("flags", {}),
@@ -173,15 +173,14 @@ class ScenarioSession:
     def start(
         self,
         scenario: ScenarioDefinition,
-        events_file: Path,
     ) -> ActiveSession:
         """Start a new scenario session.
 
         Creates the session file and returns the new session.
+        Generates a trace_id for OpenTelemetry distributed tracing.
 
         Args:
             scenario: The scenario being started.
-            events_file: Path to the events JSONL file.
 
         Returns:
             The newly created ActiveSession.
@@ -197,17 +196,15 @@ class ScenarioSession:
                 "Stop it first with 'aptl scenario stop'."
             )
 
-        # Use relative path from state_dir for portability
-        try:
-            relative_events = events_file.relative_to(self._state_dir)
-        except ValueError:
-            relative_events = events_file
+        from aptl.core.telemetry import generate_trace_context
+
+        ctx = generate_trace_context()
 
         session = ActiveSession(
             scenario_id=scenario.metadata.id,
             state=SessionState.ACTIVE,
             started_at=datetime.now(timezone.utc).isoformat(),
-            events_file=str(relative_events),
+            trace_id=ctx["trace_id"],
         )
 
         self._write(session)

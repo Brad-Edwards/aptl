@@ -20,6 +20,7 @@ def _make_session(run_id: str = "test-run-id") -> ActiveSession:
         state=SessionState.COMPLETED,
         started_at="2025-01-01T00:00:00+00:00",
         trace_id="a" * 32,
+        span_id="b" * 16,
         flags={
             "aptl-victim": {
                 "user": {

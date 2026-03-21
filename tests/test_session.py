@@ -78,6 +78,7 @@ class TestActiveSession:
         assert session.hints_used == {}
         assert session.completed_objectives == []
         assert session.trace_id == ""
+        assert session.span_id == ""
 
     def test_creation_with_all_fields(self):
         """ActiveSession should accept all fields."""
@@ -88,12 +89,14 @@ class TestActiveSession:
             state=SessionState.ACTIVE,
             started_at="2026-02-16T14:30:00+00:00",
             trace_id="a" * 32,
+            span_id="b" * 16,
             hints_used={"obj-a": 2},
             completed_objectives=["obj-a"],
         )
         assert session.hints_used == {"obj-a": 2}
         assert session.completed_objectives == ["obj-a"]
         assert session.trace_id == "a" * 32
+        assert session.span_id == "b" * 16
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +121,7 @@ class TestSessionSerialization:
             state=SessionState.ACTIVE,
             started_at="2026-02-16T14:30:00+00:00",
             trace_id="a" * 32,
+            span_id="b" * 16,
             hints_used={"obj-a": 1},
             completed_objectives=["obj-b"],
         )
@@ -128,6 +132,7 @@ class TestSessionSerialization:
         assert restored.state == original.state
         assert restored.started_at == original.started_at
         assert restored.trace_id == original.trace_id
+        assert restored.span_id == original.span_id
         assert restored.hints_used == original.hints_used
         assert restored.completed_objectives == original.completed_objectives
 
@@ -163,7 +168,7 @@ class TestSessionSerialization:
             })
 
     def test_deserialize_defaults_optional_fields(self):
-        """Deserialization should default trace_id, hints_used and completed_objectives."""
+        """Deserialization should default trace_id, span_id, hints_used and completed_objectives."""
         from aptl.core.session import _deserialize_session
 
         session = _deserialize_session({
@@ -172,6 +177,7 @@ class TestSessionSerialization:
             "started_at": "2026-02-16T14:30:00+00:00",
         })
         assert session.trace_id == ""
+        assert session.span_id == ""
         assert session.hints_used == {}
         assert session.completed_objectives == []
 
@@ -239,14 +245,16 @@ class TestScenarioSessionStart:
         assert "T" in session.started_at
         assert "+" in session.started_at or "Z" in session.started_at
 
-    def test_start_generates_trace_id(self, aptl_state_dir):
-        """Starting a session should generate a 32-char hex trace_id."""
+    def test_start_generates_trace_context(self, aptl_state_dir):
+        """Starting a session should generate valid trace_id and span_id."""
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
         session = mgr.start(_make_scenario_def())
         assert len(session.trace_id) == 32
+        assert len(session.span_id) == 16
         int(session.trace_id, 16)  # should not raise
+        int(session.span_id, 16)   # should not raise
 
 
 # ---------------------------------------------------------------------------

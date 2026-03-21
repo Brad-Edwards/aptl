@@ -28,7 +28,6 @@ from aptl.core.scenarios import (
 )
 from aptl.core.session import ActiveSession, ScenarioSession
 from aptl.core.telemetry import (
-    SPAN_SCENARIO_RUN,
     create_child_span,
     create_root_span,
     get_tracer,
@@ -403,7 +402,7 @@ def start(
     session_mgr._write(session)
 
     # Write trace context for MCP servers to read
-    write_trace_context(state, session.trace_id, "0" * 16)
+    write_trace_context(state, session.trace_id, session.span_id)
 
     # Collect CTF flags from running containers
     flags = collect_flags()
@@ -418,7 +417,7 @@ def start(
     # Emit a lightweight OTel span marking scenario start
     init_tracing()
     tracer = get_tracer()
-    parent_ctx = make_parent_context(session.trace_id, "0" * 16)
+    parent_ctx = make_parent_context(session.trace_id, session.span_id)
     span = create_child_span(tracer, parent_ctx, "scenario.started", {
         "aptl.scenario.id": scenario.metadata.id,
         "aptl.scenario.mode": scenario.mode.value,
@@ -501,9 +500,9 @@ def stop(
     seconds = int(elapsed % 60)
 
     # Create the synthetic root span covering the full scenario duration
-    init_tracing()
-    tracer = get_tracer()
     if session.trace_id:
+        init_tracing()
+        tracer = get_tracer()
         start_ns = int(started.timestamp() * 1e9)
         end_ns = int(now.timestamp() * 1e9)
         create_root_span(
@@ -513,12 +512,12 @@ def stop(
             start_time=start_ns,
             end_time=end_ns,
             trace_id=session.trace_id,
-            span_id="0" * 16,
+            span_id=session.span_id,
         )
-    shutdown_tracing()
+        shutdown_tracing()
 
-    # Brief delay to allow BatchSpanProcessor flush from MCP servers
-    time.sleep(2)
+        # Brief delay to allow BatchSpanProcessor flush from MCP servers
+        time.sleep(2)
 
     # Finish session
     finished_session = session_mgr.finish()

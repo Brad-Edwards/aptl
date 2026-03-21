@@ -89,6 +89,33 @@ class TestCollectTraces:
         called_url = mock_curl.call_args[0][0]
         assert called_url.startswith("http://custom:9999/api/traces/")
 
+    @patch("aptl.core.collectors._curl_json")
+    def test_uses_explicit_tempo_url(self, mock_curl):
+        mock_curl.return_value = {"resourceSpans": []}
+
+        collect_traces("abc123", tempo_url="http://explicit:7777")
+
+        called_url = mock_curl.call_args[0][0]
+        assert called_url == "http://explicit:7777/api/traces/abc123"
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_does_not_mutate_input_spans(self, mock_curl):
+        """collect_traces should not mutate the parsed Tempo response."""
+        original_span = {"name": "test", "traceId": "abc"}
+        mock_curl.return_value = {
+            "resourceSpans": [
+                {
+                    "resource": {"attrs": "val"},
+                    "scopeSpans": [{"spans": [original_span]}],
+                }
+            ]
+        }
+        spans = collect_traces("abc123")
+        assert len(spans) == 1
+        assert "resource" in spans[0]
+        # Original span dict should not have been mutated
+        assert "resource" not in original_span
+
 
 class TestCollectContainerLogs:
     """Tests for container log collection."""

@@ -20,7 +20,6 @@ import os
 import secrets
 from pathlib import Path
 
-from opentelemetry import context as otel_context
 from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter

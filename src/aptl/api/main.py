@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from aptl.api.deps import ALLOWED_ORIGINS
 from aptl.api.routers import config, lab, scenarios, terminal
 from aptl.utils.logging import get_logger, setup_logging
 
@@ -22,10 +23,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(  # NOSONAR — localhost-only origins; this is a local lab tool, not internet-facing
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://localhost:5173",
-        ],
+        allow_origins=list(ALLOWED_ORIGINS),
         allow_credentials=False,
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type", "Accept"],

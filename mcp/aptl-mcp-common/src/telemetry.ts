@@ -9,7 +9,7 @@
  * trace_id as scenario lifecycle spans from the Python CLI.
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 
 import { context, trace, Tracer, Context, SpanStatusCode, SpanKind } from '@opentelemetry/api';
@@ -79,17 +79,39 @@ interface TraceContextFile {
   trace_flags: string;
 }
 
+// Cache to avoid reading trace-context.json on every tool call
+let cachedContext: Context | undefined;
+let cachedMtimeMs: number = 0;
+let cachedCtxPath: string = '';
+
 /**
  * Read the trace context written by `aptl scenario start`.
  * Returns an OTel Context with the remote parent, or undefined if
  * no active scenario context exists.
+ *
+ * Results are cached by file mtime to avoid repeated disk reads
+ * on every tool call.
  */
 export function loadParentContext(): Context | undefined {
   const traceDir = process.env.APTL_STATE_DIR || '.aptl';
   const ctxPath = resolve(traceDir, 'trace-context.json');
 
   if (!existsSync(ctxPath)) {
+    cachedContext = undefined;
+    cachedMtimeMs = 0;
     return undefined;
+  }
+
+  // Check mtime — return cached result if file hasn't changed
+  try {
+    const mtimeMs = statSync(ctxPath).mtimeMs;
+    if (ctxPath === cachedCtxPath && mtimeMs === cachedMtimeMs) {
+      return cachedContext;
+    }
+    cachedCtxPath = ctxPath;
+    cachedMtimeMs = mtimeMs;
+  } catch {
+    return cachedContext;
   }
 
   try {
@@ -106,13 +128,16 @@ export function loadParentContext(): Context | undefined {
     // Validate hex lengths
     if (spanContext.traceId.length !== 32 || spanContext.spanId.length !== 16) {
       console.error('[OTel] Invalid trace context dimensions, ignoring');
+      cachedContext = undefined;
       return undefined;
     }
 
     const parentSpan = trace.wrapSpanContext(spanContext);
-    return trace.setSpan(context.active(), parentSpan);
+    cachedContext = trace.setSpan(context.active(), parentSpan);
+    return cachedContext;
   } catch (err) {
     console.error(`[OTel] Could not load trace context from ${ctxPath}: ${err}`);
+    cachedContext = undefined;
     return undefined;
   }
 }

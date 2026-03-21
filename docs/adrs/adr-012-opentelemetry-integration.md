@@ -62,7 +62,8 @@ The OTel stack is always-on lab infrastructure (not optional):
 - **OTel Collector** (`otel/opentelemetry-collector-contrib`) — receives OTLP,
   batches, forwards to Tempo
 - **Grafana Tempo** — trace storage with 72h retention
-- **Grafana** — trace visualization at `http://localhost:3100`
+- **Grafana** — trace visualization at `http://localhost:3100` (bound to
+  localhost only; default credentials `admin`/`aptl-otel`)
 
 All services run under the `otel` Docker Compose profile, automatically
 included by `aptl lab start`.

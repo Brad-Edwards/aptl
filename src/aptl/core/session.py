@@ -38,7 +38,8 @@ class ActiveSession:
         scenario_id: ID of the active scenario.
         state: Current lifecycle state.
         started_at: ISO 8601 UTC timestamp of when the session started.
-        trace_id: Hex trace ID for OpenTelemetry distributed tracing.
+        trace_id: 32-char hex trace ID for OpenTelemetry distributed tracing.
+        span_id: 16-char hex span ID for the scenario root span context.
         hints_used: Map of objective_id to highest hint level revealed.
         completed_objectives: List of objective IDs that have been completed.
         flags: CTF flags captured at scenario start, keyed by container name.
@@ -48,6 +49,7 @@ class ActiveSession:
     state: SessionState
     started_at: str
     trace_id: str = ""
+    span_id: str = ""
     hints_used: dict[str, int] = field(default_factory=dict)
     completed_objectives: list[str] = field(default_factory=list)
     flags: dict[str, dict[str, dict]] = field(default_factory=dict)
@@ -86,6 +88,7 @@ def _deserialize_session(data: dict) -> ActiveSession:
             state=SessionState(data["state"]),
             started_at=data["started_at"],
             trace_id=data.get("trace_id", ""),
+            span_id=data.get("span_id", ""),
             hints_used=data.get("hints_used", {}),
             completed_objectives=data.get("completed_objectives", []),
             flags=data.get("flags", {}),
@@ -205,6 +208,7 @@ class ScenarioSession:
             state=SessionState.ACTIVE,
             started_at=datetime.now(timezone.utc).isoformat(),
             trace_id=ctx["trace_id"],
+            span_id=ctx["span_id"],
         )
 
         self._write(session)

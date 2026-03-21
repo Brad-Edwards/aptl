@@ -363,8 +363,8 @@ def collect_traces(
             resource = batch.get("resource", {})
             for scope_span in batch.get("scopeSpans", []):
                 for span in scope_span.get("spans", []):
-                    span["resource"] = resource
-                    spans.append(span)
+                    enriched = {**span, "resource": resource}
+                    spans.append(enriched)
 
     log.info("Collected %d spans from Tempo for trace %s", len(spans), trace_id[:16])
     return spans

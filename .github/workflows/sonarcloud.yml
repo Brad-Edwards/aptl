@@ -38,6 +38,7 @@ jobs:
           npm install
           npx svelte-kit sync
           npx vitest run --coverage
+          sed -i 's|^SF:|SF:web/|' coverage/lcov.info
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v7
         env:

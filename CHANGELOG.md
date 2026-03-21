@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.11.1] - 2026-03-21
+
+### Fixed
+
+- SonarCloud quality gate failure: new code coverage below 80% threshold
+  - Added tests for `container-state.ts`, route load functions, `getScenario()` API, `subscribeLabEvents`, and SSE reconnect logic in lab store
+  - Scoped vitest coverage to `src/` only, eliminating `build/`, `.svelte-kit/`, and `node_modules/` noise from lcov report
+  - All new TypeScript files now at 100% coverage (56 tests across 7 test files)
+
 ## [4.11.0] - 2026-03-21
 
 ### Added

@@ -36,8 +36,9 @@
 	});
 </script>
 
-<div
-	class="rounded-lg border border-aptl-border bg-aptl-surface p-5 transition-colors hover:bg-aptl-surface-hover"
+<a
+	href="/scenarios/{scenario.id}"
+	class="block rounded-lg border border-aptl-border bg-aptl-surface p-5 transition-colors hover:bg-aptl-surface-hover"
 >
 	<div class="mb-3 flex flex-wrap items-center gap-2">
 		<span class="rounded-full px-2 py-0.5 text-xs font-medium {modeColor}">
@@ -70,4 +71,4 @@
 			{/each}
 		</div>
 	{/if}
-</div>
+</a>

@@ -6,6 +6,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.11.1] - 2026-03-21
+
+### Fixed
+
+- SonarCloud quality gate failure: new code coverage below 80% threshold
+  - Added tests for `container-state.ts`, route load functions, `getScenario()` API, `subscribeLabEvents`, and SSE reconnect logic in lab store
+  - Scoped vitest coverage to `src/` only, eliminating `build/`, `.svelte-kit/`, and `node_modules/` noise from lcov report
+  - All new TypeScript files now at 100% coverage (56 tests across 7 test files)
+
+## [4.11.0] - 2026-03-21
+
+### Added
+
+- Interactive scenario workbench view at `/scenarios/[id]` (UI-001, #223):
+  - Block-composition architecture: `buildBlockSequence()` pure function maps scenario data to typed `WorkbenchBlock[]` discriminated union, separating data logic from rendering
+  - 9 workbench block components: NarrativeBlock (markdown), TerminalBlock (xterm.js wrapper), SiemQueryBlock (stub), ContainerStatusBlock (SSE-driven), HintToggle (progressive disclosure), ObjectiveBlock, AttackStepBlock, WorkbenchStatusBar (sticky), SectionDivider
+  - Full `ScenarioDefinition` TypeScript type hierarchy mirroring Python Pydantic models (metadata, steps, objectives, scoring, attack chain, MITRE references)
+  - `renderMarkdown()` utility using `marked` + DOMPurify for safe runtime markdown rendering
+  - Scenario card links from Lab Home page to workbench view
+  - `prose-aptl` CSS class for dark-themed markdown prose styling
+  - Progressive hint disclosure with escalating point penalties shown in amber
+  - SIEM query blocks display query JSON with disabled "Run Query" button (ready for OpenSearch integration)
+  - Copyable attack step commands with clipboard feedback
+  - Lazy-mounted terminals in attack step blocks to avoid mass WebSocket connections
+  - Stable block keys for Svelte each-block diffing
+  - Shared `stateColor()` utility for container state badge colors
+  - Unit tests for block sequence builder (11 tests), markdown renderer (9 tests), and HintToggle component (7 tests)
+  - `marked` and `dompurify` dependencies added
+  - Vitest `resolve.conditions: ['browser']` fix for Svelte 5 component testing with jsdom
+  - Route load function uses SvelteKit `error()` for proper HTTP status propagation
+
+### Security
+
+- WebSocket terminal endpoint now validates the `Origin` header before accepting connections, blocking cross-site WebSocket hijacking (CSWSH) — previously any website visited while the lab was running could open a shell on lab containers because CORS middleware does not protect WebSocket upgrades
+- `ALLOWED_ORIGINS` constant shared between CORS middleware and WebSocket origin check in `aptl.api.deps` to prevent drift
+
 ## [4.10.0] - 2026-03-21
 
 ### Added

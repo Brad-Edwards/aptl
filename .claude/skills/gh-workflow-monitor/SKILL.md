@@ -8,14 +8,12 @@ disable-model-invocation: true
 
 Use the `gh` for GitHub operations.
 
-## Step 1: Switch to plan mode.
+## Step 1: Check current branch.
 
-## Step 2: Check current branch.
+## Step 2: If the branch is not green, find the GitHub Actions workflow run associated with the current branch. Use the gh cli.
 
-## Step 3: If the branch is not green, find the GitHub Actions workflow run associated with the current branch. Use the gh cli.
+## Step 3: Monitor the workflow run for failures.
 
-## Step 4: Monitor the workflow run for failures.
+## Step 4: If the workflow run fails, propose a fix.
 
-## Step 5: If the workflow run fails, propose a fix.
-
-## Step 6: If the workflow run succeeds, exit plan mode and report the status.
+## Step 5: If the workflow run succeeds, exit plan mode and report the status.

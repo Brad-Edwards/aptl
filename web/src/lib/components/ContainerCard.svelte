@@ -34,8 +34,14 @@
 		return 'stopped';
 	});
 
+	const SSH_CONTAINERS = new Set(['victim', 'kali', 'reverse', 'workstation']);
+
 	const displayName = $derived(
 		container.name.replace(/^aptl-/, '').replace(/-\d+$/, '')
+	);
+
+	const showTerminal = $derived(
+		container.state === 'running' && SSH_CONTAINERS.has(displayName)
 	);
 </script>
 
@@ -75,6 +81,16 @@
 					+{container.ports.length - 3} more
 				</span>
 			{/if}
+		</div>
+	{/if}
+	{#if showTerminal}
+		<div class="mt-2">
+			<a
+				href="/terminal/{displayName}"
+				class="text-xs font-medium text-aptl-indigo transition-colors hover:text-aptl-indigo-hover"
+			>
+				Terminal
+			</a>
 		</div>
 	{/if}
 </div>

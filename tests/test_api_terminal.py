@@ -58,6 +58,38 @@ def _make_mock_conn(process):
 
 
 class TestTerminalWebSocket:
+    def test_cross_origin_rejected(self, api_client):
+        """Cross-origin WebSocket connections are rejected before accept."""
+        with pytest.raises(Exception):
+            with api_client.websocket_connect(
+                "/api/terminal/ws/victim",
+                headers={"origin": "http://evil.com"},
+            ) as ws:
+                ws.receive_json()
+
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_allowed_origin_accepted(self, mock_status, api_client):
+        """Connections from allowed origins proceed normally."""
+        mock_status.return_value = _make_lab_status(running=False)
+
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim",
+            headers={"origin": "http://localhost:3000"},
+        ) as ws:
+            msg = ws.receive_json()
+            assert msg["type"] == "error"
+            assert "not running" in msg["message"]
+
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_no_origin_header_allowed(self, mock_status, api_client):
+        """Connections without an Origin header are allowed (non-browser clients)."""
+        mock_status.return_value = _make_lab_status(running=False)
+
+        with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
+            msg = ws.receive_json()
+            assert msg["type"] == "error"
+            assert "not running" in msg["message"]
+
     @patch("aptl.api.routers.terminal.lab_status")
     def test_invalid_container_rejected(self, mock_status, api_client):
         """Unknown container name closes WebSocket with 1008."""

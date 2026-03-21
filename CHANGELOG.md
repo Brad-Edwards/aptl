@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Vitest `resolve.conditions: ['browser']` fix for Svelte 5 component testing with jsdom
   - Route load function uses SvelteKit `error()` for proper HTTP status propagation
 
+### Security
+
+- WebSocket terminal endpoint now validates the `Origin` header before accepting connections, blocking cross-site WebSocket hijacking (CSWSH) — previously any website visited while the lab was running could open a shell on lab containers because CORS middleware does not protect WebSocket upgrades
+- `ALLOWED_ORIGINS` constant shared between CORS middleware and WebSocket origin check in `aptl.api.deps` to prevent drift
+
 ## [4.10.0] - 2026-03-21
 
 ### Added

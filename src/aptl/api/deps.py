@@ -1,4 +1,4 @@
-"""Dependency injection for the APTL API."""
+"""Dependency injection and shared constants for the APTL API."""
 
 from pathlib import Path
 from typing import Optional
@@ -6,6 +6,14 @@ from typing import Optional
 from fastapi import HTTPException
 
 from aptl.core.config import AptlConfig, find_config, load_config
+
+# Trusted origins for CORS and WebSocket origin validation.
+# CORS middleware does not protect WebSocket upgrade requests, so
+# the terminal endpoint checks this set independently.
+ALLOWED_ORIGINS: set[str] = {
+    "http://localhost:3000",
+    "http://localhost:5173",
+}
 
 
 def get_project_dir() -> Path:

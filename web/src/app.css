@@ -30,3 +30,83 @@ body {
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 }
+
+/* Markdown prose styling for workbench narrative blocks */
+.prose-aptl {
+	color: var(--color-aptl-text);
+	line-height: 1.65;
+}
+
+.prose-aptl h1 {
+	font-size: 1.5rem;
+	font-weight: 700;
+	margin-bottom: 0.5rem;
+}
+
+.prose-aptl h2 {
+	font-size: 1.25rem;
+	font-weight: 600;
+	margin-top: 1.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.prose-aptl h3 {
+	font-size: 1rem;
+	font-weight: 600;
+	margin-top: 1rem;
+	margin-bottom: 0.25rem;
+}
+
+.prose-aptl p {
+	margin-top: 0.5rem;
+	margin-bottom: 0.5rem;
+	color: var(--color-aptl-text-muted);
+}
+
+.prose-aptl strong {
+	color: var(--color-aptl-text);
+	font-weight: 600;
+}
+
+.prose-aptl code {
+	background-color: var(--color-aptl-surface);
+	border-radius: 0.25rem;
+	padding: 0.125rem 0.375rem;
+	font-family: var(--font-mono);
+	font-size: 0.8125rem;
+}
+
+.prose-aptl pre {
+	background-color: var(--color-aptl-bg);
+	border-radius: 0.5rem;
+	padding: 0.75rem 1rem;
+	overflow-x: auto;
+	margin-top: 0.75rem;
+	margin-bottom: 0.75rem;
+}
+
+.prose-aptl pre code {
+	background: none;
+	padding: 0;
+}
+
+.prose-aptl ul,
+.prose-aptl ol {
+	margin-top: 0.5rem;
+	margin-bottom: 0.5rem;
+	padding-left: 1.25rem;
+	color: var(--color-aptl-text-muted);
+}
+
+.prose-aptl li {
+	margin-top: 0.25rem;
+}
+
+.prose-aptl a {
+	color: var(--color-aptl-indigo);
+	text-decoration: underline;
+}
+
+.prose-aptl a:hover {
+	color: var(--color-aptl-indigo-hover);
+}

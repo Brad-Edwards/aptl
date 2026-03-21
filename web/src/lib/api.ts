@@ -1,4 +1,10 @@
-import type { AppConfig, LabActionResponse, LabStatus, ScenarioSummary } from './types';
+import type {
+	AppConfig,
+	LabActionResponse,
+	LabStatus,
+	ScenarioDefinition,
+	ScenarioSummary
+} from './types';
 
 const BASE = '/api';
 const MAX_ERROR_TEXT_LENGTH = 500;
@@ -31,8 +37,8 @@ export async function getScenarios(): Promise<ScenarioSummary[]> {
 	return fetchJSON<ScenarioSummary[]>('/scenarios');
 }
 
-export async function getScenario(id: string): Promise<Record<string, unknown>> {
-	return fetchJSON<Record<string, unknown>>(`/scenarios/${encodeURIComponent(id)}`);
+export async function getScenario(id: string): Promise<ScenarioDefinition> {
+	return fetchJSON<ScenarioDefinition>(`/scenarios/${encodeURIComponent(id)}`);
 }
 
 export async function getConfig(): Promise<AppConfig> {

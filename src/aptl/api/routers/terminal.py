@@ -7,7 +7,7 @@ from pathlib import Path
 import asyncssh
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from aptl.api.deps import get_project_dir
+from aptl.api.deps import ALLOWED_ORIGINS, get_project_dir
 from aptl.core.lab import lab_status
 from aptl.core.ssh import _KEY_NAME
 from aptl.utils.logging import get_logger
@@ -78,6 +78,16 @@ async def terminal_ws(
     Opens an SSH PTY connection to the specified container and relays
     stdin/stdout between the WebSocket and the SSH process.
     """
+    # Reject cross-origin WebSocket connections.
+    # CORS middleware does NOT protect WebSocket upgrades — browsers send
+    # them cross-origin without preflight. Without this check, any website
+    # the user visits could open a shell on lab containers.
+    origin = websocket.headers.get("origin", "")
+    if origin and origin not in ALLOWED_ORIGINS:
+        await websocket.close(code=1008, reason="Origin not allowed")
+        log.warning("Rejected WebSocket from disallowed origin: %s", origin)
+        return
+
     # Validate container name
     if container not in SSH_ENDPOINTS:
         await websocket.accept()

@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - In-browser terminal for container SSH access via xterm.js and WebSocket (#221):
-  - WebSocket endpoint `ws /api/terminal/ws/{container}` with asyncssh PTY relay for victim, kali, and reverse containers
+  - WebSocket endpoint `ws /api/terminal/ws/{container}` with asyncssh PTY relay for all SSH-capable containers
   - `Terminal.svelte` component: xterm.js wrapper with FitAddon, WebLinksAddon, APTL dark theme, auto-resize
   - Full-page terminal route at `/terminal/{container}` with back navigation
   - "Terminal" link on ContainerCard when container is running and SSH-capable

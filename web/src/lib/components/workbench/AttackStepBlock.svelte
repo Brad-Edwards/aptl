@@ -10,6 +10,7 @@
 	let { step, stepIndex }: Props = $props();
 
 	let copiedIdx = $state<number | null>(null);
+	let terminalOpen = $state(false);
 
 	async function copyCommand(cmd: string, idx: number) {
 		try {
@@ -119,8 +120,17 @@
 		</div>
 	{/if}
 
-	<!-- Embedded terminal for target container -->
+	<!-- Embedded terminal for target container (lazy-mounted to avoid mass WebSocket connections) -->
 	{#if step.target}
-		<TerminalBlock container={step.target} label="Terminal: {step.target}" />
+		{#if terminalOpen}
+			<TerminalBlock container={step.target} label="Terminal: {step.target}" />
+		{:else}
+			<button
+				onclick={() => (terminalOpen = true)}
+				class="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-aptl-border py-3 text-xs text-aptl-text-muted transition-colors hover:border-aptl-indigo hover:text-aptl-indigo"
+			>
+				Open Terminal: {step.target}
+			</button>
+		{/if}
 	{/if}
 </div>

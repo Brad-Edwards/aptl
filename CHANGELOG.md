@@ -20,9 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Progressive hint disclosure with escalating point penalties shown in amber
   - SIEM query blocks display query JSON with disabled "Run Query" button (ready for OpenSearch integration)
   - Copyable attack step commands with clipboard feedback
+  - Lazy-mounted terminals in attack step blocks to avoid mass WebSocket connections
+  - Stable block keys for Svelte each-block diffing
+  - Shared `stateColor()` utility for container state badge colors
   - Unit tests for block sequence builder (11 tests), markdown renderer (9 tests), and HintToggle component (7 tests)
   - `marked` and `dompurify` dependencies added
   - Vitest `resolve.conditions: ['browser']` fix for Svelte 5 component testing with jsdom
+  - Route load function uses SvelteKit `error()` for proper HTTP status propagation
 
 ## [4.10.0] - 2026-03-21
 

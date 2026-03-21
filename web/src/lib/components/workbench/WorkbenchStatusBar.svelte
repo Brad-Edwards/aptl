@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ScenarioDefinition, ContainerInfo } from '$lib/types';
 	import { labStatus } from '$lib/stores/lab';
+	import { stateColor } from '$lib/container-state';
 
 	interface Props {
 		scenario: ScenarioDefinition;
@@ -27,12 +28,6 @@
 	function containerState(name: string): string {
 		const c = $labStatus.containers.find((c: ContainerInfo) => c.name === name);
 		return c?.state ?? 'unknown';
-	}
-
-	function stateColor(state: string): string {
-		if (state === 'running') return 'bg-aptl-green';
-		if (state === 'exited' || state === 'dead') return 'bg-aptl-red';
-		return 'bg-aptl-amber';
 	}
 
 	const totalPoints = $derived(

@@ -98,6 +98,9 @@ def start_lab(
         LabResult indicating success or failure.
     """
     profiles = config.containers.enabled_profiles()
+    # OTel stack (Collector + Tempo + Grafana) is core infrastructure
+    if "otel" not in profiles:
+        profiles = [*profiles, "otel"]
     cmd = build_compose_command("up", profiles)
 
     log.info("Starting lab with profiles: %s", profiles)
@@ -148,6 +151,7 @@ def stop_lab(
         profiles = [
             "wazuh", "victim", "kali", "reverse",
             "enterprise", "soc", "mail", "fileshare", "dns",
+            "otel",
         ]
 
     cmd = build_compose_command("down", profiles=profiles)

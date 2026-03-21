@@ -6,6 +6,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.12.0] - 2026-03-21
+
+### Added
+
+- OpenTelemetry integration replacing custom JSONL tracing systems (OBS-001, #225):
+  - Python `telemetry.py` module: OTel TracerProvider with OTLP HTTP exporter, trace context generation/propagation, span creation for scenario lifecycle events
+  - TypeScript `telemetry.ts` module: OTel NodeTracerProvider with OTLP proto exporter, cross-process trace context via `.aptl/trace-context.json`, `traceToolCall()` wrapper with GenAI SIG attributes
+  - Docker infrastructure: OTel Collector (`otel` profile), Grafana Tempo (72h retention), Grafana UI at port 3100
+  - OTel Collector config, Tempo config, and Grafana datasource provisioning in `config/otel/`
+  - Run archive `traces/spans.json` containing all OTel spans fetched from Tempo
+  - `trace_id` field in session state and run manifest for distributed tracing correlation
+  - `collect_traces()` collector querying Tempo HTTP API by trace ID
+  - ADR-012 documenting the OpenTelemetry integration decision
+
+### Changed
+
+- `aptl lab start` now always includes `--profile otel` for the observability stack
+- Run manifest includes `trace_id` field
+- `.mcp.json.example` uses `OTEL_EXPORTER_OTLP_ENDPOINT` instead of `APTL_TRACE_DIR`
+- MCP server startup initializes OTel tracing; shutdown flushes spans
+- `assemble_run()` no longer takes `events` parameter; collects traces from Tempo instead
+
+### Removed
+
+- `src/aptl/core/events.py` (EventLog, EventType, Event, make_event) — replaced by OTel spans
+- `mcp/aptl-mcp-common/src/tracing.ts` (ToolTracer, ToolTrace) — replaced by OTel spans
+- `tests/test_events.py` — replaced by `tests/test_telemetry.py`
+- `APTL_TRACE_DIR` environment variable and `.aptl/traces/` directory
+- `collect_mcp_traces()` from collectors (replaced by `collect_traces()`)
+- `scenario/events.jsonl` and `agents/traces.jsonl` from run archive format
+
 ## [4.11.1] - 2026-03-21
 
 ### Fixed

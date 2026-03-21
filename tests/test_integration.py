@@ -13,7 +13,6 @@ import yaml
 from typer.testing import CliRunner
 
 from aptl.cli.scenario import app
-from aptl.core.events import EventLog, EventType
 from aptl.core.scenarios import (
     ScenarioDefinition,
     ScenarioMode,
@@ -318,8 +317,8 @@ class TestFullLifecycle:
         )
         return tmp_path
 
-    def test_start_creates_session_and_events(self, tmp_path):
-        """AC-3: start creates session.json and initializes event log."""
+    def test_start_creates_session_and_trace_context(self, tmp_path):
+        """AC-3: start creates session.json and writes trace-context.json."""
         project = self._setup_project(tmp_path)
 
         result = runner.invoke(app, [
@@ -335,13 +334,13 @@ class TestFullLifecycle:
         session_data = json.loads(session_path.read_text())
         assert session_data["scenario_id"] == "integration-test"
         assert session_data["state"] == "active"
+        assert len(session_data["trace_id"]) == 32
 
-        # Events file
-        events_dir = project / ".aptl" / "events"
-        event_files = list(events_dir.glob("*.jsonl"))
-        assert len(event_files) == 1
-        content = event_files[0].read_text()
-        assert "scenario_started" in content
+        # Trace context file for MCP servers
+        ctx_path = project / ".aptl" / "trace-context.json"
+        assert ctx_path.exists()
+        ctx_data = json.loads(ctx_path.read_text())
+        assert ctx_data["trace_id"] == session_data["trace_id"]
 
     def test_status_shows_progress(self, tmp_path):
         """AC-4: status shows elapsed time."""
@@ -398,28 +397,16 @@ class TestFullLifecycle:
         ])
         assert result.exit_code == 0
 
-    def test_event_log_records_timeline(self, tmp_path):
-        """Events log should capture the scenario timeline."""
+    def test_trace_context_cleaned_after_stop(self, tmp_path):
+        """trace-context.json should be removed after stop."""
         project = self._setup_project(tmp_path)
         runner.invoke(app, [
             "start", "integration-test",
             "--project-dir", str(project),
         ])
-
-        # Capture the events file path before stop clears session
-        session_data = json.loads(
-            (project / ".aptl" / "session.json").read_text()
-        )
-        events_path = project / ".aptl" / session_data["events_file"]
-
         runner.invoke(app, [
             "stop", "--project-dir", str(project),
         ])
 
-        # Read events
-        event_log = EventLog(events_path)
-        events = event_log.read_all()
-        event_types = [e.event_type for e in events]
-
-        assert EventType.SCENARIO_STARTED in event_types
-        assert EventType.SCENARIO_STOPPED in event_types
+        ctx_path = project / ".aptl" / "trace-context.json"
+        assert not ctx_path.exists()

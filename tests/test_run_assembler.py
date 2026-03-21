@@ -8,7 +8,6 @@ from unittest.mock import patch
 import pytest
 
 from aptl.core.config import AptlConfig
-from aptl.core.events import Event, EventType
 from aptl.core.run_assembler import assemble_run
 from aptl.core.runstore import LocalRunStore
 from aptl.core.scenarios import ScenarioDefinition, load_scenario
@@ -20,7 +19,8 @@ def _make_session(run_id: str = "test-run-id") -> ActiveSession:
         scenario_id="test-scenario",
         state=SessionState.COMPLETED,
         started_at="2025-01-01T00:00:00+00:00",
-        events_file="events/test.jsonl",
+        trace_id="a" * 32,
+        span_id="b" * 16,
         flags={
             "aptl-victim": {
                 "user": {
@@ -34,22 +34,6 @@ def _make_session(run_id: str = "test-run-id") -> ActiveSession:
         run_id=run_id,
     )
 
-
-
-def _make_events() -> list[Event]:
-    return [
-        Event(
-            event_type=EventType.SCENARIO_STARTED,
-            scenario_id="test-scenario",
-            timestamp="2025-01-01T00:00:00+00:00",
-            data={"mode": "red"},
-        ),
-        Event(
-            event_type=EventType.SCENARIO_STOPPED,
-            scenario_id="test-scenario",
-            timestamp="2025-01-01T01:00:00+00:00",
-        ),
-    ]
 
 
 def _make_scenario_yaml(path: Path) -> Path:
@@ -103,7 +87,7 @@ class TestAssembleRun:
     @patch("aptl.core.run_assembler.collect_misp_events")
     @patch("aptl.core.run_assembler.collect_shuffle_executions")
     @patch("aptl.core.run_assembler.collect_container_logs")
-    @patch("aptl.core.run_assembler.collect_mcp_traces")
+    @patch("aptl.core.run_assembler.collect_traces")
     def test_assembles_complete_run(
         self,
         mock_traces,
@@ -129,7 +113,8 @@ class TestAssembleRun:
             "aptl-victim": "victim log output\n",
         }
         mock_traces.return_value = [
-            {"timestamp": "2025-01-01T00:15:00+00:00", "tool_name": "kali_run_command"},
+            {"name": "aptl.scenario.run", "traceId": "a" * 32},
+            {"name": "execute_tool", "traceId": "a" * 32},
         ]
 
         # Create scenario file
@@ -138,7 +123,6 @@ class TestAssembleRun:
 
         store = LocalRunStore(tmp_path / "runs")
         session = _make_session()
-        events = _make_events()
         config = AptlConfig()
 
         run_dir = assemble_run(
@@ -147,7 +131,6 @@ class TestAssembleRun:
             session=session,
             scenario=scenario,
             scenario_path=scenario_path,
-            events=events,
             config=config,
         )
 
@@ -156,10 +139,9 @@ class TestAssembleRun:
         assert (run_dir / "manifest.json").exists()
         assert (run_dir / "flags.json").exists()
         assert (run_dir / "scenario" / "definition.yaml").exists()
-        assert (run_dir / "scenario" / "events.jsonl").exists()
         assert (run_dir / "wazuh" / "alerts.jsonl").exists()
         assert (run_dir / "containers" / "aptl-victim.log").exists()
-        assert (run_dir / "agents" / "traces.jsonl").exists()
+        assert (run_dir / "traces" / "spans.json").exists()
 
         # Verify manifest content
         manifest = json.loads((run_dir / "manifest.json").read_text())
@@ -167,23 +149,19 @@ class TestAssembleRun:
         assert manifest["scenario_id"] == "test-scenario"
         assert manifest["scenario_name"] == "Test Scenario"
         assert manifest["flags_captured"] == 1
+        assert manifest["trace_id"] == "a" * 32
 
         # Verify flags
         flags = json.loads((run_dir / "flags.json").read_text())
         assert "aptl-victim" in flags
 
-        # Verify events
-        event_lines = (run_dir / "scenario" / "events.jsonl").read_text().strip().splitlines()
-        assert len(event_lines) == 2
-
         # Verify container logs
         assert "victim log output" in (run_dir / "containers" / "aptl-victim.log").read_text()
 
         # Verify traces
-        trace_lines = (run_dir / "agents" / "traces.jsonl").read_text().strip().splitlines()
-        assert len(trace_lines) == 1
-        trace = json.loads(trace_lines[0])
-        assert trace["tool_name"] == "kali_run_command"
+        spans = json.loads((run_dir / "traces" / "spans.json").read_text())
+        assert len(spans) == 2
+        assert spans[0]["name"] == "aptl.scenario.run"
 
     @patch("aptl.core.run_assembler._active_containers")
     @patch("aptl.core.run_assembler.collect_wazuh_alerts")
@@ -192,7 +170,7 @@ class TestAssembleRun:
     @patch("aptl.core.run_assembler.collect_misp_events")
     @patch("aptl.core.run_assembler.collect_shuffle_executions")
     @patch("aptl.core.run_assembler.collect_container_logs")
-    @patch("aptl.core.run_assembler.collect_mcp_traces")
+    @patch("aptl.core.run_assembler.collect_traces")
     def test_handles_no_optional_data(
         self,
         mock_traces,
@@ -220,7 +198,6 @@ class TestAssembleRun:
 
         store = LocalRunStore(tmp_path / "runs")
         session = _make_session()
-        events = _make_events()
         config = AptlConfig()
 
         run_dir = assemble_run(
@@ -229,17 +206,15 @@ class TestAssembleRun:
             session=session,
             scenario=scenario,
             scenario_path=scenario_path,
-            events=events,
             config=config,
         )
 
         # Core files should always exist
         assert (run_dir / "manifest.json").exists()
         assert (run_dir / "flags.json").exists()
-        assert (run_dir / "scenario" / "events.jsonl").exists()
 
-        # Optional directories should not have files when empty
-        assert not (run_dir / "agents" / "traces.jsonl").exists()
+        # No traces when Tempo returns empty
+        assert not (run_dir / "traces" / "spans.json").exists()
         assert not (run_dir / "soc" / "thehive-cases.json").exists()
 
 
@@ -253,7 +228,7 @@ class TestRunManifest:
     @patch("aptl.core.run_assembler.collect_misp_events", return_value=[])
     @patch("aptl.core.run_assembler.collect_shuffle_executions", return_value=[])
     @patch("aptl.core.run_assembler.collect_container_logs", return_value={})
-    @patch("aptl.core.run_assembler.collect_mcp_traces", return_value=[])
+    @patch("aptl.core.run_assembler.collect_traces", return_value=[])
     def test_manifest_has_required_fields(
         self, m1, m2, m3, m4, m5, m6, m7, m8, tmp_path
     ):
@@ -268,7 +243,6 @@ class TestRunManifest:
             session=_make_session("manifest-test"),
             scenario=scenario,
             scenario_path=scenario_path,
-            events=_make_events(),
             config=AptlConfig(),
         )
 
@@ -281,6 +255,7 @@ class TestRunManifest:
             "started_at",
             "finished_at",
             "duration_seconds",
+            "trace_id",
             "config_snapshot",
             "containers",
             "flags_captured",
@@ -289,6 +264,7 @@ class TestRunManifest:
             assert key in manifest, f"Missing manifest key: {key}"
 
         assert manifest["run_id"] == "manifest-test"
+        assert manifest["trace_id"] == "a" * 32
         assert isinstance(manifest["duration_seconds"], (int, float))
         assert isinstance(manifest["config_snapshot"], dict)
         assert "lab" in manifest["config_snapshot"]

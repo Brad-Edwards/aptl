@@ -52,11 +52,23 @@ export function initTracing(serverName: string): void {
 
 /**
  * Force-flush and shutdown the TracerProvider.
+ *
+ * Flush/shutdown errors are caught and logged — tracing teardown
+ * must never crash the host process (e.g. when the Collector is
+ * unreachable).
  */
 export async function shutdownTracing(): Promise<void> {
   if (provider !== null) {
-    await provider.forceFlush();
-    await provider.shutdown();
+    try {
+      await provider.forceFlush();
+    } catch {
+      // Collector may be unreachable — not fatal
+    }
+    try {
+      await provider.shutdown();
+    } catch {
+      // Best-effort shutdown
+    }
     provider = null;
     console.error('[OTel] Tracing shut down');
   }

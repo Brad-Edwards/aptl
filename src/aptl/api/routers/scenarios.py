@@ -83,12 +83,12 @@ async def get_scenario(
     project_dir: Path = Depends(get_project_dir),
 ) -> dict:
     """Get full scenario definition by ID."""
-    log.info("GET /scenarios/%s", scenario_id)
+    log.info("GET /scenarios/<id>")
     try:
         scenario = await asyncio.to_thread(
             _load_single_scenario, scenario_id, project_dir
         )
     except ScenarioNotFoundError:
-        log.warning("Scenario not found: %s", scenario_id)
-        raise HTTPException(status_code=404, detail=f"Scenario not found: {scenario_id}")
+        log.warning("Scenario not found")
+        raise HTTPException(status_code=404, detail="Scenario not found")
     return scenario.model_dump()

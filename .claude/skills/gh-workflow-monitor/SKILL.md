@@ -18,4 +18,4 @@ Use the `gh` for GitHub operations.
 
 ## Step 5: If the workflow run fails, propose a fix.
 
-## Step 6: If the workflow run succeeds, report the status.
+## Step 6: If the workflow run succeeds, exit plan mode and report the status.

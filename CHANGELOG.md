@@ -6,6 +6,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.9.2] - 2026-03-20
+
+### Fixed
+
+- API response models use `Optional[str] = None` instead of `str = ""` for error fields
+- SSE generator implements exponential backoff and circuit breaker (terminates after 10 consecutive errors)
+- CORS tightened to `GET`/`POST` methods and `Content-Type`/`Accept` headers only
+- Lab start endpoint has 30-minute timeout via `asyncio.wait_for`
+- All API routers use FastAPI `Depends()` for `get_project_dir` injection (testable, validates directory exists)
+- `get_project_dir()` returns HTTP 503 when project directory does not exist
+- Hardcoded container list in config router replaced with dynamic `ContainerSettings.model_fields`
+- `ContainerSettings.enabled_profiles()` uses `model_fields` instead of hardcoded list
+- Docker CLI installed via official APT repo with GPG verification instead of `curl | sh`
+- Production web Docker image uses `npm ci --omit=dev` instead of copying full `node_modules`
+- Uvicorn production config: `--workers`, `--log-level info`, `--timeout-keep-alive 65`, `--access-log`
+- Frontend SSE reconnects with generation counter to prevent race conditions
+- Frontend error text truncated to 500 characters
+- `+page.svelte` checks `error != null` instead of truthy for nullable error field
+
+### Added
+
+- Structured logging (`aptl.utils.logging`) in all API routers and `create_app()`
+- `+error.svelte` dark-themed error page with status code and back link
+- Accessibility: `role="status"`/`role="img"`, `aria-label` on status dots, badges, spinner, buttons; `sr-only` loading text
+- Expert difficulty gets distinct violet badge (was same red as advanced)
+- HTML meta tags: `description`, `theme-color` (#1a1d23), `apple-mobile-web-app-capable`
+- `.dockerignore` files for project root and `web/`
+- Docker socket security documentation in README
+- SonarCloud config includes `web/src` sources and `web/coverage/lcov.info`
+- CI workflow runs web frontend tests with coverage
+- Vitest coverage config (v8 provider, lcov reporter)
+
+### Removed
+
+- Unused `web/src/lib/stores/scenarios.ts`
+- Unused `getScenarios` import from `+page.ts`
+- `httpx` from `web` optional deps (already in `dev`; CI installs both)
+
+## [4.9.1] - 2026-03-20
+
+### Fixed
+
+- CI SonarCloud workflow installs `.[dev,web]` so API tests find `fastapi` (#219)
+- API test files gracefully skip via `pytest.importorskip` when web deps are absent
+
+## [4.9.0] - 2026-03-20
+
+### Added
+
+- Notebook-style web UI Phase 1 MVP (SYS-010, ADR-011) (#219):
+  - FastAPI backend (`src/aptl/api/`) wrapping existing `aptl.core` modules — no domain logic duplication
+  - REST endpoints: `GET /api/lab/status`, `POST /api/lab/start`, `POST /api/lab/stop`, `GET /api/scenarios`, `GET /api/scenarios/{id}`, `GET /api/config`, `GET /api/health`
+  - SSE endpoint `GET /api/lab/events` for real-time container status updates
+  - SvelteKit frontend (`web/`) with Tailwind CSS v4, dark theme (indigo/violet/teal palette)
+  - Lab Home page with container status grid, start/stop controls, scenario listing with difficulty/mode badges
+  - `aptl web serve` CLI command to start the API server on port 8400
+  - `web` optional dependency group: FastAPI, uvicorn, sse-starlette, httpx
+  - Docker Compose `web` profile with `aptl-web-api` (172.20.0.40:8400) and `aptl-web-ui` (172.20.0.41:3000) services
+  - Backend tests (`test_api_lab.py`, `test_api_scenarios.py`, `test_api_config.py`) and frontend API tests
+  - ADR-011 status: proposed -> accepted
+
 ## [4.8.0] - 2026-03-20
 
 ### Added

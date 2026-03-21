@@ -94,10 +94,9 @@ class TestTerminalWebSocket:
 
         with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
             ws.send_text(json.dumps({"type": "stdin", "data": "ls\n"}))
-            # Give the relay tasks time to process
-            import time
-            time.sleep(0.1)
 
+        # ws context exit closes the WebSocket, which unblocks the relay
+        # tasks and allows them to process queued messages before shutdown
         process.stdin.write.assert_called_with("ls\n")
 
     @patch("aptl.api.routers.terminal.asyncssh")
@@ -135,8 +134,6 @@ class TestTerminalWebSocket:
 
         with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
             ws.send_text(json.dumps({"type": "resize", "cols": 120, "rows": 40}))
-            import time
-            time.sleep(0.1)
 
         process.change_terminal_size.assert_called_with(120, 40)
 
@@ -171,14 +168,14 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
-            assert "Connection refused" in msg["message"]
+            assert msg["message"] == "SSH connection failed"
 
     @patch("aptl.api.routers.terminal.lab_status")
     def test_valid_containers_accepted(self, mock_status, api_client):
         """All valid container names are accepted (not rejected with 1008)."""
         mock_status.return_value = _make_lab_status(running=False)
 
-        for name in ["victim", "kali", "reverse"]:
+        for name in ["victim", "kali", "reverse", "workstation"]:
             with api_client.websocket_connect(f"/api/terminal/ws/{name}") as ws:
                 msg = ws.receive_json()
                 # Should get "lab not running" error, not unknown container

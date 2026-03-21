@@ -58,11 +58,13 @@ async def _relay_ws_to_ssh(
             if msg_type == "stdin":
                 process.stdin.write(msg.get("data", ""))
             elif msg_type == "resize":
-                cols = msg.get("cols", 80)
-                rows = msg.get("rows", 24)
+                cols = max(1, min(msg.get("cols", 80), 500))
+                rows = max(1, min(msg.get("rows", 24), 200))
                 process.change_terminal_size(cols, rows)
-    except (asyncio.CancelledError, WebSocketDisconnect, json.JSONDecodeError):
+    except (asyncio.CancelledError, WebSocketDisconnect):
         pass
+    except json.JSONDecodeError:
+        log.debug("Malformed WebSocket message, ignoring")
 
 
 @router.websocket("/terminal/ws/{container}")
@@ -107,7 +109,7 @@ async def terminal_ws(
             port=port,
             username=username,
             client_keys=[str(key_path)],
-            known_hosts=None,
+            known_hosts=None,  # localhost-only; containers regenerate host keys on rebuild
         )
         process = await conn.create_process(
             term_type="xterm-256color",
@@ -119,10 +121,10 @@ async def terminal_ws(
             _relay_ws_to_ssh(websocket, process),
         )
     except asyncssh.Error as exc:
-        log.exception("SSH connection error on port %d", port)
+        log.exception("SSH connection error on port %d: %s", port, exc)
         try:
             await websocket.send_json(
-                {"type": "error", "message": f"SSH connection failed: {exc}"}
+                {"type": "error", "message": "SSH connection failed"}
             )
         except Exception:
             pass

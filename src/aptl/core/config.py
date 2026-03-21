@@ -57,14 +57,10 @@ class ContainerSettings(BaseModel):
 
     def enabled_profiles(self) -> list[str]:
         """Return docker compose profile names for enabled containers."""
-        profiles = []
-        for field_name in [
-            "wazuh", "victim", "kali", "reverse",
-            "enterprise", "soc", "mail", "fileshare", "dns",
-        ]:
-            if getattr(self, field_name):
-                profiles.append(field_name)
-        return profiles
+        return [
+            name for name in type(self).model_fields
+            if getattr(self, name)
+        ]
 
 
 class RunStorageConfig(BaseModel):

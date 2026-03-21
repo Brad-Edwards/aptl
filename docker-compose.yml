@@ -903,6 +903,53 @@ services:
         limits:
           memory: 512m
 
+  # ==========================================================================
+  # WEB UI (web profile)
+  # ==========================================================================
+
+  aptl-web-api:
+    profiles: ["web"]
+    container_name: aptl-web-api
+    build:
+      context: .
+      dockerfile: web/Dockerfile.api
+    restart: unless-stopped
+    ports:
+      - "8400:8400"
+    environment:
+      - APTL_PROJECT_DIR=/project
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/project:ro
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.40
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  aptl-web-ui:
+    profiles: ["web"]
+    container_name: aptl-web-ui
+    build:
+      context: web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - ORIGIN=http://localhost:3000
+    depends_on:
+      - aptl-web-api
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.41
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
 # ==========================================================================
 # NETWORKS
 # ==========================================================================

@@ -7,6 +7,7 @@ when a service is unavailable and never raise.
 """
 
 import json
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -324,47 +325,46 @@ def collect_container_logs(
     return logs
 
 
-def collect_mcp_traces(
-    trace_dir: Path,
-    start_iso: str,
-    end_iso: str,
+def collect_traces(
+    trace_id: str,
+    tempo_url: str | None = None,
 ) -> list[dict]:
-    """Merge all MCP trace JSONL files from the trace directory.
+    """Fetch all spans for a trace from Grafana Tempo.
 
-    Reads ``*.jsonl`` files, filters by timestamp within the window,
-    and returns a chronologically sorted merged list.
+    Queries the Tempo HTTP API by trace ID and returns the spans
+    in OTLP JSON format.
+
+    Args:
+        trace_id: The hex trace ID to query.
+        tempo_url: Base URL for Tempo. Defaults to ``TEMPO_URL`` env
+            var or ``http://localhost:3200``.
+
+    Returns:
+        List of span dicts, or empty list on error.
     """
-    if not trace_dir.exists():
-        log.info("Trace directory %s does not exist, skipping", trace_dir)
+    if not trace_id:
+        log.info("No trace_id provided, skipping trace collection")
         return []
 
-    start_dt = datetime.fromisoformat(start_iso)
-    end_dt = datetime.fromisoformat(end_iso)
-    all_traces: list[dict] = []
+    url = tempo_url or os.getenv("TEMPO_URL", "http://localhost:3200")
+    api_url = f"{url}/api/traces/{trace_id}"
 
-    for jsonl_file in trace_dir.glob("*.jsonl"):
-        for line in jsonl_file.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+    result = _curl_json(api_url, timeout=30)
+    if result is None:
+        log.warning("Failed to fetch traces from Tempo at %s", api_url)
+        return []
 
-            ts = entry.get("timestamp", "")
-            if ts:
-                try:
-                    entry_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                    if start_dt <= entry_dt <= end_dt:
-                        all_traces.append(entry)
-                except ValueError:
-                    all_traces.append(entry)
-            else:
-                all_traces.append(entry)
+    # Tempo returns { batches: [ { resource: {...}, scopeSpans: [...] } ] }
+    # or { resourceSpans: [...] } depending on version. Normalize to span list.
+    spans: list[dict] = []
+    if isinstance(result, dict):
+        # Tempo v2 format: batches -> scopeSpans -> spans
+        for batch in result.get("batches", result.get("resourceSpans", [])):
+            resource = batch.get("resource", {})
+            for scope_span in batch.get("scopeSpans", []):
+                for span in scope_span.get("spans", []):
+                    enriched = {**span, "resource": resource}
+                    spans.append(enriched)
 
-    # Sort chronologically
-    all_traces.sort(key=lambda x: x.get("timestamp", ""))
-
-    log.info("Collected %d MCP trace entries", len(all_traces))
-    return all_traces
+    log.info("Collected %d spans from Tempo for trace %s", len(spans), trace_id[:16])
+    return spans

@@ -1,7 +1,7 @@
 """CLI commands for scenario management."""
 
 import os
-import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -14,7 +14,6 @@ from rich.table import Table
 
 from aptl.core.config import AptlConfig, find_config, load_config
 from aptl.core.env import load_dotenv
-from aptl.core.events import EventLog, EventType, make_event
 from aptl.core.flags import collect_flags
 from aptl.core.run_assembler import assemble_run
 from aptl.core.runstore import LocalRunStore
@@ -28,6 +27,15 @@ from aptl.core.scenarios import (
     validate_scenario_containers,
 )
 from aptl.core.session import ActiveSession, ScenarioSession
+from aptl.core.telemetry import (
+    create_child_span,
+    create_root_span,
+    get_tracer,
+    init_tracing,
+    make_parent_context,
+    shutdown_tracing,
+    write_trace_context,
+)
 from aptl.utils.logging import get_logger
 
 log = get_logger("cli.scenario")
@@ -381,13 +389,8 @@ def start(
     state = _state_dir(project_dir)
     session_mgr = ScenarioSession(state)
 
-    # Create events directory and log
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
-    events_dir = state / "events"
-    events_file = events_dir / f"{scenario.metadata.id}_{ts}.jsonl"
-
     try:
-        session = session_mgr.start(scenario, events_file)
+        session = session_mgr.start(scenario)
     except ScenarioStateError as e:
         log.error("Cannot start scenario: %s", e)
         typer.echo(f"Error: {e}")
@@ -398,12 +401,8 @@ def start(
     session.run_id = run_id
     session_mgr._write(session)
 
-    # Set trace directory for MCP servers and clean stale traces
-    trace_dir = state / "traces"
-    if trace_dir.exists():
-        shutil.rmtree(trace_dir)
-    trace_dir.mkdir(parents=True, exist_ok=True)
-    os.environ["APTL_TRACE_DIR"] = str(trace_dir)
+    # Write trace context for MCP servers to read
+    write_trace_context(state, session.trace_id, session.span_id)
 
     # Collect CTF flags from running containers
     flags = collect_flags()
@@ -415,16 +414,18 @@ def start(
     else:
         log.warning("No CTF flags collected (containers may not be running)")
 
-    event_log = EventLog(state / session.events_file)
-    event_log.append(make_event(
-        EventType.SCENARIO_STARTED,
-        scenario.metadata.id,
-        {
-            "mode": scenario.mode.value,
-            "flags_collected": len(flags),
-            "run_id": run_id,
-        },
-    ))
+    # Emit a lightweight OTel span marking scenario start
+    init_tracing()
+    tracer = get_tracer()
+    parent_ctx = make_parent_context(session.trace_id, session.span_id)
+    span = create_child_span(tracer, parent_ctx, "scenario.started", {
+        "aptl.scenario.id": scenario.metadata.id,
+        "aptl.scenario.mode": scenario.mode.value,
+        "aptl.run.id": run_id,
+        "aptl.flags.collected": sum(len(v) for v in flags.values()),
+    })
+    span.end()
+    shutdown_tracing()
 
     typer.echo(f"Started scenario: {scenario.metadata.name}")
     typer.echo(f"  ID:         {scenario.metadata.id}")
@@ -432,8 +433,7 @@ def start(
     typer.echo(f"  Mode:       {scenario.mode.value}")
     typer.echo(f"  Objectives: {len(scenario.objectives.all_objectives())}")
     typer.echo(f"  Flags:      {sum(len(v) for v in flags.values())} captured")
-    typer.echo(f"  Events:     {session.events_file}")
-    typer.echo(f"  Traces:     {trace_dir}")
+    typer.echo(f"  Trace ID:   {session.trace_id}")
 
 
 @app.command()
@@ -492,24 +492,35 @@ def stop(
 
     scenario = _load_active_scenario(session, project_dir, scenarios_dir)
 
-    # Log stop event
-    event_log = EventLog(state / session.events_file)
-    event_log.append(make_event(
-        EventType.SCENARIO_STOPPED,
-        session.scenario_id,
-    ))
-
     # Calculate duration
     started = datetime.fromisoformat(session.started_at)
-    elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+    now = datetime.now(timezone.utc)
+    elapsed = (now - started).total_seconds()
     minutes = int(elapsed // 60)
     seconds = int(elapsed % 60)
 
+    # Create the synthetic root span covering the full scenario duration
+    if session.trace_id:
+        init_tracing()
+        tracer = get_tracer()
+        start_ns = int(started.timestamp() * 1e9)
+        end_ns = int(now.timestamp() * 1e9)
+        create_root_span(
+            tracer=tracer,
+            scenario_id=session.scenario_id,
+            run_id=session.run_id,
+            start_time=start_ns,
+            end_time=end_ns,
+            trace_id=session.trace_id,
+            span_id=session.span_id,
+        )
+        shutdown_tracing()
+
+        # Brief delay to allow BatchSpanProcessor flush from MCP servers
+        time.sleep(2)
+
     # Finish session
     finished_session = session_mgr.finish()
-
-    # Read events
-    events = event_log.read_all()
 
     # Load .env into os.environ so collectors in assemble_run() can
     # read credentials via os.getenv() (issue #184).
@@ -544,7 +555,6 @@ def stop(
                 session=finished_session,
                 scenario=scenario,
                 scenario_path=scenario_path,
-                events=events,
                 config=config,
             )
         except Exception as e:
@@ -553,6 +563,11 @@ def stop(
 
     # Clear session
     session_mgr.clear()
+
+    # Clean up trace context file
+    ctx_file = state / "trace-context.json"
+    if ctx_file.exists():
+        ctx_file.unlink()
 
     # Display summary
     typer.echo(f"Scenario stopped: {scenario.metadata.name}")

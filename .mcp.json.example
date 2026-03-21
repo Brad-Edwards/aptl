@@ -4,21 +4,21 @@
       "command": "node",
       "args": ["./mcp/mcp-red/build/index.js"],
       "env": {
-        "APTL_TRACE_DIR": "./.aptl/traces"
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
       }
     },
     "reverse-sandbox-ssh": {
       "command": "node",
       "args": ["./mcp/mcp-reverse/build/index.js"],
       "env": {
-        "APTL_TRACE_DIR": "./.aptl/traces"
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
       }
     },
     "shuffle": {
       "command": "node",
       "args": ["./mcp/mcp-soar/build/index.js"],
       "env": {
-        "APTL_TRACE_DIR": "./.aptl/traces",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
         "SHUFFLE_API_KEY": "<run seed-shuffle.sh or check Shuffle UI>"
       }
     },
@@ -26,7 +26,7 @@
       "command": "node",
       "args": ["./mcp/mcp-indexer/build/index.js"],
       "env": {
-        "APTL_TRACE_DIR": "./.aptl/traces",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
         "INDEXER_USERNAME": "admin",
         "INDEXER_PASSWORD": "SecretPassword",
         "API_USERNAME": "wazuh-wui",

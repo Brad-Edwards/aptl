@@ -3,6 +3,10 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	plugins: [sveltekit()],
+	resolve: {
+		// Use browser bundle for Svelte 5 so mount() is available in jsdom tests
+		conditions: ['browser']
+	},
 	test: {
 		include: ['tests/**/*.test.ts'],
 		environment: 'jsdom',

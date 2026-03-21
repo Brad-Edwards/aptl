@@ -6,6 +6,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.11.0] - 2026-03-21
+
+### Added
+
+- Interactive scenario workbench view at `/scenarios/[id]` (UI-001, #223):
+  - Block-composition architecture: `buildBlockSequence()` pure function maps scenario data to typed `WorkbenchBlock[]` discriminated union, separating data logic from rendering
+  - 9 workbench block components: NarrativeBlock (markdown), TerminalBlock (xterm.js wrapper), SiemQueryBlock (stub), ContainerStatusBlock (SSE-driven), HintToggle (progressive disclosure), ObjectiveBlock, AttackStepBlock, WorkbenchStatusBar (sticky), SectionDivider
+  - Full `ScenarioDefinition` TypeScript type hierarchy mirroring Python Pydantic models (metadata, steps, objectives, scoring, attack chain, MITRE references)
+  - `renderMarkdown()` utility using `marked` + DOMPurify for safe runtime markdown rendering
+  - Scenario card links from Lab Home page to workbench view
+  - `prose-aptl` CSS class for dark-themed markdown prose styling
+  - Progressive hint disclosure with escalating point penalties shown in amber
+  - SIEM query blocks display query JSON with disabled "Run Query" button (ready for OpenSearch integration)
+  - Copyable attack step commands with clipboard feedback
+  - Unit tests for block sequence builder (11 tests), markdown renderer (9 tests), and HintToggle component (7 tests)
+  - `marked` and `dompurify` dependencies added
+  - Vitest `resolve.conditions: ['browser']` fix for Svelte 5 component testing with jsdom
+
 ## [4.10.0] - 2026-03-21
 
 ### Added

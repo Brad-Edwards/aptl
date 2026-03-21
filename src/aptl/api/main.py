@@ -20,7 +20,7 @@ def create_app() -> FastAPI:
         version="0.1.0",
     )
 
-    app.add_middleware(
+    app.add_middleware(  # NOSONAR — localhost-only origins; this is a local lab tool, not internet-facing
         CORSMiddleware,
         allow_origins=[
             "http://localhost:3000",

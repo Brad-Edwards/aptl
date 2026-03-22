@@ -50,6 +50,9 @@ class DockerComposeBackend:
     ) -> list[str]:
         """Build a docker compose command with profile flags.
 
+        Does NOT add action-specific flags (--build, -d, -v); callers
+        are responsible for appending those after calling this method.
+
         Args:
             action: The compose action (up, down, ps, kill, etc.).
             profiles: List of docker compose profiles to activate.
@@ -63,9 +66,6 @@ class DockerComposeBackend:
             cmd.extend(["--profile", profile])
 
         cmd.append(action)
-
-        if action == "up":
-            cmd.extend(["--build", "-d"])
 
         return cmd
 
@@ -103,10 +103,7 @@ class DockerComposeBackend:
         Returns:
             LabResult indicating success or failure.
         """
-        cmd = ["docker", "compose"]
-        for profile in profiles:
-            cmd.extend(["--profile", profile])
-        cmd.append("up")
+        cmd = self._build_command("up", profiles)
         if build:
             cmd.append("--build")
         cmd.append("-d")

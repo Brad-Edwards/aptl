@@ -6,10 +6,10 @@ deploying the lab to a dedicated server, classroom environment, or
 cloud VM without changing scenario definitions or MCP configs.
 """
 
+import os
 import subprocess
 from pathlib import Path
 
-from aptl.core.lab import LabResult, LabStatus
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.utils.logging import get_logger
 
@@ -82,8 +82,6 @@ class SSHComposeBackend(DockerComposeBackend):
         Returns:
             CompletedProcess result.
         """
-        import os
-
         env = os.environ.copy()
         env["DOCKER_HOST"] = self._docker_host
 

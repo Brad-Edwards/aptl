@@ -15,6 +15,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from aptl.core.deployment.docker_compose import (
+    _DOCKER_TIMEOUT,
+)
 from aptl.core.lab import ALL_KNOWN_PROFILES, build_compose_command
 from aptl.core.session import ScenarioSession
 from aptl.utils.logging import get_logger
@@ -36,11 +39,6 @@ MCP_SERVER_NAMES = [
 ]
 
 _TRACE_CONTEXT_FILENAME = "trace-context.json"
-
-# Timeout for Docker Compose subprocess calls (seconds).  Generous
-# enough for a large stack, short enough that a hung daemon won't
-# block the kill switch indefinitely.
-_DOCKER_TIMEOUT = 30
 
 
 @dataclass

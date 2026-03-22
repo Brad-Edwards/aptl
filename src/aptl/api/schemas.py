@@ -78,6 +78,16 @@ class LabActionResponse(BaseModel):
     error: Optional[str] = None
 
 
+class KillActionResponse(BaseModel):
+    """Response for POST /api/lab/kill."""
+
+    success: bool
+    mcp_processes_killed: int = 0
+    containers_stopped: bool = False
+    session_cleared: bool = False
+    errors: list[str] = []
+
+
 class ScenarioSummary(BaseModel):
     """Abbreviated scenario info for listing."""
 

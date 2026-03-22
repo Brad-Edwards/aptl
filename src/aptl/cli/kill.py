@@ -13,7 +13,7 @@ app = typer.Typer(help="Emergency kill switch.", invoke_without_command=True)
 
 
 @app.callback(invoke_without_command=True)
-def kill(
+def kill_command(
     containers: bool = typer.Option(
         False,
         "--containers",

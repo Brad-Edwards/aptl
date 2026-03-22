@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from aptl.core.lab import ALL_KNOWN_PROFILES, build_compose_command
 from aptl.core.session import ScenarioSession
 from aptl.utils.logging import get_logger
 
@@ -33,12 +34,10 @@ MCP_SERVER_NAMES = [
 
 _TRACE_CONTEXT_FILENAME = "trace-context.json"
 
-# All known Docker Compose profiles, used as fallback when config is unavailable.
-_ALL_PROFILES = [
-    "wazuh", "victim", "kali", "reverse",
-    "enterprise", "soc", "mail", "fileshare", "dns",
-    "otel",
-]
+# Timeout for Docker Compose subprocess calls (seconds).  Generous
+# enough for a large stack, short enough that a hung daemon won't
+# block the kill switch indefinitely.
+_DOCKER_TIMEOUT = 30
 
 
 @dataclass
@@ -70,8 +69,14 @@ def find_mcp_processes() -> list[dict]:
 
 
 def _find_via_proc() -> list[dict]:
-    """Scan /proc for MCP server processes."""
+    """Scan /proc for MCP server processes.
+
+    Skips the current process to avoid false-positive matches when the
+    kill switch's own command line happens to contain an MCP server name
+    (e.g. in log messages or grep patterns).
+    """
     found: list[dict] = []
+    own_pid = os.getpid()
     try:
         entries = os.listdir("/proc")
     except OSError:
@@ -82,6 +87,8 @@ def _find_via_proc() -> list[dict]:
         if not entry.isdigit():
             continue
         pid = int(entry)
+        if pid == own_pid:
+            continue
         cmdline_path = f"/proc/{pid}/cmdline"
         try:
             with open(cmdline_path, "rb") as f:
@@ -118,13 +125,20 @@ def _find_via_pgrep() -> list[dict]:
     return found
 
 
-def _is_process_alive(pid: int) -> bool:
-    """Check whether a process is still running."""
+def _process_exited(pid: int) -> bool:
+    """Check whether a process has exited.
+
+    Uses ``os.kill(pid, 0)`` which sends no signal but checks existence.
+    Returns True if the process is gone (``ProcessLookupError``) or if
+    we lack permission to signal it (``PermissionError``).  In the
+    permission case the process may still be alive, but since we also
+    cannot SIGKILL it there is no point waiting further.
+    """
     try:
         os.kill(pid, 0)
-        return True
-    except (ProcessLookupError, PermissionError):
         return False
+    except (ProcessLookupError, PermissionError):
+        return True
 
 
 def kill_mcp_processes(timeout: float = 5.0) -> tuple[int, list[str]]:
@@ -167,7 +181,7 @@ def kill_mcp_processes(timeout: float = 5.0) -> tuple[int, list[str]]:
     # Phase 2: Wait for graceful shutdown
     deadline = time.monotonic() + timeout
     while pids_to_track and time.monotonic() < deadline:
-        pids_to_track = [pid for pid in pids_to_track if _is_process_alive(pid)]
+        pids_to_track = [pid for pid in pids_to_track if not _process_exited(pid)]
         if pids_to_track:
             time.sleep(0.25)
 
@@ -200,10 +214,8 @@ def kill_lab_containers(
     Returns:
         Tuple of (success, error_message).
     """
-    from aptl.core.lab import build_compose_command
-
-    profiles = list(_ALL_PROFILES)
-    kwargs: dict = {"capture_output": True, "text": True}
+    profiles = list(ALL_KNOWN_PROFILES)
+    kwargs: dict = {"capture_output": True, "text": True, "timeout": _DOCKER_TIMEOUT}
     if project_dir is not None:
         kwargs["cwd"] = project_dir
 
@@ -214,27 +226,34 @@ def kill_lab_containers(
     kill_cmd.append("kill")
 
     log.info("Running: %s", " ".join(kill_cmd))
+    kill_ok = False
     try:
         result = subprocess.run(kill_cmd, **kwargs)
-        if result.returncode != 0:
+        kill_ok = result.returncode == 0
+        if not kill_ok:
             log.warning("docker compose kill stderr: %s", result.stderr.strip())
+    except subprocess.TimeoutExpired:
+        log.warning("docker compose kill timed out after %ds", _DOCKER_TIMEOUT)
     except (FileNotFoundError, OSError) as exc:
         msg = f"docker compose kill failed: {exc}"
         log.error(msg)
         return False, msg
 
-    # Phase 2: docker compose down (cleanup)
+    # Phase 2: docker compose down (cleanup).  Treat non-zero exit as
+    # a warning — the important work (SIGKILL) already happened above.
     down_cmd = build_compose_command("down", profiles=profiles)
     log.info("Running: %s", " ".join(down_cmd))
     try:
         result = subprocess.run(down_cmd, **kwargs)
         if result.returncode != 0:
             log.warning("docker compose down stderr: %s", result.stderr.strip())
-            return False, result.stderr.strip()
+    except subprocess.TimeoutExpired:
+        log.warning("docker compose down timed out after %ds", _DOCKER_TIMEOUT)
     except (FileNotFoundError, OSError) as exc:
-        msg = f"docker compose down failed: {exc}"
-        log.error(msg)
-        return False, msg
+        log.warning("docker compose down failed: %s", exc)
+
+    if not kill_ok:
+        return False, "docker compose kill returned non-zero"
 
     log.info("All lab containers stopped")
     return True, ""

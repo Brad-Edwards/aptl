@@ -33,6 +33,15 @@ log = get_logger("lab")
 
 WAZUH_IMAGE_VERSION = "4.12.0"
 
+# All known Docker Compose profiles. Used as fallback when config is
+# unavailable (e.g. stop_lab, kill switch).  Keep in sync with
+# docker-compose.yml profile definitions.
+ALL_KNOWN_PROFILES = [
+    "wazuh", "victim", "kali", "reverse",
+    "enterprise", "soc", "mail", "fileshare", "dns",
+    "otel",
+]
+
 
 @dataclass
 class LabResult:
@@ -148,11 +157,7 @@ def stop_lab(
         except (FileNotFoundError, ValueError) as exc:
             log.warning("Could not load config for profiles: %s", exc)
     if not profiles:
-        profiles = [
-            "wazuh", "victim", "kali", "reverse",
-            "enterprise", "soc", "mail", "fileshare", "dns",
-            "otel",
-        ]
+        profiles = list(ALL_KNOWN_PROFILES)
 
     cmd = build_compose_command("down", profiles=profiles)
     if remove_volumes:

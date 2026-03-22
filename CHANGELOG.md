@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.13.0] - 2026-03-22
+
+### Added
+
+- Emergency kill switch for all agent and MCP operations (SAF-001, #229):
+  - `aptl kill` CLI command terminates all MCP server processes (SIGTERM + SIGKILL fallback)
+  - `--containers` flag force-stops all lab Docker containers via `docker compose kill`
+  - POST `/api/lab/kill` endpoint for web UI emergency button
+  - Automatic cleanup of active scenario sessions and trace context files
+  - Core `kill.py` module with resilient process discovery via `/proc/*/cmdline`
+
 ## [4.12.0] - 2026-03-21
 
 ### Added

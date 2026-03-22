@@ -36,18 +36,19 @@ if [ "$manager_ready" = false ]; then
     echo "   The agent will retry connection when the service starts"
 fi
 
-# Install prerequisites for Debian/Kali
-apt-get update
-apt-get install -y curl gnupg lsb-release
-
-# Add Wazuh repository
-curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --no-default-keyring --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import
-echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list
-chmod 644 /usr/share/keyrings/wazuh.gpg
-
-# Install Wazuh agent
-apt-get update
-WAZUH_MANAGER="$WAZUH_MANAGER" apt-get install -y wazuh-agent=4.12.0-1
+# Install Wazuh agent (skip if pre-installed at build time per SAF-002)
+if dpkg -l wazuh-agent 2>/dev/null | grep -q '^ii'; then
+    echo "Wazuh agent already installed (pre-baked in image, SAF-002)"
+else
+    echo "Wazuh agent not pre-installed, downloading from internet..."
+    apt-get update
+    apt-get install -y curl gnupg lsb-release
+    curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --no-default-keyring --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import
+    echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list
+    chmod 644 /usr/share/keyrings/wazuh.gpg
+    apt-get update
+    WAZUH_MANAGER="$WAZUH_MANAGER" apt-get install -y wazuh-agent=4.12.0-1
+fi
 
 echo "Wazuh agent installed successfully"
 

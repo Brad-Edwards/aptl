@@ -1,4 +1,7 @@
 {
+    "deployment": {
+        "provider": "docker-compose"
+    },
     "containers": {
         "wazuh": true,
         "victim": true,

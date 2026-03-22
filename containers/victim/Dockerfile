@@ -76,6 +76,23 @@ COPY base/scripts/ossec.conf.template /opt/purple-team/scripts/
 RUN mkdir -p /etc/falco/config.d
 COPY base/falco_custom.yaml /etc/falco/config.d/
 
+# Pre-install Wazuh agent and Falco at build time so containers on internal
+# Docker networks (SAF-002: internal: true) do not need internet at runtime.
+# Runtime install scripts detect pre-installed packages and skip downloads.
+RUN rpm --import https://packages.wazuh.com/key/GPG-KEY-WAZUH && \
+    printf '[wazuh]\ngpgcheck=1\ngpgkey=https://packages.wazuh.com/key/GPG-KEY-WAZUH\nenabled=1\nname=EL-$releasever - Wazuh\nbaseurl=https://packages.wazuh.com/4.x/yum/\npriority=1\n' \
+    > /etc/yum.repos.d/wazuh.repo && \
+    dnf install -y wazuh-agent-4.12.0 && \
+    dnf clean all && \
+    killall wazuh-execd wazuh-agentd wazuh-syscheckd wazuh-logcollector wazuh-modulesd 2>/dev/null || true && \
+    rm -f /var/ossec/var/run/*.pid
+
+RUN rpm --import https://falco.org/repo/falcosecurity-packages.asc && \
+    printf '[falco]\nname=Falco repository\nbaseurl=https://download.falco.org/packages/rpm\ngpgcheck=1\ngpgkey=https://falco.org/repo/falcosecurity-packages.asc\nenabled=1\n' \
+    > /etc/yum.repos.d/falco.repo && \
+    dnf install -y falco && \
+    dnf clean all
+
 # ---- Victim-specific layer ----
 
 COPY victim/entrypoint.sh /usr/local/bin/

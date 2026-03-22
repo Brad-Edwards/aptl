@@ -105,6 +105,36 @@ class TestProfileConsistency:
         )
 
 
+class TestNetworkEgressControls:
+    """Validate SAF-002: attack networks must block internet egress."""
+
+    ATTACK_NETWORKS = ["aptl-dmz", "aptl-internal", "aptl-redteam"]
+
+    def test_attack_networks_are_internal(self, compose_config):
+        """Networks carrying attack traffic must use internal: true."""
+        networks = compose_config.get("networks", {})
+        not_internal = []
+        for name in self.ATTACK_NETWORKS:
+            net = networks.get(name, {})
+            if not net.get("internal", False):
+                not_internal.append(name)
+        assert not not_internal, (
+            f"SAF-002 violation: attack networks missing internal: true: "
+            f"{not_internal}. Containers on these networks can reach the "
+            f"internet, risking autonomous agent attacks on external targets."
+        )
+
+    def test_security_network_allows_egress(self, compose_config):
+        """Security/management network must NOT be internal (SOC tools need internet)."""
+        networks = compose_config.get("networks", {})
+        security = networks.get("aptl-security", {})
+        assert not security.get("internal", False), (
+            "aptl-security must not be internal: true. "
+            "SOC tools (MISP, Wazuh, Shuffle) require internet for "
+            "threat feeds and rule updates."
+        )
+
+
 class TestBuildScriptCoverage:
     """Validate build-all-mcps.sh covers all MCP server directories."""
 

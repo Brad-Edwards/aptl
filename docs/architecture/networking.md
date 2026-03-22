@@ -105,5 +105,38 @@ Several containers connect to multiple networks:
 - Containers isolated from host network via Docker bridge
 - Only mapped ports accessible from host
 - Internal traffic unencrypted (lab environment)
-- External internet access available (standard Docker behavior)
 - Kali can reach DMZ and internal networks (simulates attacker with pivot access)
+
+## Egress Controls (SAF-002)
+
+Three of the four networks use Docker's `internal: true` flag to prevent containers from reaching the internet. This is a safety constraint: autonomous agents controlling Kali must not be able to scan or attack external targets.
+
+| Network | `internal: true` | Rationale |
+|---------|-------------------|-----------|
+| aptl-security | No | SOC tools (MISP, Wazuh, Shuffle) need internet for threat feeds and rule updates |
+| aptl-dmz | **Yes** | Contains attack targets and Kali entry point |
+| aptl-internal | **Yes** | Contains AD, database, victim, workstation — all attack targets |
+| aptl-redteam | **Yes** | Kali command center; must not reach the real internet |
+
+### Multi-homed container egress
+
+Containers connected to both an internal network and `aptl-security` (dns, wazuh.manager, suricata) retain internet access via the security network interface. Attack containers (kali, victim, webapp, ad, db, fileshare, workstation, mailserver) are only on internal networks and have no internet egress.
+
+### Host port mappings
+
+Docker `internal: true` blocks outbound container traffic (no MASQUERADE rules), but inbound host port mappings (docker-proxy/DNAT) continue to work. SSH access to victim (port 2022) and kali (port 2023) from the host is unaffected.
+
+### Package pre-installation
+
+Wazuh agent and Falco are pre-installed in container images at build time so that containers on internal networks do not need internet access at runtime. The runtime install scripts (`install-wazuh.sh`, `install-falco.sh`) detect pre-installed packages and skip downloads. If the packages are not pre-installed (e.g., using an older image), the scripts fall back to downloading from the internet, which will fail on internal networks.
+
+### Upgrading from pre-SAF-002 deployments
+
+Existing labs must be fully torn down before restarting with the new network configuration:
+
+```bash
+docker compose down    # remove old networks
+docker compose up -d   # recreate with internal: true
+```
+
+Docker cannot change a network's `internal` flag in place. Rebuilding container images (`docker compose build`) is also required to pre-install Wazuh and Falco packages.

@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.14.0] - 2026-03-22
+
+### Added
+
+- Network egress firewall on Docker networks (SAF-002, #231):
+  - `aptl-dmz`, `aptl-internal`, and `aptl-redteam` networks now use `internal: true` to block internet egress
+  - Prevents autonomous agents from scanning or attacking external targets
+  - `aptl-security` remains non-internal so SOC tools can reach threat feeds and rule updates
+  - Multi-homed management containers (dns, wazuh, suricata) retain internet via security network
+  - Host port mappings (SSH to victim/kali) unaffected by internal flag
+  - Wazuh agent and Falco pre-installed in victim, workstation, and kali container images at build time (runtime install scripts skip downloads when packages are already present)
+  - Static consistency tests enforce egress controls in `test_consistency.py`
+  - Networking architecture docs updated with egress control and upgrade details
+
 ## [4.13.0] - 2026-03-22
 
 ### Added

@@ -1033,28 +1033,34 @@ networks:
           gateway: 172.20.0.1
 
   # DMZ - Public-facing services (web, mail, DNS)
+  # SAF-002: internal: true blocks internet egress from containers
   aptl-dmz:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.1.0/24
-          gateway: 172.20.1.1
+          gateway: 172.20.1.1  # bridge interface IP; no external routing (internal network)
 
   # Internal - AD, database, file server, app server
+  # SAF-002: internal: true blocks internet egress from containers
   aptl-internal:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.2.0/24
-          gateway: 172.20.2.1
+          gateway: 172.20.2.1  # bridge interface IP; no external routing (internal network)
 
   # Red team - Kali attack platform
+  # SAF-002: internal: true blocks internet egress from containers
   aptl-redteam:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.4.0/24
-          gateway: 172.20.4.1
+          gateway: 172.20.4.1  # bridge interface IP; no external routing (internal network)
 
 # ==========================================================================
 # VOLUMES

@@ -13,11 +13,14 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from aptl.core.lab import ALL_KNOWN_PROFILES, build_compose_command
 from aptl.core.session import ScenarioSession
 from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("kill")
 
@@ -202,19 +205,28 @@ def kill_mcp_processes(timeout: float = 5.0) -> tuple[int, list[str]]:
 
 def kill_lab_containers(
     project_dir: Optional[Path] = None,
+    backend: Optional["DeploymentBackend"] = None,
 ) -> tuple[bool, str]:
     """Emergency-stop all lab containers.
 
-    Uses ``docker compose kill`` for immediate SIGKILL, followed by
-    ``docker compose down`` to clean up stopped containers.
+    Uses the deployment backend's kill method for immediate shutdown.
+    Falls back to direct Docker Compose subprocess calls if no backend
+    is provided.
 
     Args:
         project_dir: Working directory for Docker Compose.
+        backend: Optional pre-created deployment backend.
 
     Returns:
         Tuple of (success, error_message).
     """
     profiles = list(ALL_KNOWN_PROFILES)
+
+    if backend is not None:
+        return backend.kill(profiles)
+
+    # Fallback: direct Docker Compose calls (for backward compat and
+    # cases where config is unavailable)
     kwargs: dict = {"capture_output": True, "text": True, "timeout": _DOCKER_TIMEOUT}
     if project_dir is not None:
         kwargs["cwd"] = project_dir

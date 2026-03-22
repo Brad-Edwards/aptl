@@ -133,6 +133,37 @@ class TestFindMcpProcesses:
         assert result == []
 
     @patch("aptl.core.kill.sys")
+    @patch("aptl.core.kill.os.getpid", return_value=999)
+    @patch("aptl.core.kill.os.listdir")
+    @patch("builtins.open", create=True)
+    def test_skips_own_process(self, mock_open, mock_listdir, mock_getpid, mock_sys):
+        from aptl.core.kill import find_mcp_processes
+
+        mock_sys.platform = "linux"
+        # PID 999 is our own process, PID 100 is a real MCP server
+        mock_listdir.return_value = ["999", "100"]
+
+        def open_side_effect(path, mode="r"):
+            m = MagicMock()
+            m.__enter__ = lambda s: s
+            m.__exit__ = MagicMock(return_value=False)
+            if path == "/proc/100/cmdline":
+                m.read.return_value = b"node\x00mcp/mcp-wazuh/build/index.js\x00"
+            elif path == "/proc/999/cmdline":
+                # Own process cmdline might match if running aptl kill
+                m.read.return_value = b"python\x00aptl\x00kill\x00mcp-wazuh/build/index.js\x00"
+            else:
+                raise FileNotFoundError(path)
+            return m
+
+        mock_open.side_effect = open_side_effect
+
+        result = find_mcp_processes()
+
+        assert len(result) == 1
+        assert result[0]["pid"] == 100
+
+    @patch("aptl.core.kill.sys")
     @patch("aptl.core.kill.subprocess.run")
     def test_pgrep_fallback_on_non_linux(self, mock_run, mock_sys):
         from aptl.core.kill import find_mcp_processes
@@ -163,7 +194,7 @@ class TestKillMcpProcesses:
 
     @patch("aptl.core.kill.find_mcp_processes")
     @patch("aptl.core.kill.os.kill")
-    @patch("aptl.core.kill._is_process_alive")
+    @patch("aptl.core.kill._process_exited")
     def test_kills_all_found_processes(self, mock_alive, mock_kill, mock_find):
         from aptl.core.kill import kill_mcp_processes
 
@@ -171,7 +202,7 @@ class TestKillMcpProcesses:
             {"pid": 100, "cmdline": "node mcp-wazuh/build/index.js", "name": "mcp-wazuh"},
         ]
         # Process exits after SIGTERM
-        mock_alive.return_value = False
+        mock_alive.return_value = True
 
         killed, errors = kill_mcp_processes(timeout=1.0)
 
@@ -181,7 +212,7 @@ class TestKillMcpProcesses:
 
     @patch("aptl.core.kill.find_mcp_processes")
     @patch("aptl.core.kill.os.kill")
-    @patch("aptl.core.kill._is_process_alive")
+    @patch("aptl.core.kill._process_exited")
     @patch("aptl.core.kill.time.sleep")
     @patch("aptl.core.kill.time.monotonic")
     def test_sigkill_fallback_after_timeout(
@@ -192,8 +223,8 @@ class TestKillMcpProcesses:
         mock_find.return_value = [
             {"pid": 100, "cmdline": "node mcp-wazuh/build/index.js", "name": "mcp-wazuh"},
         ]
-        # Process stays alive throughout timeout
-        mock_alive.return_value = True
+        # Process stays alive throughout timeout (_process_exited returns False)
+        mock_alive.return_value = False
         # Simulate time progression past deadline
         mock_monotonic.side_effect = [0.0, 0.0, 6.0]
 
@@ -274,14 +305,15 @@ class TestKillLabContainers:
 
     @patch("aptl.core.kill.subprocess.run")
     def test_includes_all_profiles(self, mock_run):
-        from aptl.core.kill import _ALL_PROFILES, kill_lab_containers
+        from aptl.core.kill import kill_lab_containers
+        from aptl.core.lab import ALL_KNOWN_PROFILES
 
         mock_run.return_value = MagicMock(returncode=0, stderr="")
 
         kill_lab_containers()
 
         first_cmd = mock_run.call_args_list[0][0][0]
-        for profile in _ALL_PROFILES:
+        for profile in ALL_KNOWN_PROFILES:
             assert profile in first_cmd
 
     @patch("aptl.core.kill.subprocess.run")
@@ -306,6 +338,50 @@ class TestKillLabContainers:
 
         for c in mock_run.call_args_list:
             assert c[1]["cwd"] == project
+
+    @patch("aptl.core.kill.subprocess.run")
+    def test_subprocess_calls_have_timeout(self, mock_run):
+        from aptl.core.kill import _DOCKER_TIMEOUT, kill_lab_containers
+
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+
+        kill_lab_containers()
+
+        for c in mock_run.call_args_list:
+            assert c[1]["timeout"] == _DOCKER_TIMEOUT
+
+    @patch("aptl.core.kill.subprocess.run")
+    def test_handles_timeout_expired(self, mock_run):
+        from aptl.core.kill import kill_lab_containers
+
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="docker", timeout=30)
+
+        success, error = kill_lab_containers()
+
+        assert success is False
+
+    @patch("aptl.core.kill.subprocess.run")
+    def test_down_failure_is_non_fatal_when_kill_succeeded(self, mock_run):
+        from aptl.core.kill import kill_lab_containers
+
+        def run_side_effect(cmd, **kwargs):
+            m = MagicMock()
+            if "kill" in cmd:
+                m.returncode = 0
+                m.stderr = ""
+            else:
+                # docker compose down fails
+                m.returncode = 1
+                m.stderr = "network not found"
+            return m
+
+        mock_run.side_effect = run_side_effect
+
+        success, error = kill_lab_containers()
+
+        # kill succeeded, down failure is just a warning
+        assert success is True
+        assert error == ""
 
 
 class TestClearSession:

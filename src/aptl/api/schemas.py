@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HealthResponse(BaseModel):
@@ -85,7 +85,7 @@ class KillActionResponse(BaseModel):
     mcp_processes_killed: int = 0
     containers_stopped: bool = False
     session_cleared: bool = False
-    errors: list[str] = []
+    errors: list[str] = Field(default_factory=list)
 
 
 class ScenarioSummary(BaseModel):

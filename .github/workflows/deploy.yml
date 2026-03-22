@@ -1,0 +1,127 @@
+name: Deploy Lab
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        type: environment
+        required: true
+
+jobs:
+  deploy:
+    # On push to dev: use DEFAULT_DEPLOY_ENVIRONMENT repo variable.
+    # On manual dispatch: use the selected environment.
+    # If neither exists, the job is skipped entirely — users who
+    # only run locally are unaffected.
+    environment: ${{ inputs.environment || vars.DEFAULT_DEPLOY_ENVIRONMENT }}
+    if: ${{ inputs.environment || vars.DEFAULT_DEPLOY_ENVIRONMENT != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Connect to Tailscale
+        if: vars.DEPLOY_VIA_TAILSCALE == 'true'
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Sync project files
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/aptl' }}
+        run: |
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '__pycache__' \
+            --exclude '.venv' \
+            --exclude 'runs' \
+            --exclude 'research' \
+            --exclude '.env' \
+            --exclude '.aptl' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
+            ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/"
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/aptl' }}
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new ${DEPLOY_USER}@${DEPLOY_HOST}"
+
+          # Seed .env from example if first deploy
+          $SSH "cd ${DEPLOY_DIR} && [ -f .env ] || cp .env.example .env"
+
+          # Install Python CLI
+          $SSH "cd ${DEPLOY_DIR} && pip install -e . 2>/dev/null || pip3 install -e ."
+
+          # Read enabled profiles from aptl.json and start
+          PROFILES=$($SSH "cd ${DEPLOY_DIR} && python3 -c \"
+          import json
+          c = json.load(open('aptl.json')).get('containers', {})
+          print(' '.join(f'--profile {k}' for k, v in c.items() if v))
+          \"")
+
+          $SSH "cd ${DEPLOY_DIR} && docker compose down --remove-orphans 2>/dev/null || true"
+          $SSH "cd ${DEPLOY_DIR} && docker compose ${PROFILES} --profile otel up --build -d"
+
+      - name: Verify
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/aptl' }}
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new ${DEPLOY_USER}@${DEPLOY_HOST}"
+
+          # Give containers time to start
+          sleep 30
+
+          $SSH "cd ${DEPLOY_DIR} && docker compose ps --format json" | python3 -c "
+          import json, sys
+          containers = []
+          for line in sys.stdin:
+              line = line.strip()
+              if not line: continue
+              try:
+                  if line.startswith('['):
+                      containers.extend(json.loads(line))
+                  else:
+                      containers.append(json.loads(line))
+              except json.JSONDecodeError:
+                  continue
+          if not containers:
+              print('ERROR: No containers running')
+              sys.exit(1)
+          for c in containers:
+              name = c.get('Name', 'unknown')
+              state = c.get('State', 'unknown')
+              health = c.get('Health', '')
+              line = f'  {name}: {state}'
+              if health: line += f' ({health})'
+              print(line)
+          running = sum(1 for c in containers if c.get('State') == 'running')
+          total = len(containers)
+          print(f'\n{running}/{total} containers running')
+          if running < total:
+              sys.exit(1)
+          "
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

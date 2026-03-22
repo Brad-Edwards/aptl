@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.15.0] - 2026-03-22
+
+### Added
+
+- Deployment backend abstraction layer (DEP-001, #233):
+  - `DeploymentBackend` Protocol in `src/aptl/core/deployment/backend.py` defining the lifecycle interface (start, stop, status, kill, pull_images)
+  - `DockerComposeBackend` wrapping existing Docker Compose subprocess logic as the default backend
+  - `SSHComposeBackend` enabling remote deployment over SSH via `DOCKER_HOST=ssh://user@host`
+  - `DeploymentConfig` Pydantic model with provider selection and SSH configuration fields
+  - Factory function `get_backend()` for config-driven backend instantiation
+  - `deployment` section in `aptl.json` for backend configuration (backward-compatible default)
+  - ADR-013 documenting the deployment abstraction decision
+  - Existing `start_lab()`, `stop_lab()`, `lab_status()`, and `kill_lab_containers()` functions accept optional `backend` parameter while maintaining full backward compatibility
+
 ## [4.14.0] - 2026-03-22
 
 ### Added

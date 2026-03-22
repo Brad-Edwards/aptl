@@ -21,8 +21,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
-
       - name: Connect to Tailscale
         if: vars.DEPLOY_VIA_TAILSCALE == 'true'
         uses: tailscale/github-action@v4
@@ -39,33 +37,25 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-      - name: Sync project files
-        env:
-          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
-          DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/aptl' }}
-          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT || '22' }}
-        run: |
-          rsync -az --delete \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude '__pycache__' \
-            --exclude '.venv' \
-            --exclude 'runs' \
-            --exclude 'research' \
-            --exclude '.env' \
-            --exclude '.aptl' \
-            -e "ssh -i ~/.ssh/deploy_key -p ${DEPLOY_SSH_PORT} -o StrictHostKeyChecking=accept-new" \
-            ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/"
-
       - name: Deploy
         env:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/aptl' }}
           DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT || '22' }}
+          DEPLOY_BRANCH: ${{ vars.DEPLOY_BRANCH || 'dev' }}
+          DEPLOY_REPO: ${{ github.server_url }}/${{ github.repository }}.git
         run: |
           SSH="ssh -i ~/.ssh/deploy_key -p ${DEPLOY_SSH_PORT} -o StrictHostKeyChecking=accept-new ${DEPLOY_USER}@${DEPLOY_HOST}"
+
+          # Clone or pull
+          $SSH "
+            if [ -d ${DEPLOY_DIR}/.git ]; then
+              cd ${DEPLOY_DIR} && git fetch origin && git reset --hard origin/${DEPLOY_BRANCH}
+            else
+              git clone --branch ${DEPLOY_BRANCH} ${DEPLOY_REPO} ${DEPLOY_DIR}
+            fi
+          "
 
           # Seed .env from example if first deploy
           $SSH "cd ${DEPLOY_DIR} && [ -f .env ] || cp .env.example .env"

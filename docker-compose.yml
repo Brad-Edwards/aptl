@@ -1035,6 +1035,7 @@ networks:
   # DMZ - Public-facing services (web, mail, DNS)
   aptl-dmz:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.1.0/24
@@ -1043,6 +1044,7 @@ networks:
   # Internal - AD, database, file server, app server
   aptl-internal:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.2.0/24
@@ -1051,6 +1053,7 @@ networks:
   # Red team - Kali attack platform
   aptl-redteam:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.4.0/24

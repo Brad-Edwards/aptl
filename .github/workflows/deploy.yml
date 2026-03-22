@@ -48,12 +48,12 @@ jobs:
         run: |
           SSH="ssh -i ~/.ssh/deploy_key -p ${DEPLOY_SSH_PORT} -o StrictHostKeyChecking=accept-new ${DEPLOY_USER}@${DEPLOY_HOST}"
 
-          # Clone or pull
+          # Clone (shallow) or pull
           $SSH "
             if [ -d ${DEPLOY_DIR}/.git ]; then
-              cd ${DEPLOY_DIR} && git fetch origin && git reset --hard origin/${DEPLOY_BRANCH}
+              cd ${DEPLOY_DIR} && git fetch --depth=1 origin ${DEPLOY_BRANCH} && git reset --hard FETCH_HEAD
             else
-              git clone --branch ${DEPLOY_BRANCH} ${DEPLOY_REPO} ${DEPLOY_DIR}
+              git clone --depth=1 --branch ${DEPLOY_BRANCH} ${DEPLOY_REPO} ${DEPLOY_DIR}
             fi
           "
 

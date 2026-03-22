@@ -105,5 +105,23 @@ Several containers connect to multiple networks:
 - Containers isolated from host network via Docker bridge
 - Only mapped ports accessible from host
 - Internal traffic unencrypted (lab environment)
-- External internet access available (standard Docker behavior)
 - Kali can reach DMZ and internal networks (simulates attacker with pivot access)
+
+## Egress Controls (SAF-002)
+
+Three of the four networks use Docker's `internal: true` flag to prevent containers from reaching the internet. This is a safety constraint: autonomous agents controlling Kali must not be able to scan or attack external targets.
+
+| Network | `internal: true` | Rationale |
+|---------|-------------------|-----------|
+| aptl-security | No | SOC tools (MISP, Wazuh, Shuffle) need internet for threat feeds and rule updates |
+| aptl-dmz | **Yes** | Contains attack targets and Kali entry point |
+| aptl-internal | **Yes** | Contains AD, database, victim, workstation — all attack targets |
+| aptl-redteam | **Yes** | Kali command center; must not reach the real internet |
+
+### Multi-homed container egress
+
+Containers connected to both an internal network and `aptl-security` (dns, wazuh.manager, suricata) retain internet access via the security network interface. Attack containers (kali, victim, webapp, ad, db, fileshare, workstation, mailserver) are only on internal networks and have no internet egress.
+
+### Host port mappings
+
+Docker `internal: true` blocks outbound container traffic (no MASQUERADE rules), but inbound host port mappings (docker-proxy/DNAT) continue to work. SSH access to victim (port 2022) and kali (port 2023) from the host is unaffected.

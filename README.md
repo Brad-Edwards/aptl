@@ -112,6 +112,8 @@ Manage the lab:
 aptl lab status   # Show running containers
 aptl lab stop     # Stop the lab
 aptl lab stop -v  # DESTROYS ALL DATA (Wazuh indexes, MISP, TheHive, configs)
+aptl kill         # Emergency: kill all MCP server processes immediately
+aptl kill -c      # Emergency: kill MCP processes AND all lab containers
 ```
 
 **Access:**

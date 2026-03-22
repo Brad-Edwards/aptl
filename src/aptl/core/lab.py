@@ -1,16 +1,16 @@
 """Lab lifecycle management.
 
-Wraps docker compose commands for starting, stopping, and checking lab status.
-All Docker interactions go through subprocess calls to docker compose.
-Includes the full orchestration of lab startup.
+Wraps deployment backends for starting, stopping, and checking lab status.
+Docker interactions go through the DeploymentBackend protocol, with Docker
+Compose as the default backend.  Includes the full orchestration of lab
+startup.
 """
 
-import json
 import subprocess
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import yaml
 
@@ -28,6 +28,9 @@ from aptl.core.snapshot import capture_snapshot
 from aptl.core.ssh import ensure_ssh_keys
 from aptl.core.sysreqs import check_max_map_count
 from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
 
@@ -67,6 +70,27 @@ def docker_client():
     return docker.from_env()
 
 
+def _get_backend(
+    project_dir: Path,
+    config: AptlConfig | None = None,
+) -> "DeploymentBackend":
+    """Create a deployment backend from config or defaults.
+
+    Args:
+        project_dir: Working directory for the deployment.
+        config: Optional config; if None, uses default Docker Compose.
+
+    Returns:
+        A DeploymentBackend instance.
+    """
+    from aptl.core.deployment import get_backend
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+
+    if config is not None:
+        return get_backend(config, project_dir)
+    return DockerComposeBackend(project_dir=project_dir)
+
+
 def build_compose_command(
     action: str,
     profiles: list[str],
@@ -96,12 +120,17 @@ def build_compose_command(
 def start_lab(
     config: AptlConfig,
     project_dir: Optional[Path] = None,
+    backend: Optional["DeploymentBackend"] = None,
 ) -> LabResult:
-    """Start the lab environment using docker compose.
+    """Start the lab environment.
+
+    Delegates to the deployment backend.  If no backend is provided,
+    one is created from the config.
 
     Args:
         config: Validated APTL configuration.
-        project_dir: Working directory for docker compose (where docker-compose.yml lives).
+        project_dir: Working directory (where docker-compose.yml lives).
+        backend: Optional pre-created deployment backend.
 
     Returns:
         LabResult indicating success or failure.
@@ -110,28 +139,18 @@ def start_lab(
     # OTel stack (Collector + Tempo + Grafana) is core infrastructure
     if "otel" not in profiles:
         profiles = [*profiles, "otel"]
-    cmd = build_compose_command("up", profiles)
 
-    log.info("Starting lab with profiles: %s", profiles)
-    log.debug("Command: %s", " ".join(cmd))
+    if backend is None:
+        resolved_dir = project_dir or Path(".")
+        backend = _get_backend(resolved_dir, config)
 
-    kwargs: dict = {"capture_output": True, "text": True}
-    if project_dir is not None:
-        kwargs["cwd"] = project_dir
-
-    result = subprocess.run(cmd, **kwargs)
-
-    if result.returncode != 0:
-        log.error("Lab start failed: %s", result.stderr)
-        return LabResult(success=False, error=result.stderr)
-
-    log.info("Lab started successfully")
-    return LabResult(success=True, message="Lab started")
+    return backend.start(profiles)
 
 
 def stop_lab(
     remove_volumes: bool = False,
     project_dir: Optional[Path] = None,
+    backend: Optional["DeploymentBackend"] = None,
 ) -> LabResult:
     """Stop the lab environment.
 
@@ -141,7 +160,8 @@ def stop_lab(
 
     Args:
         remove_volumes: If True, also remove Docker volumes (-v flag).
-        project_dir: Working directory for docker compose.
+        project_dir: Working directory for the deployment.
+        backend: Optional pre-created deployment backend.
 
     Returns:
         LabResult indicating success or failure.
@@ -150,6 +170,7 @@ def stop_lab(
     profiles: list[str] = []
     search_dir = project_dir or Path(".")
     config_path = find_config(search_dir)
+    config: AptlConfig | None = None
     if config_path is not None:
         try:
             config = load_config(config_path)
@@ -159,65 +180,33 @@ def stop_lab(
     if not profiles:
         profiles = list(ALL_KNOWN_PROFILES)
 
-    cmd = build_compose_command("down", profiles=profiles)
-    if remove_volumes:
-        cmd.append("-v")
+    if backend is None:
+        backend = _get_backend(search_dir, config)
 
-    log.info("Stopping lab (remove_volumes=%s)", remove_volumes)
-
-    kwargs: dict = {"capture_output": True, "text": True}
-    if project_dir is not None:
-        kwargs["cwd"] = project_dir
-
-    result = subprocess.run(cmd, **kwargs)
-
-    if result.returncode != 0:
-        log.error("Lab stop failed: %s", result.stderr)
-        return LabResult(success=False, error=result.stderr)
-
-    log.info("Lab stopped successfully")
-    return LabResult(success=True, message="Lab stopped")
+    return backend.stop(profiles, remove_volumes=remove_volumes)
 
 
 def lab_status(
     project_dir: Optional[Path] = None,
+    backend: Optional["DeploymentBackend"] = None,
 ) -> LabStatus:
-    """Get the current lab status by querying docker compose.
+    """Get the current lab status.
+
+    Delegates to the deployment backend.
 
     Args:
-        project_dir: Working directory for docker compose.
+        project_dir: Working directory for the deployment.
+        backend: Optional pre-created deployment backend.
 
     Returns:
         LabStatus with container information.
     """
-    cmd = ["docker", "compose", "ps", "--format", "json"]
+    resolved_dir = project_dir or Path(".")
 
-    kwargs: dict = {"capture_output": True, "text": True}
-    if project_dir is not None:
-        kwargs["cwd"] = project_dir
+    if backend is None:
+        backend = _get_backend(resolved_dir)
 
-    result = subprocess.run(cmd, **kwargs)
-
-    if result.returncode != 0:
-        log.warning("Could not get lab status: %s", result.stderr)
-        return LabStatus(running=False, error=result.stderr)
-
-    try:
-        # docker compose ps --format json outputs one JSON object per line
-        # (NDJSON), not a JSON array. Try array first, fall back to NDJSON.
-        stripped = result.stdout.strip()
-        if not stripped:
-            containers = []
-        elif stripped.startswith("["):
-            containers = json.loads(stripped)
-        else:
-            containers = [json.loads(line) for line in stripped.splitlines() if line.strip()]
-    except json.JSONDecodeError:
-        log.warning("Could not parse compose ps output")
-        return LabStatus(running=False, error="Failed to parse container status")
-
-    running = len(containers) > 0
-    return LabStatus(running=running, containers=containers)
+    return backend.status()
 
 
 def _check_bind_mounts(project_dir: Path) -> list[str]:
@@ -270,7 +259,7 @@ def orchestrate_lab_start(
       5. Sync config file credentials
       6. Generate SSL certificates
       7. Pre-pull container images
-      8. Start containers via docker compose
+      8. Start containers via deployment backend
       9. Wait for services to become ready
      10. Test SSH connectivity
      11. Generate connection info
@@ -310,6 +299,9 @@ def orchestrate_lab_start(
     except (FileNotFoundError, ValueError) as exc:
         log.error("Failed to load config: %s", exc)
         return LabResult(success=False, error=f"Failed to load config: {exc}")
+
+    # Create deployment backend from config
+    backend = _get_backend(project_dir, config)
 
     # Step 3: Generate SSH keys
     log.info("Step 3: Generating SSH keys...")
@@ -382,31 +374,20 @@ def orchestrate_lab_start(
             error="Bind-mount pre-flight failed:\n" + "\n".join(mount_errors),
         )
 
-    # Step 7: Pre-pull container images (non-critical)
+    # Step 7: Pre-pull container images via backend (non-critical)
     log.info("Step 7: Pre-pulling container images...")
     images = [
         f"wazuh/wazuh-manager:{WAZUH_IMAGE_VERSION}",
         f"wazuh/wazuh-indexer:{WAZUH_IMAGE_VERSION}",
         f"wazuh/wazuh-dashboard:{WAZUH_IMAGE_VERSION}",
     ]
-    for image in images:
-        try:
-            pull_result = subprocess.run(
-                ["docker", "pull", image],
-                capture_output=True,
-                text=True,
-                cwd=project_dir,
-            )
-            if pull_result.returncode != 0:
-                log.warning("Failed to pull %s: %s", image, pull_result.stderr.strip())
-            else:
-                log.info("Pulled %s", image)
-        except (FileNotFoundError, OSError) as exc:
-            log.warning("Failed to pull %s: %s", image, exc)
+    pull_warnings = backend.pull_images(images)
+    for warning in pull_warnings:
+        log.warning(warning)
 
-    # Step 8: Start containers (retry once if SOC dependencies need more time)
+    # Step 8: Start containers via backend (retry once if SOC needs time)
     log.info("Step 8: Starting containers...")
-    start_result = start_lab(config, project_dir=project_dir)
+    start_result = start_lab(config, project_dir=project_dir, backend=backend)
     if not start_result.success and config.containers.soc:
         log.warning(
             "Initial compose up failed (SOC dependencies may still be "
@@ -414,7 +395,7 @@ def orchestrate_lab_start(
         )
         import time
         time.sleep(60)
-        start_result = start_lab(config, project_dir=project_dir)
+        start_result = start_lab(config, project_dir=project_dir, backend=backend)
     if not start_result.success:
         log.error("Lab start failed: %s", start_result.error)
         return LabResult(

@@ -6,6 +6,9 @@ from typing import Optional
 from fastapi import HTTPException
 
 from aptl.core.config import AptlConfig, find_config, load_config
+from aptl.utils.logging import get_logger
+
+log = get_logger("api.deps")
 
 # Trusted origins for CORS and WebSocket origin validation.
 # CORS middleware does not protect WebSocket upgrade requests, so
@@ -30,9 +33,10 @@ def get_project_dir() -> Path:
     else:
         p = Path.cwd()
     if not p.is_dir():
+        log.error("Project directory does not exist: %s", p)
         raise HTTPException(
             status_code=503,
-            detail=f"Project directory does not exist: {p}",
+            detail="Project directory not found or not configured",
         )
     return p
 

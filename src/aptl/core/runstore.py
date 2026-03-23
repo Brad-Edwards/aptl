@@ -72,7 +72,16 @@ class LocalRunStore:
         log.info("Created run directory: %s", run_dir)
         return run_dir
 
+    @staticmethod
+    def _validate_relative_path(relative_path: str) -> None:
+        """Reject path traversal attempts in relative_path."""
+        if ".." in relative_path.split("/") or relative_path.startswith("/"):
+            raise ValueError(
+                f"Invalid relative_path (path traversal rejected): {relative_path}"
+            )
+
     def write_file(self, run_id: str, relative_path: str, data: bytes) -> None:
+        self._validate_relative_path(relative_path)
         target = self._base_dir / run_id / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
@@ -90,6 +99,7 @@ class LocalRunStore:
         self.write_file(run_id, relative_path, data)
 
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None:
+        self._validate_relative_path(relative_path)
         target = self._base_dir / run_id / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)

@@ -185,6 +185,14 @@ class TestCollectWazuhAlerts:
         result = collect_wazuh_alerts(
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            auth=("admin", "testpass"),
+        )
+        assert result == []
+
+    def test_returns_empty_when_no_auth(self):
+        result = collect_wazuh_alerts(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
         )
         assert result == []
 
@@ -203,6 +211,7 @@ class TestCollectWazuhAlerts:
         result = collect_wazuh_alerts(
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            auth=("admin", "testpass"),
         )
         assert len(result) == 2
         assert result[0]["rule"]["id"] == "1"

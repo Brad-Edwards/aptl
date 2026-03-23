@@ -365,9 +365,9 @@ def _get_service_endpoints(containers: list[ContainerSnapshot]) -> list[ServiceE
     endpoints = []
     # Map container names to known services
     service_map = {
-        "aptl-wazuh-dashboard": ("Wazuh Dashboard", "https", 443, "admin/SecretPassword"),
-        "aptl-wazuh-indexer": ("Wazuh Indexer", "https", 9200, "admin/SecretPassword"),
-        "aptl-wazuh-manager": ("Wazuh API", "https", 55000, "wazuh-wui/WazuhPass123!"),
+        "aptl-wazuh-dashboard": ("Wazuh Dashboard", "https", 443, "<see .env>"),
+        "aptl-wazuh-indexer": ("Wazuh Indexer", "https", 9200, "<see .env>"),
+        "aptl-wazuh-manager": ("Wazuh API", "https", 55000, "<see .env>"),
     }
     running_names = {c.name for c in containers if "Up" in c.status}
     for cname, (label, proto, port, creds) in service_map.items():

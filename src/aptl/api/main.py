@@ -1,13 +1,28 @@
 """FastAPI application factory for the APTL web API."""
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from aptl.api.deps import ALLOWED_ORIGINS
 from aptl.api.routers import config, kill, lab, scenarios, terminal
 from aptl.utils.logging import get_logger, setup_logging
 
 log = get_logger("api")
+
+
+class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add standard security headers to all responses."""
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
 
 
 def create_app() -> FastAPI:
@@ -20,6 +35,8 @@ def create_app() -> FastAPI:
         description="Advanced Purple Team Lab — Web Interface API",
         version="0.1.0",
     )
+
+    app.add_middleware(_SecurityHeadersMiddleware)
 
     app.add_middleware(  # NOSONAR — localhost-only origins; this is a local lab tool, not internet-facing
         CORSMiddleware,

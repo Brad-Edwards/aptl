@@ -25,7 +25,7 @@ set -euo pipefail
 # Configuration
 # ---------------------------------------------------------------------------
 SHUFFLE_URL="${SHUFFLE_URL:-http://localhost:5001}"
-SHUFFLE_API_KEY="${SHUFFLE_API_KEY:-31a211c4-ea5c-4a49-b022-5e2434e758a7}"
+SHUFFLE_API_KEY="${SHUFFLE_API_KEY:?Set SHUFFLE_API_KEY in .env}"
 THEHIVE_INTERNAL_URL="http://172.20.0.18:9000"
 MISP_INTERNAL_URL="https://172.20.0.16"
 MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"

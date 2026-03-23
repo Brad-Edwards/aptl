@@ -86,11 +86,11 @@ def assemble_run(
     # 4. Collect Wazuh alerts
     indexer_url = os.getenv("APTL_INDEXER_URL", "https://localhost:9200")
     indexer_user = os.getenv("INDEXER_USERNAME", "admin")
-    indexer_pass = os.getenv("INDEXER_PASSWORD", "SecretPassword")
+    indexer_pass = os.getenv("INDEXER_PASSWORD", "")
     alerts = collect_wazuh_alerts(
         started_at, finished_at,
         indexer_url=indexer_url,
-        auth=(indexer_user, indexer_pass),
+        auth=(indexer_user, indexer_pass) if indexer_pass else None,
     )
     store.write_jsonl(run_id, "wazuh/alerts.jsonl", alerts)
 

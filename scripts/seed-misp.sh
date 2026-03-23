@@ -33,7 +33,7 @@ CURL_OPTS=(-ks --max-time 30)
 # ---------------------------------------------------------------------------
 # Preflight checks — default to ADMIN_KEY from docker-compose.yml
 # ---------------------------------------------------------------------------
-MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
+MISP_API_KEY="${MISP_API_KEY:-${MISP_ADMIN_KEY:?Set MISP_API_KEY or MISP_ADMIN_KEY in .env}}"
 
 echo "=== APTL MISP Seed Script ==="
 echo "MISP URL: ${MISP_URL}"

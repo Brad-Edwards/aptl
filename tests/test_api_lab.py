@@ -179,7 +179,7 @@ class TestProjectDirValidation:
         app.dependency_overrides[get_project_dir] = lambda: (_ for _ in ()).throw(
             __import__("fastapi").HTTPException(
                 status_code=503,
-                detail="Project directory does not exist: /nonexistent",
+                detail="Project directory not found or not configured",
             )
         )
         try:
@@ -274,7 +274,7 @@ class TestLabEventGenerator:
 
         event = asyncio.run(run())
         assert event["event"] == "error"
-        assert "docker daemon not running" in event["data"]
+        assert "Internal error" in event["data"]
 
     @patch("aptl.api.routers.lab.asyncio.sleep", _noop_sleep)
     @patch("aptl.api.routers.lab._build_status_response")

@@ -41,6 +41,16 @@ class SSHComposeBackend(DockerComposeBackend):
         remote_dir: str | None = None,
         project_name: str = "aptl",
     ) -> None:
+        import re
+
+        # Validate inputs to prevent injection via SSH URI
+        if not re.match(r"^[a-zA-Z0-9._-]+$", host):
+            raise ValueError(f"Invalid SSH host: {host!r}")
+        if not re.match(r"^[a-zA-Z0-9._-]+$", user):
+            raise ValueError(f"Invalid SSH user: {user!r}")
+        if not (1 <= ssh_port <= 65535):
+            raise ValueError(f"Invalid SSH port: {ssh_port}")
+
         super().__init__(project_dir=project_dir, project_name=project_name)
         self._host = host
         self._user = user

@@ -30,9 +30,14 @@ def serve(
         raise typer.Exit(1)
 
     import os
+    from pathlib import Path as _Path
 
     if project_dir:
-        os.environ["APTL_PROJECT_DIR"] = project_dir
+        resolved = _Path(project_dir).resolve()
+        if not resolved.is_dir():
+            typer.echo(f"Error: project directory does not exist: {resolved}", err=True)
+            raise typer.Exit(1)
+        os.environ["APTL_PROJECT_DIR"] = str(resolved)
 
     typer.echo(f"Starting APTL web API on {host}:{port}")
     uvicorn.run(

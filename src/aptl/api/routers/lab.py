@@ -140,7 +140,7 @@ async def _lab_event_generator(
             )
             yield {
                 "event": "error",
-                "data": str(exc),
+                "data": "Internal error while polling lab status",
             }
             if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                 log.error(

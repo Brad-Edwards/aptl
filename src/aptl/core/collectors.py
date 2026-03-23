@@ -64,7 +64,7 @@ def collect_wazuh_alerts(
     start_iso: str,
     end_iso: str,
     indexer_url: str = "https://localhost:9200",
-    auth: tuple[str, str] = ("admin", "SecretPassword"),
+    auth: tuple[str, str] | None = None,
 ) -> list[dict]:
     """Query Wazuh Indexer for all alerts in the time window.
 
@@ -85,6 +85,10 @@ def collect_wazuh_alerts(
 
     all_hits: list[dict] = []
     scroll_id = None
+
+    if auth is None:
+        log.warning("No Wazuh Indexer auth credentials provided, skipping alert collection")
+        return []
 
     try:
         # Initial search with scroll

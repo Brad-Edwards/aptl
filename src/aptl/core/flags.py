@@ -5,6 +5,8 @@ provides token-based signature verification for automated scoring.
 """
 
 import hashlib
+import hmac
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -13,8 +15,8 @@ from aptl.utils.logging import get_logger
 
 log = get_logger("flags")
 
-# Default signing key (known to scoring engine).
-DEFAULT_FLAG_KEY = "aptl-flag-key-2024"
+# Signing key loaded from environment; falls back to a default for local dev.
+DEFAULT_FLAG_KEY = os.getenv("APTL_FLAG_KEY", "aptl-flag-key-2024")
 
 # Flag file locations per container.  Maps docker container name to
 # a dict of {level: (flag_path, description)}.
@@ -160,7 +162,15 @@ def verify_token(token: str, key: str = DEFAULT_FLAG_KEY) -> bool:
         return False
 
     _, _, hostname, level, nonce, signature = parts
-    expected = hashlib.md5(
+    expected = hmac.new(
+        key.encode(),
+        f"{hostname}:{level}:{nonce}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    # Also accept legacy MD5 tokens for backward compatibility during rollover.
+    legacy = hashlib.md5(  # noqa: S324
         f"{key}:{hostname}:{level}:{nonce}".encode()
     ).hexdigest()
-    return signature == expected
+    return hmac.compare_digest(signature, expected) or hmac.compare_digest(
+        signature, legacy
+    )

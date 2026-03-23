@@ -53,13 +53,20 @@ async def _relay_ws_to_ssh(
     try:
         while True:
             raw = await websocket.receive_text()
+            if len(raw) > 65536:
+                log.warning("WebSocket message too large (%d bytes), dropping", len(raw))
+                continue
             msg = json.loads(raw)
             msg_type = msg.get("type")
             if msg_type == "stdin":
                 process.stdin.write(msg.get("data", ""))
             elif msg_type == "resize":
-                cols = max(1, min(msg.get("cols", 80), 500))
-                rows = max(1, min(msg.get("rows", 24), 200))
+                try:
+                    cols = max(1, min(int(msg.get("cols", 80)), 500))
+                    rows = max(1, min(int(msg.get("rows", 24)), 200))
+                except (TypeError, ValueError):
+                    log.warning("Invalid resize values, ignoring")
+                    continue
                 process.change_terminal_size(cols, rows)
     except (asyncio.CancelledError, WebSocketDisconnect):
         pass
@@ -110,16 +117,19 @@ async def terminal_ws(
     key_path = _get_key_path()
 
     await websocket.accept()
-    log.info("Terminal WebSocket accepted on port %d", port)
+    log.debug("Terminal WebSocket accepted for container %s", container)
 
     conn = None
     try:
-        conn = await asyncssh.connect(
-            host="localhost",
-            port=port,
-            username=username,
-            client_keys=[str(key_path)],
-            known_hosts=None,  # localhost-only; containers regenerate host keys on rebuild
+        conn = await asyncio.wait_for(
+            asyncssh.connect(
+                host="localhost",
+                port=port,
+                username=username,
+                client_keys=[str(key_path)],
+                known_hosts=None,  # localhost-only; containers regenerate host keys on rebuild
+            ),
+            timeout=15,
         )
         process = await conn.create_process(
             term_type="xterm-256color",
@@ -136,8 +146,8 @@ async def terminal_ws(
             await websocket.send_json(
                 {"type": "error", "message": "SSH connection failed"}
             )
-        except Exception:
-            pass
+        except Exception as send_err:
+            log.debug("Failed to send WebSocket error: %s", send_err)
     except WebSocketDisconnect:
         log.info("Terminal WebSocket disconnected from port %d", port)
     finally:

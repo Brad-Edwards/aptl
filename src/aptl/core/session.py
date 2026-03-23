@@ -327,4 +327,10 @@ class ScenarioSession:
             json.dumps(data, indent=2) + "\n",
             encoding="utf-8",
         )
+        # Restrict session file to owner-only (contains trace IDs and run IDs)
+        import os
+        try:
+            os.chmod(self._session_path, 0o600)
+        except OSError:
+            log.debug("Could not set permissions on session file")
         log.debug("Wrote session to %s", self._session_path)

@@ -34,17 +34,27 @@ class TestWebServe:
         )
 
     @patch("uvicorn.run")
-    def test_serve_with_project_dir(self, mock_run, runner):
+    def test_serve_with_project_dir(self, mock_run, runner, tmp_path):
         import os
         from aptl.cli.web import app
 
-        result = runner.invoke(app, ["--project-dir", "/tmp/mylab"])
+        result = runner.invoke(app, ["--project-dir", str(tmp_path)])
 
         assert result.exit_code == 0
         mock_run.assert_called_once()
-        assert os.environ.get("APTL_PROJECT_DIR") == "/tmp/mylab"
+        assert os.environ.get("APTL_PROJECT_DIR") == str(tmp_path.resolve())
         # Cleanup
         os.environ.pop("APTL_PROJECT_DIR", None)
+
+    @patch("uvicorn.run")
+    def test_serve_with_nonexistent_project_dir(self, mock_run, runner):
+        from aptl.cli.web import app
+
+        result = runner.invoke(app, ["--project-dir", "/no/such/dir"])
+
+        assert result.exit_code == 1
+        assert "does not exist" in result.output
+        mock_run.assert_not_called()
 
     @patch("uvicorn.run")
     def test_serve_with_workers(self, mock_run, runner):

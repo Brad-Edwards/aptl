@@ -66,6 +66,7 @@ def ensure_ssh_keys(keys_dir: Path, host_ssh_dir: Path) -> SSHKeyResult:
             ],
             capture_output=True,
             text=True,
+            timeout=30,
         )
 
         if result.returncode != 0:

@@ -19,7 +19,8 @@ ORG_NAME="APTL"
 ORG_USER="aptl-svc@thehive.local"
 ORG_USER_NAME="APTL Service Account"
 ORG_USER_PASS="AptlService2024!"
-COOKIE=$(mktemp)
+COOKIE=$(mktemp) || exit 1
+chmod 600 "$COOKIE"
 trap 'rm -f "$COOKIE"' EXIT
 
 _curl() {

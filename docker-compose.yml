@@ -212,10 +212,10 @@ services:
       - MYSQL_HOST=misp-db
       - MYSQL_DATABASE=misp
       - MYSQL_USER=misp
-      - MYSQL_PASSWORD=misp_db_password
+      - MYSQL_PASSWORD=${MISP_DB_PASSWORD:-misp_db_password}
       - ADMIN_EMAIL=admin@admin.test
-      - ADMIN_PASSWORD=admin
-      - ADMIN_KEY=JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw
+      - ADMIN_PASSWORD=${MISP_ADMIN_PASSWORD}
+      - ADMIN_KEY=${MISP_ADMIN_KEY}
       - BASE_URL=https://localhost
       - REDIS_HOST=misp-redis
     volumes:
@@ -248,8 +248,8 @@ services:
     environment:
       - MYSQL_DATABASE=misp
       - MYSQL_USER=misp
-      - MYSQL_PASSWORD=misp_db_password
-      - MYSQL_ROOT_PASSWORD=misp_root_password
+      - MYSQL_PASSWORD=${MISP_DB_PASSWORD:-misp_db_password}
+      - MYSQL_ROOT_PASSWORD=${MISP_ROOT_PASSWORD:-misp_root_password}
     volumes:
       - misp_db_data:/var/lib/mysql
     healthcheck:
@@ -271,7 +271,7 @@ services:
     image: redis:7-alpine
     container_name: aptl-misp-redis
     restart: unless-stopped
-    command: redis-server --requirepass redispassword
+    command: redis-server --requirepass ${MISP_REDIS_PASSWORD:-redispassword}
     deploy:
       resources:
         limits:
@@ -295,7 +295,7 @@ services:
       - thehive_index:/opt/thp/thehive/index
     command:
       - --secret
-      - "aptl-thehive-lab-secret-key-2024-purple"
+      - "${THEHIVE_SECRET}"
       - --cql-hostnames
       - "thehive-cassandra"
       - --index-backend
@@ -382,11 +382,11 @@ services:
     environment:
       - SHUFFLE_APP_SDK_TIMEOUT=120
       - SHUFFLE_DEFAULT_USERNAME=admin
-      - SHUFFLE_DEFAULT_PASSWORD=ShuffleAdmin2024!
-      - SHUFFLE_DEFAULT_APIKEY=31a211c4-ea5c-4a49-b022-5e2434e758a7
+      - SHUFFLE_DEFAULT_PASSWORD=${SHUFFLE_ADMIN_PASSWORD}
+      - SHUFFLE_DEFAULT_APIKEY=${SHUFFLE_API_KEY}
       - SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200
       - SHUFFLE_OPENSEARCH_USERNAME=admin
-      - SHUFFLE_OPENSEARCH_PASSWORD=StrongPassword123!
+      - SHUFFLE_OPENSEARCH_PASSWORD=${SHUFFLE_OPENSEARCH_PASSWORD:-StrongPassword123!}
       - SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true
     volumes:
       - shuffle_data:/shuffle-database
@@ -460,11 +460,11 @@ services:
     environment:
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - discovery.type=single-node
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123!
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${SHUFFLE_OPENSEARCH_PASSWORD:-StrongPassword123!}
     volumes:
       - shuffle_opensearch_data:/usr/share/opensearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -ks https://localhost:9200 -u admin:StrongPassword123! || exit 1"]
+      test: ["CMD-SHELL", "curl -ks https://localhost:9200 -u admin:${SHUFFLE_OPENSEARCH_PASSWORD:-StrongPassword123!} || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 15

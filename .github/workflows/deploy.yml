@@ -21,6 +21,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Connect to Tailscale
         if: vars.DEPLOY_VIA_TAILSCALE == 'true'
         uses: tailscale/github-action@v4
@@ -43,19 +46,16 @@ jobs:
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/aptl' }}
           DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT || '22' }}
-          DEPLOY_BRANCH: ${{ vars.DEPLOY_BRANCH || 'dev' }}
-          DEPLOY_REPO: ${{ github.server_url }}/${{ github.repository }}.git
         run: |
           SSH="ssh -i ~/.ssh/deploy_key -p ${DEPLOY_SSH_PORT} -o StrictHostKeyChecking=accept-new ${DEPLOY_USER}@${DEPLOY_HOST}"
 
-          # Clone (shallow) or pull
-          $SSH "
-            if [ -d ${DEPLOY_DIR}/.git ]; then
-              cd ${DEPLOY_DIR} && git fetch --depth=1 origin ${DEPLOY_BRANCH} && git reset --hard FETCH_HEAD
-            else
-              git clone --depth=1 --branch ${DEPLOY_BRANCH} ${DEPLOY_REPO} ${DEPLOY_DIR}
-            fi
-          "
+          # Sync repo from runner to remote (runner has repo access, remote doesn't)
+          $SSH "mkdir -p ${DEPLOY_DIR}"
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${DEPLOY_SSH_PORT} -o StrictHostKeyChecking=accept-new" \
+            --exclude='.git' \
+            --exclude='.env' \
+            ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/"
 
           # Seed .env from example if first deploy
           $SSH "cd ${DEPLOY_DIR} && [ -f .env ] || cp .env.example .env"

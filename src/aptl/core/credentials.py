@@ -6,6 +6,7 @@ real values from the .env file.
 
 import re
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 from aptl.utils.logging import get_logger
 
@@ -36,8 +37,10 @@ def sync_dashboard_config(config_path: Path, api_password: str) -> None:
 
     content = config_path.read_text()
 
+    # Escape characters that would break YAML double-quoted strings.
+    safe_pw = api_password.replace("\\", "\\\\").replace('"', '\\"')
     new_content, count = _PASSWORD_PATTERN.subn(
-        lambda m: f'{m.group(1)}"{api_password}"', content
+        lambda m: f'{m.group(1)}"{safe_pw}"', content
     )
 
     if count == 0:
@@ -87,8 +90,9 @@ def sync_manager_config(config_path: Path, cluster_key: str) -> None:
         result.append(content[pos:block_start])
         # Replace <key> only within this <cluster> block
         block = content[block_start:block_end]
+        safe_key = xml_escape(cluster_key)
         new_block, n = _KEY_PATTERN.subn(
-            lambda _: f"<key>{cluster_key}</key>", block
+            lambda _: f"<key>{safe_key}</key>", block
         )
         count += n
         result.append(new_block)

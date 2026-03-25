@@ -7,6 +7,7 @@ cloud VM without changing scenario definitions or MCP configs.
 """
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -14,6 +15,10 @@ from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.ssh_compose")
+
+# Validation patterns for SSH parameters.
+_HOST_RE = re.compile(r"^[\w.\-]+$|^\[[\w:]+\]$")
+_USER_RE = re.compile(r"^[\w\-]+$")
 
 
 class SSHComposeBackend(DockerComposeBackend):
@@ -41,6 +46,24 @@ class SSHComposeBackend(DockerComposeBackend):
         remote_dir: str | None = None,
         project_name: str = "aptl",
     ) -> None:
+        # Validate parameters before constructing SSH URI.
+        if not isinstance(ssh_port, int) or not (1 <= ssh_port <= 65535):
+            raise ValueError(f"ssh_port must be int in 1-65535, got {ssh_port!r}")
+        if not _USER_RE.match(user):
+            raise ValueError(f"Invalid SSH user: {user!r}")
+        if not _HOST_RE.match(host):
+            raise ValueError(f"Invalid SSH host: {host!r}")
+        if ssh_key is not None:
+            key_path = Path(ssh_key)
+            if not key_path.is_absolute():
+                raise ValueError(
+                    f"ssh_key must be an absolute path, got {ssh_key!r}"
+                )
+            if ".." in key_path.parts:
+                raise ValueError(
+                    f"ssh_key must not contain '..', got {ssh_key!r}"
+                )
+
         super().__init__(project_dir=project_dir, project_name=project_name)
         self._host = host
         self._user = user

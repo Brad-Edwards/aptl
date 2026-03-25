@@ -280,7 +280,8 @@ class TestRegexSpecialCharacters:
         sync_dashboard_config(config_file, r"pass\1word")
 
         content = config_file.read_text()
-        assert r'password: "pass\1word"' in content
+        # Backslash is escaped for YAML double-quoted string safety.
+        assert r'password: "pass\\1word"' in content
 
     def test_password_with_dollar_sign(self, tmp_path):
         """Password containing $ should be literal."""
@@ -295,7 +296,7 @@ class TestRegexSpecialCharacters:
         assert 'password: "pa$$word$1"' in content
 
     def test_password_with_backslashes(self, tmp_path):
-        r"""Password containing backslashes should be preserved literally."""
+        r"""Password containing backslashes should be escaped for YAML."""
         from aptl.core.credentials import sync_dashboard_config
 
         config_file = tmp_path / "wazuh.yml"
@@ -304,10 +305,11 @@ class TestRegexSpecialCharacters:
         sync_dashboard_config(config_file, r"C:\Users\admin")
 
         content = config_file.read_text()
-        assert r'password: "C:\Users\admin"' in content
+        # YAML double-quoted strings interpret \U as escape; must be \\U.
+        assert r'password: "C:\\Users\\admin"' in content
 
     def test_password_with_newline_escape(self, tmp_path):
-        r"""Password containing \n should not insert a newline."""
+        r"""Password containing \n should be escaped, not insert a newline."""
         from aptl.core.credentials import sync_dashboard_config
 
         config_file = tmp_path / "wazuh.yml"
@@ -316,7 +318,8 @@ class TestRegexSpecialCharacters:
         sync_dashboard_config(config_file, r"pass\nword")
 
         content = config_file.read_text()
-        assert r'password: "pass\nword"' in content
+        # YAML double-quoted \n means newline; must be \\n for literal.
+        assert r'password: "pass\\nword"' in content
 
     def test_cluster_key_with_backslash_one(self, tmp_path):
         r"""Cluster key containing \1 should not be treated as backreference."""
@@ -353,3 +356,27 @@ class TestRegexSpecialCharacters:
 
         content = config_file.read_text()
         assert """password: "it's-a-password\"""" in content
+
+    def test_password_with_double_quotes(self, tmp_path):
+        """Password containing double quotes should be escaped."""
+        from aptl.core.credentials import sync_dashboard_config
+
+        config_file = tmp_path / "wazuh.yml"
+        config_file.write_text('      password: "old"\n')
+
+        sync_dashboard_config(config_file, 'pass"word')
+
+        content = config_file.read_text()
+        assert 'password: "pass\\"word"' in content
+
+    def test_cluster_key_with_xml_special_chars(self, tmp_path):
+        """Cluster key with <, >, & should be XML-escaped."""
+        from aptl.core.credentials import sync_manager_config
+
+        config_file = tmp_path / "wazuh_manager.conf"
+        config_file.write_text("<cluster>\n  <key>old</key>\n</cluster>\n")
+
+        sync_manager_config(config_file, "key<>&value")
+
+        content = config_file.read_text()
+        assert "<key>key&lt;&gt;&amp;value</key>" in content

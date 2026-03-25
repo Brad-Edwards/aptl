@@ -212,14 +212,17 @@ class TestKillMcpProcesses:
 
     @patch("aptl.core.kill.find_mcp_processes")
     @patch("aptl.core.kill.os.kill")
+    @patch("aptl.core.kill._verify_mcp_process", return_value=True)
     @patch("aptl.core.kill._process_exited")
     @patch("aptl.core.kill.time.sleep")
     @patch("aptl.core.kill.time.monotonic")
+    @patch("aptl.core.kill.sys")
     def test_sigkill_fallback_after_timeout(
-        self, mock_monotonic, mock_sleep, mock_alive, mock_kill, mock_find
+        self, mock_sys, mock_monotonic, mock_sleep, mock_alive, mock_verify, mock_kill, mock_find
     ):
         from aptl.core.kill import kill_mcp_processes
 
+        mock_sys.platform = "linux"
         mock_find.return_value = [
             {"pid": 100, "cmdline": "node mcp-wazuh/build/index.js", "name": "mcp-wazuh"},
         ]
@@ -230,11 +233,39 @@ class TestKillMcpProcesses:
 
         killed, errors = kill_mcp_processes(timeout=5.0)
 
-        # SIGTERM first, then SIGKILL
+        # SIGTERM must precede SIGKILL
+        calls = mock_kill.call_args_list
+        term_idx = calls.index(call(100, signal.SIGTERM))
+        kill_idx = calls.index(call(100, signal.SIGKILL))
+        assert term_idx < kill_idx, "SIGTERM must precede SIGKILL"
+        assert killed == 1
+
+    @patch("aptl.core.kill.find_mcp_processes")
+    @patch("aptl.core.kill.os.kill")
+    @patch("aptl.core.kill._verify_mcp_process", return_value=False)
+    @patch("aptl.core.kill._process_exited")
+    @patch("aptl.core.kill.time.sleep")
+    @patch("aptl.core.kill.time.monotonic")
+    @patch("aptl.core.kill.sys")
+    def test_sigkill_skipped_when_pid_reassigned(
+        self, mock_sys, mock_monotonic, mock_sleep, mock_alive, mock_verify, mock_kill, mock_find
+    ):
+        """SIGKILL is skipped if PID no longer belongs to an MCP process."""
+        from aptl.core.kill import kill_mcp_processes
+
+        mock_sys.platform = "linux"
+        mock_find.return_value = [
+            {"pid": 100, "cmdline": "node mcp-wazuh/build/index.js", "name": "mcp-wazuh"},
+        ]
+        mock_alive.return_value = False
+        mock_monotonic.side_effect = [0.0, 0.0, 6.0]
+
+        killed, errors = kill_mcp_processes(timeout=5.0)
+
+        # SIGTERM should be sent, but SIGKILL should be skipped
         calls = mock_kill.call_args_list
         assert call(100, signal.SIGTERM) in calls
-        assert call(100, signal.SIGKILL) in calls
-        assert killed == 1
+        assert call(100, signal.SIGKILL) not in calls
 
     @patch("aptl.core.kill.find_mcp_processes")
     @patch("aptl.core.kill.os.kill")

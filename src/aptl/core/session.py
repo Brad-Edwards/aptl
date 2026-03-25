@@ -6,7 +6,9 @@ and provides methods to record hints, objective completions, and
 session lifecycle events.
 """
 
+import fcntl
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -150,7 +152,9 @@ class ScenarioSession:
         if not self._session_path.exists():
             return None
 
-        raw = self._session_path.read_text().strip()
+        with open(self._session_path, "r", encoding="utf-8") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+            raw = f.read().strip()
         if not raw:
             return None
 
@@ -317,14 +321,20 @@ class ScenarioSession:
         """Persist session state to disk.
 
         Creates the state directory and parent directories if needed.
+        Uses an exclusive file lock to prevent concurrent write corruption.
 
         Args:
             session: The session to persist.
         """
         self._state_dir.mkdir(parents=True, exist_ok=True)
         data = _serialize_session(session)
-        self._session_path.write_text(
-            json.dumps(data, indent=2) + "\n",
-            encoding="utf-8",
+        payload = json.dumps(data, indent=2) + "\n"
+        fd = os.open(
+            str(self._session_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         )
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            os.write(fd, payload.encode("utf-8"))
+        finally:
+            os.close(fd)  # releases lock
         log.debug("Wrote session to %s", self._session_path)

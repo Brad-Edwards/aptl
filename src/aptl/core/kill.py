@@ -142,6 +142,22 @@ def _process_exited(pid: int) -> bool:
         return True
 
 
+def _verify_mcp_process(pid: int) -> bool:
+    """Verify that *pid* still belongs to an MCP server process.
+
+    Re-reads ``/proc/{pid}/cmdline`` and checks for known MCP server
+    patterns.  Returns False if the process is gone, unreadable, or no
+    longer matches an MCP server — preventing SIGKILL to a recycled PID.
+    """
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            raw = f.read()
+    except (OSError, PermissionError):
+        return False
+    cmdline = raw.replace(b"\x00", b" ").decode("utf-8", errors="replace")
+    return any(f"{name}/build/index.js" in cmdline for name in MCP_SERVER_NAMES)
+
+
 def kill_mcp_processes(timeout: float = 5.0) -> tuple[int, list[str]]:
     """Terminate all running MCP server processes.
 
@@ -186,8 +202,13 @@ def kill_mcp_processes(timeout: float = 5.0) -> tuple[int, list[str]]:
         if pids_to_track:
             time.sleep(0.25)
 
-    # Phase 3: SIGKILL survivors
+    # Phase 3: SIGKILL survivors (re-verify PID still belongs to MCP)
     for pid in pids_to_track:
+        if sys.platform == "linux" and not _verify_mcp_process(pid):
+            log.warning(
+                "PID %d is no longer an MCP process, skipping SIGKILL", pid
+            )
+            continue
         try:
             os.kill(pid, signal.SIGKILL)
             log.warning("Sent SIGKILL to pid=%d (did not exit after SIGTERM)", pid)

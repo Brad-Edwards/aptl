@@ -6,6 +6,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.0] - 2026-03-24
+
+### Added
+
+- `APTL_ALLOWED_ORIGINS` environment variable for configurable CORS origins (defaults unchanged)
+- SSH deployment parameter validation (host, user, port, key path) in `SSHComposeBackend`
+- Integration tests exercising full API-to-core request paths (`test_api_integration.py`)
+- PID re-verification via `/proc/{pid}/cmdline` before SIGKILL in kill switch (TOCTOU mitigation)
+- File locking (`fcntl.flock`) for `session.json` concurrent access safety
+
+### Fixed
+
+- Credential sync: YAML password double-quote escaping and XML cluster key entity escaping in `credentials.py`
+- WebSocket terminal: empty Origin header now correctly rejected (was bypassing origin check)
+- Scenario CLI: `shutdown_tracing()` wrapped in try/finally to prevent span loss on exception
+- Deploy workflow: replaced fixed 30s sleep with 120s polling loop for container health verification
+- Kill switch test: SIGTERM/SIGKILL ordering now asserted by index, not just membership
+
+### Changed
+
+- TheHive Elasticsearch image updated from 7.17.24 to 7.17.28 (security patches)
+
 ## [4.15.1] - 2026-03-23
 
 ### Fixed

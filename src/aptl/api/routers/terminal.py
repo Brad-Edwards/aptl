@@ -83,7 +83,7 @@ async def terminal_ws(
     # them cross-origin without preflight. Without this check, any website
     # the user visits could open a shell on lab containers.
     origin = websocket.headers.get("origin", "")
-    if origin and origin not in ALLOWED_ORIGINS:
+    if not origin or origin not in ALLOWED_ORIGINS:
         await websocket.close(code=1008, reason="Origin not allowed")
         log.warning("Rejected WebSocket from disallowed origin: %s", origin)
         return

@@ -386,7 +386,7 @@ class TestSSHComposeBackend:
 
     def test_run_sets_ssh_identity_when_key_provided(self, tmp_path):
         backend = self._make_backend(
-            tmp_path, ssh_key="~/.ssh/lab_key"
+            tmp_path, ssh_key="/home/user/.ssh/lab_key"
         )
 
         with patch("subprocess.run") as mock_run:
@@ -395,7 +395,7 @@ class TestSSHComposeBackend:
 
         call_kwargs = mock_run.call_args[1]
         env = call_kwargs["env"]
-        assert env["DOCKER_SSH_IDENTITY"] == "~/.ssh/lab_key"
+        assert env["DOCKER_SSH_IDENTITY"] == "/home/user/.ssh/lab_key"
 
     def test_inherits_start_behavior(self, tmp_path):
         """SSH backend start should produce same command structure."""
@@ -627,3 +627,79 @@ class TestKillBackwardCompat:
 
         assert success is True
         mock_backend.kill.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# SSH parameter validation tests
+# ---------------------------------------------------------------------------
+
+
+class TestSSHComposeBackendValidation:
+    """Validate that SSHComposeBackend rejects dangerous parameter values."""
+
+    def test_rejects_host_with_at_sign(self, tmp_path):
+        with pytest.raises(ValueError, match="Invalid SSH host"):
+            SSHComposeBackend(tmp_path, host="user@evil", user="deploy")
+
+    def test_rejects_host_with_semicolon(self, tmp_path):
+        with pytest.raises(ValueError, match="Invalid SSH host"):
+            SSHComposeBackend(tmp_path, host="host;rm -rf /", user="deploy")
+
+    def test_rejects_host_with_spaces(self, tmp_path):
+        with pytest.raises(ValueError, match="Invalid SSH host"):
+            SSHComposeBackend(tmp_path, host="host name", user="deploy")
+
+    def test_rejects_user_with_spaces(self, tmp_path):
+        with pytest.raises(ValueError, match="Invalid SSH user"):
+            SSHComposeBackend(tmp_path, host="example.com", user="admin root")
+
+    def test_rejects_user_with_at_sign(self, tmp_path):
+        with pytest.raises(ValueError, match="Invalid SSH user"):
+            SSHComposeBackend(tmp_path, host="example.com", user="user@host")
+
+    def test_rejects_port_zero(self, tmp_path):
+        with pytest.raises(ValueError, match="ssh_port must be int in 1-65535"):
+            SSHComposeBackend(tmp_path, host="example.com", user="deploy", ssh_port=0)
+
+    def test_rejects_port_negative(self, tmp_path):
+        with pytest.raises(ValueError, match="ssh_port must be int in 1-65535"):
+            SSHComposeBackend(tmp_path, host="example.com", user="deploy", ssh_port=-1)
+
+    def test_rejects_port_over_65535(self, tmp_path):
+        with pytest.raises(ValueError, match="ssh_port must be int in 1-65535"):
+            SSHComposeBackend(tmp_path, host="example.com", user="deploy", ssh_port=70000)
+
+    def test_rejects_relative_ssh_key(self, tmp_path):
+        with pytest.raises(ValueError, match="absolute path"):
+            SSHComposeBackend(
+                tmp_path, host="example.com", user="deploy",
+                ssh_key="relative/path/key",
+            )
+
+    def test_rejects_ssh_key_with_traversal(self, tmp_path):
+        with pytest.raises(ValueError, match="must not contain"):
+            SSHComposeBackend(
+                tmp_path, host="example.com", user="deploy",
+                ssh_key="/home/../etc/passwd",
+            )
+
+    def test_accepts_valid_ipv6_host(self, tmp_path):
+        backend = SSHComposeBackend(tmp_path, host="[::1]", user="deploy")
+        assert backend.docker_host == "ssh://deploy@[::1]"
+
+    def test_accepts_valid_hostname(self, tmp_path):
+        backend = SSHComposeBackend(tmp_path, host="lab.example.com", user="deploy")
+        assert backend.docker_host == "ssh://deploy@lab.example.com"
+
+    def test_accepts_valid_absolute_key(self, tmp_path):
+        backend = SSHComposeBackend(
+            tmp_path, host="example.com", user="deploy",
+            ssh_key="/home/user/.ssh/id_rsa",
+        )
+        assert backend.docker_host == "ssh://deploy@example.com"
+
+    def test_accepts_non_default_port(self, tmp_path):
+        backend = SSHComposeBackend(
+            tmp_path, host="example.com", user="deploy", ssh_port=2222,
+        )
+        assert backend.docker_host == "ssh://deploy@example.com:2222"

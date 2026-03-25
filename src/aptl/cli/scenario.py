@@ -416,16 +416,18 @@ def start(
 
     # Emit a lightweight OTel span marking scenario start
     init_tracing()
-    tracer = get_tracer()
-    parent_ctx = make_parent_context(session.trace_id, session.span_id)
-    span = create_child_span(tracer, parent_ctx, "scenario.started", {
-        "aptl.scenario.id": scenario.metadata.id,
-        "aptl.scenario.mode": scenario.mode.value,
-        "aptl.run.id": run_id,
-        "aptl.flags.collected": sum(len(v) for v in flags.values()),
-    })
-    span.end()
-    shutdown_tracing()
+    try:
+        tracer = get_tracer()
+        parent_ctx = make_parent_context(session.trace_id, session.span_id)
+        span = create_child_span(tracer, parent_ctx, "scenario.started", {
+            "aptl.scenario.id": scenario.metadata.id,
+            "aptl.scenario.mode": scenario.mode.value,
+            "aptl.run.id": run_id,
+            "aptl.flags.collected": sum(len(v) for v in flags.values()),
+        })
+        span.end()
+    finally:
+        shutdown_tracing()
 
     typer.echo(f"Started scenario: {scenario.metadata.name}")
     typer.echo(f"  ID:         {scenario.metadata.id}")
@@ -502,19 +504,21 @@ def stop(
     # Create the synthetic root span covering the full scenario duration
     if session.trace_id:
         init_tracing()
-        tracer = get_tracer()
-        start_ns = int(started.timestamp() * 1e9)
-        end_ns = int(now.timestamp() * 1e9)
-        create_root_span(
-            tracer=tracer,
-            scenario_id=session.scenario_id,
-            run_id=session.run_id,
-            start_time=start_ns,
-            end_time=end_ns,
-            trace_id=session.trace_id,
-            span_id=session.span_id,
-        )
-        shutdown_tracing()
+        try:
+            tracer = get_tracer()
+            start_ns = int(started.timestamp() * 1e9)
+            end_ns = int(now.timestamp() * 1e9)
+            create_root_span(
+                tracer=tracer,
+                scenario_id=session.scenario_id,
+                run_id=session.run_id,
+                start_time=start_ns,
+                end_time=end_ns,
+                trace_id=session.trace_id,
+                span_id=session.span_id,
+            )
+        finally:
+            shutdown_tracing()
 
         # Brief delay to allow BatchSpanProcessor flush from MCP servers
         time.sleep(2)

@@ -57,6 +57,9 @@ def _make_mock_conn(process):
     return conn
 
 
+_VALID_ORIGIN = {"origin": "http://localhost:3000"}
+
+
 class TestTerminalWebSocket:
     def test_cross_origin_rejected(self, api_client):
         """Cross-origin WebSocket connections are rejected before accept."""
@@ -80,15 +83,11 @@ class TestTerminalWebSocket:
             assert msg["type"] == "error"
             assert "not running" in msg["message"]
 
-    @patch("aptl.api.routers.terminal.lab_status")
-    def test_no_origin_header_allowed(self, mock_status, api_client):
-        """Connections without an Origin header are allowed (non-browser clients)."""
-        mock_status.return_value = _make_lab_status(running=False)
-
-        with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
-            msg = ws.receive_json()
-            assert msg["type"] == "error"
-            assert "not running" in msg["message"]
+    def test_no_origin_header_rejected(self, api_client):
+        """Connections without an Origin header are rejected."""
+        with pytest.raises(Exception):
+            with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
+                ws.receive_json()
 
     @patch("aptl.api.routers.terminal.lab_status")
     def test_invalid_container_rejected(self, mock_status, api_client):
@@ -96,7 +95,9 @@ class TestTerminalWebSocket:
         mock_status.return_value = _make_lab_status(running=True)
 
         with pytest.raises(Exception):
-            with api_client.websocket_connect("/api/terminal/ws/nonexistent") as ws:
+            with api_client.websocket_connect(
+                "/api/terminal/ws/nonexistent", headers=_VALID_ORIGIN
+            ) as ws:
                 # Should be closed by server
                 ws.receive_json()
 
@@ -105,7 +106,9 @@ class TestTerminalWebSocket:
         """Lab not running sends error and closes WebSocket."""
         mock_status.return_value = _make_lab_status(running=False)
 
-        with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+        ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
             assert "not running" in msg["message"]
@@ -124,7 +127,9 @@ class TestTerminalWebSocket:
         # stdout.read returns empty immediately to end the ssh->ws relay
         process.stdout.read = AsyncMock(return_value="")
 
-        with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+        ) as ws:
             ws.send_text(json.dumps({"type": "stdin", "data": "ls\n"}))
 
         # ws context exit closes the WebSocket, which unblocks the relay
@@ -145,7 +150,9 @@ class TestTerminalWebSocket:
         # stdout returns data then empty
         process.stdout.read = AsyncMock(side_effect=["$ prompt\n", ""])
 
-        with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+        ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "stdout"
             assert "prompt" in msg["data"]
@@ -164,7 +171,9 @@ class TestTerminalWebSocket:
         # stdout returns empty immediately
         process.stdout.read = AsyncMock(return_value="")
 
-        with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+        ) as ws:
             ws.send_text(json.dumps({"type": "resize", "cols": 120, "rows": 40}))
 
         process.change_terminal_size.assert_called_with(120, 40)
@@ -183,7 +192,9 @@ class TestTerminalWebSocket:
         # stdout returns empty immediately to allow clean close
         process.stdout.read = AsyncMock(return_value="")
 
-        with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+        ) as ws:
             pass  # disconnect on exit
 
         conn.close.assert_called_once()
@@ -197,7 +208,9 @@ class TestTerminalWebSocket:
         mock_asyncssh.connect = AsyncMock(side_effect=Exception("Connection refused"))
         mock_asyncssh.Error = Exception
 
-        with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+        ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
             assert msg["message"] == "SSH connection failed"
@@ -208,7 +221,9 @@ class TestTerminalWebSocket:
         mock_status.return_value = _make_lab_status(running=False)
 
         for name in ["victim", "kali", "reverse", "workstation"]:
-            with api_client.websocket_connect(f"/api/terminal/ws/{name}") as ws:
+            with api_client.websocket_connect(
+                f"/api/terminal/ws/{name}", headers=_VALID_ORIGIN
+            ) as ws:
                 msg = ws.receive_json()
                 # Should get "lab not running" error, not unknown container
                 assert msg["type"] == "error"

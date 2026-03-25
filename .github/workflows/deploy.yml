@@ -82,10 +82,13 @@ jobs:
         run: |
           SSH="ssh -i ~/.ssh/deploy_key -p ${DEPLOY_SSH_PORT} -o StrictHostKeyChecking=accept-new ${DEPLOY_USER}@${DEPLOY_HOST}"
 
-          # Give containers time to start
-          sleep 30
+          # Poll until all containers are running (12 attempts x 10s = 120s max)
+          for attempt in $(seq 1 12); do
+            echo "Verify attempt ${attempt}/12..."
+            RESULT=$($SSH "cd ${DEPLOY_DIR} && docker compose ps --format json" 2>/dev/null || echo "")
 
-          $SSH "cd ${DEPLOY_DIR} && docker compose ps --format json" | python3 -c "
+            if [ -n "$RESULT" ]; then
+              STATUS=$(echo "$RESULT" | python3 -c "
           import json, sys
           containers = []
           for line in sys.stdin:
@@ -99,21 +102,36 @@ jobs:
               except json.JSONDecodeError:
                   continue
           if not containers:
-              print('ERROR: No containers running')
-              sys.exit(1)
+              print('WAITING')
+              sys.exit(0)
           for c in containers:
               name = c.get('Name', 'unknown')
               state = c.get('State', 'unknown')
               health = c.get('Health', '')
-              line = f'  {name}: {state}'
-              if health: line += f' ({health})'
-              print(line)
+              info = f'  {name}: {state}'
+              if health: info += f' ({health})'
+              print(info, file=sys.stderr)
           running = sum(1 for c in containers if c.get('State') == 'running')
           total = len(containers)
-          print(f'\n{running}/{total} containers running')
-          if running < total:
-              sys.exit(1)
-          "
+          print(f'{running}/{total} containers running', file=sys.stderr)
+          if running >= total:
+              print('PASS')
+          else:
+              print('WAITING')
+          ")
+
+              if [ "$STATUS" = "PASS" ]; then
+                echo "All containers running."
+                exit 0
+              fi
+            fi
+
+            echo "Not ready yet, waiting 10s..."
+            sleep 10
+          done
+
+          echo "ERROR: Containers did not all reach running state within 120s"
+          exit 1
 
       - name: Cleanup SSH key
         if: always()

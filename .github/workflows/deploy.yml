@@ -55,6 +55,13 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key -p ${DEPLOY_SSH_PORT} -o StrictHostKeyChecking=accept-new" \
             --exclude='.git' \
             --exclude='.env' \
+            --exclude='config/wazuh_indexer_ssl_certs' \
+            --exclude='tools/misp-mcp-server' \
+            --exclude='.venv' \
+            --exclude='keys' \
+            --exclude='runs' \
+            --exclude='.aptl' \
+            --exclude='node_modules' \
             ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/"
 
           # Seed .env from example if first deploy

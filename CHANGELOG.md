@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deploy workflow: use `aptl lab start` instead of raw `docker compose up`, fixing missing SSL certs and credential sync on fresh deploys
 - Deploy workflow: exclude root-owned and runtime directories from rsync --delete (SSL certs, venv, keys, runs, node_modules, tools/misp-mcp-server)
 - SSL cert check now verifies root-ca.pem exists, not just the directory — fixes regeneration after empty directory is left behind
+- SSH key generation target changed from `containers/keys/` to `keys/` to match docker-compose.yml bind mounts
 
 ### Changed
 

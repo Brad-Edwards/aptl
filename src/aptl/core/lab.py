@@ -305,7 +305,7 @@ def orchestrate_lab_start(
 
     # Step 3: Generate SSH keys
     log.info("Step 3: Generating SSH keys...")
-    keys_dir = project_dir / "containers" / "keys"
+    keys_dir = project_dir / "keys"
     host_ssh_dir = Path.home() / ".ssh"
     ssh_result = ensure_ssh_keys(keys_dir=keys_dir, host_ssh_dir=host_ssh_dir)
     if not ssh_result.success:

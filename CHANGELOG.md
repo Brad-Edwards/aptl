@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deploy workflow: exclude root-owned and runtime directories from rsync --delete (SSL certs, venv, keys, runs, node_modules, tools/misp-mcp-server)
 - SSL cert check now verifies root-ca.pem exists, not just the directory — fixes regeneration after empty directory is left behind
 - SSH key generation target changed from `containers/keys/` to `keys/` to match docker-compose.yml bind mounts
+- Deploy workflow: force-stop containers and prune networks before rsync to prevent "Address already in use" on redeploy
 
 ### Changed
 

@@ -50,7 +50,7 @@ jobs:
           SSH="ssh -i ~/.ssh/deploy_key -p ${DEPLOY_SSH_PORT} -o StrictHostKeyChecking=accept-new ${DEPLOY_USER}@${DEPLOY_HOST}"
 
           # Stop any running lab before syncing code
-          $SSH "cd ${DEPLOY_DIR} && docker compose down --remove-orphans 2>/dev/null; docker ps -aq --filter 'name=aptl-' | xargs -r docker rm -f 2>/dev/null; docker network prune -f 2>/dev/null || true"
+          $SSH "cd ${DEPLOY_DIR} && docker stop \$(docker ps -q) 2>/dev/null; docker rm \$(docker ps -aq) 2>/dev/null; docker network prune -f 2>/dev/null; true"
 
           # Sync repo from runner to remote (runner has repo access, remote doesn't)
           $SSH "mkdir -p ${DEPLOY_DIR}"

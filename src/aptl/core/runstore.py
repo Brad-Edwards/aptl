@@ -24,6 +24,7 @@ class RunManifest(TypedDict):
     started_at: str
     finished_at: str
     duration_seconds: float
+    trace_id: str
     config_snapshot: dict
     containers: list[str]
     flags_captured: int

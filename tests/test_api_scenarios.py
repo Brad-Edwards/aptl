@@ -1,0 +1,172 @@
+"""Tests for scenario API endpoints."""
+
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+import yaml
+
+pytest.importorskip("fastapi", reason="Web dependencies not installed")
+
+
+@pytest.fixture
+def api_client(tmp_path):
+    """Create a FastAPI test client with DI override for project_dir."""
+    from aptl.api.deps import get_project_dir
+    from aptl.api.main import app
+    from starlette.testclient import TestClient
+
+    app.dependency_overrides[get_project_dir] = lambda: tmp_path
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def scenarios_dir(tmp_path):
+    """Create a temp scenarios directory with test scenarios."""
+    sdir = tmp_path / "scenarios"
+    sdir.mkdir()
+
+    scenario1 = {
+        "metadata": {
+            "id": "recon-nmap",
+            "name": "Nmap Recon",
+            "description": "Network reconnaissance with nmap",
+            "difficulty": "beginner",
+            "estimated_minutes": 15,
+            "tags": ["recon", "nmap"],
+        },
+        "mode": "red",
+        "containers": {"required": ["kali", "victim"]},
+        "objectives": {
+            "red": [
+                {
+                    "id": "scan-target",
+                    "description": "Scan the target",
+                    "type": "manual",
+                    "points": 100,
+                }
+            ],
+            "blue": [],
+        },
+    }
+    (sdir / "recon-nmap.yaml").write_text(yaml.dump(scenario1))
+
+    scenario2 = {
+        "metadata": {
+            "id": "brute-force",
+            "name": "Brute Force",
+            "description": "SSH brute force detection",
+            "difficulty": "intermediate",
+            "estimated_minutes": 30,
+            "tags": ["ssh", "detection"],
+        },
+        "mode": "blue",
+        "containers": {"required": ["kali", "victim", "wazuh"]},
+        "objectives": {
+            "red": [],
+            "blue": [
+                {
+                    "id": "detect-brute",
+                    "description": "Detect brute force",
+                    "type": "manual",
+                    "points": 200,
+                }
+            ],
+        },
+    }
+    (sdir / "brute-force.yaml").write_text(yaml.dump(scenario2))
+
+    return sdir
+
+
+class TestListScenarios:
+    def test_returns_all_scenarios(self, api_client, scenarios_dir):
+        response = api_client.get("/api/scenarios")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        ids = {s["id"] for s in data}
+        assert "recon-nmap" in ids
+        assert "brute-force" in ids
+
+    def test_returns_scenario_details(self, api_client, scenarios_dir):
+        response = api_client.get("/api/scenarios")
+
+        data = response.json()
+        nmap = next(s for s in data if s["id"] == "recon-nmap")
+        assert nmap["name"] == "Nmap Recon"
+        assert nmap["difficulty"] == "beginner"
+        assert nmap["mode"] == "red"
+        assert nmap["estimated_minutes"] == 15
+        assert "kali" in nmap["containers_required"]
+
+    def test_returns_empty_list_when_no_scenarios(self, api_client):
+        response = api_client.get("/api/scenarios")
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+
+class TestGetScenario:
+    def test_returns_full_scenario(self, api_client, scenarios_dir):
+        response = api_client.get("/api/scenarios/recon-nmap")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["metadata"]["id"] == "recon-nmap"
+        assert data["mode"] == "red"
+
+    def test_returns_404_for_unknown(self, api_client, scenarios_dir):
+        response = api_client.get("/api/scenarios/nonexistent")
+
+        assert response.status_code == 404
+
+
+class TestInvalidScenarios:
+    """Verify that invalid scenario files are skipped gracefully."""
+
+    @pytest.fixture
+    def scenarios_dir_with_invalid(self, tmp_path):
+        """Scenarios dir with one valid and one invalid scenario."""
+        sdir = tmp_path / "scenarios"
+        sdir.mkdir()
+
+        valid = {
+            "metadata": {
+                "id": "valid-scenario",
+                "name": "Valid",
+                "description": "A valid scenario",
+                "difficulty": "beginner",
+                "estimated_minutes": 10,
+                "tags": [],
+            },
+            "mode": "red",
+            "containers": {"required": ["kali"]},
+            "objectives": {
+                "red": [{"id": "scan-target", "description": "Scan", "type": "manual", "points": 100}],
+                "blue": [],
+            },
+        }
+        (sdir / "valid.yaml").write_text(yaml.dump(valid))
+
+        # Invalid: missing required fields
+        (sdir / "broken.yaml").write_text("metadata:\n  id: broken\n")
+
+        return sdir
+
+    def test_list_skips_invalid_scenarios(self, api_client, scenarios_dir_with_invalid):
+        response = api_client.get("/api/scenarios")
+
+        assert response.status_code == 200
+        data = response.json()
+        ids = [s["id"] for s in data]
+        assert "valid-scenario" in ids
+        assert "broken" not in ids
+
+    def test_get_returns_404_for_invalid_scenario(self, api_client, scenarios_dir_with_invalid):
+        response = api_client.get("/api/scenarios/broken")
+
+        assert response.status_code == 404

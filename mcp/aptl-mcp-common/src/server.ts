@@ -17,7 +17,7 @@ import {
 import { type LabConfig } from './config.js';
 import { SSHConnectionManager } from './ssh.js';
 import { HTTPClient } from './http.js';
-import { ToolTracer } from './tracing.js';
+import { initTracing, shutdownTracing, traceToolCall } from './telemetry.js';
 import { generateToolDefinitions } from './tools/definitions.js';
 import { generateToolHandlers, type ToolHandler, type ToolContext } from './tools/handlers.js';
 import { generateAPIToolDefinitions } from './tools/api-definitions.js';
@@ -27,10 +27,10 @@ import { generateAPIToolHandlers, type APIToolHandler, type APIToolContext } fro
  * Create and configure an MCP server with the provided lab configuration
  */
 export function createMCPServer(labConfig: LabConfig) {
-  // Initialize clients and tracer based on config
+  // Initialize clients and OTel tracing based on config
   const sshManager = labConfig.containers ? new SSHConnectionManager() : null;
   const httpClient = labConfig.api ? new HTTPClient(labConfig.api) : null;
-  const tracer = new ToolTracer(labConfig.server.name);
+  initTracing(labConfig.server.name);
 
   // Pre-generate tools and handlers based on available capabilities
   let cachedTools: Tool[] = [];
@@ -103,7 +103,7 @@ export function createMCPServer(labConfig: LabConfig) {
     }
 
     // Context is narrowed to the correct type above based on tool name
-    return tracer.trace(name, args ?? {}, () => (handler as any)(args ?? {}, context));
+    return traceToolCall(name, labConfig.server.name, args ?? {}, () => (handler as any)(args ?? {}, context));
   });
 
   // Setup graceful shutdown handlers (once per process)
@@ -120,6 +120,7 @@ export function createMCPServer(labConfig: LabConfig) {
       if (!handlersSetup) {
         process.on('SIGINT', async () => {
           console.error('[MCP] Shutting down gracefully...');
+          await shutdownTracing();
           if (sshManager) {
             await sshManager.disconnectAll();
           }
@@ -128,6 +129,7 @@ export function createMCPServer(labConfig: LabConfig) {
 
         process.on('SIGTERM', async () => {
           console.error('[MCP] Shutting down gracefully...');
+          await shutdownTracing();
           if (sshManager) {
             await sshManager.disconnectAll();
           }

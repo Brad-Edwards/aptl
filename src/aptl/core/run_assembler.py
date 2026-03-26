@@ -5,21 +5,19 @@ a structured run directory via the storage backend.
 """
 
 import os
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 from aptl.core.collectors import (
     collect_container_logs,
-    collect_mcp_traces,
     collect_misp_events,
     collect_shuffle_executions,
     collect_suricata_eve,
     collect_thehive_cases,
+    collect_traces,
     collect_wazuh_alerts,
 )
 from aptl.core.config import AptlConfig
-from aptl.core.events import Event
 from aptl.core.runstore import LocalRunStore, RunManifest
 from aptl.core.scenarios import ScenarioDefinition
 from aptl.core.session import ActiveSession
@@ -27,13 +25,6 @@ from aptl.core.snapshot import capture_snapshot
 from aptl.utils.logging import get_logger
 
 log = get_logger("run_assembler")
-
-
-def _serialize_event(event: Event) -> dict:
-    """Convert an Event to a JSON-serializable dict."""
-    d = asdict(event)
-    d["event_type"] = event.event_type.value
-    return d
 
 
 def _active_containers() -> list[str]:
@@ -60,7 +51,6 @@ def assemble_run(
     session: ActiveSession,
     scenario: ScenarioDefinition,
     scenario_path: Path,
-    events: list[Event],
     config: AptlConfig,
 ) -> Path:
     """Assemble a complete run directory after scenario stop.
@@ -93,11 +83,7 @@ def assemble_run(
     if scenario_path.exists():
         store.copy_file(run_id, "scenario/definition.yaml", scenario_path)
 
-    # 4. Write events
-    event_dicts = [_serialize_event(e) for e in events]
-    store.write_jsonl(run_id, "scenario/events.jsonl", event_dicts)
-
-    # 5. Collect Wazuh alerts
+    # 4. Collect Wazuh alerts
     indexer_url = os.getenv("APTL_INDEXER_URL", "https://localhost:9200")
     indexer_user = os.getenv("INDEXER_USERNAME", "admin")
     indexer_pass = os.getenv("INDEXER_PASSWORD", "SecretPassword")
@@ -108,12 +94,12 @@ def assemble_run(
     )
     store.write_jsonl(run_id, "wazuh/alerts.jsonl", alerts)
 
-    # 7. Collect Suricata EVE
+    # 5. Collect Suricata EVE
     eve_entries = collect_suricata_eve(started_at, finished_at)
     if eve_entries:
         store.write_jsonl(run_id, "suricata/eve.jsonl", eve_entries)
 
-    # 8. Collect TheHive cases
+    # 6. Collect TheHive cases
     thehive_url = os.getenv("THEHIVE_URL", "http://localhost:9000")
     thehive_key = os.getenv("THEHIVE_API_KEY", "")
     cases = collect_thehive_cases(
@@ -122,7 +108,7 @@ def assemble_run(
     if cases:
         store.write_json(run_id, "soc/thehive-cases.json", cases)
 
-    # 9. Collect MISP correlations
+    # 7. Collect MISP correlations
     misp_url = os.getenv("MISP_URL", "https://localhost:8443")
     misp_key = os.getenv("MISP_API_KEY", "")
     misp_events = collect_misp_events(
@@ -131,7 +117,7 @@ def assemble_run(
     if misp_events:
         store.write_json(run_id, "soc/misp-correlations.json", misp_events)
 
-    # 10. Collect Shuffle executions
+    # 8. Collect Shuffle executions
     shuffle_url = os.getenv("SHUFFLE_URL", "http://localhost:5001")
     shuffle_key = os.getenv("SHUFFLE_API_KEY", "")
     shuffle_execs = collect_shuffle_executions(
@@ -140,7 +126,7 @@ def assemble_run(
     if shuffle_execs:
         store.write_json(run_id, "soc/shuffle-executions.json", shuffle_execs)
 
-    # 11. Collect container logs
+    # 9. Collect container logs
     containers = _active_containers()
     container_logs = collect_container_logs(containers, started_at, finished_at)
     for name, log_text in container_logs.items():
@@ -148,13 +134,14 @@ def assemble_run(
             run_id, f"containers/{name}.log", log_text.encode("utf-8")
         )
 
-    # 12. Merge MCP traces
-    trace_dir = Path(os.getenv("APTL_TRACE_DIR", ".aptl/traces"))
-    traces = collect_mcp_traces(trace_dir, started_at, finished_at)
-    if traces:
-        store.write_jsonl(run_id, "agents/traces.jsonl", traces)
+    # 10. Collect traces from Tempo
+    spans: list[dict] = []
+    if session.trace_id:
+        spans = collect_traces(session.trace_id)
+        if spans:
+            store.write_json(run_id, "traces/spans.json", spans)
 
-    # 13. Write manifest
+    # 11. Write manifest
     started_dt = datetime.fromisoformat(started_at)
     finished_dt = datetime.fromisoformat(finished_at)
     duration = (finished_dt - started_dt).total_seconds()
@@ -166,6 +153,7 @@ def assemble_run(
         "started_at": started_at,
         "finished_at": finished_at,
         "duration_seconds": duration,
+        "trace_id": session.trace_id,
         "config_snapshot": {
             "lab": config.lab.model_dump(),
             "containers": config.containers.model_dump(),
@@ -176,10 +164,10 @@ def assemble_run(
     store.write_json(run_id, "manifest.json", manifest)
 
     log.info(
-        "Run %s assembled: %d alerts, %d traces, %d container logs",
+        "Run %s assembled: %d alerts, %d spans, %d container logs",
         run_id,
         len(alerts),
-        len(traces),
+        len(spans),
         len(container_logs),
     )
     return run_dir

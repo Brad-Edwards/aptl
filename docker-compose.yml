@@ -348,7 +348,7 @@ services:
 
   thehive-es:
     profiles: ["soc"]
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.24
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.28
     container_name: aptl-thehive-es
     restart: unless-stopped
     environment:
@@ -903,6 +903,122 @@ services:
         limits:
           memory: 512m
 
+  # ==========================================================================
+  # WEB UI (web profile)
+  # ==========================================================================
+
+  aptl-web-api:
+    profiles: ["web"]
+    container_name: aptl-web-api
+    build:
+      context: .
+      dockerfile: web/Dockerfile.api
+    restart: unless-stopped
+    ports:
+      - "8400:8400"
+    environment:
+      - APTL_PROJECT_DIR=/project
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/project:ro
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.40
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  aptl-web-ui:
+    profiles: ["web"]
+    container_name: aptl-web-ui
+    build:
+      context: web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - ORIGIN=http://localhost:3000
+    depends_on:
+      - aptl-web-api
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.41
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  # ==========================================================================
+  # OBSERVABILITY STACK (OpenTelemetry)
+  # ==========================================================================
+
+  aptl-otel-collector:
+    profiles: ["otel"]
+    container_name: aptl-otel-collector
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    restart: unless-stopped
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./config/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.53
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  aptl-tempo:
+    profiles: ["otel"]
+    container_name: aptl-tempo
+    image: grafana/tempo:2.7.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "3200:3200"
+    volumes:
+      - ./config/otel/tempo-config.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.51
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  aptl-grafana-otel:
+    profiles: ["otel"]
+    container_name: aptl-grafana-otel
+    image: grafana/grafana:11.6.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3100:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./config/otel/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/tempo.yaml:ro
+      - grafana_otel_data:/var/lib/grafana
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.52
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
 # ==========================================================================
 # NETWORKS
 # ==========================================================================
@@ -917,28 +1033,34 @@ networks:
           gateway: 172.20.0.1
 
   # DMZ - Public-facing services (web, mail, DNS)
+  # SAF-002: internal: true blocks internet egress from containers
   aptl-dmz:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.1.0/24
-          gateway: 172.20.1.1
+          gateway: 172.20.1.1  # bridge interface IP; no external routing (internal network)
 
   # Internal - AD, database, file server, app server
+  # SAF-002: internal: true blocks internet egress from containers
   aptl-internal:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.2.0/24
-          gateway: 172.20.2.1
+          gateway: 172.20.2.1  # bridge interface IP; no external routing (internal network)
 
   # Red team - Kali attack platform
+  # SAF-002: internal: true blocks internet egress from containers
   aptl-redteam:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.4.0/24
-          gateway: 172.20.4.1
+          gateway: 172.20.4.1  # bridge interface IP; no external routing (internal network)
 
 # ==========================================================================
 # VOLUMES
@@ -1001,3 +1123,7 @@ volumes:
   kali_operations:
   kali_logs:
   reverse_logs:
+
+  # OpenTelemetry
+  tempo_data:
+  grafana_otel_data:

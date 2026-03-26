@@ -6,6 +6,276 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.1] - 2026-03-25
+
+### Fixed
+
+- Test helper `_find_node()` returns absolute path via `shutil.which()` instead of bare `"node"` string, fixing `_server_available()` check that caused MCP protocol tests to skip on systems without NVM
+- Deploy workflow: use `aptl lab start` instead of raw `docker compose up`, fixing missing SSL certs and credential sync on fresh deploys
+- Deploy workflow: exclude root-owned and runtime directories from rsync --delete (SSL certs, venv, keys, runs, node_modules, tools/misp-mcp-server)
+- SSL cert check now verifies root-ca.pem exists, not just the directory — fixes regeneration after empty directory is left behind
+- SSH key generation target changed from `containers/keys/` to `keys/` to match docker-compose.yml bind mounts
+- Deploy workflow: force-stop containers and prune networks before rsync to prevent "Address already in use" on redeploy
+
+### Changed
+
+- SonarCloud scan now waits for Quality Gate result (`-Dsonar.qualitygate.wait=true`), failing the CI job if the gate is red
+- Branch protection on `main` and `dev`: "SonarCloud Code Analysis" is now a required status check
+
+## [4.16.0] - 2026-03-24
+
+### Added
+
+- `APTL_ALLOWED_ORIGINS` environment variable for configurable CORS origins (defaults unchanged)
+- SSH deployment parameter validation (host, user, port, key path) in `SSHComposeBackend`
+- Integration tests exercising full API-to-core request paths (`test_api_integration.py`)
+- PID re-verification via `/proc/{pid}/cmdline` before SIGKILL in kill switch (TOCTOU mitigation)
+- File locking (`fcntl.flock`) for `session.json` concurrent access safety
+
+### Fixed
+
+- Credential sync: YAML password double-quote escaping and XML cluster key entity escaping in `credentials.py`
+- WebSocket terminal: empty Origin header now correctly rejected (was bypassing origin check)
+- Scenario CLI: `shutdown_tracing()` wrapped in try/finally to prevent span loss on exception
+- Deploy workflow: replaced fixed 30s sleep with 120s polling loop for container health verification
+- Kill switch test: SIGTERM/SIGKILL ordering now asserted by index, not just membership
+
+### Changed
+
+- TheHive Elasticsearch image updated from 7.17.24 to 7.17.28 (security patches)
+
+## [4.15.1] - 2026-03-23
+
+### Fixed
+
+- Deploy workflow: replace remote `git clone` with `rsync` from runner to fix clone failures on hosts without GitHub credentials (curl 56 connection reset)
+
+## [4.15.0] - 2026-03-22
+
+### Added
+
+- Deployment backend abstraction layer (DEP-001, #233):
+  - `DeploymentBackend` Protocol in `src/aptl/core/deployment/backend.py` defining the lifecycle interface (start, stop, status, kill, pull_images)
+  - `DockerComposeBackend` wrapping existing Docker Compose subprocess logic as the default backend
+  - `SSHComposeBackend` enabling remote deployment over SSH via `DOCKER_HOST=ssh://user@host`
+  - `DeploymentConfig` Pydantic model with provider selection and SSH configuration fields
+  - Factory function `get_backend()` for config-driven backend instantiation
+  - `deployment` section in `aptl.json` for backend configuration (backward-compatible default)
+  - ADR-013 documenting the deployment abstraction decision
+  - Existing `start_lab()`, `stop_lab()`, `lab_status()`, and `kill_lab_containers()` functions accept optional `backend` parameter while maintaining full backward compatibility
+
+## [4.14.0] - 2026-03-22
+
+### Added
+
+- Network egress firewall on Docker networks (SAF-002, #231):
+  - `aptl-dmz`, `aptl-internal`, and `aptl-redteam` networks now use `internal: true` to block internet egress
+  - Prevents autonomous agents from scanning or attacking external targets
+  - `aptl-security` remains non-internal so SOC tools can reach threat feeds and rule updates
+  - Multi-homed management containers (dns, wazuh, suricata) retain internet via security network
+  - Host port mappings (SSH to victim/kali) unaffected by internal flag
+  - Wazuh agent and Falco pre-installed in victim, workstation, and kali container images at build time (runtime install scripts skip downloads when packages are already present)
+  - Static consistency tests enforce egress controls in `test_consistency.py`
+  - Networking architecture docs updated with egress control and upgrade details
+
+## [4.13.0] - 2026-03-22
+
+### Added
+
+- Emergency kill switch for all agent and MCP operations (SAF-001, #229):
+  - `aptl kill` CLI command terminates all MCP server processes (SIGTERM + SIGKILL fallback)
+  - `--containers` flag force-stops all lab Docker containers via `docker compose kill`
+  - POST `/api/lab/kill` endpoint for web UI emergency button
+  - Automatic cleanup of active scenario sessions and trace context files
+  - Core `kill.py` module with resilient process discovery via `/proc/*/cmdline`
+
+## [4.12.0] - 2026-03-21
+
+### Added
+
+- OpenTelemetry integration replacing custom JSONL tracing systems (OBS-001, #225):
+  - Python `telemetry.py` module: OTel TracerProvider with OTLP HTTP exporter, trace context generation/propagation, span creation for scenario lifecycle events
+  - TypeScript `telemetry.ts` module: OTel NodeTracerProvider with OTLP proto exporter, cross-process trace context via `.aptl/trace-context.json`, `traceToolCall()` wrapper with GenAI SIG attributes
+  - Docker infrastructure: OTel Collector (`otel` profile), Grafana Tempo (72h retention), Grafana UI at port 3100
+  - OTel Collector config, Tempo config, and Grafana datasource provisioning in `config/otel/`
+  - Run archive `traces/spans.json` containing all OTel spans fetched from Tempo
+  - `trace_id` field in session state and run manifest for distributed tracing correlation
+  - `collect_traces()` collector querying Tempo HTTP API by trace ID
+  - ADR-012 documenting the OpenTelemetry integration decision
+
+### Changed
+
+- `aptl lab start` now always includes `--profile otel` for the observability stack
+- Run manifest includes `trace_id` field
+- `.mcp.json.example` uses `OTEL_EXPORTER_OTLP_ENDPOINT` instead of `APTL_TRACE_DIR`
+- MCP server startup initializes OTel tracing; shutdown flushes spans
+- `assemble_run()` no longer takes `events` parameter; collects traces from Tempo instead
+
+### Removed
+
+- `src/aptl/core/events.py` (EventLog, EventType, Event, make_event) — replaced by OTel spans
+- `mcp/aptl-mcp-common/src/tracing.ts` (ToolTracer, ToolTrace) — replaced by OTel spans
+- `tests/test_events.py` — replaced by `tests/test_telemetry.py`
+- `APTL_TRACE_DIR` environment variable and `.aptl/traces/` directory
+- `collect_mcp_traces()` from collectors (replaced by `collect_traces()`)
+- `scenario/events.jsonl` and `agents/traces.jsonl` from run archive format
+
+## [4.11.1] - 2026-03-21
+
+### Fixed
+
+- SonarCloud quality gate failure: new code coverage below 80% threshold
+  - Added tests for `container-state.ts`, route load functions, `getScenario()` API, `subscribeLabEvents`, and SSE reconnect logic in lab store
+  - Scoped vitest coverage to `src/` only, eliminating `build/`, `.svelte-kit/`, and `node_modules/` noise from lcov report
+  - All new TypeScript files now at 100% coverage (56 tests across 7 test files)
+
+## [4.11.0] - 2026-03-21
+
+### Added
+
+- Interactive scenario workbench view at `/scenarios/[id]` (UI-001, #223):
+  - Block-composition architecture: `buildBlockSequence()` pure function maps scenario data to typed `WorkbenchBlock[]` discriminated union, separating data logic from rendering
+  - 9 workbench block components: NarrativeBlock (markdown), TerminalBlock (xterm.js wrapper), SiemQueryBlock (stub), ContainerStatusBlock (SSE-driven), HintToggle (progressive disclosure), ObjectiveBlock, AttackStepBlock, WorkbenchStatusBar (sticky), SectionDivider
+  - Full `ScenarioDefinition` TypeScript type hierarchy mirroring Python Pydantic models (metadata, steps, objectives, scoring, attack chain, MITRE references)
+  - `renderMarkdown()` utility using `marked` + DOMPurify for safe runtime markdown rendering
+  - Scenario card links from Lab Home page to workbench view
+  - `prose-aptl` CSS class for dark-themed markdown prose styling
+  - Progressive hint disclosure with escalating point penalties shown in amber
+  - SIEM query blocks display query JSON with disabled "Run Query" button (ready for OpenSearch integration)
+  - Copyable attack step commands with clipboard feedback
+  - Lazy-mounted terminals in attack step blocks to avoid mass WebSocket connections
+  - Stable block keys for Svelte each-block diffing
+  - Shared `stateColor()` utility for container state badge colors
+  - Unit tests for block sequence builder (11 tests), markdown renderer (9 tests), and HintToggle component (7 tests)
+  - `marked` and `dompurify` dependencies added
+  - Vitest `resolve.conditions: ['browser']` fix for Svelte 5 component testing with jsdom
+  - Route load function uses SvelteKit `error()` for proper HTTP status propagation
+
+### Security
+
+- WebSocket terminal endpoint now validates the `Origin` header before accepting connections, blocking cross-site WebSocket hijacking (CSWSH) — previously any website visited while the lab was running could open a shell on lab containers because CORS middleware does not protect WebSocket upgrades
+- `ALLOWED_ORIGINS` constant shared between CORS middleware and WebSocket origin check in `aptl.api.deps` to prevent drift
+
+## [4.10.0] - 2026-03-21
+
+### Added
+
+- In-browser terminal for container SSH access via xterm.js and WebSocket (#221):
+  - WebSocket endpoint `ws /api/terminal/ws/{container}` with asyncssh PTY relay for all SSH-capable containers
+  - `Terminal.svelte` component: xterm.js wrapper with FitAddon, WebLinksAddon, APTL dark theme, auto-resize
+  - Full-page terminal route at `/terminal/{container}` with back navigation
+  - "Terminal" link on ContainerCard when container is running and SSH-capable
+  - Vite dev server WebSocket proxy (`ws: true`) for `/api` endpoint
+  - `asyncssh>=2.17.0` added to `web` optional dependencies
+  - WebSocket endpoint tests covering validation, stdin/stdout relay, resize, disconnect cleanup, and error handling
+
+## [4.9.2] - 2026-03-20
+
+### Fixed
+
+- API response models use `Optional[str] = None` instead of `str = ""` for error fields
+- SSE generator implements exponential backoff and circuit breaker (terminates after 10 consecutive errors)
+- CORS tightened to `GET`/`POST` methods and `Content-Type`/`Accept` headers only
+- Lab start endpoint has 30-minute timeout via `asyncio.wait_for`
+- All API routers use FastAPI `Depends()` for `get_project_dir` injection (testable, validates directory exists)
+- `get_project_dir()` returns HTTP 503 when project directory does not exist
+- Hardcoded container list in config router replaced with dynamic `ContainerSettings.model_fields`
+- `ContainerSettings.enabled_profiles()` uses `model_fields` instead of hardcoded list
+- Docker CLI installed via official APT repo with GPG verification instead of `curl | sh`
+- Production web Docker image uses `npm ci --omit=dev` instead of copying full `node_modules`
+- Uvicorn production config: `--workers`, `--log-level info`, `--timeout-keep-alive 65`, `--access-log`
+- Frontend SSE reconnects with generation counter to prevent race conditions
+- Frontend error text truncated to 500 characters
+- `+page.svelte` checks `error != null` instead of truthy for nullable error field
+
+### Added
+
+- Structured logging (`aptl.utils.logging`) in all API routers and `create_app()`
+- `+error.svelte` dark-themed error page with status code and back link
+- Accessibility: `role="status"`/`role="img"`, `aria-label` on status dots, badges, spinner, buttons; `sr-only` loading text
+- Expert difficulty gets distinct violet badge (was same red as advanced)
+- HTML meta tags: `description`, `theme-color` (#1a1d23), `apple-mobile-web-app-capable`
+- `.dockerignore` files for project root and `web/`
+- Docker socket security documentation in README
+- SonarCloud config includes `web/src` sources and `web/coverage/lcov.info`
+- CI workflow runs web frontend tests with coverage
+- Vitest coverage config (v8 provider, lcov reporter)
+
+### Removed
+
+- Unused `web/src/lib/stores/scenarios.ts`
+- Unused `getScenarios` import from `+page.ts`
+- `httpx` from `web` optional deps (already in `dev`; CI installs both)
+
+## [4.9.1] - 2026-03-20
+
+### Fixed
+
+- CI SonarCloud workflow installs `.[dev,web]` so API tests find `fastapi` (#219)
+- API test files gracefully skip via `pytest.importorskip` when web deps are absent
+
+## [4.9.0] - 2026-03-20
+
+### Added
+
+- Notebook-style web UI Phase 1 MVP (SYS-010, ADR-011) (#219):
+  - FastAPI backend (`src/aptl/api/`) wrapping existing `aptl.core` modules — no domain logic duplication
+  - REST endpoints: `GET /api/lab/status`, `POST /api/lab/start`, `POST /api/lab/stop`, `GET /api/scenarios`, `GET /api/scenarios/{id}`, `GET /api/config`, `GET /api/health`
+  - SSE endpoint `GET /api/lab/events` for real-time container status updates
+  - SvelteKit frontend (`web/`) with Tailwind CSS v4, dark theme (indigo/violet/teal palette)
+  - Lab Home page with container status grid, start/stop controls, scenario listing with difficulty/mode badges
+  - `aptl web serve` CLI command to start the API server on port 8400
+  - `web` optional dependency group: FastAPI, uvicorn, sse-starlette, httpx
+  - Docker Compose `web` profile with `aptl-web-api` (172.20.0.40:8400) and `aptl-web-ui` (172.20.0.41:3000) services
+  - Backend tests (`test_api_lab.py`, `test_api_scenarios.py`, `test_api_config.py`) and frontend API tests
+  - ADR-011 status: proposed -> accepted
+
+## [4.8.0] - 2026-03-20
+
+### Added
+
+- Architecture Decision Records (ADRs) section in docs with MADR-format template and 11 ADRs documenting all significant architectural decisions from v2.0.0 through v4.7.0 (#217)
+
+## [4.7.0] - 2026-03-20
+
+### Changed
+
+- Upgraded CI actions to Node.js 24-compatible versions: `actions/checkout@v6`, `actions/setup-python@v6`, `actions/setup-node@v6` (#211)
+- Migrated from deprecated `SonarSource/sonarcloud-github-action` to `SonarSource/sonarqube-scan-action@v7` (#211)
+
+## [4.6.8] - 2026-03-20
+
+### Fixed
+
+- SonarCloud quality gate failing with 0% TypeScript coverage — CI workflow now runs vitest with coverage in `mcp/aptl-mcp-common/` before the SonarCloud scan, generating `lcov.info` that the existing sonar config already expects (#211)
+- Added `mcp/aptl-mcp-common/tests` to `sonar.tests` so SonarCloud recognizes TS test files as test sources
+- Fixed SonarCloud "can't be indexed twice" error — `mcp/**/tests/**` added to `sonar.exclusions` so test files under `mcp/` are excluded from source analysis while still indexed via `sonar.tests` (#211)
+
+## [4.6.7] - 2026-03-08
+
+### Fixed
+
+- Persistent SSH sessions stranded callers on close/timeout — `cleanup()` now rejects all pending command promises and clears per-command timeouts (#189)
+
+## [4.6.6] - 2026-03-08
+
+### Fixed
+
+- `aptl scenario stop` did not load project `.env` into `os.environ` before calling `assemble_run()` — collectors for Wazuh Indexer, TheHive, MISP, and Shuffle got empty-string fallbacks for API keys and silently skipped data collection, losing SOC telemetry (#184)
+- Collector HTTP timeout was 20s — MISP and TheHive regularly exceed this on cold queries, causing silent data loss; raised to 120s to match test helper timeouts (#184)
+
+## [4.6.5] - 2026-03-08
+
+### Fixed
+
+- `sync_manager_config()` cluster key regex vulnerable to polynomial backtracking (ReDoS) — replaced `re.DOTALL` regex with linear-time string search for `<cluster>` blocks (#183)
+
+## [4.6.4] - 2026-03-08
+
+### Fixed
+
+- `sync_manager_config()` corrupted TLS config by replacing all `<key>` elements — regex now scoped to only match `<key>` inside `<cluster>` blocks, leaving `<indexer><ssl><key>` untouched (#183)
+
 ## [4.6.3] - 2026-03-08
 
 ### Fixed

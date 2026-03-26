@@ -6,7 +6,9 @@ and provides methods to record hints, objective completions, and
 session lifecycle events.
 """
 
+import fcntl
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -38,7 +40,8 @@ class ActiveSession:
         scenario_id: ID of the active scenario.
         state: Current lifecycle state.
         started_at: ISO 8601 UTC timestamp of when the session started.
-        events_file: Relative path to the events JSONL file within .aptl/.
+        trace_id: 32-char hex trace ID for OpenTelemetry distributed tracing.
+        span_id: 16-char hex span ID for the scenario root span context.
         hints_used: Map of objective_id to highest hint level revealed.
         completed_objectives: List of objective IDs that have been completed.
         flags: CTF flags captured at scenario start, keyed by container name.
@@ -47,7 +50,8 @@ class ActiveSession:
     scenario_id: str
     state: SessionState
     started_at: str
-    events_file: str
+    trace_id: str = ""
+    span_id: str = ""
     hints_used: dict[str, int] = field(default_factory=dict)
     completed_objectives: list[str] = field(default_factory=list)
     flags: dict[str, dict[str, dict]] = field(default_factory=dict)
@@ -85,7 +89,8 @@ def _deserialize_session(data: dict) -> ActiveSession:
             scenario_id=data["scenario_id"],
             state=SessionState(data["state"]),
             started_at=data["started_at"],
-            events_file=data["events_file"],
+            trace_id=data.get("trace_id", ""),
+            span_id=data.get("span_id", ""),
             hints_used=data.get("hints_used", {}),
             completed_objectives=data.get("completed_objectives", []),
             flags=data.get("flags", {}),
@@ -147,7 +152,9 @@ class ScenarioSession:
         if not self._session_path.exists():
             return None
 
-        raw = self._session_path.read_text().strip()
+        with open(self._session_path, "r", encoding="utf-8") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+            raw = f.read().strip()
         if not raw:
             return None
 
@@ -173,15 +180,14 @@ class ScenarioSession:
     def start(
         self,
         scenario: ScenarioDefinition,
-        events_file: Path,
     ) -> ActiveSession:
         """Start a new scenario session.
 
         Creates the session file and returns the new session.
+        Generates a trace_id for OpenTelemetry distributed tracing.
 
         Args:
             scenario: The scenario being started.
-            events_file: Path to the events JSONL file.
 
         Returns:
             The newly created ActiveSession.
@@ -197,17 +203,16 @@ class ScenarioSession:
                 "Stop it first with 'aptl scenario stop'."
             )
 
-        # Use relative path from state_dir for portability
-        try:
-            relative_events = events_file.relative_to(self._state_dir)
-        except ValueError:
-            relative_events = events_file
+        from aptl.core.telemetry import generate_trace_context
+
+        ctx = generate_trace_context()
 
         session = ActiveSession(
             scenario_id=scenario.metadata.id,
             state=SessionState.ACTIVE,
             started_at=datetime.now(timezone.utc).isoformat(),
-            events_file=str(relative_events),
+            trace_id=ctx["trace_id"],
+            span_id=ctx["span_id"],
         )
 
         self._write(session)
@@ -316,14 +321,20 @@ class ScenarioSession:
         """Persist session state to disk.
 
         Creates the state directory and parent directories if needed.
+        Uses an exclusive file lock to prevent concurrent write corruption.
 
         Args:
             session: The session to persist.
         """
         self._state_dir.mkdir(parents=True, exist_ok=True)
         data = _serialize_session(session)
-        self._session_path.write_text(
-            json.dumps(data, indent=2) + "\n",
-            encoding="utf-8",
+        payload = json.dumps(data, indent=2) + "\n"
+        fd = os.open(
+            str(self._session_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         )
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            os.write(fd, payload.encode("utf-8"))
+        finally:
+            os.close(fd)  # releases lock
         log.debug("Wrote session to %s", self._session_path)

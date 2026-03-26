@@ -19,6 +19,7 @@ class TestEnsureSSLCerts:
 
         certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
         certs_dir.mkdir(parents=True)
+        (certs_dir / "root-ca.pem").write_text("fake-cert")
 
         mock_run = mocker.patch("aptl.core.certs.subprocess.run")
 
@@ -183,6 +184,7 @@ class TestEnsureSSLCerts:
 
         certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
         certs_dir.mkdir(parents=True)
+        (certs_dir / "root-ca.pem").write_text("fake-cert")
 
         result = ensure_ssl_certs(tmp_path)
 

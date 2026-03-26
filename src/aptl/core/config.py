@@ -57,14 +57,10 @@ class ContainerSettings(BaseModel):
 
     def enabled_profiles(self) -> list[str]:
         """Return docker compose profile names for enabled containers."""
-        profiles = []
-        for field_name in [
-            "wazuh", "victim", "kali", "reverse",
-            "enterprise", "soc", "mail", "fileshare", "dns",
-        ]:
-            if getattr(self, field_name):
-                profiles.append(field_name)
-        return profiles
+        return [
+            name for name in type(self).model_fields
+            if getattr(self, name)
+        ]
 
 
 class RunStorageConfig(BaseModel):
@@ -78,6 +74,38 @@ class RunStorageConfig(BaseModel):
     s3_prefix: str = "runs/"        # Future
 
 
+class DeploymentConfig(BaseModel):
+    """Configuration for deployment backend selection.
+
+    Controls which deployment backend is used for lab lifecycle
+    operations (start, stop, status, kill).  Defaults to local
+    Docker Compose.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = "docker-compose"    # "docker-compose" or "ssh-compose"
+    project_name: str = "aptl"
+
+    # SSH-specific fields (only used when provider == "ssh-compose")
+    ssh_host: str | None = None
+    ssh_user: str | None = None
+    ssh_key: str | None = None
+    ssh_port: int = 22
+    remote_dir: str | None = None
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        allowed = {"docker-compose", "ssh-compose"}
+        if v not in allowed:
+            raise ValueError(
+                f"Unknown deployment provider '{v}'. "
+                f"Supported: {', '.join(sorted(allowed))}"
+            )
+        return v
+
+
 class AptlConfig(BaseModel):
     """Top-level APTL configuration."""
 
@@ -85,6 +113,7 @@ class AptlConfig(BaseModel):
 
     lab: LabSettings = LabSettings(name="aptl")
     containers: ContainerSettings = ContainerSettings()
+    deployment: DeploymentConfig = DeploymentConfig()
     run_storage: RunStorageConfig = RunStorageConfig()
 
 

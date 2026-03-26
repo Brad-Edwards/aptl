@@ -60,18 +60,10 @@ jobs:
           # Seed .env from example if first deploy
           $SSH "cd ${DEPLOY_DIR} && [ -f .env ] || cp .env.example .env"
 
-          # Install Python CLI in venv
+          # Install Python CLI in venv and start lab
           $SSH "cd ${DEPLOY_DIR} && ([ -d .venv ] || python3 -m venv .venv) && .venv/bin/pip install -e ."
-
-          # Read enabled profiles from aptl.json and start
-          PROFILES=$($SSH "cd ${DEPLOY_DIR} && python3 -c \"
-          import json
-          c = json.load(open('aptl.json')).get('containers', {})
-          print(' '.join(f'--profile {k}' for k, v in c.items() if v))
-          \"")
-
-          $SSH "cd ${DEPLOY_DIR} && docker compose down --remove-orphans 2>/dev/null || true"
-          $SSH "cd ${DEPLOY_DIR} && docker compose ${PROFILES} --profile otel up --build -d"
+          $SSH "cd ${DEPLOY_DIR} && .venv/bin/aptl lab stop --yes 2>/dev/null || true"
+          $SSH "cd ${DEPLOY_DIR} && .venv/bin/aptl lab start"
 
       - name: Verify
         env:

@@ -972,7 +972,7 @@ services:
       start_period: 10s
     networks:
       aptl-security:
-        ipv4_address: 172.20.0.50
+        ipv4_address: 172.20.0.53
     deploy:
       resources:
         limits:

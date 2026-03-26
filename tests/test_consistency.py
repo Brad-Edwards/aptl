@@ -53,6 +53,39 @@ class TestComposeConsistency:
         dupes = [n for n in names if names.count(n) > 1]
         assert not dupes, f"Duplicate container_name values: {set(dupes)}"
 
+    def test_static_ipv4_addresses_are_unique_per_network(self, compose_config):
+        """Static container IPs must not collide within the same Docker network."""
+        services = compose_config.get("services", {})
+        seen: dict[tuple[str, str], str] = {}
+        dupes: list[tuple[str, str, str, str]] = []
+
+        for service_name, svc in services.items():
+            networks = svc.get("networks", {})
+            if not isinstance(networks, dict):
+                continue
+
+            for network_name, network_cfg in networks.items():
+                if not isinstance(network_cfg, dict):
+                    continue
+
+                ip = network_cfg.get("ipv4_address")
+                if not ip:
+                    continue
+
+                key = (network_name, ip)
+                if key in seen:
+                    dupes.append((network_name, ip, seen[key], service_name))
+                else:
+                    seen[key] = service_name
+
+        assert not dupes, (
+            "Duplicate static ipv4_address assignments:\n"
+            + "\n".join(
+                f"  {network}: {ip} used by {first} and {second}"
+                for network, ip, first, second in dupes
+            )
+        )
+
 
 class TestCodeReferencesMatchCompose:
     """Ensure docker exec references in code match actual container_name values."""

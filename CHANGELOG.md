@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Test helper `_find_node()` returns absolute path via `shutil.which()` instead of bare `"node"` string, fixing `_server_available()` check that caused MCP protocol tests to skip on systems without NVM
-- Deploy workflow: use venv for `pip install` to fix PEP 668 failure on Ubuntu 24.04
+- Deploy workflow: use `aptl lab start` instead of raw `docker compose up`, fixing missing SSL certs and credential sync on fresh deploys
 
 ### Changed
 

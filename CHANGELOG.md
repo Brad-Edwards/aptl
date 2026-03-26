@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Test helper `_find_node()` returns absolute path via `shutil.which()` instead of bare `"node"` string, fixing `_server_available()` check that caused MCP protocol tests to skip on systems without NVM
 - Deploy workflow: use `aptl lab start` instead of raw `docker compose up`, fixing missing SSL certs and credential sync on fresh deploys
+- Deploy workflow: exclude root-owned and runtime directories from rsync --delete (SSL certs, venv, keys, runs, node_modules, tools/misp-mcp-server)
 
 ### Changed
 

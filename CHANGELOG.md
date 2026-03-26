@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Test helper `_find_node()` returns absolute path via `shutil.which()` instead of bare `"node"` string, fixing `_server_available()` check that caused MCP protocol tests to skip on systems without NVM
+- Deploy workflow: use venv for `pip install` to fix PEP 668 failure on Ubuntu 24.04
+
+### Changed
+
+- SonarCloud scan now waits for Quality Gate result (`-Dsonar.qualitygate.wait=true`), failing the CI job if the gate is red
+- Branch protection on `main` and `dev`: "SonarCloud Code Analysis" is now a required status check
 
 ## [4.16.0] - 2026-03-24
 

@@ -147,6 +147,16 @@ def _load_active_scenario(
     return _load_scenario_or_exit(resolved_dir, session.scenario_id)
 
 
+def _load_env(project_dir: Path) -> None:
+    """Load .env into os.environ so evaluators/collectors can read credentials."""
+    env_path = project_dir / ".env"
+    try:
+        raw_env = load_dotenv(env_path)
+        os.environ.update(raw_env)
+    except FileNotFoundError:
+        log.warning(".env not found at %s; evaluators will use defaults", env_path)
+
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -492,9 +502,11 @@ def status(
             session.hints_used,
             elapsed_seconds,
         )
-        _print_score_summary(score, scenario)
-    except (SystemExit, Exception):
-        pass
+        _print_score_summary(score)
+    except SystemExit:
+        pass  # _load_scenario_or_exit raises typer.Exit on missing file
+    except Exception as e:
+        log.debug("Could not compute score for status: %s", e)
 
 
 @app.command()
@@ -516,95 +528,7 @@ def stop(
     state = _state_dir(project_dir)
     session_mgr = ScenarioSession(state)
     session = _require_active_session(session_mgr)
-
-    scenario = _load_active_scenario(session, project_dir, scenarios_dir)
-
-    # Calculate duration
-    started = datetime.fromisoformat(session.started_at)
-    now = datetime.now(timezone.utc)
-    elapsed = (now - started).total_seconds()
-    minutes = int(elapsed // 60)
-    seconds = int(elapsed % 60)
-
-    # Create the synthetic root span covering the full scenario duration
-    if session.trace_id:
-        init_tracing()
-        try:
-            tracer = get_tracer()
-            start_ns = int(started.timestamp() * 1e9)
-            end_ns = int(now.timestamp() * 1e9)
-            create_root_span(
-                tracer=tracer,
-                scenario_id=session.scenario_id,
-                run_id=session.run_id,
-                start_time=start_ns,
-                end_time=end_ns,
-                trace_id=session.trace_id,
-                span_id=session.span_id,
-            )
-        finally:
-            shutdown_tracing()
-
-        # Brief delay to allow BatchSpanProcessor flush from MCP servers
-        time.sleep(2)
-
-    # Finish session
-    finished_session = session_mgr.finish()
-
-    # Load .env into os.environ so collectors in assemble_run() can
-    # read credentials via os.getenv() (issue #184).
-    env_path = project_dir / ".env"
-    try:
-        raw_env = load_dotenv(env_path)
-        os.environ.update(raw_env)
-    except FileNotFoundError:
-        log.warning(".env not found at %s; collectors will use defaults", env_path)
-
-    # Assemble experiment run directory (if run_id was set)
-    run_dir = None
-    if session.run_id:
-        try:
-            config_path = find_config(project_dir)
-            config = load_config(config_path) if config_path else AptlConfig()
-
-            local_path = Path(config.run_storage.local_path)
-            if not local_path.is_absolute():
-                local_path = project_dir / local_path
-
-            store = LocalRunStore(local_path)
-
-            resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
-            scenario_path = _find_scenario_by_name(
-                resolved_dir, session.scenario_id
-            )
-
-            run_dir = assemble_run(
-                store=store,
-                run_id=session.run_id,
-                session=finished_session,
-                scenario=scenario,
-                scenario_path=scenario_path,
-                config=config,
-            )
-        except Exception as e:
-            log.error("Failed to assemble run: %s", e)
-            typer.echo(f"Warning: Run assembly failed: {e}")
-
-    # Clear session
-    session_mgr.clear()
-
-    # Clean up trace context file
-    ctx_file = state / "trace-context.json"
-    if ctx_file.exists():
-        ctx_file.unlink()
-
-    # Display summary
-    typer.echo(f"Scenario stopped: {scenario.metadata.name}")
-    typer.echo(f"  Duration: {minutes}m {seconds}s")
-    flag_count = sum(len(v) for v in session.flags.values())
-    typer.echo(f"  Flags:    {flag_count}")
-    if run_dir:
-        typer.echo(f"  Run:      {run_dir}")
+    _stop_scenario(project_dir, scenarios_dir, session_mgr, session)
 
 
 # ---------------------------------------------------------------------------
@@ -612,7 +536,7 @@ def stop(
 # ---------------------------------------------------------------------------
 
 
-def _print_score_summary(score: ScoreReport, scenario: ScenarioDefinition) -> None:
+def _print_score_summary(score: ScoreReport) -> None:
     """Print a formatted score summary."""
     typer.echo("")
     typer.echo("Score:")
@@ -663,6 +587,9 @@ def evaluate(
     session = _require_active_session(session_mgr)
     scenario = _load_active_scenario(session, project_dir, scenarios_dir)
 
+    # Load .env so evaluators can read credentials (Wazuh Indexer, etc.)
+    _load_env(project_dir)
+
     engine = ScenarioEngine(scenario, session_mgr)
     results = asyncio.run(engine.evaluate_once())
 
@@ -678,7 +605,7 @@ def evaluate(
     # Show current score
     score = engine.get_score()
     if score is not None:
-        _print_score_summary(score, scenario)
+        _print_score_summary(score)
 
 
 # ---------------------------------------------------------------------------
@@ -721,12 +648,8 @@ def _stop_scenario(
 
     finished_session = session_mgr.finish()
 
-    env_path = project_dir / ".env"
-    try:
-        raw_env = load_dotenv(env_path)
-        os.environ.update(raw_env)
-    except FileNotFoundError:
-        log.warning(".env not found at %s; collectors will use defaults", env_path)
+    # Load .env so collectors in assemble_run() can read credentials (issue #184).
+    _load_env(project_dir)
 
     run_dir = None
     if session.run_id:
@@ -871,6 +794,9 @@ def run(
         typer.echo("No auto-evaluable objectives. Use 'aptl scenario stop' when done.")
         return
 
+    # Load .env so evaluators can read credentials (Wazuh Indexer, etc.)
+    _load_env(project_dir)
+
     # --- Engine phase ---
     timeout_minutes = timeout if timeout is not None else float(
         scenario.metadata.estimated_minutes
@@ -926,7 +852,7 @@ def run(
         typer.echo("Engine stopped: evaluation complete")
 
     if engine_result.score is not None:
-        _print_score_summary(engine_result.score, scenario)
+        _print_score_summary(engine_result.score)
 
     typer.echo(f"\n  Cycles:  {engine_result.evaluation_cycles}")
     typer.echo(f"  Elapsed: {int(engine_result.elapsed_seconds // 60)}m "

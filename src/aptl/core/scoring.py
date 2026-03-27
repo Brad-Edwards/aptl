@@ -122,7 +122,7 @@ def compute_score(
             )
         )
 
-    base_total = sum(os.earned for os in objective_scores)
+    base_total = sum(obj_score.earned for obj_score in objective_scores)
 
     bonus = 0
     if scoring.time_bonus.enabled:

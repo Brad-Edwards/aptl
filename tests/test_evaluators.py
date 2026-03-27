@@ -335,3 +335,72 @@ def test_evaluate_objective_file(mocker):
     )
     result = asyncio.run(evaluate_objective(obj, SESSION_STARTED_AT))
     assert result.passed is True
+
+
+# ---------------------------------------------------------------------------
+# Error / edge-case paths
+# ---------------------------------------------------------------------------
+
+
+def test_wazuh_alert_exception_in_to_thread(mocker, wazuh_validation):
+    """Wazuh evaluator returns failure when _curl_json raises."""
+    mocker.patch(
+        "aptl.core.evaluators._curl_json",
+        side_effect=OSError("Connection refused"),
+    )
+    result = asyncio.run(evaluate_wazuh_alert(
+        "err-obj", wazuh_validation, SESSION_STARTED_AT
+    ))
+    assert result.passed is False
+    assert "Query error" in result.detail
+
+
+def test_command_output_exception_in_to_thread(mocker, command_validation):
+    """Command evaluator returns failure when _run_cmd raises."""
+    mocker.patch(
+        "aptl.core.evaluators._run_cmd",
+        side_effect=OSError("Docker not found"),
+    )
+    result = asyncio.run(evaluate_command_output("err-obj", command_validation))
+    assert result.passed is False
+    assert "Execution error" in result.detail
+
+
+def test_file_exists_exception_in_to_thread(mocker, file_validation):
+    """File evaluator returns failure when _run_cmd raises."""
+    mocker.patch(
+        "aptl.core.evaluators._run_cmd",
+        side_effect=OSError("Docker not found"),
+    )
+    result = asyncio.run(evaluate_file_exists("err-obj", file_validation))
+    assert result.passed is False
+    assert "Execution error" in result.detail
+
+
+def test_wazuh_alert_naive_session_timestamp(mocker, wazuh_validation):
+    """Wazuh evaluator handles naive (no-tz) session timestamps."""
+    mocker.patch(
+        "aptl.core.evaluators._curl_json",
+        return_value={"hits": {"total": {"value": 10}, "hits": []}},
+    )
+    result = asyncio.run(evaluate_wazuh_alert(
+        "tz-obj", wazuh_validation, "2026-03-26T10:00:00"
+    ))
+    assert result.passed is True
+
+
+def test_wazuh_alert_window_clamped_to_session_start(mocker):
+    """Time window is clamped to session start when session is shorter than window."""
+    validation = WazuhAlertValidation(
+        query={"match_all": {}},
+        min_matches=1,
+        time_window_seconds=3600,  # max allowed; will exceed session age
+    )
+    mocker.patch(
+        "aptl.core.evaluators._curl_json",
+        return_value={"hits": {"total": {"value": 5}, "hits": []}},
+    )
+    result = asyncio.run(evaluate_wazuh_alert(
+        "clamp-obj", validation, SESSION_STARTED_AT
+    ))
+    assert result.passed is True

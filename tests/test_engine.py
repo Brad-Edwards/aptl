@@ -369,3 +369,163 @@ def test_run_invokes_progress_callback(
 
     assert len(progress_calls) >= 1
     assert progress_calls[0][0] == 1
+
+
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_run_no_active_session(session_mgr, scenario_with_evaluable, mocker):
+    """Engine returns empty result when no session is active."""
+    _mock_otel(mocker)
+
+    engine = ScenarioEngine(scenario_with_evaluable, session_mgr)
+
+    async def drive():
+        shutdown = asyncio.Event()
+        return await engine.run(shutdown)
+
+    result = asyncio.run(drive())
+    assert result.completed_objectives == []
+    assert result.evaluation_cycles == 0
+
+
+def test_run_session_disappears_mid_loop(
+    mocker, session_mgr, active_session, scenario_with_evaluable
+):
+    """Engine exits gracefully if session file is deleted during run."""
+    call_count = 0
+    original_get_active = session_mgr.get_active
+
+    def get_active_then_none():
+        nonlocal call_count
+        call_count += 1
+        # First call succeeds (initial check), second returns None (mid-loop)
+        if call_count <= 1:
+            return original_get_active()
+        return None
+
+    mocker.patch.object(session_mgr, "get_active", side_effect=get_active_then_none)
+    _mock_otel(mocker)
+
+    engine = ScenarioEngine(
+        scenario_with_evaluable, session_mgr, poll_interval=0.1
+    )
+
+    async def drive():
+        shutdown = asyncio.Event()
+        return await engine.run(shutdown)
+
+    result = asyncio.run(drive())
+    assert result.evaluation_cycles >= 1
+
+
+def test_run_progress_callback_error_does_not_crash(
+    mocker, session_mgr, active_session, scenario_with_evaluable
+):
+    """Engine continues if progress callback raises."""
+    async def mock_evaluate(obj, started_at):
+        return EvaluationResult(
+            objective_id=obj.id,
+            passed=True,
+            detail="Pass",
+            checked_at="2026-03-26T10:01:00+00:00",
+        )
+
+    mocker.patch("aptl.core.engine.evaluate_objective", side_effect=mock_evaluate)
+    _mock_otel(mocker)
+
+    def bad_callback(cycle, results, score):
+        raise RuntimeError("callback crashed")
+
+    engine = ScenarioEngine(
+        scenario_with_evaluable,
+        session_mgr,
+        poll_interval=0.1,
+        on_progress=bad_callback,
+    )
+
+    async def drive():
+        shutdown = asyncio.Event()
+        return await engine.run(shutdown)
+
+    result = asyncio.run(drive())
+    # Engine should complete despite callback error
+    assert result.evaluation_cycles >= 1
+    assert "cmd-obj" in result.completed_objectives
+
+
+def test_evaluate_once_handles_evaluator_exception(
+    mocker, session_mgr, active_session, scenario_with_evaluable
+):
+    """evaluate_once logs and skips objectives that raise exceptions."""
+    call_count = 0
+
+    async def mock_evaluate(obj, started_at):
+        nonlocal call_count
+        call_count += 1
+        if obj.id == "cmd-obj":
+            raise RuntimeError("evaluator exploded")
+        return EvaluationResult(
+            objective_id=obj.id,
+            passed=True,
+            detail="Pass",
+            checked_at="2026-03-26T10:01:00+00:00",
+        )
+
+    mocker.patch("aptl.core.engine.evaluate_objective", side_effect=mock_evaluate)
+
+    engine = ScenarioEngine(scenario_with_evaluable, session_mgr)
+    results = asyncio.run(engine.evaluate_once())
+
+    # cmd-obj raised, wazuh-obj succeeded
+    assert len(results) == 1
+    assert results[0].objective_id == "wazuh-obj"
+
+
+def test_get_score_no_session(session_mgr, scenario_with_evaluable):
+    """get_score returns None when no session is active."""
+    engine = ScenarioEngine(scenario_with_evaluable, session_mgr)
+    assert engine.get_score() is None
+
+
+def test_run_state_transition_errors_are_handled(
+    mocker, session_mgr, active_session, scenario_with_evaluable
+):
+    """Engine handles ScenarioStateError from set_evaluating/set_active gracefully."""
+    from aptl.core.scenarios import ScenarioStateError
+
+    async def mock_evaluate(obj, started_at):
+        return EvaluationResult(
+            objective_id=obj.id,
+            passed=True,
+            detail="Pass",
+            checked_at="2026-03-26T10:01:00+00:00",
+        )
+
+    mocker.patch("aptl.core.engine.evaluate_objective", side_effect=mock_evaluate)
+    _mock_otel(mocker)
+
+    # Make state transitions fail
+    mocker.patch.object(
+        session_mgr, "set_evaluating",
+        side_effect=ScenarioStateError("already evaluating"),
+    )
+    mocker.patch.object(
+        session_mgr, "set_active_from_evaluating",
+        side_effect=ScenarioStateError("not in evaluating"),
+    )
+
+    engine = ScenarioEngine(
+        scenario_with_evaluable, session_mgr, poll_interval=0.1
+    )
+
+    async def drive():
+        shutdown = asyncio.Event()
+        return await engine.run(shutdown)
+
+    result = asyncio.run(drive())
+    # Engine should complete despite state transition errors
+    assert result.evaluation_cycles >= 1
+    assert "cmd-obj" in result.completed_objectives

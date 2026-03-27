@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.0] - 2026-03-26
+
+### Added
+
+- Scenario runtime engine with async evaluation loop (`src/aptl/core/engine.py`) — periodically checks non-manual objectives against live infrastructure (Wazuh alerts, command output, file existence) and updates session state incrementally
+- Objective evaluators (`src/aptl/core/evaluators.py`) — async functions for each `ObjectiveType`: `evaluate_wazuh_alert` queries the Wazuh Indexer ES API, `evaluate_command_output` runs `docker exec` and checks output, `evaluate_file_exists` checks file presence and content in containers
+- Scoring engine (`src/aptl/core/scoring.py`) — computes scenario scores from completed objectives, hint penalties, and time-based bonuses with linear decay
+- `aptl scenario run <name>` CLI command — combined start + evaluation loop + stop with Ctrl+C graceful shutdown and real-time progress reporting
+- `aptl scenario evaluate` CLI command — single evaluation pass against an active session for debugging and scripting
+- `aptl scenario status` now displays current score, objective completion breakdown, and pass/fail status
+- `ScenarioSession.set_evaluating()` and `set_active_from_evaluating()` methods — the `EVALUATING` session state is now actively used during evaluation cycles
+- OTel `aptl.evaluation` child spans emitted for each objective evaluation cycle
+- 45 new tests: evaluator unit tests (`test_evaluators.py`), scoring tests (`test_scoring.py`), engine integration tests (`test_engine.py`), CLI command tests (`test_cli_evaluate.py`)
+
 ## [4.16.1] - 2026-03-25
 
 ### Fixed

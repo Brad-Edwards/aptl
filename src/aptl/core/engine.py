@@ -6,11 +6,13 @@ for each evaluation event.
 """
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from aptl.core.evaluators import EvaluationResult, evaluate_objective
 from aptl.core.scenarios import ObjectiveType, ScenarioDefinition
+from aptl.core.scenarios import ScenarioStateError
 from aptl.core.scoring import ScoreReport, compute_score
 from aptl.core.session import ScenarioSession
 from aptl.core.telemetry import (
@@ -37,7 +39,7 @@ class EngineResult:
     evaluation_cycles: int = 0
 
 
-ProgressCallback = None  # Type alias placeholder
+ProgressCallback = Callable[[int, list[EvaluationResult], ScoreReport], None]
 
 
 class ScenarioEngine:
@@ -62,7 +64,7 @@ class ScenarioEngine:
         session_mgr: ScenarioSession,
         poll_interval: float = 10.0,
         timeout_minutes: float | None = None,
-        on_progress: object = None,
+        on_progress: ProgressCallback | None = None,
     ) -> None:
         self._scenario = scenario
         self._session_mgr = session_mgr
@@ -131,8 +133,9 @@ class ScenarioEngine:
                 # Transition to EVALUATING
                 try:
                     self._session_mgr.set_evaluating()
-                except Exception:
-                    pass  # May already be evaluating or race condition
+                except ScenarioStateError:
+                    log.debug("Could not transition to EVALUATING (already in that state)")
+                    pass
 
                 # Evaluate all pending objectives concurrently
                 eval_results = await asyncio.gather(
@@ -178,7 +181,8 @@ class ScenarioEngine:
                 # Transition back to ACTIVE
                 try:
                     self._session_mgr.set_active_from_evaluating()
-                except Exception:
+                except ScenarioStateError:
+                    log.debug("Could not transition back to ACTIVE from EVALUATING")
                     pass
 
                 # Compute score

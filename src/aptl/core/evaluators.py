@@ -9,7 +9,7 @@ I/O via ``asyncio.to_thread``) and fault-tolerant: they return
 import asyncio
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from aptl.core.collectors import _curl_json, _run_cmd
 from aptl.core.scenarios import (
@@ -50,16 +50,7 @@ async def evaluate_wazuh_alert(
     now = datetime.now(timezone.utc)
     checked_at = now.isoformat()
 
-    window_start = max(
-        datetime.fromisoformat(session_started_at),
-        now.replace(
-            second=now.second,
-            microsecond=now.microsecond,
-        ),
-    )
-    # Use the smaller of: time since session start, or time_window_seconds
-    from datetime import timedelta
-
+    # Use the later of: (now - time_window_seconds) or session start
     window_start_dt = now - timedelta(seconds=validation.time_window_seconds)
     session_start_dt = datetime.fromisoformat(session_started_at)
     if not session_start_dt.tzinfo:

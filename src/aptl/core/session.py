@@ -296,6 +296,38 @@ class ScenarioSession:
         else:
             log.debug("No session file to clear")
 
+    def set_evaluating(self) -> None:
+        """Transition session state from ACTIVE to EVALUATING.
+
+        Raises:
+            ScenarioStateError: If session is not in ACTIVE state.
+        """
+        session = self._require_active()
+        if session.state != SessionState.ACTIVE:
+            raise ScenarioStateError(
+                f"Cannot transition to EVALUATING: session is "
+                f"'{session.state.value}', not 'active'."
+            )
+        session.state = SessionState.EVALUATING
+        self._write(session)
+        log.debug("Session transitioned to EVALUATING")
+
+    def set_active_from_evaluating(self) -> None:
+        """Transition session state from EVALUATING back to ACTIVE.
+
+        Raises:
+            ScenarioStateError: If session is not in EVALUATING state.
+        """
+        session = self._require_active()
+        if session.state != SessionState.EVALUATING:
+            raise ScenarioStateError(
+                f"Cannot transition to ACTIVE: session is "
+                f"'{session.state.value}', not 'evaluating'."
+            )
+        session.state = SessionState.ACTIVE
+        self._write(session)
+        log.debug("Session transitioned back to ACTIVE")
+
     def _require_active(self) -> ActiveSession:
         """Load the current session and verify it is active.
 

@@ -47,6 +47,8 @@ log = get_logger("cli.scenario")
 app = typer.Typer(help="Scenario management.")
 console = Console()
 
+_SCENARIO_NAME_HELP = "Scenario name or filename."
+
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -237,7 +239,7 @@ def list_scenarios(
 
 @app.command()
 def show(
-    name: str = typer.Argument(help="Scenario name or filename."),
+    name: str = typer.Argument(help=_SCENARIO_NAME_HELP),
     project_dir: Path = typer.Option(
         Path("."),
         "--project-dir",
@@ -369,7 +371,7 @@ def validate(
 
 @app.command()
 def start(
-    name: str = typer.Argument(help="Scenario name or filename."),
+    name: str = typer.Argument(help=_SCENARIO_NAME_HELP),
     project_dir: Path = typer.Option(
         Path("."),
         "--project-dir",
@@ -495,7 +497,8 @@ def status(
     # Show scoring if we can load the scenario definition
     try:
         resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
-        scenario = _load_scenario_or_exit(resolved_dir, session.scenario_id)
+        path = _find_scenario_by_name(resolved_dir, session.scenario_id)
+        scenario = load_scenario(path)
         score = compute_score(
             scenario,
             session.completed_objectives,
@@ -503,8 +506,6 @@ def status(
             elapsed_seconds,
         )
         _print_score_summary(score)
-    except SystemExit:
-        pass  # _load_scenario_or_exit raises typer.Exit on missing file
     except Exception as e:
         log.debug("Could not compute score for status: %s", e)
 
@@ -690,42 +691,15 @@ def _stop_scenario(
         typer.echo(f"  Run:      {run_dir}")
 
 
-@app.command()
-def run(
-    name: str = typer.Argument(help="Scenario name or filename."),
-    project_dir: Path = typer.Option(
-        Path("."),
-        "--project-dir",
-        "-d",
-        help="Path to the APTL project directory.",
-    ),
-    scenarios_dir: Path | None = typer.Option(
-        None,
-        "--scenarios-dir",
-        "-s",
-        help="Path to scenarios directory. Defaults to <project-dir>/scenarios.",
-    ),
-    poll_interval: float = typer.Option(
-        10.0,
-        "--poll-interval",
-        help="Seconds between evaluation cycles.",
-    ),
-    timeout: float | None = typer.Option(
-        None,
-        "--timeout",
-        help="Override timeout in minutes (default: scenario estimated_minutes).",
-    ),
-) -> None:
-    """Start a scenario, evaluate objectives in real time, then stop.
+def _start_scenario_session(
+    project_dir: Path,
+    scenarios_dir: Path | None,
+    name: str,
+) -> tuple:
+    """Start a scenario session and return (scenario, session_mgr, session, run_id).
 
-    Combines start + evaluation loop + stop into a single command.
-    The engine periodically checks non-manual objectives against live
-    infrastructure. Press Ctrl+C for graceful shutdown.
+    Raises typer.Exit on validation failure.
     """
-    from aptl.core.engine import ScenarioEngine
-
-    # --- Start phase (same as `aptl scenario start`) ---
-    log.info("Starting scenario run: %s", name)
     resolved_dir = _resolve_scenarios_dir(project_dir, scenarios_dir)
     scenario = _load_scenario_or_exit(resolved_dir, name)
 
@@ -773,20 +747,97 @@ def run(
     finally:
         shutdown_tracing()
 
-    # Count evaluable objectives
+    return scenario, session_mgr, session, run_id
+
+
+def _print_engine_report(engine_result, scenario, session_mgr, project_dir, scenarios_dir):
+    """Print engine results and run the stop phase."""
+    from aptl.core.engine import EngineResult
+
+    typer.echo("")
+    if engine_result.timed_out:
+        typer.echo("Engine stopped: timeout reached")
+    else:
+        typer.echo("Engine stopped: evaluation complete")
+
+    if engine_result.score is not None:
+        _print_score_summary(engine_result.score)
+
+    typer.echo(f"\n  Cycles:  {engine_result.evaluation_cycles}")
+    typer.echo(f"  Elapsed: {int(engine_result.elapsed_seconds // 60)}m "
+               f"{int(engine_result.elapsed_seconds % 60)}s")
+
+    typer.echo("")
+    session = session_mgr.get_active()
+    if session is not None and session_mgr.is_active():
+        _stop_scenario(project_dir, scenarios_dir, session_mgr, session)
+
+
+def _on_run_progress(cycle: int, results: list, score: ScoreReport) -> None:
+    """Progress callback for the run command."""
+    completed = sum(1 for os_ in score.objective_scores if os_.completed)
+    total = len(score.objective_scores)
+    for r in results:
+        if r.passed:
+            typer.echo(f"  [PASS] {r.objective_id}: {r.detail}")
+    typer.echo(
+        f"  Cycle {cycle}: {completed}/{total} objectives, "
+        f"score {score.total_score}/{score.max_score}"
+    )
+
+
+@app.command()
+def run(
+    name: str = typer.Argument(help=_SCENARIO_NAME_HELP),
+    project_dir: Path = typer.Option(
+        Path("."),
+        "--project-dir",
+        "-d",
+        help="Path to the APTL project directory.",
+    ),
+    scenarios_dir: Path | None = typer.Option(
+        None,
+        "--scenarios-dir",
+        "-s",
+        help="Path to scenarios directory. Defaults to <project-dir>/scenarios.",
+    ),
+    poll_interval: float = typer.Option(
+        10.0,
+        "--poll-interval",
+        help="Seconds between evaluation cycles.",
+    ),
+    timeout: float | None = typer.Option(
+        None,
+        "--timeout",
+        help="Override timeout in minutes (default: scenario estimated_minutes).",
+    ),
+) -> None:
+    """Start a scenario, evaluate objectives in real time, then stop.
+
+    Combines start + evaluation loop + stop into a single command.
+    The engine periodically checks non-manual objectives against live
+    infrastructure. Press Ctrl+C for graceful shutdown.
+    """
+    from aptl.core.engine import ScenarioEngine
+
+    log.info("Starting scenario run: %s", name)
+    scenario, session_mgr, session, run_id = _start_scenario_session(
+        project_dir, scenarios_dir, name,
+    )
+
     evaluable = [
         o for o in scenario.objectives.all_objectives()
         if o.type != ObjectiveType.MANUAL
     ]
-    manual = [
-        o for o in scenario.objectives.all_objectives()
+    manual_count = sum(
+        1 for o in scenario.objectives.all_objectives()
         if o.type == ObjectiveType.MANUAL
-    ]
+    )
 
     typer.echo(f"Started scenario: {scenario.metadata.name}")
     typer.echo(f"  Run ID:     {run_id}")
     typer.echo(f"  Evaluable:  {len(evaluable)} objectives (auto-checked)")
-    typer.echo(f"  Manual:     {len(manual)} objectives (require manual completion)")
+    typer.echo(f"  Manual:     {manual_count} objectives (require manual completion)")
     typer.echo(f"  Trace ID:   {session.trace_id}")
     typer.echo("")
 
@@ -794,32 +845,18 @@ def run(
         typer.echo("No auto-evaluable objectives. Use 'aptl scenario stop' when done.")
         return
 
-    # Load .env so evaluators can read credentials (Wazuh Indexer, etc.)
     _load_env(project_dir)
 
-    # --- Engine phase ---
     timeout_minutes = timeout if timeout is not None else float(
         scenario.metadata.estimated_minutes
     )
-
-    def on_progress(cycle: int, results: list, score: ScoreReport) -> None:
-        completed = sum(1 for os_ in score.objective_scores if os_.completed)
-        total = len(score.objective_scores)
-        newly_passed = [r for r in results if r.passed]
-        if newly_passed:
-            for r in newly_passed:
-                typer.echo(f"  [PASS] {r.objective_id}: {r.detail}")
-        typer.echo(
-            f"  Cycle {cycle}: {completed}/{total} objectives, "
-            f"score {score.total_score}/{score.max_score}"
-        )
 
     engine = ScenarioEngine(
         scenario=scenario,
         session_mgr=session_mgr,
         poll_interval=poll_interval,
         timeout_minutes=timeout_minutes,
-        on_progress=on_progress,
+        on_progress=_on_run_progress,
     )
 
     shutdown_event = asyncio.Event()
@@ -844,22 +881,4 @@ def run(
         signal.signal(signal.SIGINT, original_sigint)
         signal.signal(signal.SIGTERM, original_sigterm)
 
-    # --- Report ---
-    typer.echo("")
-    if engine_result.timed_out:
-        typer.echo("Engine stopped: timeout reached")
-    else:
-        typer.echo("Engine stopped: evaluation complete")
-
-    if engine_result.score is not None:
-        _print_score_summary(engine_result.score)
-
-    typer.echo(f"\n  Cycles:  {engine_result.evaluation_cycles}")
-    typer.echo(f"  Elapsed: {int(engine_result.elapsed_seconds // 60)}m "
-               f"{int(engine_result.elapsed_seconds % 60)}s")
-
-    # --- Stop phase ---
-    typer.echo("")
-    session = session_mgr.get_active()
-    if session is not None and session_mgr.is_active():
-        _stop_scenario(project_dir, scenarios_dir, session_mgr, session)
+    _print_engine_report(engine_result, scenario, session_mgr, project_dir, scenarios_dir)

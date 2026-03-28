@@ -14,7 +14,7 @@ from aptl.core.evaluators import EvaluationResult, evaluate_objective
 from aptl.core.scenarios import ObjectiveType, ScenarioDefinition
 from aptl.core.scenarios import ScenarioStateError
 from aptl.core.scoring import ScoreReport, compute_score
-from aptl.core.session import ScenarioSession
+from aptl.core.session import ActiveSession, ScenarioSession
 from aptl.core.telemetry import (
     SPAN_EVALUATION,
     create_child_span,
@@ -40,6 +40,74 @@ class EngineResult:
 
 
 ProgressCallback = Callable[[int, list[EvaluationResult], ScoreReport], None]
+
+
+def _parse_started_at(session: ActiveSession) -> datetime:
+    """Parse session start time, ensuring UTC timezone."""
+    started_at = datetime.fromisoformat(session.started_at)
+    if not started_at.tzinfo:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    return started_at
+
+
+def _pending_objectives(
+    all_objectives: list,
+    evaluable_ids: set[str],
+    completed: set[str],
+) -> list:
+    """Return evaluable objectives that haven't been completed yet."""
+    return [
+        o for o in all_objectives
+        if o.id in evaluable_ids and o.id not in completed
+    ]
+
+
+def _process_eval_results(
+    eval_results: list,
+    pending: list,
+    completed_set: set[str],
+    session_mgr: ScenarioSession,
+    tracer: object,
+    parent_ctx: object,
+    cycle: int,
+) -> list[EvaluationResult]:
+    """Process raw gather results: log errors, record completions, emit spans."""
+    cycle_results: list[EvaluationResult] = []
+    for i, er in enumerate(eval_results):
+        if isinstance(er, Exception):
+            log.warning("Evaluation exception for %s: %s", pending[i].id, er)
+            continue
+
+        cycle_results.append(er)
+
+        if er.passed and er.objective_id not in completed_set:
+            session_mgr.record_objective_complete(er.objective_id)
+            completed_set.add(er.objective_id)
+            log.info("Objective completed: %s", er.objective_id)
+
+        span = create_child_span(
+            tracer, parent_ctx, SPAN_EVALUATION,
+            {
+                "aptl.objective.id": er.objective_id,
+                "aptl.evaluation.passed": er.passed,
+                "aptl.evaluation.detail": er.detail,
+                "aptl.evaluation.cycle": cycle,
+            },
+        )
+        span.end()
+
+    return cycle_results
+
+
+def _try_state_transition(session_mgr: ScenarioSession, to_evaluating: bool) -> None:
+    """Attempt a session state transition, logging on failure."""
+    try:
+        if to_evaluating:
+            session_mgr.set_evaluating()
+        else:
+            session_mgr.set_active_from_evaluating()
+    except ScenarioStateError as exc:
+        log.debug("State transition failed: %s", exc)
 
 
 class ScenarioEngine:
@@ -78,6 +146,36 @@ class ScenarioEngine:
             if o.type != ObjectiveType.MANUAL
         }
 
+    def _is_timed_out(self, elapsed: float) -> bool:
+        """Check whether the engine has exceeded its timeout."""
+        if self._timeout_minutes is None:
+            return False
+        return elapsed >= self._timeout_minutes * 60
+
+    def _update_result_from_session(
+        self, result: EngineResult, cycle: int, cycle_results: list[EvaluationResult],
+        elapsed: float,
+    ) -> None:
+        """Recompute score and update the engine result from current session."""
+        session = self._session_mgr.get_active()
+        if session is None:
+            return
+
+        score = compute_score(
+            self._scenario,
+            session.completed_objectives,
+            session.hints_used,
+            elapsed,
+        )
+        result.score = score
+        result.completed_objectives = list(session.completed_objectives)
+
+        if self._on_progress is not None:
+            try:
+                self._on_progress(cycle, cycle_results, score)
+            except Exception as e:
+                log.warning("Progress callback error: %s", e)
+
     async def run(self, shutdown_event: asyncio.Event) -> EngineResult:
         """Main evaluation loop.
 
@@ -89,9 +187,7 @@ class ScenarioEngine:
             log.error("No active session to run engine against")
             return EngineResult()
 
-        started_at = datetime.fromisoformat(session.started_at)
-        if not started_at.tzinfo:
-            started_at = started_at.replace(tzinfo=timezone.utc)
+        started_at = _parse_started_at(session)
 
         init_tracing()
         tracer = get_tracer()
@@ -103,124 +199,55 @@ class ScenarioEngine:
         try:
             while not shutdown_event.is_set():
                 cycle += 1
-                now = datetime.now(timezone.utc)
-                elapsed = (now - started_at).total_seconds()
+                elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
 
-                # Check timeout
-                if self._timeout_minutes is not None:
-                    if elapsed >= self._timeout_minutes * 60:
-                        log.info("Engine timeout reached after %.0fs", elapsed)
-                        result.timed_out = True
-                        break
+                if self._is_timed_out(elapsed):
+                    log.info("Engine timeout reached after %.0fs", elapsed)
+                    result.timed_out = True
+                    break
 
-                # Reload session to get latest completed_objectives
                 session = self._session_mgr.get_active()
                 if session is None:
                     log.warning("Session disappeared during engine run")
                     break
 
                 completed_set = set(session.completed_objectives)
-                pending = [
-                    o
-                    for o in self._all_objectives
-                    if o.id in self._evaluable_ids and o.id not in completed_set
-                ]
+                pending = _pending_objectives(
+                    self._all_objectives, self._evaluable_ids, completed_set,
+                )
 
                 if not pending:
                     log.info("All evaluable objectives complete")
                     break
 
-                # Transition to EVALUATING
-                try:
-                    self._session_mgr.set_evaluating()
-                except ScenarioStateError:
-                    log.debug("Could not transition to EVALUATING (already in that state)")
-                    pass
+                _try_state_transition(self._session_mgr, to_evaluating=True)
 
-                # Evaluate all pending objectives concurrently
                 eval_results = await asyncio.gather(
-                    *[
-                        evaluate_objective(o, session.started_at)
-                        for o in pending
-                    ],
+                    *[evaluate_objective(o, session.started_at) for o in pending],
                     return_exceptions=True,
                 )
 
-                # Process results
-                cycle_results: list[EvaluationResult] = []
-                for i, er in enumerate(eval_results):
-                    if isinstance(er, Exception):
-                        log.warning(
-                            "Evaluation exception for %s: %s",
-                            pending[i].id,
-                            er,
-                        )
-                        continue
+                cycle_results = _process_eval_results(
+                    eval_results, pending, completed_set,
+                    self._session_mgr, tracer, parent_ctx, cycle,
+                )
 
-                    cycle_results.append(er)
-
-                    if er.passed and er.objective_id not in completed_set:
-                        self._session_mgr.record_objective_complete(er.objective_id)
-                        completed_set.add(er.objective_id)
-                        log.info("Objective completed: %s", er.objective_id)
-
-                    # Emit OTel evaluation span
-                    span = create_child_span(
-                        tracer,
-                        parent_ctx,
-                        SPAN_EVALUATION,
-                        {
-                            "aptl.objective.id": er.objective_id,
-                            "aptl.evaluation.passed": er.passed,
-                            "aptl.evaluation.detail": er.detail,
-                            "aptl.evaluation.cycle": cycle,
-                        },
-                    )
-                    span.end()
-
-                # Transition back to ACTIVE
-                try:
-                    self._session_mgr.set_active_from_evaluating()
-                except ScenarioStateError:
-                    log.debug("Could not transition back to ACTIVE from EVALUATING")
-                    pass
-
-                # Compute score
-                session = self._session_mgr.get_active()
-                if session is not None:
-                    score = compute_score(
-                        self._scenario,
-                        session.completed_objectives,
-                        session.hints_used,
-                        elapsed,
-                    )
-                    result.score = score
-                    result.completed_objectives = list(session.completed_objectives)
-
-                    # Invoke progress callback
-                    if self._on_progress is not None:
-                        try:
-                            self._on_progress(cycle, cycle_results, score)
-                        except Exception as e:
-                            log.warning("Progress callback error: %s", e)
-
+                _try_state_transition(self._session_mgr, to_evaluating=False)
+                self._update_result_from_session(result, cycle, cycle_results, elapsed)
                 result.evaluation_cycles = cycle
 
-                # Wait for next cycle (interruptible by shutdown_event)
                 try:
                     await asyncio.wait_for(
-                        shutdown_event.wait(),
-                        timeout=self._poll_interval,
+                        shutdown_event.wait(), timeout=self._poll_interval,
                     )
-                    # If we get here, shutdown was signaled
-                    break
+                    break  # shutdown was signaled
                 except asyncio.TimeoutError:
-                    # Normal timeout, continue to next cycle
-                    pass
+                    pass  # normal cycle interval
 
         finally:
-            now = datetime.now(timezone.utc)
-            result.elapsed_seconds = (now - started_at).total_seconds()
+            result.elapsed_seconds = (
+                datetime.now(timezone.utc) - started_at
+            ).total_seconds()
             result.evaluation_cycles = cycle
             shutdown_tracing()
 
@@ -236,11 +263,9 @@ class ScenarioEngine:
             return []
 
         completed_set = set(session.completed_objectives)
-        pending = [
-            o
-            for o in self._all_objectives
-            if o.id in self._evaluable_ids and o.id not in completed_set
-        ]
+        pending = _pending_objectives(
+            self._all_objectives, self._evaluable_ids, completed_set,
+        )
 
         if not pending:
             return []
@@ -253,11 +278,7 @@ class ScenarioEngine:
         results: list[EvaluationResult] = []
         for i, er in enumerate(eval_results):
             if isinstance(er, Exception):
-                log.warning(
-                    "Evaluation exception for %s: %s",
-                    pending[i].id,
-                    er,
-                )
+                log.warning("Evaluation exception for %s: %s", pending[i].id, er)
                 continue
 
             results.append(er)
@@ -275,9 +296,7 @@ class ScenarioEngine:
         if session is None:
             return None
 
-        started_at = datetime.fromisoformat(session.started_at)
-        if not started_at.tzinfo:
-            started_at = started_at.replace(tzinfo=timezone.utc)
+        started_at = _parse_started_at(session)
         elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
 
         return compute_score(

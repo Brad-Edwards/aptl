@@ -181,14 +181,13 @@ async def evaluate_command_output(
             )
 
     # Check optional regex
-    if validation.regex is not None:
-        if not re.search(validation.regex, output):
-            return EvaluationResult(
-                objective_id=objective_id,
-                passed=False,
-                detail=f"Regex not matched: {validation.regex}",
-                checked_at=checked_at,
-            )
+    if validation.regex is not None and not re.search(validation.regex, output):
+        return EvaluationResult(
+            objective_id=objective_id,
+            passed=False,
+            detail=f"Regex not matched: {validation.regex}",
+            checked_at=checked_at,
+        )
 
     log.info("Command output eval for %s: PASS", objective_id)
     return EvaluationResult(

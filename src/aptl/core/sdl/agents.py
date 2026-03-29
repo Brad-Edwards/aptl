@@ -10,7 +10,7 @@ the agent executes. Framework bindings (Gymnasium, PettingZoo)
 are a deployment-layer concern.
 """
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from aptl.core.sdl._base import SDLModel
 
@@ -46,3 +46,9 @@ class Agent(SDLModel):
     initial_knowledge: InitialKnowledge | None = None
     allowed_subnets: list[str] = Field(default_factory=list)
     reward_calculator: str = ""
+
+    @model_validator(mode="after")
+    def validate_required_entity(self) -> "Agent":
+        if not self.entity:
+            raise ValueError("Agent requires 'entity'")
+        return self

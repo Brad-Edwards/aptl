@@ -13,7 +13,7 @@ directories, CTF flag files.
 from enum import Enum
 from typing import Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from aptl.core.sdl._base import SDLModel, normalize_enum_value, parse_bool_or_var
 from aptl.core.sdl._source import Source
@@ -66,3 +66,22 @@ class Content(SDLModel):
     @classmethod
     def parse_sensitive(cls, v: bool | str) -> bool | str:
         return parse_bool_or_var(v, field_name="sensitive")
+
+    @model_validator(mode="after")
+    def validate_type_requirements(self) -> "Content":
+        """Require the minimum anchors needed to describe real content."""
+        if not self.target:
+            raise ValueError("Content requires 'target'")
+
+        if self.type == ContentType.FILE and not self.path:
+            raise ValueError("File content requires 'path'")
+
+        if self.type == ContentType.DATASET and not (self.source or self.items):
+            raise ValueError(
+                "Dataset content requires either 'source' or non-empty 'items'"
+            )
+
+        if self.type == ContentType.DIRECTORY and not self.destination:
+            raise ValueError("Directory content requires 'destination'")
+
+        return self

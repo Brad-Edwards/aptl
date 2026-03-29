@@ -9,7 +9,7 @@ accounts — including properties relevant to attack scenarios
 
 from enum import Enum
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from aptl.core.sdl._base import SDLModel, normalize_enum_value, parse_bool_or_var
 
@@ -52,3 +52,9 @@ class Account(SDLModel):
     @classmethod
     def parse_disabled(cls, v: bool | str) -> bool | str:
         return parse_bool_or_var(v, field_name="disabled")
+
+    @model_validator(mode="after")
+    def validate_required_node(self) -> "Account":
+        if not self.node:
+            raise ValueError("Account requires 'node'")
+        return self

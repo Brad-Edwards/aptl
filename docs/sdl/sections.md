@@ -298,7 +298,7 @@ content:
     format: sql
 ```
 
-`target` must reference a VM node, not a switch/network node.
+`target` is required for every content entry and must reference a VM node, not a switch/network node. `file` content requires `path`; `dataset` content requires either `source` or non-empty `items`; `directory` content requires `destination`.
 
 ---
 
@@ -322,7 +322,7 @@ accounts:
     mail: ""
 ```
 
-`node` must reference a VM node, not a switch/network node.
+`username` and `node` are required. `node` must reference a VM node, not a switch/network node.
 
 ---
 
@@ -380,7 +380,7 @@ agents:
     reward_calculator: HybridImpactPwn
 ```
 
-`initial_knowledge.hosts` references VM node names, `subnets` references switch-backed infrastructure names, `services` references service names declared in `nodes.*.services`, and `accounts` references entries in the `accounts` section. `allowed_subnets` follows the same switch-backed infrastructure rule.
+`entity` is required and must resolve to the `entities` section. `initial_knowledge.hosts` references VM node names, `subnets` references switch-backed infrastructure names, `services` references service names declared in `nodes.*.services`, and `accounts` references entries in the `accounts` section. `allowed_subnets` follows the same switch-backed infrastructure rule.
 
 ---
 
@@ -406,7 +406,9 @@ variables:
 
 Variables are referenced as `${var_name}` in other sections. They are **not resolved at parse time** — resolution happens at instantiation.
 
-Full-value placeholders are currently supported in ordinary string fields, common scalar fields (counts, booleans, scores, timings, RAM/CPU, ports), and many reference values. The semantic validator checks that `${var_name}` refers to a declared variable, but substitution still happens later during instantiation. User-defined mapping keys and enum-backed fields still need concrete values today.
+Full-value placeholders are currently supported in ordinary string fields, common scalar fields (counts, booleans, scores, timings, RAM/CPU, ports), and many reference values. The semantic validator checks that `${var_name}` refers to a declared variable, but substitution still happens later during instantiation. User-defined mapping keys and enum-backed fields still need concrete values today, and placeholder keys are rejected at parse time.
+
+Think of variables as parameterizing **properties of declared objects**, not the object graph itself. For example, a node's hostname, a content file's text, or a subnet CIDR may be variable-backed, while top-level identifiers like `nodes.web`, `features.nginx`, or `accounts.domain-admin` must remain literal.
 
 `default` and every entry in `allowed_values` must match the declared `type`. If `allowed_values` is provided, `default` must be one of those values.
 

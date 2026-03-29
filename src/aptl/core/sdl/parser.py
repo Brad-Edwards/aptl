@@ -40,6 +40,14 @@ _NESTED_HASHMAP_FIELDS = frozenset({
 })
 
 
+def _child_is_hashmap_field(key: str, value: Any) -> bool:
+    """Return whether the children of ``key`` are user-defined hashmap keys."""
+    if key in _HASHMAP_SECTIONS or key in _NESTED_HASHMAP_FIELDS:
+        return True
+    # Complex properties use list items like ``[{switch-name: "10.0.0.10"}]``.
+    return key == "properties" and isinstance(value, list)
+
+
 def _normalize_field_key(k: Any) -> Any:
     """Normalize a Pydantic field key: lowercase + hyphens to underscores."""
     if isinstance(k, str):
@@ -66,13 +74,7 @@ def _normalize_keys(data: Any, is_hashmap: bool = False) -> Any:
 
             # Check if this field's children are user-defined HashMap keys
             child_key = norm_k if isinstance(norm_k, str) else str(norm_k)
-            child_is_hashmap = (
-                child_key in _HASHMAP_SECTIONS
-                or child_key in _NESTED_HASHMAP_FIELDS
-            )
-            # Complex properties (list of {link-name: ip}) have user-defined keys
-            if child_key == "properties" and isinstance(v, list):
-                child_is_hashmap = True
+            child_is_hashmap = _child_is_hashmap_field(child_key, v)
             result[norm_k] = _normalize_keys(v, is_hashmap=child_is_hashmap)
         return result
     if isinstance(data, list):
@@ -80,6 +82,42 @@ def _normalize_keys(data: Any, is_hashmap: bool = False) -> Any:
         # user-defined keys, list items within it do too.
         return [_normalize_keys(item, is_hashmap=is_hashmap) for item in data]
     return data
+
+
+def _reject_variable_mapping_keys(
+    data: Any,
+    *,
+    path: str = "",
+    is_hashmap: bool = False,
+) -> None:
+    """Reject ``${var}`` placeholders in symbol-defining mapping keys."""
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if is_hashmap and is_variable_ref(k):
+                key_path = f"{path}.{k}" if path else str(k)
+                raise SDLParseError(
+                    "Variable placeholders are not allowed in "
+                    f"user-defined mapping keys: '{key_path}'"
+                )
+
+            child_key = k if isinstance(k, str) else str(k)
+            child_path = f"{path}.{child_key}" if path else child_key
+            child_is_hashmap = _child_is_hashmap_field(child_key, v)
+            _reject_variable_mapping_keys(
+                v,
+                path=child_path,
+                is_hashmap=child_is_hashmap,
+            )
+        return
+
+    if isinstance(data, list):
+        for index, item in enumerate(data):
+            child_path = f"{path}[{index}]"
+            _reject_variable_mapping_keys(
+                item,
+                path=child_path,
+                is_hashmap=is_hashmap,
+            )
 
 
 def _expand_source(value: Any) -> Any:
@@ -209,6 +247,9 @@ def parse_sdl(
 
     # Normalize keys (case-insensitive, hyphens to underscores)
     data = _normalize_keys(raw)
+
+    # User-defined mapping keys define the SDL symbol table and must be concrete.
+    _reject_variable_mapping_keys(data)
 
     # Expand shorthands
     data = _expand_shorthands(data)

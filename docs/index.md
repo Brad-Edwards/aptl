@@ -46,6 +46,15 @@ aptl lab start
 ### Architecture Decision Records
 - [ADR Index](adrs/README.md) -- Why we built it this way
 
+### Scenario Description Language (SDL)
+- [SDL Overview](sdl/index.md) — What the SDL is and how to use it
+- [Sections Reference](sdl/sections.md) — Complete reference for all 20 sections
+- [Parser Behavior](sdl/parser.md) — Key normalization, shorthands, format detection
+- [Semantic Validation](sdl/validation.md) — Cross-reference checks (24 passes)
+- [Design Precedents](sdl/precedents.md) — Where each element comes from
+- [Limitations](sdl/limitations.md) — What the SDL cannot express yet
+- [Testing](sdl/testing.md) — Unit tests, stress tests, fuzz tests
+
 ### Scenarios & Runs
 - [SOC Architecture Spec](specs/soc-feature-spec.md) — Scenario engine, run archives, collectors
 

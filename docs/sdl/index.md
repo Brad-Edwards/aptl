@@ -1,0 +1,86 @@
+# Scenario Description Language (SDL) Reference
+
+The APTL SDL is a YAML-based specification language for describing cyber range scenarios. It is ported from the [Open Cyber Range SDL](https://github.com/Open-Cyber-Range/SDL-parser) and extended with APTL-specific concepts for attack/defense exercises, automated scoring, and agent-driven operations.
+
+The SDL describes *what a scenario is* — not how to deploy it. A separate backend binding layer (not yet implemented) translates SDL specifications into concrete infrastructure (Docker Compose, Terraform, cloud APIs).
+
+## Quick Example
+
+```yaml
+name: simple-pentest-lab
+description: Web app with SQL injection targeting a database
+
+nodes:
+  lab-net:
+    type: Switch
+  webapp:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 1}
+    features: [flask-app]
+    services: [{port: 8080, name: http}]
+    vulnerabilities: [sqli]
+  database:
+    type: VM
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    features: [postgres]
+    services: [{port: 5432, name: postgresql}]
+    asset_value: {confidentiality: high}
+
+infrastructure:
+  lab-net: {count: 1, properties: {cidr: 10.0.0.0/24, gateway: 10.0.0.1}}
+  webapp: {count: 1, links: [lab-net]}
+  database: {count: 1, links: [lab-net]}
+
+features:
+  flask-app: {type: Service, source: vulnerable-flask-app}
+  postgres: {type: Service, source: postgresql-16}
+
+vulnerabilities:
+  sqli:
+    name: SQL Injection
+    description: SQLi in login form
+    technical: true
+    class: CWE-89
+
+relationships:
+  app-to-db:
+    type: connects_to
+    source: flask-app
+    target: postgres
+
+accounts:
+  db-admin:
+    username: admin
+    node: database
+    password_strength: weak
+```
+
+## Documentation
+
+- [SDL Sections Reference](sections.md) — Complete reference for all 20 sections
+- [Parser Behavior](parser.md) — Key normalization, shorthand expansion, format detection
+- [Semantic Validation](validation.md) — Cross-reference checks and what the validator enforces
+- [Design Precedents](precedents.md) — Where each SDL element comes from
+- [Limitations & Future Work](limitations.md) — What the SDL cannot express yet
+- [Testing](testing.md) — How to run unit tests, stress tests, and fuzz tests
+
+## Usage
+
+```python
+from aptl.core.sdl import parse_sdl, parse_sdl_file
+
+# From a string
+scenario = parse_sdl(yaml_string)
+
+# From a file
+scenario = parse_sdl_file(Path("scenarios/my-scenario.yaml"))
+
+# Skip semantic validation (structural only)
+scenario = parse_sdl(yaml_string, skip_semantic_validation=True)
+```
+
+## Backward Compatibility
+
+All existing APTL scenario YAMLs (the `metadata` + `mode` + `objectives` format) continue to work unchanged. The parser auto-detects legacy vs SDL format. All imports from `aptl.core.scenarios` continue to work — the module is a re-export shim over the SDL package.

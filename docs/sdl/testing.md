@@ -6,10 +6,10 @@
 
 ```bash
 pytest tests/test_sdl_models.py tests/test_sdl_validator.py \
-       tests/test_sdl_parser.py tests/test_sdl_compat.py -v
+       tests/test_sdl_parser.py -v
 ```
 
-Tests structural validation (Pydantic models), semantic validation (cross-reference checks), parser behavior (normalization, shorthands, format detection), and backward compatibility with the legacy `aptl.core.scenarios` API.
+Tests structural validation (Pydantic models), semantic validation (cross-reference checks), and parser behavior (normalization, shorthands, SDL-only format boundary).
 
 ### Stress Tests (standard run)
 

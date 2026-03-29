@@ -1,5 +1,7 @@
 # Scenario & Observability Core — Architecture Spec
 
+> Historical note: this document describes the pre-SDL scenario runtime that was removed in the SDL-only branch. It is retained for context until a new SDL-native runtime lands.
+
 ## 1. Overview
 
 ### 1.1 Purpose

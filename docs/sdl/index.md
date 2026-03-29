@@ -59,8 +59,8 @@ accounts:
 
 ## Documentation
 
-- [SDL Sections Reference](sections.md) — Complete reference for all 20 sections
-- [Parser Behavior](parser.md) — Key normalization, shorthand expansion, format detection
+- [SDL Sections Reference](sections.md) — Complete reference for all 19 sections
+- [Parser Behavior](parser.md) — Key normalization, shorthand expansion, SDL-only parsing
 - [Semantic Validation](validation.md) — Cross-reference checks and what the validator enforces
 - [Design Precedents](precedents.md) — Where each SDL element comes from
 - [Limitations & Future Work](limitations.md) — What the SDL cannot express yet
@@ -83,4 +83,4 @@ scenario = parse_sdl(yaml_string, skip_semantic_validation=True)
 
 ## Backward Compatibility
 
-All existing APTL scenario YAMLs (the `metadata` + `mode` + `objectives` format) continue to work unchanged. The parser auto-detects legacy vs SDL format. All imports from `aptl.core.scenarios` continue to work — the module is a re-export shim over the SDL package.
+This branch is intentionally SDL-only. Legacy APTL scenario YAMLs (the old `metadata` + `mode` + `objectives` format) no longer parse, and `aptl.core.scenarios` is now a thin SDL loader/error layer rather than a re-export shim.

@@ -182,10 +182,34 @@ class Node(SDLModel):
 
     @model_validator(mode="after")
     def validate_type_constraints(self) -> "Node":
-        """Switch nodes cannot have source, resources, features, etc."""
+        """Switch nodes cannot carry VM-only fields."""
         if self.type == NodeType.SWITCH:
+            disallowed_fields: list[str] = []
             if self.source is not None:
-                raise ValueError("Switch nodes cannot have a source")
+                disallowed_fields.append("source")
             if self.resources is not None:
-                raise ValueError("Switch nodes cannot have resources")
+                disallowed_fields.append("resources")
+            if self.os is not None:
+                disallowed_fields.append("os")
+            if self.os_version:
+                disallowed_fields.append("os_version")
+            if self.features:
+                disallowed_fields.append("features")
+            if self.conditions:
+                disallowed_fields.append("conditions")
+            if self.injects:
+                disallowed_fields.append("injects")
+            if self.vulnerabilities:
+                disallowed_fields.append("vulnerabilities")
+            if self.roles:
+                disallowed_fields.append("roles")
+            if self.services:
+                disallowed_fields.append("services")
+            if self.asset_value is not None:
+                disallowed_fields.append("asset_value")
+            if disallowed_fields:
+                raise ValueError(
+                    "Switch nodes cannot have VM-only fields: "
+                    + ", ".join(disallowed_fields)
+                )
         return self

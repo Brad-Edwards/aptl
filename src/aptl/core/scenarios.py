@@ -1,15 +1,8 @@
-"""Scenario runtime support — exceptions, loading, and type re-exports.
+"""Scenario loading helpers and shared exceptions for SDL specifications.
 
-This module provides the runtime interface for scenario operations.
-The SDL specification models live in ``aptl.core.sdl``. The runtime
-evaluation models (objectives, attacks) live in ``aptl.core.objectives``
-and ``aptl.core.attacks``.
-
-NOTE: The runtime code (engine, evaluators, scoring, CLI) references
-models and fields that were removed from the SDL Scenario model during
-the legacy binding cleanup. Those references will be reconnected in
-future requirements. Until then, some runtime imports from this module
-will fail at call sites that access removed fields.
+The SDL models live in ``aptl.core.sdl``. This module intentionally
+provides only file loading, discovery, and exception types shared by
+the current SDL-only surface.
 """
 
 from pathlib import Path

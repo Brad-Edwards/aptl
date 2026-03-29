@@ -1,9 +1,9 @@
 """Scenario session state management.
 
-Tracks the active scenario session across CLI invocations via a JSON
-file in the .aptl/ state directory. Enforces valid state transitions
-and provides methods to record hints, objective completions, and
-session lifecycle events.
+Tracks the active scenario session across commands via a JSON file in
+the .aptl/ state directory. Enforces valid state transitions and
+provides methods to record hints, objective completions, and session
+lifecycle events.
 """
 
 import fcntl
@@ -15,7 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from aptl.core.scenarios import ScenarioDefinition, ScenarioStateError
+from aptl.core.scenarios import ScenarioStateError
 from aptl.utils.logging import get_logger
 
 log = get_logger("session")
@@ -101,10 +101,10 @@ def _deserialize_session(data: dict) -> ActiveSession:
 
 
 class ScenarioSession:
-    """Manages active scenario state across CLI invocations.
+    """Manages active scenario state across commands.
 
     State is persisted to a JSON file in the .aptl/ directory so that
-    separate CLI commands (start, status, evaluate, stop) share context.
+    separate commands and background tasks can share context.
     """
 
     def __init__(self, state_dir: Path) -> None:
@@ -179,7 +179,7 @@ class ScenarioSession:
 
     def start(
         self,
-        scenario: ScenarioDefinition,
+        scenario_id: str,
     ) -> ActiveSession:
         """Start a new scenario session.
 
@@ -187,7 +187,7 @@ class ScenarioSession:
         Generates a trace_id for OpenTelemetry distributed tracing.
 
         Args:
-            scenario: The scenario being started.
+            scenario_id: ID of the scenario being started.
 
         Returns:
             The newly created ActiveSession.
@@ -198,9 +198,9 @@ class ScenarioSession:
         if self.is_active():
             existing = self.get_active()
             raise ScenarioStateError(
-                f"Cannot start scenario '{scenario.metadata.id}': "
+                f"Cannot start scenario '{scenario_id}': "
                 f"scenario '{existing.scenario_id}' is already active. "
-                "Stop it first with 'aptl scenario stop'."
+                "Clear or finish the active session first."
             )
 
         from aptl.core.telemetry import generate_trace_context
@@ -208,7 +208,7 @@ class ScenarioSession:
         ctx = generate_trace_context()
 
         session = ActiveSession(
-            scenario_id=scenario.metadata.id,
+            scenario_id=scenario_id,
             state=SessionState.ACTIVE,
             started_at=datetime.now(timezone.utc).isoformat(),
             trace_id=ctx["trace_id"],
@@ -216,7 +216,7 @@ class ScenarioSession:
         )
 
         self._write(session)
-        log.info("Started session for scenario '%s'", scenario.metadata.id)
+        log.info("Started session for scenario '%s'", scenario_id)
         return session
 
     def record_hint(self, objective_id: str, hint_level: int) -> None:
@@ -339,9 +339,7 @@ class ScenarioSession:
         """
         session = self.get_active()
         if session is None:
-            raise ScenarioStateError(
-                "No active scenario. Start one with 'aptl scenario start'."
-            )
+            raise ScenarioStateError("No active scenario session.")
         if session.state not in (SessionState.ACTIVE, SessionState.EVALUATING):
             raise ScenarioStateError(
                 f"Scenario '{session.scenario_id}' is in state "

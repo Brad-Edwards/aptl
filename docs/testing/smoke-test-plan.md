@@ -1,5 +1,7 @@
 # APTL Minimum Viable Enterprise - Smoke Test Plan
 
+> Historical note: sections covering `aptl scenario` and the old scenario engine apply to the pre-SDL runtime, not the current SDL-only branch.
+
 Acceptance testing for the enterprise infrastructure, SOC stack, MCP layer, and scenario engine implemented in the SOC-in-a-Box build.
 
 ---

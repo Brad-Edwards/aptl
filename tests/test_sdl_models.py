@@ -85,6 +85,24 @@ class TestNode:
         with pytest.raises(ValidationError, match="Switch.*resources"):
             Node(type="switch", resources={"ram": "1 gib", "cpu": 1})
 
+    @pytest.mark.parametrize(
+        ("field_name", "value"),
+        [
+            ("os", "linux"),
+            ("os_version", "22.04"),
+            ("features", {"nginx": ""}),
+            ("conditions", {"health-check": ""}),
+            ("injects", {"email": ""}),
+            ("vulnerabilities", ["sqli"]),
+            ("roles", {"admin": {"username": "root"}}),
+            ("services", [{"port": 80, "name": "http"}]),
+            ("asset_value", {"confidentiality": "high"}),
+        ],
+    )
+    def test_switch_rejects_other_vm_only_fields(self, field_name, value):
+        with pytest.raises(ValidationError, match=field_name):
+            Node(type="switch", **{field_name: value})
+
 
 class TestRole:
     def test_basic_role(self):
@@ -574,6 +592,8 @@ class TestAgent:
         ik = InitialKnowledge()
         assert ik.hosts == []
         assert ik.subnets == []
+        assert ik.services == []
+        assert ik.accounts == []
 
 
 class TestVariable:
@@ -597,3 +617,19 @@ class TestVariable:
     def test_boolean_variable(self):
         v = Variable(type="boolean", default=True)
         assert v.type == VariableType.BOOLEAN
+
+    def test_rejects_default_with_wrong_type(self):
+        with pytest.raises(ValidationError, match="default must match"):
+            Variable(type="integer", default="five")
+
+    def test_rejects_allowed_values_with_wrong_type(self):
+        with pytest.raises(ValidationError, match="allowed_values must match"):
+            Variable(type="boolean", allowed_values=[True, "false"])
+
+    def test_rejects_default_outside_allowed_values(self):
+        with pytest.raises(ValidationError, match="default must be one of allowed_values"):
+            Variable(type="string", default="critical", allowed_values=["low", "medium", "high"])
+
+    def test_number_variable_accepts_int_and_float_allowed_values(self):
+        v = Variable(type="number", default=1.5, allowed_values=[1, 1.5, 2.0])
+        assert v.default == 1.5

@@ -225,6 +225,12 @@ class SemanticValidator:
     def _verify_agents(self) -> None:
         flat_entity_names = set(flatten_entities(self._s.entities).keys())
         flat_entity_names.update(self._s.entities.keys())
+        service_names = {
+            service.name
+            for node in self._s.nodes.values()
+            for service in node.services
+            if service.name
+        }
 
         for name, agent in self._s.agents.items():
             if agent.entity and agent.entity not in flat_entity_names:
@@ -255,6 +261,18 @@ class SemanticValidator:
                         self._err(
                             f"Agent '{name}' initial_knowledge subnet '{subnet}' "
                             f"not in infrastructure section"
+                        )
+                for service_name in agent.initial_knowledge.services:
+                    if service_name not in service_names:
+                        self._err(
+                            f"Agent '{name}' initial_knowledge service "
+                            f"'{service_name}' not in node service names"
+                        )
+                for acct_name in agent.initial_knowledge.accounts:
+                    if acct_name not in self._s.accounts:
+                        self._err(
+                            f"Agent '{name}' initial_knowledge account "
+                            f"'{acct_name}' not in accounts section"
                         )
 
     def _verify_variables(self) -> None:

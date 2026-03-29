@@ -24,7 +24,7 @@ _HASHMAP_SECTIONS = frozenset({
     "nodes", "infrastructure", "features", "conditions",
     "vulnerabilities", "metrics", "evaluations", "tlos",
     "goals", "entities", "injects", "events", "scripts", "stories",
-    "content", "accounts",
+    "content", "accounts", "relationships", "agents", "variables",
 })
 
 # Fields within struct models that are also HashMaps of user-defined keys.
@@ -119,18 +119,22 @@ def _expand_min_score(value: Any) -> Any:
 
 def _expand_shorthands(data: dict[str, Any]) -> dict[str, Any]:
     """Apply all shorthand expansions to normalized data."""
-    # Expand sources throughout the tree
-    def expand_sources(obj: Any) -> Any:
+    # Sections where "source" is a plain string reference, NOT a Source package.
+    _SOURCE_SKIP_SECTIONS = frozenset({"relationships", "agents"})
+
+    def expand_sources(obj: Any, skip: bool = False) -> Any:
         if isinstance(obj, dict):
             result = {}
             for k, v in obj.items():
-                if k == "source":
+                if k == "source" and not skip:
                     result[k] = _expand_source(v)
                 else:
-                    result[k] = expand_sources(v)
+                    # Once inside a skip section, stay skipped for all descendants
+                    child_skip = skip or k in _SOURCE_SKIP_SECTIONS
+                    result[k] = expand_sources(v, skip=child_skip)
             return result
         if isinstance(obj, list):
-            return [expand_sources(item) for item in obj]
+            return [expand_sources(item, skip=skip) for item in obj]
         return obj
 
     data = expand_sources(data)

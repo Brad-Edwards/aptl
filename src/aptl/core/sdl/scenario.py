@@ -14,6 +14,7 @@ from pydantic import Field, field_validator, model_validator
 
 from aptl.core.sdl._base import SDLModel
 from aptl.core.sdl.accounts import Account
+from aptl.core.sdl.agents import Agent
 from aptl.core.sdl.attacks import AttackStep, MitreReference
 from aptl.core.sdl.conditions import Condition
 from aptl.core.sdl.content import Content
@@ -24,7 +25,9 @@ from aptl.core.sdl.infrastructure import InfraNode
 from aptl.core.sdl.nodes import Node
 from aptl.core.sdl.objectives import ObjectiveSet, ScoringConfig
 from aptl.core.sdl.orchestration import Event, Inject, Script, Story
+from aptl.core.sdl.relationships import Relationship
 from aptl.core.sdl.scoring import Evaluation, Goal, Metric, TLO
+from aptl.core.sdl.variables import Variable
 from aptl.core.sdl.vulnerabilities import Vulnerability
 
 _SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -159,9 +162,12 @@ class Scenario(SDLModel):
     scripts: dict[str, Script] = Field(default_factory=dict)
     stories: dict[str, Story] = Field(default_factory=dict)
 
-    # --- New sections (G1, G2) ---
+    # --- New sections (G1, G2, identity, agents, params) ---
     content: dict[str, Content] = Field(default_factory=dict)
     accounts: dict[str, Account] = Field(default_factory=dict)
+    relationships: dict[str, Relationship] = Field(default_factory=dict)
+    agents: dict[str, Agent] = Field(default_factory=dict)
+    variables: dict[str, Variable] = Field(default_factory=dict)
 
     # --- APTL extensions ---
     metadata: Optional[ScenarioMetadata] = None

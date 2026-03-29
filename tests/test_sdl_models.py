@@ -553,3 +553,87 @@ class TestSimplePropertiesInternal:
         from aptl.core.sdl.infrastructure import SimpleProperties
         p = SimpleProperties(cidr="10.0.0.0/24", gateway="10.0.0.1")
         assert p.internal is False
+
+
+# ---------------------------------------------------------------------------
+# Relationships, Agents, Variables (G10, G11, Identity)
+# ---------------------------------------------------------------------------
+
+from aptl.core.sdl.agents import Agent, InitialKnowledge
+from aptl.core.sdl.relationships import Relationship, RelationshipType
+from aptl.core.sdl.variables import Variable, VariableType
+
+
+class TestRelationship:
+    def test_authenticates_with(self):
+        r = Relationship(type="authenticates_with", source="exchange", target="ad-ds")
+        assert r.type == RelationshipType.AUTHENTICATES_WITH
+
+    def test_trusts_with_properties(self):
+        r = Relationship(
+            type="trusts", source="child-domain", target="parent-domain",
+            properties={"trust_type": "parent-child", "trust_direction": "bidirectional"},
+        )
+        assert r.properties["trust_type"] == "parent-child"
+
+    def test_connects_to(self):
+        r = Relationship(type="connects_to", source="webapp", target="db",
+                         properties={"protocol": "tcp", "port": "5432"})
+        assert r.source == "webapp"
+
+    def test_federates_with(self):
+        r = Relationship(type="federates_with", source="adfs", target="azure-ad",
+                         properties={"protocol": "SAML"})
+        assert r.type == RelationshipType.FEDERATES_WITH
+
+
+class TestAgent:
+    def test_basic_agent(self):
+        a = Agent(entity="red-team", actions=["Scan", "Exploit"])
+        assert len(a.actions) == 2
+
+    def test_agent_with_starting_accounts(self):
+        a = Agent(
+            entity="red-team",
+            starting_accounts=["phished-user"],
+            allowed_subnets=["user-net"],
+        )
+        assert a.starting_accounts == ["phished-user"]
+
+    def test_agent_with_initial_knowledge(self):
+        a = Agent(
+            entity="blue-team",
+            initial_knowledge=InitialKnowledge(
+                hosts=["defender", "server1"],
+                subnets=["enterprise-net"],
+            ),
+        )
+        assert len(a.initial_knowledge.hosts) == 2
+
+    def test_initial_knowledge_defaults(self):
+        ik = InitialKnowledge()
+        assert ik.hosts == []
+        assert ik.subnets == []
+
+
+class TestVariable:
+    def test_string_variable(self):
+        v = Variable(type="string", default="techvault.local", description="Domain name")
+        assert v.type == VariableType.STRING
+
+    def test_integer_variable(self):
+        v = Variable(type="integer", default=5)
+        assert v.default == 5
+
+    def test_variable_with_allowed_values(self):
+        v = Variable(type="string", default="weak", allowed_values=["weak", "medium", "strong"])
+        assert len(v.allowed_values) == 3
+
+    def test_required_variable(self):
+        v = Variable(type="string", required=True)
+        assert v.required is True
+        assert v.default is None
+
+    def test_boolean_variable(self):
+        v = Variable(type="boolean", default=True)
+        assert v.type == VariableType.BOOLEAN

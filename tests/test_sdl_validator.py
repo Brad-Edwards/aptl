@@ -396,6 +396,99 @@ features:
         assert s.nodes["vm"].features["svc-a"] == ""
 
 
+class TestVerifyRelationships:
+    def test_undefined_source(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            features={"svc": {"type": "service"}},
+            relationships={"r1": {"type": "connects_to", "source": "ghost", "target": "svc"}},
+        )
+        errors = _validate(s)
+        assert any("does not reference" in e for e in errors)
+
+    def test_undefined_target(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            features={"svc": {"type": "service"}},
+            relationships={"r1": {"type": "connects_to", "source": "svc", "target": "ghost"}},
+        )
+        errors = _validate(s)
+        assert any("does not reference" in e for e in errors)
+
+    def test_valid_relationship(self):
+        s = _make_scenario(
+            features={
+                "exchange": {"type": "service"},
+                "ad-ds": {"type": "service"},
+            },
+            relationships={
+                "auth": {"type": "authenticates_with", "source": "exchange", "target": "ad-ds"},
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+
+class TestVerifyAgents:
+    def test_undefined_entity(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            agents={"a1": {"entity": "ghost-team", "actions": ["scan"]}},
+        )
+        errors = _validate(s)
+        assert any("undefined entity" in e for e in errors)
+
+    def test_undefined_starting_account(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            entities={"red": {"role": "red"}},
+            agents={"a1": {"entity": "red", "starting_accounts": ["ghost-acct"]}},
+        )
+        errors = _validate(s)
+        assert any("not in accounts" in e for e in errors)
+
+    def test_undefined_allowed_subnet(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            entities={"red": {"role": "red"}},
+            agents={"a1": {"entity": "red", "allowed_subnets": ["ghost-net"]}},
+        )
+        errors = _validate(s)
+        assert any("not in infrastructure" in e for e in errors)
+
+    def test_undefined_initial_knowledge_host(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            entities={"red": {"role": "red"}},
+            agents={"a1": {
+                "entity": "red",
+                "initial_knowledge": {"hosts": ["ghost-host"]},
+            }},
+        )
+        errors = _validate(s)
+        assert any("not in nodes" in e for e in errors)
+
+    def test_valid_agent(self):
+        s = _make_scenario(
+            nodes={
+                "vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}},
+                "net": {"type": "switch"},
+            },
+            infrastructure={"net": {"count": 1, "properties": {"cidr": "10.0.0.0/24", "gateway": "10.0.0.1"}}},
+            entities={"red": {"role": "red"}},
+            accounts={"hacker": {"username": "h4x", "node": "vm"}},
+            agents={"a1": {
+                "entity": "red",
+                "actions": ["scan", "exploit"],
+                "starting_accounts": ["hacker"],
+                "allowed_subnets": ["net"],
+                "initial_knowledge": {"hosts": ["vm"], "subnets": ["net"]},
+            }},
+        )
+        errors = _validate(s)
+        assert not errors
+
+
 class TestValidFullScenario:
     def test_complete_ocr_scenario_validates(self):
         """A complete OCR-style scenario passes validation."""

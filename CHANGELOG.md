@@ -6,6 +6,84 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] - 2026-03-29
+
+### Changed
+
+- **BREAKING**: Removed APTL legacy fields from SDL Scenario model — `metadata`, `mode`, `containers`, `preconditions`, `objectives`, `scoring`, `attack_chain`, `steps`, `defenses` are no longer part of the SDL specification. The SDL now has one clean identity: 19 specification sections with `name` as the only required field.
+- **BREAKING**: Removed backward-compatibility layer (`sdl/compat.py`) and the `scenarios.py` re-export shim. Runtime code that imported `ScenarioDefinition`, `validate_scenario_containers`, or APTL-specific types from `aptl.core.scenarios` will need updating.
+- **BREAKING**: APTL legacy scenario YAMLs (with `metadata` block) no longer parse through the SDL. They require migration to SDL format.
+- Moved runtime evaluation models to standalone modules: `aptl.core.objectives` (ObjectiveType, Objective, WazuhAlertValidation, etc.) and `aptl.core.attacks` (AttackStep, MitreReference, ExpectedDetection, etc.). These are runtime concerns, not specification concerns.
+- Removed 6 APTL-specific semantic validation passes from the SDL validator
+- Framing: OCR scoring pipeline (conditions → metrics → evaluations → TLOs → goals) is **exercise assessment** for human-evaluated team exercises. APTL objectives are **automated validation** for agent-driven scenarios — a runtime concern that lives outside the SDL.
+
+### Removed
+
+- `src/aptl/core/sdl/compat.py` — legacy backward-compatibility shim
+- `src/aptl/core/sdl/defenses.py` — free-form defense config (underspecified)
+- `src/aptl/core/sdl/objectives.py` — moved to `aptl.core.objectives`
+- `src/aptl/core/sdl/attacks.py` — moved to `aptl.core.attacks`
+- `tests/test_sdl_compat.py` — tests for removed compat layer
+
+## [5.3.0] - 2026-03-29
+
+### Added
+
+- Property-based fuzz testing for SDL parser (`tests/test_sdl_fuzz.py`) — 6 Hypothesis strategies generating ~1,050 random inputs per run; excluded from default pytest via `fuzz` marker, run with `pytest -m fuzz`
+- Real-world scenario stress tests (`tests/test_sdl_realworld.py`) — 6 scenarios from Incalmo/MHBench, NICE Challenge, CCDC, HTB ProLab, Metasploitable 2, and Locked Shields IT/OT/SCADA
+- SDL documentation suite (`docs/sdl/`) — index, sections reference, parser behavior, semantic validation (24 passes), design precedents, limitations, and testing guide
+- ADR-014: Scenario Description Language architecture decision record
+- `hypothesis>=6.0.0` added to dev dependencies
+
+### Changed
+
+- `pyproject.toml` pytest config: added `fuzz` marker and `addopts = "-m 'not fuzz'"` to exclude fuzz tests from default runs
+
+## [5.2.0] - 2026-03-29
+
+### Added
+
+- SDL `relationships` section for typed directed edges between scenario elements — adapted from STIX 2.1 Relationship SROs. Supports `authenticates_with`, `trusts`, `federates_with`, `connects_to`, `depends_on`, `manages`, `replicates_to` with free-form properties dict for type-specific metadata (trust_type, protocol, etc.). This is how identity/directory/trust emerges: accounts describe *who*, features describe *what provides auth*, relationships describe *how they connect*
+- SDL `agents` section for autonomous scenario participants — adapted from CybORG CAGE Challenge agent definitions. Each agent has an entity reference (team/role), available actions, starting accounts, initial knowledge (known hosts/subnets), and allowed subnet scope. Agent specifications are framework-agnostic (no Gymnasium coupling)
+- SDL `variables` section for scenario parameterization — adapted from CACAO v2.0 playbook_variables. Named variables with types (string/integer/boolean/number), defaults, descriptions, and allowed_values. Variables are stored as `${name}` strings in the model and resolved at instantiation time, not parse time
+- Semantic validator passes: `verify_relationships` (source/target resolve to any named element), `verify_agents` (entity/account/subnet/host references resolve), `verify_variables` (structural validation)
+- Source expansion now correctly skips `relationships` and `agents` sections where `source` is a string reference, not a package Source
+- Stress test scenarios 12 (CybORG CAGE-2 with red/blue/green agents, starting accounts, initial knowledge) and 13 (multi-domain AD with parent-child trust, ADFS federation, and parameterized variables)
+- 25 new tests for relationship, agent, and variable models and cross-reference validation
+
+## [5.1.0] - 2026-03-29
+
+### Added
+
+- SDL `content` section for data-in-systems: files, datasets (emails, DB records, pcaps), directory structures placed into scenario nodes — adapted from CyRIS `copy_content` pattern
+- SDL `accounts` section for user accounts within scenario nodes: AD users, SSH users, email accounts with password strength, Kerberos SPNs, group memberships — adapted from CyRIS `add_account` and CybORG agent sessions
+- Network access control rules (`acls`) on infrastructure nodes — adapted from CybORG `Subnets.NACLs` pattern
+- Network `internal` flag on `SimpleProperties` for egress-blocked networks
+- Host OS family and version fields on nodes (`os`, `os_version`) — vocabulary from OCSF `Device.os`
+- CIA triad `asset_value` on nodes — adapted from CybORG `ConfidentialityValue`/`AvailabilityValue`
+- `ServicePort` model for exposed network services on nodes (port/protocol/name) — simplified from OCSF `NetworkEndpoint`
+- `PlatformCommand` on attack steps for per-OS command variants with cleanup — adapted from CALDERA `platforms.{os}.{shell}.command` and Atomic Red Team `cleanup_command`
+- Health check extensions on conditions: `timeout`, `retries`, `start_period`
+- Feature-list shorthand on nodes: `features: [svc-a, svc-b]` expands to dict with empty role binding
+- Scenario 11 stress test: Exchange server with mailboxes, accounts, ACLs, phishing lure content, asset values
+- 30 new tests for all extension models, validator passes, and shorthand expansion
+
+## [5.0.0] - 2026-03-28
+
+### Added
+
+- Formal Scenario Description Language (SDL) package (`src/aptl/core/sdl/`) ported from the Open Cyber Range SDL, extended for APTL's domain, and decoupled from backend-specific infrastructure
+- 14 OCR SDL sections: nodes (VM/Switch), infrastructure (topology/IP/CIDR), features (Service/Configuration/Artifact with cycle-detected dependency graphs), conditions (command/source monitoring), vulnerabilities (CWE-classified), metrics/evaluations/TLOs/goals (full scoring pipeline), entities (recursive org/team/person hierarchy with exercise roles), orchestration (injects/events/scripts/stories with human-readable durations)
+- APTL extensions integrated into the SDL: objectives with auto-evaluation (wazuh_alert, command_output, file_exists), attack steps with MITRE ATT&CK mapping and OCSF-aligned expected detections, defense configurations, preconditions, scenario metadata, scoring with time bonuses and hint penalties
+- Semantic validator (`validator.py`) with 21 cross-reference passes: node/feature/condition/vulnerability existence checks, infrastructure link and IP/CIDR validation, feature dependency cycle detection, metric/evaluation/TLO/goal reference chains, entity hierarchy validation, inject/event/script/story reference chains, MITRE technique format validation, mode-objective consistency
+- SDL parser (`parser.py`) with case-insensitive key normalization, hyphen-to-underscore conversion, shorthand expansion (source strings, infrastructure counts, role strings, min-score integers), and auto-detection of APTL legacy vs OCR SDL format
+- Backend-agnostic `Source(name, version)` reference type — no deployment handler coupling
+- 117 new tests across 4 test files: structural model validation, semantic cross-reference validation, parser normalization/shorthand/format-detection, and backward compatibility
+
+### Changed
+
+- `src/aptl/core/scenarios.py` is now a backward-compatibility shim re-exporting all names from `aptl.core.sdl` — all 8 consumer files continue working with zero import changes (BREAKING: internal module restructuring)
+
 ## [4.17.0] - 2026-03-26
 
 ### Added

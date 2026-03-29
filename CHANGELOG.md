@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.0] - 2026-03-29
+
+### Added
+
+- Property-based fuzz testing for SDL parser (`tests/test_sdl_fuzz.py`) — 6 Hypothesis strategies generating ~1,050 random inputs per run; excluded from default pytest via `fuzz` marker, run with `pytest -m fuzz`
+- Real-world scenario stress tests (`tests/test_sdl_realworld.py`) — 6 scenarios from Incalmo/MHBench, NICE Challenge, CCDC, HTB ProLab, Metasploitable 2, and Locked Shields IT/OT/SCADA
+- SDL documentation suite (`docs/sdl/`) — index, sections reference, parser behavior, semantic validation (24 passes), design precedents, limitations, and testing guide
+- ADR-014: Scenario Description Language architecture decision record
+- `hypothesis>=6.0.0` added to dev dependencies
+
+### Changed
+
+- `pyproject.toml` pytest config: added `fuzz` marker and `addopts = "-m 'not fuzz'"` to exclude fuzz tests from default runs
+
 ## [5.2.0] - 2026-03-29
 
 ### Added

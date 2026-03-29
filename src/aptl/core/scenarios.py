@@ -1,40 +1,110 @@
-"""Scenario definition models, loading, and validation.
+"""Scenario runtime support — exceptions, loading, and type re-exports.
 
-This module is a backward-compatibility shim that re-exports all
-public names from the new ``aptl.core.sdl`` package. All existing
-imports continue to work unchanged.
+This module provides the runtime interface for scenario operations.
+The SDL specification models live in ``aptl.core.sdl``. The runtime
+evaluation models (objectives, attacks) live in ``aptl.core.objectives``
+and ``aptl.core.attacks``.
 
-The canonical source for scenario models is now ``aptl.core.sdl``.
+NOTE: The runtime code (engine, evaluators, scoring, CLI) references
+models and fields that were removed from the SDL Scenario model during
+the legacy binding cleanup. Those references will be reconnected in
+future requirements. Until then, some runtime imports from this module
+will fail at call sites that access removed fields.
 """
 
-from aptl.core.sdl.compat import (  # noqa: F401
-    AttackStep,
-    CommandOutputValidation,
-    ContainerRequirements,
-    Difficulty,
-    ExpectedDetection,
-    FileExistsValidation,
-    Hint,
-    MitreReference,
-    Objective,
-    ObjectiveSet,
-    ObjectiveType,
-    ObserverError,
-    Precondition,
-    PreconditionType,
-    Scenario,
-    ScenarioDefinition,
-    ScenarioError,
-    ScenarioMetadata,
-    ScenarioMode,
-    ScenarioNotFoundError,
-    ScenarioStateError,
-    ScenarioValidationError,
-    ScoringConfig,
-    SeverityId,
-    TimeBonusConfig,
-    WazuhAlertValidation,
-    find_scenarios,
-    load_scenario,
-    validate_scenario_containers,
-)
+from pathlib import Path
+from typing import Optional
+
+from aptl.core.sdl import parse_sdl, Scenario, SDLParseError, SDLValidationError
+from aptl.utils.logging import get_logger
+
+log = get_logger("scenarios")
+
+
+# ---------------------------------------------------------------------------
+# Exceptions (used throughout the runtime)
+# ---------------------------------------------------------------------------
+
+
+class ScenarioError(Exception):
+    """Base exception for all scenario operations."""
+
+
+class ScenarioNotFoundError(ScenarioError):
+    """A scenario file or ID could not be found."""
+
+    def __init__(self, identifier: str) -> None:
+        self.identifier = identifier
+        super().__init__(f"Scenario not found: {identifier}")
+
+
+class ScenarioValidationError(ScenarioError):
+    """A scenario definition failed validation."""
+
+    def __init__(self, message: str, path: Optional[Path] = None) -> None:
+        self.path = path
+        self.details = message
+        prefix = f"{path}: " if path else ""
+        super().__init__(f"{prefix}{message}")
+
+
+class ScenarioStateError(ScenarioError):
+    """An invalid state transition was attempted."""
+
+
+class ObserverError(ScenarioError):
+    """The Wazuh observation bus encountered an error."""
+
+
+# ---------------------------------------------------------------------------
+# Loading functions
+# ---------------------------------------------------------------------------
+
+
+def load_scenario(path: Path) -> Scenario:
+    """Load and validate a scenario from a YAML file.
+
+    Args:
+        path: Path to a .yaml scenario file.
+
+    Returns:
+        Validated Scenario.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ScenarioValidationError: If YAML is malformed or fails validation.
+    """
+    if not path.exists():
+        raise FileNotFoundError(f"Scenario file not found: {path}")
+
+    raw = path.read_text().strip()
+    if not raw:
+        raise ScenarioValidationError("Scenario file is empty", path=path)
+
+    try:
+        scenario = parse_sdl(raw, path=path)
+    except SDLParseError as e:
+        raise ScenarioValidationError(str(e), path=path) from e
+    except SDLValidationError as e:
+        raise ScenarioValidationError(str(e), path=path) from e
+
+    log.info("Loaded scenario '%s' from %s", scenario.name, path)
+    return scenario
+
+
+def find_scenarios(search_dir: Path) -> list[Path]:
+    """Find all .yaml scenario files in a directory (non-recursive).
+
+    Args:
+        search_dir: Directory to search.
+
+    Returns:
+        Sorted list of paths to .yaml files.
+    """
+    if not search_dir.is_dir():
+        log.debug("Scenarios directory does not exist: %s", search_dir)
+        return []
+
+    paths = sorted(search_dir.glob("*.yaml"))
+    log.debug("Found %d scenario files in %s", len(paths), search_dir)
+    return paths

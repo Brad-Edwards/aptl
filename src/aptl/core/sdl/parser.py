@@ -167,11 +167,6 @@ def _expand_shorthands(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def _is_legacy_format(data: dict[str, Any]) -> bool:
-    """Detect whether data is APTL legacy format (has metadata.id)."""
-    return "metadata" in data and isinstance(data["metadata"], dict)
-
-
 def parse_sdl(
     content: str,
     path: Path | None = None,

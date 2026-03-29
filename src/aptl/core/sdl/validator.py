@@ -13,12 +13,8 @@ from ipaddress import ip_address, ip_network
 from aptl.core.sdl._errors import SDLValidationError
 from aptl.core.sdl.entities import flatten_entities
 from aptl.core.sdl.nodes import NodeType
-from aptl.core.sdl.objectives import ObjectiveType
-from aptl.core.sdl.scenario import Scenario, ScenarioMode
-from aptl.core.sdl.scoring import MetricType  # noqa: F401 - used for reference
-
-_MITRE_TECHNIQUE_PATTERN = re.compile(r"^T\d{4}(\.\d{3})?$")
-_MITRE_TACTIC_PATTERN = re.compile(r"^TA\d{4}$")
+from aptl.core.sdl.scenario import Scenario
+from aptl.core.sdl.scoring import MetricType
 
 
 def _topological_sort(graph: dict[str, list[str]]) -> list[str] | None:
@@ -85,14 +81,6 @@ class SemanticValidator:
         self._verify_relationships()
         self._verify_agents()
         self._verify_variables()
-
-        # APTL passes
-        self._verify_objectives()
-        self._verify_attack_steps()
-        self._verify_mode_consistency()
-        self._verify_container_requirements()
-        self._verify_mitre_references()
-        self._verify_scenario_content()
 
         if self._errors:
             raise SDLValidationError(self._errors)
@@ -478,78 +466,3 @@ class SemanticValidator:
                             f"Node '{node_name}' role '{role_name}' references "
                             f"undefined entity '{entity_ref}'"
                         )
-
-    # ------------------------------------------------------------------
-    # APTL extension passes
-    # ------------------------------------------------------------------
-
-    def _verify_objectives(self) -> None:
-        # Objective ID uniqueness and validation config are checked by
-        # the Pydantic models (ObjectiveSet, Objective). This pass
-        # verifies objective IDs are slug format (already enforced by
-        # the field validator, so this is a safety net).
-        pass
-
-    def _verify_attack_steps(self) -> None:
-        if not self._s.steps:
-            return
-        # Step numbers uniqueness is checked by the Pydantic model.
-        # Verify technique_id format.
-        for step in self._s.steps:
-            if not _MITRE_TECHNIQUE_PATTERN.match(step.technique_id):
-                self._err(
-                    f"Attack step {step.step_number} technique_id "
-                    f"'{step.technique_id}' does not match ATT&CK format "
-                    f"(T####.###)"
-                )
-
-    def _verify_mode_consistency(self) -> None:
-        if self._s.mode is None:
-            return
-        has_red = bool(self._s.objectives.red)
-        has_blue = bool(self._s.objectives.blue)
-
-        if not has_red and not has_blue:
-            return  # No objectives — mode is informational
-
-        if self._s.mode == ScenarioMode.RED and not has_red:
-            self._err("Red mode scenario must have red objectives")
-        if self._s.mode == ScenarioMode.BLUE and not has_blue:
-            self._err("Blue mode scenario must have blue objectives")
-
-    def _verify_container_requirements(self) -> None:
-        # ContainerRequirements validation is handled by the Pydantic model.
-        pass
-
-    def _verify_mitre_references(self) -> None:
-        if self._s.metadata is None:
-            return
-        mitre = self._s.metadata.mitre_attack
-        for tech in mitre.techniques:
-            if not _MITRE_TECHNIQUE_PATTERN.match(tech):
-                self._err(
-                    f"MITRE technique '{tech}' does not match ATT&CK format "
-                    f"(T####.###)"
-                )
-
-    def _verify_scenario_content(self) -> None:
-        has_steps = bool(self._s.steps)
-        has_objectives = bool(self._s.objectives.red or self._s.objectives.blue)
-        has_stories = bool(self._s.stories)
-        has_nodes = bool(self._s.nodes)
-        has_features = bool(self._s.features)
-        has_conditions = bool(self._s.conditions)
-        has_vulns = bool(self._s.vulnerabilities)
-        has_entities = bool(self._s.entities)
-
-        has_any_content = (
-            has_steps or has_objectives or has_stories or has_nodes
-            or has_features or has_conditions or has_vulns or has_entities
-        )
-
-        if not has_any_content:
-            self._err(
-                "Scenario must have at least one of: nodes, features, "
-                "conditions, vulnerabilities, entities, steps, objectives, "
-                "or stories"
-            )

@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] - 2026-03-29
+
+### Changed
+
+- **BREAKING**: Removed APTL legacy fields from SDL Scenario model — `metadata`, `mode`, `containers`, `preconditions`, `objectives`, `scoring`, `attack_chain`, `steps`, `defenses` are no longer part of the SDL specification. The SDL now has one clean identity: 19 specification sections with `name` as the only required field.
+- **BREAKING**: Removed backward-compatibility layer (`sdl/compat.py`) and the `scenarios.py` re-export shim. Runtime code that imported `ScenarioDefinition`, `validate_scenario_containers`, or APTL-specific types from `aptl.core.scenarios` will need updating.
+- **BREAKING**: APTL legacy scenario YAMLs (with `metadata` block) no longer parse through the SDL. They require migration to SDL format.
+- Moved runtime evaluation models to standalone modules: `aptl.core.objectives` (ObjectiveType, Objective, WazuhAlertValidation, etc.) and `aptl.core.attacks` (AttackStep, MitreReference, ExpectedDetection, etc.). These are runtime concerns, not specification concerns.
+- Removed 6 APTL-specific semantic validation passes from the SDL validator
+- Framing: OCR scoring pipeline (conditions → metrics → evaluations → TLOs → goals) is **exercise assessment** for human-evaluated team exercises. APTL objectives are **automated validation** for agent-driven scenarios — a runtime concern that lives outside the SDL.
+
+### Removed
+
+- `src/aptl/core/sdl/compat.py` — legacy backward-compatibility shim
+- `src/aptl/core/sdl/defenses.py` — free-form defense config (underspecified)
+- `src/aptl/core/sdl/objectives.py` — moved to `aptl.core.objectives`
+- `src/aptl/core/sdl/attacks.py` — moved to `aptl.core.attacks`
+- `tests/test_sdl_compat.py` — tests for removed compat layer
+
 ## [5.3.0] - 2026-03-29
 
 ### Added

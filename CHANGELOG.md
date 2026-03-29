@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.0] - 2026-03-29
+
+### Added
+
+- SDL `relationships` section for typed directed edges between scenario elements — adapted from STIX 2.1 Relationship SROs. Supports `authenticates_with`, `trusts`, `federates_with`, `connects_to`, `depends_on`, `manages`, `replicates_to` with free-form properties dict for type-specific metadata (trust_type, protocol, etc.). This is how identity/directory/trust emerges: accounts describe *who*, features describe *what provides auth*, relationships describe *how they connect*
+- SDL `agents` section for autonomous scenario participants — adapted from CybORG CAGE Challenge agent definitions. Each agent has an entity reference (team/role), available actions, starting accounts, initial knowledge (known hosts/subnets), and allowed subnet scope. Agent specifications are framework-agnostic (no Gymnasium coupling)
+- SDL `variables` section for scenario parameterization — adapted from CACAO v2.0 playbook_variables. Named variables with types (string/integer/boolean/number), defaults, descriptions, and allowed_values. Variables are stored as `${name}` strings in the model and resolved at instantiation time, not parse time
+- Semantic validator passes: `verify_relationships` (source/target resolve to any named element), `verify_agents` (entity/account/subnet/host references resolve), `verify_variables` (structural validation)
+- Source expansion now correctly skips `relationships` and `agents` sections where `source` is a string reference, not a package Source
+- Stress test scenarios 12 (CybORG CAGE-2 with red/blue/green agents, starting accounts, initial knowledge) and 13 (multi-domain AD with parent-child trust, ADFS federation, and parameterized variables)
+- 25 new tests for relationship, agent, and variable models and cross-reference validation
+
 ## [5.1.0] - 2026-03-29
 
 ### Added

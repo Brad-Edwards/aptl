@@ -82,6 +82,9 @@ class SemanticValidator:
         # New section passes
         self._verify_content()
         self._verify_accounts()
+        self._verify_relationships()
+        self._verify_agents()
+        self._verify_variables()
 
         # APTL passes
         self._verify_objectives()
@@ -216,6 +219,85 @@ class SemanticValidator:
                 self._err(
                     f"Account '{name}' references undefined node '{acct.node}'"
                 )
+
+    def _verify_relationships(self) -> None:
+        all_names = self._all_named_elements()
+        for name, rel in self._s.relationships.items():
+            if rel.source not in all_names:
+                self._err(
+                    f"Relationship '{name}' source '{rel.source}' "
+                    f"does not reference any defined element"
+                )
+            if rel.target not in all_names:
+                self._err(
+                    f"Relationship '{name}' target '{rel.target}' "
+                    f"does not reference any defined element"
+                )
+
+    def _verify_agents(self) -> None:
+        flat_entity_names = set(flatten_entities(self._s.entities).keys())
+        flat_entity_names.update(self._s.entities.keys())
+
+        for name, agent in self._s.agents.items():
+            if agent.entity and agent.entity not in flat_entity_names:
+                self._err(
+                    f"Agent '{name}' references undefined entity '{agent.entity}'"
+                )
+            for acct_name in agent.starting_accounts:
+                if acct_name not in self._s.accounts:
+                    self._err(
+                        f"Agent '{name}' starting_account '{acct_name}' "
+                        f"not in accounts section"
+                    )
+            for subnet in agent.allowed_subnets:
+                if subnet not in self._s.infrastructure:
+                    self._err(
+                        f"Agent '{name}' allowed_subnet '{subnet}' "
+                        f"not in infrastructure section"
+                    )
+            if agent.initial_knowledge:
+                for host in agent.initial_knowledge.hosts:
+                    if host not in self._s.nodes:
+                        self._err(
+                            f"Agent '{name}' initial_knowledge host '{host}' "
+                            f"not in nodes section"
+                        )
+                for subnet in agent.initial_knowledge.subnets:
+                    if subnet not in self._s.infrastructure:
+                        self._err(
+                            f"Agent '{name}' initial_knowledge subnet '{subnet}' "
+                            f"not in infrastructure section"
+                        )
+
+    def _verify_variables(self) -> None:
+        # Variable definitions are structurally validated by Pydantic.
+        # Cross-reference validation (checking ${var} references in other
+        # sections) is deferred to instantiation time because variable
+        # substitution strings can appear in any string field.
+        pass
+
+    def _all_named_elements(self) -> set[str]:
+        """Collect all named element keys across all scenario sections."""
+        names: set[str] = set()
+        names.update(self._s.nodes.keys())
+        names.update(self._s.features.keys())
+        names.update(self._s.conditions.keys())
+        names.update(self._s.vulnerabilities.keys())
+        names.update(self._s.infrastructure.keys())
+        names.update(self._s.metrics.keys())
+        names.update(self._s.evaluations.keys())
+        names.update(self._s.tlos.keys())
+        names.update(self._s.goals.keys())
+        names.update(self._s.entities.keys())
+        names.update(flatten_entities(self._s.entities).keys())
+        names.update(self._s.injects.keys())
+        names.update(self._s.events.keys())
+        names.update(self._s.scripts.keys())
+        names.update(self._s.stories.keys())
+        names.update(self._s.content.keys())
+        names.update(self._s.accounts.keys())
+        names.update(self._s.agents.keys())
+        return names
 
     def _verify_features(self) -> None:
         # Check vulnerability references

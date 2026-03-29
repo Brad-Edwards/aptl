@@ -1303,6 +1303,249 @@ entities:
 """
 
 
+# -----------------------------------------------------------------------
+# 12. CybORG CAGE-2 with agents, relationships, accounts
+# -----------------------------------------------------------------------
+
+CYBORG_WITH_AGENTS = """
+name: cyborg-cage2-agents
+description: >
+  CybORG CAGE-2 with red/blue/green agents, starting accounts,
+  initial knowledge, allowed subnets, and service relationships.
+
+nodes:
+  user-net: {type: Switch}
+  enterprise-net: {type: Switch}
+  op-net: {type: Switch}
+  user0: {type: VM, os: linux, resources: {ram: 1 gib, cpu: 1}}
+  user1: {type: VM, os: linux, resources: {ram: 1 gib, cpu: 1}}
+  enterprise0: {type: VM, os: linux, resources: {ram: 1 gib, cpu: 1}, vulnerabilities: [eternalblue]}
+  enterprise1: {type: VM, os: linux, resources: {ram: 1 gib, cpu: 1}}
+  defender: {type: VM, os: linux, resources: {ram: 2 gib, cpu: 2}, features: {velociraptor: velo-admin}, roles: {velo-admin: ubuntu}}
+  op-server0: {type: VM, os: linux, resources: {ram: 1 gib, cpu: 1}}
+
+infrastructure:
+  user-net: {count: 1, properties: {cidr: 10.0.0.0/24, gateway: 10.0.0.1}}
+  enterprise-net: {count: 1, properties: {cidr: 10.0.1.0/24, gateway: 10.0.1.1}}
+  op-net: {count: 1, properties: {cidr: 10.0.2.0/24, gateway: 10.0.2.1, internal: true}}
+  user0: {count: 1, links: [user-net]}
+  user1: {count: 1, links: [user-net]}
+  enterprise0: {count: 1, links: [enterprise-net, user-net]}
+  enterprise1: {count: 1, links: [enterprise-net]}
+  defender: {count: 1, links: [enterprise-net]}
+  op-server0: {count: 1, links: [op-net, enterprise-net]}
+
+features:
+  velociraptor: {type: Service, source: velociraptor-server}
+
+vulnerabilities:
+  eternalblue: {name: EternalBlue, description: MS17-010, technical: true, class: CWE-119}
+
+accounts:
+  phished-user:
+    username: jdoe
+    node: user0
+    password_strength: weak
+    description: "Initial foothold via spearphishing"
+  soc-admin:
+    username: soc-analyst
+    node: defender
+    password_strength: strong
+  green-user:
+    username: employee
+    node: user0
+    password_strength: medium
+
+entities:
+  red-team: {name: Red Team, role: Red}
+  blue-team:
+    name: Blue Team
+    role: Blue
+    entities:
+      analyst: {name: SOC Analyst}
+  green-team: {name: Normal Users, role: Green}
+
+agents:
+  red-agent:
+    entity: red-team
+    actions: [DiscoverRemoteSystems, DiscoverNetworkServices, ExploitRemoteService, EternalBlue, SSHBruteForce, PrivilegeEscalate, Impact]
+    starting_accounts: [phished-user]
+    initial_knowledge:
+      hosts: [user0]
+      subnets: [user-net]
+    allowed_subnets: [user-net, enterprise-net]
+    reward_calculator: HybridImpactPwn
+
+  blue-agent:
+    entity: blue-team.analyst
+    actions: [Monitor, Analyse, Remove, Restore, DecoyApache, DecoySSHD]
+    starting_accounts: [soc-admin]
+    initial_knowledge:
+      hosts: [defender, enterprise0, enterprise1, user0, user1]
+      subnets: [user-net, enterprise-net, op-net]
+    allowed_subnets: [user-net, enterprise-net, op-net]
+    reward_calculator: HybridAvailabilityConfidentiality
+
+  green-agent:
+    entity: green-team
+    actions: [NormalBrowsing, EmailCheck, FileAccess]
+    starting_accounts: [green-user]
+    allowed_subnets: [user-net]
+    description: "Simulates normal user behavior"
+
+relationships:
+  velo-monitors-enterprise:
+    type: manages
+    source: velociraptor
+    target: enterprise0
+    description: "Velociraptor monitors enterprise hosts"
+"""
+
+
+# -----------------------------------------------------------------------
+# 13. Multi-domain AD with trust, federation, and variables
+# -----------------------------------------------------------------------
+
+AD_TRUST_FEDERATED = """
+name: multi-domain-ad-trust
+description: >
+  Multi-domain AD with parent-child trust, ADFS federation to
+  cloud IdP, parameterized via variables, service relationships.
+
+variables:
+  domain_name:
+    type: string
+    default: "corp.local"
+    description: "Root AD domain name"
+  child_domain:
+    type: string
+    default: "dev.corp.local"
+    description: "Child AD domain name"
+  workstation_count:
+    type: integer
+    default: 3
+    description: "Number of employee workstations"
+
+nodes:
+  corp-net: {type: Switch}
+  dmz-net: {type: Switch}
+  dc01:
+    type: VM
+    os: windows
+    os_version: "Server 2022"
+    resources: {ram: 4 gib, cpu: 2}
+    features: {ad-forest-root: admin}
+    roles: {admin: Administrator}
+  dc02:
+    type: VM
+    os: windows
+    os_version: "Server 2022"
+    resources: {ram: 4 gib, cpu: 2}
+    features: {ad-child-domain: admin}
+    roles: {admin: Administrator}
+  adfs:
+    type: VM
+    os: windows
+    resources: {ram: 2 gib, cpu: 1}
+    features: {adfs-service: admin}
+    roles: {admin: Administrator}
+  ws01:
+    type: VM
+    os: windows
+    resources: {ram: 4 gib, cpu: 2}
+
+infrastructure:
+  corp-net: {count: 1, properties: {cidr: 10.0.0.0/16, gateway: 10.0.0.1, internal: true}}
+  dmz-net: {count: 1, properties: {cidr: 172.16.0.0/24, gateway: 172.16.0.1}}
+  dc01: {count: 1, links: [corp-net]}
+  dc02: {count: 1, links: [corp-net], dependencies: [dc01]}
+  adfs: {count: 1, links: [corp-net, dmz-net], dependencies: [dc01]}
+  ws01: {count: 1, links: [corp-net]}
+
+features:
+  ad-forest-root:
+    type: Service
+    source: adds-forest
+    description: "AD DS forest root domain"
+  ad-child-domain:
+    type: Service
+    source: adds-child
+    dependencies: [ad-forest-root]
+    description: "AD DS child domain"
+  adfs-service:
+    type: Service
+    source: adfs-2019
+    dependencies: [ad-forest-root]
+    description: "AD Federation Services for SSO"
+
+accounts:
+  domain-admin:
+    username: Administrator
+    node: dc01
+    groups: [Domain Admins, Enterprise Admins]
+    password_strength: strong
+  svc-sql:
+    username: svc_mssql
+    node: dc01
+    groups: [Domain Users]
+    password_strength: weak
+    spn: "MSSQL/db.corp.local"
+    description: "Kerberoastable service account"
+  child-admin:
+    username: Administrator
+    node: dc02
+    groups: [Domain Admins]
+    password_strength: strong
+  employee:
+    username: jdoe
+    node: ws01
+    groups: [Domain Users]
+    password_strength: medium
+    mail: "jdoe@corp.local"
+
+relationships:
+  child-trusts-parent:
+    type: trusts
+    source: ad-child-domain
+    target: ad-forest-root
+    description: "Child domain trusts forest root (automatic)"
+    properties:
+      trust_type: parent-child
+      trust_direction: bidirectional
+
+  adfs-authenticates-via-ad:
+    type: authenticates_with
+    source: adfs-service
+    target: ad-forest-root
+    description: "ADFS authenticates users against AD"
+
+  adfs-federates-cloud:
+    type: federates_with
+    source: adfs-service
+    target: adfs-service
+    description: "ADFS provides SAML federation to cloud apps"
+    properties:
+      protocol: SAML
+      idp_type: on-premises
+
+vulnerabilities:
+  kerberoast:
+    name: Kerberoastable SPN
+    description: "Service account with weak password and SPN"
+    technical: true
+    class: CWE-916
+  gpp-passwords:
+    name: GPP Passwords
+    description: "Credentials in Group Policy Preferences"
+    technical: true
+    class: CWE-312
+
+entities:
+  red-team: {name: Red Team, role: Red}
+  blue-team: {name: Blue Team, role: Blue}
+"""
+
+
 SCENARIOS = [
     ("1. OCR Full Exercise (14 sections)",       OCR_FULL_EXERCISE),
     ("2. CybORG CAGE-1 (3-host, Metasploit)",   CYBORG_CAGE1),
@@ -1315,6 +1558,8 @@ SCENARIOS = [
     ("9. Enterprise AD (multi-domain forest)",   ENTERPRISE_AD),
     ("10. Cloud Hybrid (AWS VPC + on-prem VPN)", CLOUD_HYBRID),
     ("11. Exchange with data+accounts+ACLs",     EXCHANGE_WITH_DATA),
+    ("12. CybORG CAGE-2 with agents",           CYBORG_WITH_AGENTS),
+    ("13. Multi-domain AD with trust+federation", AD_TRUST_FEDERATED),
 ]
 
 

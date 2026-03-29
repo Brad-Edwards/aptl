@@ -1,5 +1,7 @@
 # ADR-007: Python CLI as Primary Control Plane
 
+> Historical note: references to `aptl scenario` in this ADR describe the retired pre-SDL runtime, not the current SDL-only branch.
+
 ## Status
 
 accepted

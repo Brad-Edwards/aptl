@@ -126,6 +126,20 @@ class TestFormat:
         s = parse_sdl("name: test\nnodes:\n  sw:\n    type: switch")
         assert s.name == "test"
 
+    def test_switch_rejects_vm_only_fields(self):
+        sdl = """
+name: test
+nodes:
+  sw:
+    type: switch
+    os: linux
+    services:
+      - port: 80
+        name: http
+"""
+        with pytest.raises(SDLParseError, match="Switch nodes cannot have VM-only fields"):
+            parse_sdl(sdl)
+
 
 class TestErrorHandling:
     def test_empty_content(self):

@@ -33,14 +33,13 @@ Several shorthand forms are expanded before model construction:
 
 Source expansion is skipped inside `relationships` and `agents` sections where `source` is a plain string reference, not a package Source.
 
-## Format Auto-Detection
+## Format Boundary
 
-The parser handles two formats:
+The parser accepts one format:
 
-- **OCR SDL format:** Top-level `name` field, OCR sections
-- **APTL legacy format:** `metadata` block with `id`, `name`, `difficulty`, etc.
+- **SDL format:** Top-level `name` field plus SDL sections
 
-Detection: if the normalized data contains a `metadata` key with a dict value, it's APTL legacy. Both formats can coexist in the same YAML.
+Legacy APTL scenario YAMLs with a `metadata` block are intentionally rejected in this branch. They must be migrated to SDL before parsing.
 
 ## Validation Pipeline
 
@@ -48,7 +47,7 @@ Detection: if the normalized data contains a `metadata` key with a dict value, i
 2. **Key normalization** — lowercase field keys, preserve user names
 3. **Shorthand expansion** — source, infrastructure, roles, min-score, feature lists
 4. **Pydantic construction** — structural validation (types, ranges, required fields)
-5. **Semantic validation** — cross-reference checks (21+ passes, see [validation.md](validation.md))
+5. **Semantic validation** — cross-reference checks (20 passes, see [validation.md](validation.md))
 
 ## API
 

@@ -36,6 +36,15 @@ class TestMainApp:
         assert result.exit_code == 0
         assert "lab" in result.stdout
         assert "config" in result.stdout
+        assert "scenario" not in result.stdout
+
+    def test_removed_scenario_subcommand_is_not_available(self, runner):
+        """The legacy scenario command group should not be exposed."""
+        from aptl.cli.main import app
+
+        result = runner.invoke(app, ["scenario", "--help"])
+        assert result.exit_code != 0
+        assert "No such command" in result.output
 
 
 class TestLabCommands:

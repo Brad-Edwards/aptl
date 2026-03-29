@@ -12,7 +12,7 @@ at instantiation time when a backend deploys the scenario.
 from enum import Enum
 from typing import Union
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from aptl.core.sdl._base import SDLModel, normalize_enum_value
 
@@ -24,6 +24,19 @@ class VariableType(str, Enum):
     INTEGER = "integer"
     BOOLEAN = "boolean"
     NUMBER = "number"
+
+
+def _matches_variable_type(value: object, variable_type: VariableType) -> bool:
+    """Return whether a concrete value matches the declared variable type."""
+    if variable_type == VariableType.STRING:
+        return isinstance(value, str)
+    if variable_type == VariableType.INTEGER:
+        return isinstance(value, int) and not isinstance(value, bool)
+    if variable_type == VariableType.BOOLEAN:
+        return isinstance(value, bool)
+    if variable_type == VariableType.NUMBER:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return False
 
 
 class Variable(SDLModel):
@@ -44,3 +57,31 @@ class Variable(SDLModel):
     @classmethod
     def normalize_type(cls, v: str) -> str:
         return normalize_enum_value(v)
+
+    @model_validator(mode="after")
+    def validate_typed_values(self) -> "Variable":
+        """Defaults and allowed values must match the declared type."""
+        if (
+            self.default is not None
+            and not _matches_variable_type(self.default, self.type)
+        ):
+            raise ValueError(
+                f"default must match variable type '{self.type.value}'"
+            )
+
+        for value in self.allowed_values:
+            if not _matches_variable_type(value, self.type):
+                raise ValueError(
+                    f"allowed_values must match variable type '{self.type.value}'"
+                )
+
+        if (
+            self.allowed_values
+            and self.default is not None
+            and self.default not in self.allowed_values
+        ):
+            raise ValueError(
+                "default must be one of allowed_values when allowed_values is set"
+            )
+
+        return self

@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - `src/aptl/core/sdl/compat.py` — legacy backward-compatibility shim
+- `src/aptl/cli/scenario.py` — removed with the legacy scenario runtime cutover
+- `src/aptl/api/routers/scenarios.py` — removed with the legacy scenario runtime cutover
+- `src/aptl/core/engine.py`, `src/aptl/core/evaluators.py`, `src/aptl/core/scoring.py`, `src/aptl/core/run_assembler.py` — removed pending a new SDL-native runtime
 - `src/aptl/core/sdl/defenses.py` — free-form defense config (underspecified)
 - `src/aptl/core/sdl/objectives.py` — moved to `aptl.core.objectives`
 - `src/aptl/core/sdl/attacks.py` — moved to `aptl.core.attacks`

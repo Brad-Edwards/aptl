@@ -14,15 +14,15 @@ However, the OCR SDL lacks: data/content modeling, user accounts, network access
 
 ## Decision
 
-Port the OCR SDL to Python/Pydantic as `aptl.core.sdl`, extend it with 6 new sections adapted from existing systems (not invented), and decouple it from any specific deployment backend.
+Port the OCR SDL to Python/Pydantic as `aptl.core.sdl`, extend it with 5 new sections adapted from existing systems (not invented), and decouple it from any specific deployment backend.
 
 ### Architecture
 
 The SDL is a **specification language**, not a deployment tool. It describes *what a scenario is*. A separate provider binding layer (future work) translates SDL specifications into concrete infrastructure.
 
-### Sections (20 total)
+### Sections (19 total)
 
-14 from OCR (direct port) + 6 new:
+14 from OCR (direct port) + 5 new:
 - `content` (from CyRIS) — data placed into systems
 - `accounts` (from CyRIS) — user accounts within nodes
 - `relationships` (from STIX SRO) — typed edges between elements
@@ -42,7 +42,7 @@ This is simpler and more composable than a dedicated identity layer.
 
 Two-phase validation:
 1. **Structural** (Pydantic) — types, ranges, required fields, intra-model constraints
-2. **Semantic** (SemanticValidator) — 24 named passes checking cross-references, dependency cycles, IP/CIDR consistency, MITRE format, and domain rules
+2. **Semantic** (SemanticValidator) — 20 named passes checking cross-references, dependency cycles, IP/CIDR consistency, and SDL domain rules
 
 The validator collects all errors rather than failing on the first.
 
@@ -51,12 +51,15 @@ The validator collects all errors rather than failing on the first.
 The parser handles:
 - Case-insensitive field keys (preserving user-defined names)
 - Shorthand expansion (source strings, infrastructure counts, role strings, min-score integers, feature lists)
-- Auto-detection of APTL legacy vs OCR SDL format
+- SDL-only parsing with clean rejection of removed legacy `metadata` scenarios
 - Clean error messages for all failure modes
 
 ### Backward Compatibility
 
-`aptl.core.scenarios` is a re-export shim over the SDL package. All 8 consumer files continue working with zero import changes.
+None by design. This branch establishes an SDL-only boundary:
+- Legacy APTL scenario YAMLs no longer parse through the SDL
+- `aptl.core.scenarios` remains only as a thin loader/error module
+- The old scenario CLI/API/runtime entrypoints were removed rather than left as partial shims
 
 ## Consequences
 
@@ -67,12 +70,13 @@ The parser handles:
 - Every SDL element traces to a published precedent
 - Backend-agnostic: no Docker, OpenStack, or cloud provider coupling
 - Full OCR SDL compatibility preserved
-- Existing APTL scenarios work unchanged
+- One clear specification surface for follow-on provisioner/runtime work
 
 ### Negative
 
 - 24 source files in `aptl.core.sdl/` — significant surface area
 - Variables (`${var}`) not resolved at parse time, limiting validator coverage
+- Existing APTL scenario YAMLs require migration to SDL format
 - No module composition system yet (Terraform-style imports)
 - No formal verification (VSDL's SMT / CRACK's Datalog)
 - Agent action semantics are strings, not typed operations

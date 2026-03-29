@@ -4,7 +4,6 @@ Provides ``parse_sdl()`` as the primary entry point. Handles:
 - Case-insensitive key normalization (``Name`` → ``name``)
 - Hyphen-to-underscore conversion (``min-score`` → ``min_score``)
 - Shorthand expansion (``source: "pkg"`` → ``{name: "pkg", version: "*"}``)
-- Auto-detection of APTL legacy format vs OCR SDL format
 """
 
 from pathlib import Path
@@ -175,9 +174,9 @@ def parse_sdl(
 ) -> Scenario:
     """Parse an SDL YAML string into a validated Scenario.
 
-    Handles both OCR SDL format (``name`` at top level) and APTL
-    legacy format (``metadata`` block). Runs structural validation
-    (Pydantic) and semantic validation (cross-references, cycles, etc.).
+    Handles SDL documents with ``name`` at the top level. Runs
+    structural validation (Pydantic) and semantic validation
+    (cross-references, cycles, etc.).
 
     Args:
         content: Raw YAML string.

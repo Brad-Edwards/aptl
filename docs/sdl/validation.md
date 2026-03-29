@@ -1,6 +1,6 @@
 # SDL Semantic Validation
 
-The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 24 named passes after Pydantic structural validation. It collects all errors rather than failing on the first, so authors see every issue at once.
+The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 20 named passes after Pydantic structural validation. It collects all errors rather than failing on the first, so authors see every issue at once.
 
 ## Validation Passes
 
@@ -31,18 +31,8 @@ The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 24 nam
 | `verify_content` | Content targets reference existing nodes. |
 | `verify_accounts` | Account nodes reference existing nodes. |
 | `verify_relationships` | Source and target resolve to any named element in any section. |
-| `verify_agents` | Entity references resolve. Starting accounts exist in accounts section. Allowed subnets exist in infrastructure. Initial knowledge hosts/subnets exist in nodes/infrastructure. |
-| `verify_variables` | (Structural validation only — `${var}` substitution checked at instantiation time.) |
-
-### APTL-specific passes
-
-| Pass | What It Checks |
-|------|----------------|
-| `verify_objectives` | (Structural: ID uniqueness, validation config presence — enforced by Pydantic) |
-| `verify_attack_steps` | MITRE technique IDs match ATT&CK format (`T####` or `T####.###`). |
-| `verify_mode_consistency` | Red mode requires red objectives, blue mode requires blue objectives. |
-| `verify_mitre_references` | Metadata MITRE technique references match ATT&CK format. |
-| `verify_scenario_content` | Scenario has at least one of: nodes, features, conditions, vulnerabilities, entities, steps, objectives, or stories. |
+| `verify_agents` | Entity references resolve. Starting accounts and initial-knowledge accounts exist in accounts section. Allowed subnets and initial-knowledge subnets exist in infrastructure. Initial-knowledge hosts exist in nodes. Initial-knowledge services exist in `nodes.*.services[].name`. |
+| `verify_variables` | Structural validation of typed defaults and `allowed_values`. `${var}` substitution in other sections is still checked at instantiation time. |
 
 ## Error Reporting
 

@@ -75,7 +75,7 @@ nodes:
       availability: critical
 ```
 
-**Switch** nodes have no source, resources, or features — they represent pure network connectivity.
+**Switch** nodes are pure connectivity objects. They may define `type` and an optional `description`, but `source`, `resources`, `os`, `os_version`, `features`, `conditions`, `injects`, `vulnerabilities`, `roles`, `services`, and `asset_value` are rejected.
 
 **Feature list shorthand:** `features: [nginx, php]` expands to `{nginx: "", php: ""}` (no role binding required).
 
@@ -357,9 +357,13 @@ agents:
     initial_knowledge:
       hosts: [user0]                    # known at scenario start
       subnets: [user-net]
+      services: [ssh]                   # references nodes.*.services[].name
+      accounts: [helpdesk-user]         # references accounts section
     allowed_subnets: [user-net, corp-net]
     reward_calculator: HybridImpactPwn
 ```
+
+`initial_knowledge.hosts` references node names, `subnets` references infrastructure names, `services` references service names declared in `nodes.*.services`, and `accounts` references entries in the `accounts` section.
 
 ---
 
@@ -384,6 +388,8 @@ variables:
 ```
 
 Variables are referenced as `${var_name}` in other sections. They are **not resolved at parse time** — resolution happens at instantiation.
+
+`default` and every entry in `allowed_values` must match the declared `type`. If `allowed_values` is provided, `default` must be one of those values.
 
 ---
 

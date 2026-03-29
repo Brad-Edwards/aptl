@@ -1,5 +1,7 @@
 # ADR-009: Scenario Engine with YAML Specs and Run Archive Collectors
 
+> Historical note: this ADR documents the retired pre-SDL scenario runtime. Its `aptl scenario` commands and runtime modules are not part of the current SDL-only branch.
+
 ## Status
 
 accepted

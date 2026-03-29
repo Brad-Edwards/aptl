@@ -407,10 +407,45 @@ class TestVerifyAgents:
         errors = _validate(s)
         assert any("not in nodes" in e for e in errors)
 
+    def test_undefined_initial_knowledge_service(self):
+        s = _make_scenario(
+            nodes={
+                "vm": {
+                    "type": "vm",
+                    "resources": {"ram": "1 gib", "cpu": 1},
+                    "services": [{"port": 22, "name": "ssh"}],
+                }
+            },
+            entities={"red": {"role": "red"}},
+            agents={"a1": {
+                "entity": "red",
+                "initial_knowledge": {"services": ["ghost-service"]},
+            }},
+        )
+        errors = _validate(s)
+        assert any("not in node service names" in e for e in errors)
+
+    def test_undefined_initial_knowledge_account(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            entities={"red": {"role": "red"}},
+            accounts={"known-user": {"username": "user", "node": "vm"}},
+            agents={"a1": {
+                "entity": "red",
+                "initial_knowledge": {"accounts": ["ghost-account"]},
+            }},
+        )
+        errors = _validate(s)
+        assert any("initial_knowledge account" in e for e in errors)
+
     def test_valid_agent(self):
         s = _make_scenario(
             nodes={
-                "vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}},
+                "vm": {
+                    "type": "vm",
+                    "resources": {"ram": "1 gib", "cpu": 1},
+                    "services": [{"port": 22, "name": "ssh"}],
+                },
                 "net": {"type": "switch"},
             },
             infrastructure={"net": {"count": 1, "properties": {"cidr": "10.0.0.0/24", "gateway": "10.0.0.1"}}},
@@ -421,7 +456,12 @@ class TestVerifyAgents:
                 "actions": ["scan", "exploit"],
                 "starting_accounts": ["hacker"],
                 "allowed_subnets": ["net"],
-                "initial_knowledge": {"hosts": ["vm"], "subnets": ["net"]},
+                "initial_knowledge": {
+                    "hosts": ["vm"],
+                    "subnets": ["net"],
+                    "services": ["ssh"],
+                    "accounts": ["hacker"],
+                },
             }},
         )
         errors = _validate(s)

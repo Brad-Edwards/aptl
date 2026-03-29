@@ -40,7 +40,7 @@ Variables (`${var_name}`) are stored as literal strings in the model. They are *
 
 - The validator can confirm that a full-value `${var}` reference has a matching variable definition
 - Cross-reference rules that depend on a placeholder's final concrete value are deferred to instantiation
-- Enum-backed fields and user-defined mapping keys are not yet parameterizable
+- Enum-backed fields and user-defined mapping keys are not parameterizable; the parser rejects them
 - Type checking of the substituted runtime value is still the instantiating backend's responsibility
 
 This is a deliberate design choice (matching CACAO's model) but it still leaves backend substitution semantics as future work.

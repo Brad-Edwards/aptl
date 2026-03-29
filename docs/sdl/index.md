@@ -4,6 +4,19 @@ The APTL SDL is a YAML-based specification language for describing cyber range s
 
 The SDL describes *what a scenario is* — not how to deploy it. A separate backend binding layer (not yet implemented) translates SDL specifications into concrete infrastructure (Docker Compose, Terraform, cloud APIs).
 
+## Stable IDs, Variable Values
+
+The SDL keeps its **symbol table** concrete at parse time. User-defined identifiers such as node keys, feature keys, account keys, relationship keys, entity keys, and other named mapping keys are part of the language structure and must be literal.
+
+Variables are for **attribute values** on already-declared things. That includes fields such as counts, ports, CIDRs, paths, timings, descriptions, and similar runtime-substituted values.
+
+In other words:
+
+- `nodes: {web: ...}` — `web` is a stable SDL identifier
+- `content.hostname-file.text: ${hostname}` — `${hostname}` is a variable-backed attribute value
+
+This means a hostname, IP, path, or display string can be variable-backed, but a node cannot be created or renamed through `${...}` inside a mapping key.
+
 ## Quick Example
 
 ```yaml

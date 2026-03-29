@@ -514,6 +514,28 @@ class TestContent:
         )
         assert c.sensitive == "${contains_sensitive_data}"
 
+    def test_requires_target(self):
+        with pytest.raises(ValidationError, match="Content requires 'target'"):
+            Content(type="file", path="/tmp/flag.txt")
+
+    def test_file_requires_path(self):
+        with pytest.raises(ValidationError, match="File content requires 'path'"):
+            Content(type="file", target="victim")
+
+    def test_dataset_requires_source_or_items(self):
+        with pytest.raises(
+            ValidationError,
+            match="Dataset content requires either 'source' or non-empty 'items'",
+        ):
+            Content(type="dataset", target="victim")
+
+    def test_directory_requires_destination(self):
+        with pytest.raises(
+            ValidationError,
+            match="Directory content requires 'destination'",
+        ):
+            Content(type="directory", target="victim")
+
 
 class TestAccount:
     def test_basic_account(self):
@@ -542,6 +564,10 @@ class TestAccount:
     def test_disabled_placeholder(self):
         a = Account(username="svc", node="dc", disabled="${is_disabled}")
         assert a.disabled == "${is_disabled}"
+
+    def test_requires_node(self):
+        with pytest.raises(ValidationError, match="Account requires 'node'"):
+            Account(username="admin")
 
 
 class TestACLRule:
@@ -705,6 +731,10 @@ class TestAgent:
         assert ik.subnets == []
         assert ik.services == []
         assert ik.accounts == []
+
+    def test_requires_entity(self):
+        with pytest.raises(ValidationError, match="Agent requires 'entity'"):
+            Agent(actions=["Scan"])
 
 
 class TestVariable:

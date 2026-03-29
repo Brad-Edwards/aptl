@@ -37,7 +37,14 @@ Shorthand expansion also works when the shorthand value is a full variable place
 
 ## Variables
 
-Full-value `${var_name}` placeholders are preserved as literal strings during parsing. Structural validation currently accepts placeholders in ordinary string fields, common scalar/time fields, and many reference values. The parser does not substitute variables, evaluate expressions, or allow placeholders as user-defined mapping keys.
+Full-value `${var_name}` placeholders are preserved as literal strings during parsing. Structural validation currently accepts placeholders in ordinary string fields, common scalar/time fields, and many reference values. The parser does not substitute variables or evaluate expressions. It also rejects placeholders in user-defined mapping keys, because those keys define the SDL symbol table and must stay concrete.
+
+The intended boundary is:
+
+- **Concrete identifiers**: mapping keys that define named scenario elements such as `nodes.web`, `features.apache`, `accounts.db-admin`, `relationships.app-to-db`
+- **Variable-backed values**: attributes on those elements such as hostnames, ports, counts, CIDRs, paths, timings, descriptions, and other field values
+
+So a hostname may come from `${hostname}`, but a node key like `web` may not.
 
 ## OCR Duration Grammar
 

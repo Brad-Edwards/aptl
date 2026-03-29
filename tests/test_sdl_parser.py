@@ -1,5 +1,7 @@
 """Tests for SDL parser — YAML loading, key normalization, shorthands."""
 
+import re
+
 import pytest
 
 from aptl.core.sdl._errors import SDLParseError, SDLValidationError
@@ -44,6 +46,66 @@ nodes:
 """
         s = parse_sdl(sdl)
         assert s.name == "test"
+
+    @pytest.mark.parametrize(
+        ("sdl", "key_path"),
+        [
+            (
+                """
+name: test
+variables:
+  node_name:
+    type: string
+    default: sw
+nodes:
+  ${node_name}:
+    type: switch
+""",
+                "nodes.${node_name}",
+            ),
+            (
+                """
+name: test
+nodes:
+  vm:
+    type: vm
+    resources: {ram: 1 gib, cpu: 1}
+    roles:
+      ${role_name}: root
+""",
+                "nodes.vm.roles.${role_name}",
+            ),
+            (
+                """
+name: test
+nodes:
+  net:
+    type: switch
+  vm:
+    type: vm
+    resources: {ram: 1 gib, cpu: 1}
+infrastructure:
+  net:
+    count: 1
+    properties: {cidr: 10.0.0.0/24, gateway: 10.0.0.1}
+  vm:
+    count: 1
+    links: [net]
+    properties:
+      - ${link_name}: 10.0.0.10
+""",
+                "infrastructure.vm.properties[0].${link_name}",
+            ),
+        ],
+    )
+    def test_variable_placeholders_rejected_in_mapping_keys(self, sdl, key_path):
+        with pytest.raises(
+            SDLParseError,
+            match=re.escape(
+                f"user-defined mapping keys: '{key_path}'"
+            ),
+        ):
+            parse_sdl(sdl)
 
 
 class TestShorthandExpansion:
@@ -235,6 +297,42 @@ nodes:
         name: http
 """
         with pytest.raises(SDLParseError, match="Switch nodes cannot have VM-only fields"):
+            parse_sdl(sdl)
+
+    @pytest.mark.parametrize(
+        ("sdl", "message"),
+        [
+            (
+                """
+name: test
+content:
+  c1:
+    type: file
+""",
+                "Content requires 'target'",
+            ),
+            (
+                """
+name: test
+accounts:
+  a1:
+    username: admin
+""",
+                "Account requires 'node'",
+            ),
+            (
+                """
+name: test
+agents:
+  red-agent:
+    actions: [Scan]
+""",
+                "Agent requires 'entity'",
+            ),
+        ],
+    )
+    def test_extension_sections_reject_missing_anchor_fields(self, sdl, message):
+        with pytest.raises(SDLParseError, match=message):
             parse_sdl(sdl)
 
 

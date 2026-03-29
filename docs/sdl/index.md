@@ -1,6 +1,6 @@
 # Scenario Description Language (SDL) Reference
 
-The APTL SDL is a YAML-based specification language for describing cyber range scenarios. It is ported from the [Open Cyber Range SDL](https://github.com/Open-Cyber-Range/SDL-parser) and extended with APTL-specific concepts for attack/defense exercises, automated scoring, and agent-driven operations.
+The APTL SDL is a YAML-based specification language for describing cyber range scenarios. It starts from the [Open Cyber Range SDL](https://github.com/Open-Cyber-Range/SDL-parser) surface, preserves coverage across the OCR-derived sections, and extends that base with APTL's additional scenario concepts such as content, accounts, relationships, agents, and variables. It is intentionally its own SDL rather than a clone-level compatibility layer.
 
 The SDL describes *what a scenario is* — not how to deploy it. A separate backend binding layer (not yet implemented) translates SDL specifications into concrete infrastructure (Docker Compose, Terraform, cloud APIs).
 

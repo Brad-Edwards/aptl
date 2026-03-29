@@ -9,7 +9,7 @@ from typing import Optional
 
 from pydantic import Field, model_validator
 
-from aptl.core.sdl._base import SDLModel
+from aptl.core.sdl._base import SDLModel, parse_int_or_var
 from aptl.core.sdl._source import Source
 
 
@@ -21,13 +21,32 @@ class Condition(SDLModel):
 
     name: str = ""
     command: Optional[str] = None
-    interval: Optional[int] = Field(default=None, ge=1)
-    timeout: Optional[int] = Field(default=None, ge=1)
-    retries: Optional[int] = Field(default=None, ge=0)
-    start_period: Optional[int] = Field(default=None, ge=0)
+    interval: Optional[int | str] = None
+    timeout: Optional[int | str] = None
+    retries: Optional[int | str] = None
+    start_period: Optional[int | str] = None
     source: Optional[Source] = None
     description: str = ""
     environment: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_scalar_fields(cls, data):
+        if isinstance(data, dict):
+            data = dict(data)
+            for field_name, minimum in (
+                ("interval", 1),
+                ("timeout", 1),
+                ("retries", 0),
+                ("start_period", 0),
+            ):
+                if field_name in data:
+                    data[field_name] = parse_int_or_var(
+                        data[field_name],
+                        minimum=minimum,
+                        field_name=field_name,
+                    )
+        return data
 
     @model_validator(mode="after")
     def validate_command_xor_source(self) -> "Condition":

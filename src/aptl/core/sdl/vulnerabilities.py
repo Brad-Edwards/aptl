@@ -8,7 +8,7 @@ import re
 
 from pydantic import Field, field_validator
 
-from aptl.core.sdl._base import SDLModel
+from aptl.core.sdl._base import SDLModel, parse_bool_or_var
 
 _CWE_PATTERN = re.compile(r"^CWE-\d+$")
 
@@ -18,8 +18,13 @@ class Vulnerability(SDLModel):
 
     name: str
     description: str
-    technical: bool = False
+    technical: bool | str = False
     vuln_class: str = Field(alias="class")
+
+    @field_validator("technical", mode="before")
+    @classmethod
+    def parse_technical(cls, v: bool | str) -> bool | str:
+        return parse_bool_or_var(v, field_name="technical")
 
     @field_validator("vuln_class")
     @classmethod

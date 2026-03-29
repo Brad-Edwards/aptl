@@ -38,11 +38,12 @@ These are things that *should* be expressible in the SDL but aren't yet:
 
 Variables (`${var_name}`) are stored as literal strings in the model. They are **not** resolved at parse time. This means:
 
-- The validator cannot check whether a `${var}` reference has a matching variable definition
-- Type checking of variable values is deferred to instantiation
-- Default value semantics are not enforced at parse time
+- The validator can confirm that a full-value `${var}` reference has a matching variable definition
+- Cross-reference rules that depend on a placeholder's final concrete value are deferred to instantiation
+- Enum-backed fields and user-defined mapping keys are not yet parameterizable
+- Type checking of the substituted runtime value is still the instantiating backend's responsibility
 
-This is a deliberate design choice (matching CACAO's model) but limits what the validator can catch.
+This is a deliberate design choice (matching CACAO's model) but it still leaves backend substitution semantics as future work.
 
 ## What Has Been Validated
 

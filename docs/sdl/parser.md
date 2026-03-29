@@ -10,7 +10,7 @@ YAML field keys (Pydantic struct fields) are normalized to lowercase with hyphen
 - `Min-Score` → `min_score`
 - `start-time` → `start_time`
 
-**User-defined names are preserved as-is.** Node names, feature names, account names, and other HashMap keys are not transformed. This ensures cross-references remain consistent.
+**User-defined names are preserved as-is.** Node names, feature names, account names, entity fact keys, and other HashMap keys are not transformed. This ensures cross-references remain consistent.
 
 ```yaml
 # "My-Switch" is preserved, "Type" is normalized to "type"
@@ -33,6 +33,30 @@ Several shorthand forms are expanded before model construction:
 
 Source expansion is skipped inside `relationships` and `agents` sections where `source` is a plain string reference, not a package Source.
 
+Shorthand expansion also works when the shorthand value is a full variable placeholder. For example, `infrastructure: {web: ${replicas}}` expands to `infrastructure: {web: {count: ${replicas}}}`, and `min-score: ${pass_pct}` expands to `min-score: {percentage: ${pass_pct}}`.
+
+## Variables
+
+Full-value `${var_name}` placeholders are preserved as literal strings during parsing. Structural validation currently accepts placeholders in ordinary string fields, common scalar/time fields, and many reference values. The parser does not substitute variables, evaluate expressions, or allow placeholders as user-defined mapping keys.
+
+## OCR Duration Grammar
+
+Script and event times accept the documented OCR time units:
+
+- `y`, `year`
+- `mon`, `month`
+- `w`, `week`
+- `d`, `day`
+- `h`, `hour`
+- `m`, `min`, `minute`
+- `s`, `sec`, `second`
+- `ms`, `us`/`µs`, `ns`
+
+Durations may be written with spaces or `+` separators, such as `1h 30min`
+or `1m+30`. Sub-second values are rounded up to whole seconds, so `1 ms`
+parses as `1`. Negative numeric durations are rejected rather than silently
+coerced.
+
 ## Format Boundary
 
 The parser accepts one format:
@@ -47,7 +71,7 @@ Legacy APTL scenario YAMLs with a `metadata` block are intentionally rejected in
 2. **Key normalization** — lowercase field keys, preserve user names
 3. **Shorthand expansion** — source, infrastructure, roles, min-score, feature lists
 4. **Pydantic construction** — structural validation (types, ranges, required fields)
-5. **Semantic validation** — cross-reference checks (20 passes, see [validation.md](validation.md))
+5. **Semantic validation** — cross-reference checks plus variable-reference checks (20 passes, see [validation.md](validation.md))
 
 ## API
 

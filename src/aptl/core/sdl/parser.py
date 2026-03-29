@@ -12,6 +12,7 @@ from typing import Any
 import yaml
 
 from aptl.core.sdl._errors import SDLParseError, SDLValidationError
+from aptl.core.sdl._base import is_variable_ref
 from aptl.core.sdl.scenario import Scenario
 from aptl.core.sdl.validator import SemanticValidator
 
@@ -32,6 +33,7 @@ _NESTED_HASHMAP_FIELDS = frozenset({
     "conditions",          # VM.conditions (dict[str, str])
     "injects",             # VM.injects (dict[str, str])
     "roles",               # Node.roles (dict[str, Role])
+    "facts",               # Entity.facts (dict[str, str])
     "entities",            # Entity.entities (dict[str, Entity])
     "events",              # Script.events (dict[str, int])
     "platform_commands",   # AttackStep.platform_commands (dict[str, PlatformCommand])
@@ -91,7 +93,7 @@ def _expand_infrastructure(infra: dict[str, Any]) -> dict[str, Any]:
     """Expand infrastructure shorthand: {node: 3} → {node: {count: 3}}."""
     result = {}
     for name, value in infra.items():
-        if isinstance(value, int):
+        if isinstance(value, int) or is_variable_ref(value):
             result[name] = {"count": value}
         else:
             result[name] = value
@@ -111,7 +113,7 @@ def _expand_roles(roles: dict[str, Any]) -> dict[str, Any]:
 
 def _expand_min_score(value: Any) -> Any:
     """Expand min-score shorthand: 50 → {percentage: 50}."""
-    if isinstance(value, int):
+    if isinstance(value, int) or is_variable_ref(value):
         return {"percentage": value}
     return value
 

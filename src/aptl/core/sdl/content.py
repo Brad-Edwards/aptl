@@ -15,7 +15,7 @@ from typing import Optional
 
 from pydantic import Field, field_validator
 
-from aptl.core.sdl._base import SDLModel, normalize_enum_value
+from aptl.core.sdl._base import SDLModel, normalize_enum_value, parse_bool_or_var
 from aptl.core.sdl._source import Source
 
 
@@ -54,10 +54,15 @@ class Content(SDLModel):
     source: Optional[Source] = None
     format: str = ""
     items: list[ContentItem] = Field(default_factory=list)
-    sensitive: bool = False
+    sensitive: bool | str = False
     tags: list[str] = Field(default_factory=list)
 
     @field_validator("type", mode="before")
     @classmethod
     def normalize_type(cls, v: str) -> str:
         return normalize_enum_value(v)
+
+    @field_validator("sensitive", mode="before")
+    @classmethod
+    def parse_sensitive(cls, v: bool | str) -> bool | str:
+        return parse_bool_or_var(v, field_name="sensitive")

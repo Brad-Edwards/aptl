@@ -8,8 +8,8 @@ The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 20 nam
 
 | Pass | What It Checks |
 |------|----------------|
-| `verify_nodes` | Features, conditions, injects, vulnerabilities referenced by nodes exist in their respective sections. Role names on feature/condition/inject assignments match node's roles. Node names ≤ 35 characters. |
-| `verify_infrastructure` | Every infrastructure entry has a matching node. Links and dependencies reference existing infrastructure entries. Switch nodes cannot have count > 1. Complex property IPs are within linked node's CIDR. ACL from/to network references exist. |
+| `verify_nodes` | Features, conditions, injects, vulnerabilities referenced by nodes exist in their respective sections. Role names on feature/condition/inject assignments must match declared node `roles`. Node names ≤ 35 characters. |
+| `verify_infrastructure` | Every infrastructure entry has a matching node. Links reference existing switch/network entries. Dependencies reference existing infrastructure entries. Switch nodes cannot have count > 1, and nodes with conditions cannot scale above 1. Complex property IPs must be valid IPs within the linked switch's CIDR. ACL `from_net` and `to_net` references are each checked and must resolve to switch/network entries. |
 | `verify_features` | Vulnerability references exist. Dependency references exist. **Dependency cycle detection** via topological sort. |
 | `verify_conditions` | (Structural: command+interval XOR source — enforced by Pydantic) |
 | `verify_vulnerabilities` | (Structural: CWE format — enforced by Pydantic) |
@@ -28,11 +28,13 @@ The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 20 nam
 
 | Pass | What It Checks |
 |------|----------------|
-| `verify_content` | Content targets reference existing nodes. |
-| `verify_accounts` | Account nodes reference existing nodes. |
-| `verify_relationships` | Source and target resolve to any named element in any section. |
-| `verify_agents` | Entity references resolve. Starting accounts and initial-knowledge accounts exist in accounts section. Allowed subnets and initial-knowledge subnets exist in infrastructure. Initial-knowledge hosts exist in nodes. Initial-knowledge services exist in `nodes.*.services[].name`. |
-| `verify_variables` | Structural validation of typed defaults and `allowed_values`. `${var}` substitution in other sections is still checked at instantiation time. |
+| `verify_content` | Content targets reference existing VM nodes. |
+| `verify_accounts` | Account nodes reference existing VM nodes. |
+| `verify_relationships` | Source and target resolve to any named element in any section, including variables, relationships, and content item names. |
+| `verify_agents` | Entity references resolve. Starting accounts and initial-knowledge accounts exist in accounts section. Allowed subnets and initial-knowledge subnets must resolve to switch-backed infrastructure entries. Initial-knowledge hosts must resolve to VM nodes. Initial-knowledge services exist in `nodes.*.services[].name`. |
+| `verify_variables` | Checks that full-value `${var}` placeholders reference declared variables. Structural validation of typed defaults and `allowed_values` still happens in the `Variable` model itself. |
+
+When a field contains an unresolved `${var}` placeholder, reference-oriented passes treat it as deferred rather than as a broken concrete reference. The validator still does not substitute values; it only checks that the placeholder names exist.
 
 ## Error Reporting
 
@@ -49,4 +51,4 @@ except SDLValidationError as e:
 
 ## Cross-Reference Resolution
 
-The `_all_named_elements()` method collects keys from all sections for relationship validation. This means a relationship can reference any node, feature, condition, vulnerability, account, entity (including nested), metric, evaluation, TLO, goal, inject, event, script, story, content item, or agent.
+The `_all_named_elements()` method collects keys from all top-level sections for relationship validation, plus nested entity dot-paths and content item `name` values. This means a relationship can reference any node, feature, condition, vulnerability, infrastructure entry, metric, evaluation, TLO, goal, entity (including nested), inject, event, script, story, content entry, content item, account, agent, relationship, or variable.

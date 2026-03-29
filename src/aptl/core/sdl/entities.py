@@ -42,6 +42,7 @@ class Entity(SDLModel):
     categories: list[str] = Field(default_factory=list)
     vulnerabilities: list[str] = Field(default_factory=list)
     tlos: list[str] = Field(default_factory=list)
+    facts: dict[str, str] = Field(default_factory=dict)
     events: list[str] = Field(default_factory=list)
     entities: dict[str, "Entity"] = Field(default_factory=dict)
 

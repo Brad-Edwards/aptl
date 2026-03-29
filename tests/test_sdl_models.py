@@ -53,6 +53,11 @@ class TestParseRam:
         with pytest.raises(ValueError, match="Invalid RAM"):
             parse_ram("four gigabytes")
 
+    @pytest.mark.parametrize("value", [0, -1, True])
+    def test_rejects_non_positive_or_bool_values(self, value):
+        with pytest.raises(ValueError, match="RAM"):
+            parse_ram(value)
+
 
 class TestResources:
     def test_human_readable_ram(self):
@@ -62,6 +67,15 @@ class TestResources:
     def test_integer_ram(self):
         r = Resources(ram=1024, cpu=1)
         assert r.ram == 1024
+
+    def test_variable_placeholders(self):
+        r = Resources(ram="${ram_bytes}", cpu="${cpu_cores}")
+        assert r.ram == "${ram_bytes}"
+        assert r.cpu == "${cpu_cores}"
+
+    def test_rejects_non_positive_ram(self):
+        with pytest.raises(ValidationError, match="RAM"):
+            Resources(ram=0, cpu=1)
 
 
 class TestNode:
@@ -137,6 +151,10 @@ class TestInfraNode:
         with pytest.raises(ValidationError, match="unique"):
             InfraNode(links=["a", "a"])
 
+    def test_count_placeholder(self):
+        n = InfraNode(count="${replicas}")
+        assert n.count == "${replicas}"
+
 
 class TestSimpleProperties:
     def test_valid(self):
@@ -150,6 +168,16 @@ class TestSimpleProperties:
     def test_invalid_cidr(self):
         with pytest.raises(ValidationError):
             SimpleProperties(cidr="not-a-cidr", gateway="10.0.0.1")
+
+    def test_variable_placeholders_skip_network_validation(self):
+        p = SimpleProperties(
+            cidr="${network_cidr}",
+            gateway="${network_gateway}",
+            internal="${is_internal}",
+        )
+        assert p.cidr == "${network_cidr}"
+        assert p.gateway == "${network_gateway}"
+        assert p.internal == "${is_internal}"
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +221,19 @@ class TestCondition:
         with pytest.raises(ValidationError, match="interval"):
             Condition(command="/bin/check")
 
+    def test_scalar_placeholders(self):
+        c = Condition(
+            command="/usr/bin/check.sh",
+            interval="${check_interval}",
+            timeout="${check_timeout}",
+            retries="${check_retries}",
+            start_period="${check_start_period}",
+        )
+        assert c.interval == "${check_interval}"
+        assert c.timeout == "${check_timeout}"
+        assert c.retries == "${check_retries}"
+        assert c.start_period == "${check_start_period}"
+
 
 # ---------------------------------------------------------------------------
 # Vulnerabilities
@@ -235,6 +276,11 @@ class TestMetric:
         with pytest.raises(ValidationError, match="requires.*condition"):
             Metric(type="conditional", max_score=10)
 
+    def test_variable_placeholders(self):
+        m = Metric(type="manual", max_score="${max_score}", artifact="${needs_upload}")
+        assert m.max_score == "${max_score}"
+        assert m.artifact == "${needs_upload}"
+
 
 class TestMinScore:
     def test_percentage(self):
@@ -252,6 +298,10 @@ class TestMinScore:
     def test_rejects_neither(self):
         with pytest.raises(ValidationError, match="either"):
             MinScore()
+
+    def test_placeholder_percentage(self):
+        ms = MinScore(percentage="${pass_percentage}")
+        assert ms.percentage == "${pass_percentage}"
 
 
 class TestEvaluation:
@@ -288,6 +338,10 @@ class TestEntity:
         e = Entity(name="Team", role="blue")
         assert e.role == ExerciseRole.BLUE
 
+    def test_facts_supported(self):
+        e = Entity(name="Team", facts={"department": "SOC"})
+        assert e.facts == {"department": "SOC"}
+
     def test_nested_entities(self):
         e = Entity(
             name="Team",
@@ -322,12 +376,36 @@ class TestParseDuration:
     def test_compound(self):
         assert parse_duration("1h 30min") == 5400
 
+    def test_supports_months_and_years(self):
+        assert parse_duration("1 mon") == 2_592_000
+        assert parse_duration("1 y") == 31_536_000
+
+    def test_supports_micro_and_nanoseconds(self):
+        assert parse_duration("1 us") == 1
+        assert parse_duration("1 ns") == 1
+
+    def test_subsecond_values_round_up(self):
+        assert parse_duration("1 ms") == 1
+        assert parse_duration("1001 ms") == 2
+
+    def test_supports_plus_syntax(self):
+        assert parse_duration("1m+30") == 90
+
     def test_zero(self):
         assert parse_duration("0") == 0
+
+    @pytest.mark.parametrize("value", [-1, -0.5, True, ""])
+    def test_negative_or_blank_values_rejected(self, value):
+        with pytest.raises(ValueError, match="Invalid duration"):
+            parse_duration(value)
 
     def test_invalid(self):
         with pytest.raises(ValueError, match="Invalid duration"):
             parse_duration("not a duration")
+
+    def test_rejects_garbage_suffix(self):
+        with pytest.raises(ValueError, match="Invalid duration"):
+            parse_duration("1h-nope")
 
 
 class TestInject:
@@ -368,6 +446,18 @@ class TestScript:
                 speed=1.0,
                 events={"evt-1": "30 min"},
             )
+
+    def test_variable_placeholders(self):
+        s = Script(
+            start_time="${script_start}",
+            end_time="${script_end}",
+            speed="${script_speed}",
+            events={"evt-1": "${event_time}"},
+        )
+        assert s.start_time == "${script_start}"
+        assert s.end_time == "${script_end}"
+        assert s.speed == "${script_speed}"
+        assert s.events["evt-1"] == "${event_time}"
 
 
 class TestStory:
@@ -415,6 +505,15 @@ class TestContent:
         c = Content(type="file", target="fs", path="/keys/id_rsa", sensitive=True)
         assert c.sensitive is True
 
+    def test_sensitive_placeholder(self):
+        c = Content(
+            type="file",
+            target="fs",
+            path="/tmp/flag.txt",
+            sensitive="${contains_sensitive_data}",
+        )
+        assert c.sensitive == "${contains_sensitive_data}"
+
 
 class TestAccount:
     def test_basic_account(self):
@@ -440,6 +539,10 @@ class TestAccount:
                      password_strength="none")
         assert a.auth_method == "key"
 
+    def test_disabled_placeholder(self):
+        a = Account(username="svc", node="dc", disabled="${is_disabled}")
+        assert a.disabled == "${is_disabled}"
+
 
 class TestACLRule:
     def test_allow_rule(self):
@@ -451,6 +554,10 @@ class TestACLRule:
     def test_deny_rule(self):
         r = ACLRule(direction="out", to_net="wan", action="deny")
         assert r.action == ACLAction.DENY
+
+    def test_port_placeholder(self):
+        r = ACLRule(direction="in", from_net="wan", ports=["${https_port}"])
+        assert r.ports == ["${https_port}"]
 
 
 class TestOSFamily:
@@ -497,6 +604,10 @@ class TestServicePort:
             services=[{"port": 22, "name": "ssh"}, {"port": 80, "name": "http"}],
         )
         assert len(n.services) == 2
+
+    def test_placeholder(self):
+        sp = ServicePort(port="${service_port}", name="https")
+        assert sp.port == "${service_port}"
 
 
 class TestPlatformCommand:
@@ -633,3 +744,14 @@ class TestVariable:
     def test_number_variable_accepts_int_and_float_allowed_values(self):
         v = Variable(type="number", default=1.5, allowed_values=[1, 1.5, 2.0])
         assert v.default == 1.5
+
+
+class TestBooleanPlaceholders:
+    def test_vulnerability_technical_placeholder(self):
+        v = Vulnerability(
+            name="SQLi",
+            description="SQL injection",
+            technical="${is_technical}",
+            **{"class": "CWE-89"},
+        )
+        assert v.technical == "${is_technical}"

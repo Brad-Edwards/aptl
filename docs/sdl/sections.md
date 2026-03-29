@@ -23,7 +23,7 @@ A scenario is a YAML document with up to 20 named sections. All sections are opt
 | `scripts` | `dict[str, Script]` | Timed event sequences with human-readable durations |
 | `stories` | `dict[str, Story]` | Top-level exercise orchestration grouping scripts |
 
-### APTL Extensions (6 sections)
+### Extended Sections (5 sections)
 
 | Section | Type | Purpose | Adapted From |
 |---------|------|---------|--------------|
@@ -32,7 +32,6 @@ A scenario is a YAML document with up to 20 named sections. All sections are opt
 | `relationships` | `dict[str, Relationship]` | Typed edges between elements (auth, trust, federation) | STIX Relationship SRO |
 | `agents` | `dict[str, Agent]` | Autonomous participants (actions, knowledge, scope) | CybORG Agents |
 | `variables` | `dict[str, Variable]` | Parameterization (types, defaults, substitution) | CACAO playbook_variables |
-| `objectives` | `ObjectiveSet` | Red/blue objectives with auto-evaluation | APTL original |
 
 ---
 
@@ -388,40 +387,8 @@ Variables are referenced as `${var_name}` in other sections. They are **not reso
 
 ---
 
-## APTL Legacy Format
+## Scoring: Exercise Assessment vs Automated Validation
 
-The APTL legacy format (with `metadata`, `mode`, `objectives`, `steps`, `scoring`) continues to work. The parser auto-detects it.
+The SDL's scoring pipeline (conditions → metrics → evaluations → TLOs → goals) is for **exercise assessment** — human-evaluated team exercises like Locked Shields or CCDC where white team judges grade performance.
 
-```yaml
-metadata:
-  id: detect-brute-force
-  name: "Blue Team: Detect SSH Brute Force"
-  description: Detect an SSH brute force attack
-  difficulty: intermediate
-  estimated_minutes: 30
-  mitre_attack:
-    techniques: [T1110.001]
-
-mode: purple
-containers:
-  required: [kali, victim, wazuh]
-
-objectives:
-  red:
-    - id: brute-force
-      description: Execute SSH brute force
-      type: manual
-      points: 50
-  blue:
-    - id: detect-auth
-      description: Detect failed logins in Wazuh
-      type: wazuh_alert
-      points: 75
-      wazuh_alert:
-        query: {bool: {must: [{match: {rule.groups: authentication_failed}}]}}
-        min_matches: 5
-
-scoring:
-  passing_score: 100
-  max_score: 200
-```
+**Automated validation** (APTL's ObjectiveType with wazuh_alert/command_output/file_exists auto-evaluation) is a **runtime concern** that lives outside the SDL, in `aptl.core.objectives`. The SDL specifies *what success looks like* via the scoring pipeline; the runtime determines *whether it happened* via automated checks.

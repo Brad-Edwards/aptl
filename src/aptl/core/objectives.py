@@ -1,21 +1,25 @@
-"""Objective models — APTL scenario objectives with auto-evaluation.
+"""APTL objective models — runtime auto-evaluation types.
 
-Extends the OCR SDL with APTL's objective system: typed objectives
-(manual, wazuh_alert, command_output, file_exists) with validation
-configs, hints, and scoring.
+These are runtime models for the APTL evaluation engine, NOT part
+of the SDL specification. They define how objectives are validated
+against live infrastructure (Wazuh alerts, command output, file
+existence).
 
-Ported from the original ``aptl.core.scenarios`` module.
+For the SDL specification's scoring model, see ``aptl.core.sdl.scoring``
+(OCR's conditions → metrics → evaluations → TLOs → goals pipeline).
 """
 
 import re
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import Field, field_validator, model_validator
-
-from aptl.core.sdl._base import SDLModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+class _StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 class ObjectiveType(str, Enum):
@@ -27,7 +31,7 @@ class ObjectiveType(str, Enum):
     FILE_EXISTS = "file_exists"
 
 
-class Hint(SDLModel):
+class Hint(_StrictModel):
     """A progressive hint for an objective."""
 
     level: int = Field(ge=1, le=5)
@@ -42,7 +46,7 @@ class Hint(SDLModel):
         return v
 
 
-class WazuhAlertValidation(SDLModel):
+class WazuhAlertValidation(_StrictModel):
     """Validation config for wazuh_alert objective type."""
 
     query: dict[str, Any]
@@ -50,7 +54,7 @@ class WazuhAlertValidation(SDLModel):
     time_window_seconds: int = Field(default=300, ge=10, le=3600)
 
 
-class CommandOutputValidation(SDLModel):
+class CommandOutputValidation(_StrictModel):
     """Validation config for command_output objective type."""
 
     container: str
@@ -59,7 +63,7 @@ class CommandOutputValidation(SDLModel):
     regex: Optional[str] = None
 
 
-class FileExistsValidation(SDLModel):
+class FileExistsValidation(_StrictModel):
     """Validation config for file_exists objective type."""
 
     container: str
@@ -67,7 +71,7 @@ class FileExistsValidation(SDLModel):
     contains: Optional[str] = None
 
 
-class Objective(SDLModel):
+class Objective(_StrictModel):
     """A single objective within a scenario."""
 
     id: str
@@ -115,7 +119,7 @@ class Objective(SDLModel):
         return self
 
 
-class ObjectiveSet(SDLModel):
+class ObjectiveSet(_StrictModel):
     """Red and blue team objectives for a scenario."""
 
     red: list[Objective] = Field(default_factory=list)
@@ -139,7 +143,7 @@ class ObjectiveSet(SDLModel):
         return self.red + self.blue
 
 
-class TimeBonusConfig(SDLModel):
+class TimeBonusConfig(_StrictModel):
     """Configuration for time-based bonus scoring."""
 
     enabled: bool = False
@@ -147,7 +151,7 @@ class TimeBonusConfig(SDLModel):
     decay_after_minutes: int = Field(default=10, ge=1)
 
 
-class ScoringConfig(SDLModel):
+class ScoringConfig(_StrictModel):
     """Scoring parameters for a scenario."""
 
     time_bonus: TimeBonusConfig = Field(default_factory=TimeBonusConfig)

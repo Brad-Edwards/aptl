@@ -1,16 +1,22 @@
-"""Attack models — MITRE ATT&CK-mapped attack steps and detections.
+"""APTL attack models — MITRE ATT&CK-mapped steps and detections.
 
-Ported from the original ``aptl.core.scenarios`` and
-``aptl.core.detection`` modules. Provides OCSF-aligned detection
-expectations for each attack step.
+These are runtime models for describing attack procedures, NOT part
+of the SDL specification. They define attack steps with MITRE technique
+mappings and OCSF-aligned expected detection expectations.
+
+For the SDL specification's orchestration model, see
+``aptl.core.sdl.orchestration`` (OCR's events → scripts → stories
+pipeline).
 """
 
 from enum import IntEnum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from aptl.core.sdl._base import SDLModel
+
+class _StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 class SeverityId(IntEnum):
@@ -51,26 +57,22 @@ class ExpectedDetection(BaseModel):
     )
 
 
-class MitreReference(SDLModel):
+class MitreReference(_StrictModel):
     """MITRE ATT&CK tactic and technique references."""
 
     tactics: list[str] = Field(default_factory=list)
     techniques: list[str] = Field(default_factory=list)
 
 
-class PlatformCommand(SDLModel):
-    """A platform-specific command variant.
-
-    Adapted from CALDERA's ``platforms.{os}.{shell}.command`` pattern.
-    The ``cleanup`` field is from Atomic Red Team's ``cleanup_command``.
-    """
+class PlatformCommand(_StrictModel):
+    """A platform-specific command variant."""
 
     shell: str = "sh"
     command: str
     cleanup: str = ""
 
 
-class AttackStep(SDLModel):
+class AttackStep(_StrictModel):
     """A single attack step combining technique info with expected detections."""
 
     step_number: int = Field(ge=1)

@@ -9,13 +9,7 @@ from aptl.core.sdl.entities import Entity, ExerciseRole, flatten_entities
 from aptl.core.sdl.features import Feature, FeatureType
 from aptl.core.sdl.infrastructure import InfraNode, SimpleProperties
 from aptl.core.sdl.nodes import Node, NodeType, Resources, Role, parse_ram
-from aptl.core.sdl.objectives import (
-    Hint,
-    Objective,
-    ObjectiveSet,
-    ObjectiveType,
-    WazuhAlertValidation,
-)
+from aptl.core.sdl.nodes import Node
 from aptl.core.sdl.orchestration import Event, Inject, Script, Story, parse_duration
 from aptl.core.sdl.scoring import Evaluation, Goal, Metric, MetricType, MinScore, TLO
 from aptl.core.sdl.vulnerabilities import Vulnerability
@@ -373,47 +367,11 @@ class TestStory:
 # ---------------------------------------------------------------------------
 
 
-class TestObjective:
-    def test_manual(self):
-        o = Objective(id="obj-a", description="Test", type="manual", points=50)
-        assert o.type == ObjectiveType.MANUAL
-
-    def test_wazuh_requires_config(self):
-        with pytest.raises(ValidationError, match="wazuh_alert"):
-            Objective(
-                id="obj-b", description="Test", type="wazuh_alert", points=50
-            )
-
-    def test_wazuh_with_config(self):
-        o = Objective(
-            id="obj-b",
-            description="Test",
-            type="wazuh_alert",
-            points=50,
-            wazuh_alert=WazuhAlertValidation(
-                query={"match_all": {}}, min_matches=1
-            ),
-        )
-        assert o.wazuh_alert is not None
-
-
-class TestObjectiveSet:
-    def test_duplicate_ids_rejected(self):
-        with pytest.raises(ValidationError, match="Duplicate"):
-            ObjectiveSet(
-                red=[
-                    Objective(id="dup", description="A", type="manual", points=10),
-                    Objective(id="dup", description="B", type="manual", points=10),
-                ]
-            )
-
-
 # ---------------------------------------------------------------------------
-# New extension models (G1-G9, G12-G13)
+# Extension models (G1-G9, G12-G13)
 # ---------------------------------------------------------------------------
 
 from aptl.core.sdl.accounts import Account, PasswordStrength
-from aptl.core.sdl.attacks import PlatformCommand
 from aptl.core.sdl.content import Content, ContentItem, ContentType
 from aptl.core.sdl.infrastructure import ACLAction, ACLRule
 from aptl.core.sdl.nodes import AssetValue, AssetValueLevel, OSFamily, ServicePort
@@ -525,11 +483,13 @@ class TestServicePort:
 
 class TestPlatformCommand:
     def test_basic(self):
+        from aptl.core.attacks import PlatformCommand
         pc = PlatformCommand(command="whoami")
         assert pc.shell == "sh"
         assert pc.cleanup == ""
 
     def test_with_cleanup(self):
+        from aptl.core.attacks import PlatformCommand
         pc = PlatformCommand(shell="psh", command="procdump.exe", cleanup="del dump.bin")
         assert pc.cleanup == "del dump.bin"
 

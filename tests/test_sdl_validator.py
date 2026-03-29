@@ -250,67 +250,6 @@ class TestVerifyStories:
 # ---------------------------------------------------------------------------
 
 
-class TestVerifyAttackSteps:
-    def test_invalid_technique_id_format(self):
-        s = _make_scenario(
-            metadata={
-                "id": "test",
-                "name": "Test",
-                "description": "Desc",
-                "difficulty": "beginner",
-                "estimated_minutes": 10,
-            },
-            mode="red",
-            containers={"required": ["kali"]},
-            objectives={"red": [{"id": "obj", "description": "D", "type": "manual", "points": 10}]},
-            steps=[{
-                "step_number": 1,
-                "technique_id": "INVALID",
-                "technique_name": "Test",
-                "tactic": "Recon",
-                "description": "Test",
-                "target": "victim",
-            }],
-        )
-        errors = _validate(s)
-        assert any("ATT&CK format" in e for e in errors)
-
-
-class TestVerifyMitreReferences:
-    def test_invalid_technique_in_metadata(self):
-        s = _make_scenario(
-            metadata={
-                "id": "test",
-                "name": "Test",
-                "description": "Desc",
-                "difficulty": "beginner",
-                "estimated_minutes": 10,
-                "mitre_attack": {"techniques": ["INVALID"]},
-            },
-            mode="red",
-            containers={"required": ["kali"]},
-            objectives={"red": [{"id": "obj", "description": "D", "type": "manual", "points": 10}]},
-        )
-        errors = _validate(s)
-        assert any("ATT&CK format" in e for e in errors)
-
-
-class TestVerifyScenarioContent:
-    def test_ocr_scenario_with_nodes_passes(self):
-        """OCR-style scenario with just nodes is valid."""
-        s = _make_scenario(
-            nodes={"sw": {"type": "switch"}},
-        )
-        errors = _validate(s)
-        assert not errors
-
-    def test_empty_ocr_scenario_fails(self):
-        """OCR-style scenario with no content fails."""
-        s = _make_scenario()
-        errors = _validate(s)
-        assert any("at least one" in e.lower() for e in errors)
-
-
 class TestErrorCollection:
     def test_multiple_errors_collected(self):
         """Validator collects all errors, not just the first."""

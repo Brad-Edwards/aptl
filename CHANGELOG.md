@@ -6,6 +6,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-03-29
+
+### Added
+
+- SDL `content` section for data-in-systems: files, datasets (emails, DB records, pcaps), directory structures placed into scenario nodes — adapted from CyRIS `copy_content` pattern
+- SDL `accounts` section for user accounts within scenario nodes: AD users, SSH users, email accounts with password strength, Kerberos SPNs, group memberships — adapted from CyRIS `add_account` and CybORG agent sessions
+- Network access control rules (`acls`) on infrastructure nodes — adapted from CybORG `Subnets.NACLs` pattern
+- Network `internal` flag on `SimpleProperties` for egress-blocked networks
+- Host OS family and version fields on nodes (`os`, `os_version`) — vocabulary from OCSF `Device.os`
+- CIA triad `asset_value` on nodes — adapted from CybORG `ConfidentialityValue`/`AvailabilityValue`
+- `ServicePort` model for exposed network services on nodes (port/protocol/name) — simplified from OCSF `NetworkEndpoint`
+- `PlatformCommand` on attack steps for per-OS command variants with cleanup — adapted from CALDERA `platforms.{os}.{shell}.command` and Atomic Red Team `cleanup_command`
+- Health check extensions on conditions: `timeout`, `retries`, `start_period`
+- Feature-list shorthand on nodes: `features: [svc-a, svc-b]` expands to dict with empty role binding
+- Scenario 11 stress test: Exchange server with mailboxes, accounts, ACLs, phishing lure content, asset values
+- 30 new tests for all extension models, validator passes, and shorthand expansion
+
+## [5.0.0] - 2026-03-28
+
+### Added
+
+- Formal Scenario Description Language (SDL) package (`src/aptl/core/sdl/`) ported from the Open Cyber Range SDL, extended for APTL's domain, and decoupled from backend-specific infrastructure
+- 14 OCR SDL sections: nodes (VM/Switch), infrastructure (topology/IP/CIDR), features (Service/Configuration/Artifact with cycle-detected dependency graphs), conditions (command/source monitoring), vulnerabilities (CWE-classified), metrics/evaluations/TLOs/goals (full scoring pipeline), entities (recursive org/team/person hierarchy with exercise roles), orchestration (injects/events/scripts/stories with human-readable durations)
+- APTL extensions integrated into the SDL: objectives with auto-evaluation (wazuh_alert, command_output, file_exists), attack steps with MITRE ATT&CK mapping and OCSF-aligned expected detections, defense configurations, preconditions, scenario metadata, scoring with time bonuses and hint penalties
+- Semantic validator (`validator.py`) with 21 cross-reference passes: node/feature/condition/vulnerability existence checks, infrastructure link and IP/CIDR validation, feature dependency cycle detection, metric/evaluation/TLO/goal reference chains, entity hierarchy validation, inject/event/script/story reference chains, MITRE technique format validation, mode-objective consistency
+- SDL parser (`parser.py`) with case-insensitive key normalization, hyphen-to-underscore conversion, shorthand expansion (source strings, infrastructure counts, role strings, min-score integers), and auto-detection of APTL legacy vs OCR SDL format
+- Backend-agnostic `Source(name, version)` reference type — no deployment handler coupling
+- 117 new tests across 4 test files: structural model validation, semantic cross-reference validation, parser normalization/shorthand/format-detection, and backward compatibility
+
+### Changed
+
+- `src/aptl/core/scenarios.py` is now a backward-compatibility shim re-exporting all names from `aptl.core.sdl` — all 8 consumer files continue working with zero import changes (BREAKING: internal module restructuring)
+
 ## [4.17.0] - 2026-03-26
 
 ### Added

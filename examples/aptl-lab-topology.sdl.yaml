@@ -1,0 +1,899 @@
+# APTL Lab Topology — SDL representation of the real docker-compose.yml
+#
+# This SDL describes the actual APTL infrastructure as deployed by
+# docker compose. Used to validate that the SDL is expressive enough
+# to faithfully represent a real multi-network purple team lab.
+
+name: aptl-lab-topology
+description: >
+  TechVault enterprise purple team lab with Wazuh SIEM, SOC stack
+  (Suricata, TheHive, MISP, Shuffle), enterprise targets (AD, webapp,
+  database, fileshare), and Kali red team platform across four
+  segmented networks.
+
+# ---------------------------------------------------------------------------
+# Nodes: every container in the lab
+# ---------------------------------------------------------------------------
+nodes:
+  # --- Network switches (one per Docker network) ---
+  security-net:
+    type: Switch
+    description: "Security/management network (172.20.0.0/24) — Wazuh, SOC, OTel"
+
+  dmz-net:
+    type: Switch
+    description: "DMZ network (172.20.1.0/24) — public-facing services, egress blocked"
+
+  internal-net:
+    type: Switch
+    description: "Internal enterprise network (172.20.2.0/24) — AD, DB, fileshare, egress blocked"
+
+  redteam-net:
+    type: Switch
+    description: "Red team network (172.20.4.0/24) — Kali, egress blocked"
+
+  # --- Wazuh SIEM stack ---
+  wazuh-indexer:
+    type: VM
+    description: "Wazuh Indexer (OpenSearch) — alert storage and search"
+    source:
+      name: wazuh/wazuh-indexer
+      version: "4.12.0"
+    resources:
+      ram: 2 GiB
+      cpu: 2
+    features:
+      opensearch-engine: indexer-svc
+    conditions:
+      indexer-health: indexer-svc
+    roles:
+      indexer-svc:
+        username: admin
+
+  wazuh-manager:
+    type: VM
+    description: "Wazuh Manager — agent management, alerting, Filebeat"
+    source:
+      name: wazuh/wazuh-manager
+      version: "4.12.0"
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    features:
+      wazuh-core: manager-svc
+      filebeat-forwarder: manager-svc
+      custom-rules: manager-svc
+    conditions:
+      manager-api-health: manager-svc
+    roles:
+      manager-svc:
+        username: root
+
+  wazuh-dashboard:
+    type: VM
+    description: "Wazuh Dashboard — web UI for alert visualization"
+    source:
+      name: wazuh/wazuh-dashboard
+      version: "4.12.0"
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    conditions:
+      dashboard-health: dashboard-svc
+    roles:
+      dashboard-svc:
+        username: kibanaserver
+
+  # --- SOC tools ---
+  suricata:
+    type: VM
+    description: "Suricata IDS — network intrusion detection"
+    source:
+      name: jasonish/suricata
+      version: "7.0"
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    features:
+      ids-engine: suricata-svc
+      custom-suricata-rules: suricata-svc
+    roles:
+      suricata-svc:
+        username: root
+
+  misp:
+    type: VM
+    description: "MISP — threat intelligence platform"
+    source:
+      name: ghcr.io/misp/misp-docker/misp-core
+      version: latest
+    resources:
+      ram: 2 GiB
+      cpu: 1
+    conditions:
+      misp-health: misp-admin
+    roles:
+      misp-admin:
+        username: admin
+
+  misp-db:
+    type: VM
+    description: "MISP database (MariaDB)"
+    source:
+      name: mariadb
+      version: "10.11"
+    resources:
+      ram: 512 MiB
+      cpu: 1
+    conditions:
+      misp-db-health: db-svc
+    roles:
+      db-svc:
+        username: misp
+
+  thehive:
+    type: VM
+    description: "TheHive — security incident response platform"
+    source:
+      name: strangebee/thehive
+      version: "5.4"
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    conditions:
+      thehive-health: thehive-svc
+    roles:
+      thehive-svc:
+        username: admin
+
+  thehive-cassandra:
+    type: VM
+    description: "TheHive backend (Cassandra)"
+    source:
+      name: cassandra
+      version: "4.1"
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    conditions:
+      cassandra-health: cassandra-svc
+    roles:
+      cassandra-svc:
+        username: cassandra
+
+  thehive-es:
+    type: VM
+    description: "TheHive search index (Elasticsearch)"
+    source:
+      name: docker.elastic.co/elasticsearch/elasticsearch
+      version: "7.17.28"
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    conditions:
+      thehive-es-health: es-svc
+    roles:
+      es-svc:
+        username: elastic
+
+  shuffle-backend:
+    type: VM
+    description: "Shuffle SOAR — backend API"
+    source:
+      name: ghcr.io/shuffle/shuffle-backend
+      version: latest
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    roles:
+      shuffle-admin:
+        username: admin
+
+  shuffle-frontend:
+    type: VM
+    description: "Shuffle SOAR — web UI"
+    source:
+      name: ghcr.io/shuffle/shuffle-frontend
+      version: latest
+    resources:
+      ram: 256 MiB
+      cpu: 1
+
+  shuffle-opensearch:
+    type: VM
+    description: "Shuffle backend storage (OpenSearch)"
+    source:
+      name: opensearchproject/opensearch
+      version: "2.14.0"
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    conditions:
+      shuffle-os-health: os-svc
+    roles:
+      os-svc:
+        username: admin
+
+  cortex:
+    type: VM
+    description: "Cortex — observable analysis engine"
+    source:
+      name: thehiveproject/cortex
+      version: "3.1.8"
+    resources:
+      ram: 512 MiB
+      cpu: 1
+
+  # --- Enterprise targets ---
+  webapp:
+    type: VM
+    description: "TechVault web application (Flask) — vulnerable by design"
+    source: aptl-webapp
+    resources:
+      ram: 256 MiB
+      cpu: 1
+    features:
+      flask-app: webapp-svc
+    conditions:
+      webapp-health: webapp-svc
+    vulnerabilities:
+      - sqli-login
+      - sqli-search
+      - xss-stored
+      - xss-reflected
+      - command-injection
+      - idor
+    roles:
+      webapp-svc:
+        username: techvault
+
+  ad:
+    type: VM
+    description: "Active Directory domain controller (Samba) — techvault.local"
+    source: aptl-ad
+    resources:
+      ram: 512 MiB
+      cpu: 1
+    features:
+      samba-ad: ad-admin
+    conditions:
+      ad-health: ad-admin
+    vulnerabilities:
+      - weak-ad-passwords
+      - kerberoastable-spn
+      - over-privileged-accounts
+    roles:
+      ad-admin:
+        username: Administrator
+
+  db:
+    type: VM
+    description: "PostgreSQL database — TechVault application data"
+    source:
+      name: postgres
+      version: "16-alpine"
+    resources:
+      ram: 256 MiB
+      cpu: 1
+    conditions:
+      db-health: db-svc
+    vulnerabilities:
+      - weak-db-credentials
+      - exposed-pii
+    roles:
+      db-svc:
+        username: techvault
+
+  fileshare:
+    type: VM
+    description: "Samba file server — department shares with planted credentials"
+    source: aptl-fileshare
+    resources:
+      ram: 256 MiB
+      cpu: 1
+    conditions:
+      fileshare-health: fileshare-svc
+    vulnerabilities:
+      - open-shares
+      - hardcoded-credentials
+      - exposed-ssh-keys
+    roles:
+      fileshare-svc:
+        username: root
+
+  victim:
+    type: VM
+    description: "Rocky Linux application server with Wazuh agent and Falco"
+    source: aptl-victim
+    resources:
+      ram: 512 MiB
+      cpu: 1
+    conditions:
+      victim-ssh-health: labadmin
+    roles:
+      labadmin:
+        username: labadmin
+
+  workstation:
+    type: VM
+    description: "Employee workstation with bash_history, SSH keys, git tokens"
+    source: aptl-workstation
+    resources:
+      ram: 256 MiB
+      cpu: 1
+    vulnerabilities:
+      - bash-history-creds
+      - exposed-ssh-keys-ws
+      - git-tokens
+    roles:
+      user:
+        username: jdoe
+
+  dns:
+    type: VM
+    description: "BIND9 DNS server — techvault.local zone + C2 detection"
+    source: aptl-dns
+    resources:
+      ram: 128 MiB
+      cpu: 1
+    conditions:
+      dns-health: dns-svc
+    roles:
+      dns-svc:
+        username: named
+
+  kali:
+    type: VM
+    description: "Kali Linux — red team attack platform"
+    source: aptl-kali
+    resources:
+      ram: 1 GiB
+      cpu: 2
+    features:
+      kali-tools: kali-user
+      impacket: kali-user
+    conditions:
+      kali-ssh-health: kali-user
+    roles:
+      kali-user:
+        username: kali
+        entities:
+          - red-team
+
+  # --- OTel stack ---
+  otel-collector:
+    type: VM
+    description: "OpenTelemetry Collector — receives OTLP, forwards to Tempo"
+    source:
+      name: otel/opentelemetry-collector-contrib
+      version: "0.123.0"
+    resources:
+      ram: 256 MiB
+      cpu: 1
+    conditions:
+      otel-health: otel-svc
+    roles:
+      otel-svc:
+        username: root
+
+  tempo:
+    type: VM
+    description: "Grafana Tempo — distributed tracing storage (72h retention)"
+    source:
+      name: grafana/tempo
+      version: "2.7.2"
+    resources:
+      ram: 512 MiB
+      cpu: 1
+
+  grafana:
+    type: VM
+    description: "Grafana — trace visualization"
+    source:
+      name: grafana/grafana
+      version: "11.6.0"
+    resources:
+      ram: 256 MiB
+      cpu: 1
+
+# ---------------------------------------------------------------------------
+# Infrastructure: network topology and IP assignments
+# ---------------------------------------------------------------------------
+infrastructure:
+  security-net:
+    count: 1
+    properties:
+      cidr: 172.20.0.0/24
+      gateway: 172.20.0.1
+
+  dmz-net:
+    count: 1
+    properties:
+      cidr: 172.20.1.0/24
+      gateway: 172.20.1.1
+
+  internal-net:
+    count: 1
+    properties:
+      cidr: 172.20.2.0/24
+      gateway: 172.20.2.1
+
+  redteam-net:
+    count: 1
+    properties:
+      cidr: 172.20.4.0/24
+      gateway: 172.20.4.1
+
+  wazuh-indexer:
+    count: 1
+    links:
+      - security-net
+    properties:
+      - security-net: 172.20.0.12
+
+  wazuh-manager:
+    count: 1
+    links:
+      - security-net
+      - dmz-net
+      - internal-net
+    dependencies:
+      - wazuh-indexer
+    properties:
+      - security-net: 172.20.0.10
+      - dmz-net: 172.20.1.10
+      - internal-net: 172.20.2.30
+
+  wazuh-dashboard:
+    count: 1
+    links:
+      - security-net
+    dependencies:
+      - wazuh-indexer
+      - wazuh-manager
+    properties:
+      - security-net: 172.20.0.11
+
+  suricata:
+    count: 1
+    links:
+      - dmz-net
+      - internal-net
+      - security-net
+    properties:
+      - dmz-net: 172.20.1.50
+      - internal-net: 172.20.2.50
+      - security-net: 172.20.0.50
+
+  misp:
+    count: 1
+    links:
+      - security-net
+    dependencies:
+      - misp-db
+    properties:
+      - security-net: 172.20.0.16
+
+  misp-db:
+    count: 1
+    links:
+      - security-net
+    properties:
+      - security-net: 172.20.0.17
+
+  thehive:
+    count: 1
+    links:
+      - security-net
+    dependencies:
+      - thehive-cassandra
+      - thehive-es
+    properties:
+      - security-net: 172.20.0.18
+
+  thehive-cassandra:
+    count: 1
+    links:
+      - security-net
+
+  thehive-es:
+    count: 1
+    links:
+      - security-net
+
+  shuffle-backend:
+    count: 1
+    links:
+      - security-net
+    dependencies:
+      - shuffle-opensearch
+    properties:
+      - security-net: 172.20.0.20
+
+  shuffle-frontend:
+    count: 1
+    links:
+      - security-net
+    dependencies:
+      - shuffle-backend
+    properties:
+      - security-net: 172.20.0.21
+
+  shuffle-opensearch:
+    count: 1
+    links:
+      - security-net
+
+  cortex:
+    count: 1
+    links:
+      - security-net
+    dependencies:
+      - thehive-es
+    properties:
+      - security-net: 172.20.0.22
+
+  webapp:
+    count: 1
+    links:
+      - dmz-net
+      - internal-net
+    dependencies:
+      - db
+    properties:
+      - dmz-net: 172.20.1.20
+      - internal-net: 172.20.2.25
+
+  ad:
+    count: 1
+    links:
+      - internal-net
+    properties:
+      - internal-net: 172.20.2.10
+
+  db:
+    count: 1
+    links:
+      - internal-net
+    properties:
+      - internal-net: 172.20.2.11
+
+  fileshare:
+    count: 1
+    links:
+      - internal-net
+    properties:
+      - internal-net: 172.20.2.12
+
+  victim:
+    count: 1
+    links:
+      - internal-net
+    dependencies:
+      - wazuh-manager
+    properties:
+      - internal-net: 172.20.2.20
+
+  workstation:
+    count: 1
+    links:
+      - internal-net
+    dependencies:
+      - wazuh-manager
+    properties:
+      - internal-net: 172.20.2.40
+
+  dns:
+    count: 1
+    links:
+      - dmz-net
+      - internal-net
+      - security-net
+    properties:
+      - dmz-net: 172.20.1.22
+      - internal-net: 172.20.2.27
+      - security-net: 172.20.0.25
+
+  kali:
+    count: 1
+    links:
+      - redteam-net
+      - dmz-net
+      - internal-net
+    dependencies:
+      - wazuh-manager
+    properties:
+      - redteam-net: 172.20.4.30
+      - dmz-net: 172.20.1.30
+      - internal-net: 172.20.2.35
+
+  otel-collector:
+    count: 1
+    links:
+      - security-net
+    properties:
+      - security-net: 172.20.0.53
+
+  tempo:
+    count: 1
+    links:
+      - security-net
+    properties:
+      - security-net: 172.20.0.51
+
+  grafana:
+    count: 1
+    links:
+      - security-net
+    properties:
+      - security-net: 172.20.0.52
+
+# ---------------------------------------------------------------------------
+# Features: software deployed onto VMs
+# ---------------------------------------------------------------------------
+features:
+  opensearch-engine:
+    type: Service
+    source:
+      name: wazuh-indexer-config
+      version: "4.12.0"
+    description: "Wazuh Indexer (OpenSearch) core engine"
+
+  wazuh-core:
+    type: Service
+    source:
+      name: wazuh-manager-config
+      version: "4.12.0"
+    description: "Wazuh Manager core service (agent management, alerting)"
+
+  filebeat-forwarder:
+    type: Service
+    dependencies:
+      - wazuh-core
+    description: "Filebeat forwarder for Wazuh alerts to indexer"
+
+  custom-rules:
+    type: Configuration
+    dependencies:
+      - wazuh-core
+    description: "Custom Wazuh rules (Falco, Kali, AD, webapp, Suricata, database)"
+
+  ids-engine:
+    type: Service
+    source:
+      name: suricata
+      version: "7.0"
+    description: "Suricata IDS engine"
+
+  custom-suricata-rules:
+    type: Configuration
+    dependencies:
+      - ids-engine
+    description: "Custom Suricata detection rules (local.rules)"
+
+  samba-ad:
+    type: Service
+    source: samba-ad-dc
+    description: "Samba Active Directory Domain Controller (techvault.local)"
+
+  flask-app:
+    type: Service
+    source: aptl-webapp
+    description: "Flask web application with intentional vulnerabilities"
+
+  kali-tools:
+    type: Service
+    source: kali-tools-top10
+    description: "Kali Linux top-10 tools metapackage"
+
+  impacket:
+    type: Service
+    dependencies:
+      - kali-tools
+    source: impacket
+    description: "Impacket Python toolkit for AD exploitation"
+
+# ---------------------------------------------------------------------------
+# Conditions: health checks mapping to docker health checks
+# ---------------------------------------------------------------------------
+conditions:
+  indexer-health:
+    command: "curl -ks https://localhost:9200 || exit 1"
+    interval: 30
+
+  manager-api-health:
+    command: "curl -ks https://localhost:55000 || exit 1"
+    interval: 30
+
+  dashboard-health:
+    command: "curl -ks https://localhost:5601 || exit 1"
+    interval: 30
+
+  misp-health:
+    command: "curl -ksf https://localhost/users/login || exit 1"
+    interval: 30
+
+  misp-db-health:
+    command: "healthcheck.sh --connect --innodb_initialized"
+    interval: 15
+
+  thehive-health:
+    command: "curl -sf http://localhost:9000/api/status || exit 1"
+    interval: 30
+
+  cassandra-health:
+    command: "cqlsh -e 'describe cluster' || exit 1"
+    interval: 30
+
+  thehive-es-health:
+    command: "curl -sf http://localhost:9200/_cluster/health || exit 1"
+    interval: 30
+
+  shuffle-os-health:
+    command: "curl -ks https://localhost:9200 -u admin:pass || exit 1"
+    interval: 30
+
+  webapp-health:
+    command: "curl -sf http://localhost:8080/ || exit 1"
+    interval: 15
+
+  ad-health:
+    command: "samba-tool domain info 127.0.0.1 || exit 1"
+    interval: 30
+
+  db-health:
+    command: "pg_isready -U techvault -d techvault"
+    interval: 10
+
+  fileshare-health:
+    command: "smbclient -L localhost -N || exit 1"
+    interval: 15
+
+  victim-ssh-health:
+    command: "ss -tlnp | grep ':22' || exit 1"
+    interval: 15
+
+  kali-ssh-health:
+    command: "ss -tlnp | grep ':22' || exit 1"
+    interval: 15
+
+  dns-health:
+    command: "dig @localhost techvault.local SOA +short || exit 1"
+    interval: 15
+
+  otel-health:
+    command: "wget --spider -q http://localhost:13133/"
+    interval: 10
+
+# ---------------------------------------------------------------------------
+# Vulnerabilities: planted weaknesses in the enterprise
+# ---------------------------------------------------------------------------
+vulnerabilities:
+  sqli-login:
+    name: "SQL Injection (Login)"
+    description: "SQL injection in the login form allows authentication bypass"
+    technical: true
+    class: CWE-89
+
+  sqli-search:
+    name: "SQL Injection (Search)"
+    description: "SQL injection in search functionality"
+    technical: true
+    class: CWE-89
+
+  xss-stored:
+    name: "Stored XSS"
+    description: "Stored cross-site scripting in user-generated content"
+    technical: true
+    class: CWE-79
+
+  xss-reflected:
+    name: "Reflected XSS"
+    description: "Reflected XSS via URL parameters"
+    technical: true
+    class: CWE-79
+
+  command-injection:
+    name: "OS Command Injection"
+    description: "Command injection through web form input"
+    technical: true
+    class: CWE-78
+
+  idor:
+    name: "Insecure Direct Object Reference"
+    description: "IDOR allowing access to other users' records"
+    technical: true
+    class: CWE-639
+
+  weak-ad-passwords:
+    name: "Weak AD Passwords"
+    description: "Domain accounts with common/default passwords"
+    technical: false
+    class: CWE-521
+
+  kerberoastable-spn:
+    name: "Kerberoastable SPN"
+    description: "Service accounts with SPNs vulnerable to Kerberoasting"
+    technical: true
+    class: CWE-916
+
+  over-privileged-accounts:
+    name: "Over-Privileged Accounts"
+    description: "Service accounts with unnecessary Domain Admin privileges"
+    technical: false
+    class: CWE-250
+
+  weak-db-credentials:
+    name: "Weak Database Credentials"
+    description: "PostgreSQL using predictable application password"
+    technical: false
+    class: CWE-521
+
+  exposed-pii:
+    name: "Exposed PII in Database"
+    description: "Customer PII stored without encryption or access controls"
+    technical: false
+    class: CWE-312
+
+  open-shares:
+    name: "Open Network Shares"
+    description: "Samba shares accessible without authentication"
+    technical: false
+    class: CWE-732
+
+  hardcoded-credentials:
+    name: "Hardcoded Credentials in Shares"
+    description: "Plaintext credentials in configuration files on shares"
+    technical: false
+    class: CWE-798
+
+  exposed-ssh-keys:
+    name: "Exposed SSH Keys"
+    description: "Private SSH keys found in shared directories"
+    technical: true
+    class: CWE-798
+
+  bash-history-creds:
+    name: "Credentials in Bash History"
+    description: "Passwords visible in .bash_history files"
+    technical: false
+    class: CWE-312
+
+  exposed-ssh-keys-ws:
+    name: "Exposed SSH Keys (Workstation)"
+    description: "Private SSH keys in workstation home directory"
+    technical: true
+    class: CWE-798
+
+  git-tokens:
+    name: "Git Tokens in Config"
+    description: "Personal access tokens in .gitconfig"
+    technical: false
+    class: CWE-798
+
+# ---------------------------------------------------------------------------
+# Entities: exercise participants
+# ---------------------------------------------------------------------------
+entities:
+  white-team:
+    name: "Exercise Control"
+    role: White
+    mission: "Manage exercise lifecycle and scoring"
+
+  red-team:
+    name: "Red Team"
+    role: Red
+    mission: "Penetrate TechVault enterprise infrastructure"
+    entities:
+      kali-operator:
+        name: "Kali Operator"
+
+  blue-team:
+    name: "Blue Team"
+    role: Blue
+    mission: "Detect, investigate, and respond to attacks"
+    entities:
+      soc-analyst:
+        name: "SOC Analyst"
+      incident-responder:
+        name: "Incident Responder"

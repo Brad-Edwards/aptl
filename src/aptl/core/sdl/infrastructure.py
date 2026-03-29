@@ -8,12 +8,18 @@ ACL rules adapted from CybORG's ``Subnets.NACLs`` pattern.
 """
 
 from enum import Enum
-from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
-from typing import Any, Optional, Union
+from ipaddress import ip_address, ip_network
+from typing import Optional, Union
 
 from pydantic import Field, field_validator, model_validator
 
-from aptl.core.sdl._base import SDLModel, normalize_enum_value
+from aptl.core.sdl._base import (
+    SDLModel,
+    is_variable_ref,
+    normalize_enum_value,
+    parse_bool_or_var,
+    parse_int_or_var,
+)
 
 MINIMUM_NODE_COUNT = 1
 DEFAULT_NODE_COUNT = 1
@@ -37,7 +43,7 @@ class ACLRule(SDLModel):
     from_net: str = ""
     to_net: str = ""
     protocol: str = "any"
-    ports: list[int] = Field(default_factory=list)
+    ports: list[int | str] = Field(default_factory=list)
     action: ACLAction = ACLAction.ALLOW
     description: str = ""
 
@@ -46,28 +52,49 @@ class ACLRule(SDLModel):
     def normalize_action(cls, v: str) -> str:
         return normalize_enum_value(v)
 
+    @field_validator("ports", mode="before")
+    @classmethod
+    def parse_ports(cls, v: list[int | str]) -> list[int | str]:
+        if isinstance(v, list):
+            return [
+                parse_int_or_var(port, minimum=1, maximum=65535, field_name="ports")
+                for port in v
+            ]
+        return v
+
 
 class SimpleProperties(SDLModel):
     """Network properties for a switch/subnet: CIDR, gateway, and flags."""
 
     cidr: str
     gateway: str
-    internal: bool = False
+    internal: bool | str = False
 
     @field_validator("cidr")
     @classmethod
     def validate_cidr(cls, v: str) -> str:
+        if is_variable_ref(v):
+            return v
         ip_network(v, strict=False)
         return v
 
     @field_validator("gateway")
     @classmethod
     def validate_gateway(cls, v: str) -> str:
+        if is_variable_ref(v):
+            return v
         ip_address(v)
         return v
 
+    @field_validator("internal", mode="before")
+    @classmethod
+    def parse_internal(cls, v: bool | str) -> bool | str:
+        return parse_bool_or_var(v, field_name="internal")
+
     @model_validator(mode="after")
     def gateway_within_cidr(self) -> "SimpleProperties":
+        if is_variable_ref(self.cidr) or is_variable_ref(self.gateway):
+            return self
         net = ip_network(self.cidr, strict=False)
         gw = ip_address(self.gateway)
         if gw not in net:
@@ -84,12 +111,21 @@ class InfraNode(SDLModel):
     Longhand: full dict with count, links, dependencies, properties, acls.
     """
 
-    count: int = Field(default=DEFAULT_NODE_COUNT, ge=MINIMUM_NODE_COUNT)
+    count: int | str = DEFAULT_NODE_COUNT
     links: list[str] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
     properties: Optional[Union[SimpleProperties, list[dict[str, str]]]] = None
     acls: list[ACLRule] = Field(default_factory=list)
     description: str = ""
+
+    @field_validator("count", mode="before")
+    @classmethod
+    def parse_count(cls, v: int | str) -> int | str:
+        return parse_int_or_var(
+            v,
+            minimum=MINIMUM_NODE_COUNT,
+            field_name="count",
+        )
 
     @model_validator(mode="after")
     def validate_unique_links(self) -> "InfraNode":

@@ -67,6 +67,34 @@ class TestVerifyNodes:
         errors = _validate(s)
         assert any("35 characters" in e for e in errors)
 
+    @pytest.mark.parametrize(
+        ("field_name", "section_name", "section_value", "error_fragment"),
+        [
+            ("features", "features", {"svc": {"type": "service"}}, "feature 'svc' references undefined role"),
+            ("conditions", "conditions", {"check": {"command": "/bin/check", "interval": 10}}, "condition 'check' references undefined role"),
+            ("injects", "injects", {"email": {}}, "inject 'email' references undefined role"),
+        ],
+    )
+    def test_role_binding_requires_declared_role(
+        self,
+        field_name,
+        section_name,
+        section_value,
+        error_fragment,
+    ):
+        s = _make_scenario(
+            nodes={
+                "vm-1": {
+                    "type": "vm",
+                    "resources": {"ram": "1 gib", "cpu": 1},
+                    field_name: {next(iter(section_value.keys())): "admin"},
+                }
+            },
+            **{section_name: section_value},
+        )
+        errors = _validate(s)
+        assert any(error_fragment in e for e in errors)
+
 
 class TestVerifyInfrastructure:
     def test_infra_without_matching_node(self):
@@ -94,6 +122,57 @@ class TestVerifyInfrastructure:
         )
         errors = _validate(s)
         assert any("count > 1" in e for e in errors)
+
+    def test_links_must_reference_switch_entries(self):
+        s = _make_scenario(
+            nodes={
+                "vm-a": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}},
+                "vm-b": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}},
+            },
+            infrastructure={
+                "vm-a": {"count": 1, "links": ["vm-b"]},
+                "vm-b": {"count": 1},
+            },
+        )
+        errors = _validate(s)
+        assert any("must reference a switch/network entry" in e for e in errors)
+
+    def test_invalid_per_link_ip_is_rejected(self):
+        s = _make_scenario(
+            nodes={
+                "sw": {"type": "switch"},
+                "vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}},
+            },
+            infrastructure={
+                "sw": {
+                    "count": 1,
+                    "properties": {"cidr": "10.0.0.0/24", "gateway": "10.0.0.1"},
+                },
+                "vm": {
+                    "count": 1,
+                    "links": ["sw"],
+                    "properties": [{"sw": "not-an-ip"}],
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("invalid IP assignment" in e for e in errors)
+
+    def test_conditioned_node_cannot_scale_above_one(self):
+        s = _make_scenario(
+            nodes={
+                "vm": {
+                    "type": "vm",
+                    "resources": {"ram": "1 gib", "cpu": 1},
+                    "conditions": {"check": "admin"},
+                    "roles": {"admin": {"username": "ops"}},
+                }
+            },
+            infrastructure={"vm": {"count": 3}},
+            conditions={"check": {"command": "/bin/check", "interval": 10}},
+        )
+        errors = _validate(s)
+        assert any("cannot have count > 1" in e for e in errors)
 
 
 class TestVerifyFeatures:
@@ -281,6 +360,14 @@ class TestVerifyContent:
         errors = _validate(s)
         assert not errors
 
+    def test_content_target_must_be_vm(self):
+        s = _make_scenario(
+            nodes={"sw": {"type": "switch"}},
+            content={"data": {"type": "file", "target": "sw", "path": "/tmp/flag"}},
+        )
+        errors = _validate(s)
+        assert any("must be a VM node" in e for e in errors)
+
 
 class TestVerifyAccounts:
     def test_account_references_undefined_node(self):
@@ -299,6 +386,14 @@ class TestVerifyAccounts:
         errors = _validate(s)
         assert not errors
 
+    def test_account_node_must_be_vm(self):
+        s = _make_scenario(
+            nodes={"sw": {"type": "switch"}},
+            accounts={"user": {"username": "admin", "node": "sw"}},
+        )
+        errors = _validate(s)
+        assert any("must be a VM node" in e for e in errors)
+
 
 class TestVerifyACLs:
     def test_acl_references_undefined_network(self):
@@ -314,6 +409,27 @@ class TestVerifyACLs:
         )
         errors = _validate(s)
         assert any("undefined network" in e for e in errors)
+
+    def test_acl_checks_both_endpoints(self):
+        s = _make_scenario(
+            nodes={"sw": {"type": "switch"}},
+            infrastructure={
+                "sw": {
+                    "count": 1,
+                    "properties": {"cidr": "10.0.0.0/24", "gateway": "10.0.0.1"},
+                    "acls": [
+                        {
+                            "direction": "in",
+                            "from_net": "sw",
+                            "to_net": "ghost-net",
+                            "action": "deny",
+                        }
+                    ],
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("ghost-net" in e for e in errors)
 
 
 class TestFeatureListShorthand:
@@ -362,6 +478,43 @@ class TestVerifyRelationships:
             },
             relationships={
                 "auth": {"type": "authenticates_with", "source": "exchange", "target": "ad-ds"},
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_relationship_can_target_variable(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            variables={"env": {"type": "string", "default": "prod"}},
+            relationships={"r1": {"type": "connects_to", "source": "vm", "target": "env"}},
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_relationship_can_target_other_relationship(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            relationships={
+                "r1": {"type": "connects_to", "source": "vm", "target": "vm"},
+                "r2": {"type": "depends_on", "source": "vm", "target": "r1"},
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_relationship_can_target_content_item_name(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            content={
+                "dataset": {
+                    "type": "dataset",
+                    "target": "vm",
+                    "items": [{"name": "budget.eml"}],
+                }
+            },
+            relationships={
+                "r1": {"type": "connects_to", "source": "vm", "target": "budget.eml"},
             },
         )
         errors = _validate(s)
@@ -438,6 +591,59 @@ class TestVerifyAgents:
         errors = _validate(s)
         assert any("initial_knowledge account" in e for e in errors)
 
+    def test_allowed_subnet_must_reference_switch_entry(self):
+        s = _make_scenario(
+            nodes={
+                "net": {"type": "switch"},
+                "vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}},
+            },
+            infrastructure={
+                "net": {
+                    "count": 1,
+                    "properties": {"cidr": "10.0.0.0/24", "gateway": "10.0.0.1"},
+                },
+                "vm": {"count": 1, "links": ["net"]},
+            },
+            entities={"red": {"role": "red"}},
+            agents={"a1": {"entity": "red", "allowed_subnets": ["vm"]}},
+        )
+        errors = _validate(s)
+        assert any("allowed_subnet 'vm' must reference a switch/network entry" in e for e in errors)
+
+    def test_initial_knowledge_subnet_must_reference_switch_entry(self):
+        s = _make_scenario(
+            nodes={
+                "net": {"type": "switch"},
+                "vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}},
+            },
+            infrastructure={
+                "net": {
+                    "count": 1,
+                    "properties": {"cidr": "10.0.0.0/24", "gateway": "10.0.0.1"},
+                },
+                "vm": {"count": 1, "links": ["net"]},
+            },
+            entities={"red": {"role": "red"}},
+            agents={"a1": {"entity": "red", "initial_knowledge": {"subnets": ["vm"]}}},
+        )
+        errors = _validate(s)
+        assert any("initial_knowledge subnet 'vm' must reference a switch/network entry" in e for e in errors)
+
+    def test_initial_knowledge_host_must_reference_vm(self):
+        s = _make_scenario(
+            nodes={"net": {"type": "switch"}},
+            infrastructure={
+                "net": {
+                    "count": 1,
+                    "properties": {"cidr": "10.0.0.0/24", "gateway": "10.0.0.1"},
+                }
+            },
+            entities={"red": {"role": "red"}},
+            agents={"a1": {"entity": "red", "initial_knowledge": {"hosts": ["net"]}}},
+        )
+        errors = _validate(s)
+        assert any("initial_knowledge host 'net' must reference a VM node" in e for e in errors)
+
     def test_valid_agent(self):
         s = _make_scenario(
             nodes={
@@ -466,6 +672,134 @@ class TestVerifyAgents:
         )
         errors = _validate(s)
         assert not errors
+
+
+class TestVerifyVariables:
+    def test_defined_variables_allow_placeholders_across_models(self):
+        s = _make_scenario(
+            variables={
+                "ram_bytes": {"type": "integer", "default": 1073741824},
+                "cpu_cores": {"type": "integer", "default": 1},
+                "node_count": {"type": "integer", "default": 1},
+                "network_cidr": {"type": "string", "default": "10.0.0.0/24"},
+                "network_gateway": {"type": "string", "default": "10.0.0.1"},
+                "is_internal": {"type": "boolean", "default": True},
+                "check_interval": {"type": "integer", "default": 30},
+                "max_score": {"type": "integer", "default": 10},
+                "pass_percentage": {"type": "integer", "default": 75},
+                "script_start": {"type": "integer", "default": 0},
+                "script_end": {"type": "integer", "default": 3600},
+                "script_speed": {"type": "number", "default": 1.0},
+                "event_time": {"type": "integer", "default": 600},
+                "target_node": {"type": "string", "default": "vm"},
+                "subnet_name": {"type": "string", "default": "net"},
+                "entity_name": {"type": "string", "default": "blue"},
+                "account_name": {"type": "string", "default": "admin"},
+                "service_name": {"type": "string", "default": "ssh"},
+                "service_port": {"type": "integer", "default": 22},
+                "relationship_source": {"type": "string", "default": "web"},
+                "relationship_target": {"type": "string", "default": "db"},
+                "contains_sensitive_data": {"type": "boolean", "default": False},
+                "is_disabled": {"type": "boolean", "default": False},
+            },
+            nodes={
+                "net": {"type": "switch"},
+                "vm": {
+                    "type": "vm",
+                    "resources": {"ram": "${ram_bytes}", "cpu": "${cpu_cores}"},
+                    "roles": {"admin": {"username": "user", "entities": ["${entity_name}"]}},
+                    "services": [{"port": "${service_port}", "name": "ssh"}],
+                },
+            },
+            infrastructure={
+                "net": {
+                    "count": 1,
+                    "properties": {
+                        "cidr": "${network_cidr}",
+                        "gateway": "${network_gateway}",
+                        "internal": "${is_internal}",
+                    },
+                },
+                "vm": {"count": "${node_count}", "links": ["net"]},
+            },
+            conditions={
+                "check": {
+                    "command": "/bin/check",
+                    "interval": "${check_interval}",
+                }
+            },
+            metrics={
+                "m1": {
+                    "type": "conditional",
+                    "max_score": "${max_score}",
+                    "condition": "check",
+                }
+            },
+            evaluations={
+                "e1": {
+                    "metrics": ["m1"],
+                    "min_score": {"percentage": "${pass_percentage}"},
+                }
+            },
+            tlos={"t1": {"evaluation": "e1"}},
+            goals={"g1": {"tlos": ["t1"]}},
+            entities={"blue": {"role": "blue", "tlos": ["t1"]}},
+            events={"evt": {}},
+            scripts={
+                "timeline": {
+                    "start_time": "${script_start}",
+                    "end_time": "${script_end}",
+                    "speed": "${script_speed}",
+                    "events": {"evt": "${event_time}"},
+                }
+            },
+            stories={"story": {"speed": "${script_speed}", "scripts": ["timeline"]}},
+            content={
+                "dataset": {
+                    "type": "file",
+                    "target": "${target_node}",
+                    "path": "/tmp/flag",
+                    "sensitive": "${contains_sensitive_data}",
+                }
+            },
+            accounts={
+                "admin": {
+                    "username": "administrator",
+                    "node": "${target_node}",
+                    "disabled": "${is_disabled}",
+                }
+            },
+            relationships={
+                "r1": {
+                    "type": "connects_to",
+                    "source": "${relationship_source}",
+                    "target": "${relationship_target}",
+                }
+            },
+            agents={
+                "a1": {
+                    "entity": "${entity_name}",
+                    "starting_accounts": ["${account_name}"],
+                    "allowed_subnets": ["${subnet_name}"],
+                    "initial_knowledge": {
+                        "hosts": ["${target_node}"],
+                        "subnets": ["${subnet_name}"],
+                        "services": ["${service_name}"],
+                        "accounts": ["${account_name}"],
+                    },
+                }
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_undefined_variable_reference_reported(self):
+        s = _make_scenario(
+            nodes={"sw": {"type": "switch"}},
+            infrastructure={"sw": {"count": "${missing_count}"}},
+        )
+        errors = _validate(s)
+        assert any("Undefined variable 'missing_count'" in e for e in errors)
 
 
 class TestValidFullScenario:

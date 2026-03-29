@@ -13,7 +13,12 @@ from typing import Optional
 
 from pydantic import Field, field_validator, model_validator
 
-from aptl.core.sdl._base import SDLModel, normalize_enum_value
+from aptl.core.sdl._base import (
+    SDLModel,
+    normalize_enum_value,
+    parse_bool_or_var,
+    parse_int_or_var,
+)
 
 
 class MetricType(str, Enum):
@@ -32,15 +37,25 @@ class Metric(SDLModel):
 
     name: str = ""
     type: MetricType = Field(alias="type")
-    artifact: Optional[bool] = None
+    artifact: Optional[bool | str] = None
 
     @field_validator("type", mode="before")
     @classmethod
     def normalize_type(cls, v: str) -> str:
         return normalize_enum_value(v)
-    max_score: int = Field(ge=1)
+    max_score: int | str
     condition: Optional[str] = None
     description: str = ""
+
+    @field_validator("artifact", mode="before")
+    @classmethod
+    def parse_artifact(cls, v: bool | str | None) -> bool | str | None:
+        return parse_bool_or_var(v, field_name="artifact")
+
+    @field_validator("max_score", mode="before")
+    @classmethod
+    def parse_max_score(cls, v: int | str) -> int | str:
+        return parse_int_or_var(v, minimum=1, field_name="max_score")
 
     @model_validator(mode="after")
     def validate_type_fields(self) -> "Metric":
@@ -62,8 +77,23 @@ class MinScore(SDLModel):
     Longhand: ``min-score: {absolute: 50}`` or ``{percentage: 75}``.
     """
 
-    absolute: Optional[int] = Field(default=None, ge=0)
-    percentage: Optional[int] = Field(default=None, ge=0, le=100)
+    absolute: Optional[int | str] = None
+    percentage: Optional[int | str] = None
+
+    @field_validator("absolute", mode="before")
+    @classmethod
+    def parse_absolute(cls, v: int | str | None) -> int | str | None:
+        return parse_int_or_var(v, minimum=0, field_name="absolute")
+
+    @field_validator("percentage", mode="before")
+    @classmethod
+    def parse_percentage(cls, v: int | str | None) -> int | str | None:
+        return parse_int_or_var(
+            v,
+            minimum=0,
+            maximum=100,
+            field_name="percentage",
+        )
 
     @model_validator(mode="after")
     def validate_exclusive(self) -> "MinScore":

@@ -3,78 +3,134 @@
 Implements the OCR SDL exercise orchestration pipeline:
   Stories -> Scripts -> Events -> { Conditions, Injects }
 
-Scripts use human-readable duration strings (e.g., ``"10min 2 sec"``).
+Scripts use OCR-compatible human-readable duration strings
+(e.g., ``"10min 2 sec"``, ``"1 mon"``, ``"1 us"``).
 """
 
+import math
 import re
+from decimal import Decimal, ROUND_CEILING
 from typing import Optional
 
 from pydantic import Field, field_validator, model_validator
 
-from aptl.core.sdl._base import SDLModel
+from aptl.core.sdl._base import SDLModel, is_variable_ref, parse_float_or_var
 from aptl.core.sdl._source import Source
 
-# Duration parsing: supports combinations like "1h 30min", "10 min 2 sec"
+# OCR uses duration-str's fixed calendar conversions: 30d/month, 365d/year.
 _DURATION_UNITS = {
-    "w": 604_800,
-    "week": 604_800,
-    "weeks": 604_800,
-    "d": 86_400,
-    "day": 86_400,
-    "days": 86_400,
-    "h": 3_600,
-    "hr": 3_600,
-    "hour": 3_600,
-    "hours": 3_600,
-    "m": 60,
-    "min": 60,
-    "mins": 60,
-    "minute": 60,
-    "minutes": 60,
-    "s": 1,
-    "sec": 1,
-    "secs": 1,
-    "second": 1,
-    "seconds": 1,
-    "ms": 0.001,
+    "y": Decimal("31536000"),
+    "year": Decimal("31536000"),
+    "years": Decimal("31536000"),
+    "mon": Decimal("2592000"),
+    "month": Decimal("2592000"),
+    "months": Decimal("2592000"),
+    "w": Decimal("604800"),
+    "week": Decimal("604800"),
+    "weeks": Decimal("604800"),
+    "d": Decimal("86400"),
+    "day": Decimal("86400"),
+    "days": Decimal("86400"),
+    "h": Decimal("3600"),
+    "hr": Decimal("3600"),
+    "hour": Decimal("3600"),
+    "hours": Decimal("3600"),
+    "m": Decimal("60"),
+    "min": Decimal("60"),
+    "mins": Decimal("60"),
+    "minute": Decimal("60"),
+    "minutes": Decimal("60"),
+    "s": Decimal("1"),
+    "sec": Decimal("1"),
+    "secs": Decimal("1"),
+    "second": Decimal("1"),
+    "seconds": Decimal("1"),
+    "ms": Decimal("0.001"),
+    "msec": Decimal("0.001"),
+    "millisecond": Decimal("0.001"),
+    "milliseconds": Decimal("0.001"),
+    "us": Decimal("0.000001"),
+    "usec": Decimal("0.000001"),
+    "usecond": Decimal("0.000001"),
+    "microsecond": Decimal("0.000001"),
+    "microseconds": Decimal("0.000001"),
+    "ns": Decimal("0.000000001"),
+    "nsec": Decimal("0.000000001"),
+    "nanosecond": Decimal("0.000000001"),
+    "nanoseconds": Decimal("0.000000001"),
 }
 
-_DURATION_TOKEN = re.compile(
-    r"(\d+(?:_\d+)*(?:\.\d+)?)\s*("
-    + "|".join(sorted(_DURATION_UNITS, key=len, reverse=True))
-    + r")\b",
-    re.IGNORECASE,
-)
+_DURATION_NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
-def parse_duration(value: str | int | float) -> int:
+def parse_duration(value: str | int | float) -> int | str:
     """Parse a human-readable duration string to seconds.
 
     Accepts integers/floats (treated as seconds) or strings like
-    ``"10min 2 sec"``, ``"1 week 1day 1h"``, ``"0"``.
+    ``"10min 2 sec"``, ``"1 week 1day 1h"``, ``"1 mon"``, ``"1 us"``,
+    ``"1m+30"``, ``"0"``.
     """
+    if is_variable_ref(value):
+        return value
+    if isinstance(value, bool):
+        raise ValueError(f"Invalid duration: {value!r}")
     if isinstance(value, (int, float)):
-        return int(value)
+        if value < 0:
+            raise ValueError(f"Invalid duration: {value!r}")
+        if value == 0:
+            return 0
+        return math.ceil(value)
 
-    value_str = str(value).strip().replace("_", "")
-    if not value_str or value_str == "0":
+    value_str = str(value).strip()
+    if not value_str:
+        raise ValueError(f"Invalid duration: {value!r}")
+    if value_str == "0":
         return 0
 
-    if value_str.isdigit():
-        return int(value_str)
+    normalized = (
+        value_str.replace("_", "")
+        .replace(" ", "")
+        .replace("µ", "u")
+        .lower()
+    )
 
-    total = 0.0
-    found = False
-    for match in _DURATION_TOKEN.finditer(value_str):
-        found = True
-        amount = float(match.group(1))
-        unit = match.group(2).lower()
-        total += amount * _DURATION_UNITS[unit]
+    if re.fullmatch(r"\d+(?:\.\d+)?", normalized):
+        total = Decimal(normalized)
+        return int(total.to_integral_value(rounding=ROUND_CEILING))
 
-    if not found:
+    total = Decimal("0")
+    position = 0
+    parsed_any = False
+    units = sorted(_DURATION_UNITS, key=len, reverse=True)
+
+    while position < len(normalized):
+        if normalized[position] == "+":
+            position += 1
+            continue
+
+        match = _DURATION_NUMBER.match(normalized, position)
+        if match is None:
+            raise ValueError(f"Invalid duration: {value!r}")
+
+        parsed_any = True
+        amount = Decimal(match.group(0))
+        position = match.end()
+
+        unit = None
+        for candidate in units:
+            if normalized.startswith(candidate, position):
+                unit = candidate
+                position += len(candidate)
+                break
+
+        # duration-str treats bare numbers as seconds
+        multiplier = _DURATION_UNITS[unit] if unit else Decimal("1")
+        total += amount * multiplier
+
+    if not parsed_any:
         raise ValueError(f"Invalid duration: {value!r}")
 
-    return int(total)
+    return int(total.to_integral_value(rounding=ROUND_CEILING))
 
 
 class Inject(SDLModel):
@@ -117,32 +173,50 @@ class Script(SDLModel):
     """
 
     name: str = ""
-    start_time: int = Field(ge=0)
-    end_time: int = Field(ge=0)
-    speed: float = Field(gt=0)
-    events: dict[str, int] = Field(min_length=1)
+    start_time: int | str
+    end_time: int | str
+    speed: float | str
+    events: dict[str, int | str] = Field(min_length=1)
     description: str = ""
 
     @field_validator("start_time", "end_time", mode="before")
     @classmethod
-    def parse_time(cls, v: str | int | float) -> int:
+    def parse_time(cls, v: str | int | float) -> int | str:
         return parse_duration(v)
+
+    @field_validator("speed", mode="before")
+    @classmethod
+    def parse_speed(cls, v: str | int | float) -> float | str:
+        parsed = parse_float_or_var(v, minimum=0, field_name="speed")
+        if isinstance(parsed, float) and parsed <= 0:
+            raise ValueError("speed must be > 0")
+        return parsed
 
     @field_validator("events", mode="before")
     @classmethod
-    def parse_event_times(cls, v: dict) -> dict[str, int]:
+    def parse_event_times(cls, v: dict) -> dict[str, int | str]:
         if isinstance(v, dict):
             return {k: parse_duration(t) for k, t in v.items()}
         return v
 
     @model_validator(mode="after")
     def validate_time_bounds(self) -> "Script":
-        if self.end_time < self.start_time:
+        if (
+            isinstance(self.start_time, int)
+            and isinstance(self.end_time, int)
+            and self.end_time < self.start_time
+        ):
             raise ValueError(
                 f"Script end_time ({self.end_time}s) must be >= "
                 f"start_time ({self.start_time}s)"
             )
         for event_name, event_time in self.events.items():
+            if not (
+                isinstance(self.start_time, int)
+                and isinstance(self.end_time, int)
+                and isinstance(event_time, int)
+            ):
+                continue
             if event_time < self.start_time or event_time > self.end_time:
                 raise ValueError(
                     f"Event '{event_name}' time ({event_time}s) is outside "
@@ -155,6 +229,11 @@ class Story(SDLModel):
     """Top-level exercise orchestration — a group of scripts."""
 
     name: str = ""
-    speed: float = Field(default=1.0, ge=1.0)
+    speed: float | str = 1.0
     scripts: list[str] = Field(min_length=1)
     description: str = ""
+
+    @field_validator("speed", mode="before")
+    @classmethod
+    def parse_speed(cls, v: str | int | float) -> float | str:
+        return parse_float_or_var(v, minimum=1.0, field_name="speed")

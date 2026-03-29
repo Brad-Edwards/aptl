@@ -84,6 +84,22 @@ infrastructure:
         s = parse_sdl(sdl)
         assert s.infrastructure["sw"].count == 1
 
+    def test_infrastructure_count_placeholder_shorthand(self):
+        sdl = """
+name: test
+variables:
+  switch_count:
+    type: integer
+    default: 1
+nodes:
+  sw:
+    type: switch
+infrastructure:
+  sw: ${switch_count}
+"""
+        s = parse_sdl(sdl)
+        assert s.infrastructure["sw"].count == "${switch_count}"
+
     def test_role_shorthand(self):
         sdl = """
 name: test
@@ -119,6 +135,87 @@ evaluations:
 """
         s = parse_sdl(sdl, skip_semantic_validation=True)
         assert s.evaluations["e1"].min_score.percentage == 75
+
+    def test_min_score_placeholder_shorthand(self):
+        sdl = """
+name: test
+variables:
+  pass_pct:
+    type: integer
+    default: 75
+conditions:
+  c1:
+    command: /check
+    interval: 10
+metrics:
+  m1:
+    type: conditional
+    max-score: 10
+    condition: c1
+evaluations:
+  e1:
+    metrics:
+      - m1
+    min-score: ${pass_pct}
+"""
+        s = parse_sdl(sdl)
+        assert s.evaluations["e1"].min_score.percentage == "${pass_pct}"
+
+    def test_entity_facts_keys_preserved(self):
+        sdl = """
+name: test
+entities:
+  blue-team:
+    name: Blue Team
+    facts:
+      Department-Name: SOC
+      Shift: nights
+"""
+        s = parse_sdl(sdl, skip_semantic_validation=True)
+        assert s.entities["blue-team"].facts == {
+            "Department-Name": "SOC",
+            "Shift": "nights",
+        }
+
+    def test_ocr_duration_units_parse(self):
+        sdl = """
+name: test
+events:
+  phase-1: {}
+scripts:
+  main:
+    start-time: 1 us
+    end-time: 1 mon
+    speed: 1
+    events:
+      phase-1: 1 ms
+stories:
+  exercise:
+    scripts: [main]
+"""
+        s = parse_sdl(sdl)
+        assert s.scripts["main"].start_time == 1
+        assert s.scripts["main"].end_time == 2_592_000
+        assert s.scripts["main"].events["phase-1"] == 1
+
+    def test_negative_numeric_duration_rejected(self):
+        sdl = """
+name: test
+events:
+  phase-1: {}
+scripts:
+  main:
+    start-time: -5
+    end-time: 10
+    speed: 1
+    events:
+      phase-1: 1
+stories:
+  exercise:
+    scripts: [main]
+"""
+        with pytest.raises(SDLParseError, match="Invalid duration"):
+            parse_sdl(sdl)
 
 
 class TestFormat:

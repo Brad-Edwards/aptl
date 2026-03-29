@@ -10,6 +10,7 @@ pytest tests/test_sdl_models.py tests/test_sdl_validator.py \
 ```
 
 Tests structural validation (Pydantic models), semantic validation (cross-reference checks), and parser behavior (normalization, shorthands, SDL-only format boundary).
+The unit suites also cover OCR-derived duration grammar, entity fact maps, and `${var}` placeholder handling across supported scalar/reference fields.
 
 ### Stress Tests (standard run)
 

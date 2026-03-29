@@ -1,6 +1,6 @@
 # SDL Sections Reference
 
-A scenario is a YAML document with up to 20 named sections. All sections are optional. The scenario must have either a top-level `name` (OCR-style) or a `metadata` block (APTL-style).
+A scenario is a YAML document with a required top-level `name` and up to 19 named sections. Aside from `name`, all sections are optional.
 
 ## Section Overview
 
@@ -79,6 +79,8 @@ nodes:
 
 **Feature list shorthand:** `features: [nginx, php]` expands to `{nginx: "", php: ""}` (no role binding required).
 
+When `features`, `conditions`, or `injects` use the `{name: role}` form, the role must be declared in the node's `roles` map.
+
 ---
 
 ## Infrastructure
@@ -112,6 +114,8 @@ infrastructure:
 ```
 
 **Shorthand:** `web-server: 3` expands to `{count: 3}`.
+
+`links` are switch/network connectivity references, not arbitrary infrastructure edges. If a node has attached `conditions`, its `count` must stay at `1` so the condition-to-node binding remains unambiguous. Per-link IP assignments must be valid IP addresses within the linked switch's CIDR.
 
 ---
 
@@ -209,7 +213,8 @@ goals:
 
 ## Entities
 
-Recursive team/organization hierarchy with exercise roles.
+Recursive team/organization hierarchy with exercise roles and OCR-style
+fact maps.
 
 ```yaml
 entities:
@@ -218,6 +223,9 @@ entities:
     role: Blue
     mission: Defend infrastructure
     tlos: [web-defense]
+    facts:
+      department: SOC
+      primary-shift: nights
     entities:
       alice: {name: Alice}
       bob: {name: Bob}
@@ -246,7 +254,7 @@ events:
 
 scripts:
   main-timeline:
-    start-time: 5 min                  # human-readable durations
+    start-time: 5 min                  # OCR units: y, mon, w, d, h, m/min, s/sec, ms, us, ns
     end-time: 2 hour
     speed: 1.0
     events:
@@ -257,6 +265,9 @@ stories:
     speed: 1
     scripts: [main-timeline]
 ```
+
+Sub-second durations are rounded up to the nearest second, so `1 ms`,
+`1 us`, and `1 ns` all parse as `1`.
 
 ---
 
@@ -287,6 +298,8 @@ content:
     format: sql
 ```
 
+`target` must reference a VM node, not a switch/network node.
+
 ---
 
 ## Accounts
@@ -308,6 +321,8 @@ accounts:
     auth_method: password               # password, key, certificate
     mail: ""
 ```
+
+`node` must reference a VM node, not a switch/network node.
 
 ---
 
@@ -342,6 +357,8 @@ relationships:
 
 Types: `authenticates_with`, `trusts`, `federates_with`, `connects_to`, `depends_on`, `manages`, `replicates_to`.
 
+Relationship endpoints resolve against the scenario's named elements, including top-level section keys, nested entity dot-paths, variables, other relationships, and content item `name` values.
+
 ---
 
 ## Agents
@@ -363,7 +380,7 @@ agents:
     reward_calculator: HybridImpactPwn
 ```
 
-`initial_knowledge.hosts` references node names, `subnets` references infrastructure names, `services` references service names declared in `nodes.*.services`, and `accounts` references entries in the `accounts` section.
+`initial_knowledge.hosts` references VM node names, `subnets` references switch-backed infrastructure names, `services` references service names declared in `nodes.*.services`, and `accounts` references entries in the `accounts` section. `allowed_subnets` follows the same switch-backed infrastructure rule.
 
 ---
 
@@ -388,6 +405,8 @@ variables:
 ```
 
 Variables are referenced as `${var_name}` in other sections. They are **not resolved at parse time** — resolution happens at instantiation.
+
+Full-value placeholders are currently supported in ordinary string fields, common scalar fields (counts, booleans, scores, timings, RAM/CPU, ports), and many reference values. The semantic validator checks that `${var_name}` refers to a declared variable, but substitution still happens later during instantiation. User-defined mapping keys and enum-backed fields still need concrete values today.
 
 `default` and every entry in `allowed_values` must match the declared `type`. If `allowed_values` is provided, `default` must be one of those values.
 

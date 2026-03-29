@@ -14,7 +14,7 @@ However, the OCR SDL lacks: data/content modeling, user accounts, network access
 
 ## Decision
 
-Port the OCR SDL to Python/Pydantic as `aptl.core.sdl`, extend it with 5 new sections adapted from existing systems (not invented), and decouple it from any specific deployment backend.
+Use the OCR SDL as the starting surface for `aptl.core.sdl`, preserve coverage across the OCR-derived sections, extend that base with 5 new sections adapted from existing systems (not invented), and decouple the language from any specific deployment backend.
 
 ### Architecture
 
@@ -22,7 +22,7 @@ The SDL is a **specification language**, not a deployment tool. It describes *wh
 
 ### Sections (19 total)
 
-14 from OCR (direct port) + 5 new:
+14 OCR-derived base sections + 5 new:
 - `content` (from CyRIS) — data placed into systems
 - `accounts` (from CyRIS) — user accounts within nodes
 - `relationships` (from STIX SRO) — typed edges between elements
@@ -42,7 +42,7 @@ This is simpler and more composable than a dedicated identity layer.
 
 Two-phase validation:
 1. **Structural** (Pydantic) — types, ranges, required fields, intra-model constraints
-2. **Semantic** (SemanticValidator) — 20 named passes checking cross-references, dependency cycles, IP/CIDR consistency, and SDL domain rules
+2. **Semantic** (SemanticValidator) — 20 named passes checking cross-references, dependency cycles, IP/CIDR consistency, typed VM/network references, OCR count constraints, and SDL domain rules
 
 The validator collects all errors rather than failing on the first.
 
@@ -69,13 +69,13 @@ None by design. This branch establishes an SDL-only boundary:
 - **1,050+ fuzz test inputs** with zero unhandled crashes
 - Every SDL element traces to a published precedent
 - Backend-agnostic: no Docker, OpenStack, or cloud provider coupling
-- Full OCR SDL compatibility preserved
+- The OCR-derived coverage gaps identified in branch review were closed: entity facts and orchestration time grammar now align with the verified OCR surface
 - One clear specification surface for follow-on provisioner/runtime work
 
 ### Negative
 
 - 24 source files in `aptl.core.sdl/` — significant surface area
-- Variables (`${var}`) not resolved at parse time, limiting validator coverage
+- Variables (`${var}`) are still unresolved at parse time; existence is checked, but backend substitution semantics remain future work
 - Existing APTL scenario YAMLs require migration to SDL format
 - No module composition system yet (Terraform-style imports)
 - No formal verification (VSDL's SMT / CRACK's Datalog)

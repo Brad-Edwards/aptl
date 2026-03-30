@@ -108,27 +108,6 @@ class Role(SDLModel):
     entities: list[str] = Field(default_factory=list)
 
 
-class VM(SDLModel):
-    """Virtual machine configuration."""
-
-    source: Optional[Source] = None
-    resources: Resources
-    features: dict[str, str] = Field(
-        default_factory=dict,
-        description="Feature name -> role name mapping",
-    )
-    conditions: dict[str, str] = Field(
-        default_factory=dict,
-        description="Condition name -> role name mapping",
-    )
-    injects: dict[str, str] = Field(
-        default_factory=dict,
-        description="Inject name -> role name mapping",
-    )
-    vulnerabilities: list[str] = Field(default_factory=list)
-    roles: dict[str, Role] = Field(default_factory=dict)
-
-
 class OSFamily(str, Enum):
     """Operating system family. Vocabulary from OCSF Device.os."""
 
@@ -186,12 +165,6 @@ class ServicePort(SDLModel):
     @classmethod
     def parse_port_value(cls, v: int | str) -> int | str:
         return parse_int_or_var(v, minimum=1, maximum=65535, field_name="port")
-
-
-class Switch(SDLModel):
-    """Network switch — a pure connectivity node with no compute."""
-
-    pass
 
 
 class Node(SDLModel):

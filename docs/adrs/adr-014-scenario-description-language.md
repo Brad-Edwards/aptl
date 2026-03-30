@@ -76,7 +76,7 @@ None by design. This branch establishes an SDL-only boundary:
 
 ### Negative
 
-- 24 source files in `aptl.core.sdl/` — significant surface area
+- 21 source files in `aptl.core.sdl/` — significant surface area
 - Variables (`${var}`) are still unresolved at parse time; existence is checked, but backend substitution semantics remain future work
 - Existing APTL scenario YAMLs require migration to SDL format
 - No module composition system yet (Terraform-style imports)

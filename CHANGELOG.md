@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.1] - 2026-03-29
+
+### Fixed
+
+- SDL parser now catches `pydantic.ValidationError` instead of bare `Exception`, so implementation bugs propagate as real errors instead of masquerading as parse failures
+- Removed dead `VM` and `Switch` classes from `nodes.py` — the unified `Node` class with type discrimination replaced them
+- Validator node-name-length check now uses the `MAX_NODE_NAME_LENGTH` constant instead of a hardcoded `35`
+- Replaced `list.pop(0)` with `deque.popleft()` in topological sort for O(1) per operation
+- Removed redundant `_all_entity_names()` update since `flatten_entities` already includes top-level keys
+- Fixed overly permissive assertion in `test_hyphenated_keys` — now pins the expected preserved-key behavior
+- Moved `TestPlatformCommand` from `test_sdl_models.py` to `tests/test_attacks.py` since `PlatformCommand` lives in `aptl.core.attacks`, not the SDL package
+- Corrected ADR-014 file count from 24 to 21 (reflecting compat.py/defenses.py/attacks.py removal in 6.0.0)
+
 ## [6.0.0] - 2026-03-29
 
 ### Changed

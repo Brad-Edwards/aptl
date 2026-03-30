@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
 from aptl.core.sdl._errors import SDLParseError, SDLValidationError
 from aptl.core.sdl._base import is_variable_ref
@@ -286,7 +287,7 @@ def parse_sdl(
     # Construct the Pydantic model (structural validation)
     try:
         scenario = Scenario(**data)
-    except Exception as e:
+    except ValidationError as e:
         raise SDLParseError(str(e), path=path) from e
 
     # Semantic validation

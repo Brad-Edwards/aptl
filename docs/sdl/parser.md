@@ -78,7 +78,9 @@ Legacy APTL scenario YAMLs with a `metadata` block are intentionally rejected in
 2. **Key normalization** — lowercase field keys, preserve user names
 3. **Shorthand expansion** — source, infrastructure, roles, min-score, feature lists
 4. **Pydantic construction** — structural validation (types, ranges, required fields)
-5. **Semantic validation** — cross-reference checks plus variable-reference checks (20 passes, see [validation.md](validation.md))
+5. **Semantic validation** — cross-reference checks plus variable-reference checks (21 passes, see [validation.md](validation.md))
+
+On success, the returned `Scenario` may still carry non-fatal advisories in `scenario.advisories` (for example, VM nodes without explicit `resources`).
 
 ## API
 

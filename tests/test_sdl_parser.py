@@ -96,6 +96,17 @@ infrastructure:
 """,
                 "infrastructure.vm.properties[0].${link_name}",
             ),
+            (
+                """
+name: test
+objectives:
+  ${objective_name}:
+    agent: red-agent
+    success:
+      goals: [pass-exercise]
+""",
+                "objectives.${objective_name}",
+            ),
         ],
     )
     def test_variable_placeholders_rejected_in_mapping_keys(self, sdl, key_path):
@@ -109,6 +120,53 @@ infrastructure:
 
 
 class TestShorthandExpansion:
+    def test_objectives_section_parses(self):
+        sdl = """
+name: test
+entities:
+  red-team:
+    role: Red
+agents:
+  red-agent:
+    entity: red-team
+    actions: [Scan, Exploit]
+goals:
+  pass-exercise:
+    tlos: [web-defense]
+tlos:
+  web-defense:
+    evaluation: overall
+evaluations:
+  overall:
+    metrics: [service-uptime]
+    min-score: 75
+metrics:
+  service-uptime:
+    type: manual
+    max-score: 100
+objectives:
+  initial-access:
+    agent: red-agent
+    actions: [Scan]
+    targets: [red-agent]
+    success:
+      goals: [pass-exercise]
+"""
+        s = parse_sdl(sdl, skip_semantic_validation=True)
+        assert s.objectives["initial-access"].agent == "red-agent"
+        assert s.objectives["initial-access"].success.goals == ["pass-exercise"]
+        assert s.advisories == []
+
+    def test_vm_without_resources_generates_advisory(self):
+        sdl = """
+name: test
+nodes:
+  vm:
+    type: VM
+"""
+        s = parse_sdl(sdl)
+        assert any("without 'resources'" in advisory for advisory in s.advisories)
+
     def test_source_shorthand(self):
         sdl = """
 name: test

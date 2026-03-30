@@ -35,6 +35,7 @@ The 14 base sections start from the [OCR SDL](https://github.com/Open-Cyber-Rang
 | `Agent.allowed_subnets` | `AllowedSubnets:`                           | Network scope constraints                     |
 | `AssetValue`            | `ConfidentialityValue`, `AvailabilityValue` | Extended to CIA triad                         |
 | `ACLRule`               | `Subnets.NACLs`                             | Simplified from nested dict to flat rule list |
+| `Objective.agent/actions` | Agent identity + action space             | Objective actor binding and optional action subset validation |
 
 
 ### From CyRIS
@@ -44,15 +45,6 @@ The 14 base sections start from the [OCR SDL](https://github.com/Open-Cyber-Rang
 | ----------- | ----------------------------------------- | ------------------------------------------------- |
 | `Content`   | `copy_content`, `emulate_traffic_capture` | Generalized to file/dataset/directory types       |
 | `Account`   | `add_account`, `modify_account`           | Added groups, password_strength, SPN, auth_method |
-
-
-### From CALDERA / Atomic Red Team
-
-
-| SDL Element               | Source                                   | What We Adapted              |
-| ------------------------- | ---------------------------------------- | ---------------------------- |
-| `PlatformCommand`         | CALDERA `platforms.{os}.{shell}.command` | Per-OS command variants      |
-| `PlatformCommand.cleanup` | Atomic Red Team `cleanup_command`        | Teardown action per platform |
 
 
 ### From STIX 2.1
@@ -67,20 +59,20 @@ The 14 base sections start from the [OCR SDL](https://github.com/Open-Cyber-Rang
 ### From CACAO v2.0
 
 
-| SDL Element           | CACAO Source                       | What We Adapted                 |
-| --------------------- | ---------------------------------- | ------------------------------- |
-| `Variable`            | `playbook_variables`               | Types, defaults, allowed_values |
-| `${var}` substitution | CACAO variable substitution syntax | Deferred to instantiation time  |
+| SDL Element           | CACAO Source                       | What We Adapted                                                        |
+| --------------------- | ---------------------------------- | ---------------------------------------------------------------------- |
+| `Variable`            | `playbook_variables`               | Types, defaults, allowed_values                                        |
+| `${var}` substitution | CACAO variable substitution syntax | Deferred to instantiation time                                         |
+| `Objective`           | agent/target/workflow context      | Declarative actor-target-window-success binding without runtime probes |
 
 
 ### From OCSF
 
 
-| SDL Element         | OCSF Source                   | What We Adapted                               |
-| ------------------- | ----------------------------- | --------------------------------------------- |
-| `OSFamily` enum     | `Device.os.type_id`           | Vocabulary for OS classification              |
-| `ServicePort`       | `NetworkEndpoint`             | Simplified port/protocol/name                 |
-| `ExpectedDetection` | Detection Finding event class | `product_name`, `severity_id`, `analytic_uid` |
+| SDL Element     | OCSF Source         | What We Adapted                  |
+| --------------- | ------------------- | -------------------------------- |
+| `OSFamily` enum | `Device.os.type_id` | Vocabulary for OS classification |
+| `ServicePort`   | `NetworkEndpoint`   | Simplified port/protocol/name    |
 
 
 ### From Docker / Deployment Patterns

@@ -24,7 +24,8 @@ _HASHMAP_SECTIONS = frozenset({
     "nodes", "infrastructure", "features", "conditions",
     "vulnerabilities", "metrics", "evaluations", "tlos",
     "goals", "entities", "injects", "events", "scripts", "stories",
-    "content", "accounts", "relationships", "agents", "variables",
+    "content", "accounts", "relationships", "agents", "objectives",
+    "variables",
 })
 
 # Fields within struct models that are also HashMaps of user-defined keys.
@@ -36,7 +37,6 @@ _NESTED_HASHMAP_FIELDS = frozenset({
     "facts",               # Entity.facts (dict[str, str])
     "entities",            # Entity.entities (dict[str, Entity])
     "events",              # Script.events (dict[str, int])
-    "platform_commands",   # AttackStep.platform_commands (dict[str, PlatformCommand])
 })
 
 
@@ -268,6 +268,9 @@ def parse_sdl(
         except SDLValidationError as e:
             e.path = path
             raise
+        scenario._set_advisories(validator.warnings)
+    else:
+        scenario._set_advisories([])
 
     return scenario
 

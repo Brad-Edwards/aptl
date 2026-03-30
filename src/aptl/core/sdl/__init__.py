@@ -2,12 +2,12 @@
 
 A backend-agnostic scenario specification language ported from the
 Open Cyber Range SDL and extended with sections for content, accounts,
-relationships, agents, and variables.
+relationships, agents, objectives, and variables.
 
 Public API:
     parse_sdl(content) -> Scenario
     parse_sdl_file(path) -> Scenario
-    Scenario — top-level model (19 sections)
+    Scenario — top-level model (20 sections)
     SDLParseError — YAML/structural errors
     SDLValidationError — semantic validation errors
 """

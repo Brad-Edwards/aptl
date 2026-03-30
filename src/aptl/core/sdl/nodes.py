@@ -240,3 +240,25 @@ class Node(SDLModel):
                     + ", ".join(disallowed_fields)
                 )
         return self
+
+    @model_validator(mode="after")
+    def validate_unique_service_ports(self) -> "Node":
+        """Concrete VM service bindings must not reuse the same port/protocol."""
+        if self.type != NodeType.VM:
+            return self
+
+        seen: set[tuple[str, int]] = set()
+        for service in self.services:
+            if not isinstance(service.port, int):
+                continue
+            if is_variable_ref(service.protocol):
+                continue
+
+            key = (service.protocol.lower(), service.port)
+            if key in seen:
+                raise ValueError(
+                    "Duplicate service binding "
+                    f"'{service.protocol}/{service.port}' on node"
+                )
+            seen.add(key)
+        return self

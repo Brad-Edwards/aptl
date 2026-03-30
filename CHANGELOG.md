@@ -10,14 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **BREAKING**: Removed APTL legacy fields from SDL Scenario model — `metadata`, `mode`, `containers`, `preconditions`, `objectives`, `scoring`, `attack_chain`, `steps`, `defenses` are no longer part of the SDL specification. The SDL now has one clean identity: 19 specification sections with `name` as the only required field.
+- **BREAKING**: Removed APTL legacy fields from SDL Scenario model — `metadata`, `mode`, `containers`, `preconditions`, `scoring`, `attack_chain`, `steps`, and `defenses` are no longer part of the SDL specification. The legacy `objectives` block was not kept verbatim; it was replaced by a new declarative SDL `objectives` section that binds actors, targets, timing windows, and success criteria. The SDL now has one clean identity: 20 specification sections with `name` as the only required field.
 - **BREAKING**: Removed backward-compatibility layer (`sdl/compat.py`) and the `scenarios.py` re-export shim. Runtime code that imported `ScenarioDefinition`, `validate_scenario_containers`, or APTL-specific types from `aptl.core.scenarios` will need updating.
 - **BREAKING**: APTL legacy scenario YAMLs (with `metadata` block) no longer parse through the SDL. They require migration to SDL format.
 - Tightened structural validation for the new SDL sections: `content` now requires a `target` plus type-specific anchors (`path`, `source|items`, or `destination`), `accounts` require `node`, and `agents` require `entity`.
 - Parser boundary tightened: `${var}` placeholders are now rejected in user-defined mapping keys, keeping SDL identifiers concrete at parse/validate time.
-- Moved runtime evaluation models to standalone modules: `aptl.core.objectives` (ObjectiveType, Objective, WazuhAlertValidation, etc.) and `aptl.core.attacks` (AttackStep, MitreReference, ExpectedDetection, etc.). These are runtime concerns, not specification concerns.
+- Moved runtime evaluation models to standalone modules: `aptl.core.objectives` (ObjectiveType, Objective, WazuhAlertValidation, etc.) and `aptl.core.attacks` (AttackStep, MitreReference, ExpectedDetection, etc.). These are runtime evaluation mechanics, distinct from the declarative objective semantics carried by the SDL.
 - Removed 6 APTL-specific semantic validation passes from the SDL validator
-- Framing: OCR scoring pipeline (conditions → metrics → evaluations → TLOs → goals) is **exercise assessment** for human-evaluated team exercises. APTL objectives are **automated validation** for agent-driven scenarios — a runtime concern that lives outside the SDL.
+- Framing: OCR scoring pipeline (conditions → metrics → evaluations → TLOs → goals) stays in the SDL, and the SDL now also carries declarative objectives. Backend-specific automated validation remains a runtime concern outside the language itself.
 
 ### Removed
 
@@ -26,7 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src/aptl/api/routers/scenarios.py` — removed with the legacy scenario runtime cutover
 - `src/aptl/core/engine.py`, `src/aptl/core/evaluators.py`, `src/aptl/core/scoring.py`, `src/aptl/core/run_assembler.py` — removed pending a new SDL-native runtime
 - `src/aptl/core/sdl/defenses.py` — free-form defense config (underspecified)
-- `src/aptl/core/sdl/objectives.py` — moved to `aptl.core.objectives`
 - `src/aptl/core/sdl/attacks.py` — moved to `aptl.core.attacks`
 - `tests/test_sdl_compat.py` — tests for removed compat layer
 

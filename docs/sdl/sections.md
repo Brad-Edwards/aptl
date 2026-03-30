@@ -1,6 +1,6 @@
 # SDL Sections Reference
 
-A scenario is a YAML document with a required top-level `name` and up to 19 named sections. Aside from `name`, all sections are optional.
+A scenario is a YAML document with a required top-level `name` and up to 20 named sections. Aside from `name`, all sections are optional.
 
 ## Section Overview
 
@@ -23,7 +23,7 @@ A scenario is a YAML document with a required top-level `name` and up to 19 name
 | `scripts` | `dict[str, Script]` | Timed event sequences with human-readable durations |
 | `stories` | `dict[str, Story]` | Top-level exercise orchestration grouping scripts |
 
-### Extended Sections (5 sections)
+### Extended Sections (6 sections)
 
 | Section | Type | Purpose | Adapted From |
 |---------|------|---------|--------------|
@@ -31,6 +31,7 @@ A scenario is a YAML document with a required top-level `name` and up to 19 name
 | `accounts` | `dict[str, Account]` | User accounts on nodes (AD users, SSH, DB users) | CyRIS `add_account` |
 | `relationships` | `dict[str, Relationship]` | Typed edges between elements (auth, trust, federation) | STIX Relationship SRO |
 | `agents` | `dict[str, Agent]` | Autonomous participants (actions, knowledge, scope) | CybORG Agents |
+| `objectives` | `dict[str, Objective]` | Declarative experiment tasks binding actors, targets, windows, and success | OCR scoring + CACAO action/target/agent |
 | `variables` | `dict[str, Variable]` | Parameterization (types, defaults, substitution) | CACAO playbook_variables |
 
 ---
@@ -77,9 +78,13 @@ nodes:
 
 **Switch** nodes are pure connectivity objects. They may define `type` and an optional `description`, but `source`, `resources`, `os`, `os_version`, `features`, `conditions`, `injects`, `vulnerabilities`, `roles`, `services`, and `asset_value` are rejected.
 
+For **VM** nodes, `resources` remain optional at the SDL layer to preserve abstract specifications, but a VM without `resources` emits a non-fatal advisory because many deployment backends will need explicit sizing or well-defined defaults.
+
 **Feature list shorthand:** `features: [nginx, php]` expands to `{nginx: "", php: ""}` (no role binding required).
 
 When `features`, `conditions`, or `injects` use the `{name: role}` form, the role must be declared in the node's `roles` map.
+
+Concrete service bindings on a VM must be unique by `protocol` + `port`. Reusing `53/tcp` and `53/udp` is valid; declaring `443/tcp` twice on the same node is rejected.
 
 ---
 
@@ -384,6 +389,40 @@ agents:
 
 ---
 
+## Objectives
+
+Declarative experiment semantics that bind actors, targets, timing, and success criteria in the same SDL. Inspired by OCR's in-spec assessment model and CACAO's separation of agent, target, and workflow context.
+
+```yaml
+objectives:
+  red-initial-access:
+    agent: red-agent                   # or: entity: red-team
+    actions: [Scan, Exploit]           # should be declared on the agent
+    targets: [web-server, app-to-db]   # any named scenario elements except variables/objectives
+    success:
+      mode: all_of                     # all_of, any_of
+      goals: [pass-exercise]
+      metrics: [service-uptime]
+    window:
+      stories: [exercise]
+      scripts: [main-timeline]
+      events: [attack-wave]
+
+  blue-reporting:
+    entity: blue-team
+    success:
+      metrics: [report-quality]
+    depends_on: [red-initial-access]
+```
+
+Every objective must declare exactly one actor: either `agent` or `entity`. `success` is required and must reference at least one declared `condition`, `metric`, `evaluation`, `tlo`, or `goal`. `targets` are optional, but when present they must resolve to named scenario elements. `window` is optional; when supplied, referenced stories/scripts/events must exist and remain internally consistent.
+
+`depends_on` is an ordering relation, not just commentary. It defines a partial order over objectives: downstream objectives are not considered ready until their predecessors have been satisfied. Objective dependency cycles are rejected.
+
+This section is intentionally declarative. It says who is trying to do what, against what, during which window, and how success is interpreted. It does **not** embed backend-specific probes such as Wazuh queries or command-output checks.
+
+---
+
 ## Variables
 
 Scenario parameterization. Adapted from CACAO playbook_variables.
@@ -414,8 +453,11 @@ Think of variables as parameterizing **properties of declared objects**, not the
 
 ---
 
-## Scoring: Exercise Assessment vs Automated Validation
+## Scoring, Objectives, and Runtime Checks
 
-The SDL's scoring pipeline (conditions → metrics → evaluations → TLOs → goals) is for **exercise assessment** — human-evaluated team exercises like Locked Shields or CCDC where white team judges grade performance.
+The SDL now carries both:
 
-**Automated validation** (APTL's ObjectiveType with wazuh_alert/command_output/file_exists auto-evaluation) is a **runtime concern** that lives outside the SDL, in `aptl.core.objectives`. The SDL specifies *what success looks like* via the scoring pipeline; the runtime determines *whether it happened* via automated checks.
+- the OCR-style scoring pipeline (`conditions → metrics → evaluations → TLOs → goals`)
+- declarative objectives that bind actors, targets, windows, and success criteria
+
+Backend-specific auto-validation mechanics still live outside the SDL. The runtime may use Wazuh queries, command probes, file checks, or other adapters to determine whether an SDL-declared objective or scoring condition has been satisfied, but those probe details are not the language itself.

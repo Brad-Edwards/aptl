@@ -27,7 +27,7 @@ These are things that *should* be expressible in the SDL but aren't yet:
 | Gap | Description | Candidate Precedent |
 |-----|-------------|-------------------|
 | **Module composition** | Import and compose scenario modules with version constraints and parameter overrides | Terraform modules, TOSCA type derivation |
-| **CACAO-style workflow steps** | Action/condition/loop/parallel workflow semantics beyond OCR's timeline model | CACAO v2.0 workflow types |
+| **Full CACAO-style workflow steps** | Objectives now bind actors, targets, windows, and success in the SDL, but branching/loop/parallel step graphs are still not first-class | CACAO v2.0 workflow types |
 | **Temporal operators** | STIX-style FOLLOWEDBY/WITHIN for time-ordered event assertions | STIX Patterning Language |
 | **Formal verification** | Pre-deployment verification that attack paths are reachable and defenses are consistent | VSDL SMT solver, CRACK Datalog |
 | **Agent framework bindings** | Gymnasium observation/action space definitions, reward function code | CybORG Gymnasium interface |

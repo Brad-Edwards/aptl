@@ -48,9 +48,9 @@ aptl lab start
 
 ### Scenario Description Language (SDL)
 - [SDL Overview](sdl/index.md) — What the SDL is and how to use it
-- [Sections Reference](sdl/sections.md) — Complete reference for all 19 sections
+- [Sections Reference](sdl/sections.md) — Complete reference for all 20 sections
 - [Parser Behavior](sdl/parser.md) — Key normalization, shorthands, SDL-only parsing
-- [Semantic Validation](sdl/validation.md) — Cross-reference checks (20 passes)
+- [Semantic Validation](sdl/validation.md) — Cross-reference checks (21 passes)
 - [Design Precedents](sdl/precedents.md) — Where each element comes from
 - [Limitations](sdl/limitations.md) — What the SDL cannot express yet
 - [Testing](sdl/testing.md) — Unit tests, stress tests, fuzz tests

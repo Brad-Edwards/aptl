@@ -1,0 +1,747 @@
+name: hospital-ransomware-surgery-day
+description: >
+  Surgery-day ransomware exercise for a regional hospital. The scenario
+  combines phishing, vendor access abuse, identity pivoting, EHR/PACS
+  disruption, and backup-driven recovery under clinical time pressure.
+
+variables:
+  surgery_day_speed:
+    type: number
+    default: 1.0
+    description: Story speed multiplier for the exercise day
+  recovery_window:
+    type: string
+    default: "8 hour"
+    description: Total duration of the recovery story
+
+nodes:
+  internet-edge:
+    type: Switch
+    description: Public ingress for email, VPN, and external access
+  vendor-segment:
+    type: Switch
+    description: Third-party support access zone
+  corp-it:
+    type: Switch
+    description: Corporate productivity and identity-adjacent services
+  clinical-it:
+    type: Switch
+    description: Clinical application tier
+  identity-net:
+    type: Switch
+    description: Active Directory and SSO infrastructure
+  security-net:
+    type: Switch
+    description: SIEM and response tooling network
+  backup-net:
+    type: Switch
+    description: Backup and recovery network
+
+  mail-gateway:
+    type: VM
+    os: linux
+    source: secure-mail-gateway
+    resources: {ram: 2 gib, cpu: 1}
+    features: {mail-relay: mail-admin}
+    conditions: {mail-queue-healthy: mail-admin}
+    services:
+      - {port: 25, name: smtp-inbound}
+      - {port: 443, name: mail-admin-ui}
+    roles: {mail-admin: postfix}
+
+  vpn-gateway:
+    type: VM
+    os: linux
+    source: vpn-concentrator
+    resources: {ram: 2 gib, cpu: 2}
+    features: {vpn-concentrator: vpn-admin}
+    conditions:
+      vpn-auth-healthy: vpn-admin
+      vendor-session-established: vpn-admin
+    services:
+      - {port: 443, name: vpn-portal}
+      - {port: 1194, protocol: udp, name: vpn-tunnel}
+    roles:
+      vpn-admin:
+        username: netops
+        entities: [hospital-blue.identity]
+
+  ad01:
+    type: VM
+    os: windows
+    os_version: "Server 2022"
+    source: windows-ad
+    resources: {ram: 4 gib, cpu: 2}
+    features:
+      hospital-ad: domain-admin
+      hospital-adfs: federation-admin
+    conditions:
+      domain-auth-healthy: domain-admin
+      sso-healthy: federation-admin
+    services:
+      - {port: 53, protocol: udp, name: ad-dns}
+      - {port: 389, name: ad-ldap}
+      - {port: 443, name: adfs-https}
+    roles:
+      domain-admin:
+        username: Administrator
+        entities: [hospital-blue.identity]
+      federation-admin:
+        username: adfs_svc
+
+  exchange01:
+    type: VM
+    os: windows
+    os_version: "Server 2019"
+    source: exchange-2019
+    resources: {ram: 4 gib, cpu: 2}
+    features: {exchange-mailbox: exchange-admin}
+    conditions:
+      exchange-owa-healthy: exchange-admin
+      phish-mail-delivered: exchange-admin
+    services:
+      - {port: 443, name: exchange-owa}
+      - {port: 25, name: exchange-smtp}
+    roles:
+      exchange-admin:
+        username: exch_admin
+        entities: [hospital-blue.identity]
+
+  ehr-frontend:
+    type: VM
+    os: linux
+    source: ehr-web-tier
+    resources: {ram: 6 gib, cpu: 4}
+    features: {ehr-service: ehr-admin}
+    conditions:
+      ehr-api-healthy: ehr-admin
+      clinical-disruption-observed: ehr-admin
+    services:
+      - {port: 443, name: ehr-https}
+      - {port: 8443, name: ehr-admin-api}
+    roles:
+      ehr-admin:
+        username: ehrsvc
+        entities: [hospital-blue.clinical-it]
+    asset_value:
+      confidentiality: critical
+      integrity: critical
+      availability: critical
+
+  ehr-db:
+    type: VM
+    os: linux
+    source: postgres-cluster
+    resources: {ram: 8 gib, cpu: 4}
+    features: {sql-cluster: dba}
+    conditions:
+      ehr-db-healthy: dba
+      phi-staging-observed: dba
+    services:
+      - {port: 5432, name: ehr-postgres}
+    roles:
+      dba:
+        username: postgres
+        entities: [hospital-blue.clinical-it]
+    asset_value:
+      confidentiality: critical
+      integrity: critical
+
+  pacs01:
+    type: VM
+    os: linux
+    source: pacs-archive
+    resources: {ram: 6 gib, cpu: 4}
+    features: {pacs-service: pacs-admin}
+    conditions:
+      pacs-archive-healthy: pacs-admin
+      radiology-workflow-delayed: pacs-admin
+    services:
+      - {port: 104, name: dicom-store}
+      - {port: 8444, name: pacs-web-ui}
+    roles:
+      pacs-admin:
+        username: pacs
+        entities: [hospital-blue.clinical-it]
+    asset_value:
+      confidentiality: high
+      integrity: high
+      availability: critical
+
+  med-gateway:
+    type: VM
+    os: linux
+    source: medical-device-broker
+    resources: {ram: 2 gib, cpu: 2}
+    features: {device-broker: device-admin}
+    conditions: {device-mesh-healthy: device-admin}
+    services:
+      - {port: 8883, name: med-mqtt}
+    roles:
+      device-admin:
+        username: biomed
+        entities: [hospital-blue.clinical-it]
+
+  backup-vault:
+    type: VM
+    os: linux
+    source: immutable-backup-appliance
+    resources: {ram: 4 gib, cpu: 2}
+    features: {immutable-backup: backup-admin}
+    conditions:
+      backup-catalog-intact: backup-admin
+      restore-runbook-ready: backup-admin
+    services:
+      - {port: 443, name: backup-api}
+      - {port: 2049, name: backup-nfs}
+    roles:
+      backup-admin:
+        username: backupops
+        entities: [hospital-blue.recovery]
+
+  siem01:
+    type: VM
+    os: linux
+    source: siem-stack
+    resources: {ram: 8 gib, cpu: 4}
+    features:
+      siem-core: soc-admin
+      edr-sensor: soc-admin
+    conditions:
+      soc-pipeline-up: soc-admin
+      triage-case-submitted: soc-admin
+    services:
+      - {port: 5601, name: soc-ui}
+      - {port: 9200, name: soc-search}
+    roles:
+      soc-admin:
+        username: socadmin
+        entities: [hospital-blue.soc]
+
+  vendor-jump:
+    type: VM
+    os: windows
+    os_version: "11"
+    source: vendor-workstation
+    resources: {ram: 2 gib, cpu: 2}
+    conditions: {vendor-jump-online: support}
+    services:
+      - {port: 3389, name: vendor-rdp}
+    roles:
+      support:
+        username: support
+        entities: [vendor-support]
+
+infrastructure:
+  internet-edge:
+    count: 1
+    properties: {cidr: 10.70.0.0/24, gateway: 10.70.0.1}
+  vendor-segment:
+    count: 1
+    properties: {cidr: 10.70.1.0/24, gateway: 10.70.1.1, internal: true}
+    acls:
+      - {direction: in, from_net: internet-edge, protocol: tcp, ports: [443], action: allow}
+      - {direction: in, from_net: clinical-it, action: deny}
+  corp-it:
+    count: 1
+    properties: {cidr: 10.70.2.0/24, gateway: 10.70.2.1, internal: true}
+    acls:
+      - {direction: in, from_net: internet-edge, protocol: tcp, ports: [25, 443], action: allow}
+      - {direction: in, from_net: vendor-segment, protocol: tcp, ports: [443], action: allow}
+  clinical-it:
+    count: 1
+    properties: {cidr: 10.70.3.0/24, gateway: 10.70.3.1, internal: true}
+    acls:
+      - {direction: in, from_net: corp-it, protocol: tcp, ports: [443, 8443, 8444], action: allow}
+      - {direction: in, from_net: vendor-segment, protocol: tcp, ports: [443], action: allow}
+      - {direction: in, from_net: internet-edge, action: deny}
+  identity-net:
+    count: 1
+    properties: {cidr: 10.70.4.0/24, gateway: 10.70.4.1, internal: true}
+    acls:
+      - {direction: in, from_net: corp-it, protocol: tcp, ports: [53, 389, 443], action: allow}
+      - {direction: in, from_net: clinical-it, protocol: tcp, ports: [389, 443], action: allow}
+  security-net:
+    count: 1
+    properties: {cidr: 10.70.5.0/24, gateway: 10.70.5.1, internal: true}
+  backup-net:
+    count: 1
+    properties: {cidr: 10.70.6.0/24, gateway: 10.70.6.1, internal: true}
+
+  mail-gateway:
+    count: 1
+    links: [internet-edge, corp-it, security-net]
+  vpn-gateway:
+    count: 1
+    links: [internet-edge, vendor-segment, corp-it]
+  ad01:
+    count: 1
+    links: [identity-net, corp-it, clinical-it]
+  exchange01:
+    count: 1
+    links: [corp-it, identity-net]
+    dependencies: [ad01]
+  ehr-frontend:
+    count: 1
+    links: [clinical-it, identity-net]
+    dependencies: [ehr-db, ad01]
+  ehr-db:
+    count: 1
+    links: [clinical-it, backup-net]
+    dependencies: [backup-vault]
+  pacs01:
+    count: 1
+    links: [clinical-it, backup-net]
+    dependencies: [backup-vault]
+  med-gateway:
+    count: 1
+    links: [clinical-it]
+    dependencies: [ehr-frontend]
+  backup-vault:
+    count: 1
+    links: [backup-net, security-net]
+  siem01:
+    count: 1
+    links: [security-net, corp-it]
+  vendor-jump:
+    count: 1
+    links: [vendor-segment]
+
+features:
+  mail-relay: {type: Service, source: postfix-relay}
+  vpn-concentrator: {type: Service, source: openvpn-appliance}
+  hospital-ad: {type: Service, source: active-directory-domain-services}
+  hospital-adfs: {type: Service, source: adfs}
+  exchange-mailbox: {type: Service, source: exchange-mailbox-role}
+  ehr-service: {type: Service, source: epic-web}
+  sql-cluster: {type: Service, source: postgresql-ha}
+  pacs-service: {type: Service, source: orthanc-pacs}
+  device-broker: {type: Service, source: mqtt-medical-gateway}
+  immutable-backup: {type: Service, source: immutable-backup-vault}
+  siem-core: {type: Service, source: wazuh-elastic-stack}
+  edr-sensor: {type: Artifact, source: hospital-edr-agent, destination: /opt/edr}
+
+conditions:
+  mail-queue-healthy:
+    command: /usr/local/bin/check-mail-queue
+    interval: 30
+  vpn-auth-healthy:
+    command: /usr/local/bin/check-vpn-auth
+    interval: 30
+  vendor-session-established:
+    command: /usr/local/bin/check-vendor-session
+    interval: 30
+  domain-auth-healthy:
+    command: /usr/local/bin/check-domain-auth
+    interval: 30
+  sso-healthy:
+    command: /usr/local/bin/check-sso
+    interval: 30
+  exchange-owa-healthy:
+    command: /usr/local/bin/check-exchange-owa
+    interval: 30
+  phish-mail-delivered:
+    command: /usr/local/bin/check-phish-delivery
+    interval: 60
+  ehr-api-healthy:
+    command: /usr/local/bin/check-ehr-api
+    interval: 15
+  clinical-disruption-observed:
+    command: /usr/local/bin/check-clinical-disruption
+    interval: 30
+  ehr-db-healthy:
+    command: /usr/local/bin/check-postgres
+    interval: 15
+  phi-staging-observed:
+    command: /usr/local/bin/check-staged-phi
+    interval: 60
+  pacs-archive-healthy:
+    command: /usr/local/bin/check-pacs
+    interval: 15
+  radiology-workflow-delayed:
+    command: /usr/local/bin/check-radiology-delay
+    interval: 30
+  device-mesh-healthy:
+    command: /usr/local/bin/check-device-mesh
+    interval: 30
+  backup-catalog-intact:
+    command: /usr/local/bin/check-backup-catalog
+    interval: 30
+  restore-runbook-ready:
+    command: /usr/local/bin/check-restore-runbook
+    interval: 60
+  soc-pipeline-up:
+    command: /usr/local/bin/check-siem-ingest
+    interval: 30
+  triage-case-submitted:
+    command: /usr/local/bin/check-triage-case
+    interval: 60
+  vendor-jump-online:
+    command: /usr/local/bin/check-vendor-rdp
+    interval: 30
+
+vulnerabilities:
+  macro-lure:
+    name: Phishing macro lure
+    description: Macro-enabled attachment delivers initial access to the vendor support path
+    technical: false
+    class: CWE-451
+  vpn-portal-bypass:
+    name: VPN portal bypass
+    description: Vendor VPN policy allows credential reuse from unmanaged endpoints
+    technical: true
+    class: CWE-287
+  kerberoastable-service:
+    name: Kerberoastable service credential
+    description: Weak service account password permits offline cracking
+    technical: true
+    class: CWE-521
+  backup-share-exposure:
+    name: Backup share exposure
+    description: Restore staging area is writable from the clinical tier
+    technical: true
+    class: CWE-732
+
+metrics:
+  blue-ehr-availability:
+    type: CONDITIONAL
+    max-score: 100
+    condition: ehr-api-healthy
+  blue-pacs-availability:
+    type: CONDITIONAL
+    max-score: 100
+    condition: pacs-archive-healthy
+  blue-backup-integrity:
+    type: CONDITIONAL
+    max-score: 100
+    condition: backup-catalog-intact
+  blue-ir-report:
+    type: MANUAL
+    max-score: 50
+    artifact: true
+  red-phi-staging:
+    type: CONDITIONAL
+    max-score: 100
+    condition: phi-staging-observed
+  red-clinical-disruption:
+    type: CONDITIONAL
+    max-score: 100
+    condition: clinical-disruption-observed
+
+evaluations:
+  blue-clinical-resilience:
+    metrics: [blue-ehr-availability, blue-pacs-availability, blue-backup-integrity, blue-ir-report]
+    min-score: 75
+  red-ransom-impact:
+    metrics: [red-phi-staging, red-clinical-disruption]
+    min-score: {percentage: 75}
+
+tlos:
+  sustain-clinical-operations:
+    name: Sustain clinical operations
+    evaluation: blue-clinical-resilience
+  achieve-ransomware-impact:
+    name: Achieve ransomware impact
+    evaluation: red-ransom-impact
+
+goals:
+  hospital-blue-goal:
+    tlos: [sustain-clinical-operations]
+  ransom-crew-goal:
+    tlos: [achieve-ransomware-impact]
+
+entities:
+  hospital-blue:
+    name: Hospital Blue Team
+    role: Blue
+    mission: Keep patient care and core services available throughout the incident
+    tlos: [sustain-clinical-operations]
+    entities:
+      soc:
+        name: SOC
+      identity:
+        name: Identity Engineering
+      clinical-it:
+        name: Clinical IT
+      recovery:
+        name: Recovery Cell
+  vendor-support:
+    name: Vendor Support
+    role: Green
+    mission: Maintain third-party support connection for imaging systems
+  ransom-crew:
+    name: Ransom Crew
+    role: Red
+    mission: Steal PHI and disrupt radiology before the surgery window closes
+  white-cell:
+    name: White Cell
+    role: White
+
+injects:
+  vendor-advisory:
+    source: vendor-advisory-pdf
+    from_entity: white-cell
+    to_entities: [hospital-blue, vendor-support]
+    description: Advisory about intermittent VPN instability from the imaging vendor
+  phishing-wave:
+    source: payroll-lure-pack
+    from_entity: ransom-crew
+    to_entities: [hospital-blue, vendor-support]
+    description: Phishing lure targeting helpdesk and vendor support personnel
+  surgery-escalation:
+    source: operating-room-escalation
+    from_entity: white-cell
+    to_entities: [hospital-blue]
+    description: Surgeons report delayed radiology access and demand ETA
+
+events:
+  morning-advisory:
+    injects: [vendor-advisory]
+  phishing-delivery:
+    conditions: [phish-mail-delivered]
+    injects: [phishing-wave]
+  surgery-pressure:
+    conditions: [clinical-disruption-observed]
+    injects: [surgery-escalation]
+
+scripts:
+  pre-surgery:
+    start-time: 0
+    end-time: 2 hour
+    speed: ${surgery_day_speed}
+    events:
+      morning-advisory: 10 min
+      phishing-delivery: 45 min
+  live-clinic:
+    start-time: 2 hour
+    end-time: 5 hour
+    speed: ${surgery_day_speed}
+    events:
+      surgery-pressure: 3 hour
+  recovery-window:
+    start-time: 5 hour
+    end-time: ${recovery_window}
+    speed: ${surgery_day_speed}
+    events:
+      surgery-pressure: 6 hour
+
+stories:
+  surgery-day:
+    speed: ${surgery_day_speed}
+    scripts: [pre-surgery, live-clinic, recovery-window]
+
+content:
+  phi-records:
+    type: dataset
+    target: ehr-db
+    format: sql
+    source: synthetic-phi-seed
+    sensitive: true
+    tags: [phi, patients]
+  radiology-images:
+    type: dataset
+    target: pacs01
+    format: dicom
+    source: dicom-archive-seed
+    sensitive: true
+    tags: [radiology]
+  phishing-mailbox:
+    type: dataset
+    target: exchange01
+    format: eml
+    sensitive: true
+    items:
+      - name: payroll-adjustment.eml
+        tags: [phishing, attachment]
+        description: Message crafted to lure helpdesk review
+      - name: vendor-followup.eml
+        tags: [phishing, vendor]
+        description: Message impersonating the imaging vendor
+  backup-runbook:
+    type: file
+    target: backup-vault
+    path: /srv/runbooks/hospital-recovery.md
+    text: "Recover EHR, PACS, and device broker in dependency order."
+    sensitive: true
+  vendor-session-profile:
+    type: file
+    target: vendor-jump
+    path: C:\\Support\\session.ini
+    text: "tenant=hospital\\naccess=vpn\\nprofile=imaging-support"
+    sensitive: true
+
+accounts:
+  nurse-user:
+    username: nurse.jane
+    node: exchange01
+    groups: [Clinical]
+    password_strength: medium
+    mail: nurse.jane@hospital.local
+  surgeon-user:
+    username: surgeon.lee
+    node: ehr-frontend
+    groups: [Surgery]
+    password_strength: strong
+  helpdesk-user:
+    username: helpdesk
+    node: exchange01
+    groups: [Helpdesk]
+    password_strength: medium
+  svc-ehr:
+    username: ehrsvc
+    node: ehr-frontend
+    groups: [AppServices]
+    password_strength: weak
+    spn: "HTTP/ehr.hospital.local"
+  svc-sql:
+    username: ehrsql
+    node: ehr-db
+    groups: [DBA]
+    password_strength: weak
+    spn: "POSTGRES/ehr-db.hospital.local"
+  backup-operator:
+    username: backupops
+    node: backup-vault
+    groups: [BackupAdmins]
+    password_strength: strong
+  vendor-tech:
+    username: support
+    node: vendor-jump
+    groups: [VendorSupport]
+    password_strength: medium
+  soc-analyst:
+    username: socanalyst
+    node: siem01
+    groups: [SOC]
+    password_strength: strong
+
+relationships:
+  exchange-auths-ad:
+    type: authenticates_with
+    source: exchange-mailbox
+    target: hospital-ad
+  vpn-vendor-support-path:
+    type: authenticates_with
+    source: vendor-tech
+    target: vpn-concentrator
+    description: Vendor support uses VPN plus shared support credentials
+  ehr-sso-path:
+    type: federates_with
+    source: ehr-service
+    target: hospital-adfs
+    properties: {protocol: "SAML"}
+  ehr-to-database:
+    type: connects_to
+    source: ehr-service
+    target: sql-cluster
+    properties: {protocol: "tcp", port: "5432"}
+  pacs-sync-to-backup:
+    type: replicates_to
+    source: pacs-service
+    target: immutable-backup
+  med-gateway-depends-ehr:
+    type: depends_on
+    source: device-broker
+    target: ehr-service
+  backup-manages-ehr:
+    type: manages
+    source: immutable-backup
+    target: ehr-db
+
+agents:
+  red-initial:
+    entity: ransom-crew
+    actions: [Phish, AbuseVPN, Discover, StealCred]
+    initial_knowledge:
+      hosts: [mail-gateway, vpn-gateway, vendor-jump]
+      subnets: [internet-edge, vendor-segment]
+      services: [smtp-inbound, vpn-portal, vendor-rdp]
+      accounts: [vendor-tech]
+    allowed_subnets: [internet-edge, vendor-segment, corp-it]
+    reward_calculator: InitialAccessImpact
+  red-operator:
+    entity: ransom-crew
+    actions: [Pivot, Exfiltrate, Encrypt, Disable]
+    starting_accounts: [svc-ehr]
+    initial_knowledge:
+      hosts: [ehr-frontend, ehr-db, pacs01]
+      subnets: [clinical-it, backup-net]
+      services: [ehr-https, ehr-postgres, dicom-store]
+      accounts: [svc-sql, backup-operator]
+    allowed_subnets: [clinical-it, backup-net, identity-net]
+    reward_calculator: HybridImpactPwn
+  blue-soc-agent:
+    entity: hospital-blue.soc
+    actions: [Inspect, Triage, Isolate, Escalate]
+    starting_accounts: [soc-analyst]
+    initial_knowledge:
+      hosts: [siem01, mail-gateway, vpn-gateway]
+      subnets: [security-net, corp-it]
+      services: [soc-ui, mail-admin-ui, vpn-portal]
+      accounts: [helpdesk-user, vendor-tech]
+    allowed_subnets: [security-net, corp-it, vendor-segment]
+    reward_calculator: HybridAvailabilityConfidentiality
+  blue-ir-agent:
+    entity: hospital-blue.recovery
+    actions: [Contain, Restore, ReissueCreds, Validate]
+    starting_accounts: [backup-operator]
+    initial_knowledge:
+      hosts: [backup-vault, ehr-db, pacs01]
+      subnets: [backup-net, clinical-it]
+      services: [backup-api, backup-nfs, pacs-web-ui]
+      accounts: [svc-sql, backup-operator]
+    allowed_subnets: [backup-net, clinical-it, identity-net]
+    reward_calculator: RecoveryResilience
+
+objectives:
+  red-establish-foothold:
+    agent: red-initial
+    actions: [Phish, AbuseVPN]
+    targets: [vpn-gateway, exchange01, vpn-vendor-support-path]
+    success:
+      conditions: [vendor-session-established]
+    window:
+      stories: [surgery-day]
+      scripts: [pre-surgery]
+      events: [phishing-delivery]
+  red-stage-phi:
+    agent: red-operator
+    actions: [Pivot, Exfiltrate]
+    targets: [phi-records, ehr-to-database, ehr-db]
+    success:
+      conditions: [phi-staging-observed]
+      metrics: [red-phi-staging]
+    depends_on: [red-establish-foothold]
+    window:
+      stories: [surgery-day]
+      scripts: [live-clinic]
+  red-disrupt-radiology:
+    entity: ransom-crew
+    targets: [pacs01, radiology-images, pacs-sync-to-backup]
+    success:
+      goals: [ransom-crew-goal]
+    depends_on: [red-stage-phi]
+    window:
+      stories: [surgery-day]
+      scripts: [live-clinic]
+      events: [surgery-pressure]
+  blue-detect-and-triage:
+    agent: blue-soc-agent
+    actions: [Inspect, Triage, Escalate]
+    targets: [siem01, vpn-gateway, mail-gateway]
+    success:
+      conditions: [soc-pipeline-up, triage-case-submitted]
+    window:
+      stories: [surgery-day]
+      scripts: [pre-surgery, live-clinic]
+  blue-restore-clinical-services:
+    agent: blue-ir-agent
+    actions: [Contain, Restore, Validate]
+    targets: [backup-vault, ehr-db, pacs01, backup-manages-ehr]
+    success:
+      goals: [hospital-blue-goal]
+      metrics: [blue-backup-integrity]
+    depends_on: [blue-detect-and-triage, red-disrupt-radiology]
+    window:
+      stories: [surgery-day]
+      scripts: [recovery-window]

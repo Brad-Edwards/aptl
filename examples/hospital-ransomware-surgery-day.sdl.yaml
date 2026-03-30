@@ -240,27 +240,27 @@ infrastructure:
     count: 1
     properties: {cidr: 10.70.1.0/24, gateway: 10.70.1.1, internal: true}
     acls:
-      - {direction: in, from_net: internet-edge, protocol: tcp, ports: [443], action: allow}
-      - {direction: in, from_net: clinical-it, action: deny}
+      - {name: allow-public-vpn, direction: in, from_net: internet-edge, protocol: tcp, ports: [443], action: allow}
+      - {name: deny-clinical-backflow, direction: in, from_net: clinical-it, action: deny}
   corp-it:
     count: 1
     properties: {cidr: 10.70.2.0/24, gateway: 10.70.2.1, internal: true}
     acls:
-      - {direction: in, from_net: internet-edge, protocol: tcp, ports: [25, 443], action: allow}
-      - {direction: in, from_net: vendor-segment, protocol: tcp, ports: [443], action: allow}
+      - {name: allow-public-mail-web, direction: in, from_net: internet-edge, protocol: tcp, ports: [25, 443], action: allow}
+      - {name: allow-vendor-support, direction: in, from_net: vendor-segment, protocol: tcp, ports: [443], action: allow}
   clinical-it:
     count: 1
     properties: {cidr: 10.70.3.0/24, gateway: 10.70.3.1, internal: true}
     acls:
-      - {direction: in, from_net: corp-it, protocol: tcp, ports: [443, 8443, 8444], action: allow}
-      - {direction: in, from_net: vendor-segment, protocol: tcp, ports: [443], action: allow}
-      - {direction: in, from_net: internet-edge, action: deny}
+      - {name: allow-corp-clinical-apps, direction: in, from_net: corp-it, protocol: tcp, ports: [443, 8443, 8444], action: allow}
+      - {name: allow-vendor-clinical-web, direction: in, from_net: vendor-segment, protocol: tcp, ports: [443], action: allow}
+      - {name: deny-public-clinical, direction: in, from_net: internet-edge, action: deny}
   identity-net:
     count: 1
     properties: {cidr: 10.70.4.0/24, gateway: 10.70.4.1, internal: true}
     acls:
-      - {direction: in, from_net: corp-it, protocol: tcp, ports: [53, 389, 443], action: allow}
-      - {direction: in, from_net: clinical-it, protocol: tcp, ports: [389, 443], action: allow}
+      - {name: allow-corp-identity, direction: in, from_net: corp-it, protocol: tcp, ports: [53, 389, 443], action: allow}
+      - {name: allow-clinical-identity, direction: in, from_net: clinical-it, protocol: tcp, ports: [389, 443], action: allow}
   security-net:
     count: 1
     properties: {cidr: 10.70.5.0/24, gateway: 10.70.5.1, internal: true}
@@ -697,7 +697,12 @@ objectives:
   red-establish-foothold:
     agent: red-initial
     actions: [Phish, AbuseVPN]
-    targets: [vpn-gateway, exchange01, vpn-vendor-support-path]
+    targets:
+      - vpn-gateway
+      - exchange01
+      - nodes.vpn-gateway.services.vpn-portal
+      - infrastructure.corp-it.acls.allow-vendor-support
+      - vpn-vendor-support-path
     success:
       conditions: [vendor-session-established]
     window:
@@ -728,7 +733,12 @@ objectives:
   blue-detect-and-triage:
     agent: blue-soc-agent
     actions: [Inspect, Triage, Escalate]
-    targets: [siem01, vpn-gateway, mail-gateway]
+    targets:
+      - siem01
+      - vpn-gateway
+      - mail-gateway
+      - nodes.vpn-gateway.services.vpn-portal
+      - infrastructure.corp-it.acls.allow-vendor-support
     success:
       conditions: [soc-pipeline-up, triage-case-submitted]
     window:

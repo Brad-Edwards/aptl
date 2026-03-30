@@ -10,7 +10,7 @@ pytest tests/test_sdl_models.py tests/test_sdl_validator.py \
 ```
 
 Tests structural validation (Pydantic models), semantic validation (cross-reference checks), and parser behavior (normalization, shorthands, SDL-only format boundary).
-The unit suites also cover OCR-derived duration grammar, entity fact maps, and `${var}` placeholder handling across supported scalar/reference fields.
+The unit suites also cover OCR-derived duration grammar, workflow graphs, direct service/ACL target refs, and `${var}` placeholder handling across supported scalar/reference fields including selected leaf enums.
 
 ### Stress Tests (standard run)
 
@@ -77,6 +77,8 @@ The up-front design briefs for the new complex examples live in
 [`docs/sdl/complex-scenarios.md`](complex-scenarios.md), and the running
 authoring issue log lives in
 [`docs/sdl/complex-scenario-authoring-notes.md`](complex-scenario-authoring-notes.md).
+
+Those example files now also serve as disk-backed coverage for the newest SDL surfaces: enum-backed variable values, direct service/ACL objective targets, and workflow branching / parallel fanout.
 
 ## Adding New Scenarios
 

@@ -16,8 +16,8 @@ from pydantic import Field, field_validator, model_validator
 from aptl.core.sdl._base import (
     SDLModel,
     is_variable_ref,
-    normalize_enum_value,
     parse_bool_or_var,
+    parse_enum_or_var,
     parse_int_or_var,
 )
 
@@ -39,18 +39,19 @@ class ACLRule(SDLModel):
     traffic rules between network segments.
     """
 
+    name: str = ""
     direction: str = ""
     from_net: str = ""
     to_net: str = ""
     protocol: str = "any"
     ports: list[int | str] = Field(default_factory=list)
-    action: ACLAction = ACLAction.ALLOW
+    action: ACLAction | str = ACLAction.ALLOW
     description: str = ""
 
     @field_validator("action", mode="before")
     @classmethod
-    def normalize_action(cls, v: str) -> str:
-        return normalize_enum_value(v)
+    def normalize_action(cls, v: str) -> ACLAction | str:
+        return parse_enum_or_var(v, ACLAction, field_name="action")
 
     @field_validator("ports", mode="before")
     @classmethod
@@ -137,4 +138,15 @@ class InfraNode(SDLModel):
     def validate_unique_dependencies(self) -> "InfraNode":
         if len(self.dependencies) != len(set(self.dependencies)):
             raise ValueError("Infrastructure dependencies must be unique")
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_acl_names(self) -> "InfraNode":
+        seen_names: set[str] = set()
+        for acl in self.acls:
+            if not acl.name:
+                continue
+            if acl.name in seen_names:
+                raise ValueError(f"Infrastructure ACL names must be unique: '{acl.name}'")
+            seen_names.add(acl.name)
         return self

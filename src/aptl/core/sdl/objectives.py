@@ -15,7 +15,7 @@ from enum import Enum
 
 from pydantic import Field, field_validator, model_validator
 
-from aptl.core.sdl._base import SDLModel, normalize_enum_value
+from aptl.core.sdl._base import SDLModel, parse_enum_or_var
 
 
 class SuccessMode(str, Enum):
@@ -28,7 +28,7 @@ class SuccessMode(str, Enum):
 class ObjectiveSuccess(SDLModel):
     """Declarative success criteria for an objective."""
 
-    mode: SuccessMode = SuccessMode.ALL_OF
+    mode: SuccessMode | str = SuccessMode.ALL_OF
     conditions: list[str] = Field(default_factory=list)
     metrics: list[str] = Field(default_factory=list)
     evaluations: list[str] = Field(default_factory=list)
@@ -37,8 +37,8 @@ class ObjectiveSuccess(SDLModel):
 
     @field_validator("mode", mode="before")
     @classmethod
-    def normalize_mode(cls, v: str) -> str:
-        return normalize_enum_value(v)
+    def normalize_mode(cls, v: str) -> SuccessMode | str:
+        return parse_enum_or_var(v, SuccessMode, field_name="mode")
 
     @model_validator(mode="after")
     def validate_non_empty(self) -> "ObjectiveSuccess":
@@ -62,6 +62,8 @@ class ObjectiveWindow(SDLModel):
     stories: list[str] = Field(default_factory=list)
     scripts: list[str] = Field(default_factory=list)
     events: list[str] = Field(default_factory=list)
+    workflows: list[str] = Field(default_factory=list)
+    steps: list[str] = Field(default_factory=list)
 
 
 class Objective(SDLModel):

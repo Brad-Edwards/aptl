@@ -218,8 +218,8 @@ infrastructure:
     count: 1
     properties: {cidr: 10.110.3.0/24, gateway: 10.110.3.1, internal: true}
     acls:
-      - {direction: in, from_net: terminal-it, protocol: tcp, ports: [443, 4840], action: allow}
-      - {direction: in, from_net: public-edge, action: deny}
+      - {name: allow-yard-control, direction: in, from_net: terminal-it, protocol: tcp, ports: [443, 4840], action: allow}
+      - {name: deny-public-yard, direction: in, from_net: public-edge, action: deny}
   safety-net:
     count: 1
     properties: {cidr: 10.110.4.0/24, gateway: 10.110.4.1, internal: true}
@@ -605,10 +605,18 @@ objectives:
     window:
       stories: [surge-day]
       scripts: [arrival-phase, customs-surge-phase]
+      workflows: [yard-recovery]
+      steps: [yard-recovery.maintain-integrity]
   blue-blackstart-yard:
     agent: blue-yard-agent
     actions: [Inspect, Isolate, Restore, Validate]
-    targets: [backup-vault, historian01, yard-hmi, historian-replicates-backup]
+    targets:
+      - backup-vault
+      - historian01
+      - yard-hmi
+      - historian-replicates-backup
+      - nodes.crane-plc.services.crane-opcua
+      - infrastructure.yard-ot.acls.allow-yard-control
     success:
       goals: [port-blue-goal]
     depends_on: [blue-maintain-customs-integrity, red-degrade-yard-ops]
@@ -616,3 +624,54 @@ objectives:
       stories: [surge-day]
       scripts: [yard-disruption-phase]
       events: [yard-standdown]
+      workflows: [yard-recovery]
+      steps: [yard-recovery.restore-yard]
+  blue-validate-yard-telemetry:
+    agent: blue-yard-agent
+    actions: [Inspect, Validate]
+    targets:
+      - historian01
+      - camera-analytics
+      - nodes.historian01.services.historian-ui
+      - infrastructure.yard-ot.acls.allow-yard-control
+    success:
+      conditions: [yard-telemetry-flowing, historian-replication-ok]
+      metrics: [blue-telemetry-retention]
+    depends_on: [red-degrade-yard-ops]
+    window:
+      stories: [surge-day]
+      scripts: [yard-disruption-phase]
+      events: [yard-standdown]
+      workflows: [yard-recovery]
+      steps: [yard-recovery.validate-telemetry]
+
+workflows:
+  yard-recovery:
+    description: >
+      Recovery workflow that preserves customs integrity, branches into
+      blackstart-style OT recovery when tampering is observed, and joins
+      yard restoration with telemetry validation before declaring finish.
+    start: maintain-integrity
+    steps:
+      maintain-integrity:
+        type: objective
+        objective: blue-maintain-customs-integrity
+        next: assess-yard
+      assess-yard:
+        type: if
+        when:
+          conditions: [tampered-manifest-observed]
+        then: fanout-blackstart
+        else: finish
+      fanout-blackstart:
+        type: parallel
+        branches: [restore-yard, validate-telemetry]
+        next: finish
+      restore-yard:
+        type: objective
+        objective: blue-blackstart-yard
+      validate-telemetry:
+        type: objective
+        objective: blue-validate-yard-telemetry
+      finish:
+        type: end

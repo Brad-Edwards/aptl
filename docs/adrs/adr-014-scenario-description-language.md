@@ -14,20 +14,21 @@ However, the OCR SDL lacks: data/content modeling, user accounts, network access
 
 ## Decision
 
-Use the OCR SDL as the starting surface for `aptl.core.sdl`, preserve coverage across the OCR-derived sections, extend that base with 5 new sections adapted from existing systems (not invented), and decouple the language from any specific deployment backend.
+Use the OCR SDL as the starting surface for `aptl.core.sdl`, preserve coverage across the OCR-derived sections, extend that base with 7 new sections adapted from existing systems (not invented), and decouple the language from any specific deployment backend.
 
 ### Architecture
 
 The SDL is a **specification language**, not a deployment tool. It describes *what a scenario is*. A separate provider binding layer (future work) translates SDL specifications into concrete infrastructure.
 
-### Sections (20 total)
+### Sections (21 total)
 
-14 OCR-derived base sections + 6 new:
+14 OCR-derived base sections + 7 new:
 - `content` (from CyRIS) — data placed into systems
 - `accounts` (from CyRIS) — user accounts within nodes
 - `relationships` (from STIX SRO) — typed edges between elements
 - `agents` (from CybORG) — autonomous participants
 - `objectives` (from OCR scoring + CACAO workflow context) — declarative experiment semantics
+- `workflows` (from CACAO workflow patterns) — branching and parallel objective composition
 - `variables` (from CACAO) — parameterization
 
 ### Identity Model
@@ -43,7 +44,7 @@ This is simpler and more composable than a dedicated identity layer.
 
 Two-phase validation:
 1. **Structural** (Pydantic) — types, ranges, required fields, intra-model constraints
-2. **Semantic** (SemanticValidator) — 21 named passes checking cross-references, dependency cycles, IP/CIDR consistency, typed VM/network references, OCR count constraints, and SDL domain rules
+2. **Semantic** (SemanticValidator) — 22 named passes checking cross-references, dependency cycles, IP/CIDR consistency, typed VM/network references, OCR count constraints, workflow graph integrity, and SDL domain rules
 
 The validator collects all errors rather than failing on the first.
 

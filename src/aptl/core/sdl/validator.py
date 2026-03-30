@@ -16,6 +16,7 @@ from aptl.core.sdl._base import extract_variable_name, is_variable_ref
 from aptl.core.sdl.entities import flatten_entities
 from aptl.core.sdl.infrastructure import SimpleProperties
 from aptl.core.sdl.nodes import NodeType
+from aptl.core.sdl.orchestration import WorkflowStepType
 from aptl.core.sdl.scenario import Scenario
 from aptl.core.sdl.scoring import MetricType
 
@@ -79,6 +80,135 @@ class SemanticValidator:
         names.update(self._s.entities.keys())
         return names
 
+    def _qualified_service_refs(self) -> set[str]:
+        refs: set[str] = set()
+        for node_name, node in self._s.nodes.items():
+            for service in node.services:
+                if service.name:
+                    refs.add(f"nodes.{node_name}.services.{service.name}")
+        return refs
+
+    def _qualified_acl_refs(self) -> set[str]:
+        refs: set[str] = set()
+        for infra_name, infra in self._s.infrastructure.items():
+            for acl in infra.acls:
+                if acl.name:
+                    refs.add(f"infrastructure.{infra_name}.acls.{acl.name}")
+        return refs
+
+    def _workflow_step_refs(self) -> set[str]:
+        refs: set[str] = set()
+        for workflow_name, workflow in self._s.workflows.items():
+            for step_name in workflow.steps:
+                refs.add(f"{workflow_name}.{step_name}")
+        return refs
+
+    def _named_ref_index(self, *, targetable: bool = False) -> dict[str, set[str]]:
+        """Build the alias map for generic relationship/objective refs.
+
+        Bare refs stay available for most top-level sections when they are
+        unambiguous. Qualified refs are always accepted for top-level sections,
+        and are required for infrastructure entries because those keys
+        intentionally mirror node names.
+        """
+        index: dict[str, set[str]] = defaultdict(set)
+
+        def add(alias: str, canonical: str) -> None:
+            index[alias].add(canonical)
+
+        top_level_sections = (
+            ("nodes", self._s.nodes, True),
+            ("features", self._s.features, True),
+            ("conditions", self._s.conditions, True),
+            ("vulnerabilities", self._s.vulnerabilities, True),
+            ("infrastructure", self._s.infrastructure, False),
+            ("metrics", self._s.metrics, True),
+            ("evaluations", self._s.evaluations, True),
+            ("tlos", self._s.tlos, True),
+            ("goals", self._s.goals, True),
+            ("content", self._s.content, True),
+            ("accounts", self._s.accounts, True),
+            ("agents", self._s.agents, True),
+            ("objectives", self._s.objectives, True),
+            ("workflows", self._s.workflows, True),
+            ("relationships", self._s.relationships, True),
+            ("variables", self._s.variables, True),
+            ("injects", self._s.injects, True),
+            ("events", self._s.events, True),
+            ("scripts", self._s.scripts, True),
+            ("stories", self._s.stories, True),
+        )
+
+        for section_name, section, allow_bare in top_level_sections:
+            for name in section:
+                canonical = f"{section_name}.{name}"
+                add(canonical, canonical)
+                if allow_bare:
+                    add(name, canonical)
+
+        for entity_name in self._all_entity_names():
+            canonical = f"entities.{entity_name}"
+            add(canonical, canonical)
+            add(entity_name, canonical)
+
+        for content_name, content in self._s.content.items():
+            for item in content.items:
+                if not item.name:
+                    continue
+                canonical = f"content.{content_name}.items.{item.name}"
+                add(canonical, canonical)
+                add(item.name, canonical)
+
+        for ref in self._qualified_service_refs():
+            add(ref, ref)
+        for ref in self._qualified_acl_refs():
+            add(ref, ref)
+
+        if not targetable:
+            return {alias: set(candidates) for alias, candidates in index.items()}
+
+        disallowed_prefixes = (
+            "variables.",
+            "objectives.",
+            "workflows.",
+        )
+        filtered: dict[str, set[str]] = {}
+        for alias, candidates in index.items():
+            keep = {
+                candidate
+                for candidate in candidates
+                if not candidate.startswith(disallowed_prefixes)
+            }
+            if keep:
+                filtered[alias] = keep
+        return filtered
+
+    def _validate_named_ref(
+        self,
+        ref: str,
+        *,
+        owner_label: str,
+        ref_label: str,
+        targetable: bool = False,
+    ) -> None:
+        """Validate a generic reference against the named-element index."""
+        index = self._named_ref_index(targetable=targetable)
+        candidates = index.get(ref)
+        if not candidates:
+            qualifier = "targetable " if targetable else ""
+            self._err(
+                f"{owner_label} {ref_label} '{ref}' does not reference any "
+                f"defined {qualifier}element"
+            )
+            return
+
+        if len(candidates) > 1:
+            choices = ", ".join(sorted(candidates))
+            self._err(
+                f"{owner_label} {ref_label} '{ref}' is ambiguous; use one of: "
+                f"{choices}"
+            )
+
     def validate(self) -> None:
         """Run all validation passes and raise on errors."""
         self._errors = []
@@ -107,6 +237,7 @@ class SemanticValidator:
         self._verify_relationships()
         self._verify_agents()
         self._verify_objectives()
+        self._verify_workflows()
         self._verify_variables()
         self._collect_advisories()
 
@@ -354,23 +485,18 @@ class SemanticValidator:
                 )
 
     def _verify_relationships(self) -> None:
-        all_names = self._all_named_elements()
         for name, rel in self._s.relationships.items():
-            if (
-                not self._is_unresolved_var(rel.source)
-                and rel.source not in all_names
-            ):
-                self._err(
-                    f"Relationship '{name}' source '{rel.source}' "
-                    f"does not reference any defined element"
+            if not self._is_unresolved_var(rel.source):
+                self._validate_named_ref(
+                    rel.source,
+                    owner_label=f"Relationship '{name}'",
+                    ref_label="source",
                 )
-            if (
-                not self._is_unresolved_var(rel.target)
-                and rel.target not in all_names
-            ):
-                self._err(
-                    f"Relationship '{name}' target '{rel.target}' "
-                    f"does not reference any defined element"
+            if not self._is_unresolved_var(rel.target):
+                self._validate_named_ref(
+                    rel.target,
+                    owner_label=f"Relationship '{name}'",
+                    ref_label="target",
                 )
 
     def _verify_agents(self) -> None:
@@ -458,7 +584,6 @@ class SemanticValidator:
 
     def _verify_objectives(self) -> None:
         actor_entities = self._all_entity_names()
-        targetable_names = self._all_targetable_elements()
 
         for name, objective in self._s.objectives.items():
             if (
@@ -499,11 +624,12 @@ class SemanticValidator:
             for target in objective.targets:
                 if self._is_unresolved_var(target):
                     continue
-                if target not in targetable_names:
-                    self._err(
-                        f"Objective '{name}' target '{target}' does not "
-                        "reference any defined targetable element"
-                    )
+                self._validate_named_ref(
+                    target,
+                    owner_label=f"Objective '{name}'",
+                    ref_label="target",
+                    targetable=True,
+                )
 
             success_sections = (
                 ("condition", objective.success.conditions, self._s.conditions),
@@ -525,6 +651,7 @@ class SemanticValidator:
             if objective.window:
                 referenced_story_scripts: set[str] = set()
                 referenced_scripts: set[str] = set()
+                referenced_workflows: set[str] = set()
 
                 for story_name in objective.window.stories:
                     if self._is_unresolved_var(story_name):
@@ -580,6 +707,56 @@ class SemanticValidator:
                             "is not included by the referenced scripts"
                         )
 
+                for workflow_name in objective.window.workflows:
+                    if self._is_unresolved_var(workflow_name):
+                        continue
+                    workflow = self._s.workflows.get(workflow_name)
+                    if workflow is None:
+                        self._err(
+                            f"Objective '{name}' references undefined workflow "
+                            f"'{workflow_name}' in window"
+                        )
+                        continue
+                    referenced_workflows.add(workflow_name)
+
+                if objective.window.steps and not objective.window.workflows:
+                    self._err(
+                        f"Objective '{name}' window steps require at least one "
+                        "referenced workflow"
+                    )
+
+                for step_ref in objective.window.steps:
+                    if self._is_unresolved_var(step_ref):
+                        continue
+                    if "." not in step_ref:
+                        self._err(
+                            f"Objective '{name}' window step '{step_ref}' must "
+                            "use '<workflow>.<step>' syntax"
+                        )
+                        continue
+
+                    workflow_name, step_name = step_ref.split(".", 1)
+                    workflow = self._s.workflows.get(workflow_name)
+                    if workflow is None:
+                        self._err(
+                            f"Objective '{name}' window step '{step_ref}' "
+                            f"references undefined workflow '{workflow_name}'"
+                        )
+                        continue
+                    if (
+                        referenced_workflows
+                        and workflow_name not in referenced_workflows
+                    ):
+                        self._err(
+                            f"Objective '{name}' window step '{step_ref}' "
+                            "is not part of the referenced workflows"
+                        )
+                    if step_name not in workflow.steps:
+                        self._err(
+                            f"Objective '{name}' window step '{step_ref}' "
+                            f"references undefined step '{step_name}'"
+                        )
+
             for dep_name in objective.depends_on:
                 if self._is_unresolved_var(dep_name):
                     continue
@@ -597,6 +774,150 @@ class SemanticValidator:
             ]
         if dep_graph and _topological_sort(dep_graph) is None:
             self._err("Objective dependency graph contains a cycle")
+
+    def _verify_workflows(self) -> None:
+        for workflow_name, workflow in self._s.workflows.items():
+            if "." in workflow_name:
+                self._err(
+                    f"Workflow '{workflow_name}' name cannot contain '.' "
+                    "because step references use '<workflow>.<step>' syntax"
+                )
+
+            if (
+                not self._is_unresolved_var(workflow.start)
+                and workflow.start not in workflow.steps
+            ):
+                self._err(
+                    f"Workflow '{workflow_name}' start step "
+                    f"'{workflow.start}' is not defined"
+                )
+
+            graph: dict[str, list[str]] = {
+                step_name: [] for step_name in workflow.steps
+            }
+
+            for step_name, step in workflow.steps.items():
+                if "." in step_name:
+                    self._err(
+                        f"Workflow '{workflow_name}' step '{step_name}' cannot "
+                        "contain '.' because objective windows use "
+                        "'<workflow>.<step>' syntax"
+                    )
+
+                edges: list[str] = []
+
+                if step.type == WorkflowStepType.OBJECTIVE:
+                    if (
+                        not self._is_unresolved_var(step.objective)
+                        and step.objective not in self._s.objectives
+                    ):
+                        self._err(
+                            f"Workflow '{workflow_name}' step '{step_name}' "
+                            f"references undefined objective '{step.objective}'"
+                        )
+                    if step.next:
+                        if (
+                            not self._is_unresolved_var(step.next)
+                            and step.next not in workflow.steps
+                        ):
+                            self._err(
+                                f"Workflow '{workflow_name}' step '{step_name}' "
+                                f"next step '{step.next}' is not defined"
+                            )
+                        elif not self._is_unresolved_var(step.next):
+                            edges.append(step.next)
+
+                elif step.type == WorkflowStepType.IF:
+                    predicate_sections = (
+                        ("condition", step.when.conditions, self._s.conditions),
+                        ("metric", step.when.metrics, self._s.metrics),
+                        (
+                            "evaluation",
+                            step.when.evaluations,
+                            self._s.evaluations,
+                        ),
+                        ("TLO", step.when.tlos, self._s.tlos),
+                        ("goal", step.when.goals, self._s.goals),
+                        ("objective", step.when.objectives, self._s.objectives),
+                    )
+                    for label, refs, section in predicate_sections:
+                        for ref in refs:
+                            if self._is_unresolved_var(ref):
+                                continue
+                            if ref not in section:
+                                self._err(
+                                    f"Workflow '{workflow_name}' step "
+                                    f"'{step_name}' references undefined "
+                                    f"{label} '{ref}' in predicate"
+                                )
+
+                    for branch_label, branch_ref in (
+                        ("then", step.then_step),
+                        ("else", step.else_step),
+                    ):
+                        if self._is_unresolved_var(branch_ref):
+                            continue
+                        if branch_ref not in workflow.steps:
+                            self._err(
+                                f"Workflow '{workflow_name}' step '{step_name}' "
+                                f"{branch_label} step '{branch_ref}' is not "
+                                "defined"
+                            )
+                            continue
+                        edges.append(branch_ref)
+
+                elif step.type == WorkflowStepType.PARALLEL:
+                    for branch_ref in step.branches:
+                        if self._is_unresolved_var(branch_ref):
+                            continue
+                        if branch_ref not in workflow.steps:
+                            self._err(
+                                f"Workflow '{workflow_name}' step '{step_name}' "
+                                f"branch '{branch_ref}' is not defined"
+                            )
+                            continue
+                        edges.append(branch_ref)
+
+                    if step.next:
+                        if (
+                            not self._is_unresolved_var(step.next)
+                            and step.next not in workflow.steps
+                        ):
+                            self._err(
+                                f"Workflow '{workflow_name}' step '{step_name}' "
+                                f"join step '{step.next}' is not defined"
+                            )
+                        elif not self._is_unresolved_var(step.next):
+                            edges.append(step.next)
+
+                graph[step_name] = edges
+
+            if graph and _topological_sort(graph) is None:
+                self._err(
+                    f"Workflow '{workflow_name}' graph contains a cycle"
+                )
+
+            if (
+                self._is_unresolved_var(workflow.start)
+                or workflow.start not in workflow.steps
+            ):
+                continue
+
+            reachable: set[str] = set()
+            stack = [workflow.start]
+            while stack:
+                current = stack.pop()
+                if current in reachable:
+                    continue
+                reachable.add(current)
+                stack.extend(graph.get(current, []))
+
+            unreachable = sorted(set(workflow.steps) - reachable)
+            if unreachable:
+                self._err(
+                    f"Workflow '{workflow_name}' contains unreachable steps: "
+                    + ", ".join(unreachable)
+                )
 
     def _verify_variables(self) -> None:
         defined = set(self._s.variables.keys())
@@ -635,40 +956,11 @@ class SemanticValidator:
 
     def _all_named_elements(self) -> set[str]:
         """Collect all named element keys across all scenario sections."""
-        names: set[str] = set()
-        names.update(self._s.nodes.keys())
-        names.update(self._s.features.keys())
-        names.update(self._s.conditions.keys())
-        names.update(self._s.vulnerabilities.keys())
-        names.update(self._s.infrastructure.keys())
-        names.update(self._s.metrics.keys())
-        names.update(self._s.evaluations.keys())
-        names.update(self._s.tlos.keys())
-        names.update(self._s.goals.keys())
-        names.update(self._s.entities.keys())
-        names.update(flatten_entities(self._s.entities).keys())
-        names.update(self._s.injects.keys())
-        names.update(self._s.events.keys())
-        names.update(self._s.scripts.keys())
-        names.update(self._s.stories.keys())
-        names.update(self._s.content.keys())
-        for content in self._s.content.values():
-            for item in content.items:
-                if item.name:
-                    names.add(item.name)
-        names.update(self._s.accounts.keys())
-        names.update(self._s.agents.keys())
-        names.update(self._s.objectives.keys())
-        names.update(self._s.relationships.keys())
-        names.update(self._s.variables.keys())
-        return names
+        return set(self._named_ref_index().keys())
 
     def _all_targetable_elements(self) -> set[str]:
         """Collect named elements that can serve as objective targets."""
-        names = self._all_named_elements()
-        names.difference_update(self._s.variables.keys())
-        names.difference_update(self._s.objectives.keys())
-        return names
+        return set(self._named_ref_index(targetable=True).keys())
 
     def _verify_features(self) -> None:
         # Check vulnerability references

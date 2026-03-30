@@ -25,6 +25,7 @@ _HASHMAP_SECTIONS = frozenset({
     "vulnerabilities", "metrics", "evaluations", "tlos",
     "goals", "entities", "injects", "events", "scripts", "stories",
     "content", "accounts", "relationships", "agents", "objectives",
+    "workflows",
     "variables",
 })
 
@@ -37,6 +38,7 @@ _NESTED_HASHMAP_FIELDS = frozenset({
     "facts",               # Entity.facts (dict[str, str])
     "entities",            # Entity.entities (dict[str, Entity])
     "events",              # Script.events (dict[str, int])
+    "steps",               # Workflow.steps (dict[str, WorkflowStep])
 })
 
 
@@ -69,12 +71,12 @@ def _normalize_keys(data: Any, is_hashmap: bool = False) -> Any:
             if is_hashmap:
                 # This key is a user-defined identifier — preserve it
                 norm_k = k
+                child_is_hashmap = False
             else:
                 norm_k = _normalize_field_key(k)
-
-            # Check if this field's children are user-defined HashMap keys
-            child_key = norm_k if isinstance(norm_k, str) else str(norm_k)
-            child_is_hashmap = _child_is_hashmap_field(child_key, v)
+                # Check if this field's children are user-defined HashMap keys
+                child_key = norm_k if isinstance(norm_k, str) else str(norm_k)
+                child_is_hashmap = _child_is_hashmap_field(child_key, v)
             result[norm_k] = _normalize_keys(v, is_hashmap=child_is_hashmap)
         return result
     if isinstance(data, list):
@@ -102,7 +104,9 @@ def _reject_variable_mapping_keys(
 
             child_key = k if isinstance(k, str) else str(k)
             child_path = f"{path}.{child_key}" if path else child_key
-            child_is_hashmap = _child_is_hashmap_field(child_key, v)
+            child_is_hashmap = (
+                False if is_hashmap else _child_is_hashmap_field(child_key, v)
+            )
             _reject_variable_mapping_keys(
                 v,
                 path=child_path,
@@ -161,22 +165,47 @@ def _expand_shorthands(data: dict[str, Any]) -> dict[str, Any]:
     # Sections where "source" is a plain string reference, NOT a Source package.
     _SOURCE_SKIP_SECTIONS = frozenset({"relationships", "agents"})
 
-    def expand_sources(obj: Any, skip: bool = False) -> Any:
+    def expand_sources_scoped(
+        obj: Any,
+        *,
+        is_hashmap: bool = False,
+        skip: bool = False,
+    ) -> Any:
         if isinstance(obj, dict):
             result = {}
             for k, v in obj.items():
+                if is_hashmap:
+                    result[k] = expand_sources_scoped(
+                        v,
+                        is_hashmap=False,
+                        skip=skip,
+                    )
+                    continue
+
+                child_skip = skip or k in _SOURCE_SKIP_SECTIONS
+                child_is_hashmap = _child_is_hashmap_field(k, v)
+
                 if k == "source" and not skip:
                     result[k] = _expand_source(v)
                 else:
-                    # Once inside a skip section, stay skipped for all descendants
-                    child_skip = skip or k in _SOURCE_SKIP_SECTIONS
-                    result[k] = expand_sources(v, skip=child_skip)
+                    result[k] = expand_sources_scoped(
+                        v,
+                        is_hashmap=child_is_hashmap,
+                        skip=child_skip,
+                    )
             return result
         if isinstance(obj, list):
-            return [expand_sources(item, skip=skip) for item in obj]
+            return [
+                expand_sources_scoped(
+                    item,
+                    is_hashmap=is_hashmap,
+                    skip=skip,
+                )
+                for item in obj
+            ]
         return obj
 
-    data = expand_sources(data)
+    data = expand_sources_scoped(data)
 
     # Expand infrastructure shorthand
     if "infrastructure" in data and isinstance(data["infrastructure"], dict):

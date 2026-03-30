@@ -71,6 +71,6 @@ This ADR refines ADR-014's SDL boundary by making declarative objectives part of
 
 ### Risks
 
-- If future runtimes need richer control flow, the current objective model may need to evolve toward a more explicit workflow model.
-- Authors may infer stronger execution semantics than currently implemented unless `depends_on`, `window`, and success rules are documented precisely.
+- If future runtimes need loops, switch/case routing, or exception branches, the current workflow model may need further expansion.
+- Authors may infer stronger execution semantics than currently implemented unless `depends_on`, `window`, workflow, and success rules are documented precisely.
 - Divergence from OCR/CACAO details remains possible if future changes borrow terminology without preserving the underlying conceptual boundary.

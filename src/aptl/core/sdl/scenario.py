@@ -1,10 +1,10 @@
 """Top-level Scenario model — the root of the SDL.
 
-The Scenario combines 20 specification sections covering
+The Scenario combines 21 specification sections covering
 who (entities, accounts, agents), what (nodes, features,
 vulnerabilities, content), when (scripts, stories, events),
 and declarative experiment semantics (objectives, scoring
-pipeline, conditions, relationships, variables).
+pipeline, conditions, relationships, workflows, variables).
 
 Delivery-level concerns (Docker, Terraform, cloud APIs) are
 outside the SDL.
@@ -22,7 +22,7 @@ from aptl.core.sdl.features import Feature
 from aptl.core.sdl.infrastructure import InfraNode
 from aptl.core.sdl.nodes import Node
 from aptl.core.sdl.objectives import Objective
-from aptl.core.sdl.orchestration import Event, Inject, Script, Story
+from aptl.core.sdl.orchestration import Event, Inject, Script, Story, Workflow
 from aptl.core.sdl.relationships import Relationship
 from aptl.core.sdl.scoring import Evaluation, Goal, Metric, TLO
 from aptl.core.sdl.variables import Variable
@@ -32,7 +32,7 @@ from aptl.core.sdl.vulnerabilities import Vulnerability
 class Scenario(SDLModel):
     """Top-level scenario specification.
 
-    A YAML document with up to 20 named sections. Only ``name``
+    A YAML document with up to 21 named sections. Only ``name``
     is required. All sections are optional dicts keyed by
     user-defined identifiers.
     """
@@ -63,6 +63,7 @@ class Scenario(SDLModel):
     relationships: dict[str, Relationship] = Field(default_factory=dict)
     agents: dict[str, Agent] = Field(default_factory=dict)
     objectives: dict[str, Objective] = Field(default_factory=dict)
+    workflows: dict[str, Workflow] = Field(default_factory=dict)
     variables: dict[str, Variable] = Field(default_factory=dict)
 
     _advisories: list[str] = PrivateAttr(default_factory=list)

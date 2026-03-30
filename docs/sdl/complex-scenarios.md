@@ -84,7 +84,7 @@ red team attempts data theft and radiology disruption?
 
 ### SDL Stress Surface
 
-- All 20 sections
+- All 21 sections
 - Hybrid IT + clinical + vendor trust boundaries
 - Multiple agents with distinct initial knowledge and subnet scope
 - Objectives that target systems, relationships, and content

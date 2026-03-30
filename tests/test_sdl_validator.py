@@ -520,6 +520,57 @@ class TestVerifyRelationships:
         errors = _validate(s)
         assert not errors
 
+    def test_relationship_rejects_ambiguous_bare_ref(self):
+        s = _make_scenario(
+            nodes={"web": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            features={"web": {"type": "service", "source": {"name": "nginx"}}},
+            relationships={"r1": {"type": "connects_to", "source": "web", "target": "web"}},
+        )
+        errors = _validate(s)
+        assert any("source 'web' is ambiguous" in e for e in errors)
+        assert any("nodes.web" in e and "features.web" in e for e in errors)
+
+    def test_relationship_accepts_section_qualified_refs(self):
+        s = _make_scenario(
+            nodes={"web": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            features={"web": {"type": "service", "source": {"name": "nginx"}}},
+            relationships={
+                "r1": {
+                    "type": "depends_on",
+                    "source": "features.web",
+                    "target": "nodes.web",
+                }
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_relationship_accepts_qualified_content_item_ref(self):
+        s = _make_scenario(
+            nodes={"vm": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}}},
+            content={
+                "dataset-a": {
+                    "type": "dataset",
+                    "target": "vm",
+                    "items": [{"name": "shared"}],
+                },
+                "dataset-b": {
+                    "type": "dataset",
+                    "target": "vm",
+                    "items": [{"name": "shared"}],
+                },
+            },
+            relationships={
+                "r1": {
+                    "type": "connects_to",
+                    "source": "content.dataset-a.items.shared",
+                    "target": "nodes.vm",
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
 
 class TestVerifyAgents:
     def test_undefined_entity(self):
@@ -778,6 +829,74 @@ class TestVerifyObjectives:
         errors = _validate(s)
         assert any("defined targetable element" in e for e in errors)
 
+    def test_target_rejects_ambiguous_bare_ref(self):
+        kwargs = self._base_kwargs()
+        kwargs["features"] = {"web": {"type": "service", "source": {"name": "nginx"}}}
+        s = _make_scenario(
+            **kwargs,
+            objectives={
+                "obj-1": {
+                    "agent": "red-agent",
+                    "targets": ["web"],
+                    "success": {"goals": ["pass-exercise"]},
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("target 'web' is ambiguous" in e for e in errors)
+        assert any("nodes.web" in e and "features.web" in e for e in errors)
+
+    def test_targets_accept_section_qualified_refs(self):
+        kwargs = self._base_kwargs()
+        s = _make_scenario(
+            **kwargs,
+            objectives={
+                "obj-1": {
+                    "agent": "red-agent",
+                    "targets": ["nodes.web", "infrastructure.net"],
+                    "success": {"goals": ["pass-exercise"]},
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_targets_can_reference_named_services_and_acls(self):
+        kwargs = self._base_kwargs()
+        kwargs["nodes"]["web"]["services"] = [{"port": 443, "name": "web-https"}]
+        kwargs["infrastructure"]["net"]["acls"] = [
+            {
+                "name": "allow-admin",
+                "direction": "in",
+                "from_net": "net",
+                "protocol": "tcp",
+                "ports": [443],
+                "action": "allow",
+            }
+        ]
+        s = _make_scenario(
+            **kwargs,
+            objectives={
+                "obj-1": {
+                    "agent": "red-agent",
+                    "targets": [
+                        "nodes.web.services.web-https",
+                        "infrastructure.net.acls.allow-admin",
+                    ],
+                    "success": {"goals": ["pass-exercise"]},
+                },
+            },
+            relationships={
+                "r1": {
+                    "type": "connects_to",
+                    "source": "nodes.web.services.web-https",
+                    "target": "infrastructure.net.acls.allow-admin",
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
     def test_success_references_must_exist(self):
         s = _make_scenario(
             **self._base_kwargs(),
@@ -829,6 +948,61 @@ class TestVerifyObjectives:
         errors = _validate(s)
         assert any("Objective dependency graph contains a cycle" in e for e in errors)
 
+    def test_window_steps_require_workflows(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            objectives={
+                "obj-1": {
+                    "agent": "red-agent",
+                    "success": {"goals": ["pass-exercise"]},
+                    "window": {"steps": ["response.validate"]},
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("window steps require at least one referenced workflow" in e for e in errors)
+
+    def test_window_steps_must_belong_to_workflow(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            objectives={
+                "obj-1": {
+                    "agent": "red-agent",
+                    "success": {"goals": ["pass-exercise"]},
+                    "window": {
+                        "workflows": ["response"],
+                        "steps": ["other.validate"],
+                    },
+                },
+            },
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "obj-1",
+                            "next": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+                "other": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "obj-1",
+                            "next": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("is not part of the referenced workflows" in e for e in errors)
+
     def test_valid_objective(self):
         s = _make_scenario(
             **self._base_kwargs(),
@@ -848,6 +1022,180 @@ class TestVerifyObjectives:
                     "entity": "blue",
                     "success": {"metrics": ["report-quality"]},
                     "depends_on": ["recon"],
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+
+class TestVerifyWorkflows:
+    def _base_kwargs(self) -> dict:
+        return {
+            "entities": {"blue": {"role": "blue"}},
+            "metrics": {
+                "report-quality": {
+                    "type": "manual",
+                    "max_score": 100,
+                },
+            },
+            "evaluations": {
+                "overall": {
+                    "metrics": ["report-quality"],
+                    "min_score": {"percentage": 50},
+                },
+            },
+            "tlos": {"ops-ready": {"evaluation": "overall"}},
+            "goals": {"pass-exercise": {"tlos": ["ops-ready"]}},
+            "objectives": {
+                "validate-release": {
+                    "entity": "blue",
+                    "success": {"goals": ["pass-exercise"]},
+                },
+                "rollback-edge": {
+                    "entity": "blue",
+                    "success": {"metrics": ["report-quality"]},
+                },
+            },
+        }
+
+    def test_workflow_references_undefined_objective(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "missing-objective",
+                            "next": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("references undefined objective" in e for e in errors)
+
+    def test_workflow_missing_start_step(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("start step 'validate' is not defined" in e for e in errors)
+
+    def test_workflow_cycle_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "next": "branch",
+                        },
+                        "branch": {
+                            "type": "parallel",
+                            "branches": ["validate"],
+                        },
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("graph contains a cycle" in e for e in errors)
+
+    def test_workflow_unreachable_step_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "next": "finish",
+                        },
+                        "finish": {"type": "end"},
+                        "orphan": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("contains unreachable steps: orphan" in e for e in errors)
+
+    def test_parallel_branch_reference_must_exist(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "fanout",
+                    "steps": {
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback-edge", "missing-step"],
+                            "next": "finish",
+                        },
+                        "rollback-edge": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "next": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("branch 'missing-step' is not defined" in e for e in errors)
+
+    def test_valid_workflow(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "next": "branch",
+                        },
+                        "branch": {
+                            "type": "if",
+                            "when": {"objectives": ["validate-release"]},
+                            "then": "fanout",
+                            "else": "finish",
+                        },
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback", "confirm"],
+                            "next": "finish",
+                        },
+                        "rollback": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                        },
+                        "finish": {"type": "end"},
+                    },
                 },
             },
         )

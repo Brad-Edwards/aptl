@@ -157,6 +157,46 @@ objectives:
         assert s.objectives["initial-access"].success.goals == ["pass-exercise"]
         assert s.advisories == []
 
+    def test_workflows_section_parses(self):
+        sdl = """
+name: test
+entities:
+  blue-team:
+    role: Blue
+metrics:
+  release-check:
+    type: manual
+    max-score: 100
+evaluations:
+  eval-1:
+    metrics: [release-check]
+    min-score: 75
+tlos:
+  tlo-1:
+    evaluation: eval-1
+goals:
+  pass-exercise:
+    tlos: [tlo-1]
+objectives:
+  validate-release:
+    entity: blue-team
+    success:
+      goals: [pass-exercise]
+workflows:
+  release-response:
+    start: validate
+    steps:
+      validate:
+        type: objective
+        objective: validate-release
+        next: finish
+      finish:
+        type: end
+"""
+        s = parse_sdl(sdl, skip_semantic_validation=True)
+        assert s.workflows["release-response"].start == "validate"
+        assert "validate" in s.workflows["release-response"].steps
+
     def test_vm_without_resources_generates_advisory(self):
         sdl = """
 name: test
@@ -297,6 +337,38 @@ entities:
             "Shift": "nights",
         }
 
+    def test_feature_key_named_source_is_not_treated_as_source_field(self):
+        sdl = """
+name: test
+nodes:
+  web:
+    type: vm
+    resources: {ram: 1 gib, cpu: 1}
+    roles: {admin: root}
+    features:
+      source: admin
+features:
+  source:
+    type: service
+    source: busybox
+infrastructure:
+  web: {count: 1}
+"""
+        s = parse_sdl(sdl, skip_semantic_validation=True)
+        assert s.nodes["web"].features == {"source": "admin"}
+        assert s.features["source"].source.name == "busybox"
+
+    def test_entity_fact_key_named_source_is_not_treated_as_source_field(self):
+        sdl = """
+name: test
+entities:
+  blue-team:
+    facts:
+      source: internal-doc
+"""
+        s = parse_sdl(sdl, skip_semantic_validation=True)
+        assert s.entities["blue-team"].facts == {"source": "internal-doc"}
+
     def test_ocr_duration_units_parse(self):
         sdl = """
 name: test
@@ -317,6 +389,77 @@ stories:
         assert s.scripts["main"].start_time == 1
         assert s.scripts["main"].end_time == 2_592_000
         assert s.scripts["main"].events["phase-1"] == 1
+
+    def test_leaf_enum_placeholders_parse(self):
+        sdl = """
+name: test
+variables:
+  account_strength:
+    type: string
+    default: strong
+  host_os:
+    type: string
+    default: linux
+  acl_action:
+    type: string
+    default: allow
+  success_mode:
+    type: string
+    default: any_of
+  team_role:
+    type: string
+    default: blue
+nodes:
+  net:
+    type: switch
+  vm:
+    type: vm
+    os: ${host_os}
+    resources: {ram: 1 gib, cpu: 1}
+infrastructure:
+  net:
+    count: 1
+    properties: {cidr: 10.0.0.0/24, gateway: 10.0.0.1}
+    acls:
+      - {name: allow-admin, direction: in, from_net: net, action: "${acl_action}"}
+  vm:
+    count: 1
+    links: [net]
+entities:
+  blue-team:
+    role: ${team_role}
+accounts:
+  admin:
+    username: admin
+    node: vm
+    password_strength: ${account_strength}
+goals:
+  pass-exercise:
+    tlos: [tlo-1]
+tlos:
+  tlo-1:
+    evaluation: eval-1
+evaluations:
+  eval-1:
+    metrics: [release-check]
+    min-score: 75
+metrics:
+  release-check:
+    type: manual
+    max-score: 100
+objectives:
+  review:
+    entity: blue-team
+    success:
+      mode: ${success_mode}
+      goals: [pass-exercise]
+"""
+        s = parse_sdl(sdl)
+        assert s.nodes["vm"].os == "${host_os}"
+        assert s.infrastructure["net"].acls[0].action == "${acl_action}"
+        assert s.entities["blue-team"].role == "${team_role}"
+        assert s.accounts["admin"].password_strength == "${account_strength}"
+        assert s.objectives["review"].success.mode == "${success_mode}"
 
     def test_negative_numeric_duration_rejected(self):
         sdl = """
@@ -356,6 +499,72 @@ nodes:
 """
         with pytest.raises(SDLParseError, match="Switch nodes cannot have VM-only fields"):
             parse_sdl(sdl)
+
+    @pytest.mark.parametrize(
+        "field_name",
+        [
+            "nodes.vm.type",
+            "features.svc.type",
+            "content.seed.type",
+            "metrics.m1.type",
+            "relationships.r1.type",
+            "variables.v1.type",
+        ],
+    )
+    def test_discriminant_enums_reject_placeholders(self, field_name):
+        sdl_by_field = {
+            "nodes.vm.type": """
+name: test
+nodes:
+  vm:
+    type: ${node_type}
+""",
+            "features.svc.type": """
+name: test
+features:
+  svc:
+    type: ${feature_type}
+""",
+            "content.seed.type": """
+name: test
+nodes:
+  vm:
+    type: vm
+    resources: {ram: 1 gib, cpu: 1}
+content:
+  seed:
+    type: ${content_type}
+    target: vm
+""",
+            "metrics.m1.type": """
+name: test
+metrics:
+  m1:
+    type: ${metric_type}
+    max-score: 100
+""",
+            "relationships.r1.type": """
+name: test
+nodes:
+  vm:
+    type: vm
+    resources: {ram: 1 gib, cpu: 1}
+relationships:
+  r1:
+    type: ${relationship_type}
+    source: vm
+    target: vm
+""",
+            "variables.v1.type": """
+name: test
+variables:
+  v1:
+    type: ${variable_type}
+    default: hello
+""",
+        }
+        with pytest.raises(SDLParseError):
+            parse_sdl(sdl_by_field[field_name], skip_semantic_validation=True)
 
     @pytest.mark.parametrize(
         ("sdl", "message"),

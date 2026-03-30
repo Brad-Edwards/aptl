@@ -33,3 +33,7 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [009](adr-009-scenario-engine.md) | Scenario Engine with YAML Specs and Run Archive Collectors | accepted | 2026-03-02 |
 | [010](adr-010-sonarcloud-quality.md) | SonarCloud for Continuous Code Quality | accepted | 2026-03-07 |
 | [011](adr-011-web-ui.md) | Notebook-Style Web UI (SvelteKit + FastAPI) | proposed | 2026-03-20 |
+| [012](adr-012-opentelemetry-integration.md) | OpenTelemetry Integration | accepted | 2026-03-21 |
+| [013](adr-013-deployment-abstraction.md) | Deployment Backend Abstraction Layer | accepted | 2026-03-22 |
+| [014](adr-014-scenario-description-language.md) | Scenario Description Language (SDL) | accepted | 2026-03-29 |
+| [015](adr-015-declarative-sdl-objectives.md) | Declarative Experiment Objectives in the SDL | accepted | 2026-03-29 |

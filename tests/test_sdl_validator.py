@@ -674,6 +674,187 @@ class TestVerifyAgents:
         assert not errors
 
 
+class TestVerifyObjectives:
+    def _base_kwargs(self) -> dict:
+        return {
+            "nodes": {
+                "net": {"type": "switch"},
+                "web": {"type": "vm", "resources": {"ram": "1 gib", "cpu": 1}},
+            },
+            "infrastructure": {
+                "net": {
+                    "count": 1,
+                    "properties": {"cidr": "10.0.0.0/24", "gateway": "10.0.0.1"},
+                },
+                "web": {"count": 1, "links": ["net"]},
+            },
+            "entities": {
+                "red": {"role": "red"},
+                "blue": {"role": "blue"},
+            },
+            "agents": {
+                "red-agent": {
+                    "entity": "red",
+                    "actions": ["Scan", "Exploit"],
+                },
+            },
+            "metrics": {
+                "report-quality": {
+                    "type": "manual",
+                    "max_score": 100,
+                },
+            },
+            "evaluations": {
+                "overall": {
+                    "metrics": ["report-quality"],
+                    "min_score": {"percentage": 50},
+                },
+            },
+            "tlos": {"web-defense": {"evaluation": "overall"}},
+            "goals": {"pass-exercise": {"tlos": ["web-defense"]}},
+            "events": {"attack-wave": {}},
+            "scripts": {
+                "main-timeline": {
+                    "start_time": 0,
+                    "end_time": 3600,
+                    "speed": 1.0,
+                    "events": {"attack-wave": 600},
+                },
+            },
+            "stories": {"exercise": {"scripts": ["main-timeline"]}},
+        }
+
+    def test_undefined_agent(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            objectives={
+                "obj-1": {
+                    "agent": "ghost-agent",
+                    "success": {"goals": ["pass-exercise"]},
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("undefined agent" in e for e in errors)
+
+    def test_undefined_entity(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            objectives={
+                "obj-1": {
+                    "entity": "ghost-team",
+                    "success": {"goals": ["pass-exercise"]},
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("undefined entity" in e for e in errors)
+
+    def test_actions_must_be_declared_by_agent(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            objectives={
+                "obj-1": {
+                    "agent": "red-agent",
+                    "actions": ["Persist"],
+                    "success": {"goals": ["pass-exercise"]},
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("is not declared by agent" in e for e in errors)
+
+    def test_target_must_resolve(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            objectives={
+                "obj-1": {
+                    "agent": "red-agent",
+                    "targets": ["ghost-target"],
+                    "success": {"goals": ["pass-exercise"]},
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("defined targetable element" in e for e in errors)
+
+    def test_success_references_must_exist(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            objectives={
+                "obj-1": {
+                    "agent": "red-agent",
+                    "success": {"metrics": ["ghost-metric"]},
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("undefined metric" in e for e in errors)
+
+    def test_window_event_must_belong_to_script(self):
+        kwargs = self._base_kwargs()
+        kwargs["events"] = {"attack-wave": {}, "cleanup-wave": {}}
+        s = _make_scenario(
+            **kwargs,
+            objectives={
+                "obj-1": {
+                    "agent": "red-agent",
+                    "success": {"goals": ["pass-exercise"]},
+                    "window": {
+                        "scripts": ["main-timeline"],
+                        "events": ["cleanup-wave"],
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("not included by the referenced scripts" in e for e in errors)
+
+    def test_dependency_cycle_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            objectives={
+                "obj-1": {
+                    "agent": "red-agent",
+                    "success": {"goals": ["pass-exercise"]},
+                    "depends_on": ["obj-2"],
+                },
+                "obj-2": {
+                    "entity": "blue",
+                    "success": {"metrics": ["report-quality"]},
+                    "depends_on": ["obj-1"],
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("Objective dependency graph contains a cycle" in e for e in errors)
+
+    def test_valid_objective(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            objectives={
+                "recon": {
+                    "agent": "red-agent",
+                    "actions": ["Scan"],
+                    "targets": ["web"],
+                    "success": {"goals": ["pass-exercise"]},
+                    "window": {
+                        "stories": ["exercise"],
+                        "scripts": ["main-timeline"],
+                        "events": ["attack-wave"],
+                    },
+                },
+                "report": {
+                    "entity": "blue",
+                    "success": {"metrics": ["report-quality"]},
+                    "depends_on": ["recon"],
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+
 class TestVerifyVariables:
     def test_defined_variables_allow_placeholders_across_models(self):
         s = _make_scenario(
@@ -701,6 +882,7 @@ class TestVerifyVariables:
                 "relationship_target": {"type": "string", "default": "db"},
                 "contains_sensitive_data": {"type": "boolean", "default": False},
                 "is_disabled": {"type": "boolean", "default": False},
+                "objective_target": {"type": "string", "default": "vm"},
             },
             nodes={
                 "net": {"type": "switch"},
@@ -789,6 +971,13 @@ class TestVerifyVariables:
                     },
                 }
             },
+            objectives={
+                "obj": {
+                    "agent": "a1",
+                    "targets": ["${objective_target}"],
+                    "success": {"goals": ["g1"]},
+                }
+            },
         )
         errors = _validate(s)
         assert not errors
@@ -800,6 +989,16 @@ class TestVerifyVariables:
         )
         errors = _validate(s)
         assert any("Undefined variable 'missing_count'" in e for e in errors)
+
+
+class TestAdvisories:
+    def test_vm_without_resources_emits_advisory(self):
+        scenario = _make_scenario(
+            nodes={"vm": {"type": "vm"}},
+        )
+        validator = SemanticValidator(scenario)
+        validator.validate()
+        assert any("without 'resources'" in warning for warning in validator.warnings)
 
 
 class TestValidFullScenario:

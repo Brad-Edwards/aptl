@@ -53,9 +53,13 @@ class SemanticValidator:
     def __init__(self, scenario: Scenario) -> None:
         self._s = scenario
         self._errors: list[str] = []
+        self._warnings: list[str] = []
 
     def _err(self, msg: str) -> None:
         self._errors.append(msg)
+
+    def _warn(self, msg: str) -> None:
+        self._warnings.append(msg)
 
     def _is_unresolved_var(self, value: object) -> bool:
         return is_variable_ref(value)
@@ -70,9 +74,15 @@ class SemanticValidator:
     def _is_vm_node(self, node_name: str) -> bool:
         return self._node_type(node_name) == NodeType.VM
 
+    def _all_entity_names(self) -> set[str]:
+        names = set(flatten_entities(self._s.entities).keys())
+        names.update(self._s.entities.keys())
+        return names
+
     def validate(self) -> None:
         """Run all validation passes and raise on errors."""
         self._errors = []
+        self._warnings = []
 
         # OCR passes
         self._verify_nodes()
@@ -96,10 +106,31 @@ class SemanticValidator:
         self._verify_accounts()
         self._verify_relationships()
         self._verify_agents()
+        self._verify_objectives()
         self._verify_variables()
+        self._collect_advisories()
 
         if self._errors:
             raise SDLValidationError(self._errors)
+
+    @property
+    def warnings(self) -> list[str]:
+        """Return non-fatal advisories collected during validation."""
+        return list(self._warnings)
+
+    def _collect_advisories(self) -> None:
+        self._warn_missing_vm_resources()
+
+    def _warn_missing_vm_resources(self) -> None:
+        for name, node in self._s.nodes.items():
+            if node.type != NodeType.VM:
+                continue
+            if node.resources is None:
+                self._warn(
+                    f"Node '{name}' is a VM without 'resources'. This is "
+                    "valid SDL, but may be undeployable unless the backend "
+                    "supplies defaults."
+                )
 
     # ------------------------------------------------------------------
     # OCR validation passes
@@ -343,8 +374,7 @@ class SemanticValidator:
                 )
 
     def _verify_agents(self) -> None:
-        flat_entity_names = set(flatten_entities(self._s.entities).keys())
-        flat_entity_names.update(self._s.entities.keys())
+        flat_entity_names = self._all_entity_names()
         service_names = {
             service.name
             for node in self._s.nodes.values()
@@ -426,6 +456,148 @@ class SemanticValidator:
                             f"'{acct_name}' not in accounts section"
                         )
 
+    def _verify_objectives(self) -> None:
+        actor_entities = self._all_entity_names()
+        targetable_names = self._all_targetable_elements()
+
+        for name, objective in self._s.objectives.items():
+            if (
+                objective.agent
+                and not self._is_unresolved_var(objective.agent)
+                and objective.agent not in self._s.agents
+            ):
+                self._err(
+                    f"Objective '{name}' references undefined agent "
+                    f"'{objective.agent}'"
+                )
+
+            if (
+                objective.entity
+                and not self._is_unresolved_var(objective.entity)
+                and objective.entity not in actor_entities
+            ):
+                self._err(
+                    f"Objective '{name}' references undefined entity "
+                    f"'{objective.entity}'"
+                )
+
+            if (
+                objective.agent
+                and not self._is_unresolved_var(objective.agent)
+                and objective.agent in self._s.agents
+            ):
+                allowed_actions = set(self._s.agents[objective.agent].actions)
+                for action in objective.actions:
+                    if self._is_unresolved_var(action):
+                        continue
+                    if action not in allowed_actions:
+                        self._err(
+                            f"Objective '{name}' action '{action}' is not "
+                            f"declared by agent '{objective.agent}'"
+                        )
+
+            for target in objective.targets:
+                if self._is_unresolved_var(target):
+                    continue
+                if target not in targetable_names:
+                    self._err(
+                        f"Objective '{name}' target '{target}' does not "
+                        "reference any defined targetable element"
+                    )
+
+            success_sections = (
+                ("condition", objective.success.conditions, self._s.conditions),
+                ("metric", objective.success.metrics, self._s.metrics),
+                ("evaluation", objective.success.evaluations, self._s.evaluations),
+                ("TLO", objective.success.tlos, self._s.tlos),
+                ("goal", objective.success.goals, self._s.goals),
+            )
+            for label, refs, section in success_sections:
+                for ref in refs:
+                    if self._is_unresolved_var(ref):
+                        continue
+                    if ref not in section:
+                        self._err(
+                            f"Objective '{name}' references undefined {label} "
+                            f"'{ref}' in success criteria"
+                        )
+
+            if objective.window:
+                referenced_story_scripts: set[str] = set()
+                referenced_scripts: set[str] = set()
+
+                for story_name in objective.window.stories:
+                    if self._is_unresolved_var(story_name):
+                        continue
+                    story = self._s.stories.get(story_name)
+                    if story is None:
+                        self._err(
+                            f"Objective '{name}' references undefined story "
+                            f"'{story_name}' in window"
+                        )
+                        continue
+                    referenced_story_scripts.update(story.scripts)
+
+                for script_name in objective.window.scripts:
+                    if self._is_unresolved_var(script_name):
+                        continue
+                    script = self._s.scripts.get(script_name)
+                    if script is None:
+                        self._err(
+                            f"Objective '{name}' references undefined script "
+                            f"'{script_name}' in window"
+                        )
+                        continue
+                    referenced_scripts.add(script_name)
+                    if (
+                        referenced_story_scripts
+                        and script_name not in referenced_story_scripts
+                    ):
+                        self._err(
+                            f"Objective '{name}' window script '{script_name}' "
+                            "is not included by the referenced stories"
+                        )
+
+                candidate_scripts = referenced_scripts or referenced_story_scripts
+                candidate_events: set[str] = set()
+                for script_name in candidate_scripts:
+                    script = self._s.scripts.get(script_name)
+                    if script is not None:
+                        candidate_events.update(script.events.keys())
+
+                for event_name in objective.window.events:
+                    if self._is_unresolved_var(event_name):
+                        continue
+                    if event_name not in self._s.events:
+                        self._err(
+                            f"Objective '{name}' references undefined event "
+                            f"'{event_name}' in window"
+                        )
+                        continue
+                    if candidate_events and event_name not in candidate_events:
+                        self._err(
+                            f"Objective '{name}' window event '{event_name}' "
+                            "is not included by the referenced scripts"
+                        )
+
+            for dep_name in objective.depends_on:
+                if self._is_unresolved_var(dep_name):
+                    continue
+                if dep_name not in self._s.objectives:
+                    self._err(
+                        f"Objective '{name}' depends on undefined objective "
+                        f"'{dep_name}'"
+                    )
+
+        dep_graph: dict[str, list[str]] = {}
+        for name, objective in self._s.objectives.items():
+            dep_graph[name] = [
+                dep for dep in objective.depends_on
+                if not self._is_unresolved_var(dep) and dep in self._s.objectives
+            ]
+        if dep_graph and _topological_sort(dep_graph) is None:
+            self._err("Objective dependency graph contains a cycle")
+
     def _verify_variables(self) -> None:
         defined = set(self._s.variables.keys())
 
@@ -486,8 +658,16 @@ class SemanticValidator:
                     names.add(item.name)
         names.update(self._s.accounts.keys())
         names.update(self._s.agents.keys())
+        names.update(self._s.objectives.keys())
         names.update(self._s.relationships.keys())
         names.update(self._s.variables.keys())
+        return names
+
+    def _all_targetable_elements(self) -> set[str]:
+        """Collect named elements that can serve as objective targets."""
+        names = self._all_named_elements()
+        names.difference_update(self._s.variables.keys())
+        names.difference_update(self._s.objectives.keys())
         return names
 
     def _verify_features(self) -> None:
@@ -630,9 +810,7 @@ class SemanticValidator:
             check_entity(name, entity)
 
     def _verify_injects(self) -> None:
-        flat_names = set(flatten_entities(self._s.entities).keys())
-        # Also include top-level entity keys
-        flat_names.update(self._s.entities.keys())
+        flat_names = self._all_entity_names()
 
         for name, inject in self._s.injects.items():
             if (
@@ -701,8 +879,7 @@ class SemanticValidator:
                     )
 
     def _verify_roles(self) -> None:
-        flat_names = set(flatten_entities(self._s.entities).keys())
-        flat_names.update(self._s.entities.keys())
+        flat_names = self._all_entity_names()
 
         for node_name, node in self._s.nodes.items():
             for role_name, role in node.roles.items():

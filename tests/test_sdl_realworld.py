@@ -805,6 +805,80 @@ entities:
     name: "Crimsonia APT"
     role: Red
     mission: "Disrupt Berylia critical infrastructure"
+
+conditions:
+  scada-hmi-responsive:
+    command: /usr/bin/check-hmi-availability
+    interval: 60
+
+metrics:
+  maintain-scada-availability:
+    type: CONDITIONAL
+    max-score: 100
+    condition: scada-hmi-responsive
+  execute-disruption:
+    type: MANUAL
+    max-score: 100
+    artifact: true
+
+evaluations:
+  blue-resilience:
+    metrics: [maintain-scada-availability]
+    min-score: 75
+  red-impact:
+    metrics: [execute-disruption]
+    min-score: {absolute: 100}
+
+tlos:
+  sustain-critical-operations:
+    evaluation: blue-resilience
+  achieve-scada-disruption:
+    evaluation: red-impact
+
+goals:
+  berylia-goal:
+    tlos: [sustain-critical-operations]
+  crimsonia-goal:
+    tlos: [achieve-scada-disruption]
+
+events:
+  disruption-wave: {}
+  recovery-phase: {}
+
+scripts:
+  locked-shields-day-1:
+    start-time: 0
+    end-time: 8 hour
+    speed: 1
+    events:
+      disruption-wave: 2 hour
+      recovery-phase: 4 hour
+
+stories:
+  main-exercise:
+    scripts: [locked-shields-day-1]
+
+objectives:
+  crimsonia-disrupt-scada:
+    entity: crimsonia-red
+    targets: [hmi-controls-power, hmi-controls-water, hmi-server]
+    success:
+      goals: [crimsonia-goal]
+    window:
+      stories: [main-exercise]
+      scripts: [locked-shields-day-1]
+      events: [disruption-wave]
+
+  berylia-maintain-operations:
+    entity: berylia-blue.ot-team
+    targets: [hmi-server, plc-power, plc-water]
+    success:
+      goals: [berylia-goal]
+    window:
+      stories: [main-exercise]
+      scripts: [locked-shields-day-1]
+      events: [recovery-phase]
+    depends_on: [crimsonia-disrupt-scada]
 """
 
 
@@ -857,3 +931,14 @@ def test_scenario_stats(label, yaml_str):
     rels = len(scenario.relationships)
     # Just verify these are non-trivial scenarios
     assert nodes >= 1
+
+
+def test_objectives_are_exercised_in_realworld_suite():
+    """At least one real-world fixture should carry declarative objectives."""
+    labels_with_objectives: list[str] = []
+    for label, yaml_str in SCENARIOS:
+        scenario = parse_sdl(textwrap.dedent(yaml_str))
+        if scenario.objectives:
+            labels_with_objectives.append(label)
+
+    assert labels_with_objectives

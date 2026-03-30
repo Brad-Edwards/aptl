@@ -1,8 +1,8 @@
 # Scenario Description Language (SDL) Reference
 
-The APTL SDL is a YAML-based specification language for describing cyber range scenarios. It starts from the [Open Cyber Range SDL](https://github.com/Open-Cyber-Range/SDL-parser) surface, preserves coverage across the OCR-derived sections, and extends that base with APTL's additional scenario concepts such as content, accounts, relationships, agents, and variables. It is intentionally its own SDL rather than a clone-level compatibility layer.
+The APTL SDL is a YAML-based specification language for describing cyber range scenarios and experiments. It starts from the [Open Cyber Range SDL](https://github.com/Open-Cyber-Range/SDL-parser) surface, preserves coverage across the OCR-derived sections, and extends that base with APTL's additional scenario concepts such as content, accounts, relationships, agents, objectives, and variables. It is intentionally its own SDL rather than a clone-level compatibility layer.
 
-The SDL describes *what a scenario is* — not how to deploy it. A separate backend binding layer (not yet implemented) translates SDL specifications into concrete infrastructure (Docker Compose, Terraform, cloud APIs).
+The SDL describes *what the scenario and experiment mean* — not how to deploy them. A separate backend binding layer (not yet implemented) translates SDL specifications into concrete infrastructure (Docker Compose, Terraform, cloud APIs), and runtime adapters can evaluate SDL-declared conditions/objectives with concrete probes.
 
 ## Stable IDs, Variable Values
 
@@ -72,12 +72,14 @@ accounts:
 
 ## Documentation
 
-- [SDL Sections Reference](sections.md) — Complete reference for all 19 sections
+- [SDL Sections Reference](sections.md) — Complete reference for all 20 sections
 - [Parser Behavior](parser.md) — Key normalization, shorthand expansion, SDL-only parsing
 - [Semantic Validation](validation.md) — Cross-reference checks and what the validator enforces
 - [Design Precedents](precedents.md) — Where each SDL element comes from
 - [Limitations & Future Work](limitations.md) — What the SDL cannot express yet
 - [Testing](testing.md) — How to run unit tests, stress tests, and fuzz tests
+- [Complex Scenario Designs](complex-scenarios.md) — Up-front design briefs for large example exercises
+- [Complex Scenario Authoring Notes](complex-scenario-authoring-notes.md) — Persistent issue log from encoding those designs into SDL
 
 ## Usage
 
@@ -92,6 +94,10 @@ scenario = parse_sdl_file(Path("scenarios/my-scenario.yaml"))
 
 # Skip semantic validation (structural only)
 scenario = parse_sdl(yaml_string, skip_semantic_validation=True)
+
+# Non-fatal authoring advisories
+for advisory in scenario.advisories:
+    print(advisory)
 ```
 
 ## Backward Compatibility

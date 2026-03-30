@@ -1,6 +1,6 @@
 # SDL Semantic Validation
 
-The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 20 named passes after Pydantic structural validation. It collects all errors rather than failing on the first, so authors see every issue at once.
+The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 21 named passes after Pydantic structural validation. It collects all errors rather than failing on the first, so authors see every issue at once.
 
 ## Validation Passes
 
@@ -32,9 +32,18 @@ The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 20 nam
 | `verify_accounts` | Account nodes reference existing VM nodes. |
 | `verify_relationships` | Source and target resolve to any named element in any section, including variables, relationships, and content item names. |
 | `verify_agents` | Entity references resolve. Starting accounts and initial-knowledge accounts exist in accounts section. Allowed subnets and initial-knowledge subnets must resolve to switch-backed infrastructure entries. Initial-knowledge hosts must resolve to VM nodes. Initial-knowledge services exist in `nodes.*.services[].name`. |
+| `verify_objectives` | Objective actors resolve (`agent` or `entity`). Objective actions must be declared by the referenced agent. Targets resolve to named scenario elements. Success criteria resolve to declared conditions/metrics/evaluations/TLOs/goals. Optional windows resolve to stories/scripts/events and must remain internally consistent. Objective dependencies must resolve and stay acyclic. |
 | `verify_variables` | Checks that full-value `${var}` placeholders reference declared variables. Structural validation of typed defaults and `allowed_values` still happens in the `Variable` model itself. |
 
 When a field contains an unresolved `${var}` placeholder, reference-oriented passes treat it as deferred rather than as a broken concrete reference. The validator still does not substitute values; it only checks that the placeholder names exist.
+
+## Advisories
+
+Successful parses may still carry non-fatal advisories on `Scenario.advisories`. These are not validation errors and do not block parsing.
+
+Current advisory coverage:
+
+- VM nodes without `resources` are allowed, but emit an advisory because some deployment backends may not be able to instantiate them without explicit sizing defaults.
 
 ## Error Reporting
 
@@ -51,4 +60,4 @@ except SDLValidationError as e:
 
 ## Cross-Reference Resolution
 
-The `_all_named_elements()` method collects keys from all top-level sections for relationship validation, plus nested entity dot-paths and content item `name` values. This means a relationship can reference any node, feature, condition, vulnerability, infrastructure entry, metric, evaluation, TLO, goal, entity (including nested), inject, event, script, story, content entry, content item, account, agent, relationship, or variable.
+The `_all_named_elements()` method collects keys from all top-level sections for relationship validation, plus nested entity dot-paths and content item `name` values. This means a relationship can reference any node, feature, condition, vulnerability, infrastructure entry, metric, evaluation, TLO, goal, entity (including nested), inject, event, script, story, content entry, content item, account, agent, objective, relationship, or variable.

@@ -1,5 +1,7 @@
 """Tests for the SDL scenario loading boundary."""
 
+from pathlib import Path
+
 import pytest
 
 
@@ -7,6 +9,14 @@ VALID_SDL = """
 name: test-scenario
 description: Minimal SDL scenario
 """
+
+EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
+EXAMPLE_SCENARIOS = sorted(EXAMPLES_DIR.glob("*.sdl.yaml"))
+COMPLEX_EXAMPLES = [
+    EXAMPLES_DIR / "hospital-ransomware-surgery-day.sdl.yaml",
+    EXAMPLES_DIR / "satcom-release-poisoning.sdl.yaml",
+    EXAMPLES_DIR / "port-authority-surge-response.sdl.yaml",
+]
 
 
 class TestLoadScenario:
@@ -100,6 +110,32 @@ class TestFindScenarios:
         from aptl.core.scenarios import find_scenarios
 
         assert find_scenarios(tmp_path / "missing") == []
+
+
+@pytest.mark.parametrize("path", EXAMPLE_SCENARIOS, ids=lambda path: path.name)
+def test_example_scenarios_load(path):
+    """Every example SDL should load successfully from disk."""
+    from aptl.core.scenarios import load_scenario
+
+    scenario = load_scenario(path)
+
+    assert scenario.name
+    assert scenario.advisories == []
+
+
+@pytest.mark.parametrize("path", COMPLEX_EXAMPLES, ids=lambda path: path.name)
+def test_complex_examples_have_experiment_semantics(path):
+    """Curated complex examples should exercise the full experiment surface."""
+    from aptl.core.scenarios import load_scenario
+
+    scenario = load_scenario(path)
+
+    assert scenario.objectives
+    assert scenario.agents
+    assert scenario.relationships
+    assert scenario.content
+    assert scenario.stories
+    assert scenario.metrics
 
 
 class TestScenarioExceptions:

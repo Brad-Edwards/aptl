@@ -1,0 +1,681 @@
+name: satcom-release-poisoning
+description: >
+  Hybrid supply-chain exercise for a satellite communications platform.
+  The scenario models build compromise, signed artifact poisoning,
+  release promotion, tenant isolation risk, and rollback under live
+  telemetry pressure.
+
+variables:
+  release_story_speed:
+    type: number
+    default: 1.25
+    description: Playback speed for the release-day story
+  canary_cutover:
+    type: string
+    default: "45 min"
+    description: When canary promotion begins
+  rollback_deadline:
+    type: string
+    default: "6 hour"
+    description: Time by which rollback should be complete
+
+nodes:
+  internet-edge: {type: Switch, description: Public and partner ingress}
+  corp-eng: {type: Switch, description: Engineering workstations and forge access}
+  build-net: {type: Switch, description: CI runner and registry network}
+  control-net: {type: Switch, description: Satellite control plane}
+  edge-net: {type: Switch, description: Regional edge gateways}
+  telemetry-net: {type: Switch, description: Telemetry collection and streaming}
+  federation-net: {type: Switch, description: Customer and vendor federation boundary}
+  security-net: {type: Switch, description: Monitoring and response systems}
+
+  git-forge:
+    type: VM
+    os: linux
+    source: git-forge
+    resources: {ram: 4 gib, cpu: 2}
+    features: {git-service: forge-admin}
+    conditions: {repo-integrity-healthy: forge-admin}
+    services:
+      - {port: 443, name: forge-https}
+      - {port: 22, name: forge-ssh}
+    roles:
+      forge-admin:
+        username: forgeadmin
+        entities: [platform-blue.release-engineering]
+
+  ci-runner:
+    type: VM
+    os: linux
+    source: ci-runner
+    resources: {ram: 4 gib, cpu: 4}
+    features: {ci-orchestrator: ci-admin}
+    conditions:
+      pipeline-green: ci-admin
+      rogue-release-promoted: ci-admin
+    services:
+      - {port: 443, name: ci-api}
+      - {port: 2222, name: ci-ssh}
+    roles:
+      ci-admin:
+        username: gitlab-runner
+
+  artifact-registry:
+    type: VM
+    os: linux
+    source: artifact-registry
+    resources: {ram: 4 gib, cpu: 2}
+    features: {release-registry: registry-admin}
+    conditions:
+      release-signature-valid: registry-admin
+      rollback-package-ready: registry-admin
+    services:
+      - {port: 5000, name: registry-api}
+      - {port: 443, name: registry-ui}
+    roles:
+      registry-admin:
+        username: registry
+        entities: [platform-blue.release-engineering]
+
+  signing-hsm:
+    type: VM
+    os: linux
+    source: signing-service
+    resources: {ram: 2 gib, cpu: 2}
+    features: {signing-service: signing-admin}
+    conditions: {signing-health: signing-admin}
+    services:
+      - {port: 8443, name: signing-api}
+    roles: {signing-admin: signer}
+
+  control-api:
+    type: VM
+    os: linux
+    source: satcom-control-plane
+    resources: {ram: 6 gib, cpu: 4}
+    features: {satcom-control: control-admin}
+    conditions:
+      control-plane-healthy: control-admin
+      rollback-complete: control-admin
+    services:
+      - {port: 443, name: control-api}
+      - {port: 8444, name: control-admin-ui}
+    roles:
+      control-admin:
+        username: satops
+        entities: [platform-blue.sre]
+    asset_value:
+      integrity: critical
+      availability: critical
+
+  edge-gateway-east:
+    type: VM
+    os: linux
+    source: satcom-edge
+    resources: {ram: 2 gib, cpu: 2}
+    features: {edge-agent-east: edge-admin}
+    conditions:
+      edge-east-healthy: edge-admin
+      edge-east-poisoned: edge-admin
+    services:
+      - {port: 443, name: edge-east-api}
+    roles: {edge-admin: edgeeast}
+
+  edge-gateway-west:
+    type: VM
+    os: linux
+    source: satcom-edge
+    resources: {ram: 2 gib, cpu: 2}
+    features: {edge-agent-west: edge-admin}
+    conditions:
+      edge-west-healthy: edge-admin
+      edge-west-poisoned: edge-admin
+    services:
+      - {port: 443, name: edge-west-api}
+    roles: {edge-admin: edgewest}
+
+  telemetry-broker:
+    type: VM
+    os: linux
+    source: kafka-broker
+    resources: {ram: 4 gib, cpu: 2}
+    features: {telemetry-bus: telemetry-admin}
+    conditions: {telemetry-flowing: telemetry-admin}
+    services:
+      - {port: 9092, name: telemetry-kafka}
+      - {port: 443, name: telemetry-ui}
+    roles: {telemetry-admin: telemetry}
+
+  analytics-lake:
+    type: VM
+    os: linux
+    source: analytics-lake
+    resources: {ram: 4 gib, cpu: 2}
+    features: {analytics-store: lake-admin}
+    conditions: {analytics-ingest-healthy: lake-admin}
+    services:
+      - {port: 443, name: analytics-ui}
+    roles: {lake-admin: lake}
+
+  customer-portal:
+    type: VM
+    os: linux
+    source: customer-portal
+    resources: {ram: 4 gib, cpu: 2}
+    features: {customer-portal-app: portal-admin}
+    conditions:
+      tenant-isolation-healthy: portal-admin
+      portal-sso-healthy: portal-admin
+    services:
+      - {port: 443, name: portal-https}
+    roles:
+      portal-admin:
+        username: portal
+        entities: [platform-blue.release-engineering]
+
+  support-bastion:
+    type: VM
+    os: linux
+    source: support-bastion
+    resources: {ram: 2 gib, cpu: 2}
+    conditions: {support-bastion-online: support-admin}
+    services:
+      - {port: 22, name: bastion-ssh}
+      - {port: 443, name: bastion-web}
+    roles:
+      support-admin:
+        username: support
+        entities: [vendor-ops]
+
+  siem01:
+    type: VM
+    os: linux
+    source: siem-stack
+    resources: {ram: 8 gib, cpu: 4}
+    features:
+      siem-core: soc-admin
+      release-edr: soc-admin
+    conditions:
+      security-pipeline-healthy: soc-admin
+      release-incident-ticketed: soc-admin
+    services:
+      - {port: 5601, name: release-soc-ui}
+    roles:
+      soc-admin:
+        username: socadmin
+        entities: [platform-blue.soc]
+
+  vendor-idp:
+    type: VM
+    os: linux
+    source: vendor-idp
+    resources: {ram: 2 gib, cpu: 1}
+    features: {vendor-sso: idp-admin}
+    conditions: {vendor-federation-healthy: idp-admin}
+    services:
+      - {port: 443, name: vendor-idp-https}
+    roles: {idp-admin: vendorauth}
+
+  customer-idp:
+    type: VM
+    os: linux
+    source: customer-idp
+    resources: {ram: 2 gib, cpu: 1}
+    features: {customer-sso: idp-admin}
+    conditions: {customer-federation-healthy: idp-admin}
+    services:
+      - {port: 443, name: customer-idp-https}
+    roles: {idp-admin: customerauth}
+
+infrastructure:
+  internet-edge:
+    count: 1
+    properties: {cidr: 10.90.0.0/24, gateway: 10.90.0.1}
+  corp-eng:
+    count: 1
+    properties: {cidr: 10.90.1.0/24, gateway: 10.90.1.1, internal: true}
+  build-net:
+    count: 1
+    properties: {cidr: 10.90.2.0/24, gateway: 10.90.2.1, internal: true}
+    acls:
+      - {direction: in, from_net: corp-eng, protocol: tcp, ports: [22, 443, 5000], action: allow}
+      - {direction: in, from_net: internet-edge, action: deny}
+  control-net:
+    count: 1
+    properties: {cidr: 10.90.3.0/24, gateway: 10.90.3.1, internal: true}
+  edge-net:
+    count: 1
+    properties: {cidr: 10.90.4.0/24, gateway: 10.90.4.1, internal: true}
+  telemetry-net:
+    count: 1
+    properties: {cidr: 10.90.5.0/24, gateway: 10.90.5.1, internal: true}
+  federation-net:
+    count: 1
+    properties: {cidr: 10.90.6.0/24, gateway: 10.90.6.1}
+  security-net:
+    count: 1
+    properties: {cidr: 10.90.7.0/24, gateway: 10.90.7.1, internal: true}
+
+  git-forge: {count: 1, links: [corp-eng, build-net]}
+  ci-runner:
+    count: 1
+    links: [build-net, security-net]
+    dependencies: [git-forge, artifact-registry]
+  artifact-registry:
+    count: 1
+    links: [build-net, control-net]
+    dependencies: [signing-hsm]
+  signing-hsm: {count: 1, links: [build-net]}
+  control-api:
+    count: 1
+    links: [control-net, edge-net, telemetry-net]
+    dependencies: [artifact-registry, telemetry-broker]
+  edge-gateway-east:
+    count: 1
+    links: [edge-net, telemetry-net]
+    dependencies: [control-api]
+  edge-gateway-west:
+    count: 1
+    links: [edge-net, telemetry-net]
+    dependencies: [control-api]
+  telemetry-broker:
+    count: 1
+    links: [telemetry-net, security-net]
+    dependencies: [analytics-lake]
+  analytics-lake: {count: 1, links: [telemetry-net]}
+  customer-portal:
+    count: 1
+    links: [internet-edge, federation-net, control-net]
+    dependencies: [vendor-idp, customer-idp]
+  support-bastion:
+    count: 1
+    links: [internet-edge, federation-net, control-net]
+  siem01: {count: 1, links: [security-net, corp-eng]}
+  vendor-idp: {count: 1, links: [federation-net]}
+  customer-idp: {count: 1, links: [federation-net]}
+
+features:
+  git-service: {type: Service, source: gitea-enterprise}
+  ci-orchestrator: {type: Service, source: gitlab-runner}
+  release-registry: {type: Service, source: harbor-registry}
+  signing-service: {type: Service, source: notation-signer}
+  satcom-control: {type: Service, source: satcom-control-api}
+  edge-agent-east: {type: Service, source: edge-control-agent}
+  edge-agent-west: {type: Service, source: edge-control-agent}
+  telemetry-bus: {type: Service, source: kafka}
+  analytics-store: {type: Service, source: parquet-lake}
+  customer-portal-app: {type: Service, source: tenant-portal}
+  siem-core: {type: Service, source: wazuh-elastic-stack}
+  release-edr: {type: Artifact, source: release-edr-agent, destination: /opt/edr}
+  vendor-sso: {type: Service, source: vendor-idp}
+  customer-sso: {type: Service, source: customer-idp}
+
+conditions:
+  repo-integrity-healthy: {command: /usr/local/bin/check-repo-integrity, interval: 30}
+  pipeline-green: {command: /usr/local/bin/check-pipeline, interval: 30}
+  rogue-release-promoted: {command: /usr/local/bin/check-rogue-release, interval: 60}
+  release-signature-valid: {command: /usr/local/bin/check-release-signature, interval: 30}
+  rollback-package-ready: {command: /usr/local/bin/check-rollback-package, interval: 60}
+  signing-health: {command: /usr/local/bin/check-signing-service, interval: 30}
+  control-plane-healthy: {command: /usr/local/bin/check-control-plane, interval: 15}
+  rollback-complete: {command: /usr/local/bin/check-rollback-complete, interval: 60}
+  edge-east-healthy: {command: /usr/local/bin/check-edge-east, interval: 30}
+  edge-east-poisoned: {command: /usr/local/bin/check-edge-east-poisoned, interval: 60}
+  edge-west-healthy: {command: /usr/local/bin/check-edge-west, interval: 30}
+  edge-west-poisoned: {command: /usr/local/bin/check-edge-west-poisoned, interval: 60}
+  telemetry-flowing: {command: /usr/local/bin/check-telemetry, interval: 15}
+  analytics-ingest-healthy: {command: /usr/local/bin/check-analytics-ingest, interval: 30}
+  tenant-isolation-healthy: {command: /usr/local/bin/check-tenant-isolation, interval: 30}
+  portal-sso-healthy: {command: /usr/local/bin/check-portal-sso, interval: 30}
+  support-bastion-online: {command: /usr/local/bin/check-support-bastion, interval: 30}
+  security-pipeline-healthy: {command: /usr/local/bin/check-security-pipeline, interval: 30}
+  release-incident-ticketed: {command: /usr/local/bin/check-incident-ticket, interval: 60}
+  vendor-federation-healthy: {command: /usr/local/bin/check-vendor-federation, interval: 30}
+  customer-federation-healthy: {command: /usr/local/bin/check-customer-federation, interval: 30}
+
+vulnerabilities:
+  runner-token-reuse:
+    name: Runner token reuse
+    description: Long-lived CI token can be replayed from a compromised build workspace
+    technical: true
+    class: CWE-798
+  overbroad-registry-cred:
+    name: Overbroad registry credential
+    description: Registry service credential can both publish and promote artifacts
+    technical: true
+    class: CWE-266
+  bastion-sudo-gap:
+    name: Bastion sudo gap
+    description: Support bastion grants overly broad sudo access during incidents
+    technical: true
+    class: CWE-250
+  oidc-trust-drift:
+    name: OIDC trust drift
+    description: Customer portal accepts stale trust metadata from partner IdPs
+    technical: true
+    class: CWE-345
+
+metrics:
+  blue-release-signing:
+    type: CONDITIONAL
+    max-score: 100
+    condition: release-signature-valid
+  blue-telemetry-availability:
+    type: CONDITIONAL
+    max-score: 100
+    condition: telemetry-flowing
+  blue-tenant-isolation:
+    type: CONDITIONAL
+    max-score: 100
+    condition: tenant-isolation-healthy
+  blue-rollback-report:
+    type: MANUAL
+    max-score: 50
+    artifact: true
+  red-release-poisoning:
+    type: CONDITIONAL
+    max-score: 100
+    condition: rogue-release-promoted
+  red-edge-compromise:
+    type: CONDITIONAL
+    max-score: 100
+    condition: edge-east-poisoned
+
+evaluations:
+  blue-release-resilience:
+    metrics: [blue-release-signing, blue-telemetry-availability, blue-tenant-isolation, blue-rollback-report]
+    min-score: 75
+  red-propagation:
+    metrics: [red-release-poisoning, red-edge-compromise]
+    min-score: {percentage: 75}
+
+tlos:
+  preserve-release-integrity:
+    name: Preserve release integrity
+    evaluation: blue-release-resilience
+  achieve-poisoned-propagation:
+    name: Achieve poisoned propagation
+    evaluation: red-propagation
+
+goals:
+  platform-blue-goal:
+    tlos: [preserve-release-integrity]
+  supply-chain-red-goal:
+    tlos: [achieve-poisoned-propagation]
+
+entities:
+  platform-blue:
+    name: Platform Blue Team
+    role: Blue
+    mission: Deliver a trusted release while maintaining customer service continuity
+    tlos: [preserve-release-integrity]
+    entities:
+      release-engineering:
+        name: Release Engineering
+      sre:
+        name: Site Reliability Engineering
+      soc:
+        name: Security Operations
+  vendor-ops:
+    name: Vendor Operations
+    role: Green
+    mission: Provide support access for customer escalations
+  customer-ops:
+    name: Customer Operations
+    role: Green
+    mission: Monitor service continuity and tenant isolation
+  red-supply-chain:
+    name: Red Supply Chain Team
+    role: Red
+    mission: Poison the rollout and survive long enough to reach an edge region
+  white-cell:
+    name: White Cell
+    role: White
+
+injects:
+  release-freeze-brief:
+    source: release-freeze-brief
+    from_entity: white-cell
+    to_entities: [platform-blue]
+    description: Release engineering is notified of a planned promotion window
+  customer-telemetry-ticket:
+    source: telemetry-ticket
+    from_entity: customer-ops
+    to_entities: [platform-blue]
+    description: Customer reports delayed telemetry from a canary region
+  exec-rollback-brief:
+    source: rollback-order
+    from_entity: white-cell
+    to_entities: [platform-blue, vendor-ops]
+    description: Leadership orders a verified rollback before customer impact spreads
+
+events:
+  freeze-window:
+    injects: [release-freeze-brief]
+  canary-cutover-event:
+    conditions: [rogue-release-promoted]
+    injects: [customer-telemetry-ticket]
+  rollback-order-event:
+    conditions: [edge-east-poisoned]
+    injects: [exec-rollback-brief]
+
+scripts:
+  release-prep:
+    start-time: 0
+    end-time: 2 hour
+    speed: ${release_story_speed}
+    events:
+      freeze-window: 10 min
+  canary-rollout:
+    start-time: 2 hour
+    end-time: 4 hour
+    speed: ${release_story_speed}
+    events:
+      canary-cutover-event: ${canary_cutover}
+  incident-rollback:
+    start-time: 4 hour
+    end-time: ${rollback_deadline}
+    speed: ${release_story_speed}
+    events:
+      rollback-order-event: 5 hour
+
+stories:
+  release-day:
+    speed: ${release_story_speed}
+    scripts: [release-prep, canary-rollout, incident-rollback]
+
+content:
+  release-manifest:
+    type: file
+    target: artifact-registry
+    path: /srv/releases/manifest.json
+    text: '{"ring":"canary","signed":true,"region":"east"}'
+    sensitive: true
+  golden-edge-config:
+    type: directory
+    target: control-api
+    destination: /srv/control/golden-configs
+    sensitive: true
+  tenant-api-keys:
+    type: dataset
+    target: customer-portal
+    format: json
+    source: tenant-api-key-seed
+    sensitive: true
+  rollback-playbooks:
+    type: dataset
+    target: analytics-lake
+    format: markdown
+    items:
+      - name: canary-rollback.md
+        tags: [rollback, release]
+        description: Canary rollback checklist
+      - name: edge-validation.md
+        tags: [validation, edge]
+        description: Edge validation checklist after rollback
+
+accounts:
+  release-engineer:
+    username: releasemgr
+    node: git-forge
+    groups: [ReleaseEngineering]
+    password_strength: strong
+  ci-bot:
+    username: ci-bot
+    node: ci-runner
+    groups: [CI]
+    password_strength: medium
+    auth_method: certificate
+  registry-bot:
+    username: registry-bot
+    node: artifact-registry
+    groups: [Registry]
+    password_strength: medium
+  satops:
+    username: satops
+    node: control-api
+    groups: [SRE]
+    password_strength: strong
+  support-vendor:
+    username: support
+    node: support-bastion
+    groups: [VendorOps]
+    password_strength: medium
+  tenant-admin:
+    username: tenant.admin
+    node: customer-portal
+    groups: [Customers]
+    password_strength: strong
+  soc-analyst:
+    username: socanalyst
+    node: siem01
+    groups: [SOC]
+    password_strength: strong
+
+relationships:
+  forge-auths-ci:
+    type: authenticates_with
+    source: git-service
+    target: ci-orchestrator
+  ci-publishes-registry:
+    type: authenticates_with
+    source: ci-orchestrator
+    target: release-registry
+  registry-relies-signing:
+    type: depends_on
+    source: release-registry
+    target: signing-service
+  control-manages-east:
+    type: manages
+    source: satcom-control
+    target: edge-agent-east
+  control-manages-west:
+    type: manages
+    source: satcom-control
+    target: edge-agent-west
+  portal-federates-vendor:
+    type: federates_with
+    source: customer-portal-app
+    target: vendor-sso
+    properties: {protocol: "OIDC"}
+  portal-federates-customer:
+    type: federates_with
+    source: customer-portal-app
+    target: customer-sso
+    properties: {protocol: "OIDC"}
+  telemetry-replicates-analytics:
+    type: replicates_to
+    source: telemetry-bus
+    target: analytics-store
+  bastion-connects-control:
+    type: connects_to
+    source: support-bastion
+    target: control-api
+    properties: {protocol: "ssh", port: "22"}
+
+agents:
+  red-build-agent:
+    entity: red-supply-chain
+    actions: [Exploit, StealToken, PushArtifact, AbuseSupport]
+    initial_knowledge:
+      hosts: [git-forge, ci-runner, support-bastion]
+      subnets: [corp-eng, build-net, federation-net]
+      services: [forge-https, ci-api, bastion-ssh]
+      accounts: [support-vendor]
+    allowed_subnets: [corp-eng, build-net, federation-net, control-net]
+    reward_calculator: SupplyChainImpact
+  blue-release-agent:
+    entity: platform-blue.release-engineering
+    actions: [Review, Promote, Revoke, Rollback]
+    starting_accounts: [release-engineer, registry-bot]
+    initial_knowledge:
+      hosts: [git-forge, artifact-registry, signing-hsm]
+      subnets: [corp-eng, build-net]
+      services: [forge-https, registry-api, signing-api]
+      accounts: [ci-bot, registry-bot]
+    allowed_subnets: [corp-eng, build-net, control-net]
+    reward_calculator: TrustedRelease
+  blue-sre-agent:
+    entity: platform-blue.sre
+    actions: [Inspect, Isolate, Restore, Validate]
+    starting_accounts: [satops]
+    initial_knowledge:
+      hosts: [control-api, edge-gateway-east, edge-gateway-west, telemetry-broker]
+      subnets: [control-net, edge-net, telemetry-net]
+      services: [control-api, edge-east-api, edge-west-api, telemetry-kafka]
+      accounts: [satops]
+    allowed_subnets: [control-net, edge-net, telemetry-net, security-net]
+    reward_calculator: TelemetryAvailability
+
+objectives:
+  red-compromise-build:
+    agent: red-build-agent
+    actions: [Exploit, StealToken]
+    targets: [ci-runner, support-bastion, forge-auths-ci]
+    success:
+      conditions: [rogue-release-promoted]
+    window:
+      stories: [release-day]
+      scripts: [release-prep]
+  red-poison-release:
+    agent: red-build-agent
+    actions: [PushArtifact]
+    targets: [release-manifest, artifact-registry, ci-publishes-registry]
+    success:
+      metrics: [red-release-poisoning]
+    depends_on: [red-compromise-build]
+    window:
+      stories: [release-day]
+      scripts: [canary-rollout]
+      events: [canary-cutover-event]
+  red-reach-edge:
+    entity: red-supply-chain
+    targets: [edge-gateway-east, control-manages-east]
+    success:
+      goals: [supply-chain-red-goal]
+    depends_on: [red-poison-release]
+    window:
+      stories: [release-day]
+      scripts: [incident-rollback]
+      events: [rollback-order-event]
+  blue-validate-release:
+    agent: blue-release-agent
+    actions: [Review, Revoke]
+    targets: [artifact-registry, signing-hsm, registry-relies-signing]
+    success:
+      conditions: [release-signature-valid]
+      metrics: [blue-release-signing]
+    window:
+      stories: [release-day]
+      scripts: [release-prep, canary-rollout]
+  blue-preserve-service:
+    agent: blue-sre-agent
+    actions: [Inspect, Isolate, Restore, Validate]
+    targets: [control-api, edge-gateway-east, telemetry-broker, telemetry-replicates-analytics]
+    success:
+      goals: [platform-blue-goal]
+      metrics: [blue-telemetry-availability, blue-tenant-isolation]
+    depends_on: [blue-validate-release, red-reach-edge]
+    window:
+      stories: [release-day]
+      scripts: [incident-rollback]

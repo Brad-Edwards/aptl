@@ -1282,6 +1282,41 @@ features:
 vulnerabilities:
   eternalblue: {name: EternalBlue, description: MS17-010, technical: true, class: CWE-119}
 
+conditions:
+  enterprise0-compromised:
+    command: /usr/bin/check-enterprise0-compromise
+    interval: 60
+
+metrics:
+  red-access-achieved:
+    type: CONDITIONAL
+    max-score: 50
+    condition: enterprise0-compromised
+  blue-detection-report:
+    type: MANUAL
+    max-score: 50
+    artifact: true
+
+evaluations:
+  red-campaign:
+    metrics: [red-access-achieved]
+    min-score: {absolute: 50}
+  blue-response:
+    metrics: [blue-detection-report]
+    min-score: 50
+
+tlos:
+  establish-enterprise-foothold:
+    evaluation: red-campaign
+  detect-enterprise-compromise:
+    evaluation: blue-response
+
+goals:
+  red-campaign-goal:
+    tlos: [establish-enterprise-foothold]
+  blue-response-goal:
+    tlos: [detect-enterprise-compromise]
+
 accounts:
   phished-user:
     username: jdoe
@@ -1340,6 +1375,47 @@ relationships:
     source: velociraptor
     target: enterprise0
     description: "Velociraptor monitors enterprise hosts"
+
+events:
+  phishing-wave: {}
+  triage-window: {}
+
+scripts:
+  day-1:
+    start-time: 0
+    end-time: 2 hour
+    speed: 1
+    events:
+      phishing-wave: 5 min
+      triage-window: 45 min
+
+stories:
+  exercise:
+    scripts: [day-1]
+
+objectives:
+  red-establish-foothold:
+    agent: red-agent
+    actions: [DiscoverRemoteSystems, ExploitRemoteService, EternalBlue]
+    targets: [enterprise0]
+    success:
+      goals: [red-campaign-goal]
+    window:
+      stories: [exercise]
+      scripts: [day-1]
+      events: [phishing-wave]
+
+  blue-detect-and-report:
+    agent: blue-agent
+    actions: [Monitor, Analyse]
+    targets: [enterprise0, velociraptor]
+    success:
+      goals: [blue-response-goal]
+    window:
+      stories: [exercise]
+      scripts: [day-1]
+      events: [triage-window]
+    depends_on: [red-establish-foothold]
 """
 
 
@@ -1484,6 +1560,56 @@ vulnerabilities:
 entities:
   red-team: {name: Red Team, role: Red}
   blue-team: {name: Blue Team, role: Blue}
+
+conditions:
+  federation-service-up:
+    command: /usr/bin/check-adfs-federation
+    interval: 60
+
+metrics:
+  maintain-federation:
+    type: CONDITIONAL
+    max-score: 100
+    condition: federation-service-up
+
+evaluations:
+  federation-health:
+    metrics: [maintain-federation]
+    min-score: 75
+
+tlos:
+  sustain-federated-auth:
+    evaluation: federation-health
+
+goals:
+  blue-identity-goal:
+    tlos: [sustain-federated-auth]
+
+events:
+  federation-cutover: {}
+
+scripts:
+  identity-day:
+    start-time: 0
+    end-time: 4 hour
+    speed: 1
+    events:
+      federation-cutover: 30 min
+
+stories:
+  federation-exercise:
+    scripts: [identity-day]
+
+objectives:
+  preserve-federated-auth:
+    entity: blue-team
+    targets: [adfs-service, child-trusts-parent]
+    success:
+      goals: [blue-identity-goal]
+    window:
+      stories: [federation-exercise]
+      scripts: [identity-day]
+      events: [federation-cutover]
 """
 
 
@@ -1545,3 +1671,14 @@ def test_scenario_topology_integrity(label, yaml_str):
         for vuln_name in node.vulnerabilities:
             assert vuln_name in scenario.vulnerabilities, \
                 f"{label}: node '{node_name}' refs missing vuln '{vuln_name}'"
+
+
+def test_objectives_are_exercised_in_stress_suite():
+    """Stress fixtures should include realistic objective-bearing scenarios."""
+    labels_with_objectives: list[str] = []
+    for label, yaml_str in SCENARIOS:
+        scenario = parse_sdl(textwrap.dedent(yaml_str))
+        if scenario.objectives:
+            labels_with_objectives.append(label)
+
+    assert len(labels_with_objectives) >= 2

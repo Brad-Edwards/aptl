@@ -10,6 +10,7 @@ from aptl.core.sdl.features import Feature, FeatureType
 from aptl.core.sdl.infrastructure import InfraNode, SimpleProperties
 from aptl.core.sdl.nodes import Node, NodeType, Resources, Role, parse_ram
 from aptl.core.sdl.nodes import Node
+from aptl.core.sdl.objectives import Objective, ObjectiveSuccess, ObjectiveWindow
 from aptl.core.sdl.orchestration import Event, Inject, Script, Story, parse_duration
 from aptl.core.sdl.scoring import Evaluation, Goal, Metric, MetricType, MinScore, TLO
 from aptl.core.sdl.vulnerabilities import Vulnerability
@@ -475,6 +476,51 @@ class TestStory:
 # ---------------------------------------------------------------------------
 
 
+class TestObjectiveSuccess:
+    def test_requires_at_least_one_reference(self):
+        with pytest.raises(ValidationError, match="at least one condition"):
+            ObjectiveSuccess()
+
+    def test_accepts_goal_reference(self):
+        success = ObjectiveSuccess(goals=["pass-exercise"])
+        assert success.goals == ["pass-exercise"]
+
+
+class TestObjective:
+    def test_requires_exactly_one_actor_binding(self):
+        with pytest.raises(ValidationError, match="exactly one"):
+            Objective(
+                success={"goals": ["g1"]},
+            )
+
+        with pytest.raises(ValidationError, match="exactly one"):
+            Objective(
+                agent="red-agent",
+                entity="red-team",
+                success={"goals": ["g1"]},
+            )
+
+    def test_valid_agent_objective(self):
+        objective = Objective(
+            agent="red-agent",
+            actions=["Scan"],
+            targets=["web-server"],
+            success={"goals": ["initial-access"]},
+            window={"scripts": ["main-timeline"], "events": ["attack-wave"]},
+            depends_on=["recon"],
+        )
+        assert objective.agent == "red-agent"
+        assert objective.success.goals == ["initial-access"]
+        assert isinstance(objective.window, ObjectiveWindow)
+
+    def test_valid_entity_objective(self):
+        objective = Objective(
+            entity="blue-team",
+            success={"metrics": ["report-quality"]},
+        )
+        assert objective.entity == "blue-team"
+
+
 # ---------------------------------------------------------------------------
 # Extension models (G1-G9, G12-G13)
 # ---------------------------------------------------------------------------
@@ -628,6 +674,28 @@ class TestServicePort:
             type="vm",
             resources={"ram": "1 gib", "cpu": 1},
             services=[{"port": 22, "name": "ssh"}, {"port": 80, "name": "http"}],
+        )
+        assert len(n.services) == 2
+
+    def test_duplicate_port_protocol_rejected(self):
+        with pytest.raises(ValidationError, match="Duplicate service binding"):
+            Node(
+                type="vm",
+                resources={"ram": "1 gib", "cpu": 1},
+                services=[
+                    {"port": 443, "protocol": "tcp", "name": "https"},
+                    {"port": 443, "protocol": "tcp", "name": "alt-https"},
+                ],
+            )
+
+    def test_same_port_with_different_protocols_allowed(self):
+        n = Node(
+            type="vm",
+            resources={"ram": "1 gib", "cpu": 1},
+            services=[
+                {"port": 53, "protocol": "tcp", "name": "dns-tcp"},
+                {"port": 53, "protocol": "udp", "name": "dns-udp"},
+            ],
         )
         assert len(n.services) == 2
 

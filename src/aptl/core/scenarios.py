@@ -81,6 +81,9 @@ def load_scenario(path: Path) -> Scenario:
     except SDLValidationError as e:
         raise ScenarioValidationError(str(e), path=path) from e
 
+    for advisory in scenario.advisories:
+        log.warning("Scenario '%s' advisory: %s", scenario.name, advisory)
+
     log.info("Loaded scenario '%s' from %s", scenario.name, path)
     return scenario
 

@@ -23,6 +23,8 @@ pytest tests/test_sdl_stress.py tests/test_sdl_realworld.py -v
 - **test_sdl_stress.py** — Scenarios 1-13: OCR, CybORG, CALDERA, Atomic Red Team, CyRIS, KYPO, HTB, Enterprise AD, Cloud Hybrid, Exchange+data, CybORG+agents, AD+trust+federation
 - **test_sdl_realworld.py** — Scenarios 14-19: Incalmo Equifax, NICE Challenge 17, CCDC Burnsodyne, HTB Offshore-style, Metasploitable 2, Locked Shields IT/OT/SCADA
 
+Objective coverage is exercised in the stress suites as well: the agent-heavy CybORG-derived scenarios and exercise-heavy scenarios now include declarative `objectives` so the section is tested against realistic combinations of agents, scoring, orchestration, and team structure rather than only unit tests.
+
 Each scenario is tested for:
 1. Parse + validate success
 2. Infrastructure cross-reference integrity
@@ -58,6 +60,23 @@ pytest tests/ -v
 # Everything including fuzz
 pytest tests/ -m '' -v
 ```
+
+### Example Scenarios
+
+The `examples/` directory now contains curated large SDL files that are
+meant to be reusable starting points rather than inline test-only
+fixtures. They are loaded directly from disk by `tests/test_scenarios.py`
+so they stay valid as real SDL artifacts:
+
+- `aptl-lab-topology.sdl.yaml`
+- `hospital-ransomware-surgery-day.sdl.yaml`
+- `satcom-release-poisoning.sdl.yaml`
+- `port-authority-surge-response.sdl.yaml`
+
+The up-front design briefs for the new complex examples live in
+[`docs/sdl/complex-scenarios.md`](complex-scenarios.md), and the running
+authoring issue log lives in
+[`docs/sdl/complex-scenario-authoring-notes.md`](complex-scenario-authoring-notes.md).
 
 ## Adding New Scenarios
 

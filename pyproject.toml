@@ -36,6 +36,7 @@ dev = [
     "pytest-mock>=3.12.0",
     "coverage>=7.0.0",
     "httpx>=0.27.0",
+    "hypothesis>=6.0.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -44,6 +45,10 @@ packages = ["src/aptl"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "fuzz: property-based fuzz tests (run with: pytest -m fuzz)",
+]
+addopts = "-m 'not fuzz'"
 
 [tool.coverage.run]
 source = ["aptl"]

@@ -17,27 +17,8 @@ import pytest
 
 
 def _make_scenario_def(scenario_id: str = "test-scenario"):
-    """Create a minimal ScenarioDefinition for testing."""
-    from aptl.core.scenarios import ScenarioDefinition
-
-    return ScenarioDefinition(
-        metadata={
-            "id": scenario_id,
-            "name": "Test Scenario",
-            "description": "A test scenario",
-            "difficulty": "beginner",
-            "estimated_minutes": 10,
-        },
-        mode="red",
-        containers={"required": ["kali"]},
-        objectives={
-            "red": [
-                {"id": "obj-a", "description": "Do A", "type": "manual", "points": 50},
-                {"id": "obj-b", "description": "Do B", "type": "manual", "points": 50},
-            ],
-            "blue": [],
-        },
-    )
+    """Return a scenario ID for testing session lifecycle behavior."""
+    return scenario_id
 
 
 # ---------------------------------------------------------------------------

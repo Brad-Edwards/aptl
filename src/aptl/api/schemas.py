@@ -88,19 +88,6 @@ class KillActionResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
-class ScenarioSummary(BaseModel):
-    """Abbreviated scenario info for listing."""
-
-    id: str
-    name: str
-    description: str
-    difficulty: str
-    mode: str
-    estimated_minutes: int
-    tags: list[str] = []
-    containers_required: list[str] = []
-
-
 class ConfigResponse(BaseModel):
     """Response for GET /api/config."""
 

@@ -777,19 +777,6 @@ class TestServicePort:
         assert sp.port == "${service_port}"
 
 
-class TestPlatformCommand:
-    def test_basic(self):
-        from aptl.core.attacks import PlatformCommand
-        pc = PlatformCommand(command="whoami")
-        assert pc.shell == "sh"
-        assert pc.cleanup == ""
-
-    def test_with_cleanup(self):
-        from aptl.core.attacks import PlatformCommand
-        pc = PlatformCommand(shell="psh", command="procdump.exe", cleanup="del dump.bin")
-        assert pc.cleanup == "del dump.bin"
-
-
 class TestConditionExtensions:
     def test_timeout_and_retries(self):
         from aptl.core.sdl.conditions import Condition

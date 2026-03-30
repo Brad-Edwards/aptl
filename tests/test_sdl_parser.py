@@ -34,7 +34,7 @@ infrastructure:
     count: 1
 """
         s = parse_sdl(sdl)
-        assert "vm_1" in s.nodes or "vm-1" in s.nodes
+        assert "vm-1" in s.nodes
 
     def test_integer_keys_preserved(self):
         """YAML can have integer keys (e.g., in step numbers)."""

@@ -6,7 +6,7 @@ domain-specific rules. Collects all errors rather than failing on
 the first one.
 """
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from ipaddress import ip_address, ip_network
 
 from pydantic import BaseModel
@@ -15,7 +15,7 @@ from aptl.core.sdl._errors import SDLValidationError
 from aptl.core.sdl._base import extract_variable_name, is_variable_ref
 from aptl.core.sdl.entities import flatten_entities
 from aptl.core.sdl.infrastructure import SimpleProperties
-from aptl.core.sdl.nodes import NodeType
+from aptl.core.sdl.nodes import MAX_NODE_NAME_LENGTH, NodeType
 from aptl.core.sdl.orchestration import WorkflowStepType
 from aptl.core.sdl.scenario import Scenario
 from aptl.core.sdl.scoring import MetricType
@@ -30,11 +30,11 @@ def _topological_sort(graph: dict[str, list[str]]) -> list[str] | None:
         for dep in deps:
             in_degree[dep] += 1
 
-    queue = [n for n, d in in_degree.items() if d == 0]
+    queue = deque(n for n, d in in_degree.items() if d == 0)
     order: list[str] = []
 
     while queue:
-        node = queue.pop(0)
+        node = queue.popleft()
         order.append(node)
         for dep in graph.get(node, []):
             in_degree[dep] -= 1
@@ -76,9 +76,7 @@ class SemanticValidator:
         return self._node_type(node_name) == NodeType.VM
 
     def _all_entity_names(self) -> set[str]:
-        names = set(flatten_entities(self._s.entities).keys())
-        names.update(self._s.entities.keys())
-        return names
+        return set(flatten_entities(self._s.entities).keys())
 
     def _qualified_service_refs(self) -> set[str]:
         refs: set[str] = set()
@@ -269,7 +267,7 @@ class SemanticValidator:
 
     def _verify_nodes(self) -> None:
         for name, node in self._s.nodes.items():
-            if len(name) > 35:
+            if len(name) > MAX_NODE_NAME_LENGTH:
                 self._err(f"Node '{name}' name exceeds 35 characters")
 
             for feat_name, role_name in node.features.items():

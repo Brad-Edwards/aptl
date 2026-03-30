@@ -31,13 +31,13 @@ Several shorthand forms are expanded before model construction:
 | `min-score: 50` | `min-score: {percentage: 50}` |
 | `features: [svc-a, svc-b]` (on nodes) | `features: {svc-a: "", svc-b: ""}` |
 
-Source expansion is skipped inside `relationships` and `agents` sections where `source` is a plain string reference, not a package Source.
+Source expansion only applies to actual SDL `source` fields. It is skipped inside `relationships` and `agents` where `source` is a plain string reference, and it does not fire on user-defined map keys that merely happen to be named `source`.
 
 Shorthand expansion also works when the shorthand value is a full variable placeholder. For example, `infrastructure: {web: ${replicas}}` expands to `infrastructure: {web: {count: ${replicas}}}`, and `min-score: ${pass_pct}` expands to `min-score: {percentage: ${pass_pct}}`.
 
 ## Variables
 
-Full-value `${var_name}` placeholders are preserved as literal strings during parsing. Structural validation currently accepts placeholders in ordinary string fields, common scalar/time fields, and many reference values. The parser does not substitute variables or evaluate expressions. It also rejects placeholders in user-defined mapping keys, because those keys define the SDL symbol table and must stay concrete.
+Full-value `${var_name}` placeholders are preserved as literal strings during parsing. Structural validation currently accepts placeholders in ordinary string fields, common scalar/time fields, many reference values, and selected leaf enum-backed property fields. The parser does not substitute variables or evaluate expressions. It also rejects placeholders in user-defined mapping keys, because those keys define the SDL symbol table and must stay concrete.
 
 The intended boundary is:
 
@@ -78,7 +78,7 @@ Legacy APTL scenario YAMLs with a `metadata` block are intentionally rejected in
 2. **Key normalization** — lowercase field keys, preserve user names
 3. **Shorthand expansion** — source, infrastructure, roles, min-score, feature lists
 4. **Pydantic construction** — structural validation (types, ranges, required fields)
-5. **Semantic validation** — cross-reference checks plus variable-reference checks (21 passes, see [validation.md](validation.md))
+5. **Semantic validation** — cross-reference checks plus variable-reference checks (22 passes, see [validation.md](validation.md))
 
 On success, the returned `Scenario` may still carry non-fatal advisories in `scenario.advisories` (for example, VM nodes without explicit `resources`).
 

@@ -1,6 +1,6 @@
 # Scenario Description Language (SDL) Reference
 
-The APTL SDL is a YAML-based specification language for describing cyber range scenarios and experiments. It starts from the [Open Cyber Range SDL](https://github.com/Open-Cyber-Range/SDL-parser) surface, preserves coverage across the OCR-derived sections, and extends that base with APTL's additional scenario concepts such as content, accounts, relationships, agents, objectives, and variables. It is intentionally its own SDL rather than a clone-level compatibility layer.
+The APTL SDL is a YAML-based specification language for describing cyber range scenarios and experiments. It starts from the [Open Cyber Range SDL](https://github.com/Open-Cyber-Range/SDL-parser) surface, preserves coverage across the OCR-derived sections, and extends that base with APTL's additional scenario concepts such as content, accounts, relationships, agents, objectives, workflows, and variables. It is intentionally its own SDL rather than a clone-level compatibility layer.
 
 The SDL describes *what the scenario and experiment mean* — not how to deploy them. A separate backend binding layer (not yet implemented) translates SDL specifications into concrete infrastructure (Docker Compose, Terraform, cloud APIs), and runtime adapters can evaluate SDL-declared conditions/objectives with concrete probes.
 
@@ -16,6 +16,13 @@ In other words:
 - `content.hostname-file.text: ${hostname}` — `${hostname}` is a variable-backed attribute value
 
 This means a hostname, IP, path, or display string can be variable-backed, but a node cannot be created or renamed through `${...}` inside a mapping key.
+
+Generic cross-section refs such as relationship endpoints and objective targets accept either:
+
+- bare names like `webapp` when the name is unambiguous
+- qualified refs like `nodes.webapp`, `features.nginx`, `accounts.db-admin`, or `infrastructure.dmz-net` when disambiguation is needed
+
+Named service bindings, named ACL rules, and workflow steps keep their existing qualified forms.
 
 ## Quick Example
 
@@ -72,7 +79,7 @@ accounts:
 
 ## Documentation
 
-- [SDL Sections Reference](sections.md) — Complete reference for all 20 sections
+- [SDL Sections Reference](sections.md) — Complete reference for all 21 sections
 - [Parser Behavior](parser.md) — Key normalization, shorthand expansion, SDL-only parsing
 - [Semantic Validation](validation.md) — Cross-reference checks and what the validator enforces
 - [Design Precedents](precedents.md) — Where each SDL element comes from

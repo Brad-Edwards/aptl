@@ -14,6 +14,7 @@ from aptl.core.sdl._base import (
     SDLModel,
     is_variable_ref,
     normalize_enum_value,
+    parse_enum_or_var,
     parse_int_or_var,
 )
 from aptl.core.sdl._source import Source
@@ -151,9 +152,26 @@ class AssetValueLevel(str, Enum):
 class AssetValue(SDLModel):
     """CIA triad asset valuation for scoring and risk assessment."""
 
-    confidentiality: AssetValueLevel = AssetValueLevel.MEDIUM
-    integrity: AssetValueLevel = AssetValueLevel.MEDIUM
-    availability: AssetValueLevel = AssetValueLevel.MEDIUM
+    confidentiality: AssetValueLevel | str = AssetValueLevel.MEDIUM
+    integrity: AssetValueLevel | str = AssetValueLevel.MEDIUM
+    availability: AssetValueLevel | str = AssetValueLevel.MEDIUM
+
+    @field_validator(
+        "confidentiality",
+        "integrity",
+        "availability",
+        mode="before",
+    )
+    @classmethod
+    def normalize_asset_value(
+        cls,
+        v: AssetValueLevel | str,
+    ) -> AssetValueLevel | str:
+        return parse_enum_or_var(
+            v,
+            AssetValueLevel,
+            field_name="asset_value",
+        )
 
 
 class ServicePort(SDLModel):
@@ -192,7 +210,7 @@ class Node(SDLModel):
     def normalize_type(cls, v: str) -> str:
         return normalize_enum_value(v)
     resources: Optional[Resources] = None
-    os: Optional[OSFamily] = None
+    os: Optional[OSFamily | str] = None
     os_version: str = ""
     features: dict[str, str] = Field(default_factory=dict)
     conditions: dict[str, str] = Field(default_factory=dict)
@@ -205,7 +223,11 @@ class Node(SDLModel):
     @field_validator("os", mode="before")
     @classmethod
     def normalize_os(cls, v):
-        return normalize_enum_value(v) if v is not None else v
+        return (
+            parse_enum_or_var(v, OSFamily, field_name="os")
+            if v is not None
+            else v
+        )
 
     @model_validator(mode="after")
     def validate_type_constraints(self) -> "Node":
@@ -243,22 +265,27 @@ class Node(SDLModel):
 
     @model_validator(mode="after")
     def validate_unique_service_ports(self) -> "Node":
-        """Concrete VM service bindings must not reuse the same port/protocol."""
+        """Concrete VM service bindings must stay uniquely addressable."""
         if self.type != NodeType.VM:
             return self
 
         seen: set[tuple[str, int]] = set()
+        seen_names: set[str] = set()
         for service in self.services:
             if not isinstance(service.port, int):
-                continue
-            if is_variable_ref(service.protocol):
-                continue
-
-            key = (service.protocol.lower(), service.port)
-            if key in seen:
-                raise ValueError(
-                    "Duplicate service binding "
-                    f"'{service.protocol}/{service.port}' on node"
-                )
-            seen.add(key)
+                pass
+            elif not is_variable_ref(service.protocol):
+                key = (service.protocol.lower(), service.port)
+                if key in seen:
+                    raise ValueError(
+                        "Duplicate service binding "
+                        f"'{service.protocol}/{service.port}' on node"
+                    )
+                seen.add(key)
+            if service.name:
+                if service.name in seen_names:
+                    raise ValueError(
+                        f"Duplicate named service '{service.name}' on node"
+                    )
+                seen_names.add(service.name)
         return self

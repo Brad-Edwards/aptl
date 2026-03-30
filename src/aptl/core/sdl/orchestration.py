@@ -10,11 +10,17 @@ Scripts use OCR-compatible human-readable duration strings
 import math
 import re
 from decimal import Decimal, ROUND_CEILING
+from enum import Enum
 from typing import Optional
 
 from pydantic import Field, field_validator, model_validator
 
-from aptl.core.sdl._base import SDLModel, is_variable_ref, parse_float_or_var
+from aptl.core.sdl._base import (
+    SDLModel,
+    is_variable_ref,
+    normalize_enum_value,
+    parse_float_or_var,
+)
 from aptl.core.sdl._source import Source
 
 # OCR uses duration-str's fixed calendar conversions: 30d/month, 365d/year.
@@ -237,3 +243,107 @@ class Story(SDLModel):
     @classmethod
     def parse_speed(cls, v: str | int | float) -> float | str:
         return parse_float_or_var(v, minimum=1.0, field_name="speed")
+
+
+class WorkflowStepType(str, Enum):
+    """Control-flow node types for declarative experiment workflows."""
+
+    OBJECTIVE = "objective"
+    IF = "if"
+    PARALLEL = "parallel"
+    END = "end"
+
+
+class WorkflowPredicate(SDLModel):
+    """Branch predicate reusing objective-style success references."""
+
+    conditions: list[str] = Field(default_factory=list)
+    metrics: list[str] = Field(default_factory=list)
+    evaluations: list[str] = Field(default_factory=list)
+    tlos: list[str] = Field(default_factory=list)
+    goals: list[str] = Field(default_factory=list)
+    objectives: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_non_empty(self) -> "WorkflowPredicate":
+        if any((
+            self.conditions,
+            self.metrics,
+            self.evaluations,
+            self.tlos,
+            self.goals,
+            self.objectives,
+        )):
+            return self
+        raise ValueError(
+            "Workflow predicate must reference at least one condition, "
+            "metric, evaluation, TLO, goal, or objective"
+        )
+
+
+class WorkflowStep(SDLModel):
+    """A node in a workflow graph."""
+
+    type: WorkflowStepType = Field(alias="type")
+    objective: str = ""
+    next: str = ""
+    when: WorkflowPredicate | None = None
+    then_step: str = Field(default="", alias="then")
+    else_step: str = Field(default="", alias="else")
+    branches: list[str] = Field(default_factory=list)
+    description: str = ""
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def normalize_type(cls, v: str) -> str:
+        return normalize_enum_value(v)
+
+    @model_validator(mode="after")
+    def validate_type_specific_fields(self) -> "WorkflowStep":
+        if self.type == WorkflowStepType.OBJECTIVE:
+            if not self.objective:
+                raise ValueError("Objective workflow step requires 'objective'")
+            if self.when is not None or self.then_step or self.else_step or self.branches:
+                raise ValueError(
+                    "Objective workflow step only supports 'objective', "
+                    "optional 'next', and 'description'"
+                )
+            return self
+
+        if self.type == WorkflowStepType.IF:
+            if self.when is None or not self.then_step or not self.else_step:
+                raise ValueError(
+                    "If workflow step requires 'when', 'then', and 'else'"
+                )
+            if self.objective or self.branches or self.next:
+                raise ValueError(
+                    "If workflow step only supports 'when', 'then', 'else', "
+                    "and 'description'"
+                )
+            return self
+
+        if self.type == WorkflowStepType.PARALLEL:
+            if not self.branches:
+                raise ValueError("Parallel workflow step requires 'branches'")
+            if self.objective or self.when is not None or self.then_step or self.else_step:
+                raise ValueError(
+                    "Parallel workflow step only supports 'branches', "
+                    "optional 'next', and 'description'"
+                )
+            if len(self.branches) != len(set(self.branches)):
+                raise ValueError("Parallel workflow branches must be unique")
+            return self
+
+        if self.objective or self.next or self.when is not None or self.then_step or self.else_step or self.branches:
+            raise ValueError(
+                "End workflow step only supports 'type' and 'description'"
+            )
+        return self
+
+
+class Workflow(SDLModel):
+    """A declarative experiment control graph over objectives."""
+
+    description: str = ""
+    start: str
+    steps: dict[str, WorkflowStep] = Field(min_length=1)

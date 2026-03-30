@@ -10,6 +10,10 @@ variables:
     type: number
     default: 1.25
     description: Playback speed for the release-day story
+  release_engineer_password_strength:
+    type: string
+    default: strong
+    description: Password posture for release engineering operator accounts
   canary_cutover:
     type: string
     default: "45 min"
@@ -238,8 +242,8 @@ infrastructure:
     count: 1
     properties: {cidr: 10.90.2.0/24, gateway: 10.90.2.1, internal: true}
     acls:
-      - {direction: in, from_net: corp-eng, protocol: tcp, ports: [22, 443, 5000], action: allow}
-      - {direction: in, from_net: internet-edge, action: deny}
+      - {name: allow-engineering-release, direction: in, from_net: corp-eng, protocol: tcp, ports: [22, 443, 5000], action: allow}
+      - {name: deny-public-build, direction: in, from_net: internet-edge, action: deny}
   control-net:
     count: 1
     properties: {cidr: 10.90.3.0/24, gateway: 10.90.3.1, internal: true}
@@ -519,7 +523,7 @@ accounts:
     username: releasemgr
     node: git-forge
     groups: [ReleaseEngineering]
-    password_strength: strong
+    password_strength: ${release_engineer_password_strength}
   ci-bot:
     username: ci-bot
     node: ci-runner
@@ -668,6 +672,25 @@ objectives:
     window:
       stories: [release-day]
       scripts: [release-prep, canary-rollout]
+      workflows: [release-response]
+      steps: [release-response.validate-release]
+  blue-revoke-artifact:
+    agent: blue-release-agent
+    actions: [Revoke, Rollback]
+    targets:
+      - release-manifest
+      - artifact-registry
+      - nodes.artifact-registry.services.registry-api
+      - infrastructure.build-net.acls.allow-engineering-release
+    success:
+      conditions: [rollback-package-ready]
+    depends_on: [blue-validate-release]
+    window:
+      stories: [release-day]
+      scripts: [incident-rollback]
+      events: [rollback-order-event]
+      workflows: [release-response]
+      steps: [release-response.revoke-artifact]
   blue-preserve-service:
     agent: blue-sre-agent
     actions: [Inspect, Isolate, Restore, Validate]
@@ -679,3 +702,35 @@ objectives:
     window:
       stories: [release-day]
       scripts: [incident-rollback]
+      workflows: [release-response]
+      steps: [release-response.rollback-edge]
+
+workflows:
+  release-response:
+    description: >
+      Release-control workflow that validates a canary, branches on
+      poisoned promotion, and fans out rollback work when needed.
+    start: validate-release
+    steps:
+      validate-release:
+        type: objective
+        objective: blue-validate-release
+        next: branch-on-promotion
+      branch-on-promotion:
+        type: if
+        when:
+          conditions: [rogue-release-promoted]
+        then: rollback-fanout
+        else: finish
+      rollback-fanout:
+        type: parallel
+        branches: [revoke-artifact, rollback-edge]
+        next: finish
+      revoke-artifact:
+        type: objective
+        objective: blue-revoke-artifact
+      rollback-edge:
+        type: objective
+        objective: blue-preserve-service
+      finish:
+        type: end

@@ -7,11 +7,20 @@ from aptl.core.sdl._source import Source
 from aptl.core.sdl.conditions import Condition
 from aptl.core.sdl.entities import Entity, ExerciseRole, flatten_entities
 from aptl.core.sdl.features import Feature, FeatureType
-from aptl.core.sdl.infrastructure import InfraNode, SimpleProperties
+from aptl.core.sdl.infrastructure import ACLAction, ACLRule, InfraNode, SimpleProperties
 from aptl.core.sdl.nodes import Node, NodeType, Resources, Role, parse_ram
 from aptl.core.sdl.nodes import Node
 from aptl.core.sdl.objectives import Objective, ObjectiveSuccess, ObjectiveWindow
-from aptl.core.sdl.orchestration import Event, Inject, Script, Story, parse_duration
+from aptl.core.sdl.orchestration import (
+    Event,
+    Inject,
+    Script,
+    Story,
+    Workflow,
+    WorkflowStep,
+    WorkflowStepType,
+    parse_duration,
+)
 from aptl.core.sdl.scoring import Evaluation, Goal, Metric, MetricType, MinScore, TLO
 from aptl.core.sdl.vulnerabilities import Vulnerability
 
@@ -155,6 +164,15 @@ class TestInfraNode:
     def test_count_placeholder(self):
         n = InfraNode(count="${replicas}")
         assert n.count == "${replicas}"
+
+    def test_duplicate_acl_names_rejected(self):
+        with pytest.raises(ValidationError, match="ACL names must be unique"):
+            InfraNode(
+                acls=[
+                    {"name": "allow-admin", "direction": "in", "from_net": "wan"},
+                    {"name": "allow-admin", "direction": "out", "to_net": "wan"},
+                ]
+            )
 
 
 class TestSimpleProperties:
@@ -339,6 +357,10 @@ class TestEntity:
         e = Entity(name="Team", role="blue")
         assert e.role == ExerciseRole.BLUE
 
+    def test_role_placeholder(self):
+        e = Entity(name="Team", role="${exercise_role}")
+        assert e.role == "${exercise_role}"
+
     def test_facts_supported(self):
         e = Entity(name="Team", facts={"department": "SOC"})
         assert e.facts == {"department": "SOC"}
@@ -485,6 +507,13 @@ class TestObjectiveSuccess:
         success = ObjectiveSuccess(goals=["pass-exercise"])
         assert success.goals == ["pass-exercise"]
 
+    def test_mode_placeholder(self):
+        success = ObjectiveSuccess(
+            mode="${objective_mode}",
+            goals=["pass-exercise"],
+        )
+        assert success.mode == "${objective_mode}"
+
 
 class TestObjective:
     def test_requires_exactly_one_actor_binding(self):
@@ -506,12 +535,18 @@ class TestObjective:
             actions=["Scan"],
             targets=["web-server"],
             success={"goals": ["initial-access"]},
-            window={"scripts": ["main-timeline"], "events": ["attack-wave"]},
+            window={
+                "scripts": ["main-timeline"],
+                "events": ["attack-wave"],
+                "workflows": ["response-flow"],
+                "steps": ["response-flow.validate"],
+            },
             depends_on=["recon"],
         )
         assert objective.agent == "red-agent"
         assert objective.success.goals == ["initial-access"]
         assert isinstance(objective.window, ObjectiveWindow)
+        assert objective.window.steps == ["response-flow.validate"]
 
     def test_valid_entity_objective(self):
         objective = Objective(
@@ -527,7 +562,6 @@ class TestObjective:
 
 from aptl.core.sdl.accounts import Account, PasswordStrength
 from aptl.core.sdl.content import Content, ContentItem, ContentType
-from aptl.core.sdl.infrastructure import ACLAction, ACLRule
 from aptl.core.sdl.nodes import AssetValue, AssetValueLevel, OSFamily, ServicePort
 
 
@@ -611,6 +645,14 @@ class TestAccount:
         a = Account(username="svc", node="dc", disabled="${is_disabled}")
         assert a.disabled == "${is_disabled}"
 
+    def test_password_strength_placeholder(self):
+        a = Account(
+            username="svc",
+            node="dc",
+            password_strength="${password_strength}",
+        )
+        assert a.password_strength == "${password_strength}"
+
     def test_requires_node(self):
         with pytest.raises(ValidationError, match="Account requires 'node'"):
             Account(username="admin")
@@ -627,9 +669,17 @@ class TestACLRule:
         r = ACLRule(direction="out", to_net="wan", action="deny")
         assert r.action == ACLAction.DENY
 
+    def test_named_rule(self):
+        r = ACLRule(name="allow-admin", direction="out", to_net="wan")
+        assert r.name == "allow-admin"
+
     def test_port_placeholder(self):
         r = ACLRule(direction="in", from_net="wan", ports=["${https_port}"])
         assert r.ports == ["${https_port}"]
+
+    def test_action_placeholder(self):
+        r = ACLRule(direction="in", from_net="wan", action="${acl_action}")
+        assert r.action == "${acl_action}"
 
 
 class TestOSFamily:
@@ -644,6 +694,14 @@ class TestOSFamily:
     def test_no_os(self):
         n = Node(type="vm", resources={"ram": "1 gib", "cpu": 1})
         assert n.os is None
+
+    def test_os_placeholder(self):
+        n = Node(
+            type="vm",
+            os="${node_os}",
+            resources={"ram": "1 gib", "cpu": 1},
+        )
+        assert n.os == "${node_os}"
 
 
 class TestAssetValue:
@@ -662,6 +720,10 @@ class TestAssetValue:
             asset_value={"confidentiality": "high", "availability": "critical"},
         )
         assert n.asset_value.confidentiality == AssetValueLevel.HIGH
+
+    def test_placeholder(self):
+        av = AssetValue(confidentiality="${cia_value}")
+        assert av.confidentiality == "${cia_value}"
 
 
 class TestServicePort:
@@ -685,6 +747,17 @@ class TestServicePort:
                 services=[
                     {"port": 443, "protocol": "tcp", "name": "https"},
                     {"port": 443, "protocol": "tcp", "name": "alt-https"},
+                ],
+            )
+
+    def test_duplicate_named_service_rejected(self):
+        with pytest.raises(ValidationError, match="Duplicate named service"):
+            Node(
+                type="vm",
+                resources={"ram": "1 gib", "cpu": 1},
+                services=[
+                    {"port": 22, "name": "admin"},
+                    {"port": 443, "name": "admin"},
                 ],
             )
 
@@ -736,6 +809,36 @@ class TestSimplePropertiesInternal:
         from aptl.core.sdl.infrastructure import SimpleProperties
         p = SimpleProperties(cidr="10.0.0.0/24", gateway="10.0.0.1")
         assert p.internal is False
+
+
+class TestWorkflow:
+    def test_objective_step(self):
+        step = WorkflowStep(type="objective", objective="verify-release", next="done")
+        assert step.type == WorkflowStepType.OBJECTIVE
+        assert step.objective == "verify-release"
+
+    def test_if_step_requires_branches(self):
+        with pytest.raises(ValidationError, match="requires 'when', 'then', and 'else'"):
+            WorkflowStep(type="if", when={"goals": ["g1"]})
+
+    def test_parallel_step_requires_unique_branches(self):
+        with pytest.raises(ValidationError, match="branches must be unique"):
+            WorkflowStep(type="parallel", branches=["a", "a"])
+
+    def test_valid_workflow(self):
+        workflow = Workflow(
+            start="validate",
+            steps={
+                "validate": {
+                    "type": "objective",
+                    "objective": "verify-release",
+                    "next": "done",
+                },
+                "done": {"type": "end"},
+            },
+        )
+        assert workflow.start == "validate"
+        assert set(workflow.steps) == {"validate", "done"}
 
 
 # ---------------------------------------------------------------------------

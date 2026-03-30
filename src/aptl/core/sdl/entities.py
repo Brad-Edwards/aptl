@@ -10,7 +10,7 @@ from typing import Optional
 
 from pydantic import Field, field_validator
 
-from aptl.core.sdl._base import SDLModel, normalize_enum_value
+from aptl.core.sdl._base import SDLModel, parse_enum_or_var
 
 
 class ExerciseRole(str, Enum):
@@ -32,12 +32,16 @@ class Entity(SDLModel):
 
     name: str = ""
     description: str = ""
-    role: Optional[ExerciseRole] = None
+    role: Optional[ExerciseRole | str] = None
 
     @field_validator("role", mode="before")
     @classmethod
     def normalize_role(cls, v):
-        return normalize_enum_value(v) if v is not None else v
+        return (
+            parse_enum_or_var(v, ExerciseRole, field_name="role")
+            if v is not None
+            else v
+        )
     mission: str = ""
     categories: list[str] = Field(default_factory=list)
     vulnerabilities: list[str] = Field(default_factory=list)

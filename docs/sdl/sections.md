@@ -1,6 +1,6 @@
 # SDL Sections Reference
 
-A scenario is a YAML document with a required top-level `name` and up to 20 named sections. Aside from `name`, all sections are optional.
+A scenario is a YAML document with a required top-level `name` and up to 21 named sections. Aside from `name`, all sections are optional.
 
 ## Section Overview
 
@@ -23,7 +23,7 @@ A scenario is a YAML document with a required top-level `name` and up to 20 name
 | `scripts` | `dict[str, Script]` | Timed event sequences with human-readable durations |
 | `stories` | `dict[str, Story]` | Top-level exercise orchestration grouping scripts |
 
-### Extended Sections (6 sections)
+### Extended Sections (7 sections)
 
 | Section | Type | Purpose | Adapted From |
 |---------|------|---------|--------------|
@@ -32,6 +32,7 @@ A scenario is a YAML document with a required top-level `name` and up to 20 name
 | `relationships` | `dict[str, Relationship]` | Typed edges between elements (auth, trust, federation) | STIX Relationship SRO |
 | `agents` | `dict[str, Agent]` | Autonomous participants (actions, knowledge, scope) | CybORG Agents |
 | `objectives` | `dict[str, Objective]` | Declarative experiment tasks binding actors, targets, windows, and success | OCR scoring + CACAO action/target/agent |
+| `workflows` | `dict[str, Workflow]` | Branching and parallel control graphs over declared objectives | CACAO workflow graph patterns |
 | `variables` | `dict[str, Variable]` | Parameterization (types, defaults, substitution) | CACAO playbook_variables |
 
 ---
@@ -84,7 +85,7 @@ For **VM** nodes, `resources` remain optional at the SDL layer to preserve abstr
 
 When `features`, `conditions`, or `injects` use the `{name: role}` form, the role must be declared in the node's `roles` map.
 
-Concrete service bindings on a VM must be unique by `protocol` + `port`. Reusing `53/tcp` and `53/udp` is valid; declaring `443/tcp` twice on the same node is rejected.
+Concrete service bindings on a VM must be unique by `protocol` + `port`. Reusing `53/tcp` and `53/udp` is valid; declaring `443/tcp` twice on the same node is rejected. If a service binding also has a `name`, that `name` must be unique within the node and can be targeted directly as `nodes.<node>.services.<service_name>`.
 
 ---
 
@@ -101,12 +102,14 @@ infrastructure:
       gateway: 10.0.0.1
       internal: true                    # blocks internet egress
     acls:                               # network access controls (from CybORG NACLs)
-      - direction: in
+      - name: allow-dmz-https
+        direction: in
         from_net: dmz-switch
         protocol: tcp
         ports: [443]
         action: allow
-      - direction: in
+      - name: deny-dmz-default
+        direction: in
         from_net: dmz-switch
         action: deny
 
@@ -121,6 +124,8 @@ infrastructure:
 **Shorthand:** `web-server: 3` expands to `{count: 3}`.
 
 `links` are switch/network connectivity references, not arbitrary infrastructure edges. If a node has attached `conditions`, its `count` must stay at `1` so the condition-to-node binding remains unambiguous. Per-link IP assignments must be valid IP addresses within the linked switch's CIDR.
+
+ACL rule `name` is optional, but when present it must be unique within that infrastructure entry and can be targeted directly as `infrastructure.<infra>.acls.<acl_name>`.
 
 ---
 
@@ -362,7 +367,9 @@ relationships:
 
 Types: `authenticates_with`, `trusts`, `federates_with`, `connects_to`, `depends_on`, `manages`, `replicates_to`.
 
-Relationship endpoints resolve against the scenario's named elements, including top-level section keys, nested entity dot-paths, variables, other relationships, and content item `name` values.
+Relationship endpoints resolve against the scenario's named elements, including top-level section keys, nested entity dot-paths, variables, other relationships, content item `name` values, named service bindings (`nodes.<node>.services.<service_name>`), and named ACL rules (`infrastructure.<infra>.acls.<acl_name>`).
+
+Bare refs like `webapp` are valid when they are unambiguous. Any top-level section key may also be referenced explicitly as `<section>.<name>`, for example `nodes.webapp`, `features.postgres`, `accounts.db-admin`, or `infrastructure.dmz-net`. Content items may be referenced as `content.<content_name>.items.<item_name>` when a bare item `name` would collide with some other named element.
 
 ---
 
@@ -398,7 +405,11 @@ objectives:
   red-initial-access:
     agent: red-agent                   # or: entity: red-team
     actions: [Scan, Exploit]           # should be declared on the agent
-    targets: [web-server, app-to-db]   # any named scenario elements except variables/objectives
+    targets:                           # any named scenario elements except variables/objectives/workflows
+      - web-server
+      - app-to-db
+      - nodes.web-server.services.https
+      - infrastructure.dmz-switch.acls.allow-dmz-https
     success:
       mode: all_of                     # all_of, any_of
       goals: [pass-exercise]
@@ -407,6 +418,8 @@ objectives:
       stories: [exercise]
       scripts: [main-timeline]
       events: [attack-wave]
+      workflows: [release-response]
+      steps: [release-response.validate-release]
 
   blue-reporting:
     entity: blue-team
@@ -415,11 +428,55 @@ objectives:
     depends_on: [red-initial-access]
 ```
 
-Every objective must declare exactly one actor: either `agent` or `entity`. `success` is required and must reference at least one declared `condition`, `metric`, `evaluation`, `tlo`, or `goal`. `targets` are optional, but when present they must resolve to named scenario elements. `window` is optional; when supplied, referenced stories/scripts/events must exist and remain internally consistent.
+Every objective must declare exactly one actor: either `agent` or `entity`. `success` is required and must reference at least one declared `condition`, `metric`, `evaluation`, `tlo`, or `goal`. `targets` are optional, but when present they must resolve to named scenario elements. Bare target refs work when unambiguous; otherwise use a qualified ref such as `nodes.web-server`, `features.app-to-db`, or `content.mailbox.items.invoice.eml`. `window` is optional; when supplied, referenced stories/scripts/events/workflows must exist and remain internally consistent. Workflow steps use qualified refs of the form `<workflow>.<step>`.
 
 `depends_on` is an ordering relation, not just commentary. It defines a partial order over objectives: downstream objectives are not considered ready until their predecessors have been satisfied. Objective dependency cycles are rejected.
 
 This section is intentionally declarative. It says who is trying to do what, against what, during which window, and how success is interpreted. It does **not** embed backend-specific probes such as Wazuh queries or command-output checks.
+
+---
+
+## Workflows
+
+Declarative branching and parallel control graphs over objectives. Inspired by CACAO workflow structure, but intentionally scoped to objective composition rather than a second action-step language.
+
+```yaml
+workflows:
+  release-response:
+    start: validate-release
+    steps:
+      validate-release:
+        type: objective
+        objective: blue-validate-release
+        next: branch-on-promotion
+      branch-on-promotion:
+        type: if
+        when:
+          conditions: [rogue-release-promoted]
+        then: rollback-fanout
+        else: finish
+      rollback-fanout:
+        type: parallel
+        branches: [revoke-artifact, rollback-edge]
+        next: finish
+      revoke-artifact:
+        type: objective
+        objective: blue-revoke-artifact
+      rollback-edge:
+        type: objective
+        objective: blue-preserve-service
+      finish:
+        type: end
+```
+
+Workflow step types are:
+
+- `objective` — run a declared objective, then optionally continue via `next`
+- `if` — branch on declarative predicate refs (`conditions`, `metrics`, `evaluations`, `tlos`, `goals`, `objectives`)
+- `parallel` — fan out to multiple branches, then optionally join at `next`
+- `end` — terminal node
+
+Workflow graphs are acyclic. Every referenced step must exist, every step must be reachable from `start`, and `parallel.branches` must be unique. Workflow names and step names may not contain `.` because objective window refs use `<workflow>.<step>` syntax.
 
 ---
 
@@ -445,7 +502,7 @@ variables:
 
 Variables are referenced as `${var_name}` in other sections. They are **not resolved at parse time** — resolution happens at instantiation.
 
-Full-value placeholders are currently supported in ordinary string fields, common scalar fields (counts, booleans, scores, timings, RAM/CPU, ports), and many reference values. The semantic validator checks that `${var_name}` refers to a declared variable, but substitution still happens later during instantiation. User-defined mapping keys and enum-backed fields still need concrete values today, and placeholder keys are rejected at parse time.
+Full-value placeholders are currently supported in ordinary string fields, common scalar fields (counts, booleans, scores, timings, RAM/CPU, ports), many reference values, and selected leaf enum-backed property fields such as `accounts.*.password_strength`, `entities.*.role`, `nodes.*.os`, `nodes.*.asset_value.*`, `infrastructure.*.acls[*].action`, and `objectives.*.success.mode`. The semantic validator checks that `${var_name}` refers to a declared variable, but substitution still happens later during instantiation. User-defined mapping keys and discriminant/schema-shaping enum fields such as section `type` tags still need concrete values, and placeholder keys are rejected at parse time.
 
 Think of variables as parameterizing **properties of declared objects**, not the object graph itself. For example, a node's hostname, a content file's text, or a subnet CIDR may be variable-backed, while top-level identifiers like `nodes.web`, `features.nginx`, or `accounts.domain-admin` must remain literal.
 
@@ -459,5 +516,6 @@ The SDL now carries both:
 
 - the OCR-style scoring pipeline (`conditions → metrics → evaluations → TLOs → goals`)
 - declarative objectives that bind actors, targets, windows, and success criteria
+- workflow graphs that branch or parallelize declared objectives without embedding runtime probe logic
 
 Backend-specific auto-validation mechanics still live outside the SDL. The runtime may use Wazuh queries, command probes, file checks, or other adapters to determine whether an SDL-declared objective or scoring condition has been satisfied, but those probe details are not the language itself.

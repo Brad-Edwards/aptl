@@ -11,7 +11,7 @@ from enum import Enum
 
 from pydantic import Field, field_validator, model_validator
 
-from aptl.core.sdl._base import SDLModel, normalize_enum_value, parse_bool_or_var
+from aptl.core.sdl._base import SDLModel, parse_bool_or_var, parse_enum_or_var
 
 
 class PasswordStrength(str, Enum):
@@ -34,7 +34,7 @@ class Account(SDLModel):
     username: str
     node: str = ""
     groups: list[str] = Field(default_factory=list)
-    password_strength: PasswordStrength = PasswordStrength.MEDIUM
+    password_strength: PasswordStrength | str = PasswordStrength.MEDIUM
     auth_method: str = "password"
     description: str = ""
     mail: str = ""
@@ -45,8 +45,12 @@ class Account(SDLModel):
 
     @field_validator("password_strength", mode="before")
     @classmethod
-    def normalize_strength(cls, v: str) -> str:
-        return normalize_enum_value(v)
+    def normalize_strength(cls, v: str) -> PasswordStrength | str:
+        return parse_enum_or_var(
+            v,
+            PasswordStrength,
+            field_name="password_strength",
+        )
 
     @field_validator("disabled", mode="before")
     @classmethod

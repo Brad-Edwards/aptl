@@ -27,7 +27,7 @@ These are things that *should* be expressible in the SDL but aren't yet:
 | Gap | Description | Candidate Precedent |
 |-----|-------------|-------------------|
 | **Module composition** | Import and compose scenario modules with version constraints and parameter overrides | Terraform modules, TOSCA type derivation |
-| **Full CACAO-style workflow steps** | Objectives now bind actors, targets, windows, and success in the SDL, but branching/loop/parallel step graphs are still not first-class | CACAO v2.0 workflow types |
+| **Loops / switch / exception workflow control** | SDL workflows now support branching and parallel objective graphs, but not loops, switch/case routing, exception paths, or richer step effects | CACAO v2.0 workflow types |
 | **Temporal operators** | STIX-style FOLLOWEDBY/WITHIN for time-ordered event assertions | STIX Patterning Language |
 | **Formal verification** | Pre-deployment verification that attack paths are reachable and defenses are consistent | VSDL SMT solver, CRACK Datalog |
 | **Agent framework bindings** | Gymnasium observation/action space definitions, reward function code | CybORG Gymnasium interface |
@@ -40,7 +40,7 @@ Variables (`${var_name}`) are stored as literal strings in the model. They are *
 
 - The validator can confirm that a full-value `${var}` reference has a matching variable definition
 - Cross-reference rules that depend on a placeholder's final concrete value are deferred to instantiation
-- Enum-backed fields and user-defined mapping keys are not parameterizable; the parser rejects them
+- Selected leaf enum-backed property fields are parameterizable, but discriminant/schema-shaping enums and user-defined mapping keys are still concrete
 - Type checking of the substituted runtime value is still the instantiating backend's responsibility
 
 This is a deliberate design choice (matching CACAO's model) but it still leaves backend substitution semantics as future work.

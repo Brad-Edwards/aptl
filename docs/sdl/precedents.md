@@ -64,6 +64,7 @@ The 14 base sections start from the [OCR SDL](https://github.com/Open-Cyber-Rang
 | `Variable`            | `playbook_variables`               | Types, defaults, allowed_values                                        |
 | `${var}` substitution | CACAO variable substitution syntax | Deferred to instantiation time                                         |
 | `Objective`           | agent/target/workflow context      | Declarative actor-target-window-success binding without runtime probes |
+| `Workflow`            | workflow-step graph patterns       | Branching/parallel objective composition with SDL-only step types      |
 
 
 ### From OCSF
@@ -72,7 +73,7 @@ The 14 base sections start from the [OCR SDL](https://github.com/Open-Cyber-Rang
 | SDL Element     | OCSF Source         | What We Adapted                  |
 | --------------- | ------------------- | -------------------------------- |
 | `OSFamily` enum | `Device.os.type_id` | Vocabulary for OS classification |
-| `ServicePort`   | `NetworkEndpoint`   | Simplified port/protocol/name    |
+| `ServicePort`   | `NetworkEndpoint`   | Simplified port/protocol/name; named bindings become first-class refs |
 
 
 ### From Docker / Deployment Patterns
@@ -99,5 +100,5 @@ These were considered and explicitly excluded:
 | Container entrypoints                   | Backend-specific runtime config    | Provider binding layer        |
 | Gymnasium/PettingZoo API bindings       | Framework coupling                 | Agent runtime layer           |
 | Terraform module composition            | Requires compositional model       | Future: module system         |
-| CACAO workflow steps                    | Overlaps with OCR stories/scripts  | Future: reconciliation needed |
+| Full CACAO workflow surface             | Current SDL keeps workflows objective-centric and excludes loops / switch / exceptions | Future: richer control flow |
 | VSDL SMT verification                   | Research question                  | Future: formal methods layer  |

@@ -1,6 +1,7 @@
 """Base model configuration and shared helpers for the SDL package."""
 
 import re
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -34,6 +35,29 @@ def normalize_enum_value(v: str) -> str:
     if is_variable_ref(v):
         return v
     return v.lower() if isinstance(v, str) else v
+
+
+def parse_enum_or_var(
+    value: Any,
+    enum_cls: type[Enum],
+    *,
+    field_name: str = "value",
+) -> Any:
+    """Parse an enum-backed field while allowing full ``${var}`` placeholders."""
+    if value is None or is_variable_ref(value):
+        return value
+    if isinstance(value, enum_cls):
+        return value
+    if isinstance(value, str):
+        normalized = normalize_enum_value(value)
+        try:
+            return enum_cls(normalized)
+        except ValueError as e:
+            allowed = ", ".join(member.value for member in enum_cls)
+            raise ValueError(
+                f"{field_name} must be one of: {allowed}"
+            ) from e
+    raise ValueError(f"{field_name} must be a string")
 
 
 def parse_int_or_var(

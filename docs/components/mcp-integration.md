@@ -15,6 +15,7 @@ flowchart TD
     B --> I[mcp-soar]
     B --> J[mcp-reverse]
     B --> K[mcp-indexer]
+    B --> SC[mcp-scenario]
 
     C --> L[Kali Container<br/>172.20.4.30]
     D --> M[Wazuh Manager API<br/>172.20.0.10:55000]
@@ -42,6 +43,7 @@ All SSH-based MCPs use `aptl-mcp-common` for session management, connection pool
 | mcp-casemgmt | TheHive (172.20.0.18) | HTTPS | Case management, observables, analyzers |
 | mcp-soar | Shuffle (172.20.0.20) | HTTPS | Workflow triggers, response actions |
 | mcp-reverse | Reverse eng (172.20.0.27) | SSH | Binary analysis, YARA, capa |
+| mcp-scenario | Local (no lab needed) | stdio | SDL validation, examples, scaffolding |
 
 ## Setup
 
@@ -73,3 +75,7 @@ Configure your AI client to connect to `./mcp/<server>/build/index.js`.
 - Manage incident cases
 - Trigger SOAR playbooks
 - Run binary analysis
+
+**Scenario Authoring:**
+- Create and validate SDL scenarios (no lab required)
+- See [mcp-scenario](mcp-scenario.md) for details

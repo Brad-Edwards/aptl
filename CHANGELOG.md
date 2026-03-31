@@ -6,6 +6,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.0] - 2026-03-30
+
+### Added
+
+- Runtime package (`aptl.core.runtime`) rebuilt around an SDL-native compile/plan/execute flow instead of a flat generic step DAG
+- Runtime compiler (`runtime/compiler.py`) — pure `compile_runtime_model(Scenario) -> RuntimeModel` pass that separates reusable SDL definitions from bound runtime instances
+- Composite execution planner (`runtime/planner.py`) — pure `plan(RuntimeModel, BackendManifest, RuntimeSnapshot) -> ExecutionPlan` reconciliation with `CREATE`/`UPDATE`/`DELETE`/`UNCHANGED`
+- Runtime contract hardening — plans are provenance-bound to target/manifest/base snapshot, runtime targets self-validate their manifest/component shape, and runtime resources now distinguish ordering dependencies from refresh dependencies
+- Domain-specific capability model (`runtime/capabilities.py`) — `ProvisionerCapabilities`, `OrchestratorCapabilities`, and `EvaluatorCapabilities` composed by an explicit `BackendManifest`
+- Typed runtime state (`RuntimeSnapshot`) and structured diagnostics for planner and manager lifecycle errors
+- Backend registry (`runtime/registry.py`) redesigned around separate manifest introspection and target creation paths
+- RuntimeManager (`runtime/manager.py`) now compiles, plans, applies provisioning, starts evaluator/orchestration only when their plans have work, and tears down in explicit domain order
+- Stub backends (`aptl.backends.stubs`) rewritten to the new contracts with in-memory snapshot, orchestration, and evaluation behavior
+- 15 new runtime tests across 4 test files covering compiler/model binding, planner reconciliation and capability validation, registry manifest introspection, manager lifecycle ordering, and a realistic SDL regression
+
 ## [6.0.1] - 2026-03-29
 
 ### Fixed

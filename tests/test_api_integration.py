@@ -38,9 +38,11 @@ def integration_client(tmp_path):
     )
 
     app.dependency_overrides[get_project_dir] = lambda: tmp_path
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
 
 
 # ---------------------------------------------------------------------------

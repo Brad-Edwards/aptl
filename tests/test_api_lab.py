@@ -17,9 +17,11 @@ def api_client(tmp_path):
     from starlette.testclient import TestClient
 
     app.dependency_overrides[get_project_dir] = lambda: tmp_path
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
 
 
 class TestHealthEndpoint:
@@ -130,8 +132,16 @@ class TestLabStart:
 
         mock_start.side_effect = slow_start
 
+        async def _timeout_wait_for(awaitable, timeout):
+            del timeout
+            awaitable.close()
+            raise asyncio.TimeoutError
+
         # Patch the timeout to something small for the test
-        with patch("aptl.api.routers.lab.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+        with patch(
+            "aptl.api.routers.lab.asyncio.wait_for",
+            side_effect=_timeout_wait_for,
+        ):
             response = api_client.post("/api/lab/start")
 
         assert response.status_code == 200

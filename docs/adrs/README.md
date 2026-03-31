@@ -38,3 +38,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [014](adr-014-scenario-description-language.md) | Scenario Description Language (SDL) | accepted | 2026-03-29 |
 | [015](adr-015-declarative-sdl-objectives.md) | Declarative Experiment Objectives in the SDL | accepted | 2026-03-29 |
 | [016](adr-016-workflows-targetable-subobjects-and-enum-variables.md) | Workflows, Targetable Sub-Objects, and Leaf Enum Variables in the SDL | accepted | 2026-03-29 |
+| [017](adr-017-sdl-runtime-layer.md) | SDL Runtime Layer | proposed | 2026-03-30 |

@@ -36,7 +36,8 @@ Explore the codebase to determine whether the requirement described in the issue
 ## Step 4: Plan or Report
 
 - **If the requirement is NOT yet met**: Plan the implementation. Identify which files need to be created or modified, what tests to write, and what approach to take. Enter plan mode.
-- Your plans must respect the coding standards and classification levels in ADR-012.
+- Your plans must respect the coding standards and formal methods classification levels.
+- You must add or update ADRs as appropriate.
 - Plans must include updating the changelog, readme, and docs as appropriate.
 - If designing code, remember to build off existing cross-cutting concerns, code, and patterns
 - Good code is readable, maintainable, and follows the coding standards

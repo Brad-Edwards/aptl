@@ -87,6 +87,7 @@ accounts:
 - [Testing](testing.md) — How to run unit tests, stress tests, and fuzz tests
 - [Complex Scenario Designs](complex-scenarios.md) — Up-front design briefs for large example exercises
 - [Complex Scenario Authoring Notes](complex-scenario-authoring-notes.md) — Persistent issue log from encoding those designs into SDL
+- [Runtime Architecture](runtime-architecture.md) — SDL-native compiler, composite plans, and runtime targets
 
 ## Usage
 

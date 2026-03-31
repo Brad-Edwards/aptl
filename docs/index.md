@@ -54,6 +54,7 @@ aptl lab start
 - [Design Precedents](sdl/precedents.md) — Where each element comes from
 - [Limitations](sdl/limitations.md) — What the SDL cannot express yet
 - [Testing](sdl/testing.md) — Unit tests, stress tests, fuzz tests
+- [Runtime Architecture](sdl/runtime-architecture.md) — SDL-native compiler, planner, and runtime target design
 
 ### Scenarios & Runs
 - [SOC Architecture Spec](specs/soc-feature-spec.md) — Historical pre-SDL runtime spec retained for context

@@ -18,9 +18,11 @@ def api_client(tmp_path):
     from starlette.testclient import TestClient
 
     app.dependency_overrides[get_project_dir] = lambda: tmp_path
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
 
 
 def _make_lab_status(running: bool):

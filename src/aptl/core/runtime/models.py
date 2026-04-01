@@ -426,4 +426,8 @@ class ApplyResult:
 def resource_payload(resource: ResolvedResource) -> dict[str, Any]:
     """Convert a compiled resource to a stable planner payload."""
 
-    return asdict(resource)
+    payload = asdict(resource)
+    payload.pop("address", None)
+    payload.pop("ordering_dependencies", None)
+    payload.pop("refresh_dependencies", None)
+    return payload

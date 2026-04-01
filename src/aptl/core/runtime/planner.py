@@ -21,7 +21,9 @@ from aptl.core.runtime.models import (
     SnapshotEntry,
     resource_payload,
 )
-from aptl.core.sdl._base import extract_variable_name
+from aptl.core.sdl._base import extract_variable_name, parse_enum_or_var, parse_int_or_var
+from aptl.core.sdl.infrastructure import MINIMUM_NODE_COUNT
+from aptl.core.sdl.nodes import OSFamily
 
 
 def _planned_resource(address: str, domain: RuntimeDomain, resource_type: str, resource) -> PlannedResource:
@@ -161,14 +163,100 @@ def _collect_resources(model: RuntimeModel) -> dict[str, PlannedResource]:
     return resources
 
 
+def _ordering_graph(resources: dict[str, PlannedResource]) -> dict[str, tuple[str, ...]]:
+    return {
+        address: tuple(
+            dependency
+            for dependency in resource.ordering_dependencies
+            if dependency in resources
+        )
+        for address, resource in resources.items()
+    }
+
+
+def _ordering_cycles(resources: dict[str, PlannedResource]) -> list[tuple[str, ...]]:
+    graph = _ordering_graph(resources)
+    if not graph:
+        return []
+
+    index = 0
+    indices: dict[str, int] = {}
+    lowlinks: dict[str, int] = {}
+    stack: list[str] = []
+    on_stack: set[str] = set()
+    cycles: list[tuple[str, ...]] = []
+
+    def strongconnect(address: str) -> None:
+        nonlocal index
+        indices[address] = index
+        lowlinks[address] = index
+        index += 1
+        stack.append(address)
+        on_stack.add(address)
+
+        for dependency in graph[address]:
+            if dependency not in indices:
+                strongconnect(dependency)
+                lowlinks[address] = min(lowlinks[address], lowlinks[dependency])
+            elif dependency in on_stack:
+                lowlinks[address] = min(lowlinks[address], indices[dependency])
+
+        if lowlinks[address] != indices[address]:
+            return
+
+        component: list[str] = []
+        while stack:
+            member = stack.pop()
+            on_stack.remove(member)
+            component.append(member)
+            if member == address:
+                break
+
+        component = sorted(component)
+        if len(component) > 1 or component[0] in graph[component[0]]:
+            cycles.append(tuple(component))
+
+    for address in sorted(graph):
+        if address not in indices:
+            strongconnect(address)
+
+    return sorted(cycles)
+
+
+def _ordering_cycle_diagnostics(
+    resources: dict[str, PlannedResource],
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+
+    for domain in RuntimeDomain:
+        domain_resources = {
+            address: resource
+            for address, resource in resources.items()
+            if resource.domain == domain
+        }
+        for cycle in _ordering_cycles(domain_resources):
+            rendered = ", ".join(cycle)
+            diagnostics.append(
+                Diagnostic(
+                    code=f"{domain.value}.ordering-cycle",
+                    domain=domain.value,
+                    address=cycle[0],
+                    message=(
+                        f"{domain.value.capitalize()} ordering dependencies "
+                        f"must be acyclic; detected cycle: {rendered}."
+                    ),
+                )
+            )
+
+    return diagnostics
+
+
 def _topological_order(resources: dict[str, PlannedResource]) -> list[str]:
     graph: dict[str, list[str]] = {address: [] for address in resources}
     indegree: dict[str, int] = {address: 0 for address in resources}
 
-    for address, resource in resources.items():
-        for dependency in resource.ordering_dependencies:
-            if dependency not in resources:
-                continue
+    for address, dependencies in _ordering_graph(resources).items():
+        for dependency in dependencies:
             graph[dependency].append(address)
             indegree[address] += 1
 
@@ -200,16 +288,28 @@ def _entry_matches_resource(entry: SnapshotEntry, resource: PlannedResource) -> 
     )
 
 
-def _variable_spec(model: RuntimeModel, value: object) -> tuple[str | None, dict[str, object] | None]:
+def _variable_ref(
+    model: RuntimeModel,
+    value: object,
+) -> tuple[str | None, dict[str, object] | None, bool]:
     if not isinstance(value, str):
-        return None, None
+        return None, None, False
     variable_name = extract_variable_name(value)
     if variable_name is None:
-        return None, None
+        return None, None, False
     spec = model.variable_specs.get(variable_name)
     if isinstance(spec, dict):
-        return variable_name, spec
-    return variable_name, None
+        return variable_name, spec, True
+    return variable_name, None, False
+
+
+def _error_diagnostic(code: str, address: str, message: str) -> Diagnostic:
+    return Diagnostic(
+        code=code,
+        domain="provisioning",
+        address=address,
+        message=message,
+    )
 
 
 def _variable_default_suffix(variable_name: str, variable_spec: dict[str, object] | None) -> str:
@@ -231,6 +331,48 @@ def _warning_diagnostic(code: str, address: str, message: str) -> Diagnostic:
     )
 
 
+def _validate_os_allowed_values(
+    variable_name: str,
+    variable_spec: dict[str, object],
+    *,
+    address: str,
+) -> tuple[tuple[str, ...] | None, Diagnostic | None]:
+    allowed_values = variable_spec.get("allowed_values")
+    if not isinstance(allowed_values, list) or not allowed_values:
+        return None, None
+
+    validated_values: list[str] = []
+    for raw_value in allowed_values:
+        try:
+            parsed = parse_enum_or_var(raw_value, OSFamily, field_name="os")
+        except ValueError as exc:
+            return None, _error_diagnostic(
+                "provisioner.os-family-variable-domain-invalid",
+                address,
+                (
+                    "Variable "
+                    f"'{variable_name}' allowed_values contain value {raw_value!r} "
+                    f"invalid for nodes.os: {exc}."
+                ),
+            )
+        if extract_variable_name(parsed) is not None:
+            return None, None
+        if isinstance(parsed, OSFamily):
+            validated_values.append(parsed.value)
+            continue
+        return None, _error_diagnostic(
+            "provisioner.os-family-variable-domain-invalid",
+            address,
+            (
+                "Variable "
+                f"'{variable_name}' allowed_values contain value {raw_value!r} "
+                "that could not be validated for nodes.os."
+            ),
+        )
+
+    return tuple(validated_values), None
+
+
 def _validate_node_os_family(
     model: RuntimeModel,
     node,
@@ -239,7 +381,7 @@ def _validate_node_os_family(
     if not node.os_family:
         return []
 
-    variable_name, variable_spec = _variable_spec(model, node.os_family)
+    variable_name, variable_spec, is_declared = _variable_ref(model, node.os_family)
     if variable_name is None:
         if node.os_family in supported_os_families:
             return []
@@ -251,31 +393,47 @@ def _validate_node_os_family(
                 message=f"Provisioner does not support OS family '{node.os_family}'.",
             )
         ]
-
-    allowed_values = variable_spec.get("allowed_values") if variable_spec is not None else []
-    if isinstance(allowed_values, list) and allowed_values:
-        if all(isinstance(value, str) for value in allowed_values):
-            unsupported_values = sorted(
-                {
-                    value
-                    for value in allowed_values
-                    if value not in supported_os_families
-                }
+    if not is_declared:
+        return [
+            _error_diagnostic(
+                "provisioner.os-family-variable-ref-unbound",
+                node.address,
+                (
+                    "Provisioner capability validation cannot resolve undeclared "
+                    f"variable '{variable_name}' referenced by nodes.os."
+                ),
             )
-            if unsupported_values:
-                rendered = ", ".join(repr(value) for value in unsupported_values)
-                return [
-                    Diagnostic(
-                        code="provisioner.unsupported-os-family",
-                        domain="provisioning",
-                        address=node.address,
-                        message=(
-                            "Provisioner does not support all OS families allowed by "
-                            f"variable '{variable_name}': {rendered}."
-                        ),
-                    )
-                ]
-            return []
+        ]
+
+    finite_domain, domain_error = _validate_os_allowed_values(
+        variable_name,
+        variable_spec or {},
+        address=node.address,
+    )
+    if domain_error is not None:
+        return [domain_error]
+    if finite_domain is not None:
+        unsupported_values = sorted(
+            {
+                value
+                for value in finite_domain
+                if value not in supported_os_families
+            }
+        )
+        if unsupported_values:
+            rendered = ", ".join(repr(value) for value in unsupported_values)
+            return [
+                Diagnostic(
+                    code="provisioner.unsupported-os-family",
+                    domain="provisioning",
+                    address=node.address,
+                    message=(
+                        "Provisioner does not support all OS families allowed by "
+                        f"variable '{variable_name}': {rendered}."
+                    ),
+                )
+            ]
+        return []
 
     return [
         _warning_diagnostic(
@@ -290,6 +448,52 @@ def _validate_node_os_family(
     ]
 
 
+def _validate_count_allowed_values(
+    variable_name: str,
+    variable_spec: dict[str, object],
+    *,
+    address: str,
+) -> tuple[int | None, Diagnostic | None]:
+    allowed_values = variable_spec.get("allowed_values")
+    if not isinstance(allowed_values, list) or not allowed_values:
+        return None, None
+
+    validated_values: list[int] = []
+    for raw_value in allowed_values:
+        try:
+            parsed = parse_int_or_var(
+                raw_value,
+                minimum=MINIMUM_NODE_COUNT,
+                field_name="count",
+            )
+        except ValueError as exc:
+            return None, _error_diagnostic(
+                "provisioner.count-variable-domain-invalid",
+                address,
+                (
+                    "Variable "
+                    f"'{variable_name}' allowed_values contain value {raw_value!r} "
+                    f"invalid for infrastructure.count: {exc}."
+                ),
+            )
+        if extract_variable_name(parsed) is not None:
+            return None, None
+        if isinstance(parsed, int):
+            validated_values.append(parsed)
+            continue
+        return None, _error_diagnostic(
+            "provisioner.count-variable-domain-invalid",
+            address,
+            (
+                "Variable "
+                f"'{variable_name}' allowed_values contain value {raw_value!r} "
+                "that could not be validated for infrastructure.count."
+            ),
+        )
+
+    return max(validated_values), None
+
+
 def _resource_count_upper_bound(
     model: RuntimeModel,
     resource,
@@ -298,14 +502,28 @@ def _resource_count_upper_bound(
     if isinstance(count, int):
         return count, None
 
-    variable_name, variable_spec = _variable_spec(model, count)
+    variable_name, variable_spec, is_declared = _variable_ref(model, count)
     if variable_name is None:
         return None, None
+    if not is_declared:
+        return None, _error_diagnostic(
+            "provisioner.count-variable-ref-unbound",
+            resource.address,
+            (
+                "Provisioner capability validation cannot resolve undeclared "
+                f"variable '{variable_name}' referenced by infrastructure.count."
+            ),
+        )
 
-    allowed_values = variable_spec.get("allowed_values") if variable_spec is not None else []
-    if isinstance(allowed_values, list) and allowed_values:
-        if all(isinstance(value, int) and not isinstance(value, bool) for value in allowed_values):
-            return max(allowed_values), None
+    finite_upper_bound, domain_error = _validate_count_allowed_values(
+        variable_name,
+        variable_spec or {},
+        address=resource.address,
+    )
+    if domain_error is not None:
+        return None, domain_error
+    if finite_upper_bound is not None:
+        return finite_upper_bound, None
 
     return (
         None,
@@ -774,8 +992,12 @@ def plan(
     """Reconcile a compiled runtime model against the current snapshot."""
 
     snapshot = snapshot or RuntimeSnapshot()
-    diagnostics = [*model.diagnostics, *_validate_manifest(model, manifest)]
     resources = _collect_resources(model)
+    diagnostics = [
+        *model.diagnostics,
+        *_validate_manifest(model, manifest),
+        *_ordering_cycle_diagnostics(resources),
+    ]
     actions, deleted_entries = _build_operations(resources, snapshot)
 
     provisioning = _build_provisioning_plan(resources, actions, deleted_entries)

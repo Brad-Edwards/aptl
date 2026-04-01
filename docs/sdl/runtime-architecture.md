@@ -75,6 +75,8 @@ Runtime resources carry two dependency sets:
 Cross-domain refs participate in refresh propagation, but not startup ordering.
 This keeps the fixed phase order intact while still making downstream plans
 honestly react to upstream changes.
+Ordering graphs must remain acyclic within each domain; the planner emits error
+diagnostics and invalidates the plan if a cycle survives into runtime planning.
 
 ## Runtime Snapshot
 
@@ -113,10 +115,15 @@ Validation is semantic, not section-only. Phase 1 checks include:
 
 Variable-backed capability fields are handled soundly:
 
-- if a referenced variable has finite `allowed_values`, validation checks the
-  whole declared domain
-- otherwise the planner emits warning diagnostics and defers exact validation
-  until instantiation rather than guessing from defaults
+- capability-relevant variable refs must be declared, even when SDL semantic
+  cross-reference validation was skipped earlier
+- if a referenced variable has finite `allowed_values`, the planner first
+  revalidates that domain against the SDL field being parameterized
+  (`nodes.os`, `infrastructure.count`) before any backend capability checks run
+- only field-valid finite domains are checked against backend capabilities
+- declared variables without a finite field-valid pre-instantiation domain emit
+  warning diagnostics and defer exact validation until instantiation rather
+  than guessing from defaults
 
 ## Runtime Target Lifecycle
 
@@ -151,6 +158,17 @@ create executor ordering edges across domains.
 
 This prevents applying a plan against a different runtime target or a stale
 snapshot than the one it was reconciled against.
+
+`RuntimeTarget` is self-validating at construction time:
+
+- manifest presence and component shape must match
+- required protocol methods must exist
+- those methods must be invokable with the runtime's actual call shapes, not
+  just be present by name
+
+`RuntimeManager` also hardens the execution boundary at call time. Backend
+exceptions and invalid lifecycle return payloads are converted into structured
+runtime diagnostics instead of surfacing as unhandled crashes.
 
 ## Phase 1 Scope
 

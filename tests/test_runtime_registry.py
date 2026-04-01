@@ -30,6 +30,54 @@ class BadEvaluator:
         return {}
 
 
+class WrongSigProvisioner:
+    def validate(self):
+        return []
+
+    def apply(self):
+        return None
+
+
+class WrongSigOrchestrator:
+    def start(self, plan):
+        del plan
+        return None
+
+    def status(self, verbose):
+        del verbose
+        return {}
+
+    def stop(self):
+        return None
+
+
+class WrongSigEvaluator:
+    def start(self, plan):
+        del plan
+        return None
+
+    def status(self, verbose):
+        del verbose
+        return {}
+
+    def results(self, include_meta):
+        del include_meta
+        return {}
+
+    def stop(self):
+        return None
+
+
+class OptionalArgProvisioner:
+    def validate(self, plan, dry_run: bool = False):
+        del plan, dry_run
+        return []
+
+    def apply(self, plan, snapshot, *, region: str = "test"):
+        del plan, snapshot, region
+        return None
+
+
 class TestBackendRegistry:
     def test_manifest_introspection_happens_before_target_creation(self):
         calls: list[str] = []
@@ -170,6 +218,75 @@ class TestBackendRegistry:
         with pytest.raises(ValueError, match="registry.target-contract-mismatch"):
             registry.create("bad-contract")
 
+    def test_registry_create_rejects_wrong_signature_component_contract(self):
+        registry = BackendRegistry()
+
+        def manifest_factory(**config):
+            return create_stub_manifest(**config)
+
+        def components_factory(*, manifest, **config):
+            del manifest, config
+            components = create_stub_components(manifest=create_stub_manifest())
+            return RuntimeTargetComponents(
+                provisioner=WrongSigProvisioner(),
+                orchestrator=components.orchestrator,
+                evaluator=components.evaluator,
+            )
+
+        registry.register("bad-signature", manifest_factory, components_factory)
+
+        with pytest.raises(ValueError, match="registry.target-contract-mismatch"):
+            registry.create("bad-signature")
+
+    def test_direct_runtime_target_construction_rejects_wrong_signature_provisioner(self):
+        components = create_stub_components(manifest=create_stub_manifest())
+
+        with pytest.raises(ValueError, match="registry.target-contract-mismatch"):
+            RuntimeTarget(
+                name="broken",
+                manifest=create_stub_manifest(),
+                provisioner=WrongSigProvisioner(),
+                orchestrator=components.orchestrator,
+                evaluator=components.evaluator,
+            )
+
+    def test_direct_runtime_target_construction_rejects_wrong_signature_orchestrator(self):
+        components = create_stub_components(manifest=create_stub_manifest())
+
+        with pytest.raises(ValueError, match="registry.target-contract-mismatch"):
+            RuntimeTarget(
+                name="broken",
+                manifest=create_stub_manifest(),
+                provisioner=components.provisioner,
+                orchestrator=WrongSigOrchestrator(),
+                evaluator=components.evaluator,
+            )
+
+    def test_direct_runtime_target_construction_rejects_wrong_signature_evaluator(self):
+        components = create_stub_components(manifest=create_stub_manifest())
+
+        with pytest.raises(ValueError, match="registry.target-contract-mismatch"):
+            RuntimeTarget(
+                name="broken",
+                manifest=create_stub_manifest(),
+                provisioner=components.provisioner,
+                orchestrator=components.orchestrator,
+                evaluator=WrongSigEvaluator(),
+            )
+
+    def test_direct_runtime_target_construction_accepts_optional_extra_parameters(self):
+        components = create_stub_components(manifest=create_stub_manifest())
+
+        target = RuntimeTarget(
+            name="optional",
+            manifest=create_stub_manifest(),
+            provisioner=OptionalArgProvisioner(),
+            orchestrator=components.orchestrator,
+            evaluator=components.evaluator,
+        )
+
+        assert target.provisioner is not None
+
     def test_legacy_evaluator_collections_are_rejected(self):
         registry = BackendRegistry()
 
@@ -206,3 +323,10 @@ class TestBackendRegistry:
         assert registry.list_backends() == ["alpha", "beta"]
         assert registry.is_registered("alpha")
         assert not registry.is_registered("gamma")
+
+    def test_duplicate_registration_is_rejected(self):
+        registry = BackendRegistry()
+        registry.register("stub", create_stub_manifest, create_stub_components)
+
+        with pytest.raises(ValueError, match="already registered"):
+            registry.register("stub", create_stub_manifest, create_stub_components)

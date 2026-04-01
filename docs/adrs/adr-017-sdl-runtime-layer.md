@@ -85,6 +85,8 @@ Runtime resources carry two dependency sets:
 
 Cross-domain refs participate only in refresh propagation. Fixed phase order
 remains `provisioning -> evaluation -> orchestration`.
+If any same-domain ordering graph is cyclic, planning fails closed with runtime
+diagnostics rather than guessing an execution order.
 
 ### Capability Model
 
@@ -97,10 +99,17 @@ Capabilities are domain-specific rather than a single overloaded bag:
 The planner validates semantic requirements from the compiled model, including
 node types, OS families, scaling limits, ACL usage, content types, account
 features, orchestration usage, workflows, workflow predicate condition refs,
-scoring, and objectives. Variable-backed capability fields are validated
-soundly against finite `allowed_values` domains when available; otherwise the
-planner emits warnings and defers exact capability validation until
-instantiation rather than guessing from defaults.
+scoring, and objectives. Capability-relevant variable refs consumed by the
+planner must still resolve soundly even when SDL semantic cross-reference
+validation was skipped earlier:
+
+- undeclared capability-relevant `${var}` refs are planner errors
+- finite `allowed_values` domains are first revalidated against the SDL field
+  being parameterized before backend capability checks run
+- only field-valid finite domains are checked against backend capabilities
+- declared variables without a finite field-valid pre-instantiation domain
+  produce warning diagnostics and defer exact capability validation until
+  instantiation rather than guessing from defaults
 
 ### Runtime Target And Registry
 
@@ -117,8 +126,13 @@ explicit evaluator partitioning is deferred until the runtime has a real routing
 model.
 
 `RuntimeTarget` is self-validating: manifest presence, component shape, and the
-required callable protocol surface must all match both for registry-created
-targets and direct construction.
+required invokable protocol surface must all match both for registry-created
+targets and direct construction. Validation is signature-aware: methods must be
+callable with the runtime's actual lifecycle call shapes, not merely present by
+name.
+At execution time, backend exceptions and invalid lifecycle return payloads are
+treated as structured runtime failures rather than bubbling up as uncaught
+manager crashes.
 
 ### Protocols
 

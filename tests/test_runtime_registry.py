@@ -11,6 +11,25 @@ from aptl.core.runtime.registry import (
 )
 
 
+class BadProvisioner:
+    pass
+
+
+class BadOrchestrator:
+    def start(self, plan, snapshot):
+        del plan, snapshot
+        return None
+
+
+class BadEvaluator:
+    def start(self, plan, snapshot):
+        del plan, snapshot
+        return None
+
+    def status(self):
+        return {}
+
+
 class TestBackendRegistry:
     def test_manifest_introspection_happens_before_target_creation(self):
         calls: list[str] = []
@@ -94,6 +113,62 @@ class TestBackendRegistry:
                 orchestrator=None,
                 evaluator=None,
             )
+
+    def test_direct_runtime_target_construction_rejects_bad_provisioner_contract(self):
+        components = create_stub_components(manifest=create_stub_manifest())
+
+        with pytest.raises(ValueError, match="registry.target-contract-mismatch"):
+            RuntimeTarget(
+                name="broken",
+                manifest=create_stub_manifest(),
+                provisioner=BadProvisioner(),
+                orchestrator=components.orchestrator,
+                evaluator=components.evaluator,
+            )
+
+    def test_direct_runtime_target_construction_rejects_bad_orchestrator_contract(self):
+        components = create_stub_components(manifest=create_stub_manifest())
+
+        with pytest.raises(ValueError, match="registry.target-contract-mismatch"):
+            RuntimeTarget(
+                name="broken",
+                manifest=create_stub_manifest(),
+                provisioner=components.provisioner,
+                orchestrator=BadOrchestrator(),
+                evaluator=components.evaluator,
+            )
+
+    def test_direct_runtime_target_construction_rejects_bad_evaluator_contract(self):
+        components = create_stub_components(manifest=create_stub_manifest())
+
+        with pytest.raises(ValueError, match="registry.target-contract-mismatch"):
+            RuntimeTarget(
+                name="broken",
+                manifest=create_stub_manifest(),
+                provisioner=components.provisioner,
+                orchestrator=components.orchestrator,
+                evaluator=BadEvaluator(),
+            )
+
+    def test_registry_create_rejects_bad_component_contract(self):
+        registry = BackendRegistry()
+
+        def manifest_factory(**config):
+            return create_stub_manifest(**config)
+
+        def components_factory(*, manifest, **config):
+            del manifest, config
+            components = create_stub_components(manifest=create_stub_manifest())
+            return RuntimeTargetComponents(
+                provisioner=BadProvisioner(),
+                orchestrator=components.orchestrator,
+                evaluator=components.evaluator,
+            )
+
+        registry.register("bad-contract", manifest_factory, components_factory)
+
+        with pytest.raises(ValueError, match="registry.target-contract-mismatch"):
+            registry.create("bad-contract")
 
     def test_legacy_evaluator_collections_are_rejected(self):
         registry = BackendRegistry()

@@ -348,7 +348,7 @@ class EvaluationPlan:
 class ExecutionPlan:
     """Composite runtime execution plan."""
 
-    target_name: str
+    target_name: str | None
     manifest: BackendManifest
     base_snapshot: "RuntimeSnapshot"
     scenario_name: str

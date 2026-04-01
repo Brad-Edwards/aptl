@@ -1,5 +1,6 @@
 """Registry for runtime targets."""
 
+from inspect import Signature, signature
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -7,25 +8,41 @@ from aptl.core.runtime.capabilities import BackendManifest
 from aptl.core.runtime.protocols import Evaluator, Orchestrator, Provisioner
 
 
-def _require_callable_methods(
+def _require_invokable_method(
     component: object | None,
     *,
     label: str,
-    method_names: tuple[str, ...],
+    method_name: str,
+    invocation_args: tuple[object, ...],
 ) -> None:
     if component is None:
         return
-    missing = [
-        method_name
-        for method_name in method_names
-        if not callable(getattr(component, method_name, None))
-    ]
-    if missing:
-        method_list = ", ".join(missing)
+    method = getattr(component, method_name, None)
+    if not callable(method):
         raise ValueError(
             "registry.target-contract-mismatch: "
-            f"{label} is missing callable method(s): {method_list}."
+            f"{label} is missing callable method '{method_name}'."
         )
+    try:
+        method_signature = signature(method)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "registry.target-contract-mismatch: "
+            f"{label}.{method_name} has a non-inspectable signature."
+        ) from exc
+    try:
+        method_signature.bind(*invocation_args)
+    except TypeError as exc:
+        rendered_signature = _render_signature(method_signature)
+        raise ValueError(
+            "registry.target-contract-mismatch: "
+            f"{label}.{method_name}{rendered_signature} is incompatible with "
+            f"the runtime call shape for {label}.{method_name}."
+        ) from exc
+
+
+def _render_signature(method_signature: Signature) -> str:
+    return str(method_signature)
 
 
 def _validate_runtime_target_shape(
@@ -49,20 +66,61 @@ def _validate_runtime_target_shape(
             "registry.target-shape-mismatch: evaluator presence does not match "
             "the manifest."
         )
-    _require_callable_methods(
+    sample_plan = object()
+    sample_snapshot = object()
+    _require_invokable_method(
         provisioner,
         label="provisioner",
-        method_names=("validate", "apply"),
+        method_name="validate",
+        invocation_args=(sample_plan,),
     )
-    _require_callable_methods(
+    _require_invokable_method(
+        provisioner,
+        label="provisioner",
+        method_name="apply",
+        invocation_args=(sample_plan, sample_snapshot),
+    )
+    _require_invokable_method(
         orchestrator,
         label="orchestrator",
-        method_names=("start", "status", "stop"),
+        method_name="start",
+        invocation_args=(sample_plan, sample_snapshot),
     )
-    _require_callable_methods(
+    _require_invokable_method(
+        orchestrator,
+        label="orchestrator",
+        method_name="status",
+        invocation_args=(),
+    )
+    _require_invokable_method(
+        orchestrator,
+        label="orchestrator",
+        method_name="stop",
+        invocation_args=(sample_snapshot,),
+    )
+    _require_invokable_method(
         evaluator,
         label="evaluator",
-        method_names=("start", "status", "results", "stop"),
+        method_name="start",
+        invocation_args=(sample_plan, sample_snapshot),
+    )
+    _require_invokable_method(
+        evaluator,
+        label="evaluator",
+        method_name="status",
+        invocation_args=(),
+    )
+    _require_invokable_method(
+        evaluator,
+        label="evaluator",
+        method_name="results",
+        invocation_args=(),
+    )
+    _require_invokable_method(
+        evaluator,
+        label="evaluator",
+        method_name="stop",
+        invocation_args=(sample_snapshot,),
     )
 
 
@@ -115,6 +173,10 @@ class BackendRegistry:
         manifest_factory: Callable[..., BackendManifest],
         components_factory: Callable[..., RuntimeTargetComponents],
     ) -> None:
+        if name in self._descriptors:
+            raise ValueError(
+                f"Backend '{name}' is already registered and cannot be replaced."
+            )
         self._descriptors[name] = RuntimeTargetDescriptor(
             name=name,
             manifest_factory=manifest_factory,

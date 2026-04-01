@@ -242,6 +242,26 @@ class FailingStartEvaluator(RecordingEvaluator):
         )
 
 
+class InvalidValidationProvisioner(RecordingProvisioner):
+    def validate(self, plan):
+        del plan
+        return None
+
+
+class InvalidApplyProvisioner(RecordingProvisioner):
+    def apply(self, plan, snapshot: RuntimeSnapshot):
+        del plan, snapshot
+        self.calls.append("provision-apply")
+        return None
+
+
+class RaisingStartOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        del plan, snapshot
+        self.calls.append(f"{self.name}-start")
+        raise RuntimeError("boom")
+
+
 class TestRuntimeManager:
     def test_apply_starts_evaluator_before_orchestrator(self):
         calls: list[str] = []
@@ -362,6 +382,74 @@ class TestRuntimeManager:
         assert manager.snapshot.for_domain(RuntimeDomain.PROVISIONING)
         assert manager.snapshot.for_domain(RuntimeDomain.ORCHESTRATION) == {}
         assert manager.snapshot.for_domain(RuntimeDomain.EVALUATION) == {}
+
+    def test_apply_fails_gracefully_on_invalid_validation_payload(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=InvalidValidationProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert not result.success
+        assert calls == []
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+        assert manager.snapshot.entries == {}
+
+    def test_apply_fails_gracefully_on_invalid_apply_result(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=InvalidApplyProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_provisioning_only_scenario()))
+
+        assert not result.success
+        assert calls == ["provision-apply"]
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+        assert manager.snapshot.entries == {}
+
+    def test_apply_fails_gracefully_on_backend_exception(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RaisingStartOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert not result.success
+        assert calls == [
+            "provision-apply",
+            "evaluator-start",
+            "orchestrator-start",
+            "orchestrator-stop",
+            "evaluator-stop",
+        ]
+        assert "runtime.backend-call-failed" in {
+            diag.code for diag in result.diagnostics
+        }
+        assert manager.snapshot.for_domain(RuntimeDomain.ORCHESTRATION) == {}
+        assert manager.snapshot.for_domain(RuntimeDomain.EVALUATION) == {}
+        assert manager.snapshot.for_domain(RuntimeDomain.PROVISIONING)
 
     def test_runtime_manager_requires_explicit_manifest(self):
         with pytest.raises(ValueError, match="explicit manifest"):

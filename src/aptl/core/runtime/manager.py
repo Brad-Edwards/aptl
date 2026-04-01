@@ -1,6 +1,7 @@
 """Runtime manager for compiled SDL runtime plans."""
 
 from collections import deque
+from collections.abc import Iterable
 
 from aptl.core.runtime.compiler import compile_runtime_model
 from aptl.core.runtime.models import (
@@ -57,6 +58,96 @@ def _failure_diagnostic(code: str, address: str, message: str) -> Diagnostic:
         address=address,
         message=message,
     )
+
+
+def _call_backend_diagnostics(
+    method,
+    *args,
+    address: str,
+) -> list[Diagnostic]:
+    try:
+        result = method(*args)
+    except Exception as exc:
+        return [
+            _failure_diagnostic(
+                "runtime.backend-call-failed",
+                address,
+                (
+                    f"Backend method '{address}' raised "
+                    f"{type(exc).__name__}: {exc}."
+                ),
+            )
+        ]
+
+    if not isinstance(result, Iterable) or isinstance(result, (str, bytes)):
+        return [
+            _failure_diagnostic(
+                "runtime.backend-contract-invalid",
+                address,
+                (
+                    f"Backend method '{address}' returned "
+                    f"{type(result).__name__}; expected diagnostics iterable."
+                ),
+            )
+        ]
+
+    diagnostics = list(result)
+    if any(not isinstance(diagnostic, Diagnostic) for diagnostic in diagnostics):
+        return [
+            _failure_diagnostic(
+                "runtime.backend-contract-invalid",
+                address,
+                (
+                    f"Backend method '{address}' returned a diagnostics iterable "
+                    "containing non-Diagnostic values."
+                ),
+            )
+        ]
+
+    return diagnostics
+
+
+def _call_backend_apply(
+    method,
+    *args,
+    address: str,
+    snapshot: RuntimeSnapshot,
+) -> ApplyResult:
+    try:
+        result = method(*args)
+    except Exception as exc:
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                _failure_diagnostic(
+                    "runtime.backend-call-failed",
+                    address,
+                    (
+                        f"Backend method '{address}' raised "
+                        f"{type(exc).__name__}: {exc}."
+                    ),
+                )
+            ],
+        )
+
+    if not isinstance(result, ApplyResult):
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    address,
+                    (
+                        f"Backend method '{address}' returned "
+                        f"{type(result).__name__}; expected ApplyResult."
+                    ),
+                )
+            ],
+        )
+
+    return result
 
 
 def _provenance_diagnostics(
@@ -128,7 +219,12 @@ def _rollback_services(
     success = True
 
     for address, service in services:
-        stop_result = service.stop(working_snapshot)
+        stop_result = _call_backend_apply(
+            service.stop,
+            working_snapshot,
+            address=address,
+            snapshot=working_snapshot,
+        )
         diagnostics.extend(stop_result.diagnostics)
         changed_addresses.extend(stop_result.changed_addresses)
         working_snapshot = stop_result.snapshot
@@ -240,7 +336,11 @@ class RuntimeManager:
                 diagnostics=diagnostics,
             )
 
-        validation = self._target.provisioner.validate(execution_plan.provisioning)
+        validation = _call_backend_diagnostics(
+            self._target.provisioner.validate,
+            execution_plan.provisioning,
+            address="runtime.apply.provisioning.validate",
+        )
         diagnostics.extend(validation)
         if _has_error_diagnostic(validation):
             return ApplyResult(
@@ -250,9 +350,12 @@ class RuntimeManager:
             )
 
         working_snapshot = execution_plan.base_snapshot
-        provision_result = self._target.provisioner.apply(
+        provision_result = _call_backend_apply(
+            self._target.provisioner.apply,
             execution_plan.provisioning,
             working_snapshot,
+            address="runtime.apply.provisioning",
+            snapshot=working_snapshot,
         )
         diagnostics.extend(provision_result.diagnostics)
         changed_addresses.extend(provision_result.changed_addresses)
@@ -275,9 +378,12 @@ class RuntimeManager:
 
         started_evaluator = False
         if evaluation_needed and self._target.evaluator is not None:
-            evaluation_result = self._target.evaluator.start(
+            evaluation_result = _call_backend_apply(
+                self._target.evaluator.start,
                 execution_plan.evaluation,
                 working_snapshot,
+                address="runtime.apply.evaluator",
+                snapshot=working_snapshot,
             )
             diagnostics.extend(evaluation_result.diagnostics)
             changed_addresses.extend(evaluation_result.changed_addresses)
@@ -308,9 +414,12 @@ class RuntimeManager:
                 )
 
         if orchestration_needed and self._target.orchestrator is not None:
-            orchestration_result = self._target.orchestrator.start(
+            orchestration_result = _call_backend_apply(
+                self._target.orchestrator.start,
                 execution_plan.orchestration,
                 working_snapshot,
+                address="runtime.apply.orchestrator",
+                snapshot=working_snapshot,
             )
             diagnostics.extend(orchestration_result.diagnostics)
             changed_addresses.extend(orchestration_result.changed_addresses)
@@ -380,7 +489,12 @@ class RuntimeManager:
         phases_succeeded = True
 
         if self._target.orchestrator is not None:
-            stop_result = self._target.orchestrator.stop(working_snapshot)
+            stop_result = _call_backend_apply(
+                self._target.orchestrator.stop,
+                working_snapshot,
+                address="runtime.destroy.orchestrator",
+                snapshot=working_snapshot,
+            )
             diagnostics.extend(stop_result.diagnostics)
             changed_addresses.extend(stop_result.changed_addresses)
             working_snapshot = stop_result.snapshot
@@ -395,7 +509,12 @@ class RuntimeManager:
                 )
 
         if self._target.evaluator is not None:
-            stop_result = self._target.evaluator.stop(working_snapshot)
+            stop_result = _call_backend_apply(
+                self._target.evaluator.stop,
+                working_snapshot,
+                address="runtime.destroy.evaluator",
+                snapshot=working_snapshot,
+            )
             diagnostics.extend(stop_result.diagnostics)
             changed_addresses.extend(stop_result.changed_addresses)
             working_snapshot = stop_result.snapshot
@@ -428,7 +547,13 @@ class RuntimeManager:
                 for address in _delete_order(provisioning_entries)
             ],
         )
-        provision_result = self._target.provisioner.apply(delete_plan, working_snapshot)
+        provision_result = _call_backend_apply(
+            self._target.provisioner.apply,
+            delete_plan,
+            working_snapshot,
+            address="runtime.destroy.provisioning",
+            snapshot=working_snapshot,
+        )
         diagnostics.extend(provision_result.diagnostics)
         changed_addresses.extend(provision_result.changed_addresses)
         working_snapshot = provision_result.snapshot

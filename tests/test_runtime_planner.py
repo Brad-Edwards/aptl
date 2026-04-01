@@ -80,6 +80,24 @@ nodes:
 
         assert execution_plan.target_name is None
 
+    def test_planned_payload_excludes_runtime_envelope_fields(self):
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: payload-shape
+nodes:
+  vm: {type: vm, os: linux, resources: {ram: 1 gib, cpu: 1}}
+""")),
+            create_stub_manifest(),
+        )
+
+        payload = execution_plan.provisioning.operations[0].payload
+
+        assert payload["name"] == "vm"
+        assert payload["os_family"] == "linux"
+        assert "address" not in payload
+        assert "ordering_dependencies" not in payload
+        assert "refresh_dependencies" not in payload
+
     def test_delete_operations_emitted_for_removed_resources(self):
         old_model = compile_runtime_model(_scenario("""
 name: original
@@ -103,6 +121,74 @@ nodes:
             if op.action.value == "delete"
         }
         assert delete_ops == {"provision.node.vm2": "delete"}
+
+    def test_cyclic_provisioning_dependencies_fail_closed(self):
+        execution_plan = plan(
+            compile_runtime_model(
+                parse_sdl(
+                    textwrap.dedent("""
+name: provisioning-cycle
+nodes:
+  a: {type: vm, os: linux, resources: {ram: 1 gib, cpu: 1}}
+  b: {type: vm, os: linux, resources: {ram: 1 gib, cpu: 1}}
+infrastructure:
+  a: {dependencies: [b]}
+  b: {dependencies: [a]}
+"""),
+                    skip_semantic_validation=True,
+                )
+            ),
+            create_stub_manifest(),
+        )
+
+        diagnostics = {
+            (diag.code, diag.address)
+            for diag in execution_plan.diagnostics
+        }
+
+        assert ("provisioning.ordering-cycle", "provision.node.a") in diagnostics
+        assert not execution_plan.is_valid
+
+    def test_cyclic_objective_dependencies_fail_closed(self):
+        execution_plan = plan(
+            compile_runtime_model(
+                parse_sdl(
+                    textwrap.dedent("""
+name: objective-cycle
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health: {command: /bin/true, interval: 15}
+entities:
+  blue: {role: blue}
+objectives:
+  first:
+    entity: blue
+    success: {conditions: [health]}
+    depends_on: [second]
+  second:
+    entity: blue
+    success: {conditions: [health]}
+    depends_on: [first]
+"""),
+                    skip_semantic_validation=True,
+                )
+            ),
+            create_stub_manifest(),
+        )
+
+        diagnostics = {
+            (diag.code, diag.address)
+            for diag in execution_plan.diagnostics
+        }
+
+        assert ("evaluation.ordering-cycle", "evaluation.objective.first") in diagnostics
+        assert not execution_plan.is_valid
 
     def test_dependency_changes_propagate_through_evaluation_graph(self):
         old_model = compile_runtime_model(_scenario("""
@@ -672,6 +758,36 @@ nodes:
         assert "provisioner.unsupported-os-family" in codes
         assert not execution_plan.is_valid
 
+    def test_variable_backed_os_allowed_values_must_be_valid_for_nodes_os(self):
+        manifest = BackendManifest(
+            name="limited",
+            provisioner=ProvisionerCapabilities(
+                name="limited-provisioner",
+                supported_node_types=frozenset({"vm"}),
+                supported_os_families=frozenset({"banana"}),
+            ),
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: variable-os
+variables:
+  os_name:
+    type: string
+    default: banana
+    allowed_values: [banana]
+nodes:
+  vm: {type: vm, os: '${os_name}', resources: {ram: 1 gib, cpu: 1}}
+""")),
+            manifest,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+
+        assert "provisioner.os-family-variable-domain-invalid" in codes
+        assert "provisioner.unsupported-os-family" not in codes
+        assert not execution_plan.is_valid
+
     def test_variable_backed_os_without_allowed_values_defers_validation(self):
         manifest = BackendManifest(
             name="limited",
@@ -700,6 +816,32 @@ nodes:
         assert "provisioner.os-family-validation-deferred" in codes
         assert "provisioner.unsupported-os-family" not in codes
         assert execution_plan.is_valid
+
+    def test_variable_backed_os_with_undeclared_variable_fails_closed(self):
+        manifest = BackendManifest(
+            name="limited",
+            provisioner=ProvisionerCapabilities(
+                name="limited-provisioner",
+                supported_node_types=frozenset({"vm"}),
+                supported_os_families=frozenset({"linux"}),
+            ),
+        )
+        scenario = parse_sdl(
+            textwrap.dedent("""
+name: variable-os
+nodes:
+  vm: {type: vm, os: '${missing_os}', resources: {ram: 1 gib, cpu: 1}}
+"""),
+            skip_semantic_validation=True,
+        )
+
+        execution_plan = plan(compile_runtime_model(scenario), manifest)
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+
+        assert "provisioner.os-family-variable-ref-unbound" in codes
+        assert "provisioner.os-family-validation-deferred" not in codes
+        assert not execution_plan.is_valid
 
     def test_variable_backed_counts_with_allowed_values_enforce_max_nodes(self):
         manifest = BackendManifest(
@@ -733,6 +875,39 @@ infrastructure:
         assert "provisioner.max-total-nodes-exceeded" in codes
         assert not execution_plan.is_valid
 
+    def test_variable_backed_counts_allowed_values_must_be_valid_for_infrastructure_count(self):
+        manifest = BackendManifest(
+            name="limited",
+            provisioner=ProvisionerCapabilities(
+                name="limited-provisioner",
+                supported_node_types=frozenset({"vm"}),
+                supported_os_families=frozenset({"linux"}),
+                max_total_nodes=10,
+            ),
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: variable-count
+variables:
+  node_count:
+    type: integer
+    default: 0
+    allowed_values: [0]
+nodes:
+  vm: {type: vm, os: linux, resources: {ram: 1 gib, cpu: 1}}
+infrastructure:
+  vm: ${node_count}
+""")),
+            manifest,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+
+        assert "provisioner.count-variable-domain-invalid" in codes
+        assert "provisioner.max-total-nodes-exceeded" not in codes
+        assert not execution_plan.is_valid
+
     def test_variable_backed_counts_without_allowed_values_defer_max_node_validation(self):
         manifest = BackendManifest(
             name="limited",
@@ -764,6 +939,35 @@ infrastructure:
         assert "provisioner.max-total-nodes-validation-deferred" in codes
         assert "provisioner.max-total-nodes-exceeded" not in codes
         assert execution_plan.is_valid
+
+    def test_variable_backed_counts_with_undeclared_variable_fail_closed(self):
+        manifest = BackendManifest(
+            name="limited",
+            provisioner=ProvisionerCapabilities(
+                name="limited-provisioner",
+                supported_node_types=frozenset({"vm"}),
+                supported_os_families=frozenset({"linux"}),
+                max_total_nodes=1,
+            ),
+        )
+        scenario = parse_sdl(
+            textwrap.dedent("""
+name: variable-count
+nodes:
+  vm: {type: vm, os: linux, resources: {ram: 1 gib, cpu: 1}}
+infrastructure:
+  vm: ${missing_count}
+"""),
+            skip_semantic_validation=True,
+        )
+
+        execution_plan = plan(compile_runtime_model(scenario), manifest)
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+
+        assert "provisioner.count-variable-ref-unbound" in codes
+        assert "provisioner.max-total-nodes-validation-deferred" not in codes
+        assert not execution_plan.is_valid
 
     def test_dependency_ordering_across_domain_plans(self):
         execution_plan = plan(

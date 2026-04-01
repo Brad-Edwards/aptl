@@ -71,8 +71,10 @@ Reconciliation is explicit and complete:
 - snapshot-only -> `DELETE`
 - identical -> `UNCHANGED`
 
-Plans are provenance-bound to the target name, backend manifest, and base
-runtime snapshot they were reconciled against.
+Plans are provenance-bound to an optional target name, backend manifest, and
+base runtime snapshot they were reconciled against. Direct planner output is
+unbound by default; only manager-generated plans or plans with an explicit
+`target_name` are applyable.
 
 Runtime resources carry two dependency sets:
 
@@ -95,7 +97,10 @@ Capabilities are domain-specific rather than a single overloaded bag:
 The planner validates semantic requirements from the compiled model, including
 node types, OS families, scaling limits, ACL usage, content types, account
 features, orchestration usage, workflows, workflow predicate condition refs,
-scoring, and objectives.
+scoring, and objectives. Variable-backed capability fields are validated
+soundly against finite `allowed_values` domains when available; otherwise the
+planner emits warnings and defers exact capability validation until
+instantiation rather than guessing from defaults.
 
 ### Runtime Target And Registry
 
@@ -111,8 +116,9 @@ introspection. Phase 1 intentionally supports at most one evaluator per target;
 explicit evaluator partitioning is deferred until the runtime has a real routing
 model.
 
-`RuntimeTarget` is self-validating: manifest presence and component shape must
-match both for registry-created targets and direct construction.
+`RuntimeTarget` is self-validating: manifest presence, component shape, and the
+required callable protocol surface must all match both for registry-created
+targets and direct construction.
 
 ### Protocols
 
@@ -125,8 +131,8 @@ Protocols consume domain plans, not generic steps:
 Orchestrators and the phase 1 evaluator are lifecycle services with `status()`
 and `stop()`. Failed runtime-service startup triggers best-effort rollback of
 started services while preserving any provisioning state already applied.
-Services are only started when their domain plan has operations, but delete-only
-reconciliation still runs through the same lifecycle entrypoint.
+Services are only started when their domain plan has actionable operations, but
+delete-only reconciliation still runs through the same lifecycle entrypoint.
 
 Objective `window` refs remain declarative scope/refresh inputs. They do not
 create cross-domain executor ordering semantics. `depends_on` remains the only

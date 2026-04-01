@@ -40,7 +40,7 @@ top-level inject resources and fail if the named inject does not exist.
 
 ### 2. Plan
 
-`plan(runtime_model, manifest, snapshot)` is also pure.
+`plan(runtime_model, manifest, snapshot, target_name=None)` is also pure.
 
 It validates semantic backend requirements and reconciles desired runtime
 objects against the current `RuntimeSnapshot`.
@@ -53,9 +53,12 @@ objects against the current `RuntimeSnapshot`.
 
 Each plan is provenance-bound to:
 
-- the target name
+- an optional target name
 - the backend manifest used for validation
 - the base snapshot it was reconciled against
+
+Direct planner output is unbound by default. Only `RuntimeManager.plan()` or an
+explicit `target_name=` bind a plan to a concrete runtime target for apply.
 
 Reconciliation actions are explicit:
 
@@ -108,6 +111,13 @@ Validation is semantic, not section-only. Phase 1 checks include:
 - workflow predicate condition refs
 - scoring/objective usage
 
+Variable-backed capability fields are handled soundly:
+
+- if a referenced variable has finite `allowed_values`, validation checks the
+  whole declared domain
+- otherwise the planner emits warning diagnostics and defers exact validation
+  until instantiation rather than guessing from defaults
+
 ## Runtime Target Lifecycle
 
 Targets must provide an explicit manifest. The registry separates capability
@@ -123,8 +133,8 @@ inspection from instantiation, and `create()` uses the manifest returned by
 2. plan
 3. validate provisioning apply
 4. apply provisioning plan
-5. start evaluator only when the evaluation plan has operations
-6. start orchestrator only when the orchestration plan has operations
+5. start evaluator only when the evaluation plan has actionable operations
+6. start orchestrator only when the orchestration plan has actionable operations
 7. on failed runtime-service startup, roll back started services while keeping provisioning state
 8. stop orchestrator -> stop evaluator -> delete provisioning resources
 
@@ -134,6 +144,7 @@ create executor ordering edges across domains.
 
 `RuntimeManager.apply()` requires the plan provenance to match the manager:
 
+- plan must be target-bound
 - same target name
 - same manifest
 - same base snapshot

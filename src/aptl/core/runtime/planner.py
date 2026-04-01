@@ -21,6 +21,7 @@ from aptl.core.runtime.models import (
     SnapshotEntry,
     resource_payload,
 )
+from aptl.core.sdl._base import extract_variable_name
 
 
 def _planned_resource(address: str, domain: RuntimeDomain, resource_type: str, resource) -> PlannedResource:
@@ -199,15 +200,125 @@ def _entry_matches_resource(entry: SnapshotEntry, resource: PlannedResource) -> 
     )
 
 
-def _counted_total_nodes(model: RuntimeModel) -> int | None:
-    counts: list[int] = []
-    for resource in [*model.networks.values(), *model.node_deployments.values()]:
-        count = resource.spec.get("infrastructure", {}).get("count", 1)
-        if isinstance(count, int):
-            counts.append(count)
-    if not counts:
-        return 0
-    return sum(counts)
+def _variable_spec(model: RuntimeModel, value: object) -> tuple[str | None, dict[str, object] | None]:
+    if not isinstance(value, str):
+        return None, None
+    variable_name = extract_variable_name(value)
+    if variable_name is None:
+        return None, None
+    spec = model.variable_specs.get(variable_name)
+    if isinstance(spec, dict):
+        return variable_name, spec
+    return variable_name, None
+
+
+def _variable_default_suffix(variable_name: str, variable_spec: dict[str, object] | None) -> str:
+    if variable_spec is None or variable_spec.get("default") is None:
+        return f" Variable '{variable_name}' has no finite pre-instantiation domain."
+    return (
+        f" Variable '{variable_name}' has default {variable_spec['default']!r}, "
+        "but defaults are informative only before instantiation."
+    )
+
+
+def _warning_diagnostic(code: str, address: str, message: str) -> Diagnostic:
+    return Diagnostic(
+        code=code,
+        domain="provisioning",
+        address=address,
+        message=message,
+        severity=Severity.WARNING,
+    )
+
+
+def _validate_node_os_family(
+    model: RuntimeModel,
+    node,
+    supported_os_families: frozenset[str],
+) -> list[Diagnostic]:
+    if not node.os_family:
+        return []
+
+    variable_name, variable_spec = _variable_spec(model, node.os_family)
+    if variable_name is None:
+        if node.os_family in supported_os_families:
+            return []
+        return [
+            Diagnostic(
+                code="provisioner.unsupported-os-family",
+                domain="provisioning",
+                address=node.address,
+                message=f"Provisioner does not support OS family '{node.os_family}'.",
+            )
+        ]
+
+    allowed_values = variable_spec.get("allowed_values") if variable_spec is not None else []
+    if isinstance(allowed_values, list) and allowed_values:
+        if all(isinstance(value, str) for value in allowed_values):
+            unsupported_values = sorted(
+                {
+                    value
+                    for value in allowed_values
+                    if value not in supported_os_families
+                }
+            )
+            if unsupported_values:
+                rendered = ", ".join(repr(value) for value in unsupported_values)
+                return [
+                    Diagnostic(
+                        code="provisioner.unsupported-os-family",
+                        domain="provisioning",
+                        address=node.address,
+                        message=(
+                            "Provisioner does not support all OS families allowed by "
+                            f"variable '{variable_name}': {rendered}."
+                        ),
+                    )
+                ]
+            return []
+
+    return [
+        _warning_diagnostic(
+            "provisioner.os-family-validation-deferred",
+            node.address,
+            (
+                "Provisioner OS-family validation is deferred until instantiation "
+                f"for {node.os_family!r}."
+                f"{_variable_default_suffix(variable_name, variable_spec)}"
+            ),
+        )
+    ]
+
+
+def _resource_count_upper_bound(
+    model: RuntimeModel,
+    resource,
+) -> tuple[int | None, Diagnostic | None]:
+    count = resource.spec.get("infrastructure", {}).get("count", 1)
+    if isinstance(count, int):
+        return count, None
+
+    variable_name, variable_spec = _variable_spec(model, count)
+    if variable_name is None:
+        return None, None
+
+    allowed_values = variable_spec.get("allowed_values") if variable_spec is not None else []
+    if isinstance(allowed_values, list) and allowed_values:
+        if all(isinstance(value, int) and not isinstance(value, bool) for value in allowed_values):
+            return max(allowed_values), None
+
+    return (
+        None,
+        _warning_diagnostic(
+            "provisioner.max-total-nodes-validation-deferred",
+            resource.address,
+            (
+                "Provisioner max-total-nodes validation is deferred until "
+                f"instantiation for {count!r}."
+                f"{_variable_default_suffix(variable_name, variable_spec)}"
+            ),
+        ),
+    )
 
 
 def _account_features(account_spec: dict[str, object]) -> set[str]:
@@ -265,20 +376,25 @@ def _validate_manifest(model: RuntimeModel, manifest: BackendManifest) -> list[D
                     message=f"Provisioner does not support node type '{node.node_type}'.",
                 )
             )
-        if node.os_family and node.os_family not in provisioner.supported_os_families:
-            diagnostics.append(
-                Diagnostic(
-                    code="provisioner.unsupported-os-family",
-                    domain="provisioning",
-                    address=node.address,
-                    message=f"Provisioner does not support OS family '{node.os_family}'.",
-                )
+        diagnostics.extend(
+            _validate_node_os_family(
+                model,
+                node,
+                provisioner.supported_os_families,
             )
+        )
 
-    total_nodes = _counted_total_nodes(model)
+    total_nodes = 0
+    if provisioner.max_total_nodes is not None:
+        for resource in [*model.networks.values(), *model.node_deployments.values()]:
+            count_upper_bound, warning = _resource_count_upper_bound(model, resource)
+            if warning is not None:
+                diagnostics.append(warning)
+            if count_upper_bound is not None:
+                total_nodes += count_upper_bound
+
     if (
         provisioner.max_total_nodes is not None
-        and total_nodes is not None
         and total_nodes > provisioner.max_total_nodes
     ):
         diagnostics.append(
@@ -667,7 +783,7 @@ def plan(
     evaluation = _build_evaluation_plan(resources, actions, deleted_entries)
 
     return ExecutionPlan(
-        target_name=target_name or manifest.name,
+        target_name=target_name,
         manifest=manifest,
         base_snapshot=snapshot,
         scenario_name=model.scenario_name,

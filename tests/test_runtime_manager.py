@@ -7,6 +7,7 @@ import textwrap
 import pytest
 
 from aptl.backends.stubs import create_stub_manifest
+from aptl.core.runtime.compiler import compile_runtime_model
 from aptl.core.runtime.manager import RuntimeManager
 from aptl.core.runtime.models import (
     ApplyResult,
@@ -15,6 +16,7 @@ from aptl.core.runtime.models import (
     RuntimeSnapshot,
     SnapshotEntry,
 )
+from aptl.core.runtime.planner import plan
 from aptl.core.runtime.registry import RuntimeTarget
 from aptl.core.sdl import parse_sdl
 
@@ -394,6 +396,59 @@ class TestRuntimeManager:
         }
         assert manager.snapshot.entries == {}
 
+    def test_apply_rejects_unbound_direct_plan(self):
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner([]),
+            orchestrator=RecordingOrchestrator([]),
+            evaluator=RecordingEvaluator([], "evaluator"),
+        )
+        execution_plan = plan(
+            compile_runtime_model(_provisioning_only_scenario()),
+            target.manifest,
+        )
+
+        result = RuntimeManager(target).apply(execution_plan)
+
+        assert not result.success
+        assert "runtime.plan-target-unbound" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_manager_plan_binds_target_name(self):
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner([]),
+            orchestrator=RecordingOrchestrator([]),
+            evaluator=RecordingEvaluator([], "evaluator"),
+        )
+
+        execution_plan = RuntimeManager(target).plan(_provisioning_only_scenario())
+
+        assert execution_plan.target_name == "recording"
+
+    def test_apply_accepts_explicitly_bound_direct_plan(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        execution_plan = plan(
+            compile_runtime_model(_provisioning_only_scenario()),
+            target.manifest,
+            target_name=target.name,
+        )
+
+        result = RuntimeManager(target).apply(execution_plan)
+
+        assert result.success
+        assert calls == ["provision-apply"]
+
     def test_apply_rejects_target_name_mismatch(self):
         plan_target = RuntimeTarget(
             name="plan-target",
@@ -497,6 +552,48 @@ nodes:
         assert result.success
         assert calls == ["provision-apply"]
         assert manager.snapshot.entries["provision.node.vm"].payload["os_family"] == "windows"
+
+    def test_identical_second_apply_skips_runtime_service_restarts(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        first_result = manager.apply(manager.plan(_full_scenario()))
+        assert first_result.success
+
+        calls.clear()
+        second_result = manager.apply(manager.plan(_full_scenario()))
+
+        assert second_result.success
+        assert calls == ["provision-apply"]
+
+    def test_missing_service_checks_use_actionable_runtime_ops(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        first_result = manager.apply(manager.plan(_full_scenario()))
+        assert first_result.success
+
+        calls.clear()
+        object.__setattr__(target, "evaluator", None)
+
+        second_result = manager.apply(manager.plan(_full_scenario()))
+
+        assert second_result.success
+        assert calls == ["provision-apply"]
 
     def test_apply_skips_empty_runtime_service_starts(self):
         calls: list[str] = []

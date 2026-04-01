@@ -65,7 +65,18 @@ def _provenance_diagnostics(
     snapshot: RuntimeSnapshot,
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
-    if execution_plan.target_name != target.name:
+    if execution_plan.target_name is None:
+        diagnostics.append(
+            _failure_diagnostic(
+                "runtime.plan-target-unbound",
+                "runtime.apply",
+                (
+                    "Execution plan is not bound to a runtime target. Use "
+                    "RuntimeManager.plan() or pass target_name explicitly."
+                ),
+            )
+        )
+    elif execution_plan.target_name != target.name:
         diagnostics.append(
             _failure_diagnostic(
                 "runtime.plan-target-mismatch",
@@ -199,7 +210,7 @@ class RuntimeManager:
                 diagnostics=diagnostics,
             )
 
-        evaluation_needed = bool(execution_plan.evaluation.operations)
+        evaluation_needed = bool(execution_plan.evaluation.actionable_operations)
         if evaluation_needed and self._target.evaluator is None:
             diagnostics.append(
                 _failure_diagnostic(
@@ -214,7 +225,7 @@ class RuntimeManager:
                 diagnostics=diagnostics,
             )
 
-        orchestration_needed = bool(execution_plan.orchestration.operations)
+        orchestration_needed = bool(execution_plan.orchestration.actionable_operations)
         if orchestration_needed and self._target.orchestrator is None:
             diagnostics.append(
                 _failure_diagnostic(

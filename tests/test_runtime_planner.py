@@ -68,6 +68,18 @@ nodes:
         assert execution_plan.manifest == manifest
         assert execution_plan.base_snapshot == snapshot
 
+    def test_direct_plan_is_unbound_by_default(self):
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: provenance
+nodes:
+  vm: {type: vm, os: linux, resources: {ram: 1 gib, cpu: 1}}
+""")),
+            create_stub_manifest(),
+        )
+
+        assert execution_plan.target_name is None
+
     def test_delete_operations_emitted_for_removed_resources(self):
         old_model = compile_runtime_model(_scenario("""
 name: original
@@ -601,6 +613,157 @@ workflows:
         assert "evaluator.unsupported-section" in codes
         assert "evaluator.objectives-unsupported" in codes
         assert not execution_plan.is_valid
+
+    def test_variable_backed_os_allowed_values_pass_when_all_supported(self):
+        manifest = BackendManifest(
+            name="limited",
+            provisioner=ProvisionerCapabilities(
+                name="limited-provisioner",
+                supported_node_types=frozenset({"vm"}),
+                supported_os_families=frozenset({"linux", "windows"}),
+            ),
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: variable-os
+variables:
+  os_name:
+    type: string
+    default: linux
+    allowed_values: [linux, windows]
+nodes:
+  vm: {type: vm, os: '${os_name}', resources: {ram: 1 gib, cpu: 1}}
+""")),
+            manifest,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+
+        assert "provisioner.unsupported-os-family" not in codes
+        assert execution_plan.is_valid
+
+    def test_variable_backed_os_allowed_values_fail_when_any_are_unsupported(self):
+        manifest = BackendManifest(
+            name="limited",
+            provisioner=ProvisionerCapabilities(
+                name="limited-provisioner",
+                supported_node_types=frozenset({"vm"}),
+                supported_os_families=frozenset({"linux"}),
+            ),
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: variable-os
+variables:
+  os_name:
+    type: string
+    default: linux
+    allowed_values: [linux, windows]
+nodes:
+  vm: {type: vm, os: '${os_name}', resources: {ram: 1 gib, cpu: 1}}
+""")),
+            manifest,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+
+        assert "provisioner.unsupported-os-family" in codes
+        assert not execution_plan.is_valid
+
+    def test_variable_backed_os_without_allowed_values_defers_validation(self):
+        manifest = BackendManifest(
+            name="limited",
+            provisioner=ProvisionerCapabilities(
+                name="limited-provisioner",
+                supported_node_types=frozenset({"vm"}),
+                supported_os_families=frozenset({"linux"}),
+            ),
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: variable-os
+variables:
+  os_name:
+    type: string
+    default: linux
+nodes:
+  vm: {type: vm, os: '${os_name}', resources: {ram: 1 gib, cpu: 1}}
+""")),
+            manifest,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+
+        assert "provisioner.os-family-validation-deferred" in codes
+        assert "provisioner.unsupported-os-family" not in codes
+        assert execution_plan.is_valid
+
+    def test_variable_backed_counts_with_allowed_values_enforce_max_nodes(self):
+        manifest = BackendManifest(
+            name="limited",
+            provisioner=ProvisionerCapabilities(
+                name="limited-provisioner",
+                supported_node_types=frozenset({"vm"}),
+                supported_os_families=frozenset({"linux"}),
+                max_total_nodes=2,
+            ),
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: variable-count
+variables:
+  node_count:
+    type: integer
+    default: 1
+    allowed_values: [1, 3]
+nodes:
+  vm: {type: vm, os: linux, resources: {ram: 1 gib, cpu: 1}}
+infrastructure:
+  vm: ${node_count}
+""")),
+            manifest,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+
+        assert "provisioner.max-total-nodes-exceeded" in codes
+        assert not execution_plan.is_valid
+
+    def test_variable_backed_counts_without_allowed_values_defer_max_node_validation(self):
+        manifest = BackendManifest(
+            name="limited",
+            provisioner=ProvisionerCapabilities(
+                name="limited-provisioner",
+                supported_node_types=frozenset({"vm"}),
+                supported_os_families=frozenset({"linux"}),
+                max_total_nodes=1,
+            ),
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: variable-count
+variables:
+  node_count:
+    type: integer
+    default: 3
+nodes:
+  vm: {type: vm, os: linux, resources: {ram: 1 gib, cpu: 1}}
+infrastructure:
+  vm: ${node_count}
+""")),
+            manifest,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+
+        assert "provisioner.max-total-nodes-validation-deferred" in codes
+        assert "provisioner.max-total-nodes-exceeded" not in codes
+        assert execution_plan.is_valid
 
     def test_dependency_ordering_across_domain_plans(self):
         execution_plan = plan(

@@ -7,6 +7,27 @@ from aptl.core.runtime.capabilities import BackendManifest
 from aptl.core.runtime.protocols import Evaluator, Orchestrator, Provisioner
 
 
+def _require_callable_methods(
+    component: object | None,
+    *,
+    label: str,
+    method_names: tuple[str, ...],
+) -> None:
+    if component is None:
+        return
+    missing = [
+        method_name
+        for method_name in method_names
+        if not callable(getattr(component, method_name, None))
+    ]
+    if missing:
+        method_list = ", ".join(missing)
+        raise ValueError(
+            "registry.target-contract-mismatch: "
+            f"{label} is missing callable method(s): {method_list}."
+        )
+
+
 def _validate_runtime_target_shape(
     *,
     manifest: BackendManifest | None,
@@ -28,6 +49,21 @@ def _validate_runtime_target_shape(
             "registry.target-shape-mismatch: evaluator presence does not match "
             "the manifest."
         )
+    _require_callable_methods(
+        provisioner,
+        label="provisioner",
+        method_names=("validate", "apply"),
+    )
+    _require_callable_methods(
+        orchestrator,
+        label="orchestrator",
+        method_names=("start", "status", "stop"),
+    )
+    _require_callable_methods(
+        evaluator,
+        label="evaluator",
+        method_names=("start", "status", "results", "stop"),
+    )
 
 
 @dataclass(frozen=True)

@@ -41,3 +41,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [017](adr-017-sdl-runtime-layer.md) | SDL Runtime Layer | proposed | 2026-03-30 |
 | [018](adr-018-control-flow-primitives.md) | Control Flow Primitives in the SDL | superseded by ADR-019 | 2026-04-01 |
 | [019](adr-019-workflow-control-language-redesign.md) | Workflow Control-Language Redesign | accepted | 2026-04-01 |
+| [020](adr-020-lightweight-formal-methods-policy.md) | Lightweight Formal Methods Policy for Semantic Systems | accepted | 2026-04-01 |

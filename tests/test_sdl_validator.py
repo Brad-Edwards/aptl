@@ -1448,6 +1448,73 @@ class TestVerifyWorkflows:
         errors = _validate(s)
         assert any("cannot reference non-executable step 'gate'" in e for e in errors)
 
+    def test_step_state_impossible_outcome_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "branch",
+                        },
+                        "branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "validate", "outcomes": ["exhausted"]}
+                                ]
+                            },
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("impossible outcomes" in e for e in errors)
+
+    def test_join_rejects_foreign_predecessors(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "gate",
+                    "steps": {
+                        "gate": {
+                            "type": "decision",
+                            "when": {"conditions": ["service-restored"]},
+                            "then": "fanout",
+                            "else": "joined",
+                        },
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback", "confirm"],
+                            "join": "joined",
+                        },
+                        "rollback": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "on-success": "joined",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "joined",
+                        },
+                        "joined": {"type": "join", "next": "finish"},
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("may only be entered from the owning parallel's branch closure" in e for e in errors)
+
     def test_parallel_join_must_be_join_step(self):
         s = _make_scenario(
             **self._base_kwargs(),

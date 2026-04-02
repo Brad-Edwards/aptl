@@ -16,7 +16,7 @@ variables:
     description: Password posture for release engineering operator accounts
   canary_cutover:
     type: string
-    default: "45 min"
+    default: "2 hour 45 min"
     description: When canary promotion begins
   rollback_deadline:
     type: string

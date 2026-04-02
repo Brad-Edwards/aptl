@@ -3,6 +3,11 @@
 from collections.abc import Callable
 from typing import Any
 
+from aptl.core.semantics.objectives import analyze_objective_window_step_refs
+from aptl.core.semantics.workflow import (
+    WORKFLOW_STATE_SCHEMA_VERSION,
+    workflow_step_semantic_contract,
+)
 from aptl.core.runtime.capabilities import (
     WorkflowFeature,
     WorkflowStatePredicateFeature,
@@ -27,16 +32,19 @@ from aptl.core.runtime.models import (
     ScriptRuntime,
     StoryRuntime,
     TLORuntime,
+    WorkflowExecutionContract,
     WorkflowPredicateRuntime,
+    WorkflowResultContract,
     WorkflowStepOutcome,
     WorkflowStepStatePredicateRuntime,
     WorkflowStepRuntime,
     WorkflowRuntime,
 )
+from aptl.core.sdl import instantiate_scenario
 from aptl.core.sdl.orchestration import WorkflowStepType
 from aptl.core.sdl.entities import flatten_entities
 from aptl.core.sdl.nodes import NodeType
-from aptl.core.sdl.scenario import Scenario
+from aptl.core.sdl.scenario import InstantiatedScenario, Scenario
 
 
 def _dump(model: Any) -> dict[str, Any]:
@@ -341,63 +349,77 @@ def _resolve_workflow_step_refs(
     scenario: Scenario,
     *,
     step_refs: list[str],
+    referenced_workflows: set[str] | None,
     owner_address: str,
     domain: str,
     code_prefix: str,
 ) -> tuple[tuple[str, ...], tuple[str, ...], list[Diagnostic]]:
-    valid_refs: list[str] = []
-    workflow_addresses: list[str] = []
     diagnostics: list[Diagnostic] = []
-
-    for step_ref in dict.fromkeys(step_refs):
-        if "." not in step_ref:
+    analysis = analyze_objective_window_step_refs(
+        step_refs=step_refs,
+        workflows_by_name=scenario.workflows,
+        referenced_workflows=referenced_workflows,
+    )
+    for issue in analysis.issues:
+        if issue.code == "invalid-format":
             diagnostics.append(
                 Diagnostic(
                     code=f"{code_prefix}-invalid-format",
                     domain=domain,
                     address=owner_address,
                     message=(
-                        f"Reference '{step_ref}' must use '<workflow>.<step>' syntax."
+                        f"Reference '{issue.step_ref}' must use '<workflow>.<step>' syntax."
                     ),
                 )
             )
-            continue
-
-        workflow_name, step_name = step_ref.split(".", 1)
-        workflow = scenario.workflows.get(workflow_name)
-        if workflow is None:
+        elif issue.code == "workflow-unbound":
             diagnostics.append(
                 Diagnostic(
                     code=f"{code_prefix}-workflow-unbound",
                     domain=domain,
                     address=owner_address,
                     message=(
-                        f"Reference '{step_ref}' does not resolve to a defined workflow."
+                        f"Reference '{issue.step_ref}' does not resolve to a defined workflow."
                     ),
                 )
             )
-            continue
-        if step_name not in workflow.steps:
+        elif issue.code == "workflow-outside-window":
+            diagnostics.append(
+                Diagnostic(
+                    code=f"{code_prefix}-workflow-outside-window",
+                    domain=domain,
+                    address=owner_address,
+                    message=(
+                        f"Reference '{issue.step_ref}' is not part of the objective "
+                        "window's referenced workflows."
+                    ),
+                )
+            )
+        elif issue.code == "step-unbound":
             diagnostics.append(
                 Diagnostic(
                     code=f"{code_prefix}-step-unbound",
                     domain=domain,
                     address=owner_address,
                     message=(
-                        f"Reference '{step_ref}' does not resolve to a defined workflow step."
+                        f"Reference '{issue.step_ref}' does not resolve to a defined workflow step."
                     ),
                 )
             )
-            continue
 
-        valid_refs.append(step_ref)
-        workflow_addresses.append(_workflow_address(workflow_name))
+    return (
+        analysis.valid_refs,
+        _dedupe(
+            [_workflow_address(workflow_name) for workflow_name in analysis.referenced_workflows]
+        ),
+        diagnostics,
+    )
 
-    return _dedupe(valid_refs), _dedupe(workflow_addresses), diagnostics
 
-
-def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
+def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeModel:
     """Compile an SDL scenario into bound runtime objects."""
+    if not isinstance(scenario, InstantiatedScenario):
+        scenario = instantiate_scenario(scenario, validate_semantics=False)
 
     diagnostics: list[Diagnostic] = []
 
@@ -1016,6 +1038,12 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 _resolve_workflow_step_refs(
                     scenario,
                     step_refs=list(objective.window.steps),
+                    referenced_workflows={
+                        workflow_name
+                        for workflow_name in objective.window.workflows
+                        if workflow_name in scenario.workflows
+                    }
+                    or None,
                     owner_address=objective_address,
                     domain="evaluation",
                     code_prefix="evaluation.workflow-step-ref",
@@ -1245,14 +1273,15 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 join_step=step.join,
                 owning_parallel_step=join_owners.get(step_name, ""),
                 max_attempts=step.max_attempts,
-                emits_outcome=step.type in {
-                    WorkflowStepType.OBJECTIVE,
-                    WorkflowStepType.RETRY,
-                    WorkflowStepType.PARALLEL,
-                },
+                state_contract=workflow_step_semantic_contract(step.type.value),
             )
 
         objective_addresses = _dedupe(referenced_objectives)
+        result_contract_steps = {
+            step_name: step_runtime.state_contract
+            for step_name, step_runtime in control_steps.items()
+            if step_runtime.state_contract.state_observable
+        }
         predicate_dependency_addresses = _dedupe(
             [
                 address
@@ -1273,6 +1302,21 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             required_features=_dedupe_by_value(required_features),
             required_state_predicate_features=_dedupe_by_value(
                 required_state_predicate_features
+            ),
+            result_contract=WorkflowResultContract(
+                state_schema_version=WORKFLOW_STATE_SCHEMA_VERSION,
+                observable_steps=result_contract_steps,
+            ),
+            execution_contract=WorkflowExecutionContract(
+                state_schema_version=WORKFLOW_STATE_SCHEMA_VERSION,
+                start_step=workflow.start,
+                steps={
+                    step_name: step_runtime.state_contract
+                    for step_name, step_runtime in control_steps.items()
+                },
+                control_edges=control_edges,
+                join_owners=join_owners,
+                observable_steps=tuple(sorted(result_contract_steps)),
             ),
             refresh_dependencies=_dedupe(
                 [*objective_addresses, *predicate_dependency_addresses]

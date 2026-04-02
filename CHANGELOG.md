@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.0] - 2026-04-02
+
+### Added
+
+- Canonical SDL instantiation phase (`instantiate_scenario`) producing concrete `InstantiatedScenario` objects before compilation/runtime planning
+- Repo-owned variable binding semantics: parameter values, defaults, allowed-value enforcement, unresolved-placeholder failure, and post-instantiation revalidation
+- Richer workflow execution contracts with workflow-level status, run identity, timestamps, terminal reason, portable history events, and compiled `execution_contract` metadata
+- Schema-first external contract models plus generated versioned JSON Schemas under `schemas/` for SDL/runtime boundary artifacts
+- Reference async-style runtime control plane (`RuntimeControlPlane`) and reference HTTP/JSON adapter for portable backend integration
+- Focused regression coverage for instantiation, workflow execution envelopes/history, contract schema publication, and control-plane behavior
+
+### Changed
+
+- `compile_runtime_model()` now compiles concrete instantiated scenarios instead of leaving variable interpretation to backends
+- Runtime workflow validation now checks backend-reported plain-data execution envelopes against compiled `result_contract` and `execution_contract`, rather than inferring semantics from planner payload internals
+- Objective window step analysis is centralized in shared semantics and reused by both validator and compiler to reduce FM2 drift
+- Runtime snapshots now preserve plain-data orchestration history alongside portable workflow execution state
+- Runtime architecture docs and SDL guidance now describe repo-owned instantiation, language-neutral contracts, and the schema/control-plane boundary explicitly
+
 ## [6.2.0] - 2026-04-01
 
 ### Added

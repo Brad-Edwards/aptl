@@ -101,6 +101,12 @@ def _validate_runtime_target_shape(
     _require_invokable_method(
         orchestrator,
         label="orchestrator",
+        method_name="history",
+        invocation_args=(),
+    )
+    _require_invokable_method(
+        orchestrator,
+        label="orchestrator",
         method_name="stop",
         invocation_args=(sample_snapshot,),
     )

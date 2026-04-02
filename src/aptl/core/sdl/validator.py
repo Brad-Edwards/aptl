@@ -11,6 +11,11 @@ from ipaddress import ip_address, ip_network
 
 from pydantic import BaseModel
 
+from aptl.core.semantics.objectives import analyze_objective_window_step_refs
+from aptl.core.semantics.workflow import (
+    branch_closure,
+    workflow_step_semantic_contract,
+)
 from aptl.core.sdl._errors import SDLValidationError
 from aptl.core.sdl._base import extract_variable_name, is_variable_ref
 from aptl.core.sdl.entities import flatten_entities
@@ -723,36 +728,36 @@ class SemanticValidator:
                         "referenced workflow"
                     )
 
-                for step_ref in objective.window.steps:
-                    if self._is_unresolved_var(step_ref):
-                        continue
-                    if "." not in step_ref:
+                concrete_step_refs = [
+                    step_ref
+                    for step_ref in objective.window.steps
+                    if not self._is_unresolved_var(step_ref)
+                ]
+                step_analysis = analyze_objective_window_step_refs(
+                    step_refs=concrete_step_refs,
+                    workflows_by_name=self._s.workflows,
+                    referenced_workflows=referenced_workflows,
+                )
+                for issue in step_analysis.issues:
+                    if issue.code == "invalid-format":
                         self._err(
-                            f"Objective '{name}' window step '{step_ref}' must "
+                            f"Objective '{name}' window step '{issue.step_ref}' must "
                             "use '<workflow>.<step>' syntax"
                         )
-                        continue
-
-                    workflow_name, step_name = step_ref.split(".", 1)
-                    workflow = self._s.workflows.get(workflow_name)
-                    if workflow is None:
+                    elif issue.code == "workflow-unbound":
                         self._err(
-                            f"Objective '{name}' window step '{step_ref}' "
-                            f"references undefined workflow '{workflow_name}'"
+                            f"Objective '{name}' window step '{issue.step_ref}' "
+                            f"references undefined workflow '{issue.workflow_name}'"
                         )
-                        continue
-                    if (
-                        referenced_workflows
-                        and workflow_name not in referenced_workflows
-                    ):
+                    elif issue.code == "workflow-outside-window":
                         self._err(
-                            f"Objective '{name}' window step '{step_ref}' "
+                            f"Objective '{name}' window step '{issue.step_ref}' "
                             "is not part of the referenced workflows"
                         )
-                    if step_name not in workflow.steps:
+                    elif issue.code == "step-unbound":
                         self._err(
-                            f"Objective '{name}' window step '{step_ref}' "
-                            f"references undefined step '{step_name}'"
+                            f"Objective '{name}' window step '{issue.step_ref}' "
+                            f"references undefined step '{issue.step_name}'"
                         )
 
             for dep_name in objective.depends_on:
@@ -817,26 +822,32 @@ class SemanticValidator:
                 )
                 continue
             ref_step = workflow_steps[step_state.step]
-            if ref_step.type not in {
-                WorkflowStepType.OBJECTIVE,
-                WorkflowStepType.RETRY,
-                WorkflowStepType.PARALLEL,
-            }:
+            contract = workflow_step_semantic_contract(ref_step.type.value)
+            if not contract.state_observable:
                 self._err(
                     f"Workflow '{workflow_name}' step '{step_name}' "
                     f"cannot reference non-executable step '{step_state.step}' "
                     "in a predicate"
                 )
                 continue
+            invalid_outcomes = [
+                outcome.value
+                for outcome in step_state.outcomes
+                if outcome.value not in contract.observable_outcomes
+            ]
+            if invalid_outcomes:
+                allowed = ", ".join(contract.observable_outcomes)
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"references step '{step_state.step}' with impossible "
+                    f"outcomes {invalid_outcomes}; allowed outcomes are: {allowed}"
+                )
+                continue
             step_refs.append(step_state.step)
         return step_refs
 
     def _is_executable_workflow_step(self, step: WorkflowStep) -> bool:
-        return step.type in {
-            WorkflowStepType.OBJECTIVE,
-            WorkflowStepType.RETRY,
-            WorkflowStepType.PARALLEL,
-        }
+        return workflow_step_semantic_contract(step.type.value).state_observable
 
     def _validate_workflow_target_ref(
         self,
@@ -1263,6 +1274,37 @@ class SemanticValidator:
                 for target in edges:
                     if target in reachable:
                         predecessors[target].add(source)
+
+            for step_name, step in workflow.steps.items():
+                if step.type != WorkflowStepType.PARALLEL:
+                    continue
+                if (
+                    self._is_unresolved_var(step.join)
+                    or step.join not in workflow.steps
+                    or step.join not in reachable
+                ):
+                    continue
+                allowed_predecessors = branch_closure(
+                    graph,
+                    branches=(
+                        branch
+                        for branch in step.branches
+                        if branch in reachable and branch in workflow.steps
+                    ),
+                    join_step=step.join,
+                )
+                foreign_predecessors = sorted(
+                    predecessor
+                    for predecessor in predecessors.get(step.join, set())
+                    if predecessor not in allowed_predecessors
+                )
+                if foreign_predecessors:
+                    self._err(
+                        f"Workflow '{workflow_name}' join step '{step.join}' "
+                        "may only be entered from the owning parallel's branch "
+                        "closure; unexpected predecessors: "
+                        + ", ".join(foreign_predecessors)
+                    )
 
             available_memo: dict[str, set[str]] = {}
             branch_memo: dict[tuple[str, str], set[str]] = {}

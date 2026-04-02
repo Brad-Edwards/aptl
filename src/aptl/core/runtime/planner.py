@@ -1,7 +1,10 @@
 """Planner for compiled SDL runtime models."""
 
-from collections import deque
-
+from aptl.core.semantics.planner import (
+    dependency_cycles,
+    dependency_graph,
+    topological_dependency_order,
+)
 from aptl.core.runtime.capabilities import BackendManifest
 from aptl.core.runtime.models import (
     ChangeAction,
@@ -164,63 +167,16 @@ def _collect_resources(model: RuntimeModel) -> dict[str, PlannedResource]:
 
 
 def _ordering_graph(resources: dict[str, PlannedResource]) -> dict[str, tuple[str, ...]]:
-    return {
-        address: tuple(
-            dependency
-            for dependency in resource.ordering_dependencies
-            if dependency in resources
-        )
-        for address, resource in resources.items()
-    }
+    return dependency_graph(
+        {
+            address: resource.ordering_dependencies
+            for address, resource in resources.items()
+        }
+    )
 
 
 def _ordering_cycles(resources: dict[str, PlannedResource]) -> list[tuple[str, ...]]:
-    graph = _ordering_graph(resources)
-    if not graph:
-        return []
-
-    index = 0
-    indices: dict[str, int] = {}
-    lowlinks: dict[str, int] = {}
-    stack: list[str] = []
-    on_stack: set[str] = set()
-    cycles: list[tuple[str, ...]] = []
-
-    def strongconnect(address: str) -> None:
-        nonlocal index
-        indices[address] = index
-        lowlinks[address] = index
-        index += 1
-        stack.append(address)
-        on_stack.add(address)
-
-        for dependency in graph[address]:
-            if dependency not in indices:
-                strongconnect(dependency)
-                lowlinks[address] = min(lowlinks[address], lowlinks[dependency])
-            elif dependency in on_stack:
-                lowlinks[address] = min(lowlinks[address], indices[dependency])
-
-        if lowlinks[address] != indices[address]:
-            return
-
-        component: list[str] = []
-        while stack:
-            member = stack.pop()
-            on_stack.remove(member)
-            component.append(member)
-            if member == address:
-                break
-
-        component = sorted(component)
-        if len(component) > 1 or component[0] in graph[component[0]]:
-            cycles.append(tuple(component))
-
-    for address in sorted(graph):
-        if address not in indices:
-            strongconnect(address)
-
-    return sorted(cycles)
+    return dependency_cycles(_ordering_graph(resources))
 
 
 def _ordering_cycle_diagnostics(
@@ -252,30 +208,7 @@ def _ordering_cycle_diagnostics(
 
 
 def _topological_order(resources: dict[str, PlannedResource]) -> list[str]:
-    graph: dict[str, list[str]] = {address: [] for address in resources}
-    indegree: dict[str, int] = {address: 0 for address in resources}
-
-    for address, dependencies in _ordering_graph(resources).items():
-        for dependency in dependencies:
-            graph[dependency].append(address)
-            indegree[address] += 1
-
-    queue = deque(sorted(address for address, degree in indegree.items() if degree == 0))
-    order: list[str] = []
-
-    while queue:
-        current = queue.popleft()
-        order.append(current)
-        for dependent in sorted(graph[current]):
-            indegree[dependent] -= 1
-            if indegree[dependent] == 0:
-                queue.append(dependent)
-
-    if len(order) != len(resources):
-        remaining = [address for address in resources if address not in order]
-        order.extend(sorted(remaining))
-
-    return order
+    return topological_dependency_order(_ordering_graph(resources))
 
 
 def _entry_matches_resource(entry: SnapshotEntry, resource: PlannedResource) -> bool:

@@ -1,7 +1,7 @@
 """Runtime manager for compiled SDL runtime plans."""
 
-from collections import deque
 from collections.abc import Iterable
+from datetime import UTC, datetime
 
 from aptl.core.runtime.compiler import compile_runtime_model
 from aptl.core.runtime.models import (
@@ -14,37 +14,28 @@ from aptl.core.runtime.models import (
     RuntimeDomain,
     RuntimeSnapshot,
     SnapshotEntry,
+    WorkflowExecutionContract,
+    WorkflowExecutionState,
+    WorkflowHistoryEvent,
+    WorkflowHistoryEventType,
+    WorkflowResultContract,
+    WorkflowStatus,
 )
+from aptl.core.sdl import instantiate_scenario
+from aptl.core.semantics.planner import reverse_delete_order
+from aptl.core.semantics.workflow import validate_workflow_step_result
 from aptl.core.runtime.planner import plan
 from aptl.core.runtime.registry import RuntimeTarget, _validate_runtime_target_shape
-from aptl.core.sdl.scenario import Scenario
+from aptl.core.sdl.scenario import InstantiatedScenario, Scenario
 
 
 def _delete_order(entries: dict[str, SnapshotEntry]) -> list[str]:
-    graph: dict[str, list[str]] = {address: [] for address in entries}
-    indegree: dict[str, int] = {address: 0 for address in entries}
-
-    for address, entry in entries.items():
-        for dependency in entry.ordering_dependencies:
-            if dependency not in entries:
-                continue
-            graph[dependency].append(address)
-            indegree[address] += 1
-
-    queue = deque(sorted(address for address, degree in indegree.items() if degree == 0))
-    order: list[str] = []
-    while queue:
-        current = queue.popleft()
-        order.append(current)
-        for dependent in sorted(graph[current]):
-            indegree[dependent] -= 1
-            if indegree[dependent] == 0:
-                queue.append(dependent)
-
-    if len(order) != len(entries):
-        order.extend(sorted(address for address in entries if address not in order))
-
-    return list(reversed(order))
+    return reverse_delete_order(
+        {
+            address: entry.ordering_dependencies
+            for address, entry in entries.items()
+        }
+    )
 
 
 def _has_error_diagnostic(diagnostics: list[Diagnostic]) -> bool:
@@ -58,6 +49,15 @@ def _failure_diagnostic(code: str, address: str, message: str) -> Diagnostic:
         address=address,
         message=message,
     )
+
+
+def _parse_timestamp(raw: str) -> datetime:
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(raw)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed
 
 
 def _call_backend_diagnostics(
@@ -246,7 +246,355 @@ def _call_backend_apply(
             ],
         )
 
+    workflow_result_diagnostics = _workflow_result_contract_diagnostics(result.snapshot)
+    if workflow_result_diagnostics:
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=workflow_result_diagnostics,
+        )
+
     return result
+
+
+def _workflow_result_contract_diagnostics(
+    snapshot: RuntimeSnapshot,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(snapshot.orchestration_results, dict):
+        return [
+            _failure_diagnostic(
+                "runtime.backend-contract-invalid",
+                "runtime.apply.orchestration-results",
+                "RuntimeSnapshot.orchestration_results must be a dict.",
+            )
+        ]
+    if not isinstance(snapshot.orchestration_history, dict):
+        return [
+            _failure_diagnostic(
+                "runtime.backend-contract-invalid",
+                "runtime.apply.orchestration-history",
+                "RuntimeSnapshot.orchestration_history must be a dict.",
+            )
+        ]
+    workflow_entries = {
+        address: entry
+        for address, entry in snapshot.entries.items()
+        if entry.domain == RuntimeDomain.ORCHESTRATION
+        and entry.resource_type == "workflow"
+    }
+
+    for workflow_address, workflow_result in snapshot.orchestration_results.items():
+        if not isinstance(workflow_address, str):
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    "runtime.apply.orchestration-results",
+                    "Workflow orchestration result keys must be strings.",
+                )
+            )
+            continue
+        if not isinstance(workflow_result, dict):
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    (
+                        "Workflow orchestration results must use "
+                        "plain-data mapping values."
+                    ),
+                )
+            )
+            continue
+
+        workflow_entry = workflow_entries.get(workflow_address)
+        if workflow_entry is None:
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    (
+                        "Workflow orchestration results must correspond to a "
+                        "workflow entry in the runtime snapshot."
+                    ),
+                )
+            )
+            continue
+
+        payload = workflow_entry.payload
+        result_contract_payload = (
+            payload.get("result_contract") if isinstance(payload, dict) else None
+        )
+        execution_contract_payload = (
+            payload.get("execution_contract") if isinstance(payload, dict) else None
+        )
+        if not isinstance(result_contract_payload, dict):
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    "Workflow snapshot payload is missing compiled result_contract.",
+                )
+            )
+            continue
+        if not isinstance(execution_contract_payload, dict):
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    "Workflow snapshot payload is missing compiled execution_contract.",
+                )
+            )
+            continue
+
+        try:
+            result_contract = WorkflowResultContract.from_mapping(
+                result_contract_payload
+            )
+        except (TypeError, ValueError) as exc:
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    f"Workflow result_contract is invalid: {exc}",
+                )
+            )
+            continue
+        try:
+            execution_contract = WorkflowExecutionContract.from_mapping(
+                execution_contract_payload
+            )
+        except (TypeError, ValueError) as exc:
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    f"Workflow execution_contract is invalid: {exc}",
+                )
+            )
+            continue
+
+        try:
+            normalized_result = WorkflowExecutionState.from_payload(workflow_result)
+        except (TypeError, ValueError) as exc:
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    f"Workflow result payload is invalid: {exc}",
+                )
+            )
+            continue
+
+        history_payload = snapshot.orchestration_history.get(workflow_address, [])
+        if not isinstance(history_payload, list):
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    "Workflow history payload must be a list of event mappings.",
+                )
+            )
+            continue
+        normalized_history: list[WorkflowHistoryEvent] = []
+        for event_payload in history_payload:
+            try:
+                normalized_history.append(WorkflowHistoryEvent.from_payload(event_payload))
+            except (TypeError, ValueError) as exc:
+                diagnostics.append(
+                    _failure_diagnostic(
+                        "runtime.backend-contract-invalid",
+                        workflow_address,
+                        f"Workflow history payload is invalid: {exc}",
+                    )
+                )
+        if normalized_history:
+            previous_timestamp: datetime | None = None
+            for event in normalized_history:
+                try:
+                    current_timestamp = _parse_timestamp(event.timestamp)
+                except ValueError as exc:
+                    diagnostics.append(
+                        _failure_diagnostic(
+                            "runtime.backend-contract-invalid",
+                            workflow_address,
+                            f"Workflow history event timestamp is invalid: {exc}",
+                        )
+                    )
+                    continue
+                if previous_timestamp is not None and current_timestamp < previous_timestamp:
+                    diagnostics.append(
+                        _failure_diagnostic(
+                            "runtime.backend-contract-invalid",
+                            workflow_address,
+                            "Workflow history timestamps must be monotonic.",
+                        )
+                    )
+                previous_timestamp = current_timestamp
+
+        if normalized_result.state_schema_version != result_contract.state_schema_version:
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    (
+                        "Workflow result schema version "
+                        f"{normalized_result.state_schema_version!r} does not match "
+                        f"compiled contract {result_contract.state_schema_version!r}."
+                    ),
+                )
+            )
+        if normalized_result.state_schema_version != execution_contract.state_schema_version:
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    (
+                        "Workflow result schema version "
+                        f"{normalized_result.state_schema_version!r} does not match "
+                        f"execution contract {execution_contract.state_schema_version!r}."
+                    ),
+                )
+            )
+
+        unexpected_steps = sorted(
+            step_name
+            for step_name in normalized_result.steps
+            if step_name not in result_contract.observable_steps
+        )
+        if unexpected_steps:
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    (
+                        "Workflow results include non-observable or undefined steps: "
+                        + ", ".join(unexpected_steps)
+                    ),
+                )
+            )
+
+        missing_steps = sorted(
+            step_name
+            for step_name in result_contract.observable_steps
+            if step_name not in normalized_result.steps
+        )
+        if missing_steps:
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    (
+                        "Workflow results must include all observable steps: "
+                        + ", ".join(missing_steps)
+                    ),
+                )
+            )
+
+        for step_name, step_state in normalized_result.steps.items():
+            contract = result_contract.observable_steps.get(step_name)
+            if contract is None:
+                continue
+            violations = validate_workflow_step_result(
+                contract,
+                lifecycle=step_state.lifecycle.value,
+                outcome=step_state.outcome.value if step_state.outcome else None,
+                attempts=step_state.attempts,
+            )
+            for violation in violations:
+                diagnostics.append(
+                    _failure_diagnostic(
+                        "runtime.backend-contract-invalid",
+                        f"{workflow_address}.{step_name}",
+                        violation,
+                    )
+                )
+
+        for step_name, step_state in normalized_result.steps.items():
+            if step_name not in execution_contract.steps:
+                diagnostics.append(
+                    _failure_diagnostic(
+                        "runtime.backend-contract-invalid",
+                        workflow_address,
+                        f"Workflow results reference unknown step '{step_name}'.",
+                    )
+                )
+                continue
+            if step_state.lifecycle == step_state.lifecycle.COMPLETED:
+                step_contract = execution_contract.steps[step_name]
+                if (
+                    step_state.outcome is not None
+                    and step_contract.state_observable
+                    and step_state.outcome.value not in step_contract.observable_outcomes
+                ):
+                    diagnostics.append(
+                        _failure_diagnostic(
+                            "runtime.backend-contract-invalid",
+                            f"{workflow_address}.{step_name}",
+                            (
+                                f"Completed step reports outcome {step_state.outcome.value!r} "
+                                f"outside execution contract domain "
+                                f"{step_contract.observable_outcomes!r}."
+                            ),
+                        )
+                    )
+
+        terminal_event_types = {
+            WorkflowStatus.SUCCEEDED: WorkflowHistoryEventType.WORKFLOW_COMPLETED,
+            WorkflowStatus.FAILED: WorkflowHistoryEventType.WORKFLOW_FAILED,
+            WorkflowStatus.CANCELLED: WorkflowHistoryEventType.WORKFLOW_CANCELLED,
+            WorkflowStatus.TIMED_OUT: WorkflowHistoryEventType.WORKFLOW_TIMED_OUT,
+        }
+        if normalized_history:
+            if normalized_history[0].event_type != WorkflowHistoryEventType.WORKFLOW_STARTED:
+                diagnostics.append(
+                    _failure_diagnostic(
+                        "runtime.backend-contract-invalid",
+                        workflow_address,
+                        "Workflow history must start with workflow_started.",
+                    )
+                )
+            for event in normalized_history:
+                if event.step_name and event.step_name not in execution_contract.steps:
+                    diagnostics.append(
+                        _failure_diagnostic(
+                            "runtime.backend-contract-invalid",
+                            workflow_address,
+                            f"Workflow history references unknown step '{event.step_name}'.",
+                        )
+                    )
+                if event.event_type == WorkflowHistoryEventType.BRANCH_CONVERGED:
+                    if event.join_step is None or event.join_step not in execution_contract.join_owners:
+                        diagnostics.append(
+                            _failure_diagnostic(
+                                "runtime.backend-contract-invalid",
+                                workflow_address,
+                                "branch_converged events must reference a known join_step.",
+                            )
+                        )
+            expected_terminal = terminal_event_types.get(normalized_result.workflow_status)
+            if expected_terminal is not None and normalized_history[-1].event_type != expected_terminal:
+                diagnostics.append(
+                    _failure_diagnostic(
+                        "runtime.backend-contract-invalid",
+                        workflow_address,
+                        (
+                            "Workflow terminal status "
+                            f"{normalized_result.workflow_status.value!r} requires final "
+                            f"history event {expected_terminal.value!r}."
+                        ),
+                    )
+                )
+            if normalized_result.workflow_status == WorkflowStatus.RUNNING and normalized_history[-1].event_type in terminal_event_types.values():
+                diagnostics.append(
+                    _failure_diagnostic(
+                        "runtime.backend-contract-invalid",
+                        workflow_address,
+                        "Running workflows may not end history with a terminal event.",
+                    )
+                )
+
+    return diagnostics
 
 
 def _provenance_diagnostics(
@@ -371,8 +719,16 @@ class RuntimeManager:
         self,
         scenario: Scenario,
         snapshot: RuntimeSnapshot | None = None,
+        *,
+        parameters: dict[str, object] | None = None,
+        profile: str | None = None,
     ) -> ExecutionPlan:
-        model = compile_runtime_model(scenario)
+        concrete_scenario = (
+            scenario
+            if isinstance(scenario, InstantiatedScenario)
+            else instantiate_scenario(scenario, parameters=parameters, profile=profile)
+        )
+        model = compile_runtime_model(concrete_scenario)
         effective_snapshot = snapshot if snapshot is not None else self._snapshot
         return plan(
             model,
@@ -577,6 +933,7 @@ class RuntimeManager:
         if self._target.orchestrator is not None:
             info["orchestrator"] = self._target.orchestrator.status()
             info["orchestration_results"] = self._target.orchestrator.results()
+            info["orchestration_history"] = self._target.orchestrator.history()
         if self._target.evaluator is not None:
             info["evaluator"] = self._target.evaluator.status()
             info["evaluation_results"] = self._target.evaluator.results()

@@ -103,7 +103,9 @@ nav:
     - ADR-009 Scenario Engine: adrs/adr-009-scenario-engine.md
     - ADR-010 SonarCloud: adrs/adr-010-sonarcloud-quality.md
     - ADR-011 Web UI: adrs/adr-011-web-ui.md
+    - ADR-020 Lightweight Formal Methods Policy: adrs/adr-020-lightweight-formal-methods-policy.md
   - Reference:
+    - Coding Standards: reference/coding-standards.md
     - Commands: reference/commands.md
     - API: reference/api.md
     - Configuration: reference/configuration.md

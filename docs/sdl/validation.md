@@ -2,6 +2,13 @@
 
 The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 22 named passes after Pydantic structural validation. It collects all errors rather than failing on the first, so authors see every issue at once.
 
+Under the repository's [coding standards](../reference/coding-standards.md),
+this layer is primarily an `FM1` and `FM2` surface. It is where static semantic
+invariants such as cross-reference resolution, ambiguity, uniqueness,
+reachability, and fail-closed graph constraints are enforced. Those invariants
+must stay aligned with the runtime compiler and planner contracts rather than
+becoming a validator-only interpretation of the SDL.
+
 ## Validation Passes
 
 ### OCR SDL passes (ported from Rust `Scenario::formalize()`)
@@ -36,11 +43,42 @@ The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 22 nam
 | `verify_workflows` | Workflow `start` and every referenced step must exist. `objective`/`retry` steps must reference declared objectives. Predicate refs must resolve to declared conditions/metrics/evaluations/TLOs/goals/objectives, and step-state refs must resolve to prior executable steps whose state is guaranteed to be known before the predicate runs. Workflow graphs must be acyclic and fully reachable from `start`. Parallel joins must be explicit barriers, every explicit branch path must converge on the declared join, branch-local state remains scoped until the join, and post-join predicates may inspect only branch steps guaranteed on every path within their branch before the join. |
 | `verify_variables` | Checks that full-value `${var}` placeholders reference declared variables. Structural validation of typed defaults and `allowed_values` still happens in the `Variable` model itself. |
 
-When a field contains an unresolved `${var}` placeholder, reference-oriented passes treat it as deferred rather than as a broken concrete reference. The validator still does not substitute values; it only checks that the placeholder names exist.
+When a field contains an unresolved `${var}` placeholder, reference-oriented
+passes treat it as deferred rather than as a broken concrete reference. The
+validator still does not substitute values; the later repo-owned instantiation
+phase performs substitution, type-checking, and concrete revalidation before
+runtime compilation.
 
 The SDL validator is intentionally structural/semantic. The SDL-native runtime
 compiler performs additional fail-closed binding checks, including node-local
 feature dependency enforcement and bound-resource reference resolution.
+
+## Static Semantic Invariants
+
+The validator is the main enforcement point for static SDL semantics, but not
+the only source of truth. The same rules must remain consistent with compiled
+runtime models and downstream runtime contracts.
+
+Typical invariant categories in this layer include:
+
+- cross-reference existence and disambiguation
+- uniqueness rules for names and bindings
+- acyclic dependency and workflow graphs
+- fail-closed resolution for ambiguous or missing references
+- reachability and convergence constraints
+- “guaranteed to be known before evaluation” visibility rules
+
+In coding-standards terms:
+
+- `FM1` covers static semantic rules such as ambiguity, uniqueness, and
+  fail-closed reference resolution
+- `FM2` covers graph/constraint rules such as reachability, visibility, and
+  consistency across validator and compiled/runtime forms
+
+Workflows are the clearest current example. Their syntax is described in YAML,
+but the important semantics live here and in the runtime architecture: which
+steps are reachable, which joins are legal, and which prior step states are
+knowable before a predicate executes.
 
 ## Advisories
 

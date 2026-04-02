@@ -2,6 +2,12 @@
 
 The parser (`aptl.core.sdl.parser`) transforms raw YAML into a validated `Scenario` object through three stages: key normalization, shorthand expansion, and model construction.
 
+This layer is intentionally about syntax, normalization, and structural model
+construction. It is usually an `FM0` surface under the repository's
+[coding standards](../reference/coding-standards.md): parser work normally
+needs ordinary tests, not state-machine modeling or solver-backed formal
+artifacts, unless it also introduces new semantic invariants above raw syntax.
+
 ## Key Normalization
 
 YAML field keys (Pydantic struct fields) are normalized to lowercase with hyphens converted to underscores:

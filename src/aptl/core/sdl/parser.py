@@ -299,8 +299,10 @@ def parse_sdl(
             e.path = path
             raise
         scenario._set_advisories(validator.warnings)
+        scenario._set_semantic_validated(True)
     else:
         scenario._set_advisories([])
+        scenario._set_semantic_validated(False)
 
     return scenario
 

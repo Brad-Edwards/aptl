@@ -1,0 +1,55 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "changed_addresses": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Changed Addresses",
+      "type": "array"
+    },
+    "diagnostics": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "domain": {
+      "title": "Domain",
+      "type": "string"
+    },
+    "operation_id": {
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "runtime-operation/v1",
+      "default": "runtime-operation/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "state": {
+      "title": "State",
+      "type": "string"
+    },
+    "submitted_at": {
+      "title": "Submitted At",
+      "type": "string"
+    },
+    "updated_at": {
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "operation_id",
+    "domain",
+    "state",
+    "submitted_at",
+    "updated_at"
+  ],
+  "title": "OperationStatusModel",
+  "type": "object"
+}

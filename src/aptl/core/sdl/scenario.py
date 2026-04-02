@@ -67,6 +67,7 @@ class Scenario(SDLModel):
     variables: dict[str, Variable] = Field(default_factory=dict)
 
     _advisories: list[str] = PrivateAttr(default_factory=list)
+    _semantic_validated: bool = PrivateAttr(default=False)
 
     @property
     def advisories(self) -> list[str]:
@@ -75,3 +76,37 @@ class Scenario(SDLModel):
 
     def _set_advisories(self, advisories: list[str]) -> None:
         self._advisories = list(advisories)
+
+    @property
+    def semantic_validated(self) -> bool:
+        """Whether full semantic validation has already run on this scenario."""
+        return self._semantic_validated
+
+    def _set_semantic_validated(self, validated: bool) -> None:
+        self._semantic_validated = bool(validated)
+
+
+class InstantiatedScenario(Scenario):
+    """Scenario with all `${var}` references resolved to concrete values."""
+
+    _instantiation_parameters: dict[str, object] = PrivateAttr(default_factory=dict)
+    _instantiation_profile: str | None = PrivateAttr(default=None)
+
+    @property
+    def instantiation_parameters(self) -> dict[str, object]:
+        """Concrete parameter values used during instantiation."""
+        return dict(self._instantiation_parameters)
+
+    @property
+    def instantiation_profile(self) -> str | None:
+        """Optional instantiation profile name."""
+        return self._instantiation_profile
+
+    def _set_instantiation_context(
+        self,
+        *,
+        parameters: dict[str, object],
+        profile: str | None,
+    ) -> None:
+        self._instantiation_parameters = dict(parameters)
+        self._instantiation_profile = profile

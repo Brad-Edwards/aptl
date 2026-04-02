@@ -42,7 +42,11 @@ Explore the codebase to determine whether the requirement described in the issue
 ### Step 4: Plan or Report
 
 - **If the requirement is NOT yet met**: Plan the implementation. Identify which files need to be created or modified, what tests to write, and what approach to take. Enter plan mode.
-- Your plans must respect the coding standards and formal methods classification levels.
+- Your plans must respect `docs/reference/coding-standards.md` as the source of truth for coding standards and formal-methods classification (`FM0`-`FM3`).
+- Every plan that changes semantic or stateful behavior must declare its classification (`FM0`, `FM1`, `FM2`, or `FM3`) and cite the required artifacts for that level.
+- `FM1+` plans must name the invariants being introduced or changed and include invariant-driven tests.
+- `FM3` plans must include an abstract state-machine model when the change introduces or materially changes branching, re-entry, concurrency barriers, or lifecycle/result-contract semantics.
+- Plans must also state when formal methods are not required, to avoid cargo-cult usage on purely structural changes.
 - You must add or update ADRs as appropriate.
 - Plans must include updating the changelog, readme, and docs as appropriate.
 - If designing code, remember to build off existing cross-cutting concerns, code, and patterns

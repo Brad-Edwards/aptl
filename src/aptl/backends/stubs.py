@@ -1,5 +1,7 @@
 """Stub runtime backends for compiler/planner testing."""
 
+from datetime import UTC, datetime
+
 from aptl.core.runtime.capabilities import (
     BackendManifest,
     EvaluatorCapabilities,
@@ -120,6 +122,7 @@ class StubOrchestrator:
         self._running = False
         self._startup_order: list[str] = []
         self._results: dict[str, dict[str, object]] = {}
+        self._history: dict[str, list[dict[str, object]]] = {}
 
     def start(
         self,
@@ -128,11 +131,17 @@ class StubOrchestrator:
     ) -> ApplyResult:
         entries = dict(snapshot.entries)
         results = dict(snapshot.orchestration_results)
+        history = {
+            workflow_address: list(events)
+            for workflow_address, events in snapshot.orchestration_history.items()
+        }
         changed_addresses: list[str] = []
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         for op in plan.operations:
             if op.action == ChangeAction.DELETE:
                 entries.pop(op.address, None)
                 results.pop(op.address, None)
+                history.pop(op.address, None)
                 changed_addresses.append(op.address)
                 continue
             status = "queued" if op.resource_type in {"event", "script", "story", "workflow"} else "bound"
@@ -146,29 +155,53 @@ class StubOrchestrator:
                 status=status,
             )
             if op.resource_type == "workflow":
-                control_steps = op.payload.get("control_steps", {})
-                results[op.address] = {
-                    "state-schema-version": op.payload.get(
-                        "state_schema_version",
-                        "workflow-step-state/v1",
-                    ),
-                    "steps": {
-                        step_name: {
-                            "lifecycle": "pending",
-                            "outcome": None,
-                            "attempts": 0,
-                        }
-                        for step_name in control_steps
-                    },
+                result_contract = op.payload.get("result_contract", {})
+                observable_steps = result_contract.get("observable_steps", {})
+                observable_steps = {
+                    step_name: {
+                        "lifecycle": "pending",
+                        "outcome": None,
+                        "attempts": 0,
+                    }
+                    for step_name, step_payload in observable_steps.items()
+                    if isinstance(step_payload, dict)
                 }
+                results[op.address] = {
+                    "state_schema_version": result_contract.get(
+                        "state_schema_version",
+                        op.payload.get("state_schema_version", "workflow-step-state/v1"),
+                    ),
+                    "workflow_status": "running",
+                    "run_id": f"{op.address}-run",
+                    "started_at": now,
+                    "updated_at": now,
+                    "terminal_reason": None,
+                    "steps": observable_steps,
+                }
+                history[op.address] = [
+                    {
+                        "event_type": "workflow_started",
+                        "timestamp": now,
+                        "step_name": op.payload.get("execution_contract", {}).get("start_step"),
+                        "branch_name": None,
+                        "join_step": None,
+                        "outcome": None,
+                        "details": {},
+                    }
+                ]
             if op.action != ChangeAction.UNCHANGED:
                 changed_addresses.append(op.address)
         self._running = bool(plan.resources)
         self._startup_order = list(plan.startup_order)
         self._results = results
+        self._history = history
         return ApplyResult(
             success=True,
-            snapshot=snapshot.with_entries(entries, orchestration_results=results),
+            snapshot=snapshot.with_entries(
+                entries,
+                orchestration_results=results,
+                orchestration_history=history,
+            ),
             changed_addresses=changed_addresses,
         )
 
@@ -181,6 +214,12 @@ class StubOrchestrator:
 
     def results(self) -> dict[str, dict[str, object]]:
         return dict(self._results)
+
+    def history(self) -> dict[str, list[dict[str, object]]]:
+        return {
+            workflow_address: list(events)
+            for workflow_address, events in self._history.items()
+        }
 
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         entries = {
@@ -196,9 +235,14 @@ class StubOrchestrator:
         self._running = False
         self._startup_order = []
         self._results = {}
+        self._history = {}
         return ApplyResult(
             success=True,
-            snapshot=snapshot.with_entries(entries, orchestration_results={}),
+            snapshot=snapshot.with_entries(
+                entries,
+                orchestration_results={},
+                orchestration_history={},
+            ),
             changed_addresses=removed,
         )
 

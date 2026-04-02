@@ -4,6 +4,19 @@ The APTL SDL is a YAML-based specification language for describing cyber range s
 
 The SDL describes *what the scenario and experiment mean* — not how to deploy them. A separate backend binding layer (not yet implemented) translates SDL specifications into concrete infrastructure (Docker Compose, Terraform, cloud APIs), and runtime adapters can evaluate SDL-declared conditions/objectives with concrete probes.
 
+The raw YAML document is only the entrypoint. APTL's semantic behavior is
+defined above that syntax layer through typed SDL models, semantic validation,
+and the runtime/compiler/planner contracts. The repository-wide policy for when
+to formalize those semantic layers lives in the
+[coding standards](../reference/coding-standards.md).
+
+Different SDL concerns also draw from different precedent families. OCR is the
+main source for the section surface, CACAO contributes objectives/workflows and
+variables, and the workflow/runtime semantics are further disciplined by mature
+control-flow systems such as Step Functions, Argo, and SCXML plus portable
+runtime-boundary patterns from systems such as Kubernetes and Temporal. The
+crosswalk lives in [Design Precedents](precedents.md).
+
 ## Stable IDs, Variable Values
 
 The SDL keeps its **symbol table** concrete at parse time. User-defined identifiers such as node keys, feature keys, account keys, relationship keys, entity keys, and other named mapping keys are part of the language structure and must be literal.

@@ -44,7 +44,11 @@ class Orchestrator(Protocol):
         ...
 
     def results(self) -> dict[str, dict[str, Any]]:
-        """Return most recent workflow execution state."""
+        """Return most recent workflow execution state envelope."""
+        ...
+
+    def history(self) -> dict[str, list[dict[str, Any]]]:
+        """Return workflow execution history events."""
         ...
 
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:

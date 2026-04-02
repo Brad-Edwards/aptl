@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "WorkflowStepStateModel": {
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "lifecycle": {
+          "title": "Lifecycle",
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        }
+      },
+      "required": [
+        "lifecycle",
+        "attempts"
+      ],
+      "title": "WorkflowStepStateModel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "started_at": {
+      "title": "Started At",
+      "type": "string"
+    },
+    "state_schema_version": {
+      "const": "workflow-step-state/v1",
+      "default": "workflow-step-state/v1",
+      "title": "State Schema Version",
+      "type": "string"
+    },
+    "steps": {
+      "additionalProperties": {
+        "$ref": "#/$defs/WorkflowStepStateModel"
+      },
+      "title": "Steps",
+      "type": "object"
+    },
+    "terminal_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Terminal Reason"
+    },
+    "updated_at": {
+      "title": "Updated At",
+      "type": "string"
+    },
+    "workflow_status": {
+      "title": "Workflow Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "workflow_status",
+    "run_id",
+    "started_at",
+    "updated_at"
+  ],
+  "title": "WorkflowExecutionStateModel",
+  "type": "object"
+}

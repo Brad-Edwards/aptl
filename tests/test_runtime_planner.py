@@ -5,6 +5,8 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+import pytest
+
 from aptl.backends.stubs import create_stub_manifest
 from aptl.core.runtime.capabilities import (
     BackendManifest,
@@ -17,7 +19,7 @@ from aptl.core.runtime.capabilities import (
 from aptl.core.runtime.compiler import compile_runtime_model
 from aptl.core.runtime.models import RuntimeDomain, RuntimeSnapshot, SnapshotEntry
 from aptl.core.runtime.planner import plan
-from aptl.core.sdl import parse_sdl
+from aptl.core.sdl import SDLInstantiationError, parse_sdl
 
 
 def _scenario(yaml_str: str):
@@ -966,10 +968,10 @@ nodes:
 
         codes = {diag.code for diag in execution_plan.diagnostics}
 
-        assert "provisioner.unsupported-os-family" in codes
-        assert not execution_plan.is_valid
+        assert "provisioner.unsupported-os-family" not in codes
+        assert execution_plan.is_valid
 
-    def test_variable_backed_os_allowed_values_must_be_valid_for_nodes_os(self):
+    def test_variable_backed_os_defaults_must_be_valid_for_nodes_os(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -979,7 +981,7 @@ nodes:
             ),
         )
 
-        execution_plan = plan(
+        with pytest.raises(SDLInstantiationError) as exc:
             compile_runtime_model(_scenario("""
 name: variable-os
 variables:
@@ -989,17 +991,10 @@ variables:
     allowed_values: [banana]
 nodes:
   vm: {type: vm, os: '${os_name}', resources: {ram: 1 gib, cpu: 1}}
-""")),
-            manifest,
-        )
+"""))
+        assert "nodes.vm.os" in str(exc.value)
 
-        codes = {diag.code for diag in execution_plan.diagnostics}
-
-        assert "provisioner.os-family-variable-domain-invalid" in codes
-        assert "provisioner.unsupported-os-family" not in codes
-        assert not execution_plan.is_valid
-
-    def test_variable_backed_os_without_allowed_values_defers_validation(self):
+    def test_variable_backed_os_without_allowed_values_uses_instantiated_default(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -1024,11 +1019,11 @@ nodes:
 
         codes = {diag.code for diag in execution_plan.diagnostics}
 
-        assert "provisioner.os-family-validation-deferred" in codes
+        assert "provisioner.os-family-validation-deferred" not in codes
         assert "provisioner.unsupported-os-family" not in codes
         assert execution_plan.is_valid
 
-    def test_variable_backed_os_with_undeclared_variable_fails_closed(self):
+    def test_variable_backed_os_with_undeclared_variable_fails_instantiation(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -1046,13 +1041,9 @@ nodes:
             skip_semantic_validation=True,
         )
 
-        execution_plan = plan(compile_runtime_model(scenario), manifest)
-
-        codes = {diag.code for diag in execution_plan.diagnostics}
-
-        assert "provisioner.os-family-variable-ref-unbound" in codes
-        assert "provisioner.os-family-validation-deferred" not in codes
-        assert not execution_plan.is_valid
+        with pytest.raises(SDLInstantiationError) as exc:
+            compile_runtime_model(scenario)
+        assert "missing_os" in str(exc.value)
 
     def test_variable_backed_counts_with_allowed_values_enforce_max_nodes(self):
         manifest = BackendManifest(
@@ -1083,10 +1074,10 @@ infrastructure:
 
         codes = {diag.code for diag in execution_plan.diagnostics}
 
-        assert "provisioner.max-total-nodes-exceeded" in codes
-        assert not execution_plan.is_valid
+        assert "provisioner.max-total-nodes-exceeded" not in codes
+        assert execution_plan.is_valid
 
-    def test_variable_backed_counts_allowed_values_must_be_valid_for_infrastructure_count(self):
+    def test_variable_backed_counts_defaults_must_be_valid_for_infrastructure_count(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -1097,7 +1088,7 @@ infrastructure:
             ),
         )
 
-        execution_plan = plan(
+        with pytest.raises(SDLInstantiationError) as exc:
             compile_runtime_model(_scenario("""
 name: variable-count
 variables:
@@ -1109,17 +1100,10 @@ nodes:
   vm: {type: vm, os: linux, resources: {ram: 1 gib, cpu: 1}}
 infrastructure:
   vm: ${node_count}
-""")),
-            manifest,
-        )
+"""))
+        assert "infrastructure.vm.count" in str(exc.value)
 
-        codes = {diag.code for diag in execution_plan.diagnostics}
-
-        assert "provisioner.count-variable-domain-invalid" in codes
-        assert "provisioner.max-total-nodes-exceeded" not in codes
-        assert not execution_plan.is_valid
-
-    def test_variable_backed_counts_without_allowed_values_defer_max_node_validation(self):
+    def test_variable_backed_counts_without_allowed_values_use_instantiated_default(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -1147,11 +1131,11 @@ infrastructure:
 
         codes = {diag.code for diag in execution_plan.diagnostics}
 
-        assert "provisioner.max-total-nodes-validation-deferred" in codes
-        assert "provisioner.max-total-nodes-exceeded" not in codes
-        assert execution_plan.is_valid
+        assert "provisioner.max-total-nodes-validation-deferred" not in codes
+        assert "provisioner.max-total-nodes-exceeded" in codes
+        assert not execution_plan.is_valid
 
-    def test_variable_backed_counts_with_undeclared_variable_fail_closed(self):
+    def test_variable_backed_counts_with_undeclared_variable_fail_instantiation(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -1172,13 +1156,9 @@ infrastructure:
             skip_semantic_validation=True,
         )
 
-        execution_plan = plan(compile_runtime_model(scenario), manifest)
-
-        codes = {diag.code for diag in execution_plan.diagnostics}
-
-        assert "provisioner.count-variable-ref-unbound" in codes
-        assert "provisioner.max-total-nodes-validation-deferred" not in codes
-        assert not execution_plan.is_valid
+        with pytest.raises(SDLInstantiationError) as exc:
+            compile_runtime_model(scenario)
+        assert "missing_count" in str(exc.value)
 
     def test_dependency_ordering_across_domain_plans(self):
         execution_plan = plan(

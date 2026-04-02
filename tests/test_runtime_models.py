@@ -195,13 +195,65 @@ workflows:
         assert workflow.referenced_objective_addresses == ("evaluation.objective.initial",)
         assert workflow.start_step == "start"
         assert workflow.control_steps["start"].on_success == "branch"
+        assert workflow.result_contract.observable_steps["start"].observable_outcomes == (
+            "succeeded",
+            "failed",
+        )
+        assert workflow.control_steps["start"].state_contract.observable_outcomes == (
+            "succeeded",
+            "failed",
+        )
         assert workflow.control_steps["branch"].step_type == "decision"
+        assert not workflow.control_steps["branch"].state_contract.state_observable
         assert workflow.control_edges["start"] == ("branch",)
         assert workflow.control_edges["branch"] == ("end",)
         assert workflow.step_condition_addresses["branch"] == ("evaluation.condition.vm.health",)
         assert "evaluation.condition.vm.health" in workflow.step_predicate_addresses["branch"]
         assert workflow.ordering_dependencies == ()
         assert "evaluation.objective.initial" in workflow.refresh_dependencies
+
+    def test_objective_window_step_outside_window_workflows_emits_diagnostic(self):
+        model = compile_runtime_model(
+            parse_sdl(
+                textwrap.dedent("""
+name: broken-window
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health: {command: /bin/true, interval: 15}
+entities:
+  blue: {role: blue}
+objectives:
+  initial:
+    entity: blue
+    success: {conditions: [health]}
+    window:
+      workflows: [flow]
+      steps: [other.finish]
+workflows:
+  flow:
+    start: finish
+    steps:
+      finish: {type: end}
+  other:
+    start: finish
+    steps:
+      finish: {type: end}
+"""),
+                skip_semantic_validation=True,
+            )
+        )
+
+        diagnostics = {(diag.code, diag.address) for diag in model.diagnostics}
+        assert (
+            "evaluation.workflow-step-ref-workflow-outside-window",
+            "evaluation.objective.initial",
+        ) in diagnostics
 
     def test_missing_node_bindings_emit_diagnostics_without_crashing(self):
         model = compile_runtime_model(
@@ -443,6 +495,18 @@ workflows:
         assert workflow.control_edges["fanout"] == ("left-branch", "right-branch", "recover-step")
         assert workflow.join_owners == {"joined": "fanout"}
         assert workflow.control_steps["joined"].owning_parallel_step == "fanout"
+        assert set(workflow.result_contract.observable_steps) == {
+            "fanout",
+            "left-branch",
+            "right-branch",
+            "recover-step",
+        }
+        assert workflow.control_steps["fanout"].state_contract.observable_outcomes == (
+            "succeeded",
+            "failed",
+        )
+        assert workflow.control_steps["fanout"].state_contract.fixed_attempts == 1
+        assert not workflow.control_steps["joined"].state_contract.state_observable
         predicate = workflow.control_steps["branch"].predicate
         assert predicate is not None
         assert predicate.step_state_predicates == (

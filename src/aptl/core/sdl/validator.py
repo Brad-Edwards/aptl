@@ -16,7 +16,7 @@ from aptl.core.sdl._base import extract_variable_name, is_variable_ref
 from aptl.core.sdl.entities import flatten_entities
 from aptl.core.sdl.infrastructure import SimpleProperties
 from aptl.core.sdl.nodes import MAX_NODE_NAME_LENGTH, NodeType
-from aptl.core.sdl.orchestration import WorkflowStepType
+from aptl.core.sdl.orchestration import WorkflowPredicate, WorkflowStepType
 from aptl.core.sdl.scenario import Scenario
 from aptl.core.sdl.scoring import MetricType
 
@@ -777,7 +777,7 @@ class SemanticValidator:
         self,
         workflow_name: str,
         step_name: str,
-        predicate: "WorkflowPredicate",
+        predicate: WorkflowPredicate,
         workflow_steps: dict,
     ) -> None:
         """Validate all references within a workflow predicate."""

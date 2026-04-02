@@ -1045,6 +1045,10 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 edges.append(step.then_step)
             if step.else_step:
                 edges.append(step.else_step)
+            if step.body:
+                edges.append(step.body)
+            if step.on_error:
+                edges.append(step.on_error)
             edges.extend(step.branches)
             step_graph[step_name] = _dedupe(edges)
 

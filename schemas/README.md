@@ -11,4 +11,6 @@ They are the machine-readable source of truth for:
 - runtime snapshots
 - workflow result envelopes
 - workflow history streams
+- evaluation result envelopes
+- evaluation history streams
 - operation receipts and statuses

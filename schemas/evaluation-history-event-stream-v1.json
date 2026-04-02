@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "items": {
+    "additionalProperties": false,
+    "properties": {
+      "detail": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Detail"
+      },
+      "details": {
+        "additionalProperties": true,
+        "title": "Details",
+        "type": "object"
+      },
+      "event_type": {
+        "title": "Event Type",
+        "type": "string"
+      },
+      "evidence_refs": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Evidence Refs",
+        "type": "array"
+      },
+      "max_score": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Max Score"
+      },
+      "passed": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Passed"
+      },
+      "score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Score"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      },
+      "timestamp": {
+        "title": "Timestamp",
+        "type": "string"
+      }
+    },
+    "required": [
+      "event_type",
+      "timestamp",
+      "status"
+    ],
+    "title": "EvaluationHistoryEventModel",
+    "type": "object"
+  },
+  "title": "EvaluationHistoryEventStream",
+  "type": "array"
+}

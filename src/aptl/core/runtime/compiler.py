@@ -17,6 +17,8 @@ from aptl.core.runtime.models import (
     ConditionBinding,
     ContentPlacement,
     Diagnostic,
+    EvaluationExecutionContract,
+    EvaluationResultContract,
     EventRuntime,
     EvaluationRuntime,
     FeatureBinding,
@@ -149,6 +151,46 @@ def _resource_address_for_node(scenario: Scenario, node_name: str) -> str:
     if node is not None and node.type == NodeType.SWITCH:
         return _network_address(node_name)
     return _node_address(node_name)
+
+
+def _evaluation_contracts(
+    resource_type: str,
+    spec: dict[str, Any] | None = None,
+) -> tuple[EvaluationResultContract, EvaluationExecutionContract]:
+    payload = spec or {}
+    if resource_type == "metric":
+        max_score_raw = payload.get("max-score", payload.get("max_score"))
+        fixed_max_score = (
+            max_score_raw
+            if isinstance(max_score_raw, int) and not isinstance(max_score_raw, bool)
+            else None
+        )
+        return (
+            EvaluationResultContract(
+                resource_type=resource_type,
+                supports_score=True,
+                fixed_max_score=fixed_max_score,
+            ),
+            EvaluationExecutionContract(resource_type=resource_type),
+        )
+    if resource_type in {
+        "condition-binding",
+        "evaluation",
+        "tlo",
+        "goal",
+        "objective",
+    }:
+        return (
+            EvaluationResultContract(
+                resource_type=resource_type,
+                supports_passed=True,
+            ),
+            EvaluationExecutionContract(resource_type=resource_type),
+        )
+    return (
+        EvaluationResultContract(resource_type=resource_type),
+        EvaluationExecutionContract(resource_type=resource_type),
+    )
 
 
 def _resolve_binding_ref(
@@ -542,6 +584,9 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                 )
                 continue
             address = _condition_binding_address(node_name, condition_name)
+            result_contract, execution_contract = _evaluation_contracts(
+                "condition-binding"
+            )
             condition_bindings[address] = ConditionBinding(
                 address=address,
                 name=condition_name,
@@ -558,6 +603,8 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                     },
                     "template": template.spec,
                 },
+                result_contract=result_contract,
+                execution_contract=execution_contract,
             )
 
     injects = {
@@ -774,6 +821,10 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                 binding_label="condition",
             )
             diagnostics.extend(metric_diagnostics)
+        result_contract, execution_contract = _evaluation_contracts(
+            "metric",
+            metric_spec,
+        )
         metrics[metric_address] = MetricRuntime(
             address=metric_address,
             name=name,
@@ -782,6 +833,8 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             ordering_dependencies=condition_addresses,
             refresh_dependencies=condition_addresses,
             spec=metric_spec,
+            result_contract=result_contract,
+            execution_contract=execution_contract,
         )
 
     evaluations = {}
@@ -797,6 +850,7 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             resource_label="metric",
         )
         diagnostics.extend(evaluation_diagnostics)
+        result_contract, execution_contract = _evaluation_contracts("evaluation")
         evaluations[evaluation_address] = EvaluationRuntime(
             address=evaluation_address,
             name=name,
@@ -804,6 +858,8 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             ordering_dependencies=metric_addresses,
             refresh_dependencies=metric_addresses,
             spec=_dump(evaluation),
+            result_contract=result_contract,
+            execution_contract=execution_contract,
         )
 
     tlos = {}
@@ -820,6 +876,7 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
         )
         diagnostics.extend(tlo_diagnostics)
         evaluation_address = evaluation_addresses[0] if evaluation_addresses else ""
+        result_contract, execution_contract = _evaluation_contracts("tlo")
         tlos[tlo_address] = TLORuntime(
             address=tlo_address,
             name=name,
@@ -827,6 +884,8 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             ordering_dependencies=evaluation_addresses,
             refresh_dependencies=evaluation_addresses,
             spec=_dump(tlo),
+            result_contract=result_contract,
+            execution_contract=execution_contract,
         )
 
     goals = {}
@@ -842,6 +901,7 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             resource_label="TLO",
         )
         diagnostics.extend(goal_diagnostics)
+        result_contract, execution_contract = _evaluation_contracts("goal")
         goals[goal_address] = GoalRuntime(
             address=goal_address,
             name=name,
@@ -849,6 +909,8 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             ordering_dependencies=tlo_addresses,
             refresh_dependencies=tlo_addresses,
             spec=_dump(goal),
+            result_contract=result_contract,
+            execution_contract=execution_contract,
         )
 
     objectives = {}
@@ -1108,6 +1170,7 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                 *window_step_workflow_addresses,
             ]
         )
+        result_contract, execution_contract = _evaluation_contracts("objective")
         objectives[objective_address] = ObjectiveRuntime(
             address=objective_address,
             name=name,
@@ -1125,6 +1188,8 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             ordering_dependencies=ordering_dependencies,
             refresh_dependencies=refresh_dependencies,
             spec=_dump(objective),
+            result_contract=result_contract,
+            execution_contract=execution_contract,
         )
 
     workflows = {}

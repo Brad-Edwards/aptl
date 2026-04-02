@@ -7,6 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from aptl.core.runtime.models import (
+    EVALUATION_STATE_SCHEMA_VERSION,
     OPERATION_SCHEMA_VERSION,
     RUNTIME_SNAPSHOT_SCHEMA_VERSION,
     WORKFLOW_STATE_SCHEMA_VERSION,
@@ -52,6 +53,34 @@ class WorkflowHistoryEventModel(ContractModel):
     details: dict[str, Any] = Field(default_factory=dict)
 
 
+class EvaluationResultStateModel(ContractModel):
+    state_schema_version: Literal[EVALUATION_STATE_SCHEMA_VERSION] = (
+        EVALUATION_STATE_SCHEMA_VERSION
+    )
+    resource_type: str
+    run_id: str
+    status: str
+    observed_at: str
+    updated_at: str
+    passed: bool | None = None
+    score: float | int | None = None
+    max_score: int | None = None
+    detail: str | None = None
+    evidence_refs: list[str] = Field(default_factory=list)
+
+
+class EvaluationHistoryEventModel(ContractModel):
+    event_type: str
+    timestamp: str
+    status: str
+    passed: bool | None = None
+    score: float | int | None = None
+    max_score: int | None = None
+    detail: str | None = None
+    evidence_refs: list[str] = Field(default_factory=list)
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
 class PlanOperationModel(ContractModel):
     action: str
     address: str
@@ -93,7 +122,8 @@ class RuntimeSnapshotEnvelopeModel(ContractModel):
     entries: dict[str, SnapshotEntryModel] = Field(default_factory=dict)
     orchestration_results: dict[str, WorkflowExecutionStateModel] = Field(default_factory=dict)
     orchestration_history: dict[str, list[WorkflowHistoryEventModel]] = Field(default_factory=dict)
-    evaluation_results: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    evaluation_results: dict[str, EvaluationResultStateModel] = Field(default_factory=dict)
+    evaluation_history: dict[str, list[EvaluationHistoryEventModel]] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -174,6 +204,13 @@ def schema_bundle() -> dict[str, dict[str, Any]]:
             "title": "WorkflowHistoryEventStream",
             "type": "array",
             "items": WorkflowHistoryEventModel.model_json_schema(),
+        },
+        "evaluation-result-envelope-v1": EvaluationResultStateModel.model_json_schema(),
+        "evaluation-history-event-stream-v1": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "title": "EvaluationHistoryEventStream",
+            "type": "array",
+            "items": EvaluationHistoryEventModel.model_json_schema(),
         },
         "operation-receipt-v1": OperationReceiptModel.model_json_schema(),
         "operation-status-v1": OperationStatusModel.model_json_schema(),

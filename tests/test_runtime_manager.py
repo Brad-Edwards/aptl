@@ -14,6 +14,7 @@ from aptl.core.runtime.manager import RuntimeManager
 from aptl.core.runtime.models import (
     ApplyResult,
     ChangeAction,
+    EVALUATION_STATE_SCHEMA_VERSION,
     RuntimeDomain,
     RuntimeSnapshot,
     SnapshotEntry,
@@ -473,26 +474,75 @@ class RecordingEvaluator:
         self.name = name
         self.running = False
         self._results: dict[str, dict[str, object]] = {}
+        self._history: dict[str, list[dict[str, object]]] = {}
 
     def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
         self.calls.append(f"{self.name}-start")
         self.running = True
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         next_snapshot = _apply_ops(
             snapshot,
             RuntimeDomain.EVALUATION,
             plan.operations,
             status="running",
         )
-        self._results = {
-            op.address: {"passed": True}
-            for op in plan.operations
-            if op.action != ChangeAction.DELETE
-        }
+        self._results = {}
+        self._history = {}
+        for op in plan.operations:
+            if op.action == ChangeAction.DELETE:
+                continue
+            result_contract = op.payload.get("result_contract", {})
+            resource_type = str(result_contract.get("resource_type", op.resource_type))
+            result_payload: dict[str, object] = {
+                "state_schema_version": result_contract.get(
+                    "state_schema_version",
+                    EVALUATION_STATE_SCHEMA_VERSION,
+                ),
+                "resource_type": resource_type,
+                "run_id": "evaluation-run",
+                "status": "ready",
+                "observed_at": now,
+                "updated_at": now,
+                "detail": f"recorded result for {op.address}",
+                "evidence_refs": [],
+            }
+            if result_contract.get("supports_score"):
+                fixed_max_score = result_contract.get("fixed_max_score")
+                result_payload["score"] = fixed_max_score if fixed_max_score is not None else 100
+                result_payload["max_score"] = fixed_max_score if fixed_max_score is not None else 100
+            if result_contract.get("supports_passed"):
+                result_payload["passed"] = True
+            self._results[op.address] = result_payload
+            self._history[op.address] = [
+                {
+                    "event_type": "evaluation_started",
+                    "timestamp": now,
+                    "status": "running",
+                    "passed": None,
+                    "score": None,
+                    "max_score": None,
+                    "detail": None,
+                    "evidence_refs": [],
+                    "details": {},
+                },
+                {
+                    "event_type": "evaluation_ready",
+                    "timestamp": now,
+                    "status": "ready",
+                    "passed": result_payload.get("passed"),
+                    "score": result_payload.get("score"),
+                    "max_score": result_payload.get("max_score"),
+                    "detail": result_payload.get("detail"),
+                    "evidence_refs": [],
+                    "details": {},
+                },
+            ]
         return ApplyResult(
             success=True,
             snapshot=next_snapshot.with_entries(
                 next_snapshot.entries,
                 evaluation_results=self._results,
+                evaluation_history=self._history,
             ),
         )
 
@@ -502,10 +552,17 @@ class RecordingEvaluator:
     def results(self) -> dict[str, dict[str, object]]:
         return dict(self._results)
 
+    def history(self) -> dict[str, list[dict[str, object]]]:
+        return {
+            address: list(events)
+            for address, events in self._history.items()
+        }
+
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         self.calls.append(f"{self.name}-stop")
         self.running = False
         self._results = {}
+        self._history = {}
         entries = {
             address: entry
             for address, entry in snapshot.entries.items()
@@ -513,7 +570,11 @@ class RecordingEvaluator:
         }
         return ApplyResult(
             success=True,
-            snapshot=snapshot.with_entries(entries, evaluation_results={}),
+            snapshot=snapshot.with_entries(
+                entries,
+                evaluation_results={},
+                evaluation_history={},
+            ),
         )
 
 
@@ -531,7 +592,87 @@ class FailingStartEvaluator(RecordingEvaluator):
             success=False,
             snapshot=next_snapshot.with_entries(
                 next_snapshot.entries,
-                evaluation_results={"partial": {"passed": False}},
+                evaluation_results={
+                    "partial": {
+                        "state_schema_version": EVALUATION_STATE_SCHEMA_VERSION,
+                        "resource_type": "objective",
+                        "run_id": "evaluation-run",
+                        "status": "failed",
+                        "observed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                        "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                        "passed": None,
+                        "score": None,
+                        "max_score": None,
+                        "detail": "partial",
+                        "evidence_refs": [],
+                    }
+                },
+            ),
+        )
+
+
+class InvalidEvaluatorSchemaVersionEvaluator(RecordingEvaluator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        address = next(iter(self._results))
+        self._results[address]["state_schema_version"] = "evaluation-result-state/v999"
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                evaluation_results=self._results,
+                evaluation_history=self._history,
+            ),
+        )
+
+
+class MissingEvaluatorFieldsEvaluator(RecordingEvaluator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        address = next(iter(self._results))
+        self._results[address].pop("run_id", None)
+        self._results[address].pop("status", None)
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                evaluation_results=self._results,
+                evaluation_history=self._history,
+            ),
+        )
+
+
+class InvalidEvaluatorReadyPayloadEvaluator(RecordingEvaluator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        metric_address = next(
+            op.address
+            for op in plan.operations
+            if op.action != ChangeAction.DELETE and op.resource_type == "metric"
+        )
+        self._results[metric_address]["score"] = None
+        self._results[metric_address]["max_score"] = None
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                evaluation_results=self._results,
+                evaluation_history=self._history,
+            ),
+        )
+
+
+class MissingEvaluatorHistoryEvaluator(RecordingEvaluator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        address = next(iter(self._history))
+        self._history.pop(address, None)
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                evaluation_results=self._results,
+                evaluation_history=self._history,
             ),
         )
 
@@ -984,6 +1125,78 @@ class TestRuntimeManager:
         assert result.success
         assert manager.snapshot.for_domain(RuntimeDomain.ORCHESTRATION)
 
+    def test_apply_fails_on_invalid_evaluation_result_schema_version(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=InvalidEvaluatorSchemaVersionEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_missing_evaluation_result_fields(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=MissingEvaluatorFieldsEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_invalid_ready_evaluation_payload(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=InvalidEvaluatorReadyPayloadEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_missing_evaluation_history(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=MissingEvaluatorHistoryEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
     def test_status_exposes_plain_data_workflow_results(self):
         target = RuntimeTarget(
             name="recording",
@@ -1006,6 +1219,33 @@ class TestRuntimeManager:
         assert isinstance(workflow_payload["steps"], dict)
         assert workflow_payload["steps"]["run"]["lifecycle"] == "pending"
         json.dumps(workflow_results)
+
+    def test_status_exposes_plain_data_evaluation_results_and_history(self):
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner([]),
+            orchestrator=RecordingOrchestrator([]),
+            evaluator=RecordingEvaluator([], "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert result.success
+        status = manager.status()
+        evaluation_results = status["evaluation_results"]
+        evaluation_history = status["evaluation_history"]
+        assert isinstance(evaluation_results, dict)
+        assert isinstance(evaluation_history, dict)
+        metric_payload = evaluation_results["evaluation.metric.uptime"]
+        assert metric_payload["state_schema_version"] == EVALUATION_STATE_SCHEMA_VERSION
+        assert metric_payload["resource_type"] == "metric"
+        assert metric_payload["status"] == "ready"
+        assert metric_payload["score"] == 100
+        assert evaluation_history["evaluation.metric.uptime"][-1]["event_type"] == "evaluation_ready"
+        json.dumps(evaluation_results)
+        json.dumps(evaluation_history)
 
     def test_stub_runtime_emits_plain_data_workflow_results(self):
         manager = RuntimeManager(create_stub_target())

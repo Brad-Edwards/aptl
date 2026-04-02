@@ -14,6 +14,7 @@ from aptl.core.runtime.models import (
     ApplyResult,
     ChangeAction,
     Diagnostic,
+    EVALUATION_STATE_SCHEMA_VERSION,
     EvaluationPlan,
     OrchestrationPlan,
     ProvisioningPlan,
@@ -254,6 +255,7 @@ class StubEvaluator:
         self._running = False
         self._startup_order: list[str] = []
         self._results: dict[str, dict[str, object]] = {}
+        self._history: dict[str, list[dict[str, object]]] = {}
 
     def start(
         self,
@@ -263,10 +265,16 @@ class StubEvaluator:
         entries = dict(snapshot.entries)
         changed_addresses: list[str] = []
         results = dict(snapshot.evaluation_results)
+        history = {
+            address: list(events)
+            for address, events in snapshot.evaluation_history.items()
+        }
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         for op in plan.operations:
             if op.action == ChangeAction.DELETE:
                 entries.pop(op.address, None)
                 results.pop(op.address, None)
+                history.pop(op.address, None)
                 changed_addresses.append(op.address)
                 continue
             entries[op.address] = SnapshotEntry(
@@ -278,20 +286,64 @@ class StubEvaluator:
                 refresh_dependencies=op.refresh_dependencies,
                 status="evaluating",
             )
-            results[op.address] = {
-                "passed": True,
+            result_contract = op.payload.get("result_contract", {})
+            resource_type = str(result_contract.get("resource_type", op.resource_type))
+            result_payload: dict[str, object] = {
+                "state_schema_version": result_contract.get(
+                    "state_schema_version",
+                    EVALUATION_STATE_SCHEMA_VERSION,
+                ),
+                "resource_type": resource_type,
+                "run_id": "evaluation-run",
+                "status": "ready",
+                "observed_at": now,
+                "updated_at": now,
                 "detail": f"stub result for {op.address}",
+                "evidence_refs": [],
             }
+            if result_contract.get("supports_score"):
+                fixed_max_score = result_contract.get("fixed_max_score")
+                result_payload["score"] = fixed_max_score if fixed_max_score is not None else 100
+                result_payload["max_score"] = fixed_max_score if fixed_max_score is not None else 100
+            if result_contract.get("supports_passed"):
+                result_payload["passed"] = True
+            results[op.address] = result_payload
+            history[op.address] = [
+                {
+                    "event_type": "evaluation_started",
+                    "timestamp": now,
+                    "status": "running",
+                    "passed": None,
+                    "score": None,
+                    "max_score": None,
+                    "detail": None,
+                    "evidence_refs": [],
+                    "details": {},
+                },
+                {
+                    "event_type": "evaluation_ready",
+                    "timestamp": now,
+                    "status": "ready",
+                    "passed": result_payload.get("passed"),
+                    "score": result_payload.get("score"),
+                    "max_score": result_payload.get("max_score"),
+                    "detail": result_payload.get("detail"),
+                    "evidence_refs": list(result_payload.get("evidence_refs", [])),
+                    "details": {},
+                },
+            ]
             if op.action != ChangeAction.UNCHANGED:
                 changed_addresses.append(op.address)
         self._running = bool(plan.resources)
         self._startup_order = list(plan.startup_order)
         self._results = results
+        self._history = history
         return ApplyResult(
             success=True,
             snapshot=snapshot.with_entries(
                 entries,
                 evaluation_results=results,
+                evaluation_history=history,
             ),
             changed_addresses=changed_addresses,
         )
@@ -305,6 +357,12 @@ class StubEvaluator:
 
     def results(self) -> dict[str, dict[str, object]]:
         return dict(self._results)
+
+    def history(self) -> dict[str, list[dict[str, object]]]:
+        return {
+            address: list(events)
+            for address, events in self._history.items()
+        }
 
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         entries = {
@@ -320,9 +378,14 @@ class StubEvaluator:
         self._running = False
         self._startup_order = []
         self._results = {}
+        self._history = {}
         return ApplyResult(
             success=True,
-            snapshot=snapshot.with_entries(entries, evaluation_results={}),
+            snapshot=snapshot.with_entries(
+                entries,
+                evaluation_results={},
+                evaluation_history={},
+            ),
             changed_addresses=removed,
         )
 

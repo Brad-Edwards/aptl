@@ -1,5 +1,190 @@
 {
   "$defs": {
+    "EvaluationHistoryEventModel": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "event_type": {
+          "title": "Event Type",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "max_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Score"
+        },
+        "passed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Passed"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_type",
+        "timestamp",
+        "status"
+      ],
+      "title": "EvaluationHistoryEventModel",
+      "type": "object"
+    },
+    "EvaluationResultStateModel": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "max_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Score"
+        },
+        "observed_at": {
+          "title": "Observed At",
+          "type": "string"
+        },
+        "passed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Passed"
+        },
+        "resource_type": {
+          "title": "Resource Type",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "state_schema_version": {
+          "const": "evaluation-result-state/v1",
+          "default": "evaluation-result-state/v1",
+          "title": "State Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "run_id",
+        "status",
+        "observed_at",
+        "updated_at"
+      ],
+      "title": "EvaluationResultStateModel",
+      "type": "object"
+    },
     "SnapshotEntryModel": {
       "additionalProperties": false,
       "properties": {
@@ -215,10 +400,19 @@
       "title": "Entries",
       "type": "object"
     },
+    "evaluation_history": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/EvaluationHistoryEventModel"
+        },
+        "type": "array"
+      },
+      "title": "Evaluation History",
+      "type": "object"
+    },
     "evaluation_results": {
       "additionalProperties": {
-        "additionalProperties": true,
-        "type": "object"
+        "$ref": "#/$defs/EvaluationResultStateModel"
       },
       "title": "Evaluation Results",
       "type": "object"

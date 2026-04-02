@@ -6,7 +6,10 @@ This directory holds the formal artifacts for portable runtime result contracts.
 
 - typed workflow execution envelopes
 - typed workflow step execution state
+- typed evaluator result envelopes
+- typed evaluator history streams
 - manager-side validation of backend workflow results
+- manager-side validation of backend evaluator results
 
 ## Implementation Mapping
 
@@ -19,3 +22,4 @@ This directory holds the formal artifacts for portable runtime result contracts.
 
 - `tests/test_runtime_manager.py`
 - `tests/test_runtime_models.py`
+- `tests/test_runtime_contracts.py`

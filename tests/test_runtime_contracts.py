@@ -27,6 +27,7 @@ def test_closed_world_contract_models_for_runtime_envelopes():
     generated = schema_bundle()
 
     assert generated["workflow-result-envelope-v1"]["additionalProperties"] is False
+    assert generated["evaluation-result-envelope-v1"]["additionalProperties"] is False
     assert generated["operation-receipt-v1"]["additionalProperties"] is False
     assert generated["operation-status-v1"]["additionalProperties"] is False
     assert generated["runtime-snapshot-v1"]["additionalProperties"] is False

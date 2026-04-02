@@ -133,6 +133,9 @@ injects:
             "provision.node.vm",
             "orchestration.inject.phish",
         )
+        assert condition.result_contract.resource_type == "condition-binding"
+        assert condition.result_contract.supports_passed is True
+        assert condition.execution_contract.requires_start_event is True
 
     def test_objective_windows_and_workflows_resolve_refresh_dependencies(self):
         model = compile_runtime_model(_scenario("""
@@ -220,6 +223,9 @@ workflows:
         assert "evaluation.condition.vm.health" in workflow.step_predicate_addresses["branch"]
         assert workflow.ordering_dependencies == ()
         assert "evaluation.objective.initial" in workflow.refresh_dependencies
+        assert model.metrics["evaluation.metric.uptime"].result_contract.supports_score is True
+        assert model.metrics["evaluation.metric.uptime"].result_contract.fixed_max_score == 100
+        assert model.objectives["evaluation.objective.initial"].result_contract.supports_passed is True
 
     def test_objective_window_step_outside_window_workflows_emits_diagnostic(self):
         model = compile_runtime_model(

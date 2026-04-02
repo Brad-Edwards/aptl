@@ -20,6 +20,12 @@ here come from mature workflow and distributed-runtime systems:
 - Kubernetes, Temporal, and OpenC2 for portable execution-state and
   language-neutral contract boundaries
 
+Maintainer note: the focused follow-on implementation plans for evaluator
+contract symmetry, backend conformance, secure remote control, module/import
+composition, and workflow maturity live under `notes/runtime-evolution/` in the
+repository. This document stays scoped to settled architecture and current
+contracts.
+
 ## Package Boundary
 
 ```text
@@ -235,6 +241,12 @@ This mirrors the contract style used by mature multi-runtime systems:
 
 APTL currently applies that pattern first to workflow results because workflow
 control is the sharpest semantic surface in the SDL/runtime stack.
+
+The evaluator side is now following the same contract discipline: compiled
+evaluation result/execution contracts are attached to observable evaluation
+resources, backends report plain-data evaluator result envelopes and history
+streams, and the manager validates those payloads against compiled contracts
+instead of accepting ad hoc evaluation dictionaries.
 
 Objective `window` refs remain declarative scope/refresh inputs. They can force
 objective refresh when referenced orchestration state changes, but they do not

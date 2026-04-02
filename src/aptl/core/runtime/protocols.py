@@ -75,6 +75,10 @@ class Evaluator(Protocol):
         """Return most recent evaluation results."""
         ...
 
+    def history(self) -> dict[str, list[dict[str, Any]]]:
+        """Return evaluation history events."""
+        ...
+
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         """Stop evaluation and clear evaluation state."""
         ...

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import textwrap
 
+from aptl.core.runtime.capabilities import (
+    WorkflowFeature,
+    WorkflowStatePredicateFeature,
+)
 from aptl.core.runtime.compiler import compile_runtime_model
 from aptl.core.sdl import parse_sdl
 
@@ -40,6 +44,58 @@ features:
         }
         assert model.feature_bindings["provision.feature.vm1.nginx"].node_name == "vm1"
         assert model.feature_bindings["provision.feature.vm2.nginx"].node_name == "vm2"
+
+    def test_feature_binding_tracks_same_node_dependencies(self):
+        model = compile_runtime_model(_scenario("""
+name: feature-deps
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    features: {nginx: web, php-config: web}
+    roles: {web: appuser}
+features:
+  nginx: {type: service, source: nginx}
+  php-config: {type: configuration, source: php-config, dependencies: [nginx]}
+"""))
+
+        binding = model.feature_bindings["provision.feature.vm.php-config"]
+
+        assert binding.ordering_dependencies == (
+            "provision.node.vm",
+            "provision.feature.vm.nginx",
+        )
+        assert binding.refresh_dependencies == (
+            "provision.node.vm",
+            "provision.feature.vm.nginx",
+        )
+        assert not model.diagnostics
+
+    def test_missing_same_node_feature_dependency_emits_diagnostic(self):
+        model = compile_runtime_model(_scenario("""
+name: feature-deps
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    features: {php-config: web}
+    roles: {web: appuser}
+features:
+  nginx: {type: service, source: nginx}
+  php-config: {type: configuration, source: php-config, dependencies: [nginx]}
+"""))
+
+        binding = model.feature_bindings["provision.feature.vm.php-config"]
+        diagnostics = {(diag.code, diag.address) for diag in model.diagnostics}
+
+        assert (
+            "provisioning.feature-dependency-binding-missing",
+            "provision.feature.vm.php-config",
+        ) in diagnostics
+        assert binding.ordering_dependencies == ("provision.node.vm",)
+        assert binding.refresh_dependencies == ("provision.node.vm",)
 
     def test_condition_and_inject_resources_preserve_context(self):
         model = compile_runtime_model(_scenario("""
@@ -114,9 +170,9 @@ workflows:
   flow:
     start: start
     steps:
-      start: {type: objective, objective: initial, next: branch}
+      start: {type: objective, objective: initial, on-success: branch}
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: end
         else: end
@@ -137,8 +193,11 @@ workflows:
         assert "evaluation.metric.uptime" in objective.ordering_dependencies
         assert "orchestration.workflow.flow" in objective.refresh_dependencies
         assert workflow.referenced_objective_addresses == ("evaluation.objective.initial",)
-        assert workflow.step_graph["start"] == ("branch",)
-        assert workflow.step_graph["branch"] == ("end",)
+        assert workflow.start_step == "start"
+        assert workflow.control_steps["start"].on_success == "branch"
+        assert workflow.control_steps["branch"].step_type == "decision"
+        assert workflow.control_edges["start"] == ("branch",)
+        assert workflow.control_edges["branch"] == ("end",)
         assert workflow.step_condition_addresses["branch"] == ("evaluation.condition.vm.health",)
         assert "evaluation.condition.vm.health" in workflow.step_predicate_addresses["branch"]
         assert workflow.ordering_dependencies == ()
@@ -213,7 +272,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {metrics: [missing-metric], objectives: [missing-objective]}
         then: finish
         else: finish
@@ -248,9 +307,9 @@ workflows:
         assert model.objectives["evaluation.objective.initial"].window_step_refs == ()
         assert model.workflows["orchestration.workflow.flow"].referenced_objective_addresses == ()
 
-    def test_workflow_with_while_and_on_error_compiles(self):
+    def test_workflow_with_retry_and_step_state_compiles(self):
         model = compile_runtime_model(_scenario("""
-name: while-test
+name: retry-test
 nodes:
   vm:
     type: vm
@@ -273,26 +332,130 @@ objectives:
     success: {metrics: [uptime]}
 workflows:
   retry:
-    start: loop
+    start: attempt-loop
     steps:
-      loop:
-        type: while
-        when: {conditions: [health]}
-        body: do-attempt
-        next: done
-        max-iterations: 3
-        on-error: handle-error
-      do-attempt: {type: objective, objective: attempt}
-      handle-error: {type: objective, objective: recover, next: done}
+      attempt-loop:
+        type: retry
+        objective: attempt
+        on-success: branch
+        max-attempts: 3
+        on-exhausted: handle-error
+      branch:
+        type: decision
+        when:
+          conditions: [health]
+          steps:
+            - step: attempt-loop
+              outcomes: [succeeded]
+        then: done
+        else: handle-error
+      handle-error:
+        type: objective
+        objective: recover
+        on-success: done
       done: {type: end}
 """))
 
         workflow = model.workflows["orchestration.workflow.retry"]
-        assert "do-attempt" in workflow.step_graph["loop"]
-        assert "done" in workflow.step_graph["loop"]
-        assert "handle-error" in workflow.step_graph["loop"]
+        assert workflow.control_steps["attempt-loop"].step_type == "retry"
+        assert workflow.control_steps["attempt-loop"].objective_address == (
+            "evaluation.objective.attempt"
+        )
+        assert workflow.control_steps["attempt-loop"].max_attempts == 3
+        predicate = workflow.control_steps["branch"].predicate
+        assert predicate is not None
+        assert predicate.step_state_predicates[0].step_name == "attempt-loop"
+        assert set(workflow.required_features) == {
+            WorkflowFeature.DECISION,
+            WorkflowFeature.RETRY,
+            WorkflowFeature.FAILURE_TRANSITIONS,
+        }
+        assert set(workflow.required_state_predicate_features) == {
+            WorkflowStatePredicateFeature.OUTCOME_MATCHING,
+        }
         assert workflow.referenced_objective_addresses == (
             "evaluation.objective.attempt",
             "evaluation.objective.recover",
         )
-        assert "evaluation.condition.vm.health" in workflow.step_predicate_addresses["loop"]
+        assert "evaluation.condition.vm.health" in workflow.step_predicate_addresses["branch"]
+
+    def test_parallel_join_compiles_as_barrier_with_typed_predicate(self):
+        model = compile_runtime_model(_scenario("""
+name: parallel-join
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health: {command: /bin/true, interval: 15}
+entities:
+  blue: {role: blue}
+objectives:
+  left:
+    entity: blue
+    success: {conditions: [health]}
+  right:
+    entity: blue
+    success: {conditions: [health]}
+  recover:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  flow:
+    start: fanout
+    steps:
+      fanout:
+        type: parallel
+        branches: [left-branch, right-branch]
+        join: joined
+        on-failure: recover-step
+      left-branch:
+        type: objective
+        objective: left
+        on-success: joined
+      right-branch:
+        type: objective
+        objective: right
+        on-success: joined
+      joined:
+        type: join
+        next: branch
+      branch:
+        type: decision
+        when:
+          steps:
+            - step: left-branch
+              outcomes: [succeeded]
+              min-attempts: 2
+        then: finish
+        else: recover-step
+      recover-step:
+        type: objective
+        objective: recover
+        on-success: finish
+      finish: {type: end}
+"""))
+
+        workflow = model.workflows["orchestration.workflow.flow"]
+        assert workflow.control_edges["fanout"] == ("left-branch", "right-branch", "recover-step")
+        assert workflow.join_owners == {"joined": "fanout"}
+        assert workflow.control_steps["joined"].owning_parallel_step == "fanout"
+        predicate = workflow.control_steps["branch"].predicate
+        assert predicate is not None
+        assert predicate.step_state_predicates == (
+            predicate.step_state_predicates[0],
+        )
+        assert predicate.step_state_predicates[0].step_name == "left-branch"
+        assert predicate.step_state_predicates[0].min_attempts == 2
+        assert set(workflow.required_features) == {
+            WorkflowFeature.DECISION,
+            WorkflowFeature.PARALLEL_BARRIER,
+            WorkflowFeature.FAILURE_TRANSITIONS,
+        }
+        assert set(workflow.required_state_predicate_features) == {
+            WorkflowStatePredicateFeature.OUTCOME_MATCHING,
+            WorkflowStatePredicateFeature.ATTEMPT_COUNTS,
+        }

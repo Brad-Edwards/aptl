@@ -147,6 +147,105 @@ def _call_backend_apply(
             ],
         )
 
+    if not isinstance(result.snapshot, RuntimeSnapshot):
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    address,
+                    (
+                        f"Backend method '{address}' returned ApplyResult.snapshot "
+                        f"as {type(result.snapshot).__name__}; expected RuntimeSnapshot."
+                    ),
+                )
+            ],
+        )
+
+    if (
+        not isinstance(result.diagnostics, Iterable)
+        or isinstance(result.diagnostics, (str, bytes))
+    ):
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    address,
+                    (
+                        f"Backend method '{address}' returned ApplyResult.diagnostics "
+                        f"as {type(result.diagnostics).__name__}; expected iterable."
+                    ),
+                )
+            ],
+        )
+
+    if any(not isinstance(diagnostic, Diagnostic) for diagnostic in result.diagnostics):
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    address,
+                    (
+                        f"Backend method '{address}' returned ApplyResult.diagnostics "
+                        "containing non-Diagnostic values."
+                    ),
+                )
+            ],
+        )
+
+    if not isinstance(result.changed_addresses, list):
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    address,
+                    (
+                        f"Backend method '{address}' returned ApplyResult.changed_addresses "
+                        f"as {type(result.changed_addresses).__name__}; expected list."
+                    ),
+                )
+            ],
+        )
+
+    if any(not isinstance(changed_address, str) for changed_address in result.changed_addresses):
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    address,
+                    (
+                        f"Backend method '{address}' returned ApplyResult.changed_addresses "
+                        "containing non-string values."
+                    ),
+                )
+            ],
+        )
+
+    if not isinstance(result.details, dict):
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    address,
+                    (
+                        f"Backend method '{address}' returned ApplyResult.details "
+                        f"as {type(result.details).__name__}; expected dict."
+                    ),
+                )
+            ],
+        )
+
     return result
 
 
@@ -477,6 +576,7 @@ class RuntimeManager:
         }
         if self._target.orchestrator is not None:
             info["orchestrator"] = self._target.orchestrator.status()
+            info["orchestration_results"] = self._target.orchestrator.results()
         if self._target.evaluator is not None:
             info["evaluator"] = self._target.evaluator.status()
             info["evaluation_results"] = self._target.evaluator.results()

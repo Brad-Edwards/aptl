@@ -43,6 +43,10 @@ class Orchestrator(Protocol):
         """Return current orchestration status."""
         ...
 
+    def results(self) -> dict[str, dict[str, Any]]:
+        """Return most recent workflow execution state."""
+        ...
+
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         """Stop orchestration and clear orchestration state."""
         ...

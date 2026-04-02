@@ -11,6 +11,8 @@ from aptl.core.runtime.capabilities import (
     EvaluatorCapabilities,
     OrchestratorCapabilities,
     ProvisionerCapabilities,
+    WorkflowFeature,
+    WorkflowStatePredicateFeature,
 )
 from aptl.core.runtime.compiler import compile_runtime_model
 from aptl.core.runtime.models import RuntimeDomain, RuntimeSnapshot, SnapshotEntry
@@ -316,6 +318,7 @@ events:
                 supported_sections=frozenset({"workflows"}),
                 supports_workflows=True,
                 supports_condition_refs=False,
+                supported_workflow_features=frozenset({WorkflowFeature.DECISION}),
             ),
             evaluator=create_stub_manifest().evaluator,
         )
@@ -337,7 +340,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: finish
         else: finish
@@ -348,6 +351,214 @@ workflows:
 
         codes = {diag.code for diag in execution_plan.diagnostics}
         assert "orchestrator.condition-refs-unsupported" in codes
+        assert not execution_plan.is_valid
+
+    def test_workflow_feature_requires_orchestrator_support(self):
+        limited = BackendManifest(
+            name="limited",
+            provisioner=create_stub_manifest().provisioner,
+            orchestrator=OrchestratorCapabilities(
+                name="limited-orchestrator",
+                supported_sections=frozenset({"workflows"}),
+                supports_workflows=True,
+                supported_workflow_features=frozenset(),
+            ),
+            evaluator=create_stub_manifest().evaluator,
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: workflows
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+entities:
+  blue: {role: blue}
+conditions:
+  health: {command: /bin/true, interval: 15}
+objectives:
+  defend:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  flow:
+    start: attempt
+    steps:
+      attempt:
+        type: retry
+        objective: defend
+        on-success: finish
+        max-attempts: 3
+      finish: {type: end}
+"""),),
+            limited,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+        assert "orchestrator.workflow-feature-unsupported" in codes
+        assert not execution_plan.is_valid
+
+    def test_step_state_predicates_require_orchestrator_support(self):
+        limited = BackendManifest(
+            name="limited",
+            provisioner=create_stub_manifest().provisioner,
+            orchestrator=OrchestratorCapabilities(
+                name="limited-orchestrator",
+                supported_sections=frozenset({"workflows"}),
+                supports_workflows=True,
+                supported_workflow_features=frozenset({WorkflowFeature.DECISION}),
+                supported_workflow_state_predicates=frozenset(),
+            ),
+            evaluator=create_stub_manifest().evaluator,
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: workflows
+entities:
+  blue: {role: blue}
+conditions:
+  health: {command: /bin/true, interval: 15}
+objectives:
+  defend:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  flow:
+    start: validate
+    steps:
+      validate:
+        type: objective
+        objective: defend
+        on-success: branch
+      branch:
+        type: decision
+        when:
+          steps:
+            - step: validate
+              outcomes: [succeeded]
+        then: finish
+        else: finish
+      finish: {type: end}
+""")),
+            limited,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+        assert "orchestrator.step-state-predicate-feature-unsupported" in codes
+        assert not execution_plan.is_valid
+
+    def test_attempt_count_predicates_require_specific_support(self):
+        limited = BackendManifest(
+            name="limited",
+            provisioner=create_stub_manifest().provisioner,
+            orchestrator=OrchestratorCapabilities(
+                name="limited-orchestrator",
+                supported_sections=frozenset({"workflows"}),
+                supports_workflows=True,
+                supported_workflow_features=frozenset({WorkflowFeature.DECISION}),
+                supported_workflow_state_predicates=frozenset(
+                    {WorkflowStatePredicateFeature.OUTCOME_MATCHING}
+                ),
+            ),
+            evaluator=create_stub_manifest().evaluator,
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: workflows
+entities:
+  blue: {role: blue}
+conditions:
+  health: {command: /bin/true, interval: 15}
+objectives:
+  defend:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  flow:
+    start: validate
+    steps:
+      validate:
+        type: retry
+        objective: defend
+        on-success: branch
+        max-attempts: 3
+      branch:
+        type: decision
+        when:
+          steps:
+            - step: validate
+              outcomes: [succeeded]
+              min-attempts: 2
+        then: finish
+        else: finish
+      finish: {type: end}
+""")),
+            limited,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+        assert "orchestrator.step-state-predicate-feature-unsupported" in codes
+        assert not execution_plan.is_valid
+
+    def test_parallel_barrier_requires_specific_support(self):
+        limited = BackendManifest(
+            name="limited",
+            provisioner=create_stub_manifest().provisioner,
+            orchestrator=OrchestratorCapabilities(
+                name="limited-orchestrator",
+                supported_sections=frozenset({"workflows"}),
+                supports_workflows=True,
+                supported_workflow_features=frozenset(),
+            ),
+            evaluator=create_stub_manifest().evaluator,
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: workflows
+entities:
+  blue: {role: blue}
+conditions:
+  health: {command: /bin/true, interval: 15}
+objectives:
+  left:
+    entity: blue
+    success: {conditions: [health]}
+  right:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  flow:
+    start: fanout
+    steps:
+      fanout:
+        type: parallel
+        branches: [left-branch, right-branch]
+        join: joined
+      left-branch:
+        type: objective
+        objective: left
+        on-success: joined
+      right-branch:
+        type: objective
+        objective: right
+        on-success: joined
+      joined:
+        type: join
+        next: finish
+      finish: {type: end}
+""")),
+            limited,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+        assert "orchestrator.workflow-feature-unsupported" in codes
         assert not execution_plan.is_valid
 
     def test_workflow_condition_bindings_force_workflow_refresh(self):
@@ -373,7 +584,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: finish
         else: finish
@@ -404,7 +615,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: finish
         else: finish
@@ -480,7 +691,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: finish
         else: finish
@@ -533,7 +744,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: finish
         else: finish
@@ -684,7 +895,7 @@ workflows:
   flow:
     start: start
     steps:
-      start: {type: objective, objective: defend, next: end}
+      start: {type: objective, objective: defend, on-success: end}
       end: {type: end}
 """))
         execution_plan = plan(model, limited)
@@ -1020,7 +1231,7 @@ workflows:
   flow:
     start: start
     steps:
-      start: {type: objective, objective: initial, next: end}
+      start: {type: objective, objective: initial, on-success: end}
       end: {type: end}
 """)),
             create_stub_manifest(),

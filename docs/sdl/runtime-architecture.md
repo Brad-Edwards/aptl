@@ -28,7 +28,7 @@ It separates reusable definitions from bound runtime instances:
 - `injects` -> first-class orchestration inject resources
 - `node.injects` -> optional node-scoped inject bindings layered on top of top-level inject resources
 - `nodes` + `infrastructure` -> deployable network/node resources
-- orchestration and scoring/objective sections -> resolved graph nodes
+- orchestration and scoring/objective sections -> resolved runtime programs and graph nodes
 
 The output is a `RuntimeModel` with canonical addresses for every runtime-owned
 object.
@@ -37,6 +37,20 @@ Bound condition refs fail closed. An unqualified condition reference must
 resolve to exactly one bound runtime instance; zero matches and multiple matches
 are both compile-time diagnostics. Event inject refs resolve directly to
 top-level inject resources and fail if the named inject does not exist.
+Bound feature dependencies also fail closed: if a node-scoped feature binding
+declares a dependency on another feature that is not bound on the same node,
+the compiler emits a diagnostic instead of silently dropping that dependency.
+
+Compiled workflows are no longer just flattened successor maps. `WorkflowRuntime`
+now preserves:
+
+- `start_step`
+- per-step structured semantics (`objective`, `decision`, `retry`, `parallel`, `join`, `end`)
+- explicit control edges
+- external predicate dependencies
+- prior-step state dependencies
+- declared workflow feature usage
+- a versioned workflow-state schema for backend results
 
 ### 2. Plan
 
@@ -110,8 +124,17 @@ Validation is semantic, not section-only. Phase 1 checks include:
 - content types
 - account features
 - orchestration/workflow usage
+- fine-grained workflow feature usage (`decision`, `retry`, `parallel` barriers, failure transitions)
 - workflow predicate condition refs
+- workflow predicate prior-step state refs and state-predicate subfeatures (`outcome-matching`, `attempt-counts`)
 - scoring/objective usage
+
+`OrchestratorCapabilities` now expose both coarse workflow support and fine-grained workflow semantics:
+
+- `supports_workflows`
+- `supports_condition_refs`
+- `supported_workflow_features`
+- `supported_workflow_state_predicates`
 
 Variable-backed capability fields are handled soundly:
 
@@ -144,6 +167,12 @@ inspection from instantiation, and `create()` uses the manifest returned by
 6. start orchestrator only when the orchestration plan has actionable operations
 7. on failed runtime-service startup, roll back started services while keeping provisioning state
 8. stop orchestrator -> stop evaluator -> delete provisioning resources
+
+The orchestration runtime contract now includes a portable workflow-results surface.
+Backends report workflow step lifecycle/outcome state using the compiled workflow
+state schema rather than backend-native payloads. Compiled workflow predicates
+are fully typed runtime data; orchestrators should not rely on raw SDL `spec`
+to execute workflow semantics.
 
 Objective `window` refs remain declarative scope/refresh inputs. They can force
 objective refresh when referenced orchestration state changes, but they do not

@@ -189,7 +189,7 @@ workflows:
       validate:
         type: objective
         objective: validate-release
-        next: finish
+        on-success: finish
       finish:
         type: end
 """

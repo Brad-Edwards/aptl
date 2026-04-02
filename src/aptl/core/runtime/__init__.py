@@ -5,6 +5,8 @@ from aptl.core.runtime.capabilities import (
     EvaluatorCapabilities,
     OrchestratorCapabilities,
     ProvisionerCapabilities,
+    WorkflowFeature,
+    WorkflowStatePredicateFeature,
 )
 from aptl.core.runtime.compiler import compile_runtime_model
 from aptl.core.runtime.manager import RuntimeManager
@@ -44,6 +46,11 @@ from aptl.core.runtime.models import (
     StoryRuntime,
     TLORuntime,
     WorkflowRuntime,
+    WorkflowPredicateRuntime,
+    WorkflowStepLifecycle,
+    WorkflowStepOutcome,
+    WorkflowStepStatePredicateRuntime,
+    WorkflowStepRuntime,
 )
 from aptl.core.runtime.planner import plan
 from aptl.core.runtime.protocols import Evaluator, Orchestrator, Provisioner
@@ -103,5 +110,12 @@ __all__ = [
     "SnapshotEntry",
     "StoryRuntime",
     "TLORuntime",
+    "WorkflowFeature",
+    "WorkflowPredicateRuntime",
     "WorkflowRuntime",
+    "WorkflowStatePredicateFeature",
+    "WorkflowStepLifecycle",
+    "WorkflowStepOutcome",
+    "WorkflowStepStatePredicateRuntime",
+    "WorkflowStepRuntime",
 ]

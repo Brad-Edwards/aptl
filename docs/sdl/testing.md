@@ -78,7 +78,7 @@ The up-front design briefs for the new complex examples live in
 authoring issue log lives in
 [`docs/sdl/complex-scenario-authoring-notes.md`](complex-scenario-authoring-notes.md).
 
-Those example files now also serve as disk-backed coverage for the newest SDL surfaces: enum-backed variable values, direct service/ACL objective targets, and workflow branching / parallel fanout.
+Those example files now also serve as disk-backed coverage for the newest SDL surfaces: enum-backed variable values, direct service/ACL objective targets, and the redesigned workflow language (`decision`, `retry`, explicit join barriers, failure transitions, and workflow state predicates, including post-join branch-state inspection). The runtime/compiler unit suites additionally pin fail-closed behavior for missing same-node feature dependencies and malformed backend lifecycle payloads.
 
 ## Adding New Scenarios
 

@@ -1,6 +1,23 @@
 """Domain-specific runtime capability declarations."""
 
 from dataclasses import dataclass, field
+from enum import Enum
+
+
+class WorkflowFeature(str, Enum):
+    """Portable workflow control features that an orchestrator may support."""
+
+    DECISION = "decision"
+    RETRY = "retry"
+    PARALLEL_BARRIER = "parallel-barrier"
+    FAILURE_TRANSITIONS = "failure-transitions"
+
+
+class WorkflowStatePredicateFeature(str, Enum):
+    """Portable workflow state-predicate features that an orchestrator may support."""
+
+    OUTCOME_MATCHING = "outcome-matching"
+    ATTEMPT_COUNTS = "attempt-counts"
 
 
 @dataclass(frozen=True)
@@ -27,6 +44,10 @@ class OrchestratorCapabilities:
     supports_workflows: bool = False
     supports_condition_refs: bool = True
     supports_inject_bindings: bool = True
+    supported_workflow_features: frozenset[WorkflowFeature] = frozenset()
+    supported_workflow_state_predicates: frozenset[
+        WorkflowStatePredicateFeature
+    ] = frozenset()
     constraints: dict[str, str] = field(default_factory=dict)
 
 

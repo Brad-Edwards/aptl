@@ -715,9 +715,9 @@ workflows:
       validate-release:
         type: objective
         objective: blue-validate-release
-        next: branch-on-promotion
+        on-success: branch-on-promotion
       branch-on-promotion:
-        type: if
+        type: decision
         when:
           conditions: [rogue-release-promoted]
         then: rollback-fanout
@@ -725,12 +725,29 @@ workflows:
       rollback-fanout:
         type: parallel
         branches: [revoke-artifact, rollback-edge]
-        next: finish
+        join: rollback-joined
       revoke-artifact:
         type: objective
         objective: blue-revoke-artifact
+        on-success: rollback-joined
       rollback-edge:
         type: objective
         objective: blue-preserve-service
+        on-success: rollback-joined
+      rollback-joined:
+        type: join
+        next: verify-rollback
+      verify-rollback:
+        type: decision
+        when:
+          steps:
+            - step: revoke-artifact
+              outcomes: [succeeded]
+        then: finish
+        else: revalidate-release
+      revalidate-release:
+        type: objective
+        objective: blue-validate-release
+        on-success: finish
       finish:
         type: end

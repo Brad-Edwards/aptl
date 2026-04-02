@@ -701,6 +701,28 @@ def _validate_manifest(model: RuntimeModel, manifest: BackendManifest) -> list[D
                         message="Orchestrator does not support workflows.",
                     )
                 )
+            workflow_features = sorted(
+                {
+                    feature
+                    for workflow in model.workflows.values()
+                    for feature in workflow.required_features
+                },
+                key=lambda feature: feature.value,
+            )
+            for feature in workflow_features:
+                if feature in manifest.orchestrator.supported_workflow_features:
+                    continue
+                diagnostics.append(
+                    Diagnostic(
+                        code="orchestrator.workflow-feature-unsupported",
+                        domain="orchestration",
+                        address="orchestration.workflows",
+                        message=(
+                            "Orchestrator does not support workflow feature "
+                            f"'{feature.value}'."
+                        ),
+                    )
+                )
             orchestration_uses_condition_refs = any(
                 event.condition_addresses for event in model.events.values()
             ) or any(
@@ -720,6 +742,28 @@ def _validate_manifest(model: RuntimeModel, manifest: BackendManifest) -> list[D
                         message=(
                             "Orchestrator does not support condition-gated events "
                             "or workflow predicates."
+                        ),
+                    )
+                )
+            required_state_predicate_features = sorted(
+                {
+                    feature
+                    for workflow in model.workflows.values()
+                    for feature in workflow.required_state_predicate_features
+                },
+                key=lambda feature: feature.value,
+            )
+            for feature in required_state_predicate_features:
+                if feature in manifest.orchestrator.supported_workflow_state_predicates:
+                    continue
+                diagnostics.append(
+                    Diagnostic(
+                        code="orchestrator.step-state-predicate-feature-unsupported",
+                        domain="orchestration",
+                        address="orchestration.workflows",
+                        message=(
+                            "Orchestrator does not support workflow state "
+                            f"predicate feature '{feature.value}'."
                         ),
                     )
                 )

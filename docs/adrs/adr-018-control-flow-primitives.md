@@ -2,7 +2,11 @@
 
 ## Status
 
-accepted
+superseded by ADR-019
+
+This ADR is preserved as historical context for the exploratory `if` / `while`
+workflow surface. The current SDL and runtime semantics are defined by
+ADR-019 and the corresponding SDL reference docs.
 
 ## Date
 

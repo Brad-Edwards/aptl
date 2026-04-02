@@ -20,6 +20,13 @@ class BadOrchestrator:
         del plan, snapshot
         return None
 
+    def status(self):
+        return {}
+
+    def stop(self, snapshot):
+        del snapshot
+        return None
+
 
 class BadEvaluator:
     def start(self, plan, snapshot):
@@ -45,6 +52,10 @@ class WrongSigOrchestrator:
 
     def status(self, verbose):
         del verbose
+        return {}
+
+    def results(self, include_meta):
+        del include_meta
         return {}
 
     def stop(self):

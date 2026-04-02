@@ -15,7 +15,11 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
-from aptl.core.runtime.capabilities import BackendManifest
+from aptl.core.runtime.capabilities import (
+    BackendManifest,
+    WorkflowFeature,
+    WorkflowStatePredicateFeature,
+)
 
 
 class RuntimeDomain(str, Enum):
@@ -41,6 +45,22 @@ class Severity(str, Enum):
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
+
+
+class WorkflowStepLifecycle(str, Enum):
+    """Portable execution lifecycle for workflow-visible step state."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+
+
+class WorkflowStepOutcome(str, Enum):
+    """Portable execution outcomes for workflow-visible step state."""
+
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    EXHAUSTED = "exhausted"
 
 
 @dataclass(frozen=True)
@@ -176,13 +196,82 @@ class StoryRuntime(ResolvedResource):
 
 
 @dataclass(frozen=True)
-class WorkflowRuntime(ResolvedResource):
-    """Resolved workflow graph."""
+class WorkflowStepStatePredicateRuntime:
+    """Resolved predicate clause over prior workflow step state."""
 
+    step_name: str
+    outcomes: tuple[WorkflowStepOutcome, ...] = ()
+    min_attempts: int | str | None = None
+
+
+@dataclass(frozen=True)
+class WorkflowPredicateRuntime:
+    """Resolved workflow predicate semantics."""
+
+    condition_addresses: tuple[str, ...] = ()
+    metric_addresses: tuple[str, ...] = ()
+    evaluation_addresses: tuple[str, ...] = ()
+    tlo_addresses: tuple[str, ...] = ()
+    goal_addresses: tuple[str, ...] = ()
+    objective_addresses: tuple[str, ...] = ()
+    step_state_predicates: tuple[WorkflowStepStatePredicateRuntime, ...] = ()
+
+    @property
+    def external_addresses(self) -> tuple[str, ...]:
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for address in (
+            *self.condition_addresses,
+            *self.metric_addresses,
+            *self.evaluation_addresses,
+            *self.tlo_addresses,
+            *self.goal_addresses,
+            *self.objective_addresses,
+        ):
+            if address in seen:
+                continue
+            seen.add(address)
+            ordered.append(address)
+        return tuple(ordered)
+
+
+@dataclass(frozen=True)
+class WorkflowStepRuntime:
+    """Resolved workflow step semantics."""
+
+    name: str
+    step_type: str
+    objective_address: str = ""
+    predicate: WorkflowPredicateRuntime | None = None
+    next_step: str = ""
+    on_success: str = ""
+    on_failure: str = ""
+    on_exhausted: str = ""
+    then_step: str = ""
+    else_step: str = ""
+    branches: tuple[str, ...] = ()
+    join_step: str = ""
+    owning_parallel_step: str = ""
+    max_attempts: int | str | None = None
+    emits_outcome: bool = False
+
+
+@dataclass(frozen=True)
+class WorkflowRuntime(ResolvedResource):
+    """Resolved workflow control program."""
+
+    start_step: str = ""
     referenced_objective_addresses: tuple[str, ...] = ()
+    control_steps: dict[str, WorkflowStepRuntime] = field(default_factory=dict)
+    control_edges: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    join_owners: dict[str, str] = field(default_factory=dict)
     step_condition_addresses: dict[str, tuple[str, ...]] = field(default_factory=dict)
     step_predicate_addresses: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    step_graph: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    required_features: tuple[WorkflowFeature, ...] = ()
+    required_state_predicate_features: tuple[
+        WorkflowStatePredicateFeature, ...
+    ] = ()
+    state_schema_version: str = "workflow-step-state/v1"
 
 
 @dataclass(frozen=True)
@@ -381,6 +470,7 @@ class RuntimeSnapshot:
     """Current runtime snapshot."""
 
     entries: dict[str, SnapshotEntry] = field(default_factory=dict)
+    orchestration_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     evaluation_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -398,11 +488,17 @@ class RuntimeSnapshot:
         self,
         entries: dict[str, SnapshotEntry],
         *,
+        orchestration_results: dict[str, dict[str, Any]] | None = None,
         evaluation_results: dict[str, dict[str, Any]] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> "RuntimeSnapshot":
         return RuntimeSnapshot(
             entries=entries,
+            orchestration_results=(
+                dict(self.orchestration_results)
+                if orchestration_results is None
+                else dict(orchestration_results)
+            ),
             evaluation_results=(
                 dict(self.evaluation_results)
                 if evaluation_results is None

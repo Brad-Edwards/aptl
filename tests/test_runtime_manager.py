@@ -127,6 +127,7 @@ class RecordingOrchestrator:
         self.calls = calls
         self.name = name
         self.running = False
+        self._results: dict[str, dict[str, object]] = {}
 
     def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
         self.calls.append(f"{self.name}-start")
@@ -137,20 +138,38 @@ class RecordingOrchestrator:
             plan.operations,
             status="running",
         )
-        return ApplyResult(success=True, snapshot=next_snapshot)
+        self._results = {
+            op.address: {"steps": {}, "state-schema-version": "workflow-step-state/v1"}
+            for op in plan.operations
+            if op.action != ChangeAction.DELETE and op.resource_type == "workflow"
+        }
+        return ApplyResult(
+            success=True,
+            snapshot=next_snapshot.with_entries(
+                next_snapshot.entries,
+                orchestration_results=self._results,
+            ),
+        )
 
     def status(self) -> dict:
         return {"running": self.running}
 
+    def results(self) -> dict[str, dict[str, object]]:
+        return dict(self._results)
+
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         self.calls.append(f"{self.name}-stop")
         self.running = False
+        self._results = {}
         entries = {
             address: entry
             for address, entry in snapshot.entries.items()
             if entry.domain != RuntimeDomain.ORCHESTRATION
         }
-        return ApplyResult(success=True, snapshot=snapshot.with_entries(entries))
+        return ApplyResult(
+            success=True,
+            snapshot=snapshot.with_entries(entries, orchestration_results={}),
+        )
 
 
 class FailingStartOrchestrator(RecordingOrchestrator):
@@ -253,6 +272,46 @@ class InvalidApplyProvisioner(RecordingProvisioner):
         del plan, snapshot
         self.calls.append("provision-apply")
         return None
+
+
+class InvalidApplySnapshotProvisioner(RecordingProvisioner):
+    def apply(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        del plan
+        self.calls.append("provision-apply")
+        return ApplyResult(success=True, snapshot=None)  # type: ignore[arg-type]
+
+
+class InvalidApplyDiagnosticsProvisioner(RecordingProvisioner):
+    def apply(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        del plan
+        self.calls.append("provision-apply")
+        return ApplyResult(
+            success=True,
+            snapshot=snapshot,
+            diagnostics=[object()],  # type: ignore[list-item]
+        )
+
+
+class InvalidApplyChangedAddressesProvisioner(RecordingProvisioner):
+    def apply(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        del plan
+        self.calls.append("provision-apply")
+        return ApplyResult(
+            success=True,
+            snapshot=snapshot,
+            changed_addresses=["provision.node.vm", 7],  # type: ignore[list-item]
+        )
+
+
+class InvalidApplyDetailsProvisioner(RecordingProvisioner):
+    def apply(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        del plan
+        self.calls.append("provision-apply")
+        return ApplyResult(
+            success=True,
+            snapshot=snapshot,
+            details="broken",  # type: ignore[arg-type]
+        )
 
 
 class RaisingStartOrchestrator(RecordingOrchestrator):
@@ -409,6 +468,38 @@ class TestRuntimeManager:
             name="recording",
             manifest=create_stub_manifest(),
             provisioner=InvalidApplyProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_provisioning_only_scenario()))
+
+        assert not result.success
+        assert calls == ["provision-apply"]
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+        assert manager.snapshot.entries == {}
+
+    @pytest.mark.parametrize(
+        "provisioner_cls",
+        [
+            InvalidApplySnapshotProvisioner,
+            InvalidApplyDiagnosticsProvisioner,
+            InvalidApplyChangedAddressesProvisioner,
+            InvalidApplyDetailsProvisioner,
+        ],
+    )
+    def test_apply_fails_gracefully_on_malformed_apply_result_contents(
+        self,
+        provisioner_cls,
+    ):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=provisioner_cls(calls),
             orchestrator=RecordingOrchestrator(calls),
             evaluator=RecordingEvaluator(calls, "evaluator"),
         )

@@ -656,9 +656,9 @@ workflows:
       maintain-integrity:
         type: objective
         objective: blue-maintain-customs-integrity
-        next: assess-yard
+        on-success: assess-yard
       assess-yard:
-        type: if
+        type: decision
         when:
           conditions: [tampered-manifest-observed]
         then: fanout-blackstart
@@ -666,12 +666,17 @@ workflows:
       fanout-blackstart:
         type: parallel
         branches: [restore-yard, validate-telemetry]
-        next: finish
+        join: blackstart-joined
       restore-yard:
         type: objective
         objective: blue-blackstart-yard
+        on-success: blackstart-joined
       validate-telemetry:
         type: objective
         objective: blue-validate-yard-telemetry
+        on-success: blackstart-joined
+      blackstart-joined:
+        type: join
+        next: finish
       finish:
         type: end

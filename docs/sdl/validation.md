@@ -33,10 +33,14 @@ The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 22 nam
 | `verify_relationships` | Source and target resolve to any named element in any section, including variables, relationships, content item names, named service bindings, and named ACL rules. Ambiguous bare refs are rejected with qualified alternatives. |
 | `verify_agents` | Entity references resolve. Starting accounts and initial-knowledge accounts exist in accounts section. Allowed subnets and initial-knowledge subnets must resolve to switch-backed infrastructure entries. Initial-knowledge hosts must resolve to VM nodes. Initial-knowledge services exist in `nodes.*.services[].name`. |
 | `verify_objectives` | Objective actors resolve (`agent` or `entity`). Objective actions must be declared by the referenced agent. Targets resolve to named scenario elements, including qualified service/ACL refs and section-qualified top-level refs. Ambiguous bare refs are rejected with qualified alternatives. Success criteria resolve to declared conditions/metrics/evaluations/TLOs/goals. Optional windows resolve to stories/scripts/events/workflows and must remain internally consistent. Objective dependencies must resolve and stay acyclic. |
-| `verify_workflows` | Workflow `start` and every referenced step must exist. Objective steps must reference declared objectives. Predicate refs must resolve to declared conditions/metrics/evaluations/TLOs/goals/objectives. Workflow graphs must be acyclic and fully reachable from `start`. |
+| `verify_workflows` | Workflow `start` and every referenced step must exist. `objective`/`retry` steps must reference declared objectives. Predicate refs must resolve to declared conditions/metrics/evaluations/TLOs/goals/objectives, and step-state refs must resolve to prior executable steps whose state is guaranteed to be known before the predicate runs. Workflow graphs must be acyclic and fully reachable from `start`. Parallel joins must be explicit barriers, every explicit branch path must converge on the declared join, branch-local state remains scoped until the join, and post-join predicates may inspect only branch steps guaranteed on every path within their branch before the join. |
 | `verify_variables` | Checks that full-value `${var}` placeholders reference declared variables. Structural validation of typed defaults and `allowed_values` still happens in the `Variable` model itself. |
 
 When a field contains an unresolved `${var}` placeholder, reference-oriented passes treat it as deferred rather than as a broken concrete reference. The validator still does not substitute values; it only checks that the placeholder names exist.
+
+The SDL validator is intentionally structural/semantic. The SDL-native runtime
+compiler performs additional fail-closed binding checks, including node-local
+feature dependency enforcement and bound-resource reference resolution.
 
 ## Advisories
 

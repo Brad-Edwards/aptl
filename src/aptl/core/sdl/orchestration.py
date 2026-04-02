@@ -250,14 +250,44 @@ class WorkflowStepType(str, Enum):
     """Control-flow node types for declarative experiment workflows."""
 
     OBJECTIVE = "objective"
-    IF = "if"
+    DECISION = "decision"
     PARALLEL = "parallel"
-    WHILE = "while"
+    JOIN = "join"
+    RETRY = "retry"
     END = "end"
 
 
+class WorkflowStepOutcome(str, Enum):
+    """Portable workflow-visible outcomes emitted by executable steps."""
+
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    EXHAUSTED = "exhausted"
+
+
+class WorkflowStepStateRef(SDLModel):
+    """Predicate reference to previously observed workflow step state."""
+
+    step: str
+    outcomes: list[WorkflowStepOutcome] = Field(min_length=1)
+    min_attempts: int | str | None = Field(default=None, alias="min-attempts")
+
+    @field_validator("min_attempts", mode="before")
+    @classmethod
+    def parse_min_attempts(cls, v: int | str | None) -> int | str | None:
+        if v is None:
+            return None
+        return parse_int_or_var(v, minimum=1, field_name="min_attempts")
+
+    @model_validator(mode="after")
+    def validate_unique_outcomes(self) -> "WorkflowStepStateRef":
+        if len(self.outcomes) != len(set(self.outcomes)):
+            raise ValueError("Workflow step-state outcomes must be unique")
+        return self
+
+
 class WorkflowPredicate(SDLModel):
-    """Branch predicate reusing objective-style success references."""
+    """Branch predicate over runtime evaluation data and prior step state."""
 
     conditions: list[str] = Field(default_factory=list)
     metrics: list[str] = Field(default_factory=list)
@@ -265,7 +295,7 @@ class WorkflowPredicate(SDLModel):
     tlos: list[str] = Field(default_factory=list)
     goals: list[str] = Field(default_factory=list)
     objectives: list[str] = Field(default_factory=list)
-    step_outcomes: list[str] = Field(default_factory=list, alias="step-outcomes")
+    steps: list[WorkflowStepStateRef] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_non_empty(self) -> "WorkflowPredicate":
@@ -276,108 +306,163 @@ class WorkflowPredicate(SDLModel):
             self.tlos,
             self.goals,
             self.objectives,
-            self.step_outcomes,
+            self.steps,
         )):
             return self
         raise ValueError(
             "Workflow predicate must reference at least one condition, "
-            "metric, evaluation, TLO, goal, objective, or step outcome"
+            "metric, evaluation, TLO, goal, objective, or step state"
         )
 
 
 class WorkflowStep(SDLModel):
-    """A node in a workflow graph."""
+    """A named workflow step with explicit portable control semantics."""
 
     type: WorkflowStepType = Field(alias="type")
     objective: str = ""
     next: str = ""
+    on_success: str = Field(default="", alias="on-success")
+    on_failure: str = Field(default="", alias="on-failure")
+    on_exhausted: str = Field(default="", alias="on-exhausted")
     when: WorkflowPredicate | None = None
     then_step: str = Field(default="", alias="then")
     else_step: str = Field(default="", alias="else")
     branches: list[str] = Field(default_factory=list)
-    body: str = ""
-    max_iterations: int | str | None = Field(default=None, alias="max-iterations")
-    on_error: str = Field(default="", alias="on-error")
+    join: str = ""
+    max_attempts: int | str | None = Field(default=None, alias="max-attempts")
     description: str = ""
 
     @field_validator("type", mode="before")
     @classmethod
     def normalize_type(cls, v: str) -> str:
-        return normalize_enum_value(v)
+        normalized = normalize_enum_value(v)
+        if normalized in {"if", "while"}:
+            raise ValueError(
+                f"workflow step type '{normalized}' is no longer supported; "
+                "use 'decision' or 'retry' with explicit success/failure "
+                "transitions instead"
+            )
+        return normalized
 
-    @field_validator("max_iterations", mode="before")
+    @field_validator("max_attempts", mode="before")
     @classmethod
-    def parse_max_iterations(cls, v: int | str | None) -> int | str | None:
+    def parse_max_attempts(cls, v: int | str | None) -> int | str | None:
         if v is None:
             return None
-        return parse_int_or_var(v, minimum=1, field_name="max_iterations")
+        return parse_int_or_var(v, minimum=1, field_name="max_attempts")
 
     @model_validator(mode="after")
     def validate_type_specific_fields(self) -> "WorkflowStep":
         if self.type == WorkflowStepType.OBJECTIVE:
-            if not self.objective:
-                raise ValueError("Objective workflow step requires 'objective'")
+            if not self.objective or not self.on_success:
+                raise ValueError(
+                    "Objective workflow step requires 'objective' and 'on-success'"
+                )
             if (
-                self.when is not None
+                self.next
+                or self.on_exhausted
+                or self.when is not None
                 or self.then_step
                 or self.else_step
                 or self.branches
-                or self.body
-                or self.max_iterations is not None
+                or self.join
+                or self.max_attempts is not None
             ):
                 raise ValueError(
                     "Objective workflow step only supports 'objective', "
-                    "optional 'next', 'on-error', and 'description'"
+                    "'on-success', optional 'on-failure', and 'description'"
                 )
             return self
 
-        if self.type == WorkflowStepType.IF:
+        if self.type == WorkflowStepType.DECISION:
             if self.when is None or not self.then_step or not self.else_step:
                 raise ValueError(
-                    "If workflow step requires 'when', 'then', and 'else'"
+                    "Decision workflow step requires 'when', 'then', and 'else'"
                 )
             if (
                 self.objective
-                or self.branches
                 or self.next
-                or self.body
-                or self.max_iterations is not None
-                or self.on_error
+                or self.on_success
+                or self.on_failure
+                or self.on_exhausted
+                or self.branches
+                or self.join
+                or self.max_attempts is not None
             ):
                 raise ValueError(
-                    "If workflow step only supports 'when', 'then', 'else', "
-                    "and 'description'"
+                    "Decision workflow step only supports 'when', 'then', "
+                    "'else', and 'description'"
                 )
             return self
 
         if self.type == WorkflowStepType.PARALLEL:
-            if not self.branches:
-                raise ValueError("Parallel workflow step requires 'branches'")
+            if len(self.branches) < 2 or not self.join:
+                raise ValueError(
+                    "Parallel workflow step requires at least two 'branches' "
+                    "and a 'join'"
+                )
             if (
                 self.objective
                 or self.when is not None
+                or self.next
+                or self.on_success
+                or self.on_exhausted
                 or self.then_step
                 or self.else_step
-                or self.body
-                or self.max_iterations is not None
+                or self.max_attempts is not None
             ):
                 raise ValueError(
-                    "Parallel workflow step only supports 'branches', "
-                    "optional 'next', 'on-error', and 'description'"
+                    "Parallel workflow step only supports 'branches', 'join', "
+                    "optional 'on-failure', and 'description'"
                 )
             if len(self.branches) != len(set(self.branches)):
                 raise ValueError("Parallel workflow branches must be unique")
             return self
 
-        if self.type == WorkflowStepType.WHILE:
-            if self.when is None or not self.body:
+        if self.type == WorkflowStepType.JOIN:
+            if not self.next:
                 raise ValueError(
-                    "While workflow step requires 'when' and 'body'"
+                    "Join workflow step requires 'next'"
                 )
-            if self.objective or self.then_step or self.else_step or self.branches:
+            if (
+                self.objective
+                or self.on_success
+                or self.on_failure
+                or self.on_exhausted
+                or self.when is not None
+                or self.then_step
+                or self.else_step
+                or self.branches
+                or self.join
+                or self.max_attempts is not None
+            ):
                 raise ValueError(
-                    "While workflow step only supports 'when', 'body', "
-                    "optional 'next', 'max-iterations', 'on-error', "
+                    "Join workflow step only supports 'next' and 'description'"
+                )
+            return self
+
+        if self.type == WorkflowStepType.RETRY:
+            if (
+                not self.objective
+                or self.max_attempts is None
+                or not self.on_success
+            ):
+                raise ValueError(
+                    "Retry workflow step requires 'objective', 'max-attempts', "
+                    "and 'on-success'"
+                )
+            if (
+                self.next
+                or self.when is not None
+                or self.on_failure
+                or self.then_step
+                or self.else_step
+                or self.branches
+                or self.join
+            ):
+                raise ValueError(
+                    "Retry workflow step only supports 'objective', "
+                    "'max-attempts', 'on-success', optional 'on-exhausted', "
                     "and 'description'"
                 )
             return self
@@ -387,12 +472,14 @@ class WorkflowStep(SDLModel):
             self.objective
             or self.next
             or self.when is not None
+            or self.on_success
+            or self.on_failure
+            or self.on_exhausted
             or self.then_step
             or self.else_step
             or self.branches
-            or self.body
-            or self.max_iterations is not None
-            or self.on_error
+            or self.join
+            or self.max_attempts is not None
         ):
             raise ValueError(
                 "End workflow step only supports 'type' and 'description'"

@@ -888,6 +888,14 @@ class TestWorkflow:
         )
         assert step.on_error == "recover"
 
+    def test_on_error_accepts_variable(self):
+        step = WorkflowStep(
+            type="objective",
+            objective="verify-release",
+            **{"on-error": "${recovery_step}"},
+        )
+        assert step.on_error == "${recovery_step}"
+
     def test_on_error_forbidden_on_if_step(self):
         with pytest.raises(ValidationError, match="If workflow step only supports"):
             WorkflowStep(

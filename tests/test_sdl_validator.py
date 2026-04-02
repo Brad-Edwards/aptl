@@ -1474,6 +1474,30 @@ class TestVerifyWorkflows:
             "references undefined step outcome 'nonexistent'" in e for e in errors
         )
 
+    def test_on_error_variable_ref_tolerated(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            variables={
+                "recovery_step": {"type": "string", "default": "recover"},
+            },
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "next": "finish",
+                            "on-error": "${recovery_step}",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not any("on-error" in e for e in errors)
+
     def test_while_with_on_error(self):
         s = _make_scenario(
             **self._base_kwargs(),

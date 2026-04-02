@@ -577,8 +577,52 @@ def _workflow_result_contract_diagnostics(
                             "runtime.backend-contract-invalid",
                             workflow_address,
                             f"Workflow history references unknown step '{event.step_name}'.",
+                            )
+                        )
+                if (
+                    event.event_type == WorkflowHistoryEventType.SWITCH_CASE_SELECTED
+                    and event.step_name is not None
+                    and execution_contract.step_types.get(event.step_name) != "switch"
+                ):
+                    diagnostics.append(
+                        _failure_diagnostic(
+                            "runtime.backend-contract-invalid",
+                            workflow_address,
+                            "switch_case_selected events must reference a switch step.",
                         )
                     )
+                if event.event_type in {
+                    WorkflowHistoryEventType.CALL_STARTED,
+                    WorkflowHistoryEventType.CALL_COMPLETED,
+                }:
+                    if (
+                        event.step_name is None
+                        or execution_contract.step_types.get(event.step_name) != "call"
+                    ):
+                        diagnostics.append(
+                            _failure_diagnostic(
+                                "runtime.backend-contract-invalid",
+                                workflow_address,
+                                f"{event.event_type.value} events must reference a call step.",
+                            )
+                        )
+                    elif execution_contract.call_steps.get(event.step_name):
+                        expected_workflow = execution_contract.call_steps[event.step_name]
+                        actual_workflow = str(
+                            event.details.get("workflow_address", "")
+                        )
+                        if actual_workflow and actual_workflow != expected_workflow:
+                            diagnostics.append(
+                                _failure_diagnostic(
+                                    "runtime.backend-contract-invalid",
+                                    workflow_address,
+                                    (
+                                        f"{event.event_type.value} event workflow "
+                                        f"{actual_workflow!r} does not match call target "
+                                        f"{expected_workflow!r}."
+                                    ),
+                                )
+                            )
                 if event.event_type == WorkflowHistoryEventType.BRANCH_CONVERGED:
                     if event.join_step is None or event.join_step not in execution_contract.join_owners:
                         diagnostics.append(

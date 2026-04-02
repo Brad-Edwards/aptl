@@ -77,7 +77,9 @@ Compiled workflows are no longer just flattened successor maps. `WorkflowRuntime
 now preserves:
 
 - `start_step`
-- per-step structured semantics (`objective`, `decision`, `retry`, `parallel`, `join`, `end`)
+- optional workflow timeout policy in the compiled execution contract
+- per-step structured semantics (`objective`, `decision`, `switch`, `retry`, `call`, `parallel`, `join`, `end`)
+- explicit call targets and ordered switch-case predicates
 - explicit control edges
 - external predicate dependencies
 - prior-step state dependencies
@@ -215,6 +217,7 @@ The orchestration runtime contract now includes:
 - a plain-data workflow history stream
 - a compiled `result_contract` for step-visible state
 - a compiled `execution_contract` for workflow-level legality/history validation
+- control-plane operations for canceling running workflows and reconciling timeout expiry
 
 Backends report portable execution envelopes rather than backend-native object
 identity. The manager validates raw backend payloads against the compiled
@@ -267,10 +270,10 @@ Planner FM2 semantics are also now explicit rather than incidental:
 Those rules are owned by `aptl.core.semantics.planner`, not by local planner
 algorithm shape.
 
-This phase is also intentionally composition-ready. Future module/import
-expansion must happen before semantic validation and compile, so the runtime
-layer continues to operate only on canonical resolved identities rather than on
-source-file layout.
+This phase is also intentionally composition-ready. Module/import expansion now
+happens before semantic validation and compile, so the runtime layer operates
+only on canonical resolved identities rather than on source-file layout. That
+same foundation is what makes namespaced reusable workflow calls portable.
 
 `RuntimeManager.apply()` requires the plan provenance to match the manager:
 

@@ -1,0 +1,16 @@
+{
+  "schema_version": "backend-manifest/v1",
+  "name": "broken",
+  "unknown": true,
+  "provisioner": {
+    "name": "stub-provisioner",
+    "supported_node_types": [],
+    "supported_os_families": [],
+    "supported_content_types": [],
+    "supported_account_features": [],
+    "max_total_nodes": null,
+    "supports_acls": false,
+    "supports_accounts": false,
+    "constraints": {}
+  }
+}

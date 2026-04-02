@@ -116,6 +116,44 @@ workflows:
 """)
 
 
+def _workflow_call_scenario():
+    return _scenario("""
+name: workflow-call
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health: {command: /bin/true, interval: 15}
+entities:
+  blue: {role: blue}
+objectives:
+  validate:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  child:
+    start: run
+    steps:
+      run:
+        type: objective
+        objective: validate
+        on-success: finish
+      finish: {type: end}
+  parent:
+    start: delegate
+    steps:
+      delegate:
+        type: call
+        workflow: child
+        on-success: finish
+      finish: {type: end}
+""")
+
+
 class RecordingProvisioner:
     def __init__(self, calls: list[str]) -> None:
         self.calls = calls
@@ -464,6 +502,28 @@ class ResultContractOnlyOrchestrator(RecordingOrchestrator):
             snapshot=result.snapshot.with_entries(
                 entries,
                 orchestration_results=self._results,
+            ),
+        )
+
+
+class InvalidWorkflowCallHistoryOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = "orchestration.workflow.parent"
+        self._history[workflow_address].append(
+            {
+                "event_type": "call_started",
+                "timestamp": self._history[workflow_address][0]["timestamp"],
+                "step_name": "delegate",
+                "details": {"workflow_address": "orchestration.workflow.wrong"},
+            }
+        )
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+                orchestration_history=self._history,
             ),
         )
 
@@ -1124,6 +1184,24 @@ class TestRuntimeManager:
 
         assert result.success
         assert manager.snapshot.for_domain(RuntimeDomain.ORCHESTRATION)
+
+    def test_apply_fails_on_invalid_workflow_call_history(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=InvalidWorkflowCallHistoryOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_call_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
 
     def test_apply_fails_on_invalid_evaluation_result_schema_version(self):
         calls: list[str] = []

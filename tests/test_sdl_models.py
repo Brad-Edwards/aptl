@@ -854,6 +854,46 @@ class TestWorkflow:
         ):
             WorkflowStep(type="retry", objective="verify-release")
 
+    def test_switch_step(self):
+        step = WorkflowStep(
+            type="switch",
+            cases=[
+                {
+                    "when": {"goals": ["g1"]},
+                    "next": "done",
+                }
+            ],
+            default="fallback",
+        )
+        assert step.type == WorkflowStepType.SWITCH
+        assert step.default_step == "fallback"
+        assert step.cases[0].next_step == "done"
+
+    def test_call_step(self):
+        step = WorkflowStep(
+            type="call",
+            workflow="child",
+            **{"on-success": "done"},
+        )
+        assert step.type == WorkflowStepType.CALL
+        assert step.workflow == "child"
+
+    def test_workflow_timeout_scalar_parses_to_policy(self):
+        workflow = Workflow(
+            start="validate",
+            timeout="5 min",
+            steps={
+                "validate": {
+                    "type": "objective",
+                    "objective": "verify-release",
+                    "on-success": "done",
+                },
+                "done": {"type": "end"},
+            },
+        )
+        assert workflow.timeout is not None
+        assert workflow.timeout.seconds == 300
+
     def test_retry_step_forbids_decision_fields(self):
         with pytest.raises(
             ValidationError,

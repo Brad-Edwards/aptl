@@ -53,6 +53,14 @@ class WorkflowHistoryEventModel(ContractModel):
     details: dict[str, Any] = Field(default_factory=dict)
 
 
+class WorkflowCancellationRequestModel(ContractModel):
+    schema_version: Literal["workflow-cancellation-request/v1"] = (
+        "workflow-cancellation-request/v1"
+    )
+    run_id: str | None = None
+    reason: str = "cancelled by operator"
+
+
 class EvaluationResultStateModel(ContractModel):
     state_schema_version: Literal[EVALUATION_STATE_SCHEMA_VERSION] = (
         EVALUATION_STATE_SCHEMA_VERSION
@@ -205,6 +213,9 @@ def schema_bundle() -> dict[str, dict[str, Any]]:
             "type": "array",
             "items": WorkflowHistoryEventModel.model_json_schema(),
         },
+        "workflow-cancellation-request-v1": (
+            WorkflowCancellationRequestModel.model_json_schema()
+        ),
         "evaluation-result-envelope-v1": EvaluationResultStateModel.model_json_schema(),
         "evaluation-history-event-stream-v1": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",

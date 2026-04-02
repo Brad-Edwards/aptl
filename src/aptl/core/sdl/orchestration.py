@@ -251,9 +251,11 @@ class WorkflowStepType(str, Enum):
 
     OBJECTIVE = "objective"
     DECISION = "decision"
+    SWITCH = "switch"
     PARALLEL = "parallel"
     JOIN = "join"
     RETRY = "retry"
+    CALL = "call"
     END = "end"
 
 
@@ -315,6 +317,28 @@ class WorkflowPredicate(SDLModel):
         )
 
 
+class WorkflowSwitchCase(SDLModel):
+    """One ordered branch case within a ``switch`` workflow step."""
+
+    when: WorkflowPredicate
+    next_step: str = Field(alias="next")
+    description: str = ""
+
+
+class WorkflowTimeoutPolicy(SDLModel):
+    """Workflow-level timeout policy."""
+
+    seconds: int | str
+
+    @field_validator("seconds", mode="before")
+    @classmethod
+    def parse_seconds(cls, v: str | int | float) -> int | str:
+        parsed = parse_duration(v)
+        if isinstance(parsed, int) and parsed <= 0:
+            raise ValueError("timeout seconds must be > 0")
+        return parsed
+
+
 class WorkflowStep(SDLModel):
     """A named workflow step with explicit portable control semantics."""
 
@@ -327,8 +351,11 @@ class WorkflowStep(SDLModel):
     when: WorkflowPredicate | None = None
     then_step: str = Field(default="", alias="then")
     else_step: str = Field(default="", alias="else")
+    cases: list[WorkflowSwitchCase] = Field(default_factory=list)
+    default_step: str = Field(default="", alias="default")
     branches: list[str] = Field(default_factory=list)
     join: str = ""
+    workflow: str = ""
     max_attempts: int | str | None = Field(default=None, alias="max-attempts")
     description: str = ""
 
@@ -392,6 +419,32 @@ class WorkflowStep(SDLModel):
                 raise ValueError(
                     "Decision workflow step only supports 'when', 'then', "
                     "'else', and 'description'"
+                )
+            return self
+
+        if self.type == WorkflowStepType.SWITCH:
+            if not self.cases or not self.default_step:
+                raise ValueError(
+                    "Switch workflow step requires at least one 'case' and a "
+                    "'default' target"
+                )
+            if (
+                self.objective
+                or self.next
+                or self.on_success
+                or self.on_failure
+                or self.on_exhausted
+                or self.when is not None
+                or self.then_step
+                or self.else_step
+                or self.branches
+                or self.join
+                or self.workflow
+                or self.max_attempts is not None
+            ):
+                raise ValueError(
+                    "Switch workflow step only supports 'cases', 'default', "
+                    "and 'description'"
                 )
             return self
 
@@ -467,6 +520,30 @@ class WorkflowStep(SDLModel):
                 )
             return self
 
+        if self.type == WorkflowStepType.CALL:
+            if not self.workflow or not self.on_success:
+                raise ValueError(
+                    "Call workflow step requires 'workflow' and 'on-success'"
+                )
+            if (
+                self.objective
+                or self.next
+                or self.on_exhausted
+                or self.when is not None
+                or self.then_step
+                or self.else_step
+                or self.cases
+                or self.default_step
+                or self.branches
+                or self.join
+                or self.max_attempts is not None
+            ):
+                raise ValueError(
+                    "Call workflow step only supports 'workflow', "
+                    "'on-success', optional 'on-failure', and 'description'"
+                )
+            return self
+
         # END step
         if (
             self.objective
@@ -477,8 +554,11 @@ class WorkflowStep(SDLModel):
             or self.on_exhausted
             or self.then_step
             or self.else_step
+            or self.cases
+            or self.default_step
             or self.branches
             or self.join
+            or self.workflow
             or self.max_attempts is not None
         ):
             raise ValueError(
@@ -492,4 +572,14 @@ class Workflow(SDLModel):
 
     description: str = ""
     start: str
+    timeout: WorkflowTimeoutPolicy | None = None
     steps: dict[str, WorkflowStep] = Field(min_length=1)
+
+    @field_validator("timeout", mode="before")
+    @classmethod
+    def parse_timeout(cls, v: object) -> object:
+        if v is None or isinstance(v, WorkflowTimeoutPolicy):
+            return v
+        if isinstance(v, (int, float, str)):
+            return {"seconds": v}
+        return v

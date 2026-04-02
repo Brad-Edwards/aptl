@@ -1,0 +1,16 @@
+{
+  "profile": "full-remote-control-plane",
+  "required_contracts": [
+    "backend-manifest-v1",
+    "provisioning-plan-v1",
+    "orchestration-plan-v1",
+    "evaluation-plan-v1",
+    "operation-receipt-v1",
+    "operation-status-v1",
+    "runtime-snapshot-v1",
+    "workflow-result-envelope-v1",
+    "workflow-history-event-stream-v1",
+    "evaluation-result-envelope-v1",
+    "evaluation-history-event-stream-v1"
+  ]
+}

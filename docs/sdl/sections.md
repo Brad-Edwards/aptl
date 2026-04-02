@@ -1,6 +1,8 @@
 # SDL Sections Reference
 
-A scenario is a YAML document with a required top-level `name` and up to 21 named sections. Aside from `name`, all sections are optional.
+A scenario is a YAML document with a required top-level `name`, optional
+top-level composition fields (`version`, `imports`), and up to 21 named SDL
+sections. Aside from `name`, all sections are optional.
 
 ## Section Overview
 
@@ -495,7 +497,9 @@ Workflow step types are:
 
 - `objective` — execute a declared objective; `on-success` is required and `on-failure` is optional. If `on-failure` is omitted, workflow execution fails terminally on objective failure.
 - `decision` — branch on a declarative predicate using `then` / `else`
+- `switch` — evaluate ordered `cases`, take the first matching case target, and fall back to `default` when no case predicate matches
 - `retry` — re-run a declared objective until it succeeds or `max-attempts` is exhausted; `on-success` is required and `on-exhausted` is optional
+- `call` — invoke another declared workflow as a reusable subflow; `workflow` and `on-success` are required, and `on-failure` is optional
 - `parallel` — launch two or more branch entry steps concurrently and require all explicit branch paths to converge on a named `join` step; `on-failure` is optional
 - `join` — an explicit barrier step, not a normal direct successor edge, that resumes linear control via `next` only after the owning `parallel` step has observed all branches converge
 - `end` — terminal node
@@ -519,7 +523,13 @@ Workflow-visible step state is an immutable execution history. In v1, predicates
 
 After a `join`, downstream predicates may inspect executable branch steps from that fanout, but only when those steps are guaranteed on every path within their own branch before the join. Branch-local step state does not leak across sibling branches before the join, and a `parallel.on-failure` bypass does not expose abandoned branch state.
 
-Workflow graphs remain acyclic. Every referenced step must exist, every step must be reachable from `start`, joins must be referenced by exactly one `parallel` step, and every explicit branch path from a `parallel` step must converge on its declared join. Workflow names and step names may not contain `.` because objective window refs use `<workflow>.<step>` syntax.
+Workflow graphs remain acyclic. Every referenced step must exist, every step
+must be reachable from `start`, joins must be referenced by exactly one
+`parallel` step, every explicit branch path from a `parallel` step must
+converge on its declared join, and workflow call graphs must also remain
+acyclic. Workflow names may use canonical namespace-style dots, but workflow
+step names may not because objective window refs use `<workflow>.<step>`
+syntax and split on the final `.`.
 
 Migration from the exploratory workflow syntax:
 

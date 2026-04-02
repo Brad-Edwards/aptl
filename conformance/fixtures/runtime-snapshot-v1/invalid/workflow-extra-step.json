@@ -1,0 +1,83 @@
+{
+  "schema_version": "runtime-snapshot/v1",
+  "entries": {
+    "orchestration.workflow.response": {
+      "address": "orchestration.workflow.response",
+      "domain": "orchestration",
+      "resource_type": "workflow",
+      "payload": {
+        "result_contract": {
+          "state_schema_version": "workflow-step-state/v1",
+          "observable_steps": {
+            "run": {
+              "step_type": "objective",
+              "state_observable": true,
+              "observable_outcomes": ["succeeded", "failed"],
+              "supports_attempt_counts": true,
+              "fixed_attempts": 1
+            }
+          }
+        },
+        "execution_contract": {
+          "state_schema_version": "workflow-step-state/v1",
+          "start_step": "run",
+          "steps": {
+            "run": {
+              "step_type": "objective",
+              "state_observable": true,
+              "observable_outcomes": ["succeeded", "failed"],
+              "supports_attempt_counts": true,
+              "fixed_attempts": 1
+            }
+          },
+          "control_edges": {
+            "run": []
+          },
+          "join_owners": {},
+          "observable_steps": ["run"]
+        }
+      },
+      "ordering_dependencies": [],
+      "refresh_dependencies": [],
+      "status": "queued"
+    }
+  },
+  "orchestration_results": {
+    "orchestration.workflow.response": {
+      "state_schema_version": "workflow-step-state/v1",
+      "workflow_status": "running",
+      "run_id": "workflow-run",
+      "started_at": "2026-04-02T22:00:00Z",
+      "updated_at": "2026-04-02T22:00:00Z",
+      "terminal_reason": null,
+      "steps": {
+        "run": {
+          "lifecycle": "pending",
+          "outcome": null,
+          "attempts": 0
+        },
+        "extra": {
+          "lifecycle": "pending",
+          "outcome": null,
+          "attempts": 0
+        }
+      }
+    }
+  },
+  "orchestration_history": {
+    "orchestration.workflow.response": [
+      {
+        "event_type": "workflow_started",
+        "timestamp": "2026-04-02T22:00:00Z",
+        "step_name": "run",
+        "branch_name": null,
+        "join_step": null,
+        "outcome": null,
+        "details": {}
+      }
+    ]
+  },
+  "evaluation_results": {},
+  "evaluation_history": {},
+  "metadata": {}
+}

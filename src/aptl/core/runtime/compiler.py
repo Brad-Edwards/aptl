@@ -41,6 +41,7 @@ from aptl.core.runtime.models import (
     WorkflowStepOutcome,
     WorkflowStepStatePredicateRuntime,
     WorkflowStepRuntime,
+    WorkflowSwitchCaseRuntime,
     WorkflowRuntime,
 )
 from aptl.core.sdl import instantiate_scenario
@@ -1210,10 +1211,119 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             WorkflowStatePredicateFeature
         ] = []
 
+        def _compile_workflow_predicate(
+            predicate_source,
+            *,
+            predicate_address: str,
+        ) -> tuple[
+            WorkflowPredicateRuntime,
+            tuple[str, ...],
+            tuple[str, ...],
+            tuple[str, ...],
+            tuple[WorkflowStepStatePredicateRuntime, ...],
+        ]:
+            condition_addresses, workflow_diagnostics = _resolve_binding_refs(
+                condition_bindings,
+                ref_names=list(predicate_source.conditions),
+                owner_address=predicate_address,
+                domain="orchestration",
+                code_prefix="orchestration.condition-ref",
+                binding_attr="condition_name",
+                binding_label="condition",
+            )
+            diagnostics.extend(workflow_diagnostics)
+
+            predicate_addresses = list(condition_addresses)
+            metric_addresses, metric_diagnostics = _resolve_named_refs(
+                ref_names=list(predicate_source.metrics),
+                available_names=set(scenario.metrics),
+                address_builder=_metric_address,
+                owner_address=predicate_address,
+                domain="orchestration",
+                code_prefix="orchestration.metric-ref",
+                resource_label="metric",
+            )
+            evaluation_addresses, evaluation_diagnostics = _resolve_named_refs(
+                ref_names=list(predicate_source.evaluations),
+                available_names=set(scenario.evaluations),
+                address_builder=_evaluation_address,
+                owner_address=predicate_address,
+                domain="orchestration",
+                code_prefix="orchestration.evaluation-ref",
+                resource_label="evaluation",
+            )
+            tlo_addresses, tlo_diagnostics = _resolve_named_refs(
+                ref_names=list(predicate_source.tlos),
+                available_names=set(scenario.tlos),
+                address_builder=_tlo_address,
+                owner_address=predicate_address,
+                domain="orchestration",
+                code_prefix="orchestration.tlo-ref",
+                resource_label="TLO",
+            )
+            goal_addresses, goal_diagnostics = _resolve_named_refs(
+                ref_names=list(predicate_source.goals),
+                available_names=set(scenario.goals),
+                address_builder=_goal_address,
+                owner_address=predicate_address,
+                domain="orchestration",
+                code_prefix="orchestration.goal-ref",
+                resource_label="goal",
+            )
+            predicate_objectives, objective_diagnostics = _resolve_named_refs(
+                ref_names=list(predicate_source.objectives),
+                available_names=set(scenario.objectives),
+                address_builder=_objective_address,
+                owner_address=predicate_address,
+                domain="orchestration",
+                code_prefix="orchestration.objective-ref",
+                resource_label="objective",
+            )
+            diagnostics.extend(metric_diagnostics)
+            diagnostics.extend(evaluation_diagnostics)
+            diagnostics.extend(tlo_diagnostics)
+            diagnostics.extend(goal_diagnostics)
+            diagnostics.extend(objective_diagnostics)
+            predicate_addresses.extend(metric_addresses)
+            predicate_addresses.extend(evaluation_addresses)
+            predicate_addresses.extend(tlo_addresses)
+            predicate_addresses.extend(goal_addresses)
+            predicate_addresses.extend(predicate_objectives)
+
+            step_state_predicates = tuple(
+                WorkflowStepStatePredicateRuntime(
+                    step_name=ref.step,
+                    outcomes=tuple(
+                        WorkflowStepOutcome(outcome.value)
+                        for outcome in ref.outcomes
+                    ),
+                    min_attempts=ref.min_attempts,
+                )
+                for ref in predicate_source.steps
+                if isinstance(ref.step, str) and ref.step
+            )
+            return (
+                WorkflowPredicateRuntime(
+                    condition_addresses=condition_addresses,
+                    metric_addresses=tuple(metric_addresses),
+                    evaluation_addresses=tuple(evaluation_addresses),
+                    tlo_addresses=tuple(tlo_addresses),
+                    goal_addresses=tuple(goal_addresses),
+                    objective_addresses=tuple(predicate_objectives),
+                    step_state_predicates=step_state_predicates,
+                ),
+                condition_addresses,
+                _dedupe(predicate_addresses),
+                tuple(predicate_objectives),
+                step_state_predicates,
+            )
+
         for step_name, step in workflow.steps.items():
             edges: list[str] = []
             objective_address = ""
             predicate: WorkflowPredicateRuntime | None = None
+            switch_cases: tuple[WorkflowSwitchCaseRuntime, ...] = ()
+            called_workflow_address = ""
             if step.type == WorkflowStepType.OBJECTIVE:
                 edges.append(step.on_success)
                 if step.on_failure:
@@ -1221,6 +1331,10 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             elif step.type == WorkflowStepType.DECISION:
                 required_features.append(WorkflowFeature.DECISION)
                 edges.extend([step.then_step, step.else_step])
+            elif step.type == WorkflowStepType.SWITCH:
+                required_features.append(WorkflowFeature.SWITCH)
+                edges.extend(case.next_step for case in step.cases)
+                edges.append(step.default_step)
             elif step.type == WorkflowStepType.PARALLEL:
                 required_features.append(WorkflowFeature.PARALLEL_BARRIER)
                 edges.extend(step.branches)
@@ -1233,6 +1347,11 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                 edges.append(step.on_success)
                 if step.on_exhausted:
                     edges.append(step.on_exhausted)
+            elif step.type == WorkflowStepType.CALL:
+                required_features.append(WorkflowFeature.CALL)
+                edges.append(step.on_success)
+                if step.on_failure:
+                    edges.append(step.on_failure)
 
             control_edges[step_name] = _dedupe([edge for edge in edges if edge])
 
@@ -1249,102 +1368,35 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                 diagnostics.extend(objective_diagnostics)
                 referenced_objectives.extend(objective_addresses)
                 objective_address = objective_addresses[0] if objective_addresses else ""
-
-            predicate_addresses: list[str] = []
-            if step.when is not None:
-                predicate_address = _address(workflow_address, "step", step_name)
-                condition_addresses, workflow_diagnostics = _resolve_binding_refs(
-                    condition_bindings,
-                    ref_names=list(step.when.conditions),
-                    owner_address=predicate_address,
+            elif step.workflow:
+                workflow_addresses, workflow_diagnostics = _resolve_named_refs(
+                    ref_names=[step.workflow],
+                    available_names=set(scenario.workflows),
+                    address_builder=_workflow_address,
+                    owner_address=workflow_address,
                     domain="orchestration",
-                    code_prefix="orchestration.condition-ref",
-                    binding_attr="condition_name",
-                    binding_label="condition",
+                    code_prefix="orchestration.workflow-ref",
+                    resource_label="workflow",
                 )
                 diagnostics.extend(workflow_diagnostics)
+                called_workflow_address = (
+                    workflow_addresses[0] if workflow_addresses else ""
+                )
 
-                predicate_addresses = list(condition_addresses)
-                metric_addresses, metric_diagnostics = _resolve_named_refs(
-                    ref_names=list(step.when.metrics),
-                    available_names=set(scenario.metrics),
-                    address_builder=_metric_address,
-                    owner_address=predicate_address,
-                    domain="orchestration",
-                    code_prefix="orchestration.metric-ref",
-                    resource_label="metric",
+            if step.when is not None:
+                (
+                    predicate,
+                    condition_addresses,
+                    predicate_addresses,
+                    predicate_objectives,
+                    step_state_predicates,
+                ) = _compile_workflow_predicate(
+                    step.when,
+                    predicate_address=_address(workflow_address, "step", step_name),
                 )
-                evaluation_addresses, evaluation_diagnostics = _resolve_named_refs(
-                    ref_names=list(step.when.evaluations),
-                    available_names=set(scenario.evaluations),
-                    address_builder=_evaluation_address,
-                    owner_address=predicate_address,
-                    domain="orchestration",
-                    code_prefix="orchestration.evaluation-ref",
-                    resource_label="evaluation",
-                )
-                tlo_addresses, tlo_diagnostics = _resolve_named_refs(
-                    ref_names=list(step.when.tlos),
-                    available_names=set(scenario.tlos),
-                    address_builder=_tlo_address,
-                    owner_address=predicate_address,
-                    domain="orchestration",
-                    code_prefix="orchestration.tlo-ref",
-                    resource_label="TLO",
-                )
-                goal_addresses, goal_diagnostics = _resolve_named_refs(
-                    ref_names=list(step.when.goals),
-                    available_names=set(scenario.goals),
-                    address_builder=_goal_address,
-                    owner_address=predicate_address,
-                    domain="orchestration",
-                    code_prefix="orchestration.goal-ref",
-                    resource_label="goal",
-                )
-                predicate_objectives, objective_diagnostics = _resolve_named_refs(
-                    ref_names=list(step.when.objectives),
-                    available_names=set(scenario.objectives),
-                    address_builder=_objective_address,
-                    owner_address=predicate_address,
-                    domain="orchestration",
-                    code_prefix="orchestration.objective-ref",
-                    resource_label="objective",
-                )
-                diagnostics.extend(metric_diagnostics)
-                diagnostics.extend(evaluation_diagnostics)
-                diagnostics.extend(tlo_diagnostics)
-                diagnostics.extend(goal_diagnostics)
-                diagnostics.extend(objective_diagnostics)
-                predicate_addresses.extend(metric_addresses)
-                predicate_addresses.extend(evaluation_addresses)
-                predicate_addresses.extend(tlo_addresses)
-                predicate_addresses.extend(goal_addresses)
                 referenced_objectives.extend(predicate_objectives)
-                predicate_addresses.extend(predicate_objectives)
-
                 step_condition_addresses[step_name] = condition_addresses
-                step_predicate_addresses[step_name] = _dedupe(predicate_addresses)
-                step_state_predicates = tuple(
-                    WorkflowStepStatePredicateRuntime(
-                        step_name=ref.step,
-                        outcomes=tuple(
-                            WorkflowStepOutcome(outcome.value)
-                            for outcome in ref.outcomes
-                        ),
-                        min_attempts=ref.min_attempts,
-                    )
-                    for ref in step.when.steps
-                    if isinstance(ref.step, str) and ref.step
-                )
-                predicate = WorkflowPredicateRuntime(
-                    condition_addresses=condition_addresses,
-                    metric_addresses=tuple(metric_addresses),
-                    evaluation_addresses=tuple(evaluation_addresses),
-                    tlo_addresses=tuple(tlo_addresses),
-                    goal_addresses=tuple(goal_addresses),
-                    objective_addresses=tuple(predicate_objectives),
-                    step_state_predicates=step_state_predicates,
-                )
+                step_predicate_addresses[step_name] = predicate_addresses
                 if step_state_predicates:
                     required_state_predicate_features.append(
                         WorkflowStatePredicateFeature.OUTCOME_MATCHING
@@ -1356,12 +1408,61 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                     required_state_predicate_features.append(
                         WorkflowStatePredicateFeature.ATTEMPT_COUNTS
                     )
+            elif step.type == WorkflowStepType.SWITCH:
+                switch_condition_addresses: list[str] = []
+                switch_predicate_addresses: list[str] = []
+                compiled_cases: list[WorkflowSwitchCaseRuntime] = []
+                for case_index, case in enumerate(step.cases):
+                    (
+                        case_predicate,
+                        condition_addresses,
+                        predicate_addresses,
+                        predicate_objectives,
+                        step_state_predicates,
+                    ) = _compile_workflow_predicate(
+                        case.when,
+                        predicate_address=_address(
+                            workflow_address, "step", step_name, "case", str(case_index)
+                        ),
+                    )
+                    referenced_objectives.extend(predicate_objectives)
+                    switch_condition_addresses.extend(condition_addresses)
+                    switch_predicate_addresses.extend(predicate_addresses)
+                    if step_state_predicates:
+                        required_state_predicate_features.append(
+                            WorkflowStatePredicateFeature.OUTCOME_MATCHING
+                        )
+                    if any(
+                        state_predicate.min_attempts is not None
+                        for state_predicate in step_state_predicates
+                    ):
+                        required_state_predicate_features.append(
+                            WorkflowStatePredicateFeature.ATTEMPT_COUNTS
+                        )
+                    compiled_cases.append(
+                        WorkflowSwitchCaseRuntime(
+                            case_index=case_index,
+                            predicate=case_predicate,
+                            next_step=case.next_step,
+                        )
+                    )
+                switch_cases = tuple(compiled_cases)
+                if switch_condition_addresses:
+                    step_condition_addresses[step_name] = _dedupe(
+                        switch_condition_addresses
+                    )
+                if switch_predicate_addresses:
+                    step_predicate_addresses[step_name] = _dedupe(
+                        switch_predicate_addresses
+                    )
 
             if (
                 step.on_failure
                 or step.on_exhausted
             ):
                 required_features.append(WorkflowFeature.FAILURE_TRANSITIONS)
+            if workflow.timeout is not None:
+                required_features.append(WorkflowFeature.TIMEOUTS)
 
             control_steps[step_name] = WorkflowStepRuntime(
                 name=step_name,
@@ -1374,9 +1475,12 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                 on_exhausted=step.on_exhausted,
                 then_step=step.then_step,
                 else_step=step.else_step,
+                switch_cases=switch_cases,
+                default_step=step.default_step,
                 branches=tuple(step.branches),
                 join_step=step.join,
                 owning_parallel_step=join_owners.get(step_name, ""),
+                called_workflow_address=called_workflow_address,
                 max_attempts=step.max_attempts,
                 state_contract=workflow_step_semantic_contract(step.type.value),
             )
@@ -1415,12 +1519,27 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             execution_contract=WorkflowExecutionContract(
                 state_schema_version=WORKFLOW_STATE_SCHEMA_VERSION,
                 start_step=workflow.start,
+                timeout_seconds=(
+                    workflow.timeout.seconds
+                    if workflow.timeout is not None
+                    and isinstance(workflow.timeout.seconds, int)
+                    else None
+                ),
                 steps={
                     step_name: step_runtime.state_contract
                     for step_name, step_runtime in control_steps.items()
                 },
+                step_types={
+                    step_name: step_runtime.step_type
+                    for step_name, step_runtime in control_steps.items()
+                },
                 control_edges=control_edges,
                 join_owners=join_owners,
+                call_steps={
+                    step_name: step_runtime.called_workflow_address
+                    for step_name, step_runtime in control_steps.items()
+                    if step_runtime.called_workflow_address
+                },
                 observable_steps=tuple(sorted(result_contract_steps)),
             ),
             refresh_dependencies=_dedupe(

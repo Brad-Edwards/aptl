@@ -1240,6 +1240,78 @@ class TestVerifyWorkflows:
         errors = _validate(s)
         assert not errors
 
+    def test_valid_switch_and_call_workflow(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "child": {
+                    "start": "run",
+                    "steps": {
+                        "run": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+                "parent": {
+                    "start": "route",
+                    "steps": {
+                        "route": {
+                            "type": "switch",
+                            "cases": [
+                                {
+                                    "when": {"goals": ["pass-exercise"]},
+                                    "next": "delegate",
+                                }
+                            ],
+                            "default": "finish",
+                        },
+                        "delegate": {
+                            "type": "call",
+                            "workflow": "child",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_workflow_call_cycle_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "a": {
+                    "start": "delegate",
+                    "steps": {
+                        "delegate": {
+                            "type": "call",
+                            "workflow": "b",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+                "b": {
+                    "start": "delegate",
+                    "steps": {
+                        "delegate": {
+                            "type": "call",
+                            "workflow": "a",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("Workflow call graph contains a cycle" in e for e in errors)
+
     def test_retry_missing_exhausted_step_ref(self):
         s = _make_scenario(
             **self._base_kwargs(),

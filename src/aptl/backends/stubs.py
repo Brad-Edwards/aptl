@@ -55,9 +55,13 @@ def create_stub_manifest(**config) -> BackendManifest:
             supported_workflow_features=frozenset(
                 {
                     WorkflowFeature.DECISION,
+                    WorkflowFeature.SWITCH,
+                    WorkflowFeature.CALL,
                     WorkflowFeature.PARALLEL_BARRIER,
                     WorkflowFeature.RETRY,
                     WorkflowFeature.FAILURE_TRANSITIONS,
+                    WorkflowFeature.CANCELLATION,
+                    WorkflowFeature.TIMEOUTS,
                 }
             ),
             supported_workflow_state_predicates=frozenset(

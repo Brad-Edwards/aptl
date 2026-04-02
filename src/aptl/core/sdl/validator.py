@@ -965,7 +965,11 @@ class SemanticValidator:
             visiting=visiting,
         )
         step = workflow_steps[step_name]
-        if step.type in {WorkflowStepType.OBJECTIVE, WorkflowStepType.RETRY}:
+        if step.type in {
+            WorkflowStepType.OBJECTIVE,
+            WorkflowStepType.RETRY,
+            WorkflowStepType.CALL,
+        }:
             available.add(step_name)
         elif (
             step.type == WorkflowStepType.PARALLEL
@@ -1052,13 +1056,10 @@ class SemanticValidator:
         return result
 
     def _verify_workflows(self) -> None:
+        workflow_call_graph: dict[str, set[str]] = {
+            workflow_name: set() for workflow_name in self._s.workflows
+        }
         for workflow_name, workflow in self._s.workflows.items():
-            if "." in workflow_name:
-                self._err(
-                    f"Workflow '{workflow_name}' name cannot contain '.' "
-                    "because step references use '<workflow>.<step>' syntax"
-                )
-
             if (
                 not self._is_unresolved_var(workflow.start)
                 and workflow.start not in workflow.steps
@@ -1124,6 +1125,37 @@ class SemanticValidator:
                         if resolved is not None:
                             graph[step_name].append(resolved)
 
+                elif step.type == WorkflowStepType.SWITCH:
+                    aggregated_refs: list[str] = []
+                    for case_index, case in enumerate(step.cases):
+                        aggregated_refs.extend(
+                            self._validate_workflow_predicate(
+                                workflow_name,
+                                f"{step_name}.case[{case_index}]",
+                                case.when,
+                                workflow.steps,
+                            )
+                        )
+                        resolved = self._validate_workflow_target_ref(
+                            workflow_name,
+                            step_name,
+                            f"case[{case_index}] next",
+                            case.next_step,
+                            workflow.steps,
+                        )
+                        if resolved is not None:
+                            graph[step_name].append(resolved)
+                    predicate_step_refs[step_name] = aggregated_refs
+                    resolved_default = self._validate_workflow_target_ref(
+                        workflow_name,
+                        step_name,
+                        "default",
+                        step.default_step,
+                        workflow.steps,
+                    )
+                    if resolved_default is not None:
+                        graph[step_name].append(resolved_default)
+
                 elif step.type == WorkflowStepType.PARALLEL:
                     for branch_ref in step.branches:
                         resolved = self._validate_workflow_target_ref(
@@ -1177,6 +1209,33 @@ class SemanticValidator:
                     for field_name, target in (
                         ("on-success", step.on_success),
                         ("on-exhausted", step.on_exhausted),
+                    ):
+                        resolved = self._validate_workflow_target_ref(
+                            workflow_name,
+                            step_name,
+                            field_name,
+                            target,
+                            workflow.steps,
+                        )
+                        if resolved is not None:
+                            graph[step_name].append(resolved)
+
+                elif step.type == WorkflowStepType.CALL:
+                    if (
+                        not self._is_unresolved_var(step.workflow)
+                        and step.workflow not in self._s.workflows
+                    ):
+                        self._err(
+                            f"Workflow '{workflow_name}' step '{step_name}' "
+                            f"references undefined workflow '{step.workflow}'"
+                        )
+                    elif not self._is_unresolved_var(step.workflow):
+                        workflow_call_graph.setdefault(workflow_name, set()).add(
+                            step.workflow
+                        )
+                    for field_name, target in (
+                        ("on-success", step.on_success),
+                        ("on-failure", step.on_failure),
                     ):
                         resolved = self._validate_workflow_target_ref(
                             workflow_name,
@@ -1338,6 +1397,18 @@ class SemanticValidator:
                             f"from '{branch_ref}' to converge on join "
                             f"'{step.join}'"
                         )
+
+        if workflow_call_graph and _topological_sort(
+            {
+                workflow_name: sorted(
+                    callee
+                    for callee in callees
+                    if callee in workflow_call_graph
+                )
+                for workflow_name, callees in workflow_call_graph.items()
+            }
+        ) is None:
+            self._err("Workflow call graph contains a cycle")
 
     def _verify_variables(self) -> None:
         defined = set(self._s.variables.keys())

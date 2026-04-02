@@ -6,6 +6,7 @@ Provides ``parse_sdl()`` as the primary entry point. Handles:
 - Shorthand expansion (``source: "pkg"`` → ``{name: "pkg", version: "*"}``)
 """
 
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,7 @@ from pydantic import ValidationError
 
 from aptl.core.sdl._errors import SDLParseError, SDLValidationError
 from aptl.core.sdl._base import is_variable_ref
-from aptl.core.sdl.scenario import Scenario
+from aptl.core.sdl.scenario import ExpandedScenario, Scenario
 from aptl.core.sdl.validator import SemanticValidator
 
 
@@ -261,32 +262,23 @@ def parse_sdl(
         SDLParseError: If YAML parsing fails or the data isn't a dict.
         SDLValidationError: If semantic validation finds errors.
     """
-    content = content.strip()
-    if not content:
-        raise SDLParseError("SDL content is empty", path=path)
+    data = _load_normalized_data(content, path=path)
+    if data.get("imports"):
+        if path is None:
+            raise SDLParseError(
+                "SDL imports require file-backed parsing via parse_sdl_file()",
+                path=path,
+            )
+        from aptl.core.sdl.composition import expand_sdl_modules
 
-    try:
-        raw = yaml.safe_load(content)
-    except yaml.YAMLError as e:
-        raise SDLParseError(f"Invalid YAML: {e}", path=path) from e
-
-    if not isinstance(raw, dict):
-        raise SDLParseError(
-            "SDL must be a YAML mapping (not a scalar or list)", path=path
-        )
-
-    # Normalize keys (case-insensitive, hyphens to underscores)
-    data = _normalize_keys(raw)
-
-    # User-defined mapping keys define the SDL symbol table and must be concrete.
-    _reject_variable_mapping_keys(data)
-
-    # Expand shorthands
-    data = _expand_shorthands(data)
+        data, namespaces = expand_sdl_modules(data, path=path)
+        scenario_cls = ExpandedScenario if namespaces else Scenario
+    else:
+        scenario_cls = Scenario
 
     # Construct the Pydantic model (structural validation)
     try:
-        scenario = Scenario(**data)
+        scenario = scenario_cls(**data)
     except ValidationError as e:
         raise SDLParseError(str(e), path=path) from e
 
@@ -303,6 +295,8 @@ def parse_sdl(
     else:
         scenario._set_advisories([])
         scenario._set_semantic_validated(False)
+    if isinstance(scenario, ExpandedScenario):
+        scenario._set_module_namespaces(locals().get("namespaces", {}))
 
     return scenario
 
@@ -316,4 +310,55 @@ def parse_sdl_file(path: Path, **kwargs: Any) -> Scenario:
         raise FileNotFoundError(f"SDL file not found: {path}")
 
     content = path.read_text(encoding="utf-8")
-    return parse_sdl(content, path=path, **kwargs)
+    data = _load_normalized_data(content, path=path)
+    namespaces: dict[str, str] = {}
+    if data.get("imports"):
+        from aptl.core.sdl.composition import expand_sdl_modules
+
+        data, namespaces = expand_sdl_modules(data, path=path)
+    scenario_cls = ExpandedScenario if namespaces else Scenario
+    try:
+        scenario = scenario_cls(**data)
+    except ValidationError as e:
+        raise SDLParseError(str(e), path=path) from e
+
+    skip_semantic_validation = bool(kwargs.pop("skip_semantic_validation", False))
+    if not skip_semantic_validation:
+        validator = SemanticValidator(scenario)
+        try:
+            validator.validate()
+        except SDLValidationError as e:
+            e.path = path
+            raise
+        scenario._set_advisories(validator.warnings)
+        scenario._set_semantic_validated(True)
+    else:
+        scenario._set_advisories([])
+        scenario._set_semantic_validated(False)
+    if isinstance(scenario, ExpandedScenario):
+        scenario._set_module_namespaces(namespaces)
+    return scenario
+
+
+def _load_normalized_data(
+    content: str,
+    *,
+    path: Path | None = None,
+) -> dict[str, Any]:
+    content = textwrap.dedent(content).strip()
+    if not content:
+        raise SDLParseError("SDL content is empty", path=path)
+
+    try:
+        raw = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        raise SDLParseError(f"Invalid YAML: {e}", path=path) from e
+
+    if not isinstance(raw, dict):
+        raise SDLParseError(
+            "SDL must be a YAML mapping (not a scalar or list)", path=path
+        )
+
+    data = _normalize_keys(raw)
+    _reject_variable_mapping_keys(data)
+    return _expand_shorthands(data)

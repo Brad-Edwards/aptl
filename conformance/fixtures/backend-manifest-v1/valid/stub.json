@@ -1,0 +1,32 @@
+{
+  "schema_version": "backend-manifest/v1",
+  "name": "stub",
+  "provisioner": {
+    "name": "stub-provisioner",
+    "supported_node_types": ["vm", "switch"],
+    "supported_os_families": ["linux", "windows"],
+    "supported_content_types": ["file", "dataset"],
+    "supported_account_features": ["groups", "shell"],
+    "max_total_nodes": null,
+    "supports_acls": true,
+    "supports_accounts": true,
+    "constraints": {}
+  },
+  "orchestrator": {
+    "name": "stub-orchestrator",
+    "supported_sections": ["events", "scripts", "stories", "workflows"],
+    "supports_workflows": true,
+    "supports_condition_refs": true,
+    "supports_inject_bindings": true,
+    "supported_workflow_features": ["decision", "parallel-barrier", "retry", "failure-transitions"],
+    "supported_workflow_state_predicates": ["outcome-matching", "attempt-counts"],
+    "constraints": {}
+  },
+  "evaluator": {
+    "name": "stub-evaluator",
+    "supported_sections": ["conditions", "metrics", "evaluations", "tlos", "goals", "objectives"],
+    "supports_scoring": true,
+    "supports_objectives": true,
+    "constraints": {}
+  }
+}

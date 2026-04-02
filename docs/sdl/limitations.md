@@ -18,7 +18,8 @@ These are intentionally excluded from the specification layer:
 - **Extra hosts** (/etc/hosts overrides) — deployment detail
 - **Ulimits** (nofile, memlock) — deployment detail
 
-These will be addressed by a future SDL → Docker Compose / Terraform provider binding layer.
+These remain outside the language itself and are addressed by provider bindings
+and runtime deployment adapters rather than by the SDL surface.
 
 ### Specification-Layer Gaps (future SDL work)
 
@@ -26,8 +27,8 @@ These are things that *should* be expressible in the SDL but aren't yet:
 
 | Gap | Description | Candidate Precedent |
 |-----|-------------|-------------------|
-| **Module composition** | Import and compose scenario modules with version constraints and parameter overrides | Terraform modules, TOSCA type derivation |
-| **Switch / richer step effects** | SDL workflows support explicit decisions, retries, failure transitions, explicit parallel joins, and predicates over prior step state, but not switch/case routing, reusable subflows, or richer step effects beyond declared objective execution | CACAO v2.0 workflow types |
+| **Remote module registries / package publishing** | Local file-backed module/import composition now exists, but reusable distribution, trust policy, and registry-backed resolution are still future work | Terraform registry, OCI artifact delivery |
+| **Compensation / rollback semantics** | SDL workflows now support explicit decisions, switch/case routing, reusable `call` subflows, retries, failure transitions, explicit parallel joins, and cancel/timeout lifecycle observation, but not compensating action scopes or rollback ordering | CACAO v2.0 workflow types |
 | **Temporal operators** | STIX-style FOLLOWEDBY/WITHIN for time-ordered event assertions | STIX Patterning Language |
 | **Full solver-backed verification** | Global proof-style verification that attack paths are reachable and defenses are consistent is still future work; today the repo adopts lightweight semantic modeling, invariants, typed contracts, and selective property/state-machine methods instead | VSDL SMT solver, CRACK Datalog |
 | **Agent framework bindings** | Gymnasium observation/action space definitions, reward function code | CybORG Gymnasium interface |

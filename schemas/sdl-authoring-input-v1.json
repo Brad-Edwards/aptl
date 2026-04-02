@@ -765,6 +765,36 @@
       "title": "Goal",
       "type": "object"
     },
+    "ImportDecl": {
+      "additionalProperties": false,
+      "description": "A local module import expanded before full semantic validation.",
+      "properties": {
+        "namespace": {
+          "default": "",
+          "title": "Namespace",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "version": {
+          "default": "*",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "ImportDecl",
+      "type": "object"
+    },
     "InfraNode": {
       "additionalProperties": false,
       "description": "Deployment parameters for a node.\n\nShorthand: ``node-name: 3`` (just the count).\nLonghand: full dict with count, links, dependencies, properties, acls.",
@@ -1820,6 +1850,17 @@
           "minProperties": 1,
           "title": "Steps",
           "type": "object"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowTimeoutPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1897,6 +1938,18 @@
           "title": "Branches",
           "type": "array"
         },
+        "cases": {
+          "items": {
+            "$ref": "#/$defs/WorkflowSwitchCase"
+          },
+          "title": "Cases",
+          "type": "array"
+        },
+        "default": {
+          "default": "",
+          "title": "Default",
+          "type": "string"
+        },
         "description": {
           "default": "",
           "title": "Description",
@@ -1970,6 +2023,11 @@
             }
           ],
           "default": null
+        },
+        "workflow": {
+          "default": "",
+          "title": "Workflow",
+          "type": "string"
         }
       },
       "required": [
@@ -2032,13 +2090,61 @@
       "enum": [
         "objective",
         "decision",
+        "switch",
         "parallel",
         "join",
         "retry",
+        "call",
         "end"
       ],
       "title": "WorkflowStepType",
       "type": "string"
+    },
+    "WorkflowSwitchCase": {
+      "additionalProperties": false,
+      "description": "One ordered branch case within a ``switch`` workflow step.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "next": {
+          "title": "Next",
+          "type": "string"
+        },
+        "when": {
+          "$ref": "#/$defs/WorkflowPredicate"
+        }
+      },
+      "required": [
+        "when",
+        "next"
+      ],
+      "title": "WorkflowSwitchCase",
+      "type": "object"
+    },
+    "WorkflowTimeoutPolicy": {
+      "additionalProperties": false,
+      "description": "Workflow-level timeout policy.",
+      "properties": {
+        "seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Seconds"
+        }
+      },
+      "required": [
+        "seconds"
+      ],
+      "title": "WorkflowTimeoutPolicy",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -2111,6 +2217,13 @@
       },
       "title": "Goals",
       "type": "object"
+    },
+    "imports": {
+      "items": {
+        "$ref": "#/$defs/ImportDecl"
+      },
+      "title": "Imports",
+      "type": "array"
     },
     "infrastructure": {
       "additionalProperties": {
@@ -2185,6 +2298,11 @@
       },
       "title": "Variables",
       "type": "object"
+    },
+    "version": {
+      "default": "*",
+      "title": "Version",
+      "type": "string"
     },
     "vulnerabilities": {
       "additionalProperties": {

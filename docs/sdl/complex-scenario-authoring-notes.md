@@ -20,6 +20,8 @@ friction does not disappear into chat context.
   into `stories` / `scripts` / `events` plus `depends_on`. The SDL now
   has first-class `workflows` for branching and parallel objective
   composition, and the satcom/port examples exercise them.
-- Still out of scope: workflows are DAGs only. Loops, switch/case
-  constructs, exception paths, and richer CACAO step semantics remain
-  future work.
+- Resolved: workflows now support `switch` routing, reusable `call`
+  subflows, and explicit cancel/timeout lifecycle semantics at the
+  control-plane boundary.
+- Still out of scope: workflows are DAGs only. General loops, exception
+  hierarchies, and compensation/rollback semantics remain future work.

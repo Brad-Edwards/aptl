@@ -100,6 +100,9 @@ class WorkflowHistoryEventType(str, Enum):
     WORKFLOW_STARTED = "workflow_started"
     STEP_STARTED = "step_started"
     STEP_COMPLETED = "step_completed"
+    SWITCH_CASE_SELECTED = "switch_case_selected"
+    CALL_STARTED = "call_started"
+    CALL_COMPLETED = "call_completed"
     BRANCH_ENTERED = "branch_entered"
     BRANCH_CONVERGED = "branch_converged"
     WORKFLOW_COMPLETED = "workflow_completed"
@@ -318,6 +321,15 @@ class WorkflowPredicateRuntime:
 
 
 @dataclass(frozen=True)
+class WorkflowSwitchCaseRuntime:
+    """Resolved ordered switch-case branch semantics."""
+
+    case_index: int
+    predicate: WorkflowPredicateRuntime
+    next_step: str
+
+
+@dataclass(frozen=True)
 class WorkflowStepRuntime:
     """Resolved workflow step semantics."""
 
@@ -331,9 +343,12 @@ class WorkflowStepRuntime:
     on_exhausted: str = ""
     then_step: str = ""
     else_step: str = ""
+    switch_cases: tuple[WorkflowSwitchCaseRuntime, ...] = ()
+    default_step: str = ""
     branches: tuple[str, ...] = ()
     join_step: str = ""
     owning_parallel_step: str = ""
+    called_workflow_address: str = ""
     max_attempts: int | str | None = None
     state_contract: WorkflowStepSemanticContract = field(
         default_factory=lambda: WorkflowStepSemanticContract(step_type="")
@@ -429,9 +444,12 @@ class WorkflowExecutionContract:
 
     state_schema_version: str = WORKFLOW_STATE_SCHEMA_VERSION
     start_step: str = ""
+    timeout_seconds: int | None = None
     steps: dict[str, WorkflowStepSemanticContract] = field(default_factory=dict)
+    step_types: dict[str, str] = field(default_factory=dict)
     control_edges: dict[str, tuple[str, ...]] = field(default_factory=dict)
     join_owners: dict[str, str] = field(default_factory=dict)
+    call_steps: dict[str, str] = field(default_factory=dict)
     observable_steps: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -441,6 +459,11 @@ class WorkflowExecutionContract:
             )
         if not isinstance(self.start_step, str):
             raise TypeError("workflow execution contract start_step must be a string")
+        if self.timeout_seconds is not None:
+            if isinstance(self.timeout_seconds, bool) or not isinstance(self.timeout_seconds, int):
+                raise TypeError("workflow execution contract timeout_seconds must be an int or None")
+            if self.timeout_seconds <= 0:
+                raise ValueError("workflow execution contract timeout_seconds must be > 0")
         if not isinstance(self.steps, dict):
             raise TypeError("workflow execution contract steps must be a dict")
         if any(not isinstance(name, str) for name in self.steps):
@@ -452,10 +475,18 @@ class WorkflowExecutionContract:
             raise TypeError(
                 "workflow execution contract step contracts must be WorkflowStepSemanticContract values"
             )
+        if not isinstance(self.step_types, dict):
+            raise TypeError("workflow execution contract step_types must be a dict")
+        if any(not isinstance(name, str) or not isinstance(step_type, str) for name, step_type in self.step_types.items()):
+            raise TypeError("workflow execution contract step_types must map strings to strings")
         if not isinstance(self.control_edges, dict):
             raise TypeError("workflow execution contract control_edges must be a dict")
         if not isinstance(self.join_owners, dict):
             raise TypeError("workflow execution contract join_owners must be a dict")
+        if not isinstance(self.call_steps, dict):
+            raise TypeError("workflow execution contract call_steps must be a dict")
+        if any(not isinstance(step_name, str) or not isinstance(workflow_address, str) for step_name, workflow_address in self.call_steps.items()):
+            raise TypeError("workflow execution contract call_steps must map strings to strings")
         if any(not isinstance(step_name, str) for step_name in self.observable_steps):
             raise TypeError(
                 "workflow execution contract observable_steps must be strings"
@@ -496,9 +527,22 @@ class WorkflowExecutionContract:
                 payload.get("state_schema_version", WORKFLOW_STATE_SCHEMA_VERSION)
             ),
             start_step=str(payload.get("start_step", "")),
+            timeout_seconds=(
+                int(payload["timeout_seconds"])
+                if payload.get("timeout_seconds") is not None
+                else None
+            ),
             steps=steps,
+            step_types={
+                str(step_name): str(step_type)
+                for step_name, step_type in payload.get("step_types", {}).items()
+            },
             control_edges=control_edges,
             join_owners={str(join): str(owner) for join, owner in join_owners_payload.items()},
+            call_steps={
+                str(step_name): str(workflow_address)
+                for step_name, workflow_address in payload.get("call_steps", {}).items()
+            },
             observable_steps=tuple(
                 str(step_name) for step_name in payload.get("observable_steps", ())
             ),
@@ -1510,6 +1554,15 @@ class ApplyResult:
     diagnostics: list[Diagnostic] = field(default_factory=list)
     changed_addresses: list[str] = field(default_factory=list)
     details: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class WorkflowCancellationRequest:
+    """Portable request for cancelling one workflow run."""
+
+    workflow_address: str
+    run_id: str | None = None
+    reason: str = "cancelled by operator"
 
 
 @dataclass(frozen=True)

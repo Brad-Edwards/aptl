@@ -8,9 +8,13 @@ class WorkflowFeature(str, Enum):
     """Portable workflow control features that an orchestrator may support."""
 
     DECISION = "decision"
+    SWITCH = "switch"
     RETRY = "retry"
+    CALL = "call"
     PARALLEL_BARRIER = "parallel-barrier"
     FAILURE_TRANSITIONS = "failure-transitions"
+    CANCELLATION = "cancellation"
+    TIMEOUTS = "timeouts"
 
 
 class WorkflowStatePredicateFeature(str, Enum):

@@ -11,10 +11,12 @@ _OBSERVABLE_OUTCOMES_BY_STEP_TYPE: dict[str, tuple[str, ...]] = {
     "objective": ("succeeded", "failed"),
     "retry": ("succeeded", "exhausted"),
     "parallel": ("succeeded", "failed"),
+    "call": ("succeeded", "failed"),
 }
 _FIXED_ATTEMPTS_BY_STEP_TYPE: dict[str, int] = {
     "objective": 1,
     "parallel": 1,
+    "call": 1,
 }
 
 

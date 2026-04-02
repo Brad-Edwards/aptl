@@ -103,6 +103,10 @@ scenario = parse_sdl_file(Path("scenario.yaml"))
 scenario = parse_sdl(yaml_string, skip_semantic_validation=True)
 ```
 
+Use `parse_sdl_file(...)` for SDL that uses top-level `imports:`. Import
+expansion is file-backed and deterministic, so in-memory `parse_sdl(...)`
+rejects module/import composition by design.
+
 ## Error Types
 
 - `SDLParseError` — YAML syntax errors, structural validation failures

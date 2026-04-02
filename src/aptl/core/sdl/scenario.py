@@ -29,6 +29,15 @@ from aptl.core.sdl.variables import Variable
 from aptl.core.sdl.vulnerabilities import Vulnerability
 
 
+class ImportDecl(SDLModel):
+    """A local module import expanded before full semantic validation."""
+
+    path: str
+    namespace: str = ""
+    version: str = "*"
+    parameters: dict[str, object] = Field(default_factory=dict)
+
+
 class Scenario(SDLModel):
     """Top-level scenario specification.
 
@@ -39,7 +48,9 @@ class Scenario(SDLModel):
 
     # --- Identity ---
     name: str
+    version: str = "*"
     description: str = ""
+    imports: list[ImportDecl] = Field(default_factory=list)
 
     # --- OCR SDL: 14 sections ---
     nodes: dict[str, Node] = Field(default_factory=dict)
@@ -110,3 +121,16 @@ class InstantiatedScenario(Scenario):
     ) -> None:
         self._instantiation_parameters = dict(parameters)
         self._instantiation_profile = profile
+
+
+class ExpandedScenario(Scenario):
+    """Scenario produced by module/import expansion."""
+
+    _module_namespaces: dict[str, str] = PrivateAttr(default_factory=dict)
+
+    @property
+    def module_namespaces(self) -> dict[str, str]:
+        return dict(self._module_namespaces)
+
+    def _set_module_namespaces(self, namespaces: dict[str, str]) -> None:
+        self._module_namespaces = dict(namespaces)

@@ -1,0 +1,24 @@
+[
+  {
+    "event_type": "evaluation_started",
+    "timestamp": "2026-04-02T22:00:00Z",
+    "status": "running",
+    "passed": null,
+    "score": null,
+    "max_score": null,
+    "detail": null,
+    "evidence_refs": [],
+    "details": {}
+  },
+  {
+    "event_type": "evaluation_ready",
+    "timestamp": "2026-04-02T22:00:01Z",
+    "status": "ready",
+    "passed": true,
+    "score": null,
+    "max_score": null,
+    "detail": "ok",
+    "evidence_refs": [],
+    "details": {}
+  }
+]

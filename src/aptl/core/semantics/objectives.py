@@ -105,7 +105,7 @@ def parse_workflow_step_ref(step_ref: str) -> ParsedWorkflowStepRef | None:
 
     if "." not in step_ref:
         return None
-    workflow_name, step_name = step_ref.split(".", 1)
+    workflow_name, step_name = step_ref.rsplit(".", 1)
     if not workflow_name or not step_name:
         return None
     return ParsedWorkflowStepRef(

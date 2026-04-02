@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import textwrap
+from pathlib import Path
 
 from aptl.core.runtime.capabilities import (
     WorkflowFeature,
     WorkflowStatePredicateFeature,
 )
 from aptl.core.runtime.compiler import compile_runtime_model
-from aptl.core.sdl import parse_sdl
+from aptl.core.sdl import parse_sdl, parse_sdl_file
 
 
 def _scenario(yaml_str: str):
@@ -538,3 +539,160 @@ workflows:
             WorkflowStatePredicateFeature.OUTCOME_MATCHING,
             WorkflowStatePredicateFeature.ATTEMPT_COUNTS,
         }
+
+    def test_module_expansion_compiles_like_flat_scenario(self, tmp_path: Path):
+        imported = tmp_path / "shared.yaml"
+        imported.write_text(
+            """
+name: shared
+version: 1.0.0
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health:
+    command: /bin/true
+    interval: 15
+entities:
+  blue:
+    role: blue
+objectives:
+  validate:
+    entity: blue
+    success:
+      conditions: [health]
+workflows:
+  response:
+    start: run
+    steps:
+      run:
+        type: objective
+        objective: validate
+        on-success: finish
+      finish:
+        type: end
+""",
+            encoding="utf-8",
+        )
+        root = tmp_path / "root.yaml"
+        root.write_text(
+            """
+name: root
+imports:
+  - path: shared.yaml
+    namespace: shared
+    version: 1.0.0
+""",
+            encoding="utf-8",
+        )
+        flat = parse_sdl(
+            textwrap.dedent(
+                """
+                name: root
+                nodes:
+                  shared.vm:
+                    type: vm
+                    os: linux
+                    resources: {ram: 1 gib, cpu: 1}
+                    conditions: {shared.health: ops}
+                    roles: {ops: operator}
+                conditions:
+                  shared.health:
+                    command: /bin/true
+                    interval: 15
+                entities:
+                  shared.blue:
+                    role: blue
+                objectives:
+                  shared.validate:
+                    entity: shared.blue
+                    success:
+                      conditions: [shared.health]
+                workflows:
+                  shared.response:
+                    start: run
+                    steps:
+                      run:
+                        type: objective
+                        objective: shared.validate
+                        on-success: finish
+                      finish:
+                        type: end
+                """
+            )
+        )
+
+        expanded_model = compile_runtime_model(parse_sdl_file(root))
+        flat_model = compile_runtime_model(flat)
+
+        assert expanded_model.workflows.keys() == flat_model.workflows.keys()
+        assert expanded_model.objectives.keys() == flat_model.objectives.keys()
+        assert expanded_model.condition_bindings.keys() == flat_model.condition_bindings.keys()
+
+    def test_workflow_switch_call_and_timeout_compile_to_explicit_contracts(self):
+        model = compile_runtime_model(
+            parse_sdl(
+                textwrap.dedent(
+                    """
+                    name: advanced-workflow
+                    nodes:
+                      vm:
+                        type: vm
+                        os: linux
+                        resources: {ram: 1 gib, cpu: 1}
+                        conditions: {health: ops}
+                        roles: {ops: operator}
+                    conditions:
+                      health: {command: /bin/true, interval: 15}
+                    entities:
+                      blue: {role: blue}
+                    objectives:
+                      validate:
+                        entity: blue
+                        success: {conditions: [health]}
+                    workflows:
+                      child:
+                        start: run
+                        steps:
+                          run:
+                            type: objective
+                            objective: validate
+                            on-success: finish
+                          finish: {type: end}
+                      parent:
+                        start: route
+                        timeout: 300
+                        steps:
+                          route:
+                            type: switch
+                            cases:
+                              - when: {conditions: [health]}
+                                next: delegate
+                            default: finish
+                          delegate:
+                            type: call
+                            workflow: child
+                            on-success: finish
+                          finish: {type: end}
+                    """
+                )
+            )
+        )
+
+        workflow = model.workflows["orchestration.workflow.parent"]
+
+        assert workflow.execution_contract.timeout_seconds == 300
+        assert workflow.execution_contract.step_types["route"] == "switch"
+        assert workflow.execution_contract.step_types["delegate"] == "call"
+        assert workflow.execution_contract.call_steps["delegate"] == "orchestration.workflow.child"
+        assert workflow.control_steps["route"].default_step == "finish"
+        assert workflow.control_steps["route"].switch_cases[0].next_step == "delegate"
+        assert workflow.control_steps["delegate"].called_workflow_address == "orchestration.workflow.child"
+        assert workflow.result_contract.observable_steps["delegate"].observable_outcomes == (
+            "succeeded",
+            "failed",
+        )

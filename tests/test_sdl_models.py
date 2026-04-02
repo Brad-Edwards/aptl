@@ -17,6 +17,7 @@ from aptl.core.sdl.orchestration import (
     Script,
     Story,
     Workflow,
+    WorkflowPredicate,
     WorkflowStep,
     WorkflowStepType,
     parse_duration,
@@ -826,6 +827,90 @@ class TestWorkflow:
         )
         assert workflow.start == "validate"
         assert set(workflow.steps) == {"validate", "done"}
+
+    def test_while_step(self):
+        step = WorkflowStep(
+            type="while",
+            when={"conditions": ["health"]},
+            body="check",
+            next="done",
+            **{"max-iterations": 5},
+        )
+        assert step.type == WorkflowStepType.WHILE
+        assert step.body == "check"
+        assert step.next == "done"
+        assert step.max_iterations == 5
+
+    def test_while_step_requires_when_and_body(self):
+        with pytest.raises(ValidationError, match="requires 'when' and 'body'"):
+            WorkflowStep(type="while", when={"conditions": ["health"]})
+
+    def test_while_step_forbids_objective(self):
+        with pytest.raises(ValidationError, match="While workflow step only supports"):
+            WorkflowStep(
+                type="while",
+                when={"conditions": ["health"]},
+                body="check",
+                objective="some-obj",
+            )
+
+    def test_while_max_iterations_must_be_positive(self):
+        with pytest.raises(ValidationError, match="must be >= 1"):
+            WorkflowStep(
+                type="while",
+                when={"conditions": ["health"]},
+                body="check",
+                **{"max-iterations": 0},
+            )
+
+    def test_while_max_iterations_accepts_variable(self):
+        step = WorkflowStep(
+            type="while",
+            when={"conditions": ["health"]},
+            body="check",
+            **{"max-iterations": "${max_retries}"},
+        )
+        assert step.max_iterations == "${max_retries}"
+
+    def test_on_error_on_objective_step(self):
+        step = WorkflowStep(
+            type="objective",
+            objective="verify-release",
+            **{"on-error": "recover"},
+        )
+        assert step.on_error == "recover"
+
+    def test_on_error_on_parallel_step(self):
+        step = WorkflowStep(
+            type="parallel",
+            branches=["a", "b"],
+            **{"on-error": "recover"},
+        )
+        assert step.on_error == "recover"
+
+    def test_on_error_forbidden_on_if_step(self):
+        with pytest.raises(ValidationError, match="If workflow step only supports"):
+            WorkflowStep(
+                type="if",
+                when={"goals": ["g1"]},
+                **{"then": "a", "else": "b", "on-error": "recover"},
+            )
+
+    def test_on_error_forbidden_on_end_step(self):
+        with pytest.raises(ValidationError, match="End workflow step only supports"):
+            WorkflowStep(type="end", **{"on-error": "recover"})
+
+    def test_step_outcomes_in_predicate(self):
+        pred = WorkflowPredicate(**{"step-outcomes": ["step-a"]})
+        assert pred.step_outcomes == ["step-a"]
+
+    def test_predicate_with_only_step_outcomes_is_valid(self):
+        pred = WorkflowPredicate(**{"step-outcomes": ["step-a", "step-b"]})
+        assert len(pred.step_outcomes) == 2
+
+    def test_predicate_empty_rejected(self):
+        with pytest.raises(ValidationError, match="must reference at least one"):
+            WorkflowPredicate()
 
 
 # ---------------------------------------------------------------------------

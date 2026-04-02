@@ -773,6 +773,42 @@ class SemanticValidator:
         if dep_graph and _topological_sort(dep_graph) is None:
             self._err("Objective dependency graph contains a cycle")
 
+    def _validate_workflow_predicate(
+        self,
+        workflow_name: str,
+        step_name: str,
+        predicate: "WorkflowPredicate",
+        workflow_steps: dict,
+    ) -> None:
+        """Validate all references within a workflow predicate."""
+        predicate_sections = (
+            ("condition", predicate.conditions, self._s.conditions),
+            ("metric", predicate.metrics, self._s.metrics),
+            ("evaluation", predicate.evaluations, self._s.evaluations),
+            ("TLO", predicate.tlos, self._s.tlos),
+            ("goal", predicate.goals, self._s.goals),
+            ("objective", predicate.objectives, self._s.objectives),
+        )
+        for label, refs, section in predicate_sections:
+            for ref in refs:
+                if self._is_unresolved_var(ref):
+                    continue
+                if ref not in section:
+                    self._err(
+                        f"Workflow '{workflow_name}' step "
+                        f"'{step_name}' references undefined "
+                        f"{label} '{ref}' in predicate"
+                    )
+        for outcome_ref in predicate.step_outcomes:
+            if self._is_unresolved_var(outcome_ref):
+                continue
+            if outcome_ref not in workflow_steps:
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"references undefined step outcome "
+                    f"'{outcome_ref}' in predicate"
+                )
+
     def _verify_workflows(self) -> None:
         for workflow_name, workflow in self._s.workflows.items():
             if "." in workflow_name:
@@ -826,28 +862,9 @@ class SemanticValidator:
                             edges.append(step.next)
 
                 elif step.type == WorkflowStepType.IF:
-                    predicate_sections = (
-                        ("condition", step.when.conditions, self._s.conditions),
-                        ("metric", step.when.metrics, self._s.metrics),
-                        (
-                            "evaluation",
-                            step.when.evaluations,
-                            self._s.evaluations,
-                        ),
-                        ("TLO", step.when.tlos, self._s.tlos),
-                        ("goal", step.when.goals, self._s.goals),
-                        ("objective", step.when.objectives, self._s.objectives),
+                    self._validate_workflow_predicate(
+                        workflow_name, step_name, step.when, workflow.steps,
                     )
-                    for label, refs, section in predicate_sections:
-                        for ref in refs:
-                            if self._is_unresolved_var(ref):
-                                continue
-                            if ref not in section:
-                                self._err(
-                                    f"Workflow '{workflow_name}' step "
-                                    f"'{step_name}' references undefined "
-                                    f"{label} '{ref}' in predicate"
-                                )
 
                     for branch_label, branch_ref in (
                         ("then", step.then_step),
@@ -887,6 +904,49 @@ class SemanticValidator:
                             )
                         elif not self._is_unresolved_var(step.next):
                             edges.append(step.next)
+
+                elif step.type == WorkflowStepType.WHILE:
+                    self._validate_workflow_predicate(
+                        workflow_name, step_name, step.when, workflow.steps,
+                    )
+
+                    if not self._is_unresolved_var(step.body):
+                        if step.body not in workflow.steps:
+                            self._err(
+                                f"Workflow '{workflow_name}' step '{step_name}' "
+                                f"body step '{step.body}' is not defined"
+                            )
+                        else:
+                            edges.append(step.body)
+
+                    if step.next:
+                        if (
+                            not self._is_unresolved_var(step.next)
+                            and step.next not in workflow.steps
+                        ):
+                            self._err(
+                                f"Workflow '{workflow_name}' step '{step_name}' "
+                                f"next step '{step.next}' is not defined"
+                            )
+                        elif not self._is_unresolved_var(step.next):
+                            edges.append(step.next)
+
+                # Validate on_error for applicable step types
+                if step.on_error:
+                    if self._is_unresolved_var(step.on_error):
+                        pass
+                    elif step.on_error == step_name:
+                        self._err(
+                            f"Workflow '{workflow_name}' step '{step_name}' "
+                            f"on-error cannot reference itself"
+                        )
+                    elif step.on_error not in workflow.steps:
+                        self._err(
+                            f"Workflow '{workflow_name}' step '{step_name}' "
+                            f"on-error step '{step.on_error}' is not defined"
+                        )
+                    else:
+                        edges.append(step.on_error)
 
                 graph[step_name] = edges
 

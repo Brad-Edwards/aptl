@@ -20,6 +20,7 @@ from aptl.core.sdl._base import (
     is_variable_ref,
     normalize_enum_value,
     parse_float_or_var,
+    parse_int_or_var,
 )
 from aptl.core.sdl._source import Source
 
@@ -251,6 +252,7 @@ class WorkflowStepType(str, Enum):
     OBJECTIVE = "objective"
     IF = "if"
     PARALLEL = "parallel"
+    WHILE = "while"
     END = "end"
 
 
@@ -263,6 +265,7 @@ class WorkflowPredicate(SDLModel):
     tlos: list[str] = Field(default_factory=list)
     goals: list[str] = Field(default_factory=list)
     objectives: list[str] = Field(default_factory=list)
+    step_outcomes: list[str] = Field(default_factory=list, alias="step-outcomes")
 
     @model_validator(mode="after")
     def validate_non_empty(self) -> "WorkflowPredicate":
@@ -273,11 +276,12 @@ class WorkflowPredicate(SDLModel):
             self.tlos,
             self.goals,
             self.objectives,
+            self.step_outcomes,
         )):
             return self
         raise ValueError(
             "Workflow predicate must reference at least one condition, "
-            "metric, evaluation, TLO, goal, or objective"
+            "metric, evaluation, TLO, goal, objective, or step outcome"
         )
 
 
@@ -291,6 +295,9 @@ class WorkflowStep(SDLModel):
     then_step: str = Field(default="", alias="then")
     else_step: str = Field(default="", alias="else")
     branches: list[str] = Field(default_factory=list)
+    body: str = ""
+    max_iterations: int | str | None = Field(default=None, alias="max-iterations")
+    on_error: str = Field(default="", alias="on-error")
     description: str = ""
 
     @field_validator("type", mode="before")
@@ -298,15 +305,29 @@ class WorkflowStep(SDLModel):
     def normalize_type(cls, v: str) -> str:
         return normalize_enum_value(v)
 
+    @field_validator("max_iterations", mode="before")
+    @classmethod
+    def parse_max_iterations(cls, v: int | str | None) -> int | str | None:
+        if v is None:
+            return None
+        return parse_int_or_var(v, minimum=1, field_name="max_iterations")
+
     @model_validator(mode="after")
     def validate_type_specific_fields(self) -> "WorkflowStep":
         if self.type == WorkflowStepType.OBJECTIVE:
             if not self.objective:
                 raise ValueError("Objective workflow step requires 'objective'")
-            if self.when is not None or self.then_step or self.else_step or self.branches:
+            if (
+                self.when is not None
+                or self.then_step
+                or self.else_step
+                or self.branches
+                or self.body
+                or self.max_iterations is not None
+            ):
                 raise ValueError(
                     "Objective workflow step only supports 'objective', "
-                    "optional 'next', and 'description'"
+                    "optional 'next', 'on-error', and 'description'"
                 )
             return self
 
@@ -315,7 +336,14 @@ class WorkflowStep(SDLModel):
                 raise ValueError(
                     "If workflow step requires 'when', 'then', and 'else'"
                 )
-            if self.objective or self.branches or self.next:
+            if (
+                self.objective
+                or self.branches
+                or self.next
+                or self.body
+                or self.max_iterations is not None
+                or self.on_error
+            ):
                 raise ValueError(
                     "If workflow step only supports 'when', 'then', 'else', "
                     "and 'description'"
@@ -325,16 +353,47 @@ class WorkflowStep(SDLModel):
         if self.type == WorkflowStepType.PARALLEL:
             if not self.branches:
                 raise ValueError("Parallel workflow step requires 'branches'")
-            if self.objective or self.when is not None or self.then_step or self.else_step:
+            if (
+                self.objective
+                or self.when is not None
+                or self.then_step
+                or self.else_step
+                or self.body
+                or self.max_iterations is not None
+            ):
                 raise ValueError(
                     "Parallel workflow step only supports 'branches', "
-                    "optional 'next', and 'description'"
+                    "optional 'next', 'on-error', and 'description'"
                 )
             if len(self.branches) != len(set(self.branches)):
                 raise ValueError("Parallel workflow branches must be unique")
             return self
 
-        if self.objective or self.next or self.when is not None or self.then_step or self.else_step or self.branches:
+        if self.type == WorkflowStepType.WHILE:
+            if self.when is None or not self.body:
+                raise ValueError(
+                    "While workflow step requires 'when' and 'body'"
+                )
+            if self.objective or self.then_step or self.else_step or self.branches:
+                raise ValueError(
+                    "While workflow step only supports 'when', 'body', "
+                    "optional 'next', 'max-iterations', 'on-error', "
+                    "and 'description'"
+                )
+            return self
+
+        # END step
+        if (
+            self.objective
+            or self.next
+            or self.when is not None
+            or self.then_step
+            or self.else_step
+            or self.branches
+            or self.body
+            or self.max_iterations is not None
+            or self.on_error
+        ):
             raise ValueError(
                 "End workflow step only supports 'type' and 'description'"
             )

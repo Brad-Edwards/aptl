@@ -247,3 +247,52 @@ workflows:
         assert model.objectives["evaluation.objective.initial"].window_workflow_addresses == ()
         assert model.objectives["evaluation.objective.initial"].window_step_refs == ()
         assert model.workflows["orchestration.workflow.flow"].referenced_objective_addresses == ()
+
+    def test_workflow_with_while_and_on_error_compiles(self):
+        model = compile_runtime_model(_scenario("""
+name: while-test
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health: {command: /bin/true, interval: 15}
+entities:
+  blue: {role: blue}
+metrics:
+  uptime: {type: conditional, max-score: 100, condition: health}
+objectives:
+  attempt:
+    entity: blue
+    success: {conditions: [health]}
+  recover:
+    entity: blue
+    success: {metrics: [uptime]}
+workflows:
+  retry:
+    start: loop
+    steps:
+      loop:
+        type: while
+        when: {conditions: [health]}
+        body: do-attempt
+        next: done
+        max-iterations: 3
+        on-error: handle-error
+      do-attempt: {type: objective, objective: attempt}
+      handle-error: {type: objective, objective: recover, next: done}
+      done: {type: end}
+"""))
+
+        workflow = model.workflows["orchestration.workflow.retry"]
+        assert "do-attempt" in workflow.step_graph["loop"]
+        assert "done" in workflow.step_graph["loop"]
+        assert "handle-error" in workflow.step_graph["loop"]
+        assert workflow.referenced_objective_addresses == (
+            "evaluation.objective.attempt",
+            "evaluation.objective.recover",
+        )
+        assert "evaluation.condition.vm.health" in workflow.step_predicate_addresses["loop"]

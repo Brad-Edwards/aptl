@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.0] - 2026-04-01
+
+### Added
+
+- SDL workflow `while` step type for loop and retry-with-variation control flow, modeled as a single DAG node with `when` predicate, `body` step reference, optional `next`, and optional `max-iterations` cap
+- `on-error` field on `objective`, `while`, and `parallel` workflow steps for declarative error recovery path specification
+- `step-outcomes` field on workflow predicates allowing `if` and `while` predicates to branch based on the success or failure of previously executed workflow steps
+- ADR-018 documenting control flow primitive design decisions
+
 ## [6.1.0] - 2026-03-30
 
 ### Added

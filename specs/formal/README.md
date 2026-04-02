@@ -11,6 +11,10 @@ Examples:
 - `specs/formal/planner/`
 - `specs/formal/runtime-contracts/`
 
+Cross-domain semantic notes that constrain future phases may also live at the
+top level when they apply across multiple domains, for example
+`specs/formal/composition-readiness.md`.
+
 Each domain directory should include a short README that explains:
 
 - scope

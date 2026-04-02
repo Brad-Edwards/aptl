@@ -110,6 +110,13 @@ Required artifacts:
 propagation, where multiple references must remain internally consistent across
 validation and compiled/runtime forms.
 
+Current FM2 examples in APTL now include:
+
+- normalized objective-window references that stay aligned across validator and
+  compiler
+- typed planner dependency semantics that distinguish `ordering` from `refresh`
+  instead of inferring meaning from local algorithm structure
+
 ### FM3 Stateful / Control Semantics
 
 Use for state machines, branching, retries, joins, re-entry, lifecycle
@@ -194,6 +201,8 @@ For any semantic or stateful change:
 5. Identify affected docs, tests, and contracts.
 6. Keep validator, compiler, planner, and runtime language aligned when they
    describe the same behavior.
+7. For composition-adjacent work, preserve canonical identity semantics so
+   future namespace/module expansion can layer on without redefining FM2 rules.
 
 For `FM2` and `FM3` changes, plans and reviews must explicitly name the
 invariants and the required artifacts.

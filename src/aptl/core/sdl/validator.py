@@ -11,7 +11,7 @@ from ipaddress import ip_address, ip_network
 
 from pydantic import BaseModel
 
-from aptl.core.semantics.objectives import analyze_objective_window_step_refs
+from aptl.core.semantics.objectives import analyze_objective_window
 from aptl.core.semantics.workflow import (
     branch_closure,
     workflow_step_semantic_contract,
@@ -652,111 +652,92 @@ class SemanticValidator:
                         )
 
             if objective.window:
-                referenced_story_scripts: set[str] = set()
-                referenced_scripts: set[str] = set()
-                referenced_workflows: set[str] = set()
+                window_analysis = analyze_objective_window(
+                    story_refs=[
+                        story_name
+                        for story_name in objective.window.stories
+                        if not self._is_unresolved_var(story_name)
+                    ],
+                    script_refs=[
+                        script_name
+                        for script_name in objective.window.scripts
+                        if not self._is_unresolved_var(script_name)
+                    ],
+                    event_refs=[
+                        event_name
+                        for event_name in objective.window.events
+                        if not self._is_unresolved_var(event_name)
+                    ],
+                    workflow_refs=[
+                        workflow_name
+                        for workflow_name in objective.window.workflows
+                        if not self._is_unresolved_var(workflow_name)
+                    ],
+                    step_refs=[
+                        step_ref
+                        for step_ref in objective.window.steps
+                        if not self._is_unresolved_var(step_ref)
+                    ],
+                    stories_by_name=self._s.stories,
+                    scripts_by_name=self._s.scripts,
+                    events_by_name=self._s.events,
+                    workflows_by_name=self._s.workflows,
+                )
 
-                for story_name in objective.window.stories:
-                    if self._is_unresolved_var(story_name):
-                        continue
-                    story = self._s.stories.get(story_name)
-                    if story is None:
+                for issue in window_analysis.issues:
+                    if issue.code == "story-unbound":
                         self._err(
                             f"Objective '{name}' references undefined story "
-                            f"'{story_name}' in window"
+                            f"'{issue.ref}' in window"
                         )
-                        continue
-                    referenced_story_scripts.update(story.scripts)
-
-                for script_name in objective.window.scripts:
-                    if self._is_unresolved_var(script_name):
-                        continue
-                    script = self._s.scripts.get(script_name)
-                    if script is None:
+                    elif issue.code == "script-unbound":
                         self._err(
                             f"Objective '{name}' references undefined script "
-                            f"'{script_name}' in window"
+                            f"'{issue.ref}' in window"
                         )
-                        continue
-                    referenced_scripts.add(script_name)
-                    if (
-                        referenced_story_scripts
-                        and script_name not in referenced_story_scripts
-                    ):
+                    elif issue.code == "script-outside-window-stories":
                         self._err(
-                            f"Objective '{name}' window script '{script_name}' "
+                            f"Objective '{name}' window script '{issue.ref}' "
                             "is not included by the referenced stories"
                         )
-
-                candidate_scripts = referenced_scripts or referenced_story_scripts
-                candidate_events: set[str] = set()
-                for script_name in candidate_scripts:
-                    script = self._s.scripts.get(script_name)
-                    if script is not None:
-                        candidate_events.update(script.events.keys())
-
-                for event_name in objective.window.events:
-                    if self._is_unresolved_var(event_name):
-                        continue
-                    if event_name not in self._s.events:
+                    elif issue.code == "event-unbound":
                         self._err(
                             f"Objective '{name}' references undefined event "
-                            f"'{event_name}' in window"
+                            f"'{issue.ref}' in window"
                         )
-                        continue
-                    if candidate_events and event_name not in candidate_events:
+                    elif issue.code == "event-outside-window-scripts":
                         self._err(
-                            f"Objective '{name}' window event '{event_name}' "
+                            f"Objective '{name}' window event '{issue.ref}' "
                             "is not included by the referenced scripts"
-                        )
-
-                for workflow_name in objective.window.workflows:
-                    if self._is_unresolved_var(workflow_name):
-                        continue
-                    workflow = self._s.workflows.get(workflow_name)
-                    if workflow is None:
-                        self._err(
-                            f"Objective '{name}' references undefined workflow "
-                            f"'{workflow_name}' in window"
-                        )
-                        continue
-                    referenced_workflows.add(workflow_name)
-
-                if objective.window.steps and not objective.window.workflows:
-                    self._err(
-                        f"Objective '{name}' window steps require at least one "
-                        "referenced workflow"
-                    )
-
-                concrete_step_refs = [
-                    step_ref
-                    for step_ref in objective.window.steps
-                    if not self._is_unresolved_var(step_ref)
-                ]
-                step_analysis = analyze_objective_window_step_refs(
-                    step_refs=concrete_step_refs,
-                    workflows_by_name=self._s.workflows,
-                    referenced_workflows=referenced_workflows,
-                )
-                for issue in step_analysis.issues:
-                    if issue.code == "invalid-format":
-                        self._err(
-                            f"Objective '{name}' window step '{issue.step_ref}' must "
-                            "use '<workflow>.<step>' syntax"
                         )
                     elif issue.code == "workflow-unbound":
                         self._err(
-                            f"Objective '{name}' window step '{issue.step_ref}' "
+                            f"Objective '{name}' references undefined workflow "
+                            f"'{issue.ref}' in window"
+                        )
+                    elif issue.code == "step-requires-workflow-window":
+                        self._err(
+                            f"Objective '{name}' window steps require at least one "
+                            "referenced workflow"
+                        )
+                    elif issue.code == "step-invalid-format":
+                        self._err(
+                            f"Objective '{name}' window step '{issue.ref}' must "
+                            "use '<workflow>.<step>' syntax"
+                        )
+                    elif issue.code == "step-workflow-unbound":
+                        self._err(
+                            f"Objective '{name}' window step '{issue.ref}' "
                             f"references undefined workflow '{issue.workflow_name}'"
                         )
-                    elif issue.code == "workflow-outside-window":
+                    elif issue.code == "step-workflow-outside-window":
                         self._err(
-                            f"Objective '{name}' window step '{issue.step_ref}' "
+                            f"Objective '{name}' window step '{issue.ref}' "
                             "is not part of the referenced workflows"
                         )
                     elif issue.code == "step-unbound":
                         self._err(
-                            f"Objective '{name}' window step '{issue.step_ref}' "
+                            f"Objective '{name}' window step '{issue.ref}' "
                             f"references undefined step '{issue.step_name}'"
                         )
 

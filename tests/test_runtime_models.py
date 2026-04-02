@@ -190,6 +190,15 @@ workflows:
         assert objective.window_workflow_addresses == ("orchestration.workflow.flow",)
         assert objective.window_step_refs == ("flow.branch",)
         assert objective.window_step_workflow_addresses == ("orchestration.workflow.flow",)
+        assert [ref.reference_kind for ref in objective.window_references] == [
+            "story",
+            "script",
+            "event",
+            "workflow",
+            "workflow_step",
+        ]
+        assert objective.window_references[-1].workflow_name == "flow"
+        assert objective.window_references[-1].step_name == "branch"
         assert "evaluation.metric.uptime" in objective.ordering_dependencies
         assert "orchestration.workflow.flow" in objective.refresh_dependencies
         assert workflow.referenced_objective_addresses == ("evaluation.objective.initial",)

@@ -240,6 +240,26 @@ Objective `window` refs remain declarative scope/refresh inputs. They can force
 objective refresh when referenced orchestration state changes, but they do not
 create executor ordering edges across domains.
 
+Objective windows now compile through one shared normalized semantic form. The
+compiler preserves explicit resolved window references alongside the legacy
+address sets so later planner/runtime work can reason from canonical reference
+identities instead of reparsing raw SDL strings.
+
+Planner FM2 semantics are also now explicit rather than incidental:
+
+- `ordering` edges define create/start and delete/teardown order
+- `refresh` edges define recomputation/update propagation
+- refresh propagation is transitive over the refresh graph
+- cross-domain refresh does not create startup ordering
+
+Those rules are owned by `aptl.core.semantics.planner`, not by local planner
+algorithm shape.
+
+This phase is also intentionally composition-ready. Future module/import
+expansion must happen before semantic validation and compile, so the runtime
+layer continues to operate only on canonical resolved identities rather than on
+source-file layout.
+
 `RuntimeManager.apply()` requires the plan provenance to match the manager:
 
 - plan must be target-bound

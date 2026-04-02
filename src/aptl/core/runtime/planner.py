@@ -1,9 +1,12 @@
 """Planner for compiled SDL runtime models."""
 
 from aptl.core.semantics.planner import (
-    dependency_cycles,
-    dependency_graph,
-    topological_dependency_order,
+    DependencyKind,
+    dependency_graph_for_resources,
+    reconcile_resource_actions,
+    resource_delete_order,
+    resource_dependency_cycles,
+    resource_topological_order,
 )
 from aptl.core.runtime.capabilities import BackendManifest
 from aptl.core.runtime.models import (
@@ -167,16 +170,11 @@ def _collect_resources(model: RuntimeModel) -> dict[str, PlannedResource]:
 
 
 def _ordering_graph(resources: dict[str, PlannedResource]) -> dict[str, tuple[str, ...]]:
-    return dependency_graph(
-        {
-            address: resource.ordering_dependencies
-            for address, resource in resources.items()
-        }
-    )
+    return dependency_graph_for_resources(resources, kind=DependencyKind.ORDERING)
 
 
 def _ordering_cycles(resources: dict[str, PlannedResource]) -> list[tuple[str, ...]]:
-    return dependency_cycles(_ordering_graph(resources))
+    return resource_dependency_cycles(resources)
 
 
 def _ordering_cycle_diagnostics(
@@ -208,7 +206,7 @@ def _ordering_cycle_diagnostics(
 
 
 def _topological_order(resources: dict[str, PlannedResource]) -> list[str]:
-    return topological_dependency_order(_ordering_graph(resources))
+    return resource_topological_order(resources)
 
 
 def _entry_matches_resource(entry: SnapshotEntry, resource: PlannedResource) -> bool:
@@ -773,32 +771,16 @@ def _build_operations(
     resources: dict[str, PlannedResource],
     snapshot: RuntimeSnapshot,
 ) -> tuple[dict[str, ChangeAction], dict[str, SnapshotEntry]]:
-    actions: dict[str, ChangeAction] = {}
-    deleted_entries: dict[str, SnapshotEntry] = {}
-
-    for address, resource in resources.items():
-        existing = snapshot.get(address)
-        if existing is None:
-            actions[address] = ChangeAction.CREATE
-        elif _entry_matches_resource(existing, resource):
-            actions[address] = ChangeAction.UNCHANGED
-        else:
-            actions[address] = ChangeAction.UPDATE
-
-    for address, entry in snapshot.entries.items():
-        if address not in resources:
-            deleted_entries[address] = entry
-            actions[address] = ChangeAction.DELETE
-
-    for address in _topological_order(resources):
-        if actions[address] != ChangeAction.UNCHANGED:
-            continue
-        if any(
-            actions.get(dep) != ChangeAction.UNCHANGED
-            for dep in resources[address].refresh_dependencies
-        ):
-            actions[address] = ChangeAction.UPDATE
-
+    semantic_actions, deleted_entries = reconcile_resource_actions(
+        resources,
+        snapshot.entries,
+        resource_dependencies=lambda resource: resource,
+        matches=_entry_matches_resource,
+    )
+    actions = {
+        address: ChangeAction(action.value)
+        for address, action in semantic_actions.items()
+    }
     return actions, deleted_entries
 
 
@@ -814,7 +796,7 @@ def _delete_order(entries: dict[str, SnapshotEntry]) -> list[str]:
         )
         for address, entry in entries.items()
     }
-    return list(reversed(_topological_order(resources)))
+    return resource_delete_order(resources)
 
 
 def _build_provisioning_plan(

@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
-from aptl.core.semantics.objectives import analyze_objective_window_step_refs
+from aptl.core.semantics.objectives import analyze_objective_window
 from aptl.core.semantics.workflow import (
     WORKFLOW_STATE_SCHEMA_VERSION,
     workflow_step_semantic_contract,
@@ -27,6 +27,7 @@ from aptl.core.runtime.models import (
     NetworkRuntime,
     NodeRuntime,
     ObjectiveRuntime,
+    ObjectiveWindowReferenceRuntime,
     RuntimeModel,
     RuntimeTemplate,
     ScriptRuntime,
@@ -343,77 +344,6 @@ def _resolve_node_ref(
         ]
 
     return _resource_address_for_node(scenario, ref_name), []
-
-
-def _resolve_workflow_step_refs(
-    scenario: Scenario,
-    *,
-    step_refs: list[str],
-    referenced_workflows: set[str] | None,
-    owner_address: str,
-    domain: str,
-    code_prefix: str,
-) -> tuple[tuple[str, ...], tuple[str, ...], list[Diagnostic]]:
-    diagnostics: list[Diagnostic] = []
-    analysis = analyze_objective_window_step_refs(
-        step_refs=step_refs,
-        workflows_by_name=scenario.workflows,
-        referenced_workflows=referenced_workflows,
-    )
-    for issue in analysis.issues:
-        if issue.code == "invalid-format":
-            diagnostics.append(
-                Diagnostic(
-                    code=f"{code_prefix}-invalid-format",
-                    domain=domain,
-                    address=owner_address,
-                    message=(
-                        f"Reference '{issue.step_ref}' must use '<workflow>.<step>' syntax."
-                    ),
-                )
-            )
-        elif issue.code == "workflow-unbound":
-            diagnostics.append(
-                Diagnostic(
-                    code=f"{code_prefix}-workflow-unbound",
-                    domain=domain,
-                    address=owner_address,
-                    message=(
-                        f"Reference '{issue.step_ref}' does not resolve to a defined workflow."
-                    ),
-                )
-            )
-        elif issue.code == "workflow-outside-window":
-            diagnostics.append(
-                Diagnostic(
-                    code=f"{code_prefix}-workflow-outside-window",
-                    domain=domain,
-                    address=owner_address,
-                    message=(
-                        f"Reference '{issue.step_ref}' is not part of the objective "
-                        "window's referenced workflows."
-                    ),
-                )
-            )
-        elif issue.code == "step-unbound":
-            diagnostics.append(
-                Diagnostic(
-                    code=f"{code_prefix}-step-unbound",
-                    domain=domain,
-                    address=owner_address,
-                    message=(
-                        f"Reference '{issue.step_ref}' does not resolve to a defined workflow step."
-                    ),
-                )
-            )
-
-    return (
-        analysis.valid_refs,
-        _dedupe(
-            [_workflow_address(workflow_name) for workflow_name in analysis.referenced_workflows]
-        ),
-        diagnostics,
-    )
 
 
 def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeModel:
@@ -997,63 +927,172 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
         window_workflow_addresses: tuple[str, ...] = ()
         window_step_refs: tuple[str, ...] = ()
         window_step_workflow_addresses: tuple[str, ...] = ()
+        window_references: tuple[ObjectiveWindowReferenceRuntime, ...] = ()
         if objective.window is not None:
-            window_story_addresses, story_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.stories),
-                available_names=set(scenario.stories),
-                address_builder=_story_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.story-ref",
-                resource_label="story",
+            window_analysis = analyze_objective_window(
+                story_refs=list(objective.window.stories),
+                script_refs=list(objective.window.scripts),
+                event_refs=list(objective.window.events),
+                workflow_refs=list(objective.window.workflows),
+                step_refs=list(objective.window.steps),
+                stories_by_name=scenario.stories,
+                scripts_by_name=scenario.scripts,
+                events_by_name=scenario.events,
+                workflows_by_name=scenario.workflows,
             )
-            window_script_addresses, script_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.scripts),
-                available_names=set(scenario.scripts),
-                address_builder=_script_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.script-ref",
-                resource_label="script",
+            window_story_addresses = _dedupe(
+                [_story_address(name) for name in window_analysis.story_names]
             )
-            window_event_addresses, event_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.events),
-                available_names=set(scenario.events),
-                address_builder=_event_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.event-ref",
-                resource_label="event",
+            window_script_addresses = _dedupe(
+                [_script_address(name) for name in window_analysis.script_names]
             )
-            window_workflow_addresses, workflow_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.workflows),
-                available_names=set(scenario.workflows),
-                address_builder=_workflow_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.workflow-ref",
-                resource_label="workflow",
+            window_event_addresses = _dedupe(
+                [_event_address(name) for name in window_analysis.event_names]
             )
-            window_step_refs, window_step_workflow_addresses, step_diagnostics = (
-                _resolve_workflow_step_refs(
-                    scenario,
-                    step_refs=list(objective.window.steps),
-                    referenced_workflows={
-                        workflow_name
-                        for workflow_name in objective.window.workflows
-                        if workflow_name in scenario.workflows
-                    }
-                    or None,
-                    owner_address=objective_address,
-                    domain="evaluation",
-                    code_prefix="evaluation.workflow-step-ref",
+            window_workflow_addresses = _dedupe(
+                [_workflow_address(name) for name in window_analysis.workflow_names]
+            )
+            window_step_refs = window_analysis.workflow_step_refs
+            window_step_workflow_addresses = _dedupe(
+                [
+                    _workflow_address(workflow_name)
+                    for workflow_name in window_analysis.refresh_workflow_names
+                ]
+            )
+            window_references = tuple(
+                ObjectiveWindowReferenceRuntime(
+                    raw=ref.raw,
+                    canonical_name=ref.canonical_name,
+                    reference_kind=ref.reference_kind.value,
+                    dependency_roles=tuple(role.value for role in ref.dependency_roles),
+                    workflow_name=ref.workflow_name or "",
+                    step_name=ref.step_name or "",
+                    namespace_path=ref.namespace_path,
                 )
+                for ref in window_analysis.references
             )
-            diagnostics.extend(story_diagnostics)
-            diagnostics.extend(script_diagnostics)
-            diagnostics.extend(event_diagnostics)
-            diagnostics.extend(workflow_diagnostics)
-            diagnostics.extend(step_diagnostics)
+            for issue in window_analysis.issues:
+                if issue.code == "story-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.story-ref-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined story."
+                            ),
+                        )
+                    )
+                elif issue.code == "script-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.script-ref-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined script."
+                            ),
+                        )
+                    )
+                elif issue.code == "script-outside-window-stories":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.script-ref-outside-window-stories",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' is not included by the objective window's referenced stories."
+                            ),
+                        )
+                    )
+                elif issue.code == "event-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.event-ref-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined event."
+                            ),
+                        )
+                    )
+                elif issue.code == "event-outside-window-scripts":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.event-ref-outside-window-scripts",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' is not included by the objective window's referenced scripts."
+                            ),
+                        )
+                    )
+                elif issue.code == "workflow-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-ref-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined workflow."
+                            ),
+                        )
+                    )
+                elif issue.code == "step-requires-workflow-window":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-step-ref-window-missing-workflow",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                "Workflow step references require at least one referenced workflow."
+                            ),
+                        )
+                    )
+                elif issue.code == "step-invalid-format":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-step-ref-invalid-format",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' must use '<workflow>.<step>' syntax."
+                            ),
+                        )
+                    )
+                elif issue.code == "step-workflow-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-step-ref-workflow-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined workflow."
+                            ),
+                        )
+                    )
+                elif issue.code == "step-workflow-outside-window":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-step-ref-workflow-outside-window",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' is not part of the objective window's referenced workflows."
+                            ),
+                        )
+                    )
+                elif issue.code == "step-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-step-ref-step-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined workflow step."
+                            ),
+                        )
+                    )
 
         actor_type = "agent" if objective.agent else "entity"
         actor_name = objective.agent or objective.entity
@@ -1082,6 +1121,7 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             window_workflow_addresses=window_workflow_addresses,
             window_step_refs=window_step_refs,
             window_step_workflow_addresses=window_step_workflow_addresses,
+            window_references=window_references,
             ordering_dependencies=ordering_dependencies,
             refresh_dependencies=refresh_dependencies,
             spec=_dump(objective),

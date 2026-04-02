@@ -240,6 +240,19 @@ class StoryRuntime(ResolvedResource):
 
 
 @dataclass(frozen=True)
+class ObjectiveWindowReferenceRuntime:
+    """Normalized resolved objective/window reference."""
+
+    raw: str
+    canonical_name: str
+    reference_kind: str
+    dependency_roles: tuple[str, ...] = ()
+    workflow_name: str = ""
+    step_name: str = ""
+    namespace_path: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class WorkflowStepStatePredicateRuntime:
     """Resolved predicate clause over prior workflow step state."""
 
@@ -767,6 +780,7 @@ class ObjectiveRuntime(ResolvedResource):
     window_workflow_addresses: tuple[str, ...] = ()
     window_step_refs: tuple[str, ...] = ()
     window_step_workflow_addresses: tuple[str, ...] = ()
+    window_references: tuple[ObjectiveWindowReferenceRuntime, ...] = ()
 
 
 @dataclass(frozen=True)

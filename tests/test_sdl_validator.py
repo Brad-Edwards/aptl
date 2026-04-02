@@ -1202,6 +1202,339 @@ class TestVerifyWorkflows:
         errors = _validate(s)
         assert not errors
 
+    def test_valid_while_step(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            conditions={
+                "health-check": {
+                    "command": "curl -f http://localhost",
+                    "interval": 30,
+                },
+            },
+            workflows={
+                "retry-flow": {
+                    "start": "loop",
+                    "steps": {
+                        "loop": {
+                            "type": "while",
+                            "when": {"conditions": ["health-check"]},
+                            "body": "attempt",
+                            "next": "finish",
+                            "max-iterations": 5,
+                        },
+                        "attempt": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_while_missing_body_step_ref(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            conditions={
+                "health-check": {
+                    "command": "curl -f http://localhost",
+                    "interval": 30,
+                },
+            },
+            workflows={
+                "retry-flow": {
+                    "start": "loop",
+                    "steps": {
+                        "loop": {
+                            "type": "while",
+                            "when": {"conditions": ["health-check"]},
+                            "body": "nonexistent",
+                            "next": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("body step 'nonexistent' is not defined" in e for e in errors)
+
+    def test_while_missing_next_step_ref(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            conditions={
+                "health-check": {
+                    "command": "curl -f http://localhost",
+                    "interval": 30,
+                },
+            },
+            workflows={
+                "retry-flow": {
+                    "start": "loop",
+                    "steps": {
+                        "loop": {
+                            "type": "while",
+                            "when": {"conditions": ["health-check"]},
+                            "body": "attempt",
+                            "next": "nonexistent",
+                        },
+                        "attempt": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                        },
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("next step 'nonexistent' is not defined" in e for e in errors)
+
+    def test_while_undefined_predicate_ref(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "retry-flow": {
+                    "start": "loop",
+                    "steps": {
+                        "loop": {
+                            "type": "while",
+                            "when": {"conditions": ["missing-cond"]},
+                            "body": "attempt",
+                            "next": "finish",
+                        },
+                        "attempt": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("references undefined condition 'missing-cond'" in e for e in errors)
+
+    def test_while_does_not_create_cycle(self):
+        """WHILE is modeled as a single DAG node; it should not trigger cycle detection."""
+        s = _make_scenario(
+            **self._base_kwargs(),
+            conditions={
+                "health-check": {
+                    "command": "curl -f http://localhost",
+                    "interval": 30,
+                },
+            },
+            workflows={
+                "retry-flow": {
+                    "start": "loop",
+                    "steps": {
+                        "loop": {
+                            "type": "while",
+                            "when": {"conditions": ["health-check"]},
+                            "body": "attempt",
+                            "next": "finish",
+                        },
+                        "attempt": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not any("cycle" in e for e in errors)
+
+    def test_on_error_valid(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "next": "finish",
+                            "on-error": "recover",
+                        },
+                        "recover": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "next": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_on_error_self_reference(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "next": "finish",
+                            "on-error": "validate",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("on-error cannot reference itself" in e for e in errors)
+
+    def test_on_error_undefined_ref(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "next": "finish",
+                            "on-error": "nonexistent",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("on-error step 'nonexistent' is not defined" in e for e in errors)
+
+    def test_step_outcomes_valid(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "next": "branch",
+                        },
+                        "branch": {
+                            "type": "if",
+                            "when": {"step-outcomes": ["validate"]},
+                            "then": "confirm",
+                            "else": "finish",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_step_outcomes_undefined_ref(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "next": "branch",
+                        },
+                        "branch": {
+                            "type": "if",
+                            "when": {"step-outcomes": ["nonexistent"]},
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any(
+            "references undefined step outcome 'nonexistent'" in e for e in errors
+        )
+
+    def test_on_error_variable_ref_tolerated(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            variables={
+                "recovery_step": {"type": "string", "default": "recover"},
+            },
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "next": "finish",
+                            "on-error": "${recovery_step}",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not any("on-error" in e for e in errors)
+
+    def test_while_with_on_error(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            conditions={
+                "health-check": {
+                    "command": "curl -f http://localhost",
+                    "interval": 30,
+                },
+            },
+            workflows={
+                "retry-flow": {
+                    "start": "loop",
+                    "steps": {
+                        "loop": {
+                            "type": "while",
+                            "when": {"conditions": ["health-check"]},
+                            "body": "attempt",
+                            "next": "finish",
+                            "on-error": "recover",
+                        },
+                        "attempt": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                        },
+                        "recover": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "next": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
 
 class TestVerifyVariables:
     def test_defined_variables_allow_placeholders_across_models(self):

@@ -27,7 +27,7 @@ These are things that *should* be expressible in the SDL but aren't yet:
 | Gap | Description | Candidate Precedent |
 |-----|-------------|-------------------|
 | **Module composition** | Import and compose scenario modules with version constraints and parameter overrides | Terraform modules, TOSCA type derivation |
-| **Loops / switch / exception workflow control** | SDL workflows now support branching and parallel objective graphs, but not loops, switch/case routing, exception paths, or richer step effects | CACAO v2.0 workflow types |
+| **Switch / richer step effects** | SDL workflows support branching, parallel, loops (`while`), error recovery (`on-error`), and outcome-based conditionals (`step-outcomes`), but not switch/case routing or richer step effects beyond objective execution | CACAO v2.0 workflow types |
 | **Temporal operators** | STIX-style FOLLOWEDBY/WITHIN for time-ordered event assertions | STIX Patterning Language |
 | **Formal verification** | Pre-deployment verification that attack paths are reachable and defenses are consistent | VSDL SMT solver, CRACK Datalog |
 | **Agent framework bindings** | Gymnasium observation/action space definitions, reward function code | CybORG Gymnasium interface |

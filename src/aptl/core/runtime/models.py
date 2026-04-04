@@ -94,6 +94,16 @@ class WorkflowStatus(str, Enum):
     TIMED_OUT = "timed_out"
 
 
+class WorkflowCompensationStatus(str, Enum):
+    """Portable workflow compensation status."""
+
+    NOT_REQUIRED = "not_required"
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
 class WorkflowHistoryEventType(str, Enum):
     """Portable workflow history event kinds."""
 
@@ -109,6 +119,13 @@ class WorkflowHistoryEventType(str, Enum):
     WORKFLOW_FAILED = "workflow_failed"
     WORKFLOW_CANCELLED = "workflow_cancelled"
     WORKFLOW_TIMED_OUT = "workflow_timed_out"
+    COMPENSATION_REGISTERED = "compensation_registered"
+    COMPENSATION_STARTED = "compensation_started"
+    COMPENSATION_WORKFLOW_STARTED = "compensation_workflow_started"
+    COMPENSATION_WORKFLOW_COMPLETED = "compensation_workflow_completed"
+    COMPENSATION_WORKFLOW_FAILED = "compensation_workflow_failed"
+    COMPENSATION_COMPLETED = "compensation_completed"
+    COMPENSATION_FAILED = "compensation_failed"
 
 
 class EvaluationResultStatus(str, Enum):
@@ -349,6 +366,7 @@ class WorkflowStepRuntime:
     join_step: str = ""
     owning_parallel_step: str = ""
     called_workflow_address: str = ""
+    compensation_workflow_address: str = ""
     max_attempts: int | str | None = None
     state_contract: WorkflowStepSemanticContract = field(
         default_factory=lambda: WorkflowStepSemanticContract(step_type="")
@@ -450,6 +468,11 @@ class WorkflowExecutionContract:
     control_edges: dict[str, tuple[str, ...]] = field(default_factory=dict)
     join_owners: dict[str, str] = field(default_factory=dict)
     call_steps: dict[str, str] = field(default_factory=dict)
+    compensation_mode: str = "disabled"
+    compensation_triggers: tuple[str, ...] = ()
+    compensation_targets: dict[str, str] = field(default_factory=dict)
+    compensation_ordering: str = "reverse_completion"
+    compensation_failure_policy: str = "fail_workflow"
     observable_steps: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -487,6 +510,18 @@ class WorkflowExecutionContract:
             raise TypeError("workflow execution contract call_steps must be a dict")
         if any(not isinstance(step_name, str) or not isinstance(workflow_address, str) for step_name, workflow_address in self.call_steps.items()):
             raise TypeError("workflow execution contract call_steps must map strings to strings")
+        if not isinstance(self.compensation_mode, str):
+            raise TypeError("workflow execution contract compensation_mode must be a string")
+        if any(not isinstance(trigger, str) for trigger in self.compensation_triggers):
+            raise TypeError("workflow execution contract compensation_triggers must be strings")
+        if not isinstance(self.compensation_targets, dict):
+            raise TypeError("workflow execution contract compensation_targets must be a dict")
+        if any(not isinstance(step_name, str) or not isinstance(workflow_address, str) for step_name, workflow_address in self.compensation_targets.items()):
+            raise TypeError("workflow execution contract compensation_targets must map strings to strings")
+        if not isinstance(self.compensation_ordering, str):
+            raise TypeError("workflow execution contract compensation_ordering must be a string")
+        if not isinstance(self.compensation_failure_policy, str):
+            raise TypeError("workflow execution contract compensation_failure_policy must be a string")
         if any(not isinstance(step_name, str) for step_name in self.observable_steps):
             raise TypeError(
                 "workflow execution contract observable_steps must be strings"
@@ -543,6 +578,20 @@ class WorkflowExecutionContract:
                 str(step_name): str(workflow_address)
                 for step_name, workflow_address in payload.get("call_steps", {}).items()
             },
+            compensation_mode=str(payload.get("compensation_mode", "disabled")),
+            compensation_triggers=tuple(
+                str(trigger) for trigger in payload.get("compensation_triggers", ())
+            ),
+            compensation_targets={
+                str(step_name): str(workflow_address)
+                for step_name, workflow_address in payload.get("compensation_targets", {}).items()
+            },
+            compensation_ordering=str(
+                payload.get("compensation_ordering", "reverse_completion")
+            ),
+            compensation_failure_policy=str(
+                payload.get("compensation_failure_policy", "fail_workflow")
+            ),
             observable_steps=tuple(
                 str(step_name) for step_name in payload.get("observable_steps", ())
             ),
@@ -697,6 +746,12 @@ class WorkflowExecutionState:
     started_at: str = ""
     updated_at: str = ""
     terminal_reason: str | None = None
+    compensation_status: WorkflowCompensationStatus = (
+        WorkflowCompensationStatus.NOT_REQUIRED
+    )
+    compensation_started_at: str | None = None
+    compensation_updated_at: str | None = None
+    compensation_failures: list[dict[str, Any]] = field(default_factory=list)
     steps: dict[str, WorkflowStepExecutionState] = field(default_factory=dict)
 
     @classmethod
@@ -714,6 +769,8 @@ class WorkflowExecutionState:
                 "run_id",
                 "started_at",
                 "updated_at",
+                "compensation_status",
+                "compensation_failures",
                 "steps",
             )
             if key not in payload
@@ -750,6 +807,26 @@ class WorkflowExecutionState:
                 if payload.get("terminal_reason") is not None
                 else None
             ),
+            compensation_status=(
+                payload.get("compensation_status")
+                if isinstance(payload.get("compensation_status"), WorkflowCompensationStatus)
+                else WorkflowCompensationStatus(str(payload.get("compensation_status")))
+            ),
+            compensation_started_at=(
+                str(payload["compensation_started_at"])
+                if payload.get("compensation_started_at") is not None
+                else None
+            ),
+            compensation_updated_at=(
+                str(payload["compensation_updated_at"])
+                if payload.get("compensation_updated_at") is not None
+                else None
+            ),
+            compensation_failures=[
+                dict(item)
+                for item in payload.get("compensation_failures", [])
+                if isinstance(item, Mapping)
+            ],
             steps=steps,
         )
 
@@ -761,6 +838,10 @@ class WorkflowExecutionState:
             "started_at": self.started_at,
             "updated_at": self.updated_at,
             "terminal_reason": self.terminal_reason,
+            "compensation_status": self.compensation_status.value,
+            "compensation_started_at": self.compensation_started_at,
+            "compensation_updated_at": self.compensation_updated_at,
+            "compensation_failures": [dict(item) for item in self.compensation_failures],
             "steps": {
                 step_name: step_state.to_payload()
                 for step_name, step_state in self.steps.items()
@@ -780,6 +861,20 @@ class WorkflowExecutionState:
             raise TypeError("updated_at must be a non-empty string")
         if self.terminal_reason is not None and not isinstance(self.terminal_reason, str):
             raise TypeError("terminal_reason must be a string or None")
+        if not isinstance(self.compensation_status, WorkflowCompensationStatus):
+            raise TypeError("compensation_status must be a WorkflowCompensationStatus")
+        if self.compensation_started_at is not None and not isinstance(
+            self.compensation_started_at, str
+        ):
+            raise TypeError("compensation_started_at must be a string or None")
+        if self.compensation_updated_at is not None and not isinstance(
+            self.compensation_updated_at, str
+        ):
+            raise TypeError("compensation_updated_at must be a string or None")
+        if not isinstance(self.compensation_failures, list):
+            raise TypeError("compensation_failures must be a list")
+        if any(not isinstance(item, dict) for item in self.compensation_failures):
+            raise TypeError("compensation_failures entries must be dicts")
         if not isinstance(self.steps, dict):
             raise TypeError("workflow step results must be stored in a dict")
         if any(not isinstance(step_name, str) for step_name in self.steps):
@@ -804,6 +899,29 @@ class WorkflowExecutionState:
             raise ValueError(
                 "non-terminal workflow statuses may not include terminal_reason"
             )
+        if self.workflow_status in {WorkflowStatus.PENDING, WorkflowStatus.RUNNING}:
+            if self.compensation_status != WorkflowCompensationStatus.NOT_REQUIRED:
+                raise ValueError(
+                    "non-terminal workflow statuses may not report compensation activity"
+                )
+            if self.compensation_started_at is not None or self.compensation_updated_at is not None:
+                raise ValueError(
+                    "non-terminal workflow statuses may not report compensation timestamps"
+                )
+        if self.compensation_status == WorkflowCompensationStatus.NOT_REQUIRED:
+            if self.compensation_started_at is not None or self.compensation_updated_at is not None:
+                raise ValueError(
+                    "compensation_status=not_required may not report compensation timestamps"
+                )
+            if self.compensation_failures:
+                raise ValueError(
+                    "compensation_status=not_required may not report compensation failures"
+                )
+        if self.compensation_status == WorkflowCompensationStatus.RUNNING:
+            if self.compensation_started_at is None:
+                raise ValueError(
+                    "compensation_status=running requires compensation_started_at"
+                )
 
 
 @dataclass(frozen=True)

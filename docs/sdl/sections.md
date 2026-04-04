@@ -1,8 +1,20 @@
 # SDL Sections Reference
 
 A scenario is a YAML document with a required top-level `name`, optional
-top-level composition fields (`version`, `imports`), and up to 21 named SDL
+top-level composition fields (`version`, `module`, `imports`), and up to 21 named SDL
 sections. Aside from `name`, all sections are optional.
+
+Top-level composition fields are:
+
+- `version` — scenario or module version
+- `module` — optional publishable module descriptor (`id`, `version`, `parameters`, `exports`, `description`)
+- `imports` — optional module imports using backward-compatible `path:` or canonical `source:`
+
+Canonical `imports.source` classes are:
+
+- `local:...` for repo-local files
+- `oci:...` for remote OCI-packaged modules
+- `locked:...` for lockfile-resolved concrete imports
 
 ## Section Overview
 
@@ -503,6 +515,21 @@ Workflow step types are:
 - `parallel` — launch two or more branch entry steps concurrently and require all explicit branch paths to converge on a named `join` step; `on-failure` is optional
 - `join` — an explicit barrier step, not a normal direct successor edge, that resumes linear control via `next` only after the owning `parallel` step has observed all branches converge
 - `end` — terminal node
+
+Compensation is step-attached and workflow-governed:
+
+- compensable steps are `objective` and `call`
+- those step kinds may declare `compensate-with: <workflow>`
+- workflows may declare a `compensation:` policy with:
+  - `mode: automatic | disabled`
+  - `on: [failed, cancelled, timed_out]`
+  - `failure_policy: fail_workflow | record_and_continue`
+  - `order: reverse_completion` (the only supported ordering in v1)
+
+Compensation targets are always declared workflows, never inline rollback step
+graphs. Successful compensable steps register rollback intent, and automatic
+compensation executes in reverse completion order when the primary workflow
+terminates with a configured trigger.
 
 Workflow predicates may observe:
 

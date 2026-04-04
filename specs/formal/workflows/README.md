@@ -9,6 +9,7 @@ This directory holds the repo-native formal artifacts for SDL workflow control s
 - join ownership and legal join entry
 - step-state visibility before predicate evaluation
 - portable workflow result envelopes
+- explicit compensation / rollback registration and observation semantics
 
 ## Invariants
 
@@ -18,6 +19,9 @@ This directory holds the repo-native formal artifacts for SDL workflow control s
 - only observable step kinds may be referenced in step-state predicates
 - step-state predicates may only ask for outcomes legal for the referenced step kind
 - post-join visibility contains only step state guaranteed on every path to the join
+- compensation executes only for successfully completed compensable steps
+- compensation order is reverse completion order
+- compensation workflows remain acyclic relative to normal `call` edges
 
 ## Implementation Mapping
 
@@ -31,6 +35,7 @@ This directory holds the repo-native formal artifacts for SDL workflow control s
   - `tests/test_sdl_validator.py`
   - `tests/test_runtime_models.py`
   - `tests/test_runtime_manager.py`
+  - `tests/test_runtime_control_plane_api.py`
 
 ## Notes
 

@@ -1059,6 +1059,11 @@ class SemanticValidator:
         workflow_call_graph: dict[str, set[str]] = {
             workflow_name: set() for workflow_name in self._s.workflows
         }
+        workflow_compensation_graph: dict[str, set[str]] = {
+            workflow_name: set() for workflow_name in self._s.workflows
+        }
+        compensation_target_workflows: set[str] = set()
+        workflows_with_compensation_steps: set[str] = set()
         for workflow_name, workflow in self._s.workflows.items():
             if (
                 not self._is_unresolved_var(workflow.start)
@@ -1105,6 +1110,22 @@ class SemanticValidator:
                         )
                         if resolved is not None:
                             graph[step_name].append(resolved)
+                    if step.compensate_with:
+                        workflows_with_compensation_steps.add(workflow_name)
+                        if (
+                            not self._is_unresolved_var(step.compensate_with)
+                            and step.compensate_with not in self._s.workflows
+                        ):
+                            self._err(
+                                f"Workflow '{workflow_name}' step '{step_name}' "
+                                "references undefined compensation workflow "
+                                f"'{step.compensate_with}'"
+                            )
+                        elif not self._is_unresolved_var(step.compensate_with):
+                            workflow_compensation_graph.setdefault(workflow_name, set()).add(
+                                step.compensate_with
+                            )
+                            compensation_target_workflows.add(step.compensate_with)
 
                 elif step.type == WorkflowStepType.DECISION:
                     predicate_step_refs[step_name] = self._validate_workflow_predicate(
@@ -1246,6 +1267,22 @@ class SemanticValidator:
                         )
                         if resolved is not None:
                             graph[step_name].append(resolved)
+                    if step.compensate_with:
+                        workflows_with_compensation_steps.add(workflow_name)
+                        if (
+                            not self._is_unresolved_var(step.compensate_with)
+                            and step.compensate_with not in self._s.workflows
+                        ):
+                            self._err(
+                                f"Workflow '{workflow_name}' step '{step_name}' "
+                                "references undefined compensation workflow "
+                                f"'{step.compensate_with}'"
+                            )
+                        elif not self._is_unresolved_var(step.compensate_with):
+                            workflow_compensation_graph.setdefault(workflow_name, set()).add(
+                                step.compensate_with
+                            )
+                            compensation_target_workflows.add(step.compensate_with)
 
                 elif step.type == WorkflowStepType.END:
                     graph[step_name] = []
@@ -1409,6 +1446,25 @@ class SemanticValidator:
             }
         ) is None:
             self._err("Workflow call graph contains a cycle")
+
+        combined_workflow_graph = {
+            workflow_name: sorted(
+                workflow_call_graph.get(workflow_name, set())
+                | workflow_compensation_graph.get(workflow_name, set())
+            )
+            for workflow_name in self._s.workflows
+        }
+        if combined_workflow_graph and _topological_sort(combined_workflow_graph) is None:
+            self._err(
+                "Combined workflow call/compensation graph contains a cycle"
+            )
+
+        for workflow_name in sorted(compensation_target_workflows):
+            if workflow_name in workflows_with_compensation_steps:
+                self._err(
+                    f"Workflow '{workflow_name}' cannot be used as a compensation "
+                    "workflow because it also declares compensate-with steps"
+                )
 
     def _verify_variables(self) -> None:
         defined = set(self._s.variables.keys())

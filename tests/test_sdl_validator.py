@@ -1913,6 +1913,106 @@ class TestVerifyWorkflows:
         errors = _validate(s)
         assert not any("on-failure" in e for e in errors)
 
+    def test_non_compensable_workflow_step_rejects_compensation_target(self):
+        with pytest.raises(ValueError, match="Decision workflow step only supports"):
+            _make_scenario(
+                **self._base_kwargs(),
+                workflows={
+                    "response": {
+                        "start": "branch",
+                        "steps": {
+                            "branch": {
+                                "type": "decision",
+                                "when": {"conditions": ["check"]},
+                                "then": "finish",
+                                "else": "finish",
+                                "compensate-with": "rollback",
+                            },
+                            "finish": {"type": "end"},
+                        },
+                    },
+                    "rollback": {
+                        "start": "finish",
+                        "steps": {"finish": {"type": "end"}},
+                    },
+                },
+            )
+
+    def test_workflow_compensation_cycle_is_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "run",
+                    "compensation": {"mode": "automatic", "on": ["failed"]},
+                    "steps": {
+                        "run": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "compensate-with": "rollback",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+                "rollback": {
+                    "start": "undo",
+                    "steps": {
+                        "undo": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "compensate-with": "response",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any(
+            "Combined workflow call/compensation graph contains a cycle" in e
+            for e in errors
+        )
+
+    def test_compensation_workflow_cannot_declare_compensate_with_steps(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "run",
+                    "compensation": {"mode": "automatic", "on": ["failed"]},
+                    "steps": {
+                        "run": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "compensate-with": "rollback",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+                "rollback": {
+                    "start": "undo",
+                    "steps": {
+                        "undo": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "compensate-with": "cleanup",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+                "cleanup": {
+                    "start": "finish",
+                    "steps": {"finish": {"type": "end"}},
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("cannot be used as a compensation workflow" in e for e in errors)
+
 
 class TestVerifyVariables:
     def test_defined_variables_allow_placeholders_across_models(self):

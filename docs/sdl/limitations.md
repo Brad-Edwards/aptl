@@ -27,8 +27,8 @@ These are things that *should* be expressible in the SDL but aren't yet:
 
 | Gap | Description | Candidate Precedent |
 |-----|-------------|-------------------|
-| **Remote module registries / package publishing** | Local file-backed module/import composition now exists, but reusable distribution, trust policy, and registry-backed resolution are still future work | Terraform registry, OCI artifact delivery |
-| **Compensation / rollback semantics** | SDL workflows now support explicit decisions, switch/case routing, reusable `call` subflows, retries, failure transitions, explicit parallel joins, and cancel/timeout lifecycle observation, but not compensating action scopes or rollback ordering | CACAO v2.0 workflow types |
+| **Hosted registry operations / ecosystem distribution** | OCI-backed module resolution, lockfiles, trust policy, and publishable image-layout packaging now exist, but operating a shared registry service, signer distribution, and ecosystem-wide discovery policy are still future work | Terraform registry, OCI artifact delivery |
+| **Manual compensation APIs / advanced rollback patterns** | SDL workflows now support explicit automatic compensation targets, reverse-completion rollback ordering, and cancel/timeout/failure compensation observation, but not manual rollback triggers, nested compensation-of-compensation, or richer exception-style recovery surfaces | CACAO v2.0 workflow types, saga compensation patterns |
 | **Temporal operators** | STIX-style FOLLOWEDBY/WITHIN for time-ordered event assertions | STIX Patterning Language |
 | **Full solver-backed verification** | Global proof-style verification that attack paths are reachable and defenses are consistent is still future work; today the repo adopts lightweight semantic modeling, invariants, typed contracts, and selective property/state-machine methods instead | VSDL SMT solver, CRACK Datalog |
 | **Agent framework bindings** | Gymnasium observation/action space definitions, reward function code | CybORG Gymnasium interface |

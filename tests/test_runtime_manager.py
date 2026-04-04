@@ -238,6 +238,10 @@ class RecordingOrchestrator:
                 "started_at": now,
                 "updated_at": now,
                 "terminal_reason": None,
+                "compensation_status": "not_required",
+                "compensation_started_at": None,
+                "compensation_updated_at": None,
+                "compensation_failures": [],
                 "steps": observable_steps,
             }
             self._history[op.address] = [
@@ -518,6 +522,24 @@ class InvalidWorkflowCallHistoryOrchestrator(RecordingOrchestrator):
                 "details": {"workflow_address": "orchestration.workflow.wrong"},
             }
         )
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+                orchestration_history=self._history,
+            ),
+        )
+
+
+class InvalidWorkflowCompensationOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = next(iter(self._results))
+        self._results[workflow_address]["compensation_status"] = "running"
+        self._results[workflow_address]["compensation_started_at"] = self._history[
+            workflow_address
+        ][0]["timestamp"]
         return ApplyResult(
             success=True,
             snapshot=result.snapshot.with_entries(
@@ -1197,6 +1219,24 @@ class TestRuntimeManager:
         manager = RuntimeManager(target)
 
         result = manager.apply(manager.plan(_workflow_call_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_invalid_workflow_compensation_state(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=InvalidWorkflowCompensationOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
 
         assert not result.success
         assert "runtime.backend-contract-invalid" in {

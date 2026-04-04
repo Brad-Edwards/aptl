@@ -40,6 +40,10 @@ class WorkflowExecutionStateModel(ContractModel):
     started_at: str
     updated_at: str
     terminal_reason: str | None = None
+    compensation_status: str
+    compensation_started_at: str | None = None
+    compensation_updated_at: str | None = None
+    compensation_failures: list[dict[str, Any]] = Field(default_factory=list)
     steps: dict[str, WorkflowStepStateModel] = Field(default_factory=dict)
 
 

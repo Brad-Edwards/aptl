@@ -696,3 +696,70 @@ imports:
             "succeeded",
             "failed",
         )
+
+    def test_workflow_compensation_compiles_to_explicit_contracts(self):
+        model = compile_runtime_model(
+            parse_sdl(
+                textwrap.dedent(
+                    """
+                    name: compensation
+                    nodes:
+                      vm:
+                        type: vm
+                        os: linux
+                        resources: {ram: 1 gib, cpu: 1}
+                        conditions: {health: ops}
+                        roles: {ops: operator}
+                    conditions:
+                      health: {command: /bin/true, interval: 15}
+                    entities:
+                      blue: {role: blue}
+                    objectives:
+                      validate:
+                        entity: blue
+                        success: {conditions: [health]}
+                    workflows:
+                      rollback:
+                        start: finish
+                        steps:
+                          finish: {type: end}
+                      response:
+                        start: run
+                        compensation:
+                          mode: automatic
+                          on: [failed, cancelled, timed_out]
+                          failure_policy: record_and_continue
+                        steps:
+                          run:
+                            type: objective
+                            objective: validate
+                            compensate-with: rollback
+                            on-success: finish
+                            on-failure: finish
+                          finish: {type: end}
+                    """
+                )
+            )
+        )
+
+        workflow = model.workflows["orchestration.workflow.response"]
+
+        assert WorkflowFeature.COMPENSATION in workflow.required_features
+        assert (
+            workflow.control_steps["run"].compensation_workflow_address
+            == "orchestration.workflow.rollback"
+        )
+        assert workflow.execution_contract.compensation_mode == "automatic"
+        assert set(workflow.execution_contract.compensation_triggers) == {
+            "failed",
+            "cancelled",
+            "timed_out",
+        }
+        assert workflow.execution_contract.compensation_targets == {
+            "run": "orchestration.workflow.rollback"
+        }
+        assert workflow.execution_contract.compensation_ordering == "reverse_completion"
+        assert (
+            workflow.execution_contract.compensation_failure_policy
+            == "record_and_continue"
+        )

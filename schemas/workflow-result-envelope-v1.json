@@ -34,6 +34,42 @@
   },
   "additionalProperties": false,
   "properties": {
+    "compensation_failures": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Compensation Failures",
+      "type": "array"
+    },
+    "compensation_started_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Compensation Started At"
+    },
+    "compensation_status": {
+      "title": "Compensation Status",
+      "type": "string"
+    },
+    "compensation_updated_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Compensation Updated At"
+    },
     "run_id": {
       "title": "Run Id",
       "type": "string"
@@ -80,7 +116,8 @@
     "workflow_status",
     "run_id",
     "started_at",
-    "updated_at"
+    "updated_at",
+    "compensation_status"
   ],
   "title": "WorkflowExecutionStateModel",
   "type": "object"

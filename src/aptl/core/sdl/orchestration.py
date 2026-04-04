@@ -339,6 +339,62 @@ class WorkflowTimeoutPolicy(SDLModel):
         return parsed
 
 
+class WorkflowCompensationMode(str, Enum):
+    """Workflow-level compensation behavior."""
+
+    AUTOMATIC = "automatic"
+    DISABLED = "disabled"
+
+
+class WorkflowCompensationTrigger(str, Enum):
+    """Terminal workflow reasons that may trigger compensation."""
+
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
+
+
+class WorkflowCompensationFailurePolicy(str, Enum):
+    """How primary workflow status should treat compensation failures."""
+
+    FAIL_WORKFLOW = "fail_workflow"
+    RECORD_AND_CONTINUE = "record_and_continue"
+
+
+class WorkflowCompensationPolicy(SDLModel):
+    """Workflow-level compensation policy."""
+
+    mode: WorkflowCompensationMode = WorkflowCompensationMode.DISABLED
+    on: list[WorkflowCompensationTrigger] = Field(default_factory=list)
+    failure_policy: WorkflowCompensationFailurePolicy = Field(
+        default=WorkflowCompensationFailurePolicy.FAIL_WORKFLOW,
+        alias="failure_policy",
+    )
+    order: str = "reverse_completion"
+
+    @field_validator("order", mode="before")
+    @classmethod
+    def normalize_order(cls, v: object) -> str:
+        if v is None:
+            return "reverse_completion"
+        return str(v)
+
+    @model_validator(mode="after")
+    def validate_policy(self) -> "WorkflowCompensationPolicy":
+        if self.mode == WorkflowCompensationMode.AUTOMATIC and not self.on:
+            raise ValueError(
+                "Automatic workflow compensation requires at least one trigger in 'on'"
+            )
+        if self.order != "reverse_completion":
+            raise ValueError(
+                "Workflow compensation currently only supports order "
+                "'reverse_completion'"
+            )
+        if len(self.on) != len(set(self.on)):
+            raise ValueError("Workflow compensation triggers must be unique")
+        return self
+
+
 class WorkflowStep(SDLModel):
     """A named workflow step with explicit portable control semantics."""
 
@@ -356,6 +412,7 @@ class WorkflowStep(SDLModel):
     branches: list[str] = Field(default_factory=list)
     join: str = ""
     workflow: str = ""
+    compensate_with: str = Field(default="", alias="compensate-with")
     max_attempts: int | str | None = Field(default=None, alias="max-attempts")
     description: str = ""
 
@@ -397,7 +454,8 @@ class WorkflowStep(SDLModel):
             ):
                 raise ValueError(
                     "Objective workflow step only supports 'objective', "
-                    "'on-success', optional 'on-failure', and 'description'"
+                    "'on-success', optional 'on-failure', optional "
+                    "'compensate-with', and 'description'"
                 )
             return self
 
@@ -415,6 +473,7 @@ class WorkflowStep(SDLModel):
                 or self.branches
                 or self.join
                 or self.max_attempts is not None
+                or self.compensate_with
             ):
                 raise ValueError(
                     "Decision workflow step only supports 'when', 'then', "
@@ -441,6 +500,7 @@ class WorkflowStep(SDLModel):
                 or self.join
                 or self.workflow
                 or self.max_attempts is not None
+                or self.compensate_with
             ):
                 raise ValueError(
                     "Switch workflow step only supports 'cases', 'default', "
@@ -463,6 +523,7 @@ class WorkflowStep(SDLModel):
                 or self.then_step
                 or self.else_step
                 or self.max_attempts is not None
+                or self.compensate_with
             ):
                 raise ValueError(
                     "Parallel workflow step only supports 'branches', 'join', "
@@ -488,6 +549,7 @@ class WorkflowStep(SDLModel):
                 or self.branches
                 or self.join
                 or self.max_attempts is not None
+                or self.compensate_with
             ):
                 raise ValueError(
                     "Join workflow step only supports 'next' and 'description'"
@@ -512,6 +574,7 @@ class WorkflowStep(SDLModel):
                 or self.else_step
                 or self.branches
                 or self.join
+                or self.compensate_with
             ):
                 raise ValueError(
                     "Retry workflow step only supports 'objective', "
@@ -540,7 +603,8 @@ class WorkflowStep(SDLModel):
             ):
                 raise ValueError(
                     "Call workflow step only supports 'workflow', "
-                    "'on-success', optional 'on-failure', and 'description'"
+                    "'on-success', optional 'on-failure', optional "
+                    "'compensate-with', and 'description'"
                 )
             return self
 
@@ -560,6 +624,7 @@ class WorkflowStep(SDLModel):
             or self.join
             or self.workflow
             or self.max_attempts is not None
+            or self.compensate_with
         ):
             raise ValueError(
                 "End workflow step only supports 'type' and 'description'"
@@ -573,6 +638,7 @@ class Workflow(SDLModel):
     description: str = ""
     start: str
     timeout: WorkflowTimeoutPolicy | None = None
+    compensation: WorkflowCompensationPolicy | None = None
     steps: dict[str, WorkflowStep] = Field(min_length=1)
 
     @field_validator("timeout", mode="before")
@@ -582,4 +648,11 @@ class Workflow(SDLModel):
             return v
         if isinstance(v, (int, float, str)):
             return {"seconds": v}
+        return v
+
+    @field_validator("compensation", mode="before")
+    @classmethod
+    def parse_compensation(cls, v: object) -> object:
+        if v is None or isinstance(v, WorkflowCompensationPolicy):
+            return v
         return v

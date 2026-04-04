@@ -742,3 +742,244 @@ class TestDockerIntegration:
             provisioner.cleanup()
             assert len(provisioner.networks) == 0
             assert len(provisioner.containers) == 0
+
+
+@requires_docker
+class TestScenarioExecution:
+    """True end-to-end scenario execution with real SSH between containers.
+
+    Provisions infrastructure using the panubo/sshd image, distributes SSH
+    keys, executes the attack workflow (kali → server → workstation), and
+    verifies flag capture, condition evaluation, and the scoring pipeline.
+    """
+
+    def test_ssh_lateral_movement_e2e(self):
+        """Full attack scenario: SSH into server, lateral move to workstation."""
+        import yaml
+
+        scenario = parse_sdl_file(SCENARIO_PATH)
+        model = compile_runtime_model(scenario)
+        assert model.diagnostics == [], (
+            f"Compile diagnostics: {[d.message for d in model.diagnostics]}"
+        )
+
+        # Load raw YAML for the orchestrator's scenario context
+        with open(SCENARIO_PATH) as f:
+            scenario_dict = yaml.safe_load(f)
+
+        target = create_docker_target(
+            project_prefix="aptl-e2e",
+            scenario=scenario_dict,
+        )
+        execution_plan = plan(model, target.manifest)
+        assert execution_plan.is_valid, (
+            f"Plan diagnostics: {[d.message for d in execution_plan.diagnostics]}"
+        )
+
+        provisioner = target.provisioner
+        assert isinstance(provisioner, DockerProvisioner)
+        control_plane = RuntimeControlPlane(target)
+
+        try:
+            # --- Phase 1: Provision infrastructure ---
+            prov_receipt = control_plane.submit_provisioning(
+                execution_plan.provisioning,
+            )
+            assert prov_receipt.accepted, (
+                f"Provisioning rejected: {prov_receipt.diagnostics}"
+            )
+
+            # Verify containers exist
+            assert len(provisioner.containers) >= 3, (
+                f"Expected >= 3 containers, got {len(provisioner.containers)}"
+            )
+            assert len(provisioner.networks) >= 2, (
+                f"Expected >= 2 networks, got {len(provisioner.networks)}"
+            )
+
+            # Wait for SSH to be ready, then distribute keys
+            provisioner.wait_for_ssh()
+            provisioner.distribute_ssh_keys()
+
+            # --- Phase 2: Verify infrastructure ---
+            # Check that flags are placed correctly
+            server_cid = provisioner.container_for_node("server")
+            workstation_cid = provisioner.container_for_node("workstation")
+            kali_cid = provisioner.container_for_node("kali")
+            assert server_cid, "Server container not found"
+            assert workstation_cid, "Workstation container not found"
+            assert kali_cid, "Kali container not found"
+
+            # Verify flag files exist
+            server_flag = subprocess.run(
+                ["docker", "exec", server_cid, "cat", "/home/admin/user.txt"],
+                capture_output=True, text=True,
+            )
+            assert "FLAG{server-alpha-9f3c}" in server_flag.stdout, (
+                f"Server flag not found: {server_flag.stdout!r}"
+            )
+
+            ws_flag = subprocess.run(
+                ["docker", "exec", workstation_cid, "cat", "/home/admin/user.txt"],
+                capture_output=True, text=True,
+            )
+            assert "FLAG{workstation-bravo-7e2d}" in ws_flag.stdout, (
+                f"Workstation flag not found: {ws_flag.stdout!r}"
+            )
+
+            # Verify SSH is running on server and workstation
+            for cid, name in [(server_cid, "server"), (workstation_cid, "workstation")]:
+                ssh_check = subprocess.run(
+                    ["docker", "exec", cid, "sh", "-c", "pgrep sshd"],
+                    capture_output=True, text=True,
+                )
+                assert ssh_check.returncode == 0, f"sshd not running on {name}"
+
+            # Verify admin accounts exist
+            for cid, name in [(server_cid, "server"), (workstation_cid, "workstation")]:
+                user_check = subprocess.run(
+                    ["docker", "exec", cid, "id", "admin"],
+                    capture_output=True, text=True,
+                )
+                assert user_check.returncode == 0, f"admin user not found on {name}"
+
+            # --- Phase 3: Verify network topology ---
+            # Kali can reach server (both on dmz-net)
+            kali_to_server = subprocess.run(
+                ["docker", "exec", kali_cid, "sh", "-c",
+                 "nc -z -w3 server 22 && echo OK || echo FAIL"],
+                capture_output=True, text=True,
+            )
+            assert "OK" in kali_to_server.stdout, (
+                f"Kali cannot reach server: {kali_to_server.stdout!r}"
+            )
+
+            # Kali CANNOT directly reach workstation (different networks)
+            kali_to_ws = subprocess.run(
+                ["docker", "exec", kali_cid, "sh", "-c",
+                 "nc -z -w2 workstation 22 && echo OK || echo FAIL"],
+                capture_output=True, text=True, timeout=10,
+            )
+            assert "FAIL" in kali_to_ws.stdout, (
+                f"Kali should NOT reach workstation directly: {kali_to_ws.stdout!r}"
+            )
+
+            # Server can reach workstation (both on internal-net)
+            server_to_ws = subprocess.run(
+                ["docker", "exec", server_cid, "sh", "-c",
+                 "nc -z -w3 workstation 22 && echo OK || echo FAIL"],
+                capture_output=True, text=True,
+            )
+            assert "OK" in server_to_ws.stdout, (
+                f"Server cannot reach workstation: {server_to_ws.stdout!r}"
+            )
+
+            # --- Phase 4: Execute SSH attack (kali → server) ---
+            ssh_server = subprocess.run(
+                ["docker", "exec", kali_cid,
+                 "ssh", "-o", "StrictHostKeyChecking=no",
+                 "-o", "UserKnownHostsFile=/dev/null",
+                 "-o", "LogLevel=ERROR",
+                 "-i", "/root/.ssh/id_ed25519",
+                 "admin@server", "cat", "/home/admin/user.txt"],
+                capture_output=True, text=True, timeout=30,
+            )
+            assert ssh_server.returncode == 0, (
+                f"SSH to server failed: {ssh_server.stderr!r}"
+            )
+            assert "FLAG{server-alpha-9f3c}" in ssh_server.stdout, (
+                f"Server flag mismatch: {ssh_server.stdout!r}"
+            )
+
+            # --- Phase 5: Lateral movement (kali → server → workstation) ---
+            ssh_lateral = subprocess.run(
+                ["docker", "exec", kali_cid,
+                 "ssh", "-o", "StrictHostKeyChecking=no",
+                 "-o", "UserKnownHostsFile=/dev/null",
+                 "-o", "LogLevel=ERROR",
+                 "-i", "/root/.ssh/id_ed25519",
+                 "admin@server",
+                 "ssh -o StrictHostKeyChecking=no"
+                 " -o UserKnownHostsFile=/dev/null"
+                 " -o LogLevel=ERROR"
+                 " -i /home/admin/.ssh/id_ed25519"
+                 " admin@workstation cat /home/admin/user.txt"],
+                capture_output=True, text=True, timeout=30,
+            )
+            assert ssh_lateral.returncode == 0, (
+                f"Lateral movement SSH failed: {ssh_lateral.stderr!r}"
+            )
+            assert "FLAG{workstation-bravo-7e2d}" in ssh_lateral.stdout, (
+                f"Workstation flag mismatch: {ssh_lateral.stdout!r}"
+            )
+
+            # --- Phase 6: Run orchestration (workflow execution) ---
+            orch_receipt = control_plane.submit_orchestration(
+                execution_plan.orchestration,
+            )
+            assert orch_receipt.accepted, (
+                f"Orchestration rejected: {orch_receipt.diagnostics}"
+            )
+
+            # The orchestrator should have eagerly executed the attack workflow
+            orchestrator = target.orchestrator
+            assert isinstance(orchestrator, DockerOrchestrator)
+
+            # Check captured flags from the orchestrator
+            assert "capture-server-flag" in orchestrator.captured_flags, (
+                f"Orchestrator didn't capture server flag: {orchestrator.captured_flags}"
+            )
+            assert "FLAG{server-alpha-9f3c}" in orchestrator.captured_flags["capture-server-flag"]
+
+            assert "capture-workstation-flag" in orchestrator.captured_flags, (
+                f"Orchestrator didn't capture workstation flag: {orchestrator.captured_flags}"
+            )
+            assert "FLAG{workstation-bravo-7e2d}" in orchestrator.captured_flags["capture-workstation-flag"]
+
+            # Check workflow state
+            snapshot = control_plane.snapshot
+            atk_key = "orchestration.workflow.attack-workflow"
+            assert atk_key in snapshot.orchestration_results
+            atk_result = snapshot.orchestration_results[atk_key]
+            assert atk_result["workflow_status"] == "succeeded", (
+                f"Attack workflow status: {atk_result['workflow_status']}, "
+                f"reason: {atk_result.get('terminal_reason')}"
+            )
+
+            # Check workflow history has step transitions
+            atk_history = snapshot.orchestration_history.get(atk_key, [])
+            step_events = [e for e in atk_history if e.get("event_type") == "step_completed"]
+            assert len(step_events) >= 2, (
+                f"Expected >= 2 step completions, got {len(step_events)}: {step_events}"
+            )
+
+            # --- Phase 7: Run evaluation ---
+            eval_receipt = control_plane.submit_evaluation(
+                execution_plan.evaluation,
+            )
+            assert eval_receipt.accepted, (
+                f"Evaluation rejected: {eval_receipt.diagnostics}"
+            )
+
+            # Check evaluation results for conditions
+            eval_results = control_plane.snapshot.evaluation_results
+            assert len(eval_results) > 0, "No evaluation results"
+
+            # Check scoring pipeline entries exist
+            eval_entries = control_plane.snapshot.for_domain(RuntimeDomain.EVALUATION)
+            metric_entries = {
+                k for k in eval_entries if "metric" in k
+            }
+            assert len(metric_entries) >= 5, (
+                f"Expected >= 5 metric entries, got {len(metric_entries)}"
+            )
+
+            eval_eval_entries = {
+                k for k in eval_entries if "evaluation." in k and "metric" not in k
+            }
+            assert len(eval_eval_entries) >= 2, (
+                f"Expected >= 2 evaluation entries, got {len(eval_eval_entries)}"
+            )
+
+        finally:
+            provisioner.cleanup()

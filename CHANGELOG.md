@@ -6,6 +6,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.0] - 2026-04-02
+
+### Added
+
+- Registry-ready SDL composition with explicit `module` descriptors, canonical `imports.source` handling (`local:`, `oci:`, `locked:`), repo-owned lockfiles, and trust policy enforcement
+- `aptl sdl resolve`, `aptl sdl verify-imports`, and `aptl sdl publish` commands for import resolution, verification, and OCI layout packaging
+- OCI module publish/resolve support with digest pinning, signature verification, trust-policy gating, and deterministic lockfile records
+- Workflow compensation semantics with workflow-level `compensation` policy, step-level `compensate-with`, compiled compensation targets/order, and portable compensation status/history
+- Focused regression coverage for local and OCI composition, lockfile drift, signed remote imports, compensation validation, and cancel/timeout-triggered rollback observation
+
+### Changed
+
+- Import `source:` fields are now treated as composition inputs instead of generic SDL package-source shorthands
+- Implicit local modules normalize to canonical package identities so local composition and published modules share one descriptor model
+- Workflow execution envelopes now carry explicit compensation fields alongside the primary terminal workflow state
+- Control-plane cancellation and timeout reconciliation now emit compensation state/history when the compiled workflow contract requires it
+
 ## [6.3.0] - 2026-04-02
 
 ### Added

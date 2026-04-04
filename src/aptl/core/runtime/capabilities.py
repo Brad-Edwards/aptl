@@ -15,6 +15,7 @@ class WorkflowFeature(str, Enum):
     FAILURE_TRANSITIONS = "failure-transitions"
     CANCELLATION = "cancellation"
     TIMEOUTS = "timeouts"
+    COMPENSATION = "compensation"
 
 
 class WorkflowStatePredicateFeature(str, Enum):

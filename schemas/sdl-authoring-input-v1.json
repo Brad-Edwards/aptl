@@ -767,8 +767,13 @@
     },
     "ImportDecl": {
       "additionalProperties": false,
-      "description": "A local module import expanded before full semantic validation.",
+      "description": "A module import expanded before full semantic validation.",
       "properties": {
+        "digest": {
+          "default": "",
+          "title": "Digest",
+          "type": "string"
+        },
         "namespace": {
           "default": "",
           "title": "Namespace",
@@ -780,7 +785,13 @@
           "type": "object"
         },
         "path": {
+          "default": "",
           "title": "Path",
+          "type": "string"
+        },
+        "source": {
+          "default": "",
+          "title": "Source",
           "type": "string"
         },
         "version": {
@@ -789,9 +800,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "path"
-      ],
       "title": "ImportDecl",
       "type": "object"
     },
@@ -1061,6 +1069,48 @@
         }
       },
       "title": "MinScore",
+      "type": "object"
+    },
+    "ModuleDescriptor": {
+      "additionalProperties": false,
+      "description": "Published module metadata for SDL composition.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "exports": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Exports",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "parameters": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Parameters",
+          "type": "array"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "title": "ModuleDescriptor",
       "type": "object"
     },
     "Node": {
@@ -1834,6 +1884,17 @@
       "additionalProperties": false,
       "description": "A declarative experiment control graph over objectives.",
       "properties": {
+        "compensation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowCompensationPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "description": {
           "default": "",
           "title": "Description",
@@ -1869,6 +1930,62 @@
       ],
       "title": "Workflow",
       "type": "object"
+    },
+    "WorkflowCompensationFailurePolicy": {
+      "description": "How primary workflow status should treat compensation failures.",
+      "enum": [
+        "fail_workflow",
+        "record_and_continue"
+      ],
+      "title": "WorkflowCompensationFailurePolicy",
+      "type": "string"
+    },
+    "WorkflowCompensationMode": {
+      "description": "Workflow-level compensation behavior.",
+      "enum": [
+        "automatic",
+        "disabled"
+      ],
+      "title": "WorkflowCompensationMode",
+      "type": "string"
+    },
+    "WorkflowCompensationPolicy": {
+      "additionalProperties": false,
+      "description": "Workflow-level compensation policy.",
+      "properties": {
+        "failure_policy": {
+          "$ref": "#/$defs/WorkflowCompensationFailurePolicy",
+          "default": "fail_workflow"
+        },
+        "mode": {
+          "$ref": "#/$defs/WorkflowCompensationMode",
+          "default": "disabled"
+        },
+        "on": {
+          "items": {
+            "$ref": "#/$defs/WorkflowCompensationTrigger"
+          },
+          "title": "On",
+          "type": "array"
+        },
+        "order": {
+          "default": "reverse_completion",
+          "title": "Order",
+          "type": "string"
+        }
+      },
+      "title": "WorkflowCompensationPolicy",
+      "type": "object"
+    },
+    "WorkflowCompensationTrigger": {
+      "description": "Terminal workflow reasons that may trigger compensation.",
+      "enum": [
+        "failed",
+        "cancelled",
+        "timed_out"
+      ],
+      "title": "WorkflowCompensationTrigger",
+      "type": "string"
     },
     "WorkflowPredicate": {
       "additionalProperties": false,
@@ -1944,6 +2061,11 @@
           },
           "title": "Cases",
           "type": "array"
+        },
+        "compensate-with": {
+          "default": "",
+          "title": "Compensate-With",
+          "type": "string"
         },
         "default": {
           "default": "",
@@ -2245,6 +2367,17 @@
       },
       "title": "Metrics",
       "type": "object"
+    },
+    "module": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModuleDescriptor"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "name": {
       "title": "Name",

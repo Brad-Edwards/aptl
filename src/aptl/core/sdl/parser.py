@@ -54,6 +54,11 @@ def _child_is_hashmap_field(key: str, value: Any) -> bool:
 
 def _normalize_field_key(k: Any) -> Any:
     """Normalize a Pydantic field key: lowercase + hyphens to underscores."""
+    # PyYAML's YAML 1.1 rules can coerce bare keys like ``on``/``off`` to bools.
+    # SDL field keys are schema-defined strings, so normalize those legacy bool
+    # coercions back into the field names we actually support.
+    if isinstance(k, bool):
+        return "on" if k else "off"
     if isinstance(k, str):
         return k.lower().replace("-", "_")
     return k
@@ -165,7 +170,7 @@ def _expand_min_score(value: Any) -> Any:
 def _expand_shorthands(data: dict[str, Any]) -> dict[str, Any]:
     """Apply all shorthand expansions to normalized data."""
     # Sections where "source" is a plain string reference, NOT a Source package.
-    _SOURCE_SKIP_SECTIONS = frozenset({"relationships", "agents"})
+    _SOURCE_SKIP_SECTIONS = frozenset({"relationships", "agents", "imports"})
 
     def expand_sources_scoped(
         obj: Any,

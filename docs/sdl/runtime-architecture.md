@@ -218,6 +218,7 @@ The orchestration runtime contract now includes:
 - a compiled `result_contract` for step-visible state
 - a compiled `execution_contract` for workflow-level legality/history validation
 - control-plane operations for canceling running workflows and reconciling timeout expiry
+- explicit compensation status/history when a workflow declares rollback behavior
 
 Backends report portable execution envelopes rather than backend-native object
 identity. The manager validates raw backend payloads against the compiled
@@ -274,6 +275,18 @@ This phase is also intentionally composition-ready. Module/import expansion now
 happens before semantic validation and compile, so the runtime layer operates
 only on canonical resolved identities rather than on source-file layout. That
 same foundation is what makes namespaced reusable workflow calls portable.
+
+Composition is now registry-ready as well:
+
+- local imports remain supported through `path:` and `source: local:...`
+- reusable remote modules use `source: oci:...`
+- concrete resolved imports may be pinned via `source: locked:...`
+- `aptl sdl resolve` writes `aptl.lock.json`
+- `aptl sdl verify-imports` verifies lockfile, trust, digests, and signatures
+- `aptl sdl publish` packages a publishable SDL module as an OCI image layout
+
+Resolution and trust happen before instantiation and semantic validation, but
+planner/runtime semantics still see only one fully expanded canonical scenario.
 
 `RuntimeManager.apply()` requires the plan provenance to match the manager:
 

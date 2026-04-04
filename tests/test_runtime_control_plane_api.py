@@ -377,3 +377,230 @@ workflows:
     result = snapshot["orchestration_results"]["orchestration.workflow.response"]
     assert result["workflow_status"] == "timed_out"
     assert result["terminal_reason"] == "workflow timed out"
+
+
+def test_control_plane_api_cancellation_triggers_compensation_history():
+    scenario = _scenario("""
+name: workflow
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health: {command: /bin/true, interval: 15}
+entities:
+  blue: {role: blue}
+objectives:
+  validate:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  rollback:
+    start: finish
+    steps:
+      finish: {type: end}
+  response:
+    start: run
+    compensation:
+      mode: automatic
+      on: [cancelled]
+    steps:
+      run:
+        type: objective
+        objective: validate
+        compensate-with: rollback
+        on-success: finish
+        on-failure: finish
+      finish: {type: end}
+""")
+    target = create_stub_target()
+    execution_plan = plan(compile_runtime_model(scenario), target.manifest)
+    control_plane = RuntimeControlPlane(target)
+    app = create_control_plane_app(
+        control_plane,
+        security=ControlPlaneSecurityConfig.strict_defaults(target_name=target.name),
+    )
+    headers = {
+        "x-aptl-client-verified": "true",
+        "x-aptl-client-identity": "backend-service",
+    }
+
+    with TestClient(app) as client:
+        client.post(
+            "/operations/orchestration",
+            json={
+                "operations": [
+                    {
+                        "action": op.action.value,
+                        "address": op.address,
+                        "resource_type": op.resource_type,
+                        "payload": op.payload,
+                        "ordering_dependencies": list(op.ordering_dependencies),
+                        "refresh_dependencies": list(op.refresh_dependencies),
+                    }
+                    for op in execution_plan.orchestration.operations
+                ],
+                "startup_order": execution_plan.orchestration.startup_order,
+                "diagnostics": [],
+            },
+            headers=headers,
+        )
+        workflow_address = "orchestration.workflow.response"
+        seeded = dict(control_plane._snapshot.orchestration_results[workflow_address])
+        seeded["steps"] = {
+            **seeded["steps"],
+            "run": {"lifecycle": "completed", "outcome": "succeeded", "attempts": 1},
+        }
+        control_plane._snapshot = control_plane._snapshot.with_entries(
+            dict(control_plane._snapshot.entries),
+            orchestration_results={
+                **control_plane._snapshot.orchestration_results,
+                workflow_address: seeded,
+            },
+            orchestration_history={
+                **control_plane._snapshot.orchestration_history,
+                workflow_address: [
+                    *control_plane._snapshot.orchestration_history[workflow_address],
+                    {
+                        "event_type": "step_completed",
+                        "timestamp": seeded["updated_at"],
+                        "step_name": "run",
+                        "branch_name": None,
+                        "join_step": None,
+                        "outcome": "succeeded",
+                        "details": {},
+                    },
+                ],
+            },
+        )
+        cancel = client.post(
+            "/workflows/orchestration.workflow.response/cancel",
+            json={"reason": "operator requested stop"},
+            headers=headers,
+        )
+        snapshot = client.get("/snapshot", headers=headers).json()
+
+    assert cancel.status_code == 200
+    result = snapshot["orchestration_results"]["orchestration.workflow.response"]
+    history = snapshot["orchestration_history"]["orchestration.workflow.response"]
+    assert result["workflow_status"] == "cancelled"
+    assert result["compensation_status"] == "succeeded"
+    assert any(event["event_type"] == "compensation_started" for event in history)
+    assert any(
+        event["event_type"] == "compensation_workflow_completed"
+        and event["details"].get("workflow_address") == "orchestration.workflow.rollback"
+        for event in history
+    )
+
+
+def test_control_plane_api_timeout_triggers_compensation_history():
+    scenario = _scenario("""
+name: workflow
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health: {command: /bin/true, interval: 15}
+entities:
+  blue: {role: blue}
+objectives:
+  validate:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  rollback:
+    start: finish
+    steps:
+      finish: {type: end}
+  response:
+    start: run
+    timeout: 1
+    compensation:
+      mode: automatic
+      on: [timed_out]
+    steps:
+      run:
+        type: objective
+        objective: validate
+        compensate-with: rollback
+        on-success: finish
+        on-failure: finish
+      finish: {type: end}
+""")
+    target = create_stub_target()
+    execution_plan = plan(compile_runtime_model(scenario), target.manifest)
+    control_plane = RuntimeControlPlane(target)
+    app = create_control_plane_app(
+        control_plane,
+        security=ControlPlaneSecurityConfig.strict_defaults(target_name=target.name),
+    )
+    headers = {
+        "x-aptl-client-verified": "true",
+        "x-aptl-client-identity": "backend-service",
+    }
+
+    with TestClient(app) as client:
+        client.post(
+            "/operations/orchestration",
+            json={
+                "operations": [
+                    {
+                        "action": op.action.value,
+                        "address": op.address,
+                        "resource_type": op.resource_type,
+                        "payload": op.payload,
+                        "ordering_dependencies": list(op.ordering_dependencies),
+                        "refresh_dependencies": list(op.refresh_dependencies),
+                    }
+                    for op in execution_plan.orchestration.operations
+                ],
+                "startup_order": execution_plan.orchestration.startup_order,
+                "diagnostics": [],
+            },
+            headers=headers,
+        )
+        workflow_address = "orchestration.workflow.response"
+        seeded = dict(control_plane._snapshot.orchestration_results[workflow_address])
+        seeded["started_at"] = "2000-01-01T00:00:00Z"
+        seeded["updated_at"] = "2000-01-01T00:00:01Z"
+        seeded["steps"] = {
+            **seeded["steps"],
+            "run": {"lifecycle": "completed", "outcome": "succeeded", "attempts": 1},
+        }
+        control_plane._snapshot = control_plane._snapshot.with_entries(
+            dict(control_plane._snapshot.entries),
+            orchestration_results={
+                **control_plane._snapshot.orchestration_results,
+                workflow_address: seeded,
+            },
+            orchestration_history={
+                **control_plane._snapshot.orchestration_history,
+                workflow_address: [
+                    *control_plane._snapshot.orchestration_history[workflow_address],
+                    {
+                        "event_type": "step_completed",
+                        "timestamp": "2000-01-01T00:00:01Z",
+                        "step_name": "run",
+                        "branch_name": None,
+                        "join_step": None,
+                        "outcome": "succeeded",
+                        "details": {},
+                    },
+                ],
+            },
+        )
+        client.post("/workflows/reconcile-timeouts", headers=headers)
+        snapshot = client.get("/snapshot", headers=headers).json()
+
+    result = snapshot["orchestration_results"]["orchestration.workflow.response"]
+    history = snapshot["orchestration_history"]["orchestration.workflow.response"]
+    assert result["workflow_status"] == "timed_out"
+    assert result["compensation_status"] == "succeeded"
+    assert any(event["event_type"] == "compensation_completed" for event in history)

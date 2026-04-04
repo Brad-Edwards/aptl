@@ -20,6 +20,7 @@ from aptl.core.runtime.models import (
     RuntimeDomain,
     RuntimeSnapshot,
     SnapshotEntry,
+    WorkflowCompensationStatus,
     WorkflowExecutionContract,
     WorkflowExecutionState,
     WorkflowHistoryEvent,
@@ -473,6 +474,47 @@ def _workflow_result_contract_diagnostics(
                 )
             )
 
+        successful_compensation_steps = {
+            step_name
+            for step_name, workflow_address_target in execution_contract.compensation_targets.items()
+            if workflow_address_target
+            and step_name in normalized_result.steps
+            and normalized_result.steps[step_name].lifecycle
+            == normalized_result.steps[step_name].lifecycle.COMPLETED
+            and normalized_result.steps[step_name].outcome is not None
+            and normalized_result.steps[step_name].outcome.value == "succeeded"
+        }
+
+        if (
+            normalized_result.workflow_status
+            in {WorkflowStatus.PENDING, WorkflowStatus.RUNNING}
+            and normalized_result.compensation_status
+            != WorkflowCompensationStatus.NOT_REQUIRED
+        ):
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    "Non-terminal workflows may not report compensation activity.",
+                )
+            )
+
+        if (
+            execution_contract.compensation_mode == "automatic"
+            and normalized_result.workflow_status.value
+            in set(execution_contract.compensation_triggers)
+            and successful_compensation_steps
+            and normalized_result.compensation_status
+            == WorkflowCompensationStatus.NOT_REQUIRED
+        ):
+            diagnostics.append(
+                _failure_diagnostic(
+                    "runtime.backend-contract-invalid",
+                    workflow_address,
+                    "Terminal workflow requires compensation activity for completed compensable steps.",
+                )
+            )
+
         unexpected_steps = sorted(
             step_name
             for step_name in normalized_result.steps
@@ -562,6 +604,15 @@ def _workflow_result_contract_diagnostics(
             WorkflowStatus.TIMED_OUT: WorkflowHistoryEventType.WORKFLOW_TIMED_OUT,
         }
         if normalized_history:
+            compensation_event_types = {
+                WorkflowHistoryEventType.COMPENSATION_REGISTERED,
+                WorkflowHistoryEventType.COMPENSATION_STARTED,
+                WorkflowHistoryEventType.COMPENSATION_WORKFLOW_STARTED,
+                WorkflowHistoryEventType.COMPENSATION_WORKFLOW_COMPLETED,
+                WorkflowHistoryEventType.COMPENSATION_WORKFLOW_FAILED,
+                WorkflowHistoryEventType.COMPENSATION_COMPLETED,
+                WorkflowHistoryEventType.COMPENSATION_FAILED,
+            }
             if normalized_history[0].event_type != WorkflowHistoryEventType.WORKFLOW_STARTED:
                 diagnostics.append(
                     _failure_diagnostic(
@@ -632,25 +683,148 @@ def _workflow_result_contract_diagnostics(
                                 "branch_converged events must reference a known join_step.",
                             )
                         )
+                if event.event_type == WorkflowHistoryEventType.COMPENSATION_REGISTERED:
+                    if (
+                        event.step_name is None
+                        or event.step_name not in execution_contract.compensation_targets
+                    ):
+                        diagnostics.append(
+                            _failure_diagnostic(
+                                "runtime.backend-contract-invalid",
+                                workflow_address,
+                                "compensation_registered events must reference a compensable step.",
+                            )
+                        )
+                if event.event_type in {
+                    WorkflowHistoryEventType.COMPENSATION_WORKFLOW_STARTED,
+                    WorkflowHistoryEventType.COMPENSATION_WORKFLOW_COMPLETED,
+                    WorkflowHistoryEventType.COMPENSATION_WORKFLOW_FAILED,
+                }:
+                    if (
+                        event.step_name is None
+                        or event.step_name not in execution_contract.compensation_targets
+                    ):
+                        diagnostics.append(
+                            _failure_diagnostic(
+                                "runtime.backend-contract-invalid",
+                                workflow_address,
+                                f"{event.event_type.value} events must reference a compensable step.",
+                            )
+                        )
+                    else:
+                        expected_workflow = execution_contract.compensation_targets[
+                            event.step_name
+                        ]
+                        actual_workflow = str(event.details.get("workflow_address", ""))
+                        if actual_workflow and actual_workflow != expected_workflow:
+                            diagnostics.append(
+                                _failure_diagnostic(
+                                    "runtime.backend-contract-invalid",
+                                    workflow_address,
+                                    (
+                                        f"{event.event_type.value} event workflow "
+                                        f"{actual_workflow!r} does not match compensation target "
+                                        f"{expected_workflow!r}."
+                                    ),
+                                )
+                            )
             expected_terminal = terminal_event_types.get(normalized_result.workflow_status)
-            if expected_terminal is not None and normalized_history[-1].event_type != expected_terminal:
-                diagnostics.append(
-                    _failure_diagnostic(
-                        "runtime.backend-contract-invalid",
-                        workflow_address,
-                        (
-                            "Workflow terminal status "
-                            f"{normalized_result.workflow_status.value!r} requires final "
-                            f"history event {expected_terminal.value!r}."
-                        ),
+            if expected_terminal is not None:
+                terminal_indexes = [
+                    index
+                    for index, event in enumerate(normalized_history)
+                    if event.event_type == expected_terminal
+                ]
+                if not terminal_indexes:
+                    diagnostics.append(
+                        _failure_diagnostic(
+                            "runtime.backend-contract-invalid",
+                            workflow_address,
+                            (
+                                "Workflow terminal status "
+                                f"{normalized_result.workflow_status.value!r} requires "
+                                f"a history event {expected_terminal.value!r}."
+                            ),
+                        )
                     )
-                )
+                compensation_indexes = [
+                    index
+                    for index, event in enumerate(normalized_history)
+                    if event.event_type in compensation_event_types
+                ]
+                if compensation_indexes and terminal_indexes:
+                    if terminal_indexes[-1] > compensation_indexes[0]:
+                        diagnostics.append(
+                            _failure_diagnostic(
+                                "runtime.backend-contract-invalid",
+                                workflow_address,
+                                "Compensation events may only occur after the primary terminal workflow event.",
+                            )
+                        )
             if normalized_result.workflow_status == WorkflowStatus.RUNNING and normalized_history[-1].event_type in terminal_event_types.values():
                 diagnostics.append(
                     _failure_diagnostic(
                         "runtime.backend-contract-invalid",
                         workflow_address,
                         "Running workflows may not end history with a terminal event.",
+                    )
+                )
+            compensation_events = [
+                event for event in normalized_history if event.event_type in compensation_event_types
+            ]
+            if (
+                normalized_result.compensation_status
+                == WorkflowCompensationStatus.NOT_REQUIRED
+                and compensation_events
+            ):
+                diagnostics.append(
+                    _failure_diagnostic(
+                        "runtime.backend-contract-invalid",
+                        workflow_address,
+                        "Workflows without compensation activity may not emit compensation events.",
+                    )
+                )
+            if (
+                normalized_result.compensation_status
+                == WorkflowCompensationStatus.RUNNING
+                and not any(
+                    event.event_type == WorkflowHistoryEventType.COMPENSATION_STARTED
+                    for event in compensation_events
+                )
+            ):
+                diagnostics.append(
+                    _failure_diagnostic(
+                        "runtime.backend-contract-invalid",
+                        workflow_address,
+                        "compensation_status=running requires a compensation_started history event.",
+                    )
+                )
+            if (
+                normalized_result.compensation_status
+                == WorkflowCompensationStatus.SUCCEEDED
+                and compensation_events
+                and compensation_events[-1].event_type
+                != WorkflowHistoryEventType.COMPENSATION_COMPLETED
+            ):
+                diagnostics.append(
+                    _failure_diagnostic(
+                        "runtime.backend-contract-invalid",
+                        workflow_address,
+                        "compensation_status=succeeded requires a final compensation_completed history event.",
+                    )
+                )
+            if (
+                normalized_result.compensation_status
+                == WorkflowCompensationStatus.FAILED
+                and compensation_events
+                and compensation_events[-1].event_type
+                != WorkflowHistoryEventType.COMPENSATION_FAILED
+            ):
+                diagnostics.append(
+                    _failure_diagnostic(
+                        "runtime.backend-contract-invalid",
+                        workflow_address,
+                        "compensation_status=failed requires a final compensation_failed history event.",
                     )
                 )
 

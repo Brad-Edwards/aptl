@@ -141,7 +141,7 @@ These were considered and explicitly excluded:
 | Dockerfile/build context                | Backend-specific build detail      | Provider binding layer        |
 | Container entrypoints                   | Backend-specific runtime config    | Provider binding layer        |
 | Gymnasium/PettingZoo API bindings       | Framework coupling                 | Agent runtime layer           |
-| Terraform module composition            | Import, version, namespace, and parameter patterns | Implemented as deterministic local SDL module/import expansion |
-| Full CACAO workflow surface             | Current SDL now covers decisions, switch/case routing, reusable workflow calls, retries, explicit joins, and cancel/timeout lifecycle contracts, but still excludes loops and compensation | Future: richer compensation / exception control |
+| Terraform module composition            | Import, version, namespace, parameter, locking, and packaging patterns | Implemented as deterministic SDL module/import expansion with OCI packaging, lockfiles, and trust policy |
+| Full CACAO workflow surface             | Current SDL now covers decisions, switch/case routing, reusable workflow calls, retries, explicit joins, cancel/timeout lifecycle contracts, and explicit compensation targets/order | Future: richer exception control and compensation-of-compensation semantics |
 | Full Step Functions / SCXML execution model | Current SDL adopts only the parts needed for objective-centric branching, retry, and explicit joins | Future: richer workflow/event semantics if the SDL grows beyond current scope |
 | VSDL SMT verification                   | Too heavyweight for broad default use today | Selective future extension beyond the lightweight formal-methods policy |

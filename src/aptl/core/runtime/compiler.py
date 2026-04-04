@@ -1210,6 +1210,7 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
         required_state_predicate_features: list[
             WorkflowStatePredicateFeature
         ] = []
+        compensation_targets: dict[str, str] = {}
 
         def _compile_workflow_predicate(
             predicate_source,
@@ -1324,6 +1325,7 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
             predicate: WorkflowPredicateRuntime | None = None
             switch_cases: tuple[WorkflowSwitchCaseRuntime, ...] = ()
             called_workflow_address = ""
+            compensation_workflow_address = ""
             if step.type == WorkflowStepType.OBJECTIVE:
                 edges.append(step.on_success)
                 if step.on_failure:
@@ -1382,6 +1384,23 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                 called_workflow_address = (
                     workflow_addresses[0] if workflow_addresses else ""
                 )
+            if step.compensate_with:
+                workflow_addresses, workflow_diagnostics = _resolve_named_refs(
+                    ref_names=[step.compensate_with],
+                    available_names=set(scenario.workflows),
+                    address_builder=_workflow_address,
+                    owner_address=workflow_address,
+                    domain="orchestration",
+                    code_prefix="orchestration.workflow-ref",
+                    resource_label="workflow",
+                )
+                diagnostics.extend(workflow_diagnostics)
+                compensation_workflow_address = (
+                    workflow_addresses[0] if workflow_addresses else ""
+                )
+                if compensation_workflow_address:
+                    compensation_targets[step_name] = compensation_workflow_address
+                    required_features.append(WorkflowFeature.COMPENSATION)
 
             if step.when is not None:
                 (
@@ -1463,6 +1482,8 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                 required_features.append(WorkflowFeature.FAILURE_TRANSITIONS)
             if workflow.timeout is not None:
                 required_features.append(WorkflowFeature.TIMEOUTS)
+            if workflow.compensation is not None and workflow.compensation.mode.value != "disabled":
+                required_features.append(WorkflowFeature.COMPENSATION)
 
             control_steps[step_name] = WorkflowStepRuntime(
                 name=step_name,
@@ -1481,6 +1502,7 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                 join_step=step.join,
                 owning_parallel_step=join_owners.get(step_name, ""),
                 called_workflow_address=called_workflow_address,
+                compensation_workflow_address=compensation_workflow_address,
                 max_attempts=step.max_attempts,
                 state_contract=workflow_step_semantic_contract(step.type.value),
             )
@@ -1540,6 +1562,28 @@ def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeM
                     for step_name, step_runtime in control_steps.items()
                     if step_runtime.called_workflow_address
                 },
+                compensation_mode=(
+                    workflow.compensation.mode.value
+                    if workflow.compensation is not None
+                    else "disabled"
+                ),
+                compensation_triggers=tuple(
+                    trigger.value
+                    for trigger in (
+                        workflow.compensation.on if workflow.compensation is not None else []
+                    )
+                ),
+                compensation_targets=compensation_targets,
+                compensation_ordering=(
+                    workflow.compensation.order
+                    if workflow.compensation is not None
+                    else "reverse_completion"
+                ),
+                compensation_failure_policy=(
+                    workflow.compensation.failure_policy.value
+                    if workflow.compensation is not None
+                    else "fail_workflow"
+                ),
                 observable_steps=tuple(sorted(result_contract_steps)),
             ),
             refresh_dependencies=_dedupe(

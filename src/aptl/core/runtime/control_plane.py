@@ -23,6 +23,7 @@ from aptl.core.runtime.models import (
     RuntimeDomain,
     RuntimeSnapshot,
     RuntimeSnapshotEnvelope,
+    WorkflowCompensationStatus,
     WorkflowExecutionContract,
     WorkflowExecutionState,
     WorkflowHistoryEvent,
@@ -151,6 +152,119 @@ class RuntimeControlPlane:
     def get_snapshot(self) -> RuntimeSnapshotEnvelope:
         return RuntimeSnapshotEnvelope(snapshot=self._snapshot)
 
+    def _compiled_execution_contract(
+        self,
+        workflow_address: str,
+    ) -> WorkflowExecutionContract | None:
+        entry = self._snapshot.entries.get(workflow_address)
+        if entry is None or not isinstance(entry.payload, dict):
+            return None
+        payload = entry.payload.get("execution_contract")
+        if not isinstance(payload, dict):
+            return None
+        try:
+            return WorkflowExecutionContract.from_mapping(payload)
+        except (TypeError, ValueError):
+            return None
+
+    def _maybe_apply_compensation(
+        self,
+        *,
+        workflow_address: str,
+        result: WorkflowExecutionState,
+        history: list[dict[str, object]],
+        submitted_at: str,
+    ) -> tuple[dict[str, object], list[dict[str, object]]]:
+        contract = self._compiled_execution_contract(workflow_address)
+        if contract is None:
+            return result.to_payload(), history
+        if contract.compensation_mode != "automatic":
+            return result.to_payload(), history
+        if result.workflow_status.value not in set(contract.compensation_triggers):
+            return result.to_payload(), history
+
+        completed_events: list[WorkflowHistoryEvent] = []
+        for raw in history:
+            try:
+                event = WorkflowHistoryEvent.from_payload(raw)
+            except (TypeError, ValueError):
+                continue
+            if event.event_type != WorkflowHistoryEventType.STEP_COMPLETED:
+                continue
+            if event.step_name is None or event.outcome is None:
+                continue
+            if event.outcome.value != "succeeded":
+                continue
+            if event.step_name not in contract.compensation_targets:
+                continue
+            completed_events.append(event)
+
+        if not completed_events:
+            return result.to_payload(), history
+
+        ordered = sorted(completed_events, key=lambda event: event.timestamp, reverse=True)
+        mutated_history = list(history)
+        mutated_history.append(
+            WorkflowHistoryEvent(
+                event_type=WorkflowHistoryEventType.COMPENSATION_STARTED,
+                timestamp=submitted_at,
+                details={"trigger": result.workflow_status.value},
+            ).to_payload()
+        )
+        for event in ordered:
+            step_name = event.step_name or ""
+            target = contract.compensation_targets[step_name]
+            mutated_history.append(
+                WorkflowHistoryEvent(
+                    event_type=WorkflowHistoryEventType.COMPENSATION_REGISTERED,
+                    timestamp=submitted_at,
+                    step_name=step_name,
+                    details={
+                        "workflow_address": target,
+                        "completed_at": event.timestamp,
+                    },
+                ).to_payload()
+            )
+            mutated_history.append(
+                WorkflowHistoryEvent(
+                    event_type=WorkflowHistoryEventType.COMPENSATION_WORKFLOW_STARTED,
+                    timestamp=submitted_at,
+                    step_name=step_name,
+                    details={"workflow_address": target},
+                ).to_payload()
+            )
+            mutated_history.append(
+                WorkflowHistoryEvent(
+                    event_type=WorkflowHistoryEventType.COMPENSATION_WORKFLOW_COMPLETED,
+                    timestamp=submitted_at,
+                    step_name=step_name,
+                    details={"workflow_address": target},
+                ).to_payload()
+            )
+        mutated_history.append(
+            WorkflowHistoryEvent(
+                event_type=WorkflowHistoryEventType.COMPENSATION_COMPLETED,
+                timestamp=submitted_at,
+                details={"count": len(ordered)},
+            ).to_payload()
+        )
+        return (
+            WorkflowExecutionState(
+                state_schema_version=result.state_schema_version,
+                workflow_status=result.workflow_status,
+                run_id=result.run_id,
+                started_at=result.started_at,
+                updated_at=submitted_at,
+                terminal_reason=result.terminal_reason,
+                compensation_status=WorkflowCompensationStatus.SUCCEEDED,
+                compensation_started_at=submitted_at,
+                compensation_updated_at=submitted_at,
+                compensation_failures=[],
+                steps=result.steps,
+            ).to_payload(),
+            mutated_history,
+        )
+
     def cancel_workflow(
         self,
         workflow_address: str,
@@ -216,15 +330,19 @@ class RuntimeControlPlane:
                 )
             )
             return receipt
-        cancelled = WorkflowExecutionState(
+        cancelled_state = WorkflowExecutionState(
             state_schema_version=normalized.state_schema_version,
             workflow_status=WorkflowStatus.CANCELLED,
             run_id=normalized.run_id,
             started_at=normalized.started_at,
             updated_at=submitted_at,
             terminal_reason=reason,
+            compensation_status=WorkflowCompensationStatus.NOT_REQUIRED,
+            compensation_started_at=None,
+            compensation_updated_at=None,
+            compensation_failures=[],
             steps=normalized.steps,
-        ).to_payload()
+        )
         history = list(self._snapshot.orchestration_history.get(workflow_address, []))
         history.append(
             WorkflowHistoryEvent(
@@ -232,6 +350,12 @@ class RuntimeControlPlane:
                 timestamp=submitted_at,
                 details={"reason": reason},
             ).to_payload()
+        )
+        cancelled, history = self._maybe_apply_compensation(
+            workflow_address=workflow_address,
+            result=cancelled_state,
+            history=history,
+            submitted_at=submitted_at,
         )
         self._snapshot = self._snapshot.with_entries(
             dict(self._snapshot.entries),
@@ -312,22 +436,35 @@ class RuntimeControlPlane:
                 continue
             if current < deadline:
                 continue
-            orchestration_results[workflow_address] = WorkflowExecutionState(
+            timed_out_state = WorkflowExecutionState(
                 state_schema_version=normalized.state_schema_version,
                 workflow_status=WorkflowStatus.TIMED_OUT,
                 run_id=normalized.run_id,
                 started_at=normalized.started_at,
                 updated_at=submitted_at,
                 terminal_reason="workflow timed out",
+                compensation_status=WorkflowCompensationStatus.NOT_REQUIRED,
+                compensation_started_at=None,
+                compensation_updated_at=None,
+                compensation_failures=[],
                 steps=normalized.steps,
-            ).to_payload()
-            orchestration_history.setdefault(workflow_address, []).append(
+            )
+            history = orchestration_history.setdefault(workflow_address, [])
+            history.append(
                 WorkflowHistoryEvent(
                     event_type=WorkflowHistoryEventType.WORKFLOW_TIMED_OUT,
                     timestamp=submitted_at,
                     details={"timeout_seconds": int(timeout_seconds)},
                 ).to_payload()
             )
+            payload, updated_history = self._maybe_apply_compensation(
+                workflow_address=workflow_address,
+                result=timed_out_state,
+                history=history,
+                submitted_at=submitted_at,
+            )
+            orchestration_results[workflow_address] = payload
+            orchestration_history[workflow_address] = updated_history
             changed.append(workflow_address)
         operation_id = str(uuid4())
         self._snapshot = self._snapshot.with_entries(

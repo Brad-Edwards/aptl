@@ -107,6 +107,19 @@ Use `parse_sdl_file(...)` for SDL that uses top-level `imports:`. Import
 expansion is file-backed and deterministic, so in-memory `parse_sdl(...)`
 rejects module/import composition by design.
 
+Top-level composition now supports:
+
+- optional `module` descriptors for publishable SDL modules
+- `imports` using backward-compatible `path:` or canonical `source:`
+- `source:` classes `local:`, `oci:`, and `locked:`
+- repo-owned trust and resolution files:
+  - `aptl.lock.json`
+  - `aptl-trust.yaml`
+
+Import `source:` values are not treated as ordinary SDL package-source
+shorthand. They are resolved by the composition layer, not expanded into
+`{name, version}` package dictionaries.
+
 ## Error Types
 
 - `SDLParseError` — YAML syntax errors, structural validation failures

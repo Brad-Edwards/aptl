@@ -62,6 +62,7 @@ def create_stub_manifest(**config) -> BackendManifest:
                     WorkflowFeature.FAILURE_TRANSITIONS,
                     WorkflowFeature.CANCELLATION,
                     WorkflowFeature.TIMEOUTS,
+                    WorkflowFeature.COMPENSATION,
                 }
             ),
             supported_workflow_state_predicates=frozenset(
@@ -181,6 +182,10 @@ class StubOrchestrator:
                     "started_at": now,
                     "updated_at": now,
                     "terminal_reason": None,
+                    "compensation_status": "not_required",
+                    "compensation_started_at": None,
+                    "compensation_updated_at": None,
+                    "compensation_failures": [],
                     "steps": observable_steps,
                 }
                 history[op.address] = [

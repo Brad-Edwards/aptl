@@ -1,25 +1,48 @@
-# SSH Lateral Movement — Basic CTF Scenario
+# SSH Lateral Movement — Expanded CTF Scenario
 #
-# Two identical Linux servers with weak admin credentials and SSH
-# password authentication. A red team agent on a Kali box must
-# capture user flags from both machines.
+# Two Linux targets with weak admin credentials, a Kali attack box,
+# and a full scoring/orchestration/workflow pipeline exercising nearly
+# every SDL section.
 
 name: ssh-lateral-movement
 version: "1.0"
 description: >
-  Basic penetration testing scenario with two Linux targets and a
-  Kali attack box. The admin accounts use weak passwords with SSH
-  password authentication enabled. Each target has a unique flag
-  file. The red team agent must retrieve both flags within 10 minutes.
+  Purple team CTF scenario with two Linux targets and a Kali attack box.
+  Exercises scoring pipeline (metrics/evaluations/TLOs/goals),
+  orchestration (injects/events/scripts/stories), parameterized variables,
+  decision-based workflows, and multi-team entities.
+
+# ---------------------------------------------------------------------------
+# Variables — scenario parameterization
+# ---------------------------------------------------------------------------
+variables:
+  exercise_speed:
+    type: number
+    default: 1.0
+    description: "Story speed multiplier for the exercise"
+  attack_timeout:
+    type: integer
+    default: 600
+    description: "Maximum seconds for the attack workflow"
+  weak_password:
+    type: string
+    default: "password123"
+    description: "Weak password used by admin accounts"
 
 # ---------------------------------------------------------------------------
 # Nodes
 # ---------------------------------------------------------------------------
 nodes:
-  lab-net:
+  # --- Networks ---
+  dmz-net:
     type: Switch
-    description: "Flat lab network connecting all boxes (10.10.10.0/24)"
+    description: "DMZ network — server-facing, reachable from Kali"
 
+  internal-net:
+    type: Switch
+    description: "Internal network — workstation segment, reachable from server"
+
+  # --- Target VMs ---
   server:
     type: VM
     description: "Linux server target with SSH and a user flag"
@@ -32,8 +55,12 @@ nodes:
       cpu: 1
     features:
       ssh-password-auth: admin-role
+      http-service: admin-role
     conditions:
       server-ssh-up: admin-role
+      server-http-up: admin-role
+      brute-force-detected: admin-role
+      lateral-movement-detected: admin-role
     roles:
       admin-role:
         username: admin
@@ -41,7 +68,9 @@ nodes:
       - port: 22
         protocol: tcp
         name: ssh
-        description: "OpenSSH with password authentication"
+      - port: 80
+        protocol: tcp
+        name: http
     vulnerabilities:
       - weak-admin-password
 
@@ -66,13 +95,12 @@ nodes:
       - port: 22
         protocol: tcp
         name: ssh
-        description: "OpenSSH with password authentication"
     vulnerabilities:
       - weak-admin-password
 
   kali:
     type: VM
-    description: "Kali Linux attack box for the red team agent"
+    description: "Kali Linux attack box"
     source:
       name: kalilinux/kali-rolling
       version: "latest"
@@ -80,40 +108,52 @@ nodes:
     resources:
       ram: 2 GiB
       cpu: 2
+    features:
+      kali-tools: operator
     roles:
       operator:
         username: kali
 
 # ---------------------------------------------------------------------------
-# Infrastructure — VMs link to switch entries (networks)
+# Infrastructure
 # ---------------------------------------------------------------------------
 infrastructure:
-  lab-net:
+  dmz-net:
     count: 1
     properties:
       cidr: "10.10.10.0/24"
       gateway: "10.10.10.1"
 
+  internal-net:
+    count: 1
+    properties:
+      cidr: "10.10.20.0/24"
+      gateway: "10.10.20.1"
+
   server:
     count: 1
     links:
-      - lab-net
+      - dmz-net
+      - internal-net
     properties:
-      - lab-net: "10.10.10.10"
+      - dmz-net: "10.10.10.10"
+      - internal-net: "10.10.20.10"
 
   workstation:
     count: 1
     links:
-      - lab-net
+      - internal-net
     properties:
-      - lab-net: "10.10.10.20"
+      - internal-net: "10.10.20.20"
 
   kali:
     count: 1
     links:
-      - lab-net
+      - dmz-net
+    dependencies:
+      - server
     properties:
-      - lab-net: "10.10.10.100"
+      - dmz-net: "10.10.10.100"
 
 # ---------------------------------------------------------------------------
 # Features
@@ -121,10 +161,36 @@ infrastructure:
 features:
   ssh-password-auth:
     type: service
-    description: "OpenSSH server configured for password authentication"
+    description: "OpenSSH server with password authentication enabled"
     source:
       name: openssh-server
       version: "*"
+
+  http-service:
+    type: service
+    description: "Simple HTTP service for health checks"
+    source:
+      name: python3-http
+      version: "*"
+
+  kali-tools:
+    type: service
+    description: "Kali Linux penetration testing tools"
+    source:
+      name: kali-tools-top10
+      version: "*"
+
+  sshd-config:
+    type: configuration
+    description: "SSH daemon configuration allowing password authentication"
+    dependencies:
+      - ssh-password-auth
+
+  flag-permissions:
+    type: configuration
+    description: "Correct file permissions on flag files"
+    dependencies:
+      - ssh-password-auth
 
 # ---------------------------------------------------------------------------
 # Vulnerabilities
@@ -137,15 +203,28 @@ vulnerabilities:
     technical: true
 
 # ---------------------------------------------------------------------------
-# Conditions — health checks
+# Conditions — health checks and detection triggers
 # ---------------------------------------------------------------------------
 conditions:
   server-ssh-up:
     command: "nc -z server 22"
     interval: 10
+
+  server-http-up:
+    command: "nc -z server 80"
+    interval: 10
+
   workstation-ssh-up:
     command: "nc -z workstation 22"
     interval: 10
+
+  brute-force-detected:
+    command: "grep -q 'Failed password' /var/log/auth.log 2>/dev/null"
+    interval: 15
+
+  lateral-movement-detected:
+    command: "grep -q 'Accepted password.*from 10.10' /var/log/auth.log 2>/dev/null"
+    interval: 15
 
 # ---------------------------------------------------------------------------
 # Accounts
@@ -182,10 +261,10 @@ accounts:
     auth_method: password
     shell: /bin/bash
     home: /home/kali
-    description: "Kali operator account for the red team agent"
+    description: "Kali operator account"
 
 # ---------------------------------------------------------------------------
-# Content — flag files
+# Content — flags, loot, and directories
 # ---------------------------------------------------------------------------
 content:
   server-flag:
@@ -204,18 +283,57 @@ content:
     sensitive: true
     description: "User flag on the workstation"
 
+  server-credentials-file:
+    type: file
+    target: server
+    path: /opt/.credentials.txt
+    text: "admin:password123"
+    sensitive: true
+    tags:
+      - credentials
+      - loot
+    description: "Plaintext credentials left in a hidden file"
+
+  loot-directory:
+    type: directory
+    target: kali
+    destination: /root/loot
+    description: "Staging directory for exfiltrated data"
+
 # ---------------------------------------------------------------------------
-# Entities
+# Entities — multi-team exercise
 # ---------------------------------------------------------------------------
 entities:
+  white-cell:
+    name: "Exercise Control"
+    role: white
+    mission: "Manage exercise lifecycle and scoring"
+
   red-team:
     name: "Red Team"
     role: red
     description: "Offensive security team"
+    mission: "Compromise both targets and capture flags"
     entities:
       operator:
         name: "Red Operator"
         description: "Primary attacker"
+
+  blue-team:
+    name: "Blue Team"
+    role: blue
+    description: "Defensive security team"
+    mission: "Detect and respond to the attack"
+    tlos:
+      - detect-brute-force
+      - detect-lateral-movement
+    entities:
+      soc-analyst:
+        name: "SOC Analyst"
+        description: "Monitoring and detection"
+      incident-responder:
+        name: "Incident Responder"
+        description: "Investigation and containment"
 
 # ---------------------------------------------------------------------------
 # Agents
@@ -229,15 +347,39 @@ agents:
       - ssh-login
       - read-file
       - network-scan
+      - credential-harvest
     starting_accounts:
       - kali-operator
     initial_knowledge:
       hosts:
         - kali
       subnets:
-        - lab-net
+        - dmz-net
     allowed_subnets:
-      - lab-net
+      - dmz-net
+      - internal-net
+
+  blue-agent:
+    entity: blue-team
+    description: "Automated blue team agent monitoring server and workstation"
+    actions:
+      - monitor-logs
+      - block-ip
+      - alert-soc
+    starting_accounts:
+      - server-admin
+    initial_knowledge:
+      hosts:
+        - server
+        - workstation
+      subnets:
+        - dmz-net
+        - internal-net
+      services:
+        - ssh
+    allowed_subnets:
+      - dmz-net
+      - internal-net
 
 # ---------------------------------------------------------------------------
 # Relationships
@@ -273,6 +415,179 @@ relationships:
     target: workstation
     description: "Server has network access to the workstation"
 
+  server-depends-on-dmz:
+    type: depends_on
+    source: server
+    target: dmz-net
+    description: "Server depends on DMZ network"
+
+  blue-manages-server:
+    type: manages
+    source: blue-team
+    target: server
+    description: "Blue team manages server monitoring"
+
+# ---------------------------------------------------------------------------
+# Scoring pipeline: metrics → evaluations → TLOs → goals
+# ---------------------------------------------------------------------------
+metrics:
+  red-server-flag:
+    type: conditional
+    max-score: 50
+    condition: server-ssh-up
+    description: "Red team captures the server flag"
+
+  red-workstation-flag:
+    type: conditional
+    max-score: 50
+    condition: workstation-ssh-up
+    description: "Red team captures the workstation flag"
+
+  blue-brute-detect:
+    type: conditional
+    max-score: 40
+    condition: brute-force-detected
+    description: "Blue team detects brute force attack"
+
+  blue-lateral-detect:
+    type: conditional
+    max-score: 40
+    condition: lateral-movement-detected
+    description: "Blue team detects lateral movement"
+
+  blue-ir-report:
+    type: manual
+    max-score: 20
+    artifact: true
+    description: "Blue team submits incident report"
+
+evaluations:
+  red-flag-capture:
+    name: "Red Team Flag Capture"
+    metrics:
+      - red-server-flag
+      - red-workstation-flag
+    min-score: 75
+
+  blue-detection-response:
+    name: "Blue Team Detection & Response"
+    metrics:
+      - blue-brute-detect
+      - blue-lateral-detect
+      - blue-ir-report
+    min-score: 60
+
+tlos:
+  capture-all-flags:
+    name: "Capture all flags"
+    evaluation: red-flag-capture
+
+  detect-brute-force:
+    name: "Detect brute force attack"
+    evaluation: blue-detection-response
+
+  detect-lateral-movement:
+    name: "Detect lateral movement"
+    evaluation: blue-detection-response
+
+goals:
+  red-team-goal:
+    name: "Red Team Goal"
+    tlos:
+      - capture-all-flags
+
+  blue-team-goal:
+    name: "Blue Team Goal"
+    tlos:
+      - detect-brute-force
+      - detect-lateral-movement
+
+# ---------------------------------------------------------------------------
+# Injects — exercise injections
+# ---------------------------------------------------------------------------
+injects:
+  recon-intel:
+    source: recon-intel-pack
+    from_entity: white-cell
+    to_entities:
+      - red-team
+    description: "White cell provides initial reconnaissance intel to red team"
+
+  soc-briefing:
+    source: soc-alert-brief
+    from_entity: white-cell
+    to_entities:
+      - blue-team
+    description: "White cell briefs blue team on suspicious activity alert"
+
+  escalation-notice:
+    source: escalation-template
+    from_entity: white-cell
+    to_entities:
+      - blue-team
+      - red-team
+    description: "White cell notifies both teams of escalation"
+
+# ---------------------------------------------------------------------------
+# Events — triggered combinations of conditions and injects
+# ---------------------------------------------------------------------------
+events:
+  exercise-start:
+    injects:
+      - recon-intel
+    description: "Exercise begins with recon intel delivery"
+
+  brute-force-alert:
+    conditions:
+      - brute-force-detected
+    injects:
+      - soc-briefing
+    description: "SOC alert triggered by brute force detection"
+
+  escalation-event:
+    conditions:
+      - lateral-movement-detected
+    injects:
+      - escalation-notice
+    description: "Exercise escalation when lateral movement detected"
+
+# ---------------------------------------------------------------------------
+# Scripts — timed event sequences
+# ---------------------------------------------------------------------------
+scripts:
+  recon-phase:
+    start-time: 0
+    end-time: 10 min
+    speed: ${exercise_speed}
+    events:
+      exercise-start: 0
+
+  attack-phase:
+    start-time: 10 min
+    end-time: 30 min
+    speed: ${exercise_speed}
+    events:
+      brute-force-alert: 15 min
+
+  escalation-phase:
+    start-time: 30 min
+    end-time: 1 hour
+    speed: ${exercise_speed}
+    events:
+      escalation-event: 35 min
+
+# ---------------------------------------------------------------------------
+# Stories — top-level narrative arcs
+# ---------------------------------------------------------------------------
+stories:
+  ctf-exercise:
+    name: "CTF Exercise Day"
+    speed: ${exercise_speed}
+    scripts:
+      - recon-phase
+      - attack-phase
+      - escalation-phase
+
 # ---------------------------------------------------------------------------
 # Objectives
 # ---------------------------------------------------------------------------
@@ -303,26 +618,57 @@ objectives:
     depends_on:
       - capture-server-flag
 
+  detect-attack:
+    name: "Detect the attack"
+    description: "Blue team detects brute force and lateral movement"
+    agent: blue-agent
+    targets:
+      - server
+    actions:
+      - monitor-logs
+    success:
+      mode: any_of
+      conditions:
+        - brute-force-detected
+        - lateral-movement-detected
+
 # ---------------------------------------------------------------------------
-# Workflow — 10-minute agent run
+# Workflows — complex control flow with decision and retry steps
 # ---------------------------------------------------------------------------
 workflows:
   attack-workflow:
-    description: "Red team attack workflow with 10-minute timeout"
+    description: "Red team attack workflow with decision branching"
     start: capture-server
-    timeout: 600
+    timeout: ${attack_timeout}
     steps:
       capture-server:
         type: objective
         objective: capture-server-flag
-        on-success: capture-workstation
+        on-success: check-detection
         on-failure: fail
+
+      check-detection:
+        type: decision
+        description: "Check if blue team has detected the attack"
+        when:
+          conditions:
+            - brute-force-detected
+        then: capture-workstation-stealthy
+        else: capture-workstation
 
       capture-workstation:
         type: objective
         objective: capture-workstation-flag
         on-success: done
         on-failure: fail
+
+      capture-workstation-stealthy:
+        type: retry
+        description: "Retry flag capture with stealth if detected"
+        objective: capture-workstation-flag
+        max-attempts: 3
+        on-success: done
+        on-exhausted: fail
 
       done:
         type: end
@@ -331,3 +677,22 @@ workflows:
       fail:
         type: end
         description: "Attack workflow failed"
+
+  detection-workflow:
+    description: "Blue team detection workflow"
+    start: monitor
+    timeout: ${attack_timeout}
+    steps:
+      monitor:
+        type: objective
+        objective: detect-attack
+        on-success: complete
+        on-failure: timeout-fail
+
+      complete:
+        type: end
+        description: "Detection successful"
+
+      timeout-fail:
+        type: end
+        description: "Detection timed out"

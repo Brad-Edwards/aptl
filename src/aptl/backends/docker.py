@@ -80,7 +80,7 @@ def create_docker_manifest(**config: Any) -> BackendManifest:
             name="docker-provisioner",
             supported_node_types=frozenset({"vm", "switch"}),
             supported_os_families=frozenset({"linux"}),
-            supported_content_types=frozenset({"file"}),
+            supported_content_types=frozenset({"file", "directory"}),
             supported_account_features=frozenset(
                 {"groups", "shell", "home", "auth_method"}
             ),
@@ -90,13 +90,17 @@ def create_docker_manifest(**config: Any) -> BackendManifest:
         ),
         orchestrator=OrchestratorCapabilities(
             name="docker-orchestrator",
-            supported_sections=frozenset({"workflows"}),
+            supported_sections=frozenset(
+                {"injects", "events", "scripts", "stories", "workflows"}
+            ),
             supports_workflows=True,
-            supports_condition_refs=False,
-            supports_inject_bindings=False,
+            supports_condition_refs=True,
+            supports_inject_bindings=True,
             supported_workflow_features=frozenset({
                 WorkflowFeature.TIMEOUTS,
                 WorkflowFeature.FAILURE_TRANSITIONS,
+                WorkflowFeature.DECISION,
+                WorkflowFeature.RETRY,
             }),
         ),
         evaluator=EvaluatorCapabilities(
@@ -301,18 +305,26 @@ class DockerProvisioner:
         spec = payload.get("spec", {})
         target_node = payload.get("target_node", "")
         target_address = payload.get("target_address", "")
-        path = spec.get("path", "")
-        text = spec.get("text")
-
-        if not path or text is None:
-            return
+        content_type = spec.get("type", "file")
 
         cid = self._containers.get(target_address)
         if not cid:
             logger.warning("docker: no container for content target %s", target_address)
             return
 
-        # Create parent directory and write file
+        if content_type == "directory":
+            destination = spec.get("destination", "")
+            if destination:
+                _docker("exec", cid, "mkdir", "-p", destination, check=False)
+                logger.info("docker: created directory %s:%s", target_node, destination)
+            return
+
+        # File content
+        path = spec.get("path", "")
+        text = spec.get("text")
+        if not path or text is None:
+            return
+
         parent = "/".join(path.split("/")[:-1])
         if parent:
             _docker("exec", cid, "mkdir", "-p", parent, check=False)

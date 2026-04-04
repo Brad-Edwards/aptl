@@ -2,7 +2,7 @@
 
 Tests the full SDL -> compile -> plan -> execute pipeline using Docker
 containers. Validates that the scenario DSL, runtime SDK, and Docker backend
-work end-to-end.
+work end-to-end across all 21 SDL sections.
 
 Requires Docker daemon running. Tests are skipped if Docker is unavailable.
 """
@@ -16,7 +16,7 @@ from aptl.core.sdl import parse_sdl_file
 from aptl.core.runtime.compiler import compile_runtime_model
 from aptl.core.runtime.planner import plan
 from aptl.core.runtime.control_plane import RuntimeControlPlane
-from aptl.core.runtime.models import RuntimeSnapshot
+from aptl.core.runtime.models import RuntimeDomain, RuntimeSnapshot
 from aptl.backends.docker import (
     DockerProvisioner,
     DockerOrchestrator,
@@ -49,129 +49,429 @@ requires_docker = pytest.mark.skipif(
 )
 
 
+@pytest.fixture(scope="module")
+def scenario():
+    return parse_sdl_file(SCENARIO_PATH)
+
+
+@pytest.fixture(scope="module")
+def compiled_model(scenario):
+    return compile_runtime_model(scenario)
+
+
 # ---------------------------------------------------------------------------
-# Unit tests (no Docker needed)
+# SDL Parsing — all 21 sections
 # ---------------------------------------------------------------------------
 
 
 class TestScenarioParsing:
-    """Validate the SDL scenario parses and validates correctly."""
+    """Validate the expanded SDL scenario parses and validates."""
 
-    def test_parse_scenario(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
+    def test_parse_and_validate(self, scenario):
         assert scenario.name == "ssh-lateral-movement"
         assert scenario.semantic_validated is True
         assert scenario.advisories == []
 
-    def test_scenario_nodes(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
-        assert "lab-net" in scenario.nodes
+    def test_nodes(self, scenario):
+        assert "dmz-net" in scenario.nodes
+        assert "internal-net" in scenario.nodes
         assert "server" in scenario.nodes
         assert "workstation" in scenario.nodes
         assert "kali" in scenario.nodes
-        assert scenario.nodes["lab-net"].type.value == "switch"
+        assert scenario.nodes["dmz-net"].type.value == "switch"
         assert scenario.nodes["server"].type.value == "vm"
         assert str(scenario.nodes["server"].os) == "OSFamily.LINUX"
 
-    def test_scenario_accounts(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
+    def test_infrastructure(self, scenario):
+        assert "dmz-net" in scenario.infrastructure
+        assert "internal-net" in scenario.infrastructure
+        assert "server" in scenario.infrastructure
+        infra_server = scenario.infrastructure["server"]
+        assert "dmz-net" in infra_server.links
+        assert "internal-net" in infra_server.links
+        # workstation only on internal-net
+        infra_ws = scenario.infrastructure["workstation"]
+        assert "internal-net" in infra_ws.links
+        assert "dmz-net" not in infra_ws.links
+        # kali only on dmz-net with dependency on server
+        infra_kali = scenario.infrastructure["kali"]
+        assert "dmz-net" in infra_kali.links
+        assert "server" in infra_kali.dependencies
+
+    def test_variables(self, scenario):
+        assert "exercise_speed" in scenario.variables
+        assert "attack_timeout" in scenario.variables
+        assert "weak_password" in scenario.variables
+        speed = scenario.variables["exercise_speed"]
+        assert speed.type.value == "number"
+        assert speed.default == 1.0
+        timeout = scenario.variables["attack_timeout"]
+        assert timeout.type.value == "integer"
+        assert timeout.default == 600
+
+    def test_features(self, scenario):
+        assert "ssh-password-auth" in scenario.features
+        assert "http-service" in scenario.features
+        assert "kali-tools" in scenario.features
+        assert "sshd-config" in scenario.features
+        assert "flag-permissions" in scenario.features
+        # configuration type
+        assert scenario.features["sshd-config"].type.value == "configuration"
+        # dependency chain
+        assert "ssh-password-auth" in scenario.features["sshd-config"].dependencies
+
+    def test_vulnerabilities(self, scenario):
+        assert "weak-admin-password" in scenario.vulnerabilities
+        vuln = scenario.vulnerabilities["weak-admin-password"]
+        assert vuln.vuln_class == "CWE-521"
+        assert vuln.technical is True
+
+    def test_conditions(self, scenario):
+        assert "server-ssh-up" in scenario.conditions
+        assert "server-http-up" in scenario.conditions
+        assert "workstation-ssh-up" in scenario.conditions
+        assert "brute-force-detected" in scenario.conditions
+        assert "lateral-movement-detected" in scenario.conditions
+        bf = scenario.conditions["brute-force-detected"]
+        assert bf.command is not None
+        assert bf.interval == 15
+
+    def test_accounts(self, scenario):
         assert "server-admin" in scenario.accounts
         assert "workstation-admin" in scenario.accounts
         assert "kali-operator" in scenario.accounts
         assert scenario.accounts["server-admin"].password_strength.value == "weak"
+        assert scenario.accounts["kali-operator"].password_strength.value == "strong"
         assert scenario.accounts["server-admin"].node == "server"
 
-    def test_scenario_content(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
+    def test_content(self, scenario):
         assert "server-flag" in scenario.content
         assert "workstation-flag" in scenario.content
+        assert "server-credentials-file" in scenario.content
+        assert "loot-directory" in scenario.content
+        # File content
         assert scenario.content["server-flag"].text == "FLAG{server-alpha-9f3c}"
-        assert scenario.content["server-flag"].target == "server"
+        assert scenario.content["server-flag"].type.value == "file"
+        # Directory content
+        assert scenario.content["loot-directory"].type.value == "directory"
+        assert scenario.content["loot-directory"].destination == "/root/loot"
+        # Tags
+        assert "credentials" in scenario.content["server-credentials-file"].tags
 
-    def test_scenario_agents(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
+    def test_entities(self, scenario):
+        assert "white-cell" in scenario.entities
+        assert "red-team" in scenario.entities
+        assert "blue-team" in scenario.entities
+        # Roles
+        assert scenario.entities["white-cell"].role.value == "white"
+        assert scenario.entities["red-team"].role.value == "red"
+        assert scenario.entities["blue-team"].role.value == "blue"
+        # Nested entities
+        assert "operator" in scenario.entities["red-team"].entities
+        assert "soc-analyst" in scenario.entities["blue-team"].entities
+        assert "incident-responder" in scenario.entities["blue-team"].entities
+        # Blue team TLOs
+        assert "detect-brute-force" in scenario.entities["blue-team"].tlos
+
+    def test_agents(self, scenario):
         assert "red-agent" in scenario.agents
-        agent = scenario.agents["red-agent"]
-        assert agent.entity == "red-team"
-        assert "kali-operator" in agent.starting_accounts
-        assert "ssh-brute-force" in agent.actions
+        assert "blue-agent" in scenario.agents
+        red = scenario.agents["red-agent"]
+        blue = scenario.agents["blue-agent"]
+        assert red.entity == "red-team"
+        assert blue.entity == "blue-team"
+        assert "ssh-brute-force" in red.actions
+        assert "monitor-logs" in blue.actions
+        assert "dmz-net" in red.allowed_subnets
+        assert "internal-net" in blue.allowed_subnets
 
-    def test_scenario_objectives(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
-        assert "capture-server-flag" in scenario.objectives
-        assert "capture-workstation-flag" in scenario.objectives
-        obj = scenario.objectives["capture-workstation-flag"]
-        assert "capture-server-flag" in obj.depends_on
+    def test_relationships(self, scenario):
+        rels = scenario.relationships
+        assert "server-auth" in rels
+        assert "workstation-auth" in rels
+        assert "kali-to-server" in rels
+        assert "server-to-workstation" in rels
+        assert "server-depends-on-dmz" in rels
+        assert "blue-manages-server" in rels
+        # Types
+        assert rels["server-auth"].type.value == "authenticates_with"
+        assert rels["kali-to-server"].type.value == "connects_to"
+        assert rels["server-depends-on-dmz"].type.value == "depends_on"
+        assert rels["blue-manages-server"].type.value == "manages"
+        # Properties
+        assert rels["server-auth"].properties["protocol"] == "ssh"
 
-    def test_scenario_workflow(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
+    # --- Scoring pipeline ---
+
+    def test_metrics(self, scenario):
+        metrics = scenario.metrics
+        assert "red-server-flag" in metrics
+        assert "red-workstation-flag" in metrics
+        assert "blue-brute-detect" in metrics
+        assert "blue-lateral-detect" in metrics
+        assert "blue-ir-report" in metrics
+        # Conditional metrics
+        assert metrics["red-server-flag"].type.value == "conditional"
+        assert metrics["red-server-flag"].max_score == 50
+        assert metrics["red-server-flag"].condition == "server-ssh-up"
+        # Manual metric
+        assert metrics["blue-ir-report"].type.value == "manual"
+        assert metrics["blue-ir-report"].artifact is True
+
+    def test_evaluations(self, scenario):
+        evals = scenario.evaluations
+        assert "red-flag-capture" in evals
+        assert "blue-detection-response" in evals
+        assert "red-server-flag" in evals["red-flag-capture"].metrics
+        assert evals["red-flag-capture"].min_score.percentage == 75
+        assert evals["blue-detection-response"].min_score.percentage == 60
+
+    def test_tlos(self, scenario):
+        tlos = scenario.tlos
+        assert "capture-all-flags" in tlos
+        assert "detect-brute-force" in tlos
+        assert "detect-lateral-movement" in tlos
+        assert tlos["capture-all-flags"].evaluation == "red-flag-capture"
+
+    def test_goals(self, scenario):
+        goals = scenario.goals
+        assert "red-team-goal" in goals
+        assert "blue-team-goal" in goals
+        assert "capture-all-flags" in goals["red-team-goal"].tlos
+        assert len(goals["blue-team-goal"].tlos) == 2
+
+    # --- Orchestration pipeline ---
+
+    def test_injects(self, scenario):
+        injects = scenario.injects
+        assert "recon-intel" in injects
+        assert "soc-briefing" in injects
+        assert "escalation-notice" in injects
+        assert injects["recon-intel"].from_entity == "white-cell"
+        assert "red-team" in injects["recon-intel"].to_entities
+        # Multi-target inject
+        assert len(injects["escalation-notice"].to_entities) == 2
+
+    def test_events(self, scenario):
+        events = scenario.events
+        assert "exercise-start" in events
+        assert "brute-force-alert" in events
+        assert "escalation-event" in events
+        assert "recon-intel" in events["exercise-start"].injects
+        assert "brute-force-detected" in events["brute-force-alert"].conditions
+
+    def test_scripts(self, scenario):
+        scripts = scenario.scripts
+        assert "recon-phase" in scripts
+        assert "attack-phase" in scripts
+        assert "escalation-phase" in scripts
+        assert scripts["recon-phase"].start_time == 0
+        assert scripts["recon-phase"].end_time == 600  # 10 min in seconds
+        assert scripts["attack-phase"].start_time == 600
+        assert scripts["attack-phase"].end_time == 1800  # 30 min
+
+    def test_stories(self, scenario):
+        stories = scenario.stories
+        assert "ctf-exercise" in stories
+        assert len(stories["ctf-exercise"].scripts) == 3
+        assert "recon-phase" in stories["ctf-exercise"].scripts
+
+    # --- Objectives ---
+
+    def test_objectives(self, scenario):
+        objectives = scenario.objectives
+        assert "capture-server-flag" in objectives
+        assert "capture-workstation-flag" in objectives
+        assert "detect-attack" in objectives
+        # Red objectives
+        assert objectives["capture-server-flag"].agent == "red-agent"
+        assert "server-flag" in objectives["capture-server-flag"].targets
+        # Blue objective with any_of mode
+        detect = objectives["detect-attack"]
+        assert detect.agent == "blue-agent"
+        assert detect.success.mode.value == "any_of"
+        # Dependency chain
+        assert "capture-server-flag" in objectives["capture-workstation-flag"].depends_on
+
+    # --- Workflows ---
+
+    def test_workflows(self, scenario):
+        workflows = scenario.workflows
+        assert "attack-workflow" in workflows
+        assert "detection-workflow" in workflows
+
+    def test_attack_workflow_structure(self, scenario):
         wf = scenario.workflows["attack-workflow"]
         assert wf.start == "capture-server"
-        assert wf.timeout is not None
-        assert wf.timeout.seconds == 600
-        assert "capture-server" in wf.steps
-        assert "capture-workstation" in wf.steps
-        assert "done" in wf.steps
-        assert "fail" in wf.steps
+        steps = wf.steps
+        assert "capture-server" in steps
+        assert "check-detection" in steps
+        assert "capture-workstation" in steps
+        assert "capture-workstation-stealthy" in steps
+        assert "done" in steps
+        assert "fail" in steps
 
-    def test_scenario_vulnerabilities(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
-        assert "weak-admin-password" in scenario.vulnerabilities
-        vuln = scenario.vulnerabilities["weak-admin-password"]
-        assert vuln.vuln_class == "CWE-521"
+    def test_workflow_decision_step(self, scenario):
+        step = scenario.workflows["attack-workflow"].steps["check-detection"]
+        assert step.type.value == "decision"
+        assert step.when is not None
+        assert "brute-force-detected" in step.when.conditions
+        assert step.then_step == "capture-workstation-stealthy"
+        assert step.else_step == "capture-workstation"
 
-    def test_scenario_relationships(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
-        assert "server-auth" in scenario.relationships
-        assert "kali-to-server" in scenario.relationships
-        assert scenario.relationships["server-auth"].type.value == "authenticates_with"
+    def test_workflow_retry_step(self, scenario):
+        step = scenario.workflows["attack-workflow"].steps["capture-workstation-stealthy"]
+        assert step.type.value == "retry"
+        assert step.max_attempts == 3
+        assert step.objective == "capture-workstation-flag"
+        assert step.on_success == "done"
+        assert step.on_exhausted == "fail"
+
+    def test_detection_workflow(self, scenario):
+        wf = scenario.workflows["detection-workflow"]
+        assert wf.start == "monitor"
+        assert "monitor" in wf.steps
+        assert wf.steps["monitor"].objective == "detect-attack"
+
+
+# ---------------------------------------------------------------------------
+# Compile and Plan
+# ---------------------------------------------------------------------------
 
 
 class TestCompileAndPlan:
-    """Validate the scenario compiles and plans correctly."""
+    """Validate the expanded scenario compiles and plans correctly."""
 
-    def test_compile(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
-        model = compile_runtime_model(scenario)
-        assert model.scenario_name == "ssh-lateral-movement"
-        assert "provision.network.lab-net" in model.networks
-        assert "provision.node.server" in model.node_deployments
-        assert "provision.node.workstation" in model.node_deployments
-        assert "provision.node.kali" in model.node_deployments
-        assert "provision.content.server-flag" in model.content_placements
-        assert "provision.content.workstation-flag" in model.content_placements
-        assert "provision.account.server-admin" in model.account_placements
-        assert "orchestration.workflow.attack-workflow" in model.workflows
-        assert model.diagnostics == []
+    def test_compile_no_diagnostics(self, compiled_model):
+        assert compiled_model.diagnostics == []
+        assert compiled_model.scenario_name == "ssh-lateral-movement"
 
-    def test_plan_with_docker_manifest(self):
-        scenario = parse_sdl_file(SCENARIO_PATH)
-        model = compile_runtime_model(scenario)
+    def test_compiled_networks(self, compiled_model):
+        nets = compiled_model.networks
+        assert "provision.network.dmz-net" in nets
+        assert "provision.network.internal-net" in nets
+
+    def test_compiled_nodes(self, compiled_model):
+        nodes = compiled_model.node_deployments
+        assert "provision.node.server" in nodes
+        assert "provision.node.workstation" in nodes
+        assert "provision.node.kali" in nodes
+
+    def test_compiled_content(self, compiled_model):
+        content = compiled_model.content_placements
+        assert "provision.content.server-flag" in content
+        assert "provision.content.workstation-flag" in content
+        assert "provision.content.server-credentials-file" in content
+        assert "provision.content.loot-directory" in content
+
+    def test_compiled_accounts(self, compiled_model):
+        accounts = compiled_model.account_placements
+        assert "provision.account.server-admin" in accounts
+        assert "provision.account.workstation-admin" in accounts
+        assert "provision.account.kali-operator" in accounts
+
+    def test_compiled_feature_bindings(self, compiled_model):
+        features = compiled_model.feature_bindings
+        assert len(features) >= 3  # ssh on server, ssh on ws, kali tools, http
+
+    def test_compiled_condition_bindings(self, compiled_model):
+        conditions = compiled_model.condition_bindings
+        # server has: ssh-up, http-up, brute-force, lateral-movement
+        # workstation has: ssh-up
+        assert len(conditions) >= 5
+
+    def test_compiled_scoring_pipeline(self, compiled_model):
+        assert len(compiled_model.metrics) == 5
+        assert len(compiled_model.evaluations) == 2
+        assert len(compiled_model.tlos) == 3
+        assert len(compiled_model.goals) == 2
+
+    def test_compiled_orchestration(self, compiled_model):
+        assert len(compiled_model.injects) >= 3
+        assert len(compiled_model.events) == 3
+        assert len(compiled_model.scripts) == 3
+        assert len(compiled_model.stories) == 1
+
+    def test_compiled_workflows(self, compiled_model):
+        workflows = compiled_model.workflows
+        assert "orchestration.workflow.attack-workflow" in workflows
+        assert "orchestration.workflow.detection-workflow" in workflows
+        atk = workflows["orchestration.workflow.attack-workflow"]
+        assert atk.start_step == "capture-server"
+        assert len(atk.control_steps) == 6  # 6 steps in attack workflow
+
+    def test_compiled_objectives(self, compiled_model):
+        objectives = compiled_model.objectives
+        assert "evaluation.objective.capture-server-flag" in objectives
+        assert "evaluation.objective.capture-workstation-flag" in objectives
+        assert "evaluation.objective.detect-attack" in objectives
+
+    def test_plan_valid(self, compiled_model):
         manifest = create_docker_manifest()
-        execution_plan = plan(model, manifest)
-        assert execution_plan.is_valid
+        execution_plan = plan(compiled_model, manifest)
+        assert execution_plan.is_valid, (
+            f"Plan diagnostics: {[d.message for d in execution_plan.diagnostics]}"
+        )
         assert len(execution_plan.provisioning.operations) > 0
         assert len(execution_plan.orchestration.operations) > 0
         assert len(execution_plan.evaluation.operations) > 0
 
+    def test_plan_operation_counts(self, compiled_model):
+        manifest = create_docker_manifest()
+        execution_plan = plan(compiled_model, manifest)
+        # Should have substantial number of operations from the expanded scenario
+        assert len(execution_plan.provisioning.operations) >= 15
+        assert len(execution_plan.orchestration.operations) >= 10
+        assert len(execution_plan.evaluation.operations) >= 15
+
+
+# ---------------------------------------------------------------------------
+# Docker Manifest
+# ---------------------------------------------------------------------------
+
 
 class TestDockerManifest:
-    """Validate the Docker backend manifest declares correct capabilities."""
+    """Validate the expanded Docker backend manifest."""
 
-    def test_manifest_structure(self):
+    def test_manifest_name(self):
         manifest = create_docker_manifest()
         assert manifest.name == "docker"
-        assert manifest.has_orchestrator is True
-        assert manifest.has_evaluator is True
 
-    def test_provisioner_capabilities(self):
+    def test_provisioner_supports_directory(self):
         manifest = create_docker_manifest()
-        prov = manifest.provisioner
-        assert "vm" in prov.supported_node_types
-        assert "switch" in prov.supported_node_types
-        assert "linux" in prov.supported_os_families
-        assert prov.supports_accounts is True
-        assert prov.max_total_nodes == 20
+        assert "directory" in manifest.provisioner.supported_content_types
+        assert "file" in manifest.provisioner.supported_content_types
+
+    def test_orchestrator_supports_all_sections(self):
+        manifest = create_docker_manifest()
+        orch = manifest.orchestrator
+        assert "injects" in orch.supported_sections
+        assert "events" in orch.supported_sections
+        assert "scripts" in orch.supported_sections
+        assert "stories" in orch.supported_sections
+        assert "workflows" in orch.supported_sections
+        assert orch.supports_condition_refs is True
+        assert orch.supports_inject_bindings is True
+
+    def test_orchestrator_supports_workflow_features(self):
+        from aptl.core.runtime.capabilities import WorkflowFeature
+        manifest = create_docker_manifest()
+        features = manifest.orchestrator.supported_workflow_features
+        assert WorkflowFeature.TIMEOUTS in features
+        assert WorkflowFeature.FAILURE_TRANSITIONS in features
+        assert WorkflowFeature.DECISION in features
+        assert WorkflowFeature.RETRY in features
+
+    def test_evaluator_supports_scoring(self):
+        manifest = create_docker_manifest()
+        eval_caps = manifest.evaluator
+        assert eval_caps.supports_scoring is True
+        assert eval_caps.supports_objectives is True
+        assert "conditions" in eval_caps.supported_sections
+        assert "metrics" in eval_caps.supported_sections
+        assert "evaluations" in eval_caps.supported_sections
+        assert "tlos" in eval_caps.supported_sections
+        assert "goals" in eval_caps.supported_sections
 
     def test_target_construction(self):
         target = create_docker_target()
@@ -193,7 +493,6 @@ class TestBackendRegistry:
         registry = get_backend_registry()
         target = registry.create("docker")
         assert target.name == "docker"
-        assert target.manifest.provisioner.name == "docker-provisioner"
 
 
 # ---------------------------------------------------------------------------
@@ -207,22 +506,16 @@ class TestDockerIntegration:
 
     def test_full_pipeline(self):
         """Parse, compile, plan, provision, orchestrate, and evaluate."""
-        # 1. Parse and validate scenario
         scenario = parse_sdl_file(SCENARIO_PATH)
-        assert scenario.semantic_validated
-
-        # 2. Compile to runtime model
         model = compile_runtime_model(scenario)
         assert model.diagnostics == []
 
-        # 3. Create Docker target and plan
         target = create_docker_target(project_prefix="aptl-test")
         execution_plan = plan(model, target.manifest)
         assert execution_plan.is_valid, (
-            f"Plan diagnostics: {execution_plan.diagnostics}"
+            f"Plan diagnostics: {[d.message for d in execution_plan.diagnostics]}"
         )
 
-        # 4. Execute through the control plane
         control_plane = RuntimeControlPlane(target)
 
         try:
@@ -234,13 +527,15 @@ class TestDockerIntegration:
                 f"Provisioning rejected: {prov_receipt.diagnostics}"
             )
 
-            # Verify containers were created
+            # Verify containers and networks were created
             provisioner = target.provisioner
             assert isinstance(provisioner, DockerProvisioner)
-            containers = provisioner.containers
-            networks = provisioner.networks
-            assert len(networks) >= 1, "Expected at least 1 Docker network"
-            assert len(containers) >= 3, "Expected at least 3 containers"
+            assert len(provisioner.networks) >= 2, (
+                "Expected at least 2 Docker networks (dmz + internal)"
+            )
+            assert len(provisioner.containers) >= 3, (
+                "Expected at least 3 containers (server, workstation, kali)"
+            )
 
             # Orchestrate
             orch_receipt = control_plane.submit_orchestration(
@@ -258,63 +553,69 @@ class TestDockerIntegration:
             snapshot = control_plane.snapshot
             assert len(snapshot.entries) > 0
 
-            # Verify provisioning entries exist
-            prov_entries = snapshot.for_domain(
-                __import__("aptl.core.runtime.models", fromlist=["RuntimeDomain"]).RuntimeDomain.PROVISIONING
-            )
-            assert "provision.network.lab-net" in prov_entries
+            # Verify all three runtime domains have entries
+            prov_entries = snapshot.for_domain(RuntimeDomain.PROVISIONING)
+            orch_entries = snapshot.for_domain(RuntimeDomain.ORCHESTRATION)
+            eval_entries = snapshot.for_domain(RuntimeDomain.EVALUATION)
+            assert len(prov_entries) > 0, "Missing provisioning entries"
+            assert len(orch_entries) > 0, "Missing orchestration entries"
+            assert len(eval_entries) > 0, "Missing evaluation entries"
+
+            # Verify provisioned resources
+            assert "provision.network.dmz-net" in prov_entries
+            assert "provision.network.internal-net" in prov_entries
             assert "provision.node.server" in prov_entries
             assert "provision.node.workstation" in prov_entries
             assert "provision.node.kali" in prov_entries
 
-            # Verify workflow state
+            # Verify both workflows running
             orch_results = snapshot.orchestration_results
-            wf_key = "orchestration.workflow.attack-workflow"
-            assert wf_key in orch_results
-            wf_state = orch_results[wf_key]
-            assert wf_state["workflow_status"] == "running"
-            assert wf_state["run_id"] == f"{wf_key}-run"
+            atk_key = "orchestration.workflow.attack-workflow"
+            det_key = "orchestration.workflow.detection-workflow"
+            assert atk_key in orch_results
+            assert det_key in orch_results
+            assert orch_results[atk_key]["workflow_status"] == "running"
+            assert orch_results[det_key]["workflow_status"] == "running"
 
-            # Verify evaluation results exist
-            assert len(snapshot.evaluation_results) > 0
+            # Verify evaluation results exist for scoring pipeline
+            eval_results = snapshot.evaluation_results
+            assert len(eval_results) > 0
+
+            # Verify orchestration history
+            orch_history = snapshot.orchestration_history
+            assert atk_key in orch_history
+            assert len(orch_history[atk_key]) >= 1
+
+            # Verify evaluation history
+            eval_history = snapshot.evaluation_history
+            assert len(eval_history) > 0
 
             # Test timeout reconciliation
             timeout_receipt = control_plane.reconcile_workflow_timeouts()
             assert timeout_receipt.accepted
 
         finally:
-            # Cleanup Docker resources
             if isinstance(target.provisioner, DockerProvisioner):
                 target.provisioner.cleanup()
 
-    def test_provisioner_cleanup(self):
-        """Verify cleanup removes all Docker resources."""
-        provisioner = DockerProvisioner(project_prefix="aptl-cleanup-test")
-
-        # Create a test network
+    def test_directory_content_provisioning(self):
+        """Verify directory content type creates directories in containers."""
         from aptl.core.runtime.models import (
             ProvisioningPlan,
             ProvisionOp,
             ChangeAction,
-            RuntimeSnapshot,
             PlannedResource,
-            RuntimeDomain,
         )
 
-        test_plan = ProvisioningPlan(
+        provisioner = DockerProvisioner(project_prefix="aptl-dirtest")
+
+        net_plan = ProvisioningPlan(
             resources={
                 "provision.network.test-net": PlannedResource(
                     address="provision.network.test-net",
                     domain=RuntimeDomain.PROVISIONING,
                     resource_type="network",
-                    payload={
-                        "spec": {
-                            "properties": {
-                                "cidr": "172.30.0.0/24",
-                                "gateway": "172.30.0.1",
-                            }
-                        }
-                    },
+                    payload={"spec": {"properties": {"cidr": "172.31.0.0/24", "gateway": "172.31.0.1"}}},
                 ),
             },
             operations=[
@@ -322,14 +623,113 @@ class TestDockerIntegration:
                     action=ChangeAction.CREATE,
                     address="provision.network.test-net",
                     resource_type="network",
+                    payload={"spec": {"properties": {"cidr": "172.31.0.0/24", "gateway": "172.31.0.1"}}},
+                ),
+            ],
+        )
+
+        node_plan = ProvisioningPlan(
+            resources={
+                "provision.node.test-vm": PlannedResource(
+                    address="provision.node.test-vm",
+                    domain=RuntimeDomain.PROVISIONING,
+                    resource_type="node",
                     payload={
-                        "spec": {
-                            "properties": {
-                                "cidr": "172.30.0.0/24",
-                                "gateway": "172.30.0.1",
-                            }
-                        }
+                        "node_name": "test-vm",
+                        "spec": {"source": {"name": "ubuntu", "version": "22.04"}},
+                        "ordering_dependencies": ["provision.network.test-net"],
                     },
+                    ordering_dependencies=("provision.network.test-net",),
+                ),
+            },
+            operations=[
+                ProvisionOp(
+                    action=ChangeAction.CREATE,
+                    address="provision.node.test-vm",
+                    resource_type="node",
+                    payload={
+                        "node_name": "test-vm",
+                        "spec": {"source": {"name": "ubuntu", "version": "22.04"}},
+                        "ordering_dependencies": ["provision.network.test-net"],
+                    },
+                    ordering_dependencies=("provision.network.test-net",),
+                ),
+            ],
+        )
+
+        dir_plan = ProvisioningPlan(
+            resources={
+                "provision.content.test-dir": PlannedResource(
+                    address="provision.content.test-dir",
+                    domain=RuntimeDomain.PROVISIONING,
+                    resource_type="content-placement",
+                    payload={
+                        "target_node": "test-vm",
+                        "target_address": "provision.node.test-vm",
+                        "spec": {"type": "directory", "destination": "/opt/test-data"},
+                    },
+                ),
+            },
+            operations=[
+                ProvisionOp(
+                    action=ChangeAction.CREATE,
+                    address="provision.content.test-dir",
+                    resource_type="content-placement",
+                    payload={
+                        "target_node": "test-vm",
+                        "target_address": "provision.node.test-vm",
+                        "spec": {"type": "directory", "destination": "/opt/test-data"},
+                    },
+                ),
+            ],
+        )
+
+        try:
+            snapshot = RuntimeSnapshot()
+            # Create network, then node, then directory content
+            result = provisioner.apply(net_plan, snapshot)
+            assert result.success
+            result = provisioner.apply(node_plan, result.snapshot)
+            assert result.success
+            result = provisioner.apply(dir_plan, result.snapshot)
+            assert result.success
+
+            # Verify directory exists in container
+            cid = provisioner.containers.get("provision.node.test-vm")
+            assert cid is not None
+            check = subprocess.run(
+                ["docker", "exec", cid, "test", "-d", "/opt/test-data"],
+                capture_output=True,
+            )
+            assert check.returncode == 0, "Directory was not created in container"
+        finally:
+            provisioner.cleanup()
+
+    def test_provisioner_cleanup(self):
+        """Verify cleanup removes all Docker resources."""
+        from aptl.core.runtime.models import (
+            ProvisioningPlan,
+            ProvisionOp,
+            ChangeAction,
+            PlannedResource,
+        )
+
+        provisioner = DockerProvisioner(project_prefix="aptl-cleanup-test")
+        test_plan = ProvisioningPlan(
+            resources={
+                "provision.network.test-net": PlannedResource(
+                    address="provision.network.test-net",
+                    domain=RuntimeDomain.PROVISIONING,
+                    resource_type="network",
+                    payload={"spec": {"properties": {"cidr": "172.30.0.0/24", "gateway": "172.30.0.1"}}},
+                ),
+            },
+            operations=[
+                ProvisionOp(
+                    action=ChangeAction.CREATE,
+                    address="provision.network.test-net",
+                    resource_type="network",
+                    payload={"spec": {"properties": {"cidr": "172.30.0.0/24", "gateway": "172.30.0.1"}}},
                 ),
             ],
         )

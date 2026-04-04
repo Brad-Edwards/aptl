@@ -1,15 +1,11 @@
-"""Docker backend — provisions scenarios as Docker containers and networks.
+"""Docker backend — provisions scenarios via Docker Compose and the Docker SDK.
 
-Implements the Provisioner, Orchestrator, and Evaluator runtime protocols
-using the Docker CLI. Each SDL network becomes a Docker bridge network,
-each VM node becomes a container, and accounts/content are provisioned
-inside containers via ``docker exec``.
-
-The provisioner installs SSH and supporting tools when ``ssh-password-auth``
-feature bindings are encountered.  The orchestrator can eagerly execute
-workflow steps by driving real SSH commands between containers.  The
-evaluator checks conditions by running commands inside the appropriate
-containers.
+Implements the Provisioner, Orchestrator, and Evaluator runtime protocols.
+The provisioner generates a ``docker-compose.yml`` from the provisioning plan
+and brings the stack up with ``docker compose up``.  Post-compose operations
+(account creation, content placement, SSH key distribution) and all runtime
+commands (workflow execution, condition evaluation) use the Docker SDK for
+Python (``docker.containers.get(name).exec_run(...)``).
 
 Capability surface:
 - Provisioner: vm + switch nodes on linux, file + directory content,
@@ -21,10 +17,21 @@ Capability surface:
 from __future__ import annotations
 
 import logging
+import shlex
 import subprocess
+import tempfile
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
+
+import yaml
+
+try:
+    import docker as docker_sdk
+except ImportError:  # pragma: no cover – optional dependency
+    docker_sdk = None  # type: ignore[assignment]
 
 from aptl.core.runtime.capabilities import (
     BackendManifest,
@@ -52,6 +59,17 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Lightweight result type (replaces subprocess.CompletedProcess)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class ExecResult:
+    """Result of a command executed inside a container."""
+    exit_code: int
+    output: str
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -59,26 +77,28 @@ def _utc_now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _docker(
-    *args: str,
-    check: bool = True,
-    capture: bool = True,
-    timeout: int = 120,
-) -> subprocess.CompletedProcess:
-    """Run a docker CLI command."""
-    cmd = ["docker", *args]
-    logger.debug("docker: %s", " ".join(cmd))
-    return subprocess.run(
-        cmd,
-        capture_output=capture,
-        text=True,
-        check=check,
-        timeout=timeout,
-    )
-
-
 def _diag(code: str, address: str, message: str, severity: Severity = Severity.ERROR) -> Diagnostic:
     return Diagnostic(code=code, domain="docker", address=address, message=message, severity=severity)
+
+
+def _get_docker_client() -> Any:
+    """Create a Docker SDK client, deferring the daemon probe."""
+    if docker_sdk is None:
+        raise RuntimeError(
+            "The 'docker' Python package is required for the Docker backend. "
+            "Install it with: pip install 'docker>=7.0.0'"
+        )
+    return docker_sdk.DockerClient.from_env()
+
+
+def _exec_run(client: Any, container_id: str, cmd: list[str] | str, timeout: int = 120) -> ExecResult:
+    """Execute a command in a running container via the Docker SDK."""
+    container = client.containers.get(container_id)
+    if isinstance(cmd, str):
+        cmd = ["sh", "-c", cmd]
+    exit_code, output = container.exec_run(cmd, demux=False)
+    text = output.decode("utf-8", errors="replace") if isinstance(output, bytes) else (output or "")
+    return ExecResult(exit_code=exit_code, output=text)
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +152,13 @@ def create_docker_manifest(**config: Any) -> BackendManifest:
 # ---------------------------------------------------------------------------
 
 class DockerProvisioner:
-    """Provisions Docker networks and containers from SDL plans."""
+    """Provisions Docker networks and containers from SDL plans.
+
+    Generates a ``docker-compose.yml`` for the infrastructure layer (networks
+    and node containers) and brings it up with ``docker compose up -d``.
+    Post-compose operations — content placement, account creation, feature
+    bindings, and SSH key distribution — are performed via the Docker SDK.
+    """
 
     def __init__(
         self,
@@ -146,6 +172,14 @@ class DockerProvisioner:
         self._containers: dict[str, str] = {}  # address -> docker container id
         self._node_names: dict[str, str] = {}  # address -> node SDL name
         self._accounts: dict[str, dict[str, Any]] = {}  # address -> account spec
+        self._compose_dir: Path | None = None
+        self._client: Any = None  # Docker SDK client, created lazily
+        self._ssh_pubkey: str = ""
+
+    def _get_client(self) -> Any:
+        if self._client is None:
+            self._client = _get_docker_client()
+        return self._client
 
     @property
     def containers(self) -> dict[str, str]:
@@ -195,6 +229,10 @@ class DockerProvisioner:
                     )
         return diagnostics
 
+    # ------------------------------------------------------------------
+    # apply — Compose for infra, SDK for post-compose ops
+    # ------------------------------------------------------------------
+
     def apply(
         self,
         plan: ProvisioningPlan,
@@ -203,6 +241,11 @@ class DockerProvisioner:
         entries = dict(snapshot.entries)
         changed: list[str] = []
         diagnostics: list[Diagnostic] = []
+
+        # Separate operations into compose-managed (networks, nodes) and
+        # post-compose (content, accounts, features, conditions).
+        compose_ops = []
+        post_ops = []
 
         for op in plan.operations:
             if op.action == ChangeAction.UNCHANGED:
@@ -223,6 +266,44 @@ class DockerProvisioner:
                 changed.append(op.address)
                 continue
 
+            if op.resource_type in ("network", "node"):
+                compose_ops.append(op)
+            else:
+                post_ops.append(op)
+
+        # Phase 1: bring up networks + nodes via Compose
+        if compose_ops:
+            try:
+                self._compose_up(compose_ops)
+                for op in compose_ops:
+                    entries[op.address] = SnapshotEntry(
+                        address=op.address,
+                        domain=RuntimeDomain.PROVISIONING,
+                        resource_type=op.resource_type,
+                        payload=op.payload,
+                        ordering_dependencies=op.ordering_dependencies,
+                        refresh_dependencies=op.refresh_dependencies,
+                        status="applied",
+                    )
+                    changed.append(op.address)
+            except Exception as exc:
+                for op in compose_ops:
+                    diagnostics.append(
+                        _diag("docker.compose-failed", op.address, str(exc))
+                    )
+                    entries[op.address] = SnapshotEntry(
+                        address=op.address,
+                        domain=RuntimeDomain.PROVISIONING,
+                        resource_type=op.resource_type,
+                        payload=op.payload,
+                        ordering_dependencies=op.ordering_dependencies,
+                        refresh_dependencies=op.refresh_dependencies,
+                        status="failed",
+                    )
+                    changed.append(op.address)
+
+        # Phase 2: post-compose operations via Docker SDK
+        for op in post_ops:
             try:
                 self._create_resource(
                     op.address, op.resource_type, op.payload,
@@ -254,6 +335,166 @@ class DockerProvisioner:
             diagnostics=diagnostics,
         )
 
+    # ------------------------------------------------------------------
+    # Compose generation and lifecycle
+    # ------------------------------------------------------------------
+
+    def _compose_up(self, ops: list[Any]) -> None:
+        """Generate docker-compose.yml and bring the stack up.
+
+        When there are no node/service ops (network-only), creates networks
+        directly via the Docker SDK since ``docker compose up`` requires at
+        least one service.
+        """
+        network_ops = [op for op in ops if op.resource_type == "network"]
+        node_ops = [op for op in ops if op.resource_type == "node"]
+
+        # Network-only: create via Docker SDK directly
+        if network_ops and not node_ops:
+            self._create_networks_directly(network_ops)
+            return
+
+        compose: dict[str, Any] = {"services": {}, "networks": {}}
+
+        for op in network_ops:
+            spec = op.payload.get("spec", {})
+            properties = spec.get("properties")
+            net_name = op.address.replace(".", "-")
+
+            net_def: dict[str, Any] = {"driver": "bridge"}
+            if isinstance(properties, dict):
+                cidr = properties.get("cidr", "")
+                gateway = properties.get("gateway", "")
+                if cidr:
+                    ipam_config: dict[str, str] = {"subnet": cidr}
+                    if gateway:
+                        ipam_config["gateway"] = gateway
+                    net_def["ipam"] = {"config": [ipam_config]}
+
+            compose["networks"][net_name] = net_def
+
+        # Collect node/service definitions
+        for op in node_ops:
+            spec = op.payload.get("spec", {})
+            source = spec.get("source", {})
+            image_name = source.get("name", "ubuntu")
+            image_version = source.get("version", "latest")
+            if image_version == "*":
+                image_version = "latest"
+
+            if self._use_ssh_image:
+                image = "panubo/sshd:latest"
+            else:
+                image = f"{image_name}:{image_version}"
+
+            node_name = op.payload.get("node_name", op.address.split(".")[-1])
+            container_name = f"{self._prefix}-{node_name}"
+
+            service: dict[str, Any] = {
+                "image": image,
+                "container_name": container_name,
+                "hostname": node_name,
+            }
+
+            if self._use_ssh_image and image.startswith("panubo/sshd"):
+                service["environment"] = {
+                    "SSH_ENABLE_PASSWORD_AUTH": "true",
+                    "SSH_ENABLE_ROOT": "true",
+                }
+            else:
+                service["command"] = "sleep infinity"
+
+            # Attach to networks with aliases.  Networks may be defined in
+            # this compose file OR already exist from an earlier apply() call
+            # (created directly via Docker SDK).
+            network_deps: list[str] = []
+            for dep in op.ordering_dependencies:
+                dep_key = dep.replace(".", "-")
+                if dep_key in compose["networks"]:
+                    network_deps.append(dep_key)
+                elif dep in self._networks:
+                    # Network already exists — reference it as external
+                    ext_name = f"{self._prefix}-{dep_key}"
+                    compose["networks"][dep_key] = {
+                        "external": True,
+                        "name": ext_name,
+                    }
+                    network_deps.append(dep_key)
+
+            if network_deps:
+                service["networks"] = {}
+                for net_key in network_deps:
+                    service["networks"][net_key] = {"aliases": [node_name]}
+
+            compose["services"][node_name] = service
+            # Pre-register the node name mapping so post-compose ops can find it
+            self._node_names[op.address] = node_name
+
+        # Remove empty sections
+        if not compose["networks"]:
+            del compose["networks"]
+        if not compose["services"]:
+            del compose["services"]
+
+        # Write compose file and bring stack up
+        self._compose_dir = Path(tempfile.mkdtemp(prefix=f"{self._prefix}-compose-"))
+        compose_path = self._compose_dir / "docker-compose.yml"
+        compose_path.write_text(yaml.dump(compose, default_flow_style=False, sort_keys=False))
+
+        logger.info("docker: compose file written to %s", compose_path)
+
+        subprocess.run(
+            ["docker", "compose", "-f", str(compose_path),
+             "-p", self._prefix, "up", "-d", "--wait"],
+            check=True, capture_output=True, text=True, timeout=180,
+        )
+        logger.info("docker: compose stack '%s' is up", self._prefix)
+
+        # Populate internal state from running containers
+        client = self._get_client()
+        for op in network_ops:
+            net_name = f"{self._prefix}_{op.address.replace('.', '-')}"
+            try:
+                net = client.networks.get(net_name)
+                self._networks[op.address] = net.id
+            except Exception:
+                # Compose may use a different naming scheme
+                self._networks[op.address] = net_name
+
+        for op in node_ops:
+            node_name = op.payload.get("node_name", op.address.split(".")[-1])
+            container_name = f"{self._prefix}-{node_name}"
+            try:
+                container = client.containers.get(container_name)
+                self._containers[op.address] = container.id
+            except Exception:
+                logger.warning("docker: container %s not found after compose up", container_name)
+
+    def _create_networks_directly(self, network_ops: list[Any]) -> None:
+        """Create networks via Docker SDK when no services are needed."""
+        client = self._get_client()
+        for op in network_ops:
+            spec = op.payload.get("spec", {})
+            properties = spec.get("properties")
+            name = f"{self._prefix}-{op.address.replace('.', '-')}"
+
+            ipam_pool_configs = []
+            if isinstance(properties, dict):
+                cidr = properties.get("cidr", "")
+                gateway = properties.get("gateway", "")
+                if cidr:
+                    pool = docker_sdk.types.IPAMPool(subnet=cidr, gateway=gateway or None)
+                    ipam_pool_configs.append(pool)
+
+            ipam_config = docker_sdk.types.IPAMConfig(pool_configs=ipam_pool_configs) if ipam_pool_configs else None
+            net = client.networks.create(name, driver="bridge", ipam=ipam_config)
+            self._networks[op.address] = net.id
+            logger.info("docker: created network %s (%s)", name, net.id[:12])
+
+    # ------------------------------------------------------------------
+    # Post-compose resource creation (via Docker SDK)
+    # ------------------------------------------------------------------
+
     def _create_resource(
         self,
         address: str,
@@ -261,11 +502,7 @@ class DockerProvisioner:
         payload: dict[str, Any],
         ordering_dependencies: tuple[str, ...] = (),
     ) -> None:
-        if resource_type == "network":
-            self._create_network(address, payload)
-        elif resource_type == "node":
-            self._create_node(address, payload, ordering_dependencies)
-        elif resource_type == "content-placement":
+        if resource_type == "content-placement":
             self._create_content(address, payload)
         elif resource_type == "account-placement":
             self._create_account(address, payload)
@@ -280,109 +517,19 @@ class DockerProvisioner:
         if resource_type == "network":
             net_id = self._networks.pop(address, None)
             if net_id:
-                _docker("network", "rm", net_id, check=False)
+                try:
+                    client = self._get_client()
+                    client.networks.get(net_id).remove()
+                except Exception:
+                    pass
         elif resource_type == "node":
             cid = self._containers.pop(address, None)
             if cid:
-                _docker("rm", "-f", cid, check=False)
-
-    def _create_network(self, address: str, payload: dict[str, Any]) -> None:
-        spec = payload.get("spec", {})
-        properties = spec.get("properties")
-        name = f"{self._prefix}-{address.replace('.', '-')}"
-
-        cmd = ["network", "create", "--driver", "bridge"]
-        if isinstance(properties, dict):
-            cidr = properties.get("cidr", "")
-            gateway = properties.get("gateway", "")
-            if cidr:
-                cmd.extend(["--subnet", cidr])
-            if gateway:
-                cmd.extend(["--gateway", gateway])
-        cmd.append(name)
-
-        result = _docker(*cmd)
-        net_id = result.stdout.strip()
-        self._networks[address] = net_id
-        logger.info("docker: created network %s (%s)", name, net_id[:12])
-
-    def _create_node(
-        self,
-        address: str,
-        payload: dict[str, Any],
-        ordering_dependencies: tuple[str, ...] = (),
-    ) -> None:
-        spec = payload.get("spec", {})
-        source = spec.get("source", {})
-        image_name = source.get("name", "ubuntu")
-        image_version = source.get("version", "latest")
-        if image_version == "*":
-            image_version = "latest"
-
-        # When use_ssh_image is set, all VM nodes get the panubo/sshd
-        # image which has OpenSSH pre-installed.  This avoids needing
-        # apt-get install inside containers (which requires internet).
-        if self._use_ssh_image:
-            image = "panubo/sshd:latest"
-        else:
-            image = f"{image_name}:{image_version}"
-
-        node_name = payload.get("node_name", address.split(".")[-1])
-        container_name = f"{self._prefix}-{node_name}"
-
-        # Pull image (best effort)
-        _docker("pull", image, check=False)
-
-        # Determine which network(s) to connect to
-        network_deps: list[str] = []
-        for dep in ordering_dependencies:
-            if dep in self._networks:
-                network_deps.append(dep)
-
-        # First network goes on the run command; includes alias for SDL name
-        network_args: list[str] = []
-        if network_deps:
-            first_net = f"{self._prefix}-{network_deps[0].replace('.', '-')}"
-            network_args = [
-                "--network", first_net,
-                "--network-alias", node_name,
-            ]
-
-        # Create container — SSH image needs env vars and its own entrypoint
-        if self._use_ssh_image and image.startswith("panubo/sshd"):
-            cmd = [
-                "run", "-d",
-                "--name", container_name,
-                "--hostname", node_name,
-                "-e", "SSH_ENABLE_PASSWORD_AUTH=true",
-                "-e", "SSH_ENABLE_ROOT=true",
-                *network_args,
-                image,
-            ]
-        else:
-            cmd = [
-                "run", "-d",
-                "--name", container_name,
-                "--hostname", node_name,
-                *network_args,
-                image,
-                "sleep", "infinity",
-            ]
-        result = _docker(*cmd)
-        cid = result.stdout.strip()
-        self._containers[address] = cid
-        self._node_names[address] = node_name
-        logger.info("docker: created container %s (%s) from %s", container_name, cid[:12], image)
-
-        # Connect to additional networks with aliases
-        for dep in network_deps[1:]:
-            net_name = f"{self._prefix}-{dep.replace('.', '-')}"
-            _docker(
-                "network", "connect",
-                "--alias", node_name,
-                net_name, cid,
-                check=False,
-            )
+                try:
+                    client = self._get_client()
+                    client.containers.get(cid).remove(force=True)
+                except Exception:
+                    pass
 
     def _create_content(self, address: str, payload: dict[str, Any]) -> None:
         spec = payload.get("spec", {})
@@ -395,10 +542,12 @@ class DockerProvisioner:
             logger.warning("docker: no container for content target %s", target_address)
             return
 
+        client = self._get_client()
+
         if content_type == "directory":
             destination = spec.get("destination", "")
             if destination:
-                _docker("exec", cid, "mkdir", "-p", destination, check=False)
+                _exec_run(client, cid, ["mkdir", "-p", destination])
                 logger.info("docker: created directory %s:%s", target_node, destination)
             return
 
@@ -410,13 +559,13 @@ class DockerProvisioner:
 
         parent = "/".join(path.split("/")[:-1])
         if parent:
-            _docker("exec", cid, "mkdir", "-p", parent, check=False)
-        _docker("exec", cid, "sh", "-c", f"echo '{text}' > {path}", check=False)
+            _exec_run(client, cid, ["mkdir", "-p", parent])
+        # Use printf to avoid shell injection (text is escaped)
+        _exec_run(client, cid, ["sh", "-c", f"printf '%s\\n' {shlex.quote(text)} > {shlex.quote(path)}"])
         logger.info("docker: placed content at %s:%s", target_node, path)
 
     def _create_feature_binding(self, address: str, payload: dict[str, Any]) -> None:
         """Provision a feature binding — install real software in a container."""
-        spec = payload.get("spec", {})
         feature_name = payload.get("feature_name", "")
         target_address = payload.get("node_address", "")
         node_name = payload.get("node_name", "")
@@ -428,7 +577,6 @@ class DockerProvisioner:
 
         if feature_name == "ssh-password-auth":
             if self._use_ssh_image:
-                # SSH is handled by the panubo/sshd entrypoint — skip
                 logger.info("docker: ssh-password-auth on %s handled by image", node_name)
             else:
                 self._install_ssh_server(cid, node_name)
@@ -441,26 +589,18 @@ class DockerProvisioner:
             )
 
     def _install_ssh_server(self, cid: str, node_name: str) -> None:
-        """Ensure OpenSSH server is running and configured in a container.
-
-        For containers built from the ``panubo/sshd`` image the server is
-        already running.  For plain ubuntu containers we attempt an
-        ``apt-get install``.  Either way, we ensure sshd is listening.
-        """
+        """Ensure OpenSSH server is running and configured in a container."""
         logger.info("docker: ensuring sshd on %s", node_name)
+        client = self._get_client()
 
-        # Check if sshd is already present (e.g. panubo/sshd image)
-        check = _docker("exec", cid, "which", "sshd", check=False)
-        if check.returncode == 0:
-            # Make sure it's running
-            _docker("exec", cid, "sh", "-c",
-                    "pgrep sshd >/dev/null 2>&1 || /usr/sbin/sshd", check=False)
+        check = _exec_run(client, cid, ["which", "sshd"])
+        if check.exit_code == 0:
+            _exec_run(client, cid, "pgrep sshd >/dev/null 2>&1 || /usr/sbin/sshd")
             logger.info("docker: sshd already present on %s", node_name)
             return
 
-        # Fallback: install via apt-get (needs network)
-        _docker(
-            "exec", cid, "sh", "-c",
+        _exec_run(
+            client, cid,
             "apt-get update -qq 2>/dev/null"
             " && DEBIAN_FRONTEND=noninteractive"
             " apt-get install -y -qq openssh-server netcat-openbsd"
@@ -469,62 +609,47 @@ class DockerProvisioner:
             " && sed -i 's/#\\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config"
             " && sed -i 's/#\\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config"
             " && /usr/sbin/sshd",
-            check=False,
-            timeout=300,
         )
         logger.info("docker: sshd installed and running on %s", node_name)
 
     def _install_ssh_client_tools(self, cid: str, node_name: str) -> None:
-        """Ensure SSH client tools are available in a container.
-
-        Generates an ed25519 key pair for the operator so the orchestrator
-        can SSH between containers using key-based auth.
-        """
+        """Ensure SSH client tools and generate an ed25519 key pair."""
         logger.info("docker: ensuring ssh client on %s", node_name)
-        # Generate a key pair if one doesn't exist
-        _docker(
-            "exec", cid, "sh", "-c",
+        client = self._get_client()
+
+        _exec_run(
+            client, cid,
             "mkdir -p /root/.ssh"
             " && test -f /root/.ssh/id_ed25519"
             " || ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N '' -q",
-            check=False,
         )
-        # Store the public key for later distribution
-        result = _docker(
-            "exec", cid, "cat", "/root/.ssh/id_ed25519.pub", check=False,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            self._ssh_pubkey = result.stdout.strip()
+        result = _exec_run(client, cid, ["cat", "/root/.ssh/id_ed25519.pub"])
+        if result.exit_code == 0 and result.output.strip():
+            self._ssh_pubkey = result.output.strip()
             logger.info("docker: ssh key generated on %s", node_name)
 
     def wait_for_ssh(self, timeout: int = 30) -> None:
         """Wait for sshd to be listening on all SSH-enabled containers."""
         if not self._use_ssh_image:
             return
+        client = self._get_client()
         deadline = time.monotonic() + timeout
         for address, cid in self._containers.items():
             while time.monotonic() < deadline:
-                check = _docker(
-                    "exec", cid, "sh", "-c",
-                    "pgrep -x sshd >/dev/null 2>&1",
-                    check=False,
-                )
-                if check.returncode == 0:
+                check = _exec_run(client, cid, "pgrep -x sshd >/dev/null 2>&1")
+                if check.exit_code == 0:
                     break
                 time.sleep(0.5)
 
     def distribute_ssh_keys(self) -> None:
-        """Copy the operator's public key to all containers that have sshd.
-
-        Called after all nodes and accounts are provisioned so that the
-        orchestrator can SSH between containers using key-based auth.
-        """
-        pubkey = getattr(self, "_ssh_pubkey", "")
-        if not pubkey:
+        """Copy the operator's public key to all containers that have sshd."""
+        if not self._ssh_pubkey:
             return
 
+        client = self._get_client()
+        pubkey = shlex.quote(self._ssh_pubkey)
+
         for address, cid in self._containers.items():
-            # Install key for each provisioned account on this container
             for acct_addr, acct_spec in self._accounts.items():
                 node_name = acct_spec.get("node_name", "")
                 container_node = self._node_names.get(address, "")
@@ -533,37 +658,29 @@ class DockerProvisioner:
 
                 username = acct_spec.get("username", "")
                 home = acct_spec.get("home", f"/home/{username}")
-                _docker(
-                    "exec", cid, "sh", "-c",
+                _exec_run(
+                    client, cid,
                     f"mkdir -p {home}/.ssh"
-                    f" && echo '{pubkey}' >> {home}/.ssh/authorized_keys"
+                    f" && echo {pubkey} >> {home}/.ssh/authorized_keys"
                     f" && chmod 700 {home}/.ssh"
                     f" && chmod 600 {home}/.ssh/authorized_keys"
                     f" && chown -R {username}:{username} {home}/.ssh 2>/dev/null || true",
-                    check=False,
                 )
 
-            # Also install the private key so intermediate hops work
-            priv_key_src = getattr(self, "_kali_cid", "")
-            if not priv_key_src:
-                # Find the kali/attack container (has the private key)
-                for addr, name in self._node_names.items():
-                    if name == "kali":
-                        priv_key_src = self._containers.get(addr, "")
-                        break
+        # Copy private key from kali to intermediate hop nodes
+        kali_cid = ""
+        for addr, name in self._node_names.items():
+            if name == "kali":
+                kali_cid = self._containers.get(addr, "")
+                break
 
-        # Copy private key from kali to server for lateral movement
-        if priv_key_src:
-            priv_result = _docker(
-                "exec", priv_key_src, "cat", "/root/.ssh/id_ed25519",
-                check=False,
-            )
-            if priv_result.returncode == 0 and priv_result.stdout.strip():
-                priv_key = priv_result.stdout.strip()
+        if kali_cid:
+            priv_result = _exec_run(client, kali_cid, ["cat", "/root/.ssh/id_ed25519"])
+            if priv_result.exit_code == 0 and priv_result.output.strip():
+                priv_key = shlex.quote(priv_result.output.strip())
                 for address, cid in self._containers.items():
-                    if cid == priv_key_src:
+                    if cid == kali_cid:
                         continue
-                    # Install private key for accounts on this container
                     for acct_addr, acct_spec in self._accounts.items():
                         node_name = acct_spec.get("node_name", "")
                         container_node = self._node_names.get(address, "")
@@ -571,13 +688,12 @@ class DockerProvisioner:
                             continue
                         username = acct_spec.get("username", "")
                         home = acct_spec.get("home", f"/home/{username}")
-                        _docker(
-                            "exec", cid, "sh", "-c",
+                        _exec_run(
+                            client, cid,
                             f"mkdir -p {home}/.ssh"
-                            f" && printf '%s\\n' '{priv_key}' > {home}/.ssh/id_ed25519"
+                            f" && printf '%s\\n' {priv_key} > {home}/.ssh/id_ed25519"
                             f" && chmod 600 {home}/.ssh/id_ed25519"
                             f" && chown -R {username}:{username} {home}/.ssh 2>/dev/null || true",
-                            check=False,
                         )
 
         logger.info("docker: SSH keys distributed to all containers")
@@ -596,12 +712,12 @@ class DockerProvisioner:
             logger.warning("docker: no container for account target %s", target_address)
             return
 
+        client = self._get_client()
         groups = spec.get("groups", [])
         shell = spec.get("shell", "/bin/bash")
         home = spec.get("home", f"/home/{username}")
         password_strength = spec.get("password_strength", "medium")
 
-        # Determine password based on strength
         if password_strength == "weak":
             password = "password123"
         elif password_strength == "strong":
@@ -609,42 +725,56 @@ class DockerProvisioner:
         else:
             password = "m3dium_P@ss"
 
-        # Create user account — try useradd (Debian) first, adduser (Alpine) second
-        _docker(
-            "exec", cid, "sh", "-c",
-            f"id {username} 2>/dev/null || "
-            f"useradd -m -d {home} -s {shell} {username} 2>/dev/null || "
-            f"adduser -D -h {home} -s {shell} {username} 2>/dev/null || true",
-            check=False,
+        _exec_run(
+            client, cid,
+            f"id {shlex.quote(username)} 2>/dev/null || "
+            f"useradd -m -d {shlex.quote(home)} -s {shlex.quote(shell)} {shlex.quote(username)} 2>/dev/null || "
+            f"adduser -D -h {shlex.quote(home)} -s {shlex.quote(shell)} {shlex.quote(username)} 2>/dev/null || true",
         )
 
-        # Set password
-        _docker(
-            "exec", cid, "sh", "-c",
-            f"echo '{username}:{password}' | chpasswd 2>/dev/null || true",
-            check=False,
+        _exec_run(
+            client, cid,
+            f"echo {shlex.quote(username + ':' + password)} | chpasswd 2>/dev/null || true",
         )
 
-        # Add to groups — try groupadd+usermod (Debian) and addgroup (Alpine)
         for group in groups:
-            _docker(
-                "exec", cid, "sh", "-c",
-                f"(groupadd {group} 2>/dev/null || addgroup {group} 2>/dev/null || true)"
-                f" && (usermod -aG {group} {username} 2>/dev/null"
-                f" || addgroup {username} {group} 2>/dev/null || true)",
-                check=False,
+            _exec_run(
+                client, cid,
+                f"(groupadd {shlex.quote(group)} 2>/dev/null || addgroup {shlex.quote(group)} 2>/dev/null || true)"
+                f" && (usermod -aG {shlex.quote(group)} {shlex.quote(username)} 2>/dev/null"
+                f" || addgroup {shlex.quote(username)} {shlex.quote(group)} 2>/dev/null || true)",
             )
 
         self._accounts[address] = {**spec, "node_name": node_name}
         logger.info("docker: created account %s on %s", username, node_name)
 
     def cleanup(self) -> None:
-        """Remove all containers and networks created by this provisioner."""
-        for address, cid in list(self._containers.items()):
-            _docker("rm", "-f", cid, check=False)
+        """Tear down the compose stack and clean up all resources."""
+        # Compose down removes compose-managed containers and networks
+        if self._compose_dir and (self._compose_dir / "docker-compose.yml").exists():
+            subprocess.run(
+                ["docker", "compose", "-f",
+                 str(self._compose_dir / "docker-compose.yml"),
+                 "-p", self._prefix, "down", "-v", "--remove-orphans"],
+                check=False, capture_output=True, text=True, timeout=60,
+            )
+            logger.info("docker: compose stack '%s' torn down", self._prefix)
+
+        # Remove any remaining resources not managed by compose
+        # (e.g. networks created directly via SDK, or compose wasn't used)
+        if self._client:
+            for address, cid in list(self._containers.items()):
+                try:
+                    self._client.containers.get(cid).remove(force=True)
+                except Exception:
+                    pass
+            for address, net_id in list(self._networks.items()):
+                try:
+                    self._client.networks.get(net_id).remove()
+                except Exception:
+                    pass
+
         self._containers.clear()
-        for address, net_id in list(self._networks.items()):
-            _docker("network", "rm", net_id, check=False)
         self._networks.clear()
 
 
@@ -657,8 +787,8 @@ class DockerOrchestrator:
 
     When a parsed SDL scenario is provided, the orchestrator eagerly walks
     each workflow's step graph and performs real actions (SSH between
-    containers, read files, check conditions).  Without a scenario it falls
-    back to bookkeeping-only mode for unit tests.
+    containers, read files, check conditions) using the Docker SDK.
+    Without a scenario it falls back to bookkeeping-only mode for unit tests.
     """
 
     def __init__(
@@ -672,8 +802,12 @@ class DockerOrchestrator:
         self._startup_order: list[str] = []
         self._results: dict[str, dict[str, Any]] = {}
         self._history: dict[str, list[dict[str, Any]]] = {}
-        # Populated during execution: objective address → captured output
         self.captured_flags: dict[str, str] = {}
+
+    def _get_client(self) -> Any:
+        if self._provisioner:
+            return self._provisioner._get_client()
+        return _get_docker_client()
 
     # ------------------------------------------------------------------
     # Protocol methods
@@ -736,6 +870,8 @@ class DockerOrchestrator:
                     "started_at": now,
                     "updated_at": now,
                     "terminal_reason": None,
+                    "compensation_status": "not_required",
+                    "compensation_failures": [],
                     "steps": step_states,
                 }
                 wf_history: list[dict[str, Any]] = [{
@@ -748,7 +884,6 @@ class DockerOrchestrator:
                     "details": {},
                 }]
 
-                # --- Eager execution if we have a provisioner + scenario ---
                 if self._provisioner and self._scenario:
                     try:
                         self._execute_workflow(op.payload, wf_result, wf_history)
@@ -910,7 +1045,6 @@ class DockerOrchestrator:
                 logger.warning("docker: unhandled step type %s", step_type)
                 break
 
-        # If we exited the loop without hitting an end step, mark failed
         if wf_result.get("workflow_status") == "running":
             wf_result["workflow_status"] = "failed"
             wf_result["terminal_reason"] = "step graph exhausted without reaching end step"
@@ -923,9 +1057,7 @@ class DockerOrchestrator:
         wf_history: list[dict[str, Any]],
         step_name: str,
     ) -> bool:
-        """Execute an objective step by running the real action."""
         objective_address = step.get("objective_address", "")
-        # Extract objective name from address: "evaluation.objective.capture-server-flag"
         obj_name = objective_address.rsplit(".", 1)[-1] if objective_address else ""
         now = _utc_now()
 
@@ -960,7 +1092,6 @@ class DockerOrchestrator:
         wf_history: list[dict[str, Any]],
         step_name: str,
     ) -> str:
-        """Evaluate a decision step's condition and return the branch target."""
         predicate = step.get("predicate", {})
         condition_addrs = predicate.get("condition_addresses", [])
         if not isinstance(condition_addrs, (list, tuple)):
@@ -997,7 +1128,6 @@ class DockerOrchestrator:
         wf_history: list[dict[str, Any]],
         step_name: str,
     ) -> bool:
-        """Execute a retry step, trying the objective up to max_attempts."""
         objective_address = step.get("objective_address", "")
         obj_name = objective_address.rsplit(".", 1)[-1] if objective_address else ""
         max_attempts = int(step.get("max_attempts", 3))
@@ -1036,10 +1166,6 @@ class DockerOrchestrator:
     # ------------------------------------------------------------------
 
     def _run_objective(self, objective_name: str) -> bool:
-        """Execute a named objective using the SDL scenario for context.
-
-        Translates SDL objectives into concrete Docker exec / SSH commands.
-        """
         if not self._provisioner or not self._scenario:
             return True  # bookkeeping mode
 
@@ -1053,12 +1179,10 @@ class DockerOrchestrator:
         targets = obj_spec.get("targets", [])
         actions = obj_spec.get("actions", [])
 
-        # Resolve agent's starting node
         agents = self._scenario.get("agents", {})
         agent_spec = agents.get(agent_name, {})
         starting_accounts = agent_spec.get("starting_accounts", [])
 
-        # Find starting node from account
         accounts = self._scenario.get("accounts", {})
         agent_node = ""
         for acct_name in starting_accounts:
@@ -1072,13 +1196,11 @@ class DockerOrchestrator:
             logger.warning("docker: no container for agent node %s", agent_node)
             return False
 
-        # For read-file actions targeting content items
         if "read-file" in actions:
             return self._execute_read_file_objective(
                 agent_cid, agent_node, targets, objective_name,
             )
 
-        # For monitor-logs actions
         if "monitor-logs" in actions:
             return self._execute_monitor_objective(targets)
 
@@ -1092,76 +1214,56 @@ class DockerOrchestrator:
         targets: list[str],
         objective_name: str,
     ) -> bool:
-        """Read a file on a target node, potentially via SSH."""
+        client = self._get_client()
         content_section = self._scenario.get("content", {})
-        accounts_section = self._scenario.get("accounts", {})
 
         for target_name in targets:
             content_spec = content_section.get(target_name, {})
             target_node = content_spec.get("target", "")
             file_path = content_spec.get("path", "")
-            expected_text = content_spec.get("text", "")
 
             if not target_node or not file_path:
                 continue
 
             if target_node == agent_node:
-                # Same node — direct read
-                result = _docker(
-                    "exec", agent_cid, "cat", file_path, check=False,
-                )
+                result = _exec_run(client, agent_cid, ["cat", file_path])
             else:
-                # Different node — SSH to reach it via key-based auth
                 target_account = self._find_account_on_node(target_node)
                 if not target_account:
-                    logger.warning(
-                        "docker: no account to SSH to %s", target_node,
-                    )
+                    logger.warning("docker: no account to SSH to %s", target_node)
                     return False
 
                 username = target_account["username"]
-
-                # Try SSH from the agent's container first.  If the target
-                # isn't reachable directly (different network), hop through
-                # an intermediate node that can reach it.
-                result = _docker(
-                    "exec", agent_cid,
-                    "ssh",
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "UserKnownHostsFile=/dev/null",
-                    "-o", "LogLevel=ERROR",
-                    "-i", "/root/.ssh/id_ed25519",
-                    f"{username}@{target_node}",
-                    "cat", file_path,
-                    check=False,
-                    timeout=30,
+                result = _exec_run(
+                    client, agent_cid,
+                    ["ssh",
+                     "-o", "StrictHostKeyChecking=no",
+                     "-o", "UserKnownHostsFile=/dev/null",
+                     "-o", "LogLevel=ERROR",
+                     "-i", "/root/.ssh/id_ed25519",
+                     f"{username}@{target_node}",
+                     "cat", file_path],
                 )
 
-                # If direct SSH failed, try via an intermediate hop
-                if result.returncode != 0:
+                if result.exit_code != 0:
                     result = self._ssh_via_hop(
                         agent_cid, username, target_node, f"cat {file_path}",
                     )
 
-            output = result.stdout.strip() if result.stdout else ""
-            if result.returncode == 0 and output:
+            output = result.output.strip() if result.output else ""
+            if result.exit_code == 0 and output:
                 self.captured_flags[objective_name] = output
-                logger.info(
-                    "docker: objective %s captured: %s",
-                    objective_name, output[:40],
-                )
+                logger.info("docker: objective %s captured: %s", objective_name, output[:40])
                 return True
             else:
                 logger.warning(
                     "docker: objective %s failed (rc=%d): %s",
-                    objective_name, result.returncode,
-                    result.stderr.strip() if result.stderr else "",
+                    objective_name, result.exit_code, result.output.strip() if result.output else "",
                 )
 
         return False
 
     def _execute_monitor_objective(self, targets: list[str]) -> bool:
-        """Check monitoring conditions (always succeeds in eager mode)."""
         return True
 
     def _ssh_via_hop(
@@ -1170,13 +1272,12 @@ class DockerOrchestrator:
         username: str,
         target_node: str,
         command: str,
-    ) -> subprocess.CompletedProcess:
-        """SSH to target via each reachable intermediate node."""
+    ) -> ExecResult:
         if not self._provisioner or not self._scenario:
-            return subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="no provisioner")
+            return ExecResult(exit_code=1, output="no provisioner")
 
+        client = self._get_client()
         infra = self._scenario.get("infrastructure", {})
-        # Find nodes that link to the same networks as the target
         target_links = set(infra.get(target_node, {}).get("links", []))
 
         for node_name in infra:
@@ -1191,28 +1292,25 @@ class DockerOrchestrator:
                 continue
             hop_user = hop_account["username"]
 
-            result = _docker(
-                "exec", agent_cid,
-                "ssh",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR",
-                "-i", "/root/.ssh/id_ed25519",
-                f"{hop_user}@{node_name}",
-                f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-                f" -o LogLevel=ERROR"
-                f" -i /home/{hop_user}/.ssh/id_ed25519"
-                f" {username}@{target_node} {command}",
-                check=False,
-                timeout=30,
+            result = _exec_run(
+                client, agent_cid,
+                ["ssh",
+                 "-o", "StrictHostKeyChecking=no",
+                 "-o", "UserKnownHostsFile=/dev/null",
+                 "-o", "LogLevel=ERROR",
+                 "-i", "/root/.ssh/id_ed25519",
+                 f"{hop_user}@{node_name}",
+                 f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+                 f" -o LogLevel=ERROR"
+                 f" -i /home/{hop_user}/.ssh/id_ed25519"
+                 f" {username}@{target_node} {command}"],
             )
-            if result.returncode == 0:
+            if result.exit_code == 0:
                 return result
 
-        return subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="no reachable hop")
+        return ExecResult(exit_code=1, output="no reachable hop")
 
     def _find_account_on_node(self, node_name: str) -> dict[str, Any] | None:
-        """Find an account spec for a given node from the scenario."""
         if not self._scenario:
             return None
         for _name, acct in self._scenario.get("accounts", {}).items():
@@ -1221,11 +1319,9 @@ class DockerOrchestrator:
         return None
 
     def _check_condition_by_address(self, condition_address: str) -> bool:
-        """Evaluate a condition by its compiler address."""
         if not self._provisioner or not self._scenario:
             return False
 
-        # Address format: "evaluation.condition.{node}.{condition}"
         parts = condition_address.split(".")
         if len(parts) < 4:
             return False
@@ -1243,8 +1339,9 @@ class DockerOrchestrator:
             return False
 
         try:
-            result = _docker("exec", cid, "sh", "-c", command, check=False, timeout=15)
-            return result.returncode == 0
+            client = self._get_client()
+            result = _exec_run(client, cid, command)
+            return result.exit_code == 0
         except Exception:
             return False
 
@@ -1262,6 +1359,9 @@ class DockerEvaluator:
         self._startup_order: list[str] = []
         self._results: dict[str, dict[str, Any]] = {}
         self._history: dict[str, list[dict[str, Any]]] = {}
+
+    def _get_client(self) -> Any:
+        return self._provisioner._get_client()
 
     def start(
         self,
@@ -1315,8 +1415,6 @@ class DockerEvaluator:
             }
 
             if result_contract.get("supports_passed"):
-                # For condition-bindings and objectives, check if the condition
-                # command succeeds inside the relevant container
                 passed = self._evaluate_resource(op)
                 result_payload["passed"] = passed
 
@@ -1372,13 +1470,10 @@ class DockerEvaluator:
         spec = op.payload.get("spec", {})
         node_address = op.payload.get("node_address", "")
 
-        # Condition commands live under spec.template (from the compiler)
-        # or directly under spec.command (depending on compilation path)
         template = spec.get("template", {})
         command = template.get("command") or spec.get("command")
 
         if not command or not node_address:
-            # No command — default to passed for scoring resources
             return True
 
         cid = self._provisioner.containers.get(node_address)
@@ -1386,8 +1481,9 @@ class DockerEvaluator:
             return False
 
         try:
-            result = _docker("exec", cid, "sh", "-c", command, check=False, timeout=15)
-            return result.returncode == 0
+            client = self._get_client()
+            result = _exec_run(client, cid, command)
+            return result.exit_code == 0
         except Exception:
             return False
 

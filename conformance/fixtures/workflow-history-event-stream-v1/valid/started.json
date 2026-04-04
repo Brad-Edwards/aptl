@@ -1,0 +1,11 @@
+[
+  {
+    "event_type": "workflow_started",
+    "timestamp": "2026-04-02T22:00:00Z",
+    "step_name": "run",
+    "branch_name": null,
+    "join_step": null,
+    "outcome": null,
+    "details": {}
+  }
+]

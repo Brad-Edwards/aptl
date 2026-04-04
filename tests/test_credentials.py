@@ -161,24 +161,98 @@ class TestSyncManagerConfig:
         content = config_file.read_text()
         assert "<other>value</other>" in content
 
-    def test_replaces_multiple_key_elements(self, tmp_path):
-        """If there are multiple <key> elements, all should be replaced."""
+    def test_replaces_cluster_key_only(self, tmp_path):
+        """Only <key> elements inside <cluster> blocks should be replaced."""
         from aptl.core.credentials import sync_manager_config
 
         config_file = tmp_path / "wazuh_manager.conf"
         config_file.write_text(
             '<cluster>\n'
             '  <key>first_key</key>\n'
-            '  <key>second_key</key>\n'
             '</cluster>\n'
         )
 
         sync_manager_config(config_file, "unified_key")
 
         content = config_file.read_text()
-        assert content.count('<key>unified_key</key>') == 2
+        assert '<key>unified_key</key>' in content
         assert 'first_key' not in content
-        assert 'second_key' not in content
+
+    def test_preserves_ssl_key_element(self, tmp_path):
+        """<key> inside <indexer><ssl> must NOT be touched (#183)."""
+        from aptl.core.credentials import sync_manager_config
+
+        config_file = tmp_path / "wazuh_manager.conf"
+        config_file.write_text(
+            '<ossec_config>\n'
+            '  <indexer>\n'
+            '    <ssl>\n'
+            '      <key>/etc/filebeat/certs/filebeat-key.pem</key>\n'
+            '    </ssl>\n'
+            '  </indexer>\n'
+            '  <cluster>\n'
+            '    <key>old_cluster_key</key>\n'
+            '  </cluster>\n'
+            '</ossec_config>\n'
+        )
+
+        sync_manager_config(config_file, "new_cluster_key")
+
+        content = config_file.read_text()
+        # SSL key path must be untouched
+        assert '<key>/etc/filebeat/certs/filebeat-key.pem</key>' in content
+        # Cluster key must be replaced
+        assert '<key>new_cluster_key</key>' in content
+        assert 'old_cluster_key' not in content
+
+    def test_real_config_structure(self, tmp_path):
+        """Mirror actual wazuh_manager.conf structure with both key elements."""
+        from aptl.core.credentials import sync_manager_config
+
+        config_file = tmp_path / "wazuh_manager.conf"
+        config_file.write_text(
+            '<ossec_config>\n'
+            '  <indexer>\n'
+            '    <enabled>yes</enabled>\n'
+            '    <hosts>\n'
+            '      <host>https://wazuh.indexer:9200</host>\n'
+            '    </hosts>\n'
+            '    <ssl>\n'
+            '      <certificate_authorities>\n'
+            '        <ca>/etc/filebeat/certs/root-ca.pem</ca>\n'
+            '      </certificate_authorities>\n'
+            '      <certificate>/etc/filebeat/certs/filebeat.pem</certificate>\n'
+            '      <key>/etc/filebeat/certs/filebeat-key.pem</key>\n'
+            '    </ssl>\n'
+            '  </indexer>\n'
+            '\n'
+            '  <cluster>\n'
+            '    <name>wazuh</name>\n'
+            '    <node_name>master</node_name>\n'
+            '    <node_type>master</node_type>\n'
+            '    <key>placeholder_cluster_key</key>\n'
+            '    <port>1516</port>\n'
+            '    <bind_addr>0.0.0.0</bind_addr>\n'
+            '    <nodes>\n'
+            '      <node>NODE_IP</node>\n'
+            '    </nodes>\n'
+            '    <hidden>no</hidden>\n'
+            '    <disabled>yes</disabled>\n'
+            '  </cluster>\n'
+            '</ossec_config>\n'
+        )
+
+        sync_manager_config(config_file, "real_secret_key_123")
+
+        content = config_file.read_text()
+        # SSL key path preserved
+        assert '<key>/etc/filebeat/certs/filebeat-key.pem</key>' in content
+        # Cluster key replaced
+        assert '<key>real_secret_key_123</key>' in content
+        assert 'placeholder_cluster_key' not in content
+        # Other cluster elements preserved
+        assert '<name>wazuh</name>' in content
+        assert '<port>1516</port>' in content
 
     def test_empty_cluster_key_allowed(self, tmp_path):
         """Should allow setting an empty cluster key."""
@@ -206,7 +280,8 @@ class TestRegexSpecialCharacters:
         sync_dashboard_config(config_file, r"pass\1word")
 
         content = config_file.read_text()
-        assert r'password: "pass\1word"' in content
+        # Backslash is escaped for YAML double-quoted string safety.
+        assert r'password: "pass\\1word"' in content
 
     def test_password_with_dollar_sign(self, tmp_path):
         """Password containing $ should be literal."""
@@ -221,7 +296,7 @@ class TestRegexSpecialCharacters:
         assert 'password: "pa$$word$1"' in content
 
     def test_password_with_backslashes(self, tmp_path):
-        r"""Password containing backslashes should be preserved literally."""
+        r"""Password containing backslashes should be escaped for YAML."""
         from aptl.core.credentials import sync_dashboard_config
 
         config_file = tmp_path / "wazuh.yml"
@@ -230,10 +305,11 @@ class TestRegexSpecialCharacters:
         sync_dashboard_config(config_file, r"C:\Users\admin")
 
         content = config_file.read_text()
-        assert r'password: "C:\Users\admin"' in content
+        # YAML double-quoted strings interpret \U as escape; must be \\U.
+        assert r'password: "C:\\Users\\admin"' in content
 
     def test_password_with_newline_escape(self, tmp_path):
-        r"""Password containing \n should not insert a newline."""
+        r"""Password containing \n should be escaped, not insert a newline."""
         from aptl.core.credentials import sync_dashboard_config
 
         config_file = tmp_path / "wazuh.yml"
@@ -242,7 +318,8 @@ class TestRegexSpecialCharacters:
         sync_dashboard_config(config_file, r"pass\nword")
 
         content = config_file.read_text()
-        assert r'password: "pass\nword"' in content
+        # YAML double-quoted \n means newline; must be \\n for literal.
+        assert r'password: "pass\\nword"' in content
 
     def test_cluster_key_with_backslash_one(self, tmp_path):
         r"""Cluster key containing \1 should not be treated as backreference."""
@@ -279,3 +356,27 @@ class TestRegexSpecialCharacters:
 
         content = config_file.read_text()
         assert """password: "it's-a-password\"""" in content
+
+    def test_password_with_double_quotes(self, tmp_path):
+        """Password containing double quotes should be escaped."""
+        from aptl.core.credentials import sync_dashboard_config
+
+        config_file = tmp_path / "wazuh.yml"
+        config_file.write_text('      password: "old"\n')
+
+        sync_dashboard_config(config_file, 'pass"word')
+
+        content = config_file.read_text()
+        assert 'password: "pass\\"word"' in content
+
+    def test_cluster_key_with_xml_special_chars(self, tmp_path):
+        """Cluster key with <, >, & should be XML-escaped."""
+        from aptl.core.credentials import sync_manager_config
+
+        config_file = tmp_path / "wazuh_manager.conf"
+        config_file.write_text("<cluster>\n  <key>old</key>\n</cluster>\n")
+
+        sync_manager_config(config_file, "key<>&value")
+
+        content = config_file.read_text()
+        assert "<key>key&lt;&gt;&amp;value</key>" in content

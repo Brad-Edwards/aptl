@@ -8,22 +8,41 @@ jobs:
   sonarcloud:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,web]"
       - name: Run tests with coverage
         run: |
           coverage run -m pytest tests/ -q -k "not integration"
           coverage xml -o coverage.xml
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Run MCP TypeScript tests with coverage
+        run: |
+          cd mcp/aptl-mcp-common
+          npm install
+          npx vitest run --coverage
+      - name: Run web frontend tests with coverage
+        run: |
+          cd web
+          npm install
+          npx svelte-kit sync
+          npx vitest run --coverage
+          sed -i 's|^SF:|SF:web/|' coverage/lcov.info
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v5
+        uses: SonarSource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true

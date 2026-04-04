@@ -1,0 +1,2460 @@
+{
+  "$defs": {
+    "ACLAction": {
+      "description": "Firewall rule action.",
+      "enum": [
+        "allow",
+        "deny"
+      ],
+      "title": "ACLAction",
+      "type": "string"
+    },
+    "ACLRule": {
+      "additionalProperties": false,
+      "description": "A network access control rule on an infrastructure node.\n\nAdapted from CybORG's subnet NACL model. Specifies directional\ntraffic rules between network segments.",
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ACLAction"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "allow",
+          "title": "Action"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "direction": {
+          "default": "",
+          "title": "Direction",
+          "type": "string"
+        },
+        "from_net": {
+          "default": "",
+          "title": "From Net",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "ports": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Ports",
+          "type": "array"
+        },
+        "protocol": {
+          "default": "any",
+          "title": "Protocol",
+          "type": "string"
+        },
+        "to_net": {
+          "default": "",
+          "title": "To Net",
+          "type": "string"
+        }
+      },
+      "title": "ACLRule",
+      "type": "object"
+    },
+    "Account": {
+      "additionalProperties": false,
+      "description": "A user account on a scenario node.\n\nDistinct from OCR's ``Role`` model: roles map exercise participants\nto VM logins for exercise access. Accounts describe the environment\nstate \u2014 what accounts attackers will encounter or exploit.",
+      "properties": {
+        "auth_method": {
+          "default": "password",
+          "title": "Auth Method",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "disabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": false,
+          "title": "Disabled"
+        },
+        "groups": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Groups",
+          "type": "array"
+        },
+        "home": {
+          "default": "",
+          "title": "Home",
+          "type": "string"
+        },
+        "mail": {
+          "default": "",
+          "title": "Mail",
+          "type": "string"
+        },
+        "node": {
+          "default": "",
+          "title": "Node",
+          "type": "string"
+        },
+        "password_strength": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PasswordStrength"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "medium",
+          "title": "Password Strength"
+        },
+        "shell": {
+          "default": "",
+          "title": "Shell",
+          "type": "string"
+        },
+        "spn": {
+          "default": "",
+          "title": "Spn",
+          "type": "string"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "username"
+      ],
+      "title": "Account",
+      "type": "object"
+    },
+    "Agent": {
+      "additionalProperties": false,
+      "description": "An autonomous participant in the scenario.\n\nAgents reference existing scenario elements:\n- ``entity`` links to the entities section (team/role)\n- ``starting_accounts`` links to the accounts section\n- ``allowed_subnets`` links to infrastructure entries\n- ``initial_knowledge`` references nodes and infrastructure",
+      "properties": {
+        "actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "allowed_subnets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Subnets",
+          "type": "array"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "entity": {
+          "default": "",
+          "title": "Entity",
+          "type": "string"
+        },
+        "initial_knowledge": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InitialKnowledge"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reward_calculator": {
+          "default": "",
+          "title": "Reward Calculator",
+          "type": "string"
+        },
+        "starting_accounts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Starting Accounts",
+          "type": "array"
+        }
+      },
+      "title": "Agent",
+      "type": "object"
+    },
+    "AssetValue": {
+      "additionalProperties": false,
+      "description": "CIA triad asset valuation for scoring and risk assessment.",
+      "properties": {
+        "availability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetValueLevel"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "medium",
+          "title": "Availability"
+        },
+        "confidentiality": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetValueLevel"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "medium",
+          "title": "Confidentiality"
+        },
+        "integrity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetValueLevel"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "medium",
+          "title": "Integrity"
+        }
+      },
+      "title": "AssetValue",
+      "type": "object"
+    },
+    "AssetValueLevel": {
+      "description": "CIA triad value level. Adapted from CybORG ConfidentialityValue.",
+      "enum": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "AssetValueLevel",
+      "type": "string"
+    },
+    "Condition": {
+      "additionalProperties": false,
+      "description": "A monitoring check deployed to a VM.\n\nEither ``command`` + ``interval`` or ``source`` must be set, not both.",
+      "properties": {
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "environment": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Environment",
+          "type": "array"
+        },
+        "interval": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interval"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "retries": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retries"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "start_period": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Period"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout"
+        }
+      },
+      "title": "Condition",
+      "type": "object"
+    },
+    "Content": {
+      "additionalProperties": false,
+      "description": "Data or files placed into a scenario node.\n\nSupports three forms:\n- ``file``: A single file at a specific path, optionally with inline text.\n- ``dataset``: A collection of related items (emails, records, pcaps)\n  delivered via a source package or listed as items.\n- ``directory``: A directory structure placed at a destination path.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "destination": {
+          "default": "",
+          "title": "Destination",
+          "type": "string"
+        },
+        "format": {
+          "default": "",
+          "title": "Format",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ContentItem"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "path": {
+          "default": "",
+          "title": "Path",
+          "type": "string"
+        },
+        "sensitive": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": false,
+          "title": "Sensitive"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "target": {
+          "default": "",
+          "title": "Target",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "type": {
+          "$ref": "#/$defs/ContentType"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Content",
+      "type": "object"
+    },
+    "ContentItem": {
+      "additionalProperties": false,
+      "description": "A single item within a dataset (e.g., one email, one record).",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ContentItem",
+      "type": "object"
+    },
+    "ContentType": {
+      "description": "Kind of content placed into a system.",
+      "enum": [
+        "file",
+        "dataset",
+        "directory"
+      ],
+      "title": "ContentType",
+      "type": "string"
+    },
+    "Entity": {
+      "additionalProperties": false,
+      "description": "An organizational unit, team, or person in the exercise.\n\nEntities can nest recursively. Flattened names use dot-notation:\n``blue-team.bob`` refers to the ``bob`` entity nested inside\n``blue-team``.",
+      "properties": {
+        "categories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Categories",
+          "type": "array"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "entities": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Entity"
+          },
+          "title": "Entities",
+          "type": "object"
+        },
+        "events": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "facts": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Facts",
+          "type": "object"
+        },
+        "mission": {
+          "default": "",
+          "title": "Mission",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExerciseRole"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "tlos": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tlos",
+          "type": "array"
+        },
+        "vulnerabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Vulnerabilities",
+          "type": "array"
+        }
+      },
+      "title": "Entity",
+      "type": "object"
+    },
+    "Evaluation": {
+      "additionalProperties": false,
+      "description": "A group of metrics with a pass/fail threshold.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "metrics": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Metrics",
+          "type": "array"
+        },
+        "min_score": {
+          "$ref": "#/$defs/MinScore"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metrics",
+        "min_score"
+      ],
+      "title": "Evaluation",
+      "type": "object"
+    },
+    "Event": {
+      "additionalProperties": false,
+      "description": "A triggered action combining conditions and injects.",
+      "properties": {
+        "conditions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Conditions",
+          "type": "array"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "injects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Injects",
+          "type": "array"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "Event",
+      "type": "object"
+    },
+    "ExerciseRole": {
+      "description": "Role in the exercise.",
+      "enum": [
+        "white",
+        "green",
+        "red",
+        "blue"
+      ],
+      "title": "ExerciseRole",
+      "type": "string"
+    },
+    "Feature": {
+      "additionalProperties": false,
+      "description": "A software artifact, service, or configuration deployed to a VM.",
+      "properties": {
+        "dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "destination": {
+          "default": "",
+          "title": "Destination",
+          "type": "string"
+        },
+        "environment": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Environment",
+          "type": "array"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "$ref": "#/$defs/FeatureType"
+        },
+        "vulnerabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Vulnerabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Feature",
+      "type": "object"
+    },
+    "FeatureType": {
+      "description": "Kind of feature deployed to a VM.",
+      "enum": [
+        "service",
+        "configuration",
+        "artifact"
+      ],
+      "title": "FeatureType",
+      "type": "string"
+    },
+    "Goal": {
+      "additionalProperties": false,
+      "description": "High-level goal composed of TLOs.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "tlos": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Tlos",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tlos"
+      ],
+      "title": "Goal",
+      "type": "object"
+    },
+    "ImportDecl": {
+      "additionalProperties": false,
+      "description": "A module import expanded before full semantic validation.",
+      "properties": {
+        "digest": {
+          "default": "",
+          "title": "Digest",
+          "type": "string"
+        },
+        "namespace": {
+          "default": "",
+          "title": "Namespace",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "path": {
+          "default": "",
+          "title": "Path",
+          "type": "string"
+        },
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "version": {
+          "default": "*",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "title": "ImportDecl",
+      "type": "object"
+    },
+    "InfraNode": {
+      "additionalProperties": false,
+      "description": "Deployment parameters for a node.\n\nShorthand: ``node-name: 3`` (just the count).\nLonghand: full dict with count, links, dependencies, properties, acls.",
+      "properties": {
+        "acls": {
+          "items": {
+            "$ref": "#/$defs/ACLRule"
+          },
+          "title": "Acls",
+          "type": "array"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": 1,
+          "title": "Count"
+        },
+        "dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "links": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Links",
+          "type": "array"
+        },
+        "properties": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleProperties"
+            },
+            {
+              "items": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Properties"
+        }
+      },
+      "title": "InfraNode",
+      "type": "object"
+    },
+    "InitialKnowledge": {
+      "additionalProperties": false,
+      "description": "What an agent knows about the scenario at start time.\n\nAdapted from CybORG's INT (Initial Network Topology).\nSpecifies which hosts, subnets, services, and accounts\nthe agent has knowledge of before the scenario begins.",
+      "properties": {
+        "accounts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accounts",
+          "type": "array"
+        },
+        "hosts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Hosts",
+          "type": "array"
+        },
+        "services": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Services",
+          "type": "array"
+        },
+        "subnets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Subnets",
+          "type": "array"
+        }
+      },
+      "title": "InitialKnowledge",
+      "type": "object"
+    },
+    "Inject": {
+      "additionalProperties": false,
+      "description": "An action injected between entities during an exercise.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "environment": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Environment",
+          "type": "array"
+        },
+        "from_entity": {
+          "default": "",
+          "title": "From Entity",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tlos": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tlos",
+          "type": "array"
+        },
+        "to_entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "To Entities",
+          "type": "array"
+        }
+      },
+      "title": "Inject",
+      "type": "object"
+    },
+    "Metric": {
+      "additionalProperties": false,
+      "description": "A scoring metric \u2014 either manual or conditional.\n\nManual metrics may require artifact submission. Conditional\nmetrics reference a condition that produces the score.",
+      "properties": {
+        "artifact": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "max_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Max Score"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/MetricType"
+        }
+      },
+      "required": [
+        "type",
+        "max_score"
+      ],
+      "title": "Metric",
+      "type": "object"
+    },
+    "MetricType": {
+      "description": "How a metric is scored.",
+      "enum": [
+        "manual",
+        "conditional"
+      ],
+      "title": "MetricType",
+      "type": "string"
+    },
+    "MinScore": {
+      "additionalProperties": false,
+      "description": "Pass/fail threshold \u2014 either absolute points or percentage.\n\nShorthand: ``min-score: 50`` (interpreted as percentage).\nLonghand: ``min-score: {absolute: 50}`` or ``{percentage: 75}``.",
+      "properties": {
+        "absolute": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Absolute"
+        },
+        "percentage": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Percentage"
+        }
+      },
+      "title": "MinScore",
+      "type": "object"
+    },
+    "ModuleDescriptor": {
+      "additionalProperties": false,
+      "description": "Published module metadata for SDL composition.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "exports": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Exports",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "parameters": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Parameters",
+          "type": "array"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "title": "ModuleDescriptor",
+      "type": "object"
+    },
+    "Node": {
+      "additionalProperties": false,
+      "description": "A scenario node \u2014 either a VM or a Switch.\n\nThe ``type`` field determines which variant is active. VM fields\nare only valid when type is VM; Switch nodes carry no extra data.",
+      "properties": {
+        "asset_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "conditions": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Conditions",
+          "type": "object"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "features": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Features",
+          "type": "object"
+        },
+        "injects": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Injects",
+          "type": "object"
+        },
+        "os": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OSFamily"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Os"
+        },
+        "os_version": {
+          "default": "",
+          "title": "Os Version",
+          "type": "string"
+        },
+        "resources": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Resources"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "roles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Role"
+          },
+          "title": "Roles",
+          "type": "object"
+        },
+        "services": {
+          "items": {
+            "$ref": "#/$defs/ServicePort"
+          },
+          "title": "Services",
+          "type": "array"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "$ref": "#/$defs/NodeType"
+        },
+        "vulnerabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Vulnerabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Node",
+      "type": "object"
+    },
+    "NodeType": {
+      "description": "Whether a node is a virtual machine or network switch.",
+      "enum": [
+        "vm",
+        "switch"
+      ],
+      "title": "NodeType",
+      "type": "string"
+    },
+    "OSFamily": {
+      "description": "Operating system family. Vocabulary from OCSF Device.os.",
+      "enum": [
+        "windows",
+        "linux",
+        "macos",
+        "freebsd",
+        "other"
+      ],
+      "title": "OSFamily",
+      "type": "string"
+    },
+    "Objective": {
+      "additionalProperties": false,
+      "description": "A declarative experiment objective.",
+      "properties": {
+        "actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "agent": {
+          "default": "",
+          "title": "Agent",
+          "type": "string"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "entity": {
+          "default": "",
+          "title": "Entity",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "success": {
+          "$ref": "#/$defs/ObjectiveSuccess"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Targets",
+          "type": "array"
+        },
+        "window": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ObjectiveWindow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "success"
+      ],
+      "title": "Objective",
+      "type": "object"
+    },
+    "ObjectiveSuccess": {
+      "additionalProperties": false,
+      "description": "Declarative success criteria for an objective.",
+      "properties": {
+        "conditions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Conditions",
+          "type": "array"
+        },
+        "evaluations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evaluations",
+          "type": "array"
+        },
+        "goals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Goals",
+          "type": "array"
+        },
+        "metrics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SuccessMode"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "all_of",
+          "title": "Mode"
+        },
+        "tlos": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tlos",
+          "type": "array"
+        }
+      },
+      "title": "ObjectiveSuccess",
+      "type": "object"
+    },
+    "ObjectiveWindow": {
+      "additionalProperties": false,
+      "description": "Optional orchestration window constraining when an objective applies.",
+      "properties": {
+        "events": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "scripts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scripts",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "stories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Stories",
+          "type": "array"
+        },
+        "workflows": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Workflows",
+          "type": "array"
+        }
+      },
+      "title": "ObjectiveWindow",
+      "type": "object"
+    },
+    "PasswordStrength": {
+      "description": "How resistant the account password is to cracking.",
+      "enum": [
+        "weak",
+        "medium",
+        "strong",
+        "none"
+      ],
+      "title": "PasswordStrength",
+      "type": "string"
+    },
+    "Relationship": {
+      "additionalProperties": false,
+      "description": "A typed directed edge between two named scenario elements.\n\nSource and target can reference any named element in the scenario:\nnodes, features, accounts, entities, or infrastructure entries.\nThe validator checks that both endpoints resolve.\n\nThe ``properties`` dict carries type-specific metadata (e.g.,\n``trust_type: parent-child`` for AD trusts, ``protocol: SAML``\nfor federation). It's a flat dict rather than typed sub-models\nbecause relationship properties vary widely and we don't want\nto gate expressiveness on pre-modeling every variant.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "properties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Properties",
+          "type": "object"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/RelationshipType"
+        }
+      },
+      "required": [
+        "type",
+        "source",
+        "target"
+      ],
+      "title": "Relationship",
+      "type": "object"
+    },
+    "RelationshipType": {
+      "description": "How two scenario elements relate to each other.",
+      "enum": [
+        "authenticates_with",
+        "trusts",
+        "federates_with",
+        "connects_to",
+        "depends_on",
+        "manages",
+        "replicates_to"
+      ],
+      "title": "RelationshipType",
+      "type": "string"
+    },
+    "Resources": {
+      "additionalProperties": false,
+      "description": "Compute resources for a VM node.",
+      "properties": {
+        "cpu": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Number of CPU cores",
+          "title": "Cpu"
+        },
+        "ram": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "RAM in bytes (parsed from human-readable)",
+          "title": "Ram"
+        }
+      },
+      "required": [
+        "ram",
+        "cpu"
+      ],
+      "title": "Resources",
+      "type": "object"
+    },
+    "Role": {
+      "additionalProperties": false,
+      "description": "A named role on a VM with optional entity assignments.\n\nShorthand: ``admin: \"username\"`` (just the username string).\nLonghand: ``admin: {username: \"admin\", entities: [\"blue-team.bob\"]}``.",
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "username"
+      ],
+      "title": "Role",
+      "type": "object"
+    },
+    "Script": {
+      "additionalProperties": false,
+      "description": "A timed sequence of events.\n\nTime values are human-readable duration strings parsed to seconds.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "end_time": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "End Time"
+        },
+        "events": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "minProperties": 1,
+          "title": "Events",
+          "type": "object"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Speed"
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Start Time"
+        }
+      },
+      "required": [
+        "start_time",
+        "end_time",
+        "speed",
+        "events"
+      ],
+      "title": "Script",
+      "type": "object"
+    },
+    "ServicePort": {
+      "additionalProperties": false,
+      "description": "A network service exposed by a node. From OCSF NetworkEndpoint.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Port"
+        },
+        "protocol": {
+          "default": "tcp",
+          "title": "Protocol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "port"
+      ],
+      "title": "ServicePort",
+      "type": "object"
+    },
+    "SimpleProperties": {
+      "additionalProperties": false,
+      "description": "Network properties for a switch/subnet: CIDR, gateway, and flags.",
+      "properties": {
+        "cidr": {
+          "title": "Cidr",
+          "type": "string"
+        },
+        "gateway": {
+          "title": "Gateway",
+          "type": "string"
+        },
+        "internal": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": false,
+          "title": "Internal"
+        }
+      },
+      "required": [
+        "cidr",
+        "gateway"
+      ],
+      "title": "SimpleProperties",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "Provider-neutral artifact reference.\n\nShorthand: ``source: \"package-name\"`` (version defaults to ``\"*\"``).\nLonghand: ``source: {name: \"package-name\", version: \"1.2.3\"}``.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "default": "*",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "Story": {
+      "additionalProperties": false,
+      "description": "Top-level exercise orchestration \u2014 a group of scripts.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "scripts": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Scripts",
+          "type": "array"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": 1.0,
+          "title": "Speed"
+        }
+      },
+      "required": [
+        "scripts"
+      ],
+      "title": "Story",
+      "type": "object"
+    },
+    "SuccessMode": {
+      "description": "How referenced success criteria combine.",
+      "enum": [
+        "all_of",
+        "any_of"
+      ],
+      "title": "SuccessMode",
+      "type": "string"
+    },
+    "TLO": {
+      "additionalProperties": false,
+      "description": "Training Learning Objective \u2014 linked to an evaluation.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "evaluation": {
+          "title": "Evaluation",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evaluation"
+      ],
+      "title": "TLO",
+      "type": "object"
+    },
+    "Variable": {
+      "additionalProperties": false,
+      "description": "A named variable for scenario parameterization.\n\nVariables define configurable parameters with types, defaults,\nand optional value constraints. They're referenced in other\nsections via ``${variable_name}`` syntax.",
+      "properties": {
+        "allowed_values": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "title": "Allowed Values",
+          "type": "array"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "type": {
+          "$ref": "#/$defs/VariableType"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Variable",
+      "type": "object"
+    },
+    "VariableType": {
+      "description": "Data type of a variable.",
+      "enum": [
+        "string",
+        "integer",
+        "boolean",
+        "number"
+      ],
+      "title": "VariableType",
+      "type": "string"
+    },
+    "Vulnerability": {
+      "additionalProperties": false,
+      "description": "A named vulnerability with CWE classification.",
+      "properties": {
+        "class": {
+          "title": "Class",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "technical": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": false,
+          "title": "Technical"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "class"
+      ],
+      "title": "Vulnerability",
+      "type": "object"
+    },
+    "Workflow": {
+      "additionalProperties": false,
+      "description": "A declarative experiment control graph over objectives.",
+      "properties": {
+        "compensation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowCompensationPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "steps": {
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkflowStep"
+          },
+          "minProperties": 1,
+          "title": "Steps",
+          "type": "object"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowTimeoutPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "start",
+        "steps"
+      ],
+      "title": "Workflow",
+      "type": "object"
+    },
+    "WorkflowCompensationFailurePolicy": {
+      "description": "How primary workflow status should treat compensation failures.",
+      "enum": [
+        "fail_workflow",
+        "record_and_continue"
+      ],
+      "title": "WorkflowCompensationFailurePolicy",
+      "type": "string"
+    },
+    "WorkflowCompensationMode": {
+      "description": "Workflow-level compensation behavior.",
+      "enum": [
+        "automatic",
+        "disabled"
+      ],
+      "title": "WorkflowCompensationMode",
+      "type": "string"
+    },
+    "WorkflowCompensationPolicy": {
+      "additionalProperties": false,
+      "description": "Workflow-level compensation policy.",
+      "properties": {
+        "failure_policy": {
+          "$ref": "#/$defs/WorkflowCompensationFailurePolicy",
+          "default": "fail_workflow"
+        },
+        "mode": {
+          "$ref": "#/$defs/WorkflowCompensationMode",
+          "default": "disabled"
+        },
+        "on": {
+          "items": {
+            "$ref": "#/$defs/WorkflowCompensationTrigger"
+          },
+          "title": "On",
+          "type": "array"
+        },
+        "order": {
+          "default": "reverse_completion",
+          "title": "Order",
+          "type": "string"
+        }
+      },
+      "title": "WorkflowCompensationPolicy",
+      "type": "object"
+    },
+    "WorkflowCompensationTrigger": {
+      "description": "Terminal workflow reasons that may trigger compensation.",
+      "enum": [
+        "failed",
+        "cancelled",
+        "timed_out"
+      ],
+      "title": "WorkflowCompensationTrigger",
+      "type": "string"
+    },
+    "WorkflowPredicate": {
+      "additionalProperties": false,
+      "description": "Branch predicate over runtime evaluation data and prior step state.",
+      "properties": {
+        "conditions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Conditions",
+          "type": "array"
+        },
+        "evaluations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evaluations",
+          "type": "array"
+        },
+        "goals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Goals",
+          "type": "array"
+        },
+        "metrics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
+        "objectives": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Objectives",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/WorkflowStepStateRef"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "tlos": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tlos",
+          "type": "array"
+        }
+      },
+      "title": "WorkflowPredicate",
+      "type": "object"
+    },
+    "WorkflowStep": {
+      "additionalProperties": false,
+      "description": "A named workflow step with explicit portable control semantics.",
+      "properties": {
+        "branches": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Branches",
+          "type": "array"
+        },
+        "cases": {
+          "items": {
+            "$ref": "#/$defs/WorkflowSwitchCase"
+          },
+          "title": "Cases",
+          "type": "array"
+        },
+        "compensate-with": {
+          "default": "",
+          "title": "Compensate-With",
+          "type": "string"
+        },
+        "default": {
+          "default": "",
+          "title": "Default",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "else": {
+          "default": "",
+          "title": "Else",
+          "type": "string"
+        },
+        "join": {
+          "default": "",
+          "title": "Join",
+          "type": "string"
+        },
+        "max-attempts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max-Attempts"
+        },
+        "next": {
+          "default": "",
+          "title": "Next",
+          "type": "string"
+        },
+        "objective": {
+          "default": "",
+          "title": "Objective",
+          "type": "string"
+        },
+        "on-exhausted": {
+          "default": "",
+          "title": "On-Exhausted",
+          "type": "string"
+        },
+        "on-failure": {
+          "default": "",
+          "title": "On-Failure",
+          "type": "string"
+        },
+        "on-success": {
+          "default": "",
+          "title": "On-Success",
+          "type": "string"
+        },
+        "then": {
+          "default": "",
+          "title": "Then",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/WorkflowStepType"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowPredicate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "workflow": {
+          "default": "",
+          "title": "Workflow",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "WorkflowStep",
+      "type": "object"
+    },
+    "WorkflowStepOutcome": {
+      "description": "Portable workflow-visible outcomes emitted by executable steps.",
+      "enum": [
+        "succeeded",
+        "failed",
+        "exhausted"
+      ],
+      "title": "WorkflowStepOutcome",
+      "type": "string"
+    },
+    "WorkflowStepStateRef": {
+      "additionalProperties": false,
+      "description": "Predicate reference to previously observed workflow step state.",
+      "properties": {
+        "min-attempts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min-Attempts"
+        },
+        "outcomes": {
+          "items": {
+            "$ref": "#/$defs/WorkflowStepOutcome"
+          },
+          "minItems": 1,
+          "title": "Outcomes",
+          "type": "array"
+        },
+        "step": {
+          "title": "Step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step",
+        "outcomes"
+      ],
+      "title": "WorkflowStepStateRef",
+      "type": "object"
+    },
+    "WorkflowStepType": {
+      "description": "Control-flow node types for declarative experiment workflows.",
+      "enum": [
+        "objective",
+        "decision",
+        "switch",
+        "parallel",
+        "join",
+        "retry",
+        "call",
+        "end"
+      ],
+      "title": "WorkflowStepType",
+      "type": "string"
+    },
+    "WorkflowSwitchCase": {
+      "additionalProperties": false,
+      "description": "One ordered branch case within a ``switch`` workflow step.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "next": {
+          "title": "Next",
+          "type": "string"
+        },
+        "when": {
+          "$ref": "#/$defs/WorkflowPredicate"
+        }
+      },
+      "required": [
+        "when",
+        "next"
+      ],
+      "title": "WorkflowSwitchCase",
+      "type": "object"
+    },
+    "WorkflowTimeoutPolicy": {
+      "additionalProperties": false,
+      "description": "Workflow-level timeout policy.",
+      "properties": {
+        "seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Seconds"
+        }
+      },
+      "required": [
+        "seconds"
+      ],
+      "title": "WorkflowTimeoutPolicy",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Scenario with all `${var}` references resolved to concrete values.",
+  "properties": {
+    "accounts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Account"
+      },
+      "title": "Accounts",
+      "type": "object"
+    },
+    "agents": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Agent"
+      },
+      "title": "Agents",
+      "type": "object"
+    },
+    "conditions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Condition"
+      },
+      "title": "Conditions",
+      "type": "object"
+    },
+    "content": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Content"
+      },
+      "title": "Content",
+      "type": "object"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "entities": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Entity"
+      },
+      "title": "Entities",
+      "type": "object"
+    },
+    "evaluations": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Evaluation"
+      },
+      "title": "Evaluations",
+      "type": "object"
+    },
+    "events": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Event"
+      },
+      "title": "Events",
+      "type": "object"
+    },
+    "features": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Feature"
+      },
+      "title": "Features",
+      "type": "object"
+    },
+    "goals": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Goal"
+      },
+      "title": "Goals",
+      "type": "object"
+    },
+    "imports": {
+      "items": {
+        "$ref": "#/$defs/ImportDecl"
+      },
+      "title": "Imports",
+      "type": "array"
+    },
+    "infrastructure": {
+      "additionalProperties": {
+        "$ref": "#/$defs/InfraNode"
+      },
+      "title": "Infrastructure",
+      "type": "object"
+    },
+    "injects": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Inject"
+      },
+      "title": "Injects",
+      "type": "object"
+    },
+    "metrics": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Metric"
+      },
+      "title": "Metrics",
+      "type": "object"
+    },
+    "module": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModuleDescriptor"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "nodes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Node"
+      },
+      "title": "Nodes",
+      "type": "object"
+    },
+    "objectives": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Objective"
+      },
+      "title": "Objectives",
+      "type": "object"
+    },
+    "relationships": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Relationship"
+      },
+      "title": "Relationships",
+      "type": "object"
+    },
+    "scripts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Script"
+      },
+      "title": "Scripts",
+      "type": "object"
+    },
+    "stories": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Story"
+      },
+      "title": "Stories",
+      "type": "object"
+    },
+    "tlos": {
+      "additionalProperties": {
+        "$ref": "#/$defs/TLO"
+      },
+      "title": "Tlos",
+      "type": "object"
+    },
+    "variables": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Variable"
+      },
+      "title": "Variables",
+      "type": "object"
+    },
+    "version": {
+      "default": "*",
+      "title": "Version",
+      "type": "string"
+    },
+    "vulnerabilities": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Vulnerability"
+      },
+      "title": "Vulnerabilities",
+      "type": "object"
+    },
+    "workflows": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Workflow"
+      },
+      "title": "Workflows",
+      "type": "object"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "InstantiatedScenario",
+  "type": "object"
+}

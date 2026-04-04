@@ -6,6 +6,453 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.0] - 2026-04-02
+
+### Added
+
+- Registry-ready SDL composition with explicit `module` descriptors, canonical `imports.source` handling (`local:`, `oci:`, `locked:`), repo-owned lockfiles, and trust policy enforcement
+- `aptl sdl resolve`, `aptl sdl verify-imports`, and `aptl sdl publish` commands for import resolution, verification, and OCI layout packaging
+- OCI module publish/resolve support with digest pinning, signature verification, trust-policy gating, and deterministic lockfile records
+- Workflow compensation semantics with workflow-level `compensation` policy, step-level `compensate-with`, compiled compensation targets/order, and portable compensation status/history
+- Focused regression coverage for local and OCI composition, lockfile drift, signed remote imports, compensation validation, and cancel/timeout-triggered rollback observation
+
+### Changed
+
+- Import `source:` fields are now treated as composition inputs instead of generic SDL package-source shorthands
+- Implicit local modules normalize to canonical package identities so local composition and published modules share one descriptor model
+- Workflow execution envelopes now carry explicit compensation fields alongside the primary terminal workflow state
+- Control-plane cancellation and timeout reconciliation now emit compensation state/history when the compiled workflow contract requires it
+
+## [6.3.0] - 2026-04-02
+
+### Added
+
+- Canonical SDL instantiation phase (`instantiate_scenario`) producing concrete `InstantiatedScenario` objects before compilation/runtime planning
+- Repo-owned variable binding semantics: parameter values, defaults, allowed-value enforcement, unresolved-placeholder failure, and post-instantiation revalidation
+- Richer workflow execution contracts with workflow-level status, run identity, timestamps, terminal reason, portable history events, and compiled `execution_contract` metadata
+- Schema-first external contract models plus generated versioned JSON Schemas under `schemas/` for SDL/runtime boundary artifacts
+- Reference async-style runtime control plane (`RuntimeControlPlane`) and reference HTTP/JSON adapter for portable backend integration
+- Repo-owned backend conformance kit under `conformance/` with capability profiles, golden fixtures, portable reports, and a non-Python-friendly validation runner
+- Durable and secured per-target control-plane behavior: persisted operation state, audit log, idempotent submissions, request-size enforcement, and authenticated control-plane mutations
+- SDL module/import composition with deterministic local expansion, namespace-aware symbol rewriting, import parameters, and version matching before semantic validation
+- Workflow maturity core: workflow-level timeout policy, cancel/timeout control-plane operations, `switch` routing, reusable `call` subflows, and compiled call/timeout execution-contract metadata
+- Focused regression coverage for instantiation, workflow execution envelopes/history, contract schema publication, and control-plane behavior
+
+### Changed
+
+- `compile_runtime_model()` now compiles concrete instantiated scenarios instead of leaving variable interpretation to backends
+- Runtime workflow validation now checks backend-reported plain-data execution envelopes against compiled `result_contract` and `execution_contract`, rather than inferring semantics from planner payload internals
+- Objective window step analysis is centralized in shared semantics and reused by both validator and compiler to reduce FM2 drift
+- Runtime snapshots now preserve plain-data orchestration history alongside portable workflow execution state
+- Workflow names are now namespace-friendly canonical identifiers, while step names remain the `<workflow>.<step>` delimiter boundary
+- Runtime architecture docs and SDL guidance now describe repo-owned instantiation, language-neutral contracts, and the schema/control-plane boundary explicitly
+
+## [6.2.0] - 2026-04-01
+
+### Added
+
+- SDL workflow `while` step type for loop and retry-with-variation control flow, modeled as a single DAG node with `when` predicate, `body` step reference, optional `next`, and optional `max-iterations` cap
+- `on-error` field on `objective`, `while`, and `parallel` workflow steps for declarative error recovery path specification
+- `step-outcomes` field on workflow predicates allowing `if` and `while` predicates to branch based on the success or failure of previously executed workflow steps
+- ADR-018 documenting control flow primitive design decisions
+
+## [6.1.0] - 2026-03-30
+
+### Added
+
+- Runtime package (`aptl.core.runtime`) rebuilt around an SDL-native compile/plan/execute flow instead of a flat generic step DAG
+- Runtime compiler (`runtime/compiler.py`) — pure `compile_runtime_model(Scenario) -> RuntimeModel` pass that separates reusable SDL definitions from bound runtime instances
+- Composite execution planner (`runtime/planner.py`) — pure `plan(RuntimeModel, BackendManifest, RuntimeSnapshot) -> ExecutionPlan` reconciliation with `CREATE`/`UPDATE`/`DELETE`/`UNCHANGED`
+- Runtime contract hardening — plans are provenance-bound to target/manifest/base snapshot, raw planner output is unbound by default until explicitly targeted, runtime targets self-validate both manifest/component shape and invokable protocol signatures, capability-relevant variable refs fail closed when undeclared or field-invalid, finite variable domains are revalidated against the SDL fields they parameterize before backend capability checks run, declared-but-unbounded domains defer with warnings, ordering graphs fail closed on runtime-visible cycles, backend exceptions/invalid lifecycle returns become structured diagnostics instead of crashes, and runtime resources now distinguish ordering dependencies from refresh dependencies
+- Domain-specific capability model (`runtime/capabilities.py`) — `ProvisionerCapabilities`, `OrchestratorCapabilities`, and `EvaluatorCapabilities` composed by an explicit `BackendManifest`
+- Typed runtime state (`RuntimeSnapshot`) and structured diagnostics for planner and manager lifecycle errors
+- Backend registry (`runtime/registry.py`) redesigned around separate manifest introspection and target creation paths
+- RuntimeManager (`runtime/manager.py`) now compiles, plans, applies provisioning, starts evaluator/orchestration only when their plans have actionable work, and tears down in explicit domain order
+- Stub backends (`aptl.backends.stubs`) rewritten to the new contracts with in-memory snapshot, orchestration, and evaluation behavior
+- 15 new runtime tests across 4 test files covering compiler/model binding, planner reconciliation and capability validation, registry manifest introspection, manager lifecycle ordering, and a realistic SDL regression
+
+## [6.0.1] - 2026-03-29
+
+### Fixed
+
+- SDL parser now catches `pydantic.ValidationError` instead of bare `Exception`, so implementation bugs propagate as real errors instead of masquerading as parse failures
+- Removed dead `VM` and `Switch` classes from `nodes.py` — the unified `Node` class with type discrimination replaced them
+- Validator node-name-length check now uses the `MAX_NODE_NAME_LENGTH` constant instead of a hardcoded `35`
+- Replaced `list.pop(0)` with `deque.popleft()` in topological sort for O(1) per operation
+- Removed redundant `_all_entity_names()` update since `flatten_entities` already includes top-level keys
+- Fixed overly permissive assertion in `test_hyphenated_keys` — now pins the expected preserved-key behavior
+- Moved `TestPlatformCommand` from `test_sdl_models.py` to `tests/test_attacks.py` since `PlatformCommand` lives in `aptl.core.attacks`, not the SDL package
+- Corrected ADR-014 file count from 24 to 21 (reflecting compat.py/defenses.py/attacks.py removal in 6.0.0)
+
+## [6.0.0] - 2026-03-29
+
+### Changed
+
+- **BREAKING**: Removed APTL legacy fields from SDL Scenario model — `metadata`, `mode`, `containers`, `preconditions`, `scoring`, `attack_chain`, `steps`, and `defenses` are no longer part of the SDL specification. The legacy `objectives` block was not kept verbatim; it was replaced by declarative SDL `objectives`, and the SDL now also includes first-class `workflows` for branching/parallel objective control. The SDL now has one clean identity: 21 specification sections with `name` as the only required field.
+- **BREAKING**: Removed backward-compatibility layer (`sdl/compat.py`) and the `scenarios.py` re-export shim. Runtime code that imported `ScenarioDefinition`, `validate_scenario_containers`, or APTL-specific types from `aptl.core.scenarios` will need updating.
+- **BREAKING**: APTL legacy scenario YAMLs (with `metadata` block) no longer parse through the SDL. They require migration to SDL format.
+- Tightened structural validation for the new SDL sections: `content` now requires a `target` plus type-specific anchors (`path`, `source|items`, or `destination`), `accounts` require `node`, and `agents` require `entity`.
+- Parser boundary tightened: `${var}` placeholders are now rejected in user-defined mapping keys, keeping SDL identifiers concrete at parse/validate time.
+- Variable handling expanded: full `${var}` placeholders are now accepted in selected leaf enum-backed property fields (`accounts.password_strength`, `entities.role`, `nodes.os`, `nodes.asset_value.*`, `infrastructure.acls.action`, `objectives.success.mode`) while discriminant `type` fields remain concrete.
+- Named service bindings and named ACL rules are now first-class symbolic refs for objectives and relationships via `nodes.<node>.services.<service_name>` and `infrastructure.<infra>.acls.<acl_name>`.
+- Added SDL `workflows` section for branching and parallel objective graphs with DAG validation, reachability checks, and objective-window workflow/step binding.
+- Moved runtime evaluation models to standalone modules: `aptl.core.objectives` (ObjectiveType, Objective, WazuhAlertValidation, etc.) and `aptl.core.attacks` (AttackStep, MitreReference, ExpectedDetection, etc.). These are runtime evaluation mechanics, distinct from the declarative objective semantics carried by the SDL.
+- Removed 6 APTL-specific semantic validation passes from the SDL validator
+- Framing: OCR scoring pipeline (conditions → metrics → evaluations → TLOs → goals) stays in the SDL, and the SDL now also carries declarative objectives. Backend-specific automated validation remains a runtime concern outside the language itself.
+
+### Removed
+
+- `src/aptl/core/sdl/compat.py` — legacy backward-compatibility shim
+- `src/aptl/cli/scenario.py` — removed with the legacy scenario runtime cutover
+- `src/aptl/api/routers/scenarios.py` — removed with the legacy scenario runtime cutover
+- `src/aptl/core/engine.py`, `src/aptl/core/evaluators.py`, `src/aptl/core/scoring.py`, `src/aptl/core/run_assembler.py` — removed pending a new SDL-native runtime
+- `src/aptl/core/sdl/defenses.py` — free-form defense config (underspecified)
+- `src/aptl/core/sdl/attacks.py` — moved to `aptl.core.attacks`
+- `tests/test_sdl_compat.py` — tests for removed compat layer
+
+## [5.3.0] - 2026-03-29
+
+### Added
+
+- Property-based fuzz testing for SDL parser (`tests/test_sdl_fuzz.py`) — 6 Hypothesis strategies generating ~1,050 random inputs per run; excluded from default pytest via `fuzz` marker, run with `pytest -m fuzz`
+- Real-world scenario stress tests (`tests/test_sdl_realworld.py`) — 6 scenarios from Incalmo/MHBench, NICE Challenge, CCDC, HTB ProLab, Metasploitable 2, and Locked Shields IT/OT/SCADA
+- SDL documentation suite (`docs/sdl/`) — index, sections reference, parser behavior, semantic validation (24 passes), design precedents, limitations, and testing guide
+- ADR-014: Scenario Description Language architecture decision record
+- `hypothesis>=6.0.0` added to dev dependencies
+
+### Changed
+
+- `pyproject.toml` pytest config: added `fuzz` marker and `addopts = "-m 'not fuzz'"` to exclude fuzz tests from default runs
+
+## [5.2.0] - 2026-03-29
+
+### Added
+
+- SDL `relationships` section for typed directed edges between scenario elements — adapted from STIX 2.1 Relationship SROs. Supports `authenticates_with`, `trusts`, `federates_with`, `connects_to`, `depends_on`, `manages`, `replicates_to` with free-form properties dict for type-specific metadata (trust_type, protocol, etc.). This is how identity/directory/trust emerges: accounts describe *who*, features describe *what provides auth*, relationships describe *how they connect*
+- SDL `agents` section for autonomous scenario participants — adapted from CybORG CAGE Challenge agent definitions. Each agent has an entity reference (team/role), available actions, starting accounts, initial knowledge (known hosts/subnets), and allowed subnet scope. Agent specifications are framework-agnostic (no Gymnasium coupling)
+- SDL `variables` section for scenario parameterization — adapted from CACAO v2.0 playbook_variables. Named variables with types (string/integer/boolean/number), defaults, descriptions, and allowed_values. Variables are stored as `${name}` strings in the model and resolved at instantiation time, not parse time
+- Semantic validator passes: `verify_relationships` (source/target resolve to any named element), `verify_agents` (entity/account/subnet/host references resolve), `verify_variables` (structural validation)
+- Source expansion now correctly skips `relationships` and `agents` sections where `source` is a string reference, not a package Source
+- Stress test scenarios 12 (CybORG CAGE-2 with red/blue/green agents, starting accounts, initial knowledge) and 13 (multi-domain AD with parent-child trust, ADFS federation, and parameterized variables)
+- 25 new tests for relationship, agent, and variable models and cross-reference validation
+
+## [5.1.0] - 2026-03-29
+
+### Added
+
+- SDL `content` section for data-in-systems: files, datasets (emails, DB records, pcaps), directory structures placed into scenario nodes — adapted from CyRIS `copy_content` pattern
+- SDL `accounts` section for user accounts within scenario nodes: AD users, SSH users, email accounts with password strength, Kerberos SPNs, group memberships — adapted from CyRIS `add_account` and CybORG agent sessions
+- Network access control rules (`acls`) on infrastructure nodes — adapted from CybORG `Subnets.NACLs` pattern
+- Network `internal` flag on `SimpleProperties` for egress-blocked networks
+- Host OS family and version fields on nodes (`os`, `os_version`) — vocabulary from OCSF `Device.os`
+- CIA triad `asset_value` on nodes — adapted from CybORG `ConfidentialityValue`/`AvailabilityValue`
+- `ServicePort` model for exposed network services on nodes (port/protocol/name) — simplified from OCSF `NetworkEndpoint`
+- `PlatformCommand` on attack steps for per-OS command variants with cleanup — adapted from CALDERA `platforms.{os}.{shell}.command` and Atomic Red Team `cleanup_command`
+- Health check extensions on conditions: `timeout`, `retries`, `start_period`
+- Feature-list shorthand on nodes: `features: [svc-a, svc-b]` expands to dict with empty role binding
+- Scenario 11 stress test: Exchange server with mailboxes, accounts, ACLs, phishing lure content, asset values
+- 30 new tests for all extension models, validator passes, and shorthand expansion
+
+## [5.0.0] - 2026-03-28
+
+### Added
+
+- Formal Scenario Description Language (SDL) package (`src/aptl/core/sdl/`) ported from the Open Cyber Range SDL, extended for APTL's domain, and decoupled from backend-specific infrastructure
+- 14 OCR SDL sections: nodes (VM/Switch), infrastructure (topology/IP/CIDR), features (Service/Configuration/Artifact with cycle-detected dependency graphs), conditions (command/source monitoring), vulnerabilities (CWE-classified), metrics/evaluations/TLOs/goals (full scoring pipeline), entities (recursive org/team/person hierarchy with exercise roles), orchestration (injects/events/scripts/stories with human-readable durations)
+- APTL extensions integrated into the SDL: objectives with auto-evaluation (wazuh_alert, command_output, file_exists), attack steps with MITRE ATT&CK mapping and OCSF-aligned expected detections, defense configurations, preconditions, scenario metadata, scoring with time bonuses and hint penalties
+- Semantic validator (`validator.py`) with 21 cross-reference passes: node/feature/condition/vulnerability existence checks, infrastructure link and IP/CIDR validation, feature dependency cycle detection, metric/evaluation/TLO/goal reference chains, entity hierarchy validation, inject/event/script/story reference chains, MITRE technique format validation, mode-objective consistency
+- SDL parser (`parser.py`) with case-insensitive key normalization, hyphen-to-underscore conversion, shorthand expansion (source strings, infrastructure counts, role strings, min-score integers), and auto-detection of APTL legacy vs OCR SDL format
+- Backend-agnostic `Source(name, version)` reference type — no deployment handler coupling
+- 117 new tests across 4 test files: structural model validation, semantic cross-reference validation, parser normalization/shorthand/format-detection, and backward compatibility
+
+### Changed
+
+- `src/aptl/core/scenarios.py` is now a backward-compatibility shim re-exporting all names from `aptl.core.sdl` — all 8 consumer files continue working with zero import changes (BREAKING: internal module restructuring)
+
+## [4.17.0] - 2026-03-26
+
+### Added
+
+- Scenario runtime engine with async evaluation loop (`src/aptl/core/engine.py`) — periodically checks non-manual objectives against live infrastructure (Wazuh alerts, command output, file existence) and updates session state incrementally
+- Objective evaluators (`src/aptl/core/evaluators.py`) — async functions for each `ObjectiveType`: `evaluate_wazuh_alert` queries the Wazuh Indexer ES API, `evaluate_command_output` runs `docker exec` and checks output, `evaluate_file_exists` checks file presence and content in containers
+- Scoring engine (`src/aptl/core/scoring.py`) — computes scenario scores from completed objectives, hint penalties, and time-based bonuses with linear decay
+- `aptl scenario run <name>` CLI command — combined start + evaluation loop + stop with Ctrl+C graceful shutdown and real-time progress reporting
+- `aptl scenario evaluate` CLI command — single evaluation pass against an active session for debugging and scripting
+- `aptl scenario status` now displays current score, objective completion breakdown, and pass/fail status
+- `ScenarioSession.set_evaluating()` and `set_active_from_evaluating()` methods — the `EVALUATING` session state is now actively used during evaluation cycles
+- OTel `aptl.evaluation` child spans emitted for each objective evaluation cycle
+- 45 new tests: evaluator unit tests (`test_evaluators.py`), scoring tests (`test_scoring.py`), engine integration tests (`test_engine.py`), CLI command tests (`test_cli_evaluate.py`)
+
+## [4.16.1] - 2026-03-25
+
+### Fixed
+
+- Test helper `_find_node()` returns absolute path via `shutil.which()` instead of bare `"node"` string, fixing `_server_available()` check that caused MCP protocol tests to skip on systems without NVM
+- Deploy workflow: use `aptl lab start` instead of raw `docker compose up`, fixing missing SSL certs and credential sync on fresh deploys
+- Deploy workflow: exclude root-owned and runtime directories from rsync --delete (SSL certs, venv, keys, runs, node_modules, tools/misp-mcp-server)
+- SSL cert check now verifies root-ca.pem exists, not just the directory — fixes regeneration after empty directory is left behind
+- SSH key generation target changed from `containers/keys/` to `keys/` to match docker-compose.yml bind mounts
+- Deploy workflow: force-stop containers and prune networks before rsync to prevent "Address already in use" on redeploy
+
+### Changed
+
+- SonarCloud scan now waits for Quality Gate result (`-Dsonar.qualitygate.wait=true`), failing the CI job if the gate is red
+- Branch protection on `main` and `dev`: "SonarCloud Code Analysis" is now a required status check
+
+## [4.16.0] - 2026-03-24
+
+### Added
+
+- `APTL_ALLOWED_ORIGINS` environment variable for configurable CORS origins (defaults unchanged)
+- SSH deployment parameter validation (host, user, port, key path) in `SSHComposeBackend`
+- Integration tests exercising full API-to-core request paths (`test_api_integration.py`)
+- PID re-verification via `/proc/{pid}/cmdline` before SIGKILL in kill switch (TOCTOU mitigation)
+- File locking (`fcntl.flock`) for `session.json` concurrent access safety
+
+### Fixed
+
+- Credential sync: YAML password double-quote escaping and XML cluster key entity escaping in `credentials.py`
+- WebSocket terminal: empty Origin header now correctly rejected (was bypassing origin check)
+- Scenario CLI: `shutdown_tracing()` wrapped in try/finally to prevent span loss on exception
+- Deploy workflow: replaced fixed 30s sleep with 120s polling loop for container health verification
+- Kill switch test: SIGTERM/SIGKILL ordering now asserted by index, not just membership
+
+### Changed
+
+- TheHive Elasticsearch image updated from 7.17.24 to 7.17.28 (security patches)
+
+## [4.15.1] - 2026-03-23
+
+### Fixed
+
+- Deploy workflow: replace remote `git clone` with `rsync` from runner to fix clone failures on hosts without GitHub credentials (curl 56 connection reset)
+
+## [4.15.0] - 2026-03-22
+
+### Added
+
+- Deployment backend abstraction layer (DEP-001, #233):
+  - `DeploymentBackend` Protocol in `src/aptl/core/deployment/backend.py` defining the lifecycle interface (start, stop, status, kill, pull_images)
+  - `DockerComposeBackend` wrapping existing Docker Compose subprocess logic as the default backend
+  - `SSHComposeBackend` enabling remote deployment over SSH via `DOCKER_HOST=ssh://user@host`
+  - `DeploymentConfig` Pydantic model with provider selection and SSH configuration fields
+  - Factory function `get_backend()` for config-driven backend instantiation
+  - `deployment` section in `aptl.json` for backend configuration (backward-compatible default)
+  - ADR-013 documenting the deployment abstraction decision
+  - Existing `start_lab()`, `stop_lab()`, `lab_status()`, and `kill_lab_containers()` functions accept optional `backend` parameter while maintaining full backward compatibility
+
+## [4.14.0] - 2026-03-22
+
+### Added
+
+- Network egress firewall on Docker networks (SAF-002, #231):
+  - `aptl-dmz`, `aptl-internal`, and `aptl-redteam` networks now use `internal: true` to block internet egress
+  - Prevents autonomous agents from scanning or attacking external targets
+  - `aptl-security` remains non-internal so SOC tools can reach threat feeds and rule updates
+  - Multi-homed management containers (dns, wazuh, suricata) retain internet via security network
+  - Host port mappings (SSH to victim/kali) unaffected by internal flag
+  - Wazuh agent and Falco pre-installed in victim, workstation, and kali container images at build time (runtime install scripts skip downloads when packages are already present)
+  - Static consistency tests enforce egress controls in `test_consistency.py`
+  - Networking architecture docs updated with egress control and upgrade details
+
+## [4.13.0] - 2026-03-22
+
+### Added
+
+- Emergency kill switch for all agent and MCP operations (SAF-001, #229):
+  - `aptl kill` CLI command terminates all MCP server processes (SIGTERM + SIGKILL fallback)
+  - `--containers` flag force-stops all lab Docker containers via `docker compose kill`
+  - POST `/api/lab/kill` endpoint for web UI emergency button
+  - Automatic cleanup of active scenario sessions and trace context files
+  - Core `kill.py` module with resilient process discovery via `/proc/*/cmdline`
+
+## [4.12.0] - 2026-03-21
+
+### Added
+
+- OpenTelemetry integration replacing custom JSONL tracing systems (OBS-001, #225):
+  - Python `telemetry.py` module: OTel TracerProvider with OTLP HTTP exporter, trace context generation/propagation, span creation for scenario lifecycle events
+  - TypeScript `telemetry.ts` module: OTel NodeTracerProvider with OTLP proto exporter, cross-process trace context via `.aptl/trace-context.json`, `traceToolCall()` wrapper with GenAI SIG attributes
+  - Docker infrastructure: OTel Collector (`otel` profile), Grafana Tempo (72h retention), Grafana UI at port 3100
+  - OTel Collector config, Tempo config, and Grafana datasource provisioning in `config/otel/`
+  - Run archive `traces/spans.json` containing all OTel spans fetched from Tempo
+  - `trace_id` field in session state and run manifest for distributed tracing correlation
+  - `collect_traces()` collector querying Tempo HTTP API by trace ID
+  - ADR-012 documenting the OpenTelemetry integration decision
+
+### Changed
+
+- `aptl lab start` now always includes `--profile otel` for the observability stack
+- Run manifest includes `trace_id` field
+- `.mcp.json.example` uses `OTEL_EXPORTER_OTLP_ENDPOINT` instead of `APTL_TRACE_DIR`
+- MCP server startup initializes OTel tracing; shutdown flushes spans
+- `assemble_run()` no longer takes `events` parameter; collects traces from Tempo instead
+
+### Removed
+
+- `src/aptl/core/events.py` (EventLog, EventType, Event, make_event) — replaced by OTel spans
+- `mcp/aptl-mcp-common/src/tracing.ts` (ToolTracer, ToolTrace) — replaced by OTel spans
+- `tests/test_events.py` — replaced by `tests/test_telemetry.py`
+- `APTL_TRACE_DIR` environment variable and `.aptl/traces/` directory
+- `collect_mcp_traces()` from collectors (replaced by `collect_traces()`)
+- `scenario/events.jsonl` and `agents/traces.jsonl` from run archive format
+
+## [4.11.1] - 2026-03-21
+
+### Fixed
+
+- SonarCloud quality gate failure: new code coverage below 80% threshold
+  - Added tests for `container-state.ts`, route load functions, `getScenario()` API, `subscribeLabEvents`, and SSE reconnect logic in lab store
+  - Scoped vitest coverage to `src/` only, eliminating `build/`, `.svelte-kit/`, and `node_modules/` noise from lcov report
+  - All new TypeScript files now at 100% coverage (56 tests across 7 test files)
+
+## [4.11.0] - 2026-03-21
+
+### Added
+
+- Interactive scenario workbench view at `/scenarios/[id]` (UI-001, #223):
+  - Block-composition architecture: `buildBlockSequence()` pure function maps scenario data to typed `WorkbenchBlock[]` discriminated union, separating data logic from rendering
+  - 9 workbench block components: NarrativeBlock (markdown), TerminalBlock (xterm.js wrapper), SiemQueryBlock (stub), ContainerStatusBlock (SSE-driven), HintToggle (progressive disclosure), ObjectiveBlock, AttackStepBlock, WorkbenchStatusBar (sticky), SectionDivider
+  - Full `ScenarioDefinition` TypeScript type hierarchy mirroring Python Pydantic models (metadata, steps, objectives, scoring, attack chain, MITRE references)
+  - `renderMarkdown()` utility using `marked` + DOMPurify for safe runtime markdown rendering
+  - Scenario card links from Lab Home page to workbench view
+  - `prose-aptl` CSS class for dark-themed markdown prose styling
+  - Progressive hint disclosure with escalating point penalties shown in amber
+  - SIEM query blocks display query JSON with disabled "Run Query" button (ready for OpenSearch integration)
+  - Copyable attack step commands with clipboard feedback
+  - Lazy-mounted terminals in attack step blocks to avoid mass WebSocket connections
+  - Stable block keys for Svelte each-block diffing
+  - Shared `stateColor()` utility for container state badge colors
+  - Unit tests for block sequence builder (11 tests), markdown renderer (9 tests), and HintToggle component (7 tests)
+  - `marked` and `dompurify` dependencies added
+  - Vitest `resolve.conditions: ['browser']` fix for Svelte 5 component testing with jsdom
+  - Route load function uses SvelteKit `error()` for proper HTTP status propagation
+
+### Security
+
+- WebSocket terminal endpoint now validates the `Origin` header before accepting connections, blocking cross-site WebSocket hijacking (CSWSH) — previously any website visited while the lab was running could open a shell on lab containers because CORS middleware does not protect WebSocket upgrades
+- `ALLOWED_ORIGINS` constant shared between CORS middleware and WebSocket origin check in `aptl.api.deps` to prevent drift
+
+## [4.10.0] - 2026-03-21
+
+### Added
+
+- In-browser terminal for container SSH access via xterm.js and WebSocket (#221):
+  - WebSocket endpoint `ws /api/terminal/ws/{container}` with asyncssh PTY relay for all SSH-capable containers
+  - `Terminal.svelte` component: xterm.js wrapper with FitAddon, WebLinksAddon, APTL dark theme, auto-resize
+  - Full-page terminal route at `/terminal/{container}` with back navigation
+  - "Terminal" link on ContainerCard when container is running and SSH-capable
+  - Vite dev server WebSocket proxy (`ws: true`) for `/api` endpoint
+  - `asyncssh>=2.17.0` added to `web` optional dependencies
+  - WebSocket endpoint tests covering validation, stdin/stdout relay, resize, disconnect cleanup, and error handling
+
+## [4.9.2] - 2026-03-20
+
+### Fixed
+
+- API response models use `Optional[str] = None` instead of `str = ""` for error fields
+- SSE generator implements exponential backoff and circuit breaker (terminates after 10 consecutive errors)
+- CORS tightened to `GET`/`POST` methods and `Content-Type`/`Accept` headers only
+- Lab start endpoint has 30-minute timeout via `asyncio.wait_for`
+- All API routers use FastAPI `Depends()` for `get_project_dir` injection (testable, validates directory exists)
+- `get_project_dir()` returns HTTP 503 when project directory does not exist
+- Hardcoded container list in config router replaced with dynamic `ContainerSettings.model_fields`
+- `ContainerSettings.enabled_profiles()` uses `model_fields` instead of hardcoded list
+- Docker CLI installed via official APT repo with GPG verification instead of `curl | sh`
+- Production web Docker image uses `npm ci --omit=dev` instead of copying full `node_modules`
+- Uvicorn production config: `--workers`, `--log-level info`, `--timeout-keep-alive 65`, `--access-log`
+- Frontend SSE reconnects with generation counter to prevent race conditions
+- Frontend error text truncated to 500 characters
+- `+page.svelte` checks `error != null` instead of truthy for nullable error field
+
+### Added
+
+- Structured logging (`aptl.utils.logging`) in all API routers and `create_app()`
+- `+error.svelte` dark-themed error page with status code and back link
+- Accessibility: `role="status"`/`role="img"`, `aria-label` on status dots, badges, spinner, buttons; `sr-only` loading text
+- Expert difficulty gets distinct violet badge (was same red as advanced)
+- HTML meta tags: `description`, `theme-color` (#1a1d23), `apple-mobile-web-app-capable`
+- `.dockerignore` files for project root and `web/`
+- Docker socket security documentation in README
+- SonarCloud config includes `web/src` sources and `web/coverage/lcov.info`
+- CI workflow runs web frontend tests with coverage
+- Vitest coverage config (v8 provider, lcov reporter)
+
+### Removed
+
+- Unused `web/src/lib/stores/scenarios.ts`
+- Unused `getScenarios` import from `+page.ts`
+- `httpx` from `web` optional deps (already in `dev`; CI installs both)
+
+## [4.9.1] - 2026-03-20
+
+### Fixed
+
+- CI SonarCloud workflow installs `.[dev,web]` so API tests find `fastapi` (#219)
+- API test files gracefully skip via `pytest.importorskip` when web deps are absent
+
+## [4.9.0] - 2026-03-20
+
+### Added
+
+- Notebook-style web UI Phase 1 MVP (SYS-010, ADR-011) (#219):
+  - FastAPI backend (`src/aptl/api/`) wrapping existing `aptl.core` modules — no domain logic duplication
+  - REST endpoints: `GET /api/lab/status`, `POST /api/lab/start`, `POST /api/lab/stop`, `GET /api/scenarios`, `GET /api/scenarios/{id}`, `GET /api/config`, `GET /api/health`
+  - SSE endpoint `GET /api/lab/events` for real-time container status updates
+  - SvelteKit frontend (`web/`) with Tailwind CSS v4, dark theme (indigo/violet/teal palette)
+  - Lab Home page with container status grid, start/stop controls, scenario listing with difficulty/mode badges
+  - `aptl web serve` CLI command to start the API server on port 8400
+  - `web` optional dependency group: FastAPI, uvicorn, sse-starlette, httpx
+  - Docker Compose `web` profile with `aptl-web-api` (172.20.0.40:8400) and `aptl-web-ui` (172.20.0.41:3000) services
+  - Backend tests (`test_api_lab.py`, `test_api_scenarios.py`, `test_api_config.py`) and frontend API tests
+  - ADR-011 status: proposed -> accepted
+
+## [4.8.0] - 2026-03-20
+
+### Added
+
+- Architecture Decision Records (ADRs) section in docs with MADR-format template and 11 ADRs documenting all significant architectural decisions from v2.0.0 through v4.7.0 (#217)
+
+## [4.7.0] - 2026-03-20
+
+### Changed
+
+- Upgraded CI actions to Node.js 24-compatible versions: `actions/checkout@v6`, `actions/setup-python@v6`, `actions/setup-node@v6` (#211)
+- Migrated from deprecated `SonarSource/sonarcloud-github-action` to `SonarSource/sonarqube-scan-action@v7` (#211)
+
+## [4.6.8] - 2026-03-20
+
+### Fixed
+
+- SonarCloud quality gate failing with 0% TypeScript coverage — CI workflow now runs vitest with coverage in `mcp/aptl-mcp-common/` before the SonarCloud scan, generating `lcov.info` that the existing sonar config already expects (#211)
+- Added `mcp/aptl-mcp-common/tests` to `sonar.tests` so SonarCloud recognizes TS test files as test sources
+- Fixed SonarCloud "can't be indexed twice" error — `mcp/**/tests/**` added to `sonar.exclusions` so test files under `mcp/` are excluded from source analysis while still indexed via `sonar.tests` (#211)
+
+## [4.6.7] - 2026-03-08
+
+### Fixed
+
+- Persistent SSH sessions stranded callers on close/timeout — `cleanup()` now rejects all pending command promises and clears per-command timeouts (#189)
+
+## [4.6.6] - 2026-03-08
+
+### Fixed
+
+- `aptl scenario stop` did not load project `.env` into `os.environ` before calling `assemble_run()` — collectors for Wazuh Indexer, TheHive, MISP, and Shuffle got empty-string fallbacks for API keys and silently skipped data collection, losing SOC telemetry (#184)
+- Collector HTTP timeout was 20s — MISP and TheHive regularly exceed this on cold queries, causing silent data loss; raised to 120s to match test helper timeouts (#184)
+
+## [4.6.5] - 2026-03-08
+
+### Fixed
+
+- `sync_manager_config()` cluster key regex vulnerable to polynomial backtracking (ReDoS) — replaced `re.DOTALL` regex with linear-time string search for `<cluster>` blocks (#183)
+
+## [4.6.4] - 2026-03-08
+
+### Fixed
+
+- `sync_manager_config()` corrupted TLS config by replacing all `<key>` elements — regex now scoped to only match `<key>` inside `<cluster>` blocks, leaving `<indexer><ssl><key>` untouched (#183)
+
 ## [4.6.3] - 2026-03-08
 
 ### Fixed

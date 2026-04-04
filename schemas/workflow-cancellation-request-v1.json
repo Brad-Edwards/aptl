@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "reason": {
+      "default": "cancelled by operator",
+      "title": "Reason",
+      "type": "string"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Run Id"
+    },
+    "schema_version": {
+      "const": "workflow-cancellation-request/v1",
+      "default": "workflow-cancellation-request/v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "title": "WorkflowCancellationRequestModel",
+  "type": "object"
+}

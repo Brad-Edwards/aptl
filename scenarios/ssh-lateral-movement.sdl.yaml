@@ -1,0 +1,333 @@
+# SSH Lateral Movement — Basic CTF Scenario
+#
+# Two identical Linux servers with weak admin credentials and SSH
+# password authentication. A red team agent on a Kali box must
+# capture user flags from both machines.
+
+name: ssh-lateral-movement
+version: "1.0"
+description: >
+  Basic penetration testing scenario with two Linux targets and a
+  Kali attack box. The admin accounts use weak passwords with SSH
+  password authentication enabled. Each target has a unique flag
+  file. The red team agent must retrieve both flags within 10 minutes.
+
+# ---------------------------------------------------------------------------
+# Nodes
+# ---------------------------------------------------------------------------
+nodes:
+  lab-net:
+    type: Switch
+    description: "Flat lab network connecting all boxes (10.10.10.0/24)"
+
+  server:
+    type: VM
+    description: "Linux server target with SSH and a user flag"
+    source:
+      name: ubuntu
+      version: "22.04"
+    os: linux
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    features:
+      ssh-password-auth: admin-role
+    conditions:
+      server-ssh-up: admin-role
+    roles:
+      admin-role:
+        username: admin
+    services:
+      - port: 22
+        protocol: tcp
+        name: ssh
+        description: "OpenSSH with password authentication"
+    vulnerabilities:
+      - weak-admin-password
+
+  workstation:
+    type: VM
+    description: "Linux workstation target with SSH and a user flag"
+    source:
+      name: ubuntu
+      version: "22.04"
+    os: linux
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    features:
+      ssh-password-auth: admin-role
+    conditions:
+      workstation-ssh-up: admin-role
+    roles:
+      admin-role:
+        username: admin
+    services:
+      - port: 22
+        protocol: tcp
+        name: ssh
+        description: "OpenSSH with password authentication"
+    vulnerabilities:
+      - weak-admin-password
+
+  kali:
+    type: VM
+    description: "Kali Linux attack box for the red team agent"
+    source:
+      name: kalilinux/kali-rolling
+      version: "latest"
+    os: linux
+    resources:
+      ram: 2 GiB
+      cpu: 2
+    roles:
+      operator:
+        username: kali
+
+# ---------------------------------------------------------------------------
+# Infrastructure — VMs link to switch entries (networks)
+# ---------------------------------------------------------------------------
+infrastructure:
+  lab-net:
+    count: 1
+    properties:
+      cidr: "10.10.10.0/24"
+      gateway: "10.10.10.1"
+
+  server:
+    count: 1
+    links:
+      - lab-net
+    properties:
+      - lab-net: "10.10.10.10"
+
+  workstation:
+    count: 1
+    links:
+      - lab-net
+    properties:
+      - lab-net: "10.10.10.20"
+
+  kali:
+    count: 1
+    links:
+      - lab-net
+    properties:
+      - lab-net: "10.10.10.100"
+
+# ---------------------------------------------------------------------------
+# Features
+# ---------------------------------------------------------------------------
+features:
+  ssh-password-auth:
+    type: service
+    description: "OpenSSH server configured for password authentication"
+    source:
+      name: openssh-server
+      version: "*"
+
+# ---------------------------------------------------------------------------
+# Vulnerabilities
+# ---------------------------------------------------------------------------
+vulnerabilities:
+  weak-admin-password:
+    name: "Weak admin password"
+    description: "Admin account uses a trivially guessable password"
+    class: CWE-521
+    technical: true
+
+# ---------------------------------------------------------------------------
+# Conditions — health checks
+# ---------------------------------------------------------------------------
+conditions:
+  server-ssh-up:
+    command: "nc -z server 22"
+    interval: 10
+  workstation-ssh-up:
+    command: "nc -z workstation 22"
+    interval: 10
+
+# ---------------------------------------------------------------------------
+# Accounts
+# ---------------------------------------------------------------------------
+accounts:
+  server-admin:
+    username: admin
+    node: server
+    groups:
+      - sudo
+    password_strength: weak
+    auth_method: password
+    shell: /bin/bash
+    home: /home/admin
+    description: "Admin account on the server with a weak password"
+
+  workstation-admin:
+    username: admin
+    node: workstation
+    groups:
+      - sudo
+    password_strength: weak
+    auth_method: password
+    shell: /bin/bash
+    home: /home/admin
+    description: "Admin account on the workstation with a weak password"
+
+  kali-operator:
+    username: kali
+    node: kali
+    groups:
+      - sudo
+    password_strength: strong
+    auth_method: password
+    shell: /bin/bash
+    home: /home/kali
+    description: "Kali operator account for the red team agent"
+
+# ---------------------------------------------------------------------------
+# Content — flag files
+# ---------------------------------------------------------------------------
+content:
+  server-flag:
+    type: file
+    target: server
+    path: /home/admin/user.txt
+    text: "FLAG{server-alpha-9f3c}"
+    sensitive: true
+    description: "User flag on the server"
+
+  workstation-flag:
+    type: file
+    target: workstation
+    path: /home/admin/user.txt
+    text: "FLAG{workstation-bravo-7e2d}"
+    sensitive: true
+    description: "User flag on the workstation"
+
+# ---------------------------------------------------------------------------
+# Entities
+# ---------------------------------------------------------------------------
+entities:
+  red-team:
+    name: "Red Team"
+    role: red
+    description: "Offensive security team"
+    entities:
+      operator:
+        name: "Red Operator"
+        description: "Primary attacker"
+
+# ---------------------------------------------------------------------------
+# Agents
+# ---------------------------------------------------------------------------
+agents:
+  red-agent:
+    entity: red-team
+    description: "Automated red team agent starting on the Kali box"
+    actions:
+      - ssh-brute-force
+      - ssh-login
+      - read-file
+      - network-scan
+    starting_accounts:
+      - kali-operator
+    initial_knowledge:
+      hosts:
+        - kali
+      subnets:
+        - lab-net
+    allowed_subnets:
+      - lab-net
+
+# ---------------------------------------------------------------------------
+# Relationships
+# ---------------------------------------------------------------------------
+relationships:
+  server-auth:
+    type: authenticates_with
+    source: server-admin
+    target: server
+    description: "Admin authenticates to the server via SSH password"
+    properties:
+      protocol: ssh
+      method: password
+
+  workstation-auth:
+    type: authenticates_with
+    source: workstation-admin
+    target: workstation
+    description: "Admin authenticates to the workstation via SSH password"
+    properties:
+      protocol: ssh
+      method: password
+
+  kali-to-server:
+    type: connects_to
+    source: kali
+    target: server
+    description: "Kali has network access to the server"
+
+  server-to-workstation:
+    type: connects_to
+    source: server
+    target: workstation
+    description: "Server has network access to the workstation"
+
+# ---------------------------------------------------------------------------
+# Objectives
+# ---------------------------------------------------------------------------
+objectives:
+  capture-server-flag:
+    name: "Capture server flag"
+    description: "Read the user flag from the server"
+    agent: red-agent
+    targets:
+      - server-flag
+    actions:
+      - read-file
+    success:
+      conditions:
+        - server-ssh-up
+
+  capture-workstation-flag:
+    name: "Capture workstation flag"
+    description: "Read the user flag from the workstation"
+    agent: red-agent
+    targets:
+      - workstation-flag
+    actions:
+      - read-file
+    success:
+      conditions:
+        - workstation-ssh-up
+    depends_on:
+      - capture-server-flag
+
+# ---------------------------------------------------------------------------
+# Workflow — 10-minute agent run
+# ---------------------------------------------------------------------------
+workflows:
+  attack-workflow:
+    description: "Red team attack workflow with 10-minute timeout"
+    start: capture-server
+    timeout: 600
+    steps:
+      capture-server:
+        type: objective
+        objective: capture-server-flag
+        on-success: capture-workstation
+        on-failure: fail
+
+      capture-workstation:
+        type: objective
+        objective: capture-workstation-flag
+        on-success: done
+        on-failure: fail
+
+      done:
+        type: end
+        description: "Both flags captured successfully"
+
+      fail:
+        type: end
+        description: "Attack workflow failed"

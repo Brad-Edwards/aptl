@@ -1,36 +1,44 @@
-"""Integration tests for the Docker backend with the ssh-lateral-movement scenario.
+"""Tests for the honest Docker reference backend."""
 
-Tests the full SDL -> compile -> plan -> execute pipeline using Docker
-containers. Validates that the scenario DSL, runtime SDK, and Docker backend
-work end-to-end across all 21 SDL sections.
+from __future__ import annotations
 
-Requires Docker daemon running. Tests are skipped if Docker is unavailable.
-"""
-
+import importlib.util
+import json
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from aptl.core.sdl import parse_sdl_file
-from aptl.core.runtime.compiler import compile_runtime_model
-from aptl.core.runtime.planner import plan
-from aptl.core.runtime.control_plane import RuntimeControlPlane
-from aptl.core.runtime.models import RuntimeDomain, RuntimeSnapshot
+from aptl.backends import get_backend_registry
 from aptl.backends.docker import (
     DockerProvisioner,
-    DockerOrchestrator,
-    DockerEvaluator,
     create_docker_manifest,
     create_docker_target,
 )
-from aptl.backends import get_backend_registry
+from aptl.core.runtime.capabilities import WorkflowFeature
+from aptl.core.runtime.compiler import compile_runtime_model
+from aptl.core.runtime.control_plane import RuntimeControlPlane
+from aptl.core.runtime.models import (
+    ChangeAction,
+    OperationState,
+    PlannedResource,
+    ProvisionOp,
+    ProvisioningPlan,
+    RuntimeDomain,
+    RuntimeSnapshot,
+)
+from aptl.core.runtime.planner import plan
+from aptl.core.sdl import parse_sdl_file
 
 
-SCENARIO_PATH = Path(__file__).resolve().parents[1] / "scenarios" / "ssh-lateral-movement.sdl.yaml"
+SCENARIO_PATH = (
+    Path(__file__).resolve().parents[1] / "scenarios" / "reference-web-service.sdl.yaml"
+)
 
 
 def _docker_available() -> bool:
+    if importlib.util.find_spec("docker") is None:
+        return False
     try:
         result = subprocess.run(
             ["docker", "info"],
@@ -45,7 +53,7 @@ def _docker_available() -> bool:
 
 requires_docker = pytest.mark.skipif(
     not _docker_available(),
-    reason="Docker daemon not available",
+    reason="Docker daemon or Python docker package not available",
 )
 
 
@@ -59,927 +67,384 @@ def compiled_model(scenario):
     return compile_runtime_model(scenario)
 
 
-# ---------------------------------------------------------------------------
-# SDL Parsing — all 21 sections
-# ---------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def manifest():
+    return create_docker_manifest()
 
 
-class TestScenarioParsing:
-    """Validate the expanded SDL scenario parses and validates."""
+@pytest.fixture(scope="module")
+def execution_plan(compiled_model, manifest):
+    result = plan(compiled_model, manifest)
+    assert result.is_valid, [diag.message for diag in result.diagnostics]
+    return result
 
-    def test_parse_and_validate(self, scenario):
-        assert scenario.name == "ssh-lateral-movement"
+
+class TestReferenceScenario:
+    def test_reference_scenario_parses_cleanly(self, scenario):
+        assert scenario.name == "reference-web-service"
         assert scenario.semantic_validated is True
         assert scenario.advisories == []
 
-    def test_nodes(self, scenario):
-        assert "dmz-net" in scenario.nodes
-        assert "internal-net" in scenario.nodes
-        assert "server" in scenario.nodes
-        assert "workstation" in scenario.nodes
-        assert "kali" in scenario.nodes
-        assert scenario.nodes["dmz-net"].type.value == "switch"
-        assert scenario.nodes["server"].type.value == "vm"
-        assert str(scenario.nodes["server"].os) == "OSFamily.LINUX"
-
-    def test_infrastructure(self, scenario):
-        assert "dmz-net" in scenario.infrastructure
-        assert "internal-net" in scenario.infrastructure
-        assert "server" in scenario.infrastructure
-        infra_server = scenario.infrastructure["server"]
-        assert "dmz-net" in infra_server.links
-        assert "internal-net" in infra_server.links
-        # workstation only on internal-net
-        infra_ws = scenario.infrastructure["workstation"]
-        assert "internal-net" in infra_ws.links
-        assert "dmz-net" not in infra_ws.links
-        # kali only on dmz-net with dependency on server
-        infra_kali = scenario.infrastructure["kali"]
-        assert "dmz-net" in infra_kali.links
-        assert "server" in infra_kali.dependencies
-
-    def test_variables(self, scenario):
-        assert "exercise_speed" in scenario.variables
-        assert "attack_timeout" in scenario.variables
-        assert "weak_password" in scenario.variables
-        speed = scenario.variables["exercise_speed"]
-        assert speed.type.value == "number"
-        assert speed.default == 1.0
-        timeout = scenario.variables["attack_timeout"]
-        assert timeout.type.value == "integer"
-        assert timeout.default == 600
-
-    def test_features(self, scenario):
-        assert "ssh-password-auth" in scenario.features
+    def test_reference_scenario_exercises_the_supported_subset(self, scenario):
+        assert {"service-net", "web", "operator"} <= set(scenario.nodes)
         assert "http-service" in scenario.features
-        assert "kali-tools" in scenario.features
-        assert "sshd-config" in scenario.features
-        assert "flag-permissions" in scenario.features
-        # configuration type
-        assert scenario.features["sshd-config"].type.value == "configuration"
-        # dependency chain
-        assert "ssh-password-auth" in scenario.features["sshd-config"].dependencies
-
-    def test_vulnerabilities(self, scenario):
-        assert "weak-admin-password" in scenario.vulnerabilities
-        vuln = scenario.vulnerabilities["weak-admin-password"]
-        assert vuln.vuln_class == "CWE-521"
-        assert vuln.technical is True
-
-    def test_conditions(self, scenario):
-        assert "server-ssh-up" in scenario.conditions
-        assert "server-http-up" in scenario.conditions
-        assert "workstation-ssh-up" in scenario.conditions
-        assert "brute-force-detected" in scenario.conditions
-        assert "lateral-movement-detected" in scenario.conditions
-        bf = scenario.conditions["brute-force-detected"]
-        assert bf.command is not None
-        assert bf.interval == 15
-
-    def test_accounts(self, scenario):
-        assert "server-admin" in scenario.accounts
-        assert "workstation-admin" in scenario.accounts
-        assert "kali-operator" in scenario.accounts
-        assert scenario.accounts["server-admin"].password_strength.value == "weak"
-        assert scenario.accounts["kali-operator"].password_strength.value == "strong"
-        assert scenario.accounts["server-admin"].node == "server"
-
-    def test_content(self, scenario):
-        assert "server-flag" in scenario.content
-        assert "workstation-flag" in scenario.content
-        assert "server-credentials-file" in scenario.content
-        assert "loot-directory" in scenario.content
-        # File content
-        assert scenario.content["server-flag"].text == "FLAG{server-alpha-9f3c}"
-        assert scenario.content["server-flag"].type.value == "file"
-        # Directory content
-        assert scenario.content["loot-directory"].type.value == "directory"
-        assert scenario.content["loot-directory"].destination == "/root/loot"
-        # Tags
-        assert "credentials" in scenario.content["server-credentials-file"].tags
-
-    def test_entities(self, scenario):
-        assert "white-cell" in scenario.entities
-        assert "red-team" in scenario.entities
-        assert "blue-team" in scenario.entities
-        # Roles
-        assert scenario.entities["white-cell"].role.value == "white"
-        assert scenario.entities["red-team"].role.value == "red"
-        assert scenario.entities["blue-team"].role.value == "blue"
-        # Nested entities
-        assert "operator" in scenario.entities["red-team"].entities
-        assert "soc-analyst" in scenario.entities["blue-team"].entities
-        assert "incident-responder" in scenario.entities["blue-team"].entities
-        # Blue team TLOs
-        assert "detect-brute-force" in scenario.entities["blue-team"].tlos
-
-    def test_agents(self, scenario):
-        assert "red-agent" in scenario.agents
-        assert "blue-agent" in scenario.agents
-        red = scenario.agents["red-agent"]
-        blue = scenario.agents["blue-agent"]
-        assert red.entity == "red-team"
-        assert blue.entity == "blue-team"
-        assert "ssh-brute-force" in red.actions
-        assert "monitor-logs" in blue.actions
-        assert "dmz-net" in red.allowed_subnets
-        assert "internal-net" in blue.allowed_subnets
-
-    def test_relationships(self, scenario):
-        rels = scenario.relationships
-        assert "server-auth" in rels
-        assert "workstation-auth" in rels
-        assert "kali-to-server" in rels
-        assert "server-to-workstation" in rels
-        assert "server-depends-on-dmz" in rels
-        assert "blue-manages-server" in rels
-        # Types
-        assert rels["server-auth"].type.value == "authenticates_with"
-        assert rels["kali-to-server"].type.value == "connects_to"
-        assert rels["server-depends-on-dmz"].type.value == "depends_on"
-        assert rels["blue-manages-server"].type.value == "manages"
-        # Properties
-        assert rels["server-auth"].properties["protocol"] == "ssh"
-
-    # --- Scoring pipeline ---
-
-    def test_metrics(self, scenario):
-        metrics = scenario.metrics
-        assert "red-server-flag" in metrics
-        assert "red-workstation-flag" in metrics
-        assert "blue-brute-detect" in metrics
-        assert "blue-lateral-detect" in metrics
-        assert "blue-ir-report" in metrics
-        # Conditional metrics
-        assert metrics["red-server-flag"].type.value == "conditional"
-        assert metrics["red-server-flag"].max_score == 50
-        assert metrics["red-server-flag"].condition == "server-ssh-up"
-        # Manual metric
-        assert metrics["blue-ir-report"].type.value == "manual"
-        assert metrics["blue-ir-report"].artifact is True
-
-    def test_evaluations(self, scenario):
-        evals = scenario.evaluations
-        assert "red-flag-capture" in evals
-        assert "blue-detection-response" in evals
-        assert "red-server-flag" in evals["red-flag-capture"].metrics
-        assert evals["red-flag-capture"].min_score.percentage == 75
-        assert evals["blue-detection-response"].min_score.percentage == 60
-
-    def test_tlos(self, scenario):
-        tlos = scenario.tlos
-        assert "capture-all-flags" in tlos
-        assert "detect-brute-force" in tlos
-        assert "detect-lateral-movement" in tlos
-        assert tlos["capture-all-flags"].evaluation == "red-flag-capture"
-
-    def test_goals(self, scenario):
-        goals = scenario.goals
-        assert "red-team-goal" in goals
-        assert "blue-team-goal" in goals
-        assert "capture-all-flags" in goals["red-team-goal"].tlos
-        assert len(goals["blue-team-goal"].tlos) == 2
-
-    # --- Orchestration pipeline ---
-
-    def test_injects(self, scenario):
-        injects = scenario.injects
-        assert "recon-intel" in injects
-        assert "soc-briefing" in injects
-        assert "escalation-notice" in injects
-        assert injects["recon-intel"].from_entity == "white-cell"
-        assert "red-team" in injects["recon-intel"].to_entities
-        # Multi-target inject
-        assert len(injects["escalation-notice"].to_entities) == 2
-
-    def test_events(self, scenario):
-        events = scenario.events
-        assert "exercise-start" in events
-        assert "brute-force-alert" in events
-        assert "escalation-event" in events
-        assert "recon-intel" in events["exercise-start"].injects
-        assert "brute-force-detected" in events["brute-force-alert"].conditions
-
-    def test_scripts(self, scenario):
-        scripts = scenario.scripts
-        assert "recon-phase" in scripts
-        assert "attack-phase" in scripts
-        assert "escalation-phase" in scripts
-        assert scripts["recon-phase"].start_time == 0
-        assert scripts["recon-phase"].end_time == 600  # 10 min in seconds
-        assert scripts["attack-phase"].start_time == 600
-        assert scripts["attack-phase"].end_time == 1800  # 30 min
-
-    def test_stories(self, scenario):
-        stories = scenario.stories
-        assert "ctf-exercise" in stories
-        assert len(stories["ctf-exercise"].scripts) == 3
-        assert "recon-phase" in stories["ctf-exercise"].scripts
-
-    # --- Objectives ---
-
-    def test_objectives(self, scenario):
-        objectives = scenario.objectives
-        assert "capture-server-flag" in objectives
-        assert "capture-workstation-flag" in objectives
-        assert "detect-attack" in objectives
-        # Red objectives
-        assert objectives["capture-server-flag"].agent == "red-agent"
-        assert "server-flag" in objectives["capture-server-flag"].targets
-        # Blue objective with any_of mode
-        detect = objectives["detect-attack"]
-        assert detect.agent == "blue-agent"
-        assert detect.success.mode.value == "any_of"
-        # Dependency chain
-        assert "capture-server-flag" in objectives["capture-workstation-flag"].depends_on
-
-    # --- Workflows ---
-
-    def test_workflows(self, scenario):
-        workflows = scenario.workflows
-        assert "attack-workflow" in workflows
-        assert "detection-workflow" in workflows
-
-    def test_attack_workflow_structure(self, scenario):
-        wf = scenario.workflows["attack-workflow"]
-        assert wf.start == "capture-server"
-        steps = wf.steps
-        assert "capture-server" in steps
-        assert "check-detection" in steps
-        assert "capture-workstation" in steps
-        assert "capture-workstation-stealthy" in steps
-        assert "done" in steps
-        assert "fail" in steps
-
-    def test_workflow_decision_step(self, scenario):
-        step = scenario.workflows["attack-workflow"].steps["check-detection"]
-        assert step.type.value == "decision"
-        assert step.when is not None
-        assert "brute-force-detected" in step.when.conditions
-        assert step.then_step == "capture-workstation-stealthy"
-        assert step.else_step == "capture-workstation"
-
-    def test_workflow_retry_step(self, scenario):
-        step = scenario.workflows["attack-workflow"].steps["capture-workstation-stealthy"]
-        assert step.type.value == "retry"
-        assert step.max_attempts == 3
-        assert step.objective == "capture-workstation-flag"
-        assert step.on_success == "done"
-        assert step.on_exhausted == "fail"
-
-    def test_detection_workflow(self, scenario):
-        wf = scenario.workflows["detection-workflow"]
-        assert wf.start == "monitor"
-        assert "monitor" in wf.steps
-        assert wf.steps["monitor"].objective == "detect-attack"
-
-
-# ---------------------------------------------------------------------------
-# Compile and Plan
-# ---------------------------------------------------------------------------
+        assert {"web-http-listening", "web-index-served"} <= set(scenario.conditions)
+        assert {"web-admin", "operator-account"} <= set(scenario.accounts)
+        assert {"reference-index", "operator-notes"} <= set(scenario.content)
+        assert {"exercise-control", "platform-team"} <= set(scenario.entities)
+        assert "verifier-agent" in scenario.agents
+        assert len(scenario.relationships) == 2
+        assert len(scenario.metrics) == 2
+        assert len(scenario.evaluations) == 1
+        assert len(scenario.tlos) == 1
+        assert len(scenario.goals) == 1
+        assert len(scenario.injects) == 1
+        assert len(scenario.events) == 1
+        assert len(scenario.scripts) == 1
+        assert len(scenario.stories) == 1
+        assert {"verify-web-service", "verify-web-content"} <= set(scenario.objectives)
+        assert "reference-validation" in scenario.workflows
 
 
 class TestCompileAndPlan:
-    """Validate the expanded scenario compiles and plans correctly."""
-
-    def test_compile_no_diagnostics(self, compiled_model):
+    def test_compiles_without_diagnostics(self, compiled_model):
         assert compiled_model.diagnostics == []
-        assert compiled_model.scenario_name == "ssh-lateral-movement"
+        assert "provision.network.service-net" in compiled_model.networks
+        assert "provision.node.web" in compiled_model.node_deployments
+        assert "provision.node.operator" in compiled_model.node_deployments
+        assert "provision.feature.web.http-service" in compiled_model.feature_bindings
+        assert "evaluation.condition.web.web-http-listening" in compiled_model.condition_bindings
+        assert "evaluation.metric.web-http-availability" in compiled_model.metrics
+        assert "evaluation.objective.verify-web-service" in compiled_model.objectives
+        assert "orchestration.workflow.reference-validation" in compiled_model.workflows
 
-    def test_compiled_networks(self, compiled_model):
-        nets = compiled_model.networks
-        assert "provision.network.dmz-net" in nets
-        assert "provision.network.internal-net" in nets
-
-    def test_compiled_nodes(self, compiled_model):
-        nodes = compiled_model.node_deployments
-        assert "provision.node.server" in nodes
-        assert "provision.node.workstation" in nodes
-        assert "provision.node.kali" in nodes
-
-    def test_compiled_content(self, compiled_model):
-        content = compiled_model.content_placements
-        assert "provision.content.server-flag" in content
-        assert "provision.content.workstation-flag" in content
-        assert "provision.content.server-credentials-file" in content
-        assert "provision.content.loot-directory" in content
-
-    def test_compiled_accounts(self, compiled_model):
-        accounts = compiled_model.account_placements
-        assert "provision.account.server-admin" in accounts
-        assert "provision.account.workstation-admin" in accounts
-        assert "provision.account.kali-operator" in accounts
-
-    def test_compiled_feature_bindings(self, compiled_model):
-        features = compiled_model.feature_bindings
-        assert len(features) >= 3  # ssh on server, ssh on ws, kali tools, http
-
-    def test_compiled_condition_bindings(self, compiled_model):
-        conditions = compiled_model.condition_bindings
-        # server has: ssh-up, http-up, brute-force, lateral-movement
-        # workstation has: ssh-up
-        assert len(conditions) >= 5
-
-    def test_compiled_scoring_pipeline(self, compiled_model):
-        assert len(compiled_model.metrics) == 5
-        assert len(compiled_model.evaluations) == 2
-        assert len(compiled_model.tlos) == 3
-        assert len(compiled_model.goals) == 2
-
-    def test_compiled_orchestration(self, compiled_model):
-        assert len(compiled_model.injects) >= 3
-        assert len(compiled_model.events) == 3
-        assert len(compiled_model.scripts) == 3
-        assert len(compiled_model.stories) == 1
-
-    def test_compiled_workflows(self, compiled_model):
-        workflows = compiled_model.workflows
-        assert "orchestration.workflow.attack-workflow" in workflows
-        assert "orchestration.workflow.detection-workflow" in workflows
-        atk = workflows["orchestration.workflow.attack-workflow"]
-        assert atk.start_step == "capture-server"
-        assert len(atk.control_steps) == 6  # 6 steps in attack workflow
-
-    def test_compiled_objectives(self, compiled_model):
-        objectives = compiled_model.objectives
-        assert "evaluation.objective.capture-server-flag" in objectives
-        assert "evaluation.objective.capture-workstation-flag" in objectives
-        assert "evaluation.objective.detect-attack" in objectives
-
-    def test_plan_valid(self, compiled_model):
-        manifest = create_docker_manifest()
-        execution_plan = plan(compiled_model, manifest)
-        assert execution_plan.is_valid, (
-            f"Plan diagnostics: {[d.message for d in execution_plan.diagnostics]}"
-        )
-        assert len(execution_plan.provisioning.operations) > 0
-        assert len(execution_plan.orchestration.operations) > 0
-        assert len(execution_plan.evaluation.operations) > 0
-
-    def test_plan_operation_counts(self, compiled_model):
-        manifest = create_docker_manifest()
-        execution_plan = plan(compiled_model, manifest)
-        # Should have substantial number of operations from the expanded scenario
-        assert len(execution_plan.provisioning.operations) >= 15
-        assert len(execution_plan.orchestration.operations) >= 10
-        assert len(execution_plan.evaluation.operations) >= 15
-
-
-# ---------------------------------------------------------------------------
-# Docker Manifest
-# ---------------------------------------------------------------------------
+    def test_plans_cleanly_against_the_honest_manifest(self, execution_plan):
+        assert execution_plan.is_valid
+        assert len(execution_plan.provisioning.actionable_operations) > 0
+        assert len(execution_plan.evaluation.actionable_operations) > 0
+        assert len(execution_plan.orchestration.actionable_operations) > 0
 
 
 class TestDockerManifest:
-    """Validate the expanded Docker backend manifest."""
-
-    def test_manifest_name(self):
-        manifest = create_docker_manifest()
+    def test_manifest_matches_the_supported_slice(self, manifest):
         assert manifest.name == "docker"
+        assert manifest.provisioner.supported_node_types == frozenset({"vm", "switch"})
+        assert manifest.provisioner.supported_os_families == frozenset({"linux"})
+        assert manifest.provisioner.supported_content_types == frozenset({"file", "directory"})
+        assert manifest.provisioner.supports_accounts is True
+        assert manifest.provisioner.constraints["feature_bindings"] == "http-service only"
 
-    def test_provisioner_supports_directory(self):
-        manifest = create_docker_manifest()
-        assert "directory" in manifest.provisioner.supported_content_types
-        assert "file" in manifest.provisioner.supported_content_types
+        assert manifest.orchestrator is not None
+        assert manifest.orchestrator.supported_sections == frozenset(
+            {"injects", "events", "scripts", "stories", "workflows"}
+        )
+        assert manifest.orchestrator.supports_workflows is True
+        assert manifest.orchestrator.supports_condition_refs is True
+        assert manifest.orchestrator.supports_inject_bindings is False
+        assert manifest.orchestrator.supported_workflow_features == frozenset(
+            {
+                WorkflowFeature.TIMEOUTS,
+                WorkflowFeature.FAILURE_TRANSITIONS,
+                WorkflowFeature.DECISION,
+            }
+        )
 
-    def test_orchestrator_supports_all_sections(self):
-        manifest = create_docker_manifest()
-        orch = manifest.orchestrator
-        assert "injects" in orch.supported_sections
-        assert "events" in orch.supported_sections
-        assert "scripts" in orch.supported_sections
-        assert "stories" in orch.supported_sections
-        assert "workflows" in orch.supported_sections
-        assert orch.supports_condition_refs is True
-        assert orch.supports_inject_bindings is True
+        assert manifest.evaluator is not None
+        assert manifest.evaluator.supported_sections == frozenset(
+            {"conditions", "metrics", "evaluations", "tlos", "goals", "objectives"}
+        )
+        assert manifest.evaluator.supports_scoring is True
+        assert manifest.evaluator.supports_objectives is True
+        assert manifest.evaluator.constraints["metric_types"] == "conditional metrics only"
 
-    def test_orchestrator_supports_workflow_features(self):
-        from aptl.core.runtime.capabilities import WorkflowFeature
-        manifest = create_docker_manifest()
-        features = manifest.orchestrator.supported_workflow_features
-        assert WorkflowFeature.TIMEOUTS in features
-        assert WorkflowFeature.FAILURE_TRANSITIONS in features
-        assert WorkflowFeature.DECISION in features
-        assert WorkflowFeature.RETRY in features
+    def test_target_creation_rejects_raw_scenario_side_channels(self):
+        with pytest.raises(ValueError, match="raw SDL scenario payloads"):
+            create_docker_target(scenario={"name": "legacy-side-channel"})
 
-    def test_evaluator_supports_scoring(self):
-        manifest = create_docker_manifest()
-        eval_caps = manifest.evaluator
-        assert eval_caps.supports_scoring is True
-        assert eval_caps.supports_objectives is True
-        assert "conditions" in eval_caps.supported_sections
-        assert "metrics" in eval_caps.supported_sections
-        assert "evaluations" in eval_caps.supported_sections
-        assert "tlos" in eval_caps.supported_sections
-        assert "goals" in eval_caps.supported_sections
-
-    def test_target_construction(self):
-        target = create_docker_target()
-        assert target.name == "docker"
-        assert target.provisioner is not None
-        assert target.orchestrator is not None
-        assert target.evaluator is not None
-
-
-class TestBackendRegistry:
-    """Validate the Docker backend is registered and accessible."""
-
-    def test_docker_registered(self):
+    def test_backend_registry_exposes_docker(self):
         registry = get_backend_registry()
         assert registry.is_registered("docker")
-        assert "docker" in registry.list_backends()
-
-    def test_create_from_registry(self):
-        registry = get_backend_registry()
         target = registry.create("docker")
         assert target.name == "docker"
+        assert target.manifest.name == "docker"
 
 
-# ---------------------------------------------------------------------------
-# Docker integration tests
-# ---------------------------------------------------------------------------
+class TestRuntimeContractBehavior:
+    def test_orchestration_requires_evaluated_state(self, execution_plan):
+        target = create_docker_target(project_prefix="aptl-orch-only")
+        control_plane = RuntimeControlPlane(target)
+
+        receipt = control_plane.submit_orchestration(execution_plan.orchestration)
+        assert receipt.accepted is True
+
+        status = control_plane.get_operation(receipt.operation_id)
+        assert status is not None
+        assert status.state == OperationState.FAILED
+        assert any(diag.code.startswith("docker.workflow-objective") for diag in status.diagnostics)
+
+        workflow_result = control_plane.snapshot.orchestration_results[
+            "orchestration.workflow.reference-validation"
+        ]
+        assert workflow_result["workflow_status"] == "failed"
+
+    def test_provisioner_stops_after_compose_failure(self, monkeypatch):
+        provisioner = DockerProvisioner(project_prefix="aptl-compose-fail")
+        create_calls: list[str] = []
+
+        def fake_compose_up(_ops):
+            raise RuntimeError("compose boom")
+
+        def fake_create_resource(address, resource_type, payload):
+            create_calls.append(address)
+
+        monkeypatch.setattr(provisioner, "_compose_up", fake_compose_up)
+        monkeypatch.setattr(provisioner, "_create_resource", fake_create_resource)
+
+        plan = ProvisioningPlan(
+            resources={
+                "provision.network.service-net": PlannedResource(
+                    address="provision.network.service-net",
+                    domain=RuntimeDomain.PROVISIONING,
+                    resource_type="network",
+                    payload={"spec": {"properties": {"cidr": "10.77.0.0/24", "gateway": "10.77.0.1"}}},
+                ),
+                "provision.node.web": PlannedResource(
+                    address="provision.node.web",
+                    domain=RuntimeDomain.PROVISIONING,
+                    resource_type="node",
+                    payload={
+                        "node_name": "web",
+                        "os_family": "linux",
+                        "spec": {"source": {"name": "ubuntu", "version": "22.04"}},
+                    },
+                    ordering_dependencies=("provision.network.service-net",),
+                ),
+                "provision.content.reference-index": PlannedResource(
+                    address="provision.content.reference-index",
+                    domain=RuntimeDomain.PROVISIONING,
+                    resource_type="content-placement",
+                    payload={
+                        "target_node": "web",
+                        "target_address": "provision.node.web",
+                        "spec": {
+                            "type": "file",
+                            "path": "/srv/reference-site/index.html",
+                            "text": "ACES Reference Service Ready",
+                        },
+                    },
+                    ordering_dependencies=("provision.node.web",),
+                ),
+            },
+            operations=[
+                ProvisionOp(
+                    action=ChangeAction.CREATE,
+                    address="provision.network.service-net",
+                    resource_type="network",
+                    payload={"spec": {"properties": {"cidr": "10.77.0.0/24", "gateway": "10.77.0.1"}}},
+                ),
+                ProvisionOp(
+                    action=ChangeAction.CREATE,
+                    address="provision.node.web",
+                    resource_type="node",
+                    payload={
+                        "node_name": "web",
+                        "os_family": "linux",
+                        "spec": {"source": {"name": "ubuntu", "version": "22.04"}},
+                    },
+                    ordering_dependencies=("provision.network.service-net",),
+                ),
+                ProvisionOp(
+                    action=ChangeAction.CREATE,
+                    address="provision.content.reference-index",
+                    resource_type="content-placement",
+                    payload={
+                        "target_node": "web",
+                        "target_address": "provision.node.web",
+                        "spec": {
+                            "type": "file",
+                            "path": "/srv/reference-site/index.html",
+                            "text": "ACES Reference Service Ready",
+                        },
+                    },
+                    ordering_dependencies=("provision.node.web",),
+                ),
+            ],
+        )
+
+        result = provisioner.apply(plan, RuntimeSnapshot())
+        assert result.success is False
+        assert create_calls == []
+        assert "provision.content.reference-index" not in result.snapshot.entries
 
 
 @requires_docker
 class TestDockerIntegration:
-    """Full end-to-end execution with Docker containers."""
-
-    def test_full_pipeline(self):
-        """Parse, compile, plan, provision, orchestrate, and evaluate."""
-        scenario = parse_sdl_file(SCENARIO_PATH)
-        model = compile_runtime_model(scenario)
-        assert model.diagnostics == []
-
-        target = create_docker_target(project_prefix="aptl-test")
-        execution_plan = plan(model, target.manifest)
-        assert execution_plan.is_valid, (
-            f"Plan diagnostics: {[d.message for d in execution_plan.diagnostics]}"
-        )
-
+    def test_provisioning_creates_the_reference_environment(self, execution_plan):
+        target = create_docker_target(project_prefix="aptl-ref-provision")
         control_plane = RuntimeControlPlane(target)
-
-        try:
-            # Provision
-            prov_receipt = control_plane.submit_provisioning(
-                execution_plan.provisioning
-            )
-            assert prov_receipt.accepted, (
-                f"Provisioning rejected: {prov_receipt.diagnostics}"
-            )
-
-            # Verify containers and networks were created
-            provisioner = target.provisioner
-            assert isinstance(provisioner, DockerProvisioner)
-            assert len(provisioner.networks) >= 2, (
-                "Expected at least 2 Docker networks (dmz + internal)"
-            )
-            assert len(provisioner.containers) >= 3, (
-                "Expected at least 3 containers (server, workstation, kali)"
-            )
-
-            # Orchestrate
-            orch_receipt = control_plane.submit_orchestration(
-                execution_plan.orchestration
-            )
-            assert orch_receipt.accepted
-
-            # Evaluate
-            eval_receipt = control_plane.submit_evaluation(
-                execution_plan.evaluation
-            )
-            assert eval_receipt.accepted
-
-            # Check snapshot state
-            snapshot = control_plane.snapshot
-            assert len(snapshot.entries) > 0
-
-            # Verify all three runtime domains have entries
-            prov_entries = snapshot.for_domain(RuntimeDomain.PROVISIONING)
-            orch_entries = snapshot.for_domain(RuntimeDomain.ORCHESTRATION)
-            eval_entries = snapshot.for_domain(RuntimeDomain.EVALUATION)
-            assert len(prov_entries) > 0, "Missing provisioning entries"
-            assert len(orch_entries) > 0, "Missing orchestration entries"
-            assert len(eval_entries) > 0, "Missing evaluation entries"
-
-            # Verify provisioned resources
-            assert "provision.network.dmz-net" in prov_entries
-            assert "provision.network.internal-net" in prov_entries
-            assert "provision.node.server" in prov_entries
-            assert "provision.node.workstation" in prov_entries
-            assert "provision.node.kali" in prov_entries
-
-            # Verify both workflows running
-            orch_results = snapshot.orchestration_results
-            atk_key = "orchestration.workflow.attack-workflow"
-            det_key = "orchestration.workflow.detection-workflow"
-            assert atk_key in orch_results
-            assert det_key in orch_results
-            assert orch_results[atk_key]["workflow_status"] == "running"
-            assert orch_results[det_key]["workflow_status"] == "running"
-
-            # Verify evaluation results exist for scoring pipeline
-            eval_results = snapshot.evaluation_results
-            assert len(eval_results) > 0
-
-            # Verify orchestration history
-            orch_history = snapshot.orchestration_history
-            assert atk_key in orch_history
-            assert len(orch_history[atk_key]) >= 1
-
-            # Verify evaluation history
-            eval_history = snapshot.evaluation_history
-            assert len(eval_history) > 0
-
-            # Test timeout reconciliation
-            timeout_receipt = control_plane.reconcile_workflow_timeouts()
-            assert timeout_receipt.accepted
-
-        finally:
-            if isinstance(target.provisioner, DockerProvisioner):
-                target.provisioner.cleanup()
-
-    def test_directory_content_provisioning(self):
-        """Verify directory content type creates directories in containers."""
-        from aptl.core.runtime.models import (
-            ProvisioningPlan,
-            ProvisionOp,
-            ChangeAction,
-            PlannedResource,
-        )
-
-        provisioner = DockerProvisioner(project_prefix="aptl-dirtest")
-
-        net_plan = ProvisioningPlan(
-            resources={
-                "provision.network.test-net": PlannedResource(
-                    address="provision.network.test-net",
-                    domain=RuntimeDomain.PROVISIONING,
-                    resource_type="network",
-                    payload={"spec": {"properties": {"cidr": "172.31.0.0/24", "gateway": "172.31.0.1"}}},
-                ),
-            },
-            operations=[
-                ProvisionOp(
-                    action=ChangeAction.CREATE,
-                    address="provision.network.test-net",
-                    resource_type="network",
-                    payload={"spec": {"properties": {"cidr": "172.31.0.0/24", "gateway": "172.31.0.1"}}},
-                ),
-            ],
-        )
-
-        node_plan = ProvisioningPlan(
-            resources={
-                "provision.node.test-vm": PlannedResource(
-                    address="provision.node.test-vm",
-                    domain=RuntimeDomain.PROVISIONING,
-                    resource_type="node",
-                    payload={
-                        "node_name": "test-vm",
-                        "spec": {"source": {"name": "ubuntu", "version": "22.04"}},
-                        "ordering_dependencies": ["provision.network.test-net"],
-                    },
-                    ordering_dependencies=("provision.network.test-net",),
-                ),
-            },
-            operations=[
-                ProvisionOp(
-                    action=ChangeAction.CREATE,
-                    address="provision.node.test-vm",
-                    resource_type="node",
-                    payload={
-                        "node_name": "test-vm",
-                        "spec": {"source": {"name": "ubuntu", "version": "22.04"}},
-                        "ordering_dependencies": ["provision.network.test-net"],
-                    },
-                    ordering_dependencies=("provision.network.test-net",),
-                ),
-            ],
-        )
-
-        dir_plan = ProvisioningPlan(
-            resources={
-                "provision.content.test-dir": PlannedResource(
-                    address="provision.content.test-dir",
-                    domain=RuntimeDomain.PROVISIONING,
-                    resource_type="content-placement",
-                    payload={
-                        "target_node": "test-vm",
-                        "target_address": "provision.node.test-vm",
-                        "spec": {"type": "directory", "destination": "/opt/test-data"},
-                    },
-                ),
-            },
-            operations=[
-                ProvisionOp(
-                    action=ChangeAction.CREATE,
-                    address="provision.content.test-dir",
-                    resource_type="content-placement",
-                    payload={
-                        "target_node": "test-vm",
-                        "target_address": "provision.node.test-vm",
-                        "spec": {"type": "directory", "destination": "/opt/test-data"},
-                    },
-                ),
-            ],
-        )
-
-        try:
-            snapshot = RuntimeSnapshot()
-            # Create network, then node, then directory content
-            result = provisioner.apply(net_plan, snapshot)
-            assert result.success
-            result = provisioner.apply(node_plan, result.snapshot)
-            assert result.success
-            result = provisioner.apply(dir_plan, result.snapshot)
-            assert result.success
-
-            # Verify directory exists in container
-            cid = provisioner.containers.get("provision.node.test-vm")
-            assert cid is not None
-            check = subprocess.run(
-                ["docker", "exec", cid, "test", "-d", "/opt/test-data"],
-                capture_output=True,
-            )
-            assert check.returncode == 0, "Directory was not created in container"
-        finally:
-            provisioner.cleanup()
-
-    def test_provisioner_cleanup(self):
-        """Verify cleanup removes all Docker resources."""
-        from aptl.core.runtime.models import (
-            ProvisioningPlan,
-            ProvisionOp,
-            ChangeAction,
-            PlannedResource,
-        )
-
-        provisioner = DockerProvisioner(project_prefix="aptl-cleanup-test")
-        test_plan = ProvisioningPlan(
-            resources={
-                "provision.network.test-net": PlannedResource(
-                    address="provision.network.test-net",
-                    domain=RuntimeDomain.PROVISIONING,
-                    resource_type="network",
-                    payload={"spec": {"properties": {"cidr": "172.30.0.0/24", "gateway": "172.30.0.1"}}},
-                ),
-            },
-            operations=[
-                ProvisionOp(
-                    action=ChangeAction.CREATE,
-                    address="provision.network.test-net",
-                    resource_type="network",
-                    payload={"spec": {"properties": {"cidr": "172.30.0.0/24", "gateway": "172.30.0.1"}}},
-                ),
-            ],
-        )
-
-        try:
-            result = provisioner.apply(test_plan, RuntimeSnapshot())
-            assert result.success
-            assert len(provisioner.networks) == 1
-        finally:
-            provisioner.cleanup()
-            assert len(provisioner.networks) == 0
-            assert len(provisioner.containers) == 0
-
-
-@requires_docker
-class TestScenarioExecution:
-    """True end-to-end scenario execution with real SSH between containers.
-
-    Provisions infrastructure using the panubo/sshd image, distributes SSH
-    keys, executes the attack workflow (kali → server → workstation), and
-    verifies flag capture, condition evaluation, and the scoring pipeline.
-    """
-
-    def test_ssh_lateral_movement_e2e(self):
-        """Full attack scenario: SSH into server, lateral move to workstation."""
-        import yaml
-
-        scenario = parse_sdl_file(SCENARIO_PATH)
-        model = compile_runtime_model(scenario)
-        assert model.diagnostics == [], (
-            f"Compile diagnostics: {[d.message for d in model.diagnostics]}"
-        )
-
-        # Load raw YAML for the orchestrator's scenario context
-        with open(SCENARIO_PATH) as f:
-            scenario_dict = yaml.safe_load(f)
-
-        target = create_docker_target(
-            project_prefix="aptl-e2e",
-            scenario=scenario_dict,
-        )
-        execution_plan = plan(model, target.manifest)
-        assert execution_plan.is_valid, (
-            f"Plan diagnostics: {[d.message for d in execution_plan.diagnostics]}"
-        )
-
         provisioner = target.provisioner
         assert isinstance(provisioner, DockerProvisioner)
-        control_plane = RuntimeControlPlane(target)
 
         try:
-            # --- Phase 1: Provision infrastructure ---
-            prov_receipt = control_plane.submit_provisioning(
-                execution_plan.provisioning,
-            )
-            assert prov_receipt.accepted, (
-                f"Provisioning rejected: {prov_receipt.diagnostics}"
-            )
+            receipt = control_plane.submit_provisioning(execution_plan.provisioning)
+            assert receipt.accepted is True
 
-            # Verify containers exist
-            assert len(provisioner.containers) >= 3, (
-                f"Expected >= 3 containers, got {len(provisioner.containers)}"
-            )
-            assert len(provisioner.networks) >= 2, (
-                f"Expected >= 2 networks, got {len(provisioner.networks)}"
-            )
+            status = control_plane.get_operation(receipt.operation_id)
+            assert status is not None
+            assert status.state == OperationState.SUCCEEDED, status.diagnostics
 
-            # Wait for SSH to be ready, then distribute keys
-            provisioner.wait_for_ssh()
-            provisioner.distribute_ssh_keys()
+            assert len(provisioner.networks) == 1
+            assert len(provisioner.containers) == 2
 
-            # --- Phase 2: Verify infrastructure ---
-            # Check that flags are placed correctly
-            server_cid = provisioner.container_for_node("server")
-            workstation_cid = provisioner.container_for_node("workstation")
-            kali_cid = provisioner.container_for_node("kali")
-            assert server_cid, "Server container not found"
-            assert workstation_cid, "Workstation container not found"
-            assert kali_cid, "Kali container not found"
+            web_cid = provisioner.container_for_node("web")
+            operator_cid = provisioner.container_for_node("operator")
+            assert web_cid is not None
+            assert operator_cid is not None
 
-            # Verify flag files exist
-            server_flag = subprocess.run(
-                ["docker", "exec", server_cid, "cat", "/home/admin/user.txt"],
-                capture_output=True, text=True,
+            http_check = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    web_cid,
+                    "python3",
+                    "-c",
+                    (
+                        "import sys, urllib.request; "
+                        "body = urllib.request.urlopen('http://127.0.0.1/').read().decode('utf-8').strip(); "
+                        "sys.exit(0 if body == 'ACES Reference Service Ready' else 1)"
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=20,
             )
-            assert "FLAG{server-alpha-9f3c}" in server_flag.stdout, (
-                f"Server flag not found: {server_flag.stdout!r}"
-            )
+            assert http_check.returncode == 0, http_check.stderr or http_check.stdout
 
-            ws_flag = subprocess.run(
-                ["docker", "exec", workstation_cid, "cat", "/home/admin/user.txt"],
-                capture_output=True, text=True,
+            account_check = subprocess.run(
+                ["docker", "exec", web_cid, "id", "webadmin"],
+                capture_output=True,
+                text=True,
+                timeout=20,
             )
-            assert "FLAG{workstation-bravo-7e2d}" in ws_flag.stdout, (
-                f"Workstation flag not found: {ws_flag.stdout!r}"
-            )
+            assert account_check.returncode == 0, account_check.stderr
 
-            # Verify SSH is running on server and workstation
-            for cid, name in [(server_cid, "server"), (workstation_cid, "workstation")]:
-                ssh_check = subprocess.run(
-                    ["docker", "exec", cid, "sh", "-c", "pgrep sshd"],
-                    capture_output=True, text=True,
-                )
-                assert ssh_check.returncode == 0, f"sshd not running on {name}"
+            directory_check = subprocess.run(
+                ["docker", "exec", operator_cid, "test", "-d", "/home/operator/reference-data"],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            assert directory_check.returncode == 0, directory_check.stderr
+        finally:
+            provisioner.cleanup()
 
-            # Verify admin accounts exist
-            for cid, name in [(server_cid, "server"), (workstation_cid, "workstation")]:
-                user_check = subprocess.run(
-                    ["docker", "exec", cid, "id", "admin"],
-                    capture_output=True, text=True,
-                )
-                assert user_check.returncode == 0, f"admin user not found on {name}"
+    def test_full_reference_pipeline_works_through_runtime_affordances(self, execution_plan):
+        target = create_docker_target(project_prefix="aptl-ref-e2e")
+        control_plane = RuntimeControlPlane(target)
+        provisioner = target.provisioner
+        assert isinstance(provisioner, DockerProvisioner)
 
-            # --- Phase 3: Verify network topology ---
-            # Kali can reach server (both on dmz-net)
-            kali_to_server = subprocess.run(
-                ["docker", "exec", kali_cid, "sh", "-c",
-                 "nc -z -w3 server 22 && echo OK || echo FAIL"],
-                capture_output=True, text=True,
-            )
-            assert "OK" in kali_to_server.stdout, (
-                f"Kali cannot reach server: {kali_to_server.stdout!r}"
-            )
+        try:
+            provision_receipt = control_plane.submit_provisioning(execution_plan.provisioning)
+            assert provision_receipt.accepted is True
+            provision_status = control_plane.get_operation(provision_receipt.operation_id)
+            assert provision_status is not None
+            assert provision_status.state == OperationState.SUCCEEDED, provision_status.diagnostics
 
-            # Kali CANNOT directly reach workstation (different networks)
-            kali_to_ws = subprocess.run(
-                ["docker", "exec", kali_cid, "sh", "-c",
-                 "nc -z -w2 workstation 22 && echo OK || echo FAIL"],
-                capture_output=True, text=True, timeout=10,
-            )
-            assert "FAIL" in kali_to_ws.stdout, (
-                f"Kali should NOT reach workstation directly: {kali_to_ws.stdout!r}"
-            )
+            evaluation_receipt = control_plane.submit_evaluation(execution_plan.evaluation)
+            assert evaluation_receipt.accepted is True
+            evaluation_status = control_plane.get_operation(evaluation_receipt.operation_id)
+            assert evaluation_status is not None
+            assert evaluation_status.state == OperationState.SUCCEEDED, evaluation_status.diagnostics
 
-            # Server can reach workstation (both on internal-net)
-            server_to_ws = subprocess.run(
-                ["docker", "exec", server_cid, "sh", "-c",
-                 "nc -z -w3 workstation 22 && echo OK || echo FAIL"],
-                capture_output=True, text=True,
-            )
-            assert "OK" in server_to_ws.stdout, (
-                f"Server cannot reach workstation: {server_to_ws.stdout!r}"
-            )
+            orchestration_receipt = control_plane.submit_orchestration(execution_plan.orchestration)
+            assert orchestration_receipt.accepted is True
+            orchestration_status = control_plane.get_operation(orchestration_receipt.operation_id)
+            assert orchestration_status is not None
+            assert orchestration_status.state == OperationState.SUCCEEDED, orchestration_status.diagnostics
 
-            # --- Phase 4: Execute SSH attack (kali → server) ---
-            ssh_server = subprocess.run(
-                ["docker", "exec", kali_cid,
-                 "ssh", "-o", "StrictHostKeyChecking=no",
-                 "-o", "UserKnownHostsFile=/dev/null",
-                 "-o", "LogLevel=ERROR",
-                 "-i", "/root/.ssh/id_ed25519",
-                 "admin@server", "cat", "/home/admin/user.txt"],
-                capture_output=True, text=True, timeout=30,
-            )
-            assert ssh_server.returncode == 0, (
-                f"SSH to server failed: {ssh_server.stderr!r}"
-            )
-            assert "FLAG{server-alpha-9f3c}" in ssh_server.stdout, (
-                f"Server flag mismatch: {ssh_server.stdout!r}"
-            )
-
-            # --- Phase 5: Lateral movement (kali → server → workstation) ---
-            ssh_lateral = subprocess.run(
-                ["docker", "exec", kali_cid,
-                 "ssh", "-o", "StrictHostKeyChecking=no",
-                 "-o", "UserKnownHostsFile=/dev/null",
-                 "-o", "LogLevel=ERROR",
-                 "-i", "/root/.ssh/id_ed25519",
-                 "admin@server",
-                 "ssh -o StrictHostKeyChecking=no"
-                 " -o UserKnownHostsFile=/dev/null"
-                 " -o LogLevel=ERROR"
-                 " -i /home/admin/.ssh/id_ed25519"
-                 " admin@workstation cat /home/admin/user.txt"],
-                capture_output=True, text=True, timeout=30,
-            )
-            assert ssh_lateral.returncode == 0, (
-                f"Lateral movement SSH failed: {ssh_lateral.stderr!r}"
-            )
-            assert "FLAG{workstation-bravo-7e2d}" in ssh_lateral.stdout, (
-                f"Workstation flag mismatch: {ssh_lateral.stdout!r}"
-            )
-
-            # --- Phase 6: Run orchestration (workflow execution) ---
-            orch_receipt = control_plane.submit_orchestration(
-                execution_plan.orchestration,
-            )
-            assert orch_receipt.accepted, (
-                f"Orchestration rejected: {orch_receipt.diagnostics}"
-            )
-
-            # The orchestrator should have eagerly executed the attack workflow
-            orchestrator = target.orchestrator
-            assert isinstance(orchestrator, DockerOrchestrator)
-
-            # Check captured flags from the orchestrator
-            assert "capture-server-flag" in orchestrator.captured_flags, (
-                f"Orchestrator didn't capture server flag: {orchestrator.captured_flags}"
-            )
-            assert "FLAG{server-alpha-9f3c}" in orchestrator.captured_flags["capture-server-flag"]
-
-            assert "capture-workstation-flag" in orchestrator.captured_flags, (
-                f"Orchestrator didn't capture workstation flag: {orchestrator.captured_flags}"
-            )
-            assert "FLAG{workstation-bravo-7e2d}" in orchestrator.captured_flags["capture-workstation-flag"]
-
-            # Check workflow state
             snapshot = control_plane.snapshot
-            atk_key = "orchestration.workflow.attack-workflow"
-            assert atk_key in snapshot.orchestration_results
-            atk_result = snapshot.orchestration_results[atk_key]
-            assert atk_result["workflow_status"] == "succeeded", (
-                f"Attack workflow status: {atk_result['workflow_status']}, "
-                f"reason: {atk_result.get('terminal_reason')}"
-            )
 
-            # Check workflow history has step transitions
-            atk_history = snapshot.orchestration_history.get(atk_key, [])
-            step_events = [e for e in atk_history if e.get("event_type") == "step_completed"]
-            assert len(step_events) >= 2, (
-                f"Expected >= 2 step completions, got {len(step_events)}: {step_events}"
-            )
+            provision_entries = snapshot.for_domain(RuntimeDomain.PROVISIONING)
+            orchestration_entries = snapshot.for_domain(RuntimeDomain.ORCHESTRATION)
+            evaluation_entries = snapshot.for_domain(RuntimeDomain.EVALUATION)
+            assert "provision.network.service-net" in provision_entries
+            assert "provision.node.web" in provision_entries
+            assert "provision.node.operator" in provision_entries
+            assert "orchestration.workflow.reference-validation" in orchestration_entries
+            assert "evaluation.objective.verify-web-content" in evaluation_entries
 
-            # --- Phase 7: Run evaluation ---
-            eval_receipt = control_plane.submit_evaluation(
-                execution_plan.evaluation,
-            )
-            assert eval_receipt.accepted, (
-                f"Evaluation rejected: {eval_receipt.diagnostics}"
-            )
+            condition_result = snapshot.evaluation_results["evaluation.condition.web.web-http-listening"]
+            assert condition_result["status"] == "ready"
+            assert condition_result["passed"] is True
 
-            # Check evaluation results for conditions
-            eval_results = control_plane.snapshot.evaluation_results
-            assert len(eval_results) > 0, "No evaluation results"
+            content_condition_result = snapshot.evaluation_results["evaluation.condition.web.web-index-served"]
+            assert content_condition_result["status"] == "ready"
+            assert content_condition_result["passed"] is True
 
-            # Check scoring pipeline entries exist
-            eval_entries = control_plane.snapshot.for_domain(RuntimeDomain.EVALUATION)
-            metric_entries = {
-                k for k in eval_entries if "metric" in k
-            }
-            assert len(metric_entries) >= 5, (
-                f"Expected >= 5 metric entries, got {len(metric_entries)}"
+            availability_metric = snapshot.evaluation_results["evaluation.metric.web-http-availability"]
+            assert availability_metric["status"] == "ready"
+            assert availability_metric["score"] == 50
+            assert availability_metric["max_score"] == 50
+
+            fidelity_metric = snapshot.evaluation_results["evaluation.metric.web-content-fidelity"]
+            assert fidelity_metric["status"] == "ready"
+            assert fidelity_metric["score"] == 50
+            assert fidelity_metric["max_score"] == 50
+
+            evaluation_result = snapshot.evaluation_results["evaluation.evaluation.reference-service-health"]
+            assert evaluation_result["status"] == "ready"
+            assert evaluation_result["passed"] is True
+
+            goal_result = snapshot.evaluation_results["evaluation.goal.platform-validation-goal"]
+            assert goal_result["status"] == "ready"
+            assert goal_result["passed"] is True
+
+            service_objective = snapshot.evaluation_results["evaluation.objective.verify-web-service"]
+            assert service_objective["status"] == "ready"
+            assert service_objective["passed"] is True
+
+            content_objective = snapshot.evaluation_results["evaluation.objective.verify-web-content"]
+            assert content_objective["status"] == "ready"
+            assert content_objective["passed"] is True
+
+            workflow_result = snapshot.orchestration_results["orchestration.workflow.reference-validation"]
+            assert workflow_result["workflow_status"] == "succeeded"
+            assert workflow_result["terminal_reason"] == "Reference validation completed"
+            assert workflow_result["steps"]["verify-service"]["lifecycle"] == "completed"
+            assert workflow_result["steps"]["verify-service"]["outcome"] == "succeeded"
+            assert workflow_result["steps"]["verify-service"]["attempts"] == 1
+            assert workflow_result["steps"]["verify-content"]["lifecycle"] == "completed"
+            assert workflow_result["steps"]["verify-content"]["outcome"] == "succeeded"
+            assert workflow_result["steps"]["verify-content"]["attempts"] == 1
+
+            workflow_history = snapshot.orchestration_history["orchestration.workflow.reference-validation"]
+            assert workflow_history[0]["event_type"] == "workflow_started"
+            assert workflow_history[-1]["event_type"] == "workflow_completed"
+            completed_steps = [event for event in workflow_history if event["event_type"] == "step_completed"]
+            assert {event["step_name"] for event in completed_steps} >= {"verify-service", "content-gate", "verify-content"}
+
+            web_cid = provisioner.container_for_node("web")
+            operator_cid = provisioner.container_for_node("operator")
+            network_id = next(iter(provisioner.networks.values()))
+            assert web_cid is not None
+            assert operator_cid is not None
+            network_inspect = subprocess.run(
+                [
+                    "docker",
+                    "network",
+                    "inspect",
+                    network_id,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=20,
             )
-
-            eval_eval_entries = {
-                k for k in eval_entries if "evaluation." in k and "metric" not in k
-            }
-            assert len(eval_eval_entries) >= 2, (
-                f"Expected >= 2 evaluation entries, got {len(eval_eval_entries)}"
-            )
-
+            assert network_inspect.returncode == 0, network_inspect.stderr or network_inspect.stdout
+            network_data = json.loads(network_inspect.stdout)
+            attached = network_data[0].get("Containers", {})
+            attached_ids = set(attached)
+            assert web_cid in attached_ids
+            assert operator_cid in attached_ids
         finally:
             provisioner.cleanup()

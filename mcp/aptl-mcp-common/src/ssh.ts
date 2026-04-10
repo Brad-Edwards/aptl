@@ -1,7 +1,7 @@
 
 import { Client, ClientChannel } from 'ssh2';
-import { readFile } from 'fs/promises';
-import { EventEmitter } from 'events';
+import { readFile } from 'node:fs/promises';
+import { EventEmitter } from 'node:events';
 import { ShellFormatter, ShellType, createShellFormatter } from './shells.js';
 
 // Constants for timeouts and limits
@@ -77,17 +77,17 @@ export class PersistentSession extends EventEmitter {
   private outputBuffer: string[] = [];
   private commandQueue: CommandRequest[] = [];
   private currentCommand: CommandRequest | null = null;
-  private sessionInfo: SessionMetadata;
-  private client: Client;
-  private commandDelimiter: string;
+  private readonly sessionInfo: SessionMetadata;
+  private readonly client: Client;
+  private readonly commandDelimiter: string;
   private keepAliveInterval: NodeJS.Timeout | null = null;
   private sessionTimeout: NodeJS.Timeout | null = null;
   private commandTimeout: NodeJS.Timeout | null = null;
   private isInitialized = false;
   private outputData = '';
-  private shellFormatter: ShellFormatter;
+  private readonly shellFormatter: ShellFormatter;
 
-  private sessionTimeoutMs: number;
+  private readonly sessionTimeoutMs: number;
 
   private clearCommandTimeout(): void {
     if (this.commandTimeout) {
@@ -185,7 +185,7 @@ export class PersistentSession extends EventEmitter {
         resolve: () => {}, // No-op resolve for background
         reject: () => {}, // No-op reject for background
         timeout,
-        raw: raw !== undefined ? raw : this.sessionInfo.mode === 'raw'
+        raw: raw ?? this.sessionInfo.mode === 'raw'
       };
 
       this.commandQueue.push(request);
@@ -215,7 +215,7 @@ export class PersistentSession extends EventEmitter {
         resolve,
         reject,
         timeout,
-        raw: raw !== undefined ? raw : this.sessionInfo.mode === 'raw'
+        raw: raw ?? this.sessionInfo.mode === 'raw'
       };
 
       this.commandQueue.push(request);
@@ -311,7 +311,7 @@ export class PersistentSession extends EventEmitter {
     }
 
     // Strip carriage returns to normalize line endings before parsing
-    const normalizedOutput = this.outputData.replace(/\r/g, '');
+    const normalizedOutput = this.outputData.replaceAll('\r', '');
 
     const endDelimiter = `${this.commandDelimiter}_END_${this.currentCommand.id}`;
     const exitCode = this.shellFormatter.parseExitCode(normalizedOutput, endDelimiter);
@@ -330,7 +330,7 @@ export class PersistentSession extends EventEmitter {
 
         const lines = output.split('\n');
         if (lines[0] === '') lines.shift();
-        if (lines[lines.length - 1] === '') lines.pop();
+        if (lines.at(-1) === '') lines.pop();
 
         // Filter out lines containing internal command delimiters or command echo
         const delimiter = this.commandDelimiter;
@@ -424,8 +424,8 @@ export class PersistentSession extends EventEmitter {
 }
 
 export class SSHConnectionManager {
-  private connections: Map<string, ConnectionInfo> = new Map();
-  private sessions: Map<string, PersistentSession> = new Map();
+  private readonly connections: Map<string, ConnectionInfo> = new Map();
+  private readonly sessions: Map<string, PersistentSession> = new Map();
 
   /**
    * Execute a command on a target host via SSH

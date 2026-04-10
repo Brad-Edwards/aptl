@@ -145,7 +145,7 @@ describe('Buffer Management Logic', () => {
     expect(buffer.length).toBe(5000);
     // Should keep lines 7000-11999 (newest)
     expect(buffer[0]).toBe('line 7000');
-    expect(buffer[buffer.length - 1]).toBe('line 11999');
+    expect(buffer.at(-1)).toBe('line 11999');
   });
 });
 

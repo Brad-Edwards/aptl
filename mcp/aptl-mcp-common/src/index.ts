@@ -1,4 +1,4 @@
-import { resolve } from 'path';
+import { resolve } from 'node:path';
 
 // Export the working SSH implementation exactly as-is
 export {

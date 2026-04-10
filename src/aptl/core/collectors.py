@@ -25,7 +25,7 @@ def _run_cmd(
         return subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout
         )
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
+    except (subprocess.TimeoutExpired, OSError) as e:
         log.warning("Command failed: %s: %s", " ".join(cmd[:3]), e)
         return None
 
@@ -56,7 +56,7 @@ def _curl_json(
         return None
     try:
         return json.loads(result.stdout)
-    except (json.JSONDecodeError, ValueError):
+    except ValueError:
         return None
 
 

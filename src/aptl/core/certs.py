@@ -79,7 +79,7 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             certs_dir=certs_dir,
             error="Certificate generation timed out after 300s",
         )
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         log.error("Failed to run docker compose: %s", exc)
         return CertResult(
             success=False,
@@ -119,7 +119,7 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             certs_dir=certs_dir,
             error="Permission fix timed out after 30s",
         )
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         log.error("Failed to fix certificate permissions: %s", exc)
         return CertResult(
             success=False,

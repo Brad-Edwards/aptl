@@ -18,26 +18,28 @@ DEFAULT_FLAG_KEY = "aptl-flag-key-2024"
 
 # Flag file locations per container.  Maps docker container name to
 # a dict of {level: (flag_path, description)}.
+_ROOT_FLAG_PATH = "/root/root.txt"
+
 FLAG_LOCATIONS: dict[str, dict[str, tuple[str, str]]] = {
     "aptl-victim": {
         "user": ("/home/labadmin/user.txt", "RCE on victim"),
-        "root": ("/root/root.txt", "Privesc on victim"),
+        "root": (_ROOT_FLAG_PATH, "Privesc on victim"),
     },
     "aptl-workstation": {
         "user": ("/home/dev-user/user.txt", "Access workstation"),
-        "root": ("/root/root.txt", "Privesc on workstation"),
+        "root": (_ROOT_FLAG_PATH, "Privesc on workstation"),
     },
     "aptl-webapp": {
         "user": ("/app/user.txt", "RCE on webapp"),
-        "root": ("/root/root.txt", "Privesc on webapp"),
+        "root": (_ROOT_FLAG_PATH, "Privesc on webapp"),
     },
     "aptl-ad": {
         "user": ("/opt/flags/user.txt", "AD user compromise"),
-        "root": ("/root/root.txt", "Domain admin"),
+        "root": (_ROOT_FLAG_PATH, "Domain admin"),
     },
     "aptl-fileshare": {
         "user": ("/srv/shares/shared/user-flag.txt", "SMB access"),
-        "root": ("/root/root.txt", "Privesc on fileshare"),
+        "root": (_ROOT_FLAG_PATH, "Privesc on fileshare"),
     },
 }
 

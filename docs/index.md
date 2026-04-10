@@ -43,13 +43,27 @@ aptl lab start
 - [MCP Integration](components/mcp-integration.md)
 - [Reverse Engineering](components/reverse-engineering-container.md)
 
+### Architecture Decision Records
+- [ADR Index](adrs/README.md) -- Why we built it this way
+
+### Scenario Description Language (SDL)
+- [SDL Overview](sdl/index.md) — What the SDL is and how to use it
+- [Sections Reference](sdl/sections.md) — Complete reference for all 21 sections
+- [Parser Behavior](sdl/parser.md) — Key normalization, shorthands, SDL-only parsing
+- [Semantic Validation](sdl/validation.md) — Cross-reference checks (22 passes)
+- [Design Precedents](sdl/precedents.md) — Where each element comes from
+- [Limitations](sdl/limitations.md) — What the SDL cannot express yet
+- [Testing](sdl/testing.md) — Unit tests, stress tests, fuzz tests
+- [Runtime Architecture](sdl/runtime-architecture.md) — SDL-native compiler, planner, and runtime target design
+
 ### Scenarios & Runs
-- [SOC Architecture Spec](specs/soc-feature-spec.md) — Scenario engine, run archives, collectors
+- [SOC Architecture Spec](specs/soc-feature-spec.md) — Historical pre-SDL runtime spec retained for context
 
 ### Testing
-- [Smoke Test Plan](testing/smoke-test-plan.md) — Full-stack smoke test protocol
+- [Smoke Test Plan](testing/smoke-test-plan.md) — Historical full-stack plan for the pre-SDL scenario engine
 
 ### Reference
+- [Coding Standards](reference/coding-standards.md) — Semantic engineering policy and contributor guidance
 - [TechVault Company Profile](reference/techvault-company-profile.md)
 - [TechVault OSINT Readiness](reference/techvault-osint-readiness.md)
 - [Container Template Guide](containers/victim-template-guide.md)

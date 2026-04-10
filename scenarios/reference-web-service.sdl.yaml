@@ -1,0 +1,292 @@
+name: reference-web-service
+version: "1.0"
+description: >
+  Reference service-validation scenario for honest cross-backend runtime
+  proving. It exercises a manageable SDL/runtime slice: provisioning,
+  content and account placement, service feature binding, scoring,
+  objectives, and workflow control over evaluated state.
+
+variables:
+  workflow_timeout:
+    type: integer
+    default: 180
+    description: Maximum seconds allowed for the reference validation workflow
+  exercise_speed:
+    type: number
+    default: 1.0
+    description: Timeline speed multiplier for the reference story
+
+nodes:
+  service-net:
+    type: Switch
+    description: Shared service network for the operator and web nodes
+
+  web:
+    type: VM
+    description: Linux web node serving the reference landing page
+    source:
+      name: ubuntu
+      version: "22.04"
+    os: linux
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    features:
+      http-service: web-admin
+    conditions:
+      web-http-listening: web-admin
+      web-index-served: web-admin
+    roles:
+      web-admin:
+        username: webadmin
+    services:
+      - port: 80
+        protocol: tcp
+        name: http
+
+  operator:
+    type: VM
+    description: Linux operator node used to anchor accounts and agent ownership
+    source:
+      name: ubuntu
+      version: "22.04"
+    os: linux
+    resources:
+      ram: 1 GiB
+      cpu: 1
+    roles:
+      operator-role:
+        username: operator
+
+infrastructure:
+  service-net:
+    count: 1
+    properties:
+      cidr: "10.77.0.0/24"
+      gateway: "10.77.0.1"
+
+  web:
+    count: 1
+    links:
+      - service-net
+    properties:
+      - service-net: "10.77.0.10"
+
+  operator:
+    count: 1
+    links:
+      - service-net
+    properties:
+      - service-net: "10.77.0.20"
+
+features:
+  http-service:
+    type: service
+    description: Simple HTTP service bound to the web node
+    source:
+      name: python3-http
+      version: "*"
+
+conditions:
+  web-http-listening:
+    command: >-
+      python3 -c "import socket;
+      s = socket.create_connection(('127.0.0.1', 80), 1);
+      s.close()"
+    interval: 10
+
+  web-index-served:
+    command: >-
+      python3 -c "import sys, urllib.request;
+      body = urllib.request.urlopen('http://127.0.0.1/').read().decode('utf-8').strip();
+      sys.exit(0 if body == 'ACES Reference Service Ready' else 1)"
+    interval: 10
+
+accounts:
+  web-admin:
+    username: webadmin
+    node: web
+    shell: /bin/bash
+    home: /home/webadmin
+    password_strength: strong
+    description: Administrative account on the web node
+
+  operator-account:
+    username: operator
+    node: operator
+    shell: /bin/bash
+    home: /home/operator
+    password_strength: medium
+    description: Reference operator account
+
+content:
+  reference-index:
+    type: file
+    target: web
+    path: /srv/reference-site/index.html
+    text: "ACES Reference Service Ready"
+    description: Landing page served by the reference HTTP service
+
+  operator-notes:
+    type: directory
+    target: operator
+    destination: /home/operator/reference-data
+    description: Directory placement to exercise backend directory support
+
+entities:
+  exercise-control:
+    name: Exercise Control
+    role: white
+    mission: Coordinate the reference validation drill
+
+  platform-team:
+    name: Platform Team
+    role: blue
+    mission: Validate that the backend truly runs the reference service scenario
+
+agents:
+  verifier-agent:
+    entity: platform-team
+    description: Reference agent responsible for declarative service validation
+    actions:
+      - inspect-service
+      - validate-content
+    starting_accounts:
+      - operator-account
+    initial_knowledge:
+      hosts:
+        - operator
+        - web
+      subnets:
+        - service-net
+    allowed_subnets:
+      - service-net
+
+relationships:
+  operator-connects-web:
+    type: connects_to
+    source: operator
+    target: web
+    description: Operator can reach the web node across the service network
+
+  platform-team-manages-web:
+    type: manages
+    source: platform-team
+    target: web
+    description: Platform team is responsible for the reference web service
+
+metrics:
+  web-http-availability:
+    type: conditional
+    max-score: 50
+    condition: web-http-listening
+    description: Service is reachable on the expected port
+
+  web-content-fidelity:
+    type: conditional
+    max-score: 50
+    condition: web-index-served
+    description: Reference content is served exactly as expected
+
+evaluations:
+  reference-service-health:
+    name: Reference Service Health
+    metrics:
+      - web-http-availability
+      - web-content-fidelity
+    min-score: 100
+
+tlos:
+  validate-reference-service:
+    name: Validate reference service
+    evaluation: reference-service-health
+
+goals:
+  platform-validation-goal:
+    name: Platform validation goal
+    tlos:
+      - validate-reference-service
+
+injects:
+  validation-brief:
+    source: reference-brief
+    from_entity: exercise-control
+    to_entities:
+      - platform-team
+    description: Exercise control announces the reference validation window
+
+events:
+  validation-window-open:
+    injects:
+      - validation-brief
+    description: Reference validation window opens
+
+scripts:
+  reference-window:
+    start-time: 0
+    end-time: 15 min
+    speed: ${exercise_speed}
+    events:
+      validation-window-open: 0
+
+stories:
+  backend-reference-drill:
+    name: Backend reference drill
+    speed: ${exercise_speed}
+    scripts:
+      - reference-window
+
+objectives:
+  verify-web-service:
+    name: Verify web service
+    description: Confirm that the HTTP service is reachable
+    agent: verifier-agent
+    actions:
+      - inspect-service
+    targets:
+      - web
+    success:
+      conditions:
+        - web-http-listening
+
+  verify-web-content:
+    name: Verify web content
+    description: Confirm that the served content matches the reference page
+    agent: verifier-agent
+    actions:
+      - validate-content
+    targets:
+      - reference-index
+    success:
+      goals:
+        - platform-validation-goal
+    depends_on:
+      - verify-web-service
+
+workflows:
+  reference-validation:
+    description: Validate the reference service through evaluated objective state
+    start: verify-service
+    timeout: ${workflow_timeout}
+    steps:
+      verify-service:
+        type: objective
+        objective: verify-web-service
+        on-success: content-gate
+
+      content-gate:
+        type: decision
+        when:
+          conditions:
+            - web-index-served
+        then: verify-content
+        else: complete
+
+      verify-content:
+        type: objective
+        objective: verify-web-content
+        on-success: complete
+
+      complete:
+        type: end
+        description: Reference validation completed

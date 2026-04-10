@@ -179,6 +179,38 @@ def score_detection_coverage(
     )
 
 
+def _format_step_results(steps: list, results: list) -> list[str]:
+    """Format individual step detection results."""
+    lines: list[str] = []
+    for result in results:
+        step = next(
+            (s for s in steps if s.technique_id == result.technique_id),
+            None,
+        )
+        if step:
+            status = "DETECTED" if result.detected else "MISSED"
+            dt = result.detection_time_seconds
+            time_str = f" ({dt:.1f}s)" if dt else ""
+            lines.append(
+                f"  [{status}] Step {result.step_number}: "
+                f"{step.technique_id} {step.technique_name}{time_str}"
+            )
+    return lines
+
+
+def _format_detection_gaps(steps: list, gaps: list[str]) -> list[str]:
+    """Format detection gap details."""
+    lines: list[str] = []
+    for tid in gaps:
+        step = next(
+            (s for s in steps if s.technique_id == tid),
+            None,
+        )
+        if step:
+            lines.append(f"  - {tid}: {step.technique_name} ({step.tactic})")
+    return lines
+
+
 def format_detection_report(
     scenario_name: str,
     difficulty: str,
@@ -213,31 +245,12 @@ def format_detection_report(
 
     lines.append("")
     lines.append("Step Results:")
-
-    for result in coverage.results:
-        step = next(
-            (s for s in steps if s.technique_id == result.technique_id),
-            None,
-        )
-        if step:
-            status = "DETECTED" if result.detected else "MISSED"
-            dt = result.detection_time_seconds
-            time_str = f" ({dt:.1f}s)" if dt else ""
-            lines.append(
-                f"  [{status}] Step {result.step_number}: "
-                f"{step.technique_id} {step.technique_name}{time_str}"
-            )
+    lines.extend(_format_step_results(steps, coverage.results))
 
     if coverage.gaps:
         lines.append("")
         lines.append("Detection Gaps:")
-        for tid in coverage.gaps:
-            step = next(
-                (s for s in steps if s.technique_id == tid),
-                None,
-            )
-            if step:
-                lines.append(f"  - {tid}: {step.technique_name} ({step.tactic})")
+        lines.extend(_format_detection_gaps(steps, coverage.gaps))
 
     lines.append("")
     lines.append("MITRE ATT&CK Coverage:")

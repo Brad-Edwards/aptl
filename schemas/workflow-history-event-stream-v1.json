@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "items": {
+    "additionalProperties": false,
+    "properties": {
+      "branch_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Branch Name"
+      },
+      "details": {
+        "additionalProperties": true,
+        "title": "Details",
+        "type": "object"
+      },
+      "event_type": {
+        "title": "Event Type",
+        "type": "string"
+      },
+      "join_step": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Join Step"
+      },
+      "outcome": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Outcome"
+      },
+      "step_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Step Name"
+      },
+      "timestamp": {
+        "title": "Timestamp",
+        "type": "string"
+      }
+    },
+    "required": [
+      "event_type",
+      "timestamp"
+    ],
+    "title": "WorkflowHistoryEventModel",
+    "type": "object"
+  },
+  "title": "WorkflowHistoryEventStream",
+  "type": "array"
+}

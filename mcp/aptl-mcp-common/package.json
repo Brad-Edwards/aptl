@@ -16,12 +16,18 @@
     ],
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.17.2",
+        "@opentelemetry/api": "^1.9.0",
+        "@opentelemetry/exporter-trace-otlp-proto": "^0.57.0",
+        "@opentelemetry/resources": "^1.30.0",
+        "@opentelemetry/sdk-trace-node": "^1.30.0",
+        "@opentelemetry/semantic-conventions": "^1.30.0",
         "@types/ssh2": "^1.15.5",
         "ssh2": "^1.16.0",
         "zod": "^3.25.49"
     },
     "devDependencies": {
         "@types/node": "^25.2.1",
+        "@vitest/coverage-v8": "^4.0.18",
         "typescript": "^5.3.3",
         "vitest": "^4.0.18"
     },

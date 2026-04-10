@@ -82,7 +82,8 @@ def _find_node() -> str:
             candidate = os.path.join(nvm_bin, v, "bin", "node")
             if os.path.isfile(candidate):
                 return candidate
-    return "node"
+    import shutil
+    return shutil.which("node") or "node"
 
 
 # Custom Node.js MCP servers (built from source in mcp/)

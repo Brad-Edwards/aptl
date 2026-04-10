@@ -43,8 +43,9 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
         and the path to the certs directory.
     """
     certs_dir = project_dir / _CERTS_SUBDIR
+    root_ca = certs_dir / "root-ca.pem"
 
-    if certs_dir.exists():
+    if certs_dir.exists() and root_ca.exists():
         log.info("SSL certificates already exist at %s", certs_dir)
         return CertResult(
             success=True,
@@ -78,7 +79,7 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             certs_dir=certs_dir,
             error="Certificate generation timed out after 300s",
         )
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         log.error("Failed to run docker compose: %s", exc)
         return CertResult(
             success=False,
@@ -118,7 +119,7 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             certs_dir=certs_dir,
             error="Permission fix timed out after 30s",
         )
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         log.error("Failed to fix certificate permissions: %s", exc)
         return CertResult(
             success=False,

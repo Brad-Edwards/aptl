@@ -33,6 +33,13 @@ class EnvVars:
     wazuh_cluster_key: str = ""
 
 
+def _strip_quotes(value: str) -> str:
+    """Strip surrounding single or double quotes from a value."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        return value[1:-1]
+    return value
+
+
 def load_dotenv(path: Path) -> dict[str, str]:
     """Parse KEY=VALUE lines from a .env file.
 
@@ -74,14 +81,7 @@ def load_dotenv(path: Path) -> dict[str, str]:
         key = key.strip()
         value = value.strip()
 
-        # Strip surrounding quotes
-        if len(value) >= 2:
-            if (value[0] == '"' and value[-1] == '"') or (
-                value[0] == "'" and value[-1] == "'"
-            ):
-                value = value[1:-1]
-
-        result[key] = value
+        result[key] = _strip_quotes(value)
 
     log.debug("Loaded %d variables from %s", len(result), path)
     return result

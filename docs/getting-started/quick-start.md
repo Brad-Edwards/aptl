@@ -16,6 +16,8 @@ aptl lab start
 aptl lab status   # Show running containers and health
 aptl lab stop     # Stop the lab
 aptl lab stop -v  # Stop and remove all volumes
+aptl kill         # Emergency: kill all MCP server processes immediately
+aptl kill -c      # Emergency: kill MCP processes AND all lab containers
 ```
 
 ## Access

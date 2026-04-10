@@ -1,0 +1,43 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "accepted": {
+      "title": "Accepted",
+      "type": "boolean"
+    },
+    "diagnostics": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "domain": {
+      "title": "Domain",
+      "type": "string"
+    },
+    "operation_id": {
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "runtime-operation/v1",
+      "default": "runtime-operation/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "submitted_at": {
+      "title": "Submitted At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "operation_id",
+    "domain",
+    "submitted_at",
+    "accepted"
+  ],
+  "title": "OperationReceiptModel",
+  "type": "object"
+}

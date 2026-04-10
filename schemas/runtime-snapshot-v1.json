@@ -1,0 +1,488 @@
+{
+  "$defs": {
+    "EvaluationHistoryEventModel": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "event_type": {
+          "title": "Event Type",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "max_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Score"
+        },
+        "passed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Passed"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_type",
+        "timestamp",
+        "status"
+      ],
+      "title": "EvaluationHistoryEventModel",
+      "type": "object"
+    },
+    "EvaluationResultStateModel": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "max_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Score"
+        },
+        "observed_at": {
+          "title": "Observed At",
+          "type": "string"
+        },
+        "passed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Passed"
+        },
+        "resource_type": {
+          "title": "Resource Type",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "state_schema_version": {
+          "const": "evaluation-result-state/v1",
+          "default": "evaluation-result-state/v1",
+          "title": "State Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "run_id",
+        "status",
+        "observed_at",
+        "updated_at"
+      ],
+      "title": "EvaluationResultStateModel",
+      "type": "object"
+    },
+    "SnapshotEntryModel": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "title": "Address",
+          "type": "string"
+        },
+        "domain": {
+          "title": "Domain",
+          "type": "string"
+        },
+        "ordering_dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ordering Dependencies",
+          "type": "array"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "refresh_dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Refresh Dependencies",
+          "type": "array"
+        },
+        "resource_type": {
+          "title": "Resource Type",
+          "type": "string"
+        },
+        "status": {
+          "default": "ready",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "address",
+        "domain",
+        "resource_type"
+      ],
+      "title": "SnapshotEntryModel",
+      "type": "object"
+    },
+    "WorkflowExecutionStateModel": {
+      "additionalProperties": false,
+      "properties": {
+        "compensation_failures": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Compensation Failures",
+          "type": "array"
+        },
+        "compensation_started_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Compensation Started At"
+        },
+        "compensation_status": {
+          "title": "Compensation Status",
+          "type": "string"
+        },
+        "compensation_updated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Compensation Updated At"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "started_at": {
+          "title": "Started At",
+          "type": "string"
+        },
+        "state_schema_version": {
+          "const": "workflow-step-state/v1",
+          "default": "workflow-step-state/v1",
+          "title": "State Schema Version",
+          "type": "string"
+        },
+        "steps": {
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkflowStepStateModel"
+          },
+          "title": "Steps",
+          "type": "object"
+        },
+        "terminal_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Terminal Reason"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        },
+        "workflow_status": {
+          "title": "Workflow Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_status",
+        "run_id",
+        "started_at",
+        "updated_at",
+        "compensation_status"
+      ],
+      "title": "WorkflowExecutionStateModel",
+      "type": "object"
+    },
+    "WorkflowHistoryEventModel": {
+      "additionalProperties": false,
+      "properties": {
+        "branch_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Branch Name"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "event_type": {
+          "title": "Event Type",
+          "type": "string"
+        },
+        "join_step": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Join Step"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        },
+        "step_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Name"
+        },
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_type",
+        "timestamp"
+      ],
+      "title": "WorkflowHistoryEventModel",
+      "type": "object"
+    },
+    "WorkflowStepStateModel": {
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "lifecycle": {
+          "title": "Lifecycle",
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        }
+      },
+      "required": [
+        "lifecycle",
+        "attempts"
+      ],
+      "title": "WorkflowStepStateModel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "entries": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SnapshotEntryModel"
+      },
+      "title": "Entries",
+      "type": "object"
+    },
+    "evaluation_history": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/EvaluationHistoryEventModel"
+        },
+        "type": "array"
+      },
+      "title": "Evaluation History",
+      "type": "object"
+    },
+    "evaluation_results": {
+      "additionalProperties": {
+        "$ref": "#/$defs/EvaluationResultStateModel"
+      },
+      "title": "Evaluation Results",
+      "type": "object"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    },
+    "orchestration_history": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/WorkflowHistoryEventModel"
+        },
+        "type": "array"
+      },
+      "title": "Orchestration History",
+      "type": "object"
+    },
+    "orchestration_results": {
+      "additionalProperties": {
+        "$ref": "#/$defs/WorkflowExecutionStateModel"
+      },
+      "title": "Orchestration Results",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "runtime-snapshot/v1",
+      "default": "runtime-snapshot/v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "title": "RuntimeSnapshotEnvelopeModel",
+  "type": "object"
+}

@@ -1,0 +1,214 @@
+{
+  "$defs": {
+    "EvaluatorCapabilitiesModel": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Constraints",
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "supported_sections": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supported Sections",
+          "type": "array"
+        },
+        "supports_objectives": {
+          "default": true,
+          "title": "Supports Objectives",
+          "type": "boolean"
+        },
+        "supports_scoring": {
+          "default": true,
+          "title": "Supports Scoring",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "EvaluatorCapabilitiesModel",
+      "type": "object"
+    },
+    "OrchestratorCapabilitiesModel": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Constraints",
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "supported_sections": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supported Sections",
+          "type": "array"
+        },
+        "supported_workflow_features": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supported Workflow Features",
+          "type": "array"
+        },
+        "supported_workflow_state_predicates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supported Workflow State Predicates",
+          "type": "array"
+        },
+        "supports_condition_refs": {
+          "default": true,
+          "title": "Supports Condition Refs",
+          "type": "boolean"
+        },
+        "supports_inject_bindings": {
+          "default": true,
+          "title": "Supports Inject Bindings",
+          "type": "boolean"
+        },
+        "supports_workflows": {
+          "default": false,
+          "title": "Supports Workflows",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "OrchestratorCapabilitiesModel",
+      "type": "object"
+    },
+    "ProvisionerCapabilitiesModel": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Constraints",
+          "type": "object"
+        },
+        "max_total_nodes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Total Nodes"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "supported_account_features": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supported Account Features",
+          "type": "array"
+        },
+        "supported_content_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supported Content Types",
+          "type": "array"
+        },
+        "supported_node_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supported Node Types",
+          "type": "array"
+        },
+        "supported_os_families": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supported Os Families",
+          "type": "array"
+        },
+        "supports_accounts": {
+          "default": false,
+          "title": "Supports Accounts",
+          "type": "boolean"
+        },
+        "supports_acls": {
+          "default": false,
+          "title": "Supports Acls",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ProvisionerCapabilitiesModel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "evaluator": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EvaluatorCapabilitiesModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "orchestrator": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OrchestratorCapabilitiesModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "provisioner": {
+      "$ref": "#/$defs/ProvisionerCapabilitiesModel"
+    },
+    "schema_version": {
+      "const": "backend-manifest/v1",
+      "default": "backend-manifest/v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "provisioner"
+  ],
+  "title": "BackendManifestModel",
+  "type": "object"
+}

@@ -1,0 +1,280 @@
+{
+  "schema_version": "runtime-snapshot/v1",
+  "entries": {
+    "orchestration.workflow.response": {
+      "address": "orchestration.workflow.response",
+      "domain": "orchestration",
+      "resource_type": "workflow",
+      "payload": {
+        "name": "response",
+        "spec": {
+          "description": "",
+          "start": "run",
+          "steps": {
+            "run": {
+              "type": "objective",
+              "objective": "validate",
+              "on-success": "finish",
+              "on-failure": "",
+              "on-exhausted": "",
+              "branches": [],
+              "join": "",
+              "next": "",
+              "then": "",
+              "else": "",
+              "max-attempts": null,
+              "when": null,
+              "description": ""
+            },
+            "finish": {
+              "type": "end",
+              "objective": "",
+              "on-success": "",
+              "on-failure": "",
+              "on-exhausted": "",
+              "branches": [],
+              "join": "",
+              "next": "",
+              "then": "",
+              "else": "",
+              "max-attempts": null,
+              "when": null,
+              "description": ""
+            }
+          }
+        },
+        "start_step": "run",
+        "referenced_objective_addresses": ["evaluation.objective.validate"],
+        "control_steps": {
+          "run": {
+            "name": "run",
+            "step_type": "objective",
+            "objective_address": "evaluation.objective.validate",
+            "predicate": null,
+            "next_step": "",
+            "on_success": "finish",
+            "on_failure": "",
+            "on_exhausted": "",
+            "then_step": "",
+            "else_step": "",
+            "branches": [],
+            "join_step": "",
+            "owning_parallel_step": "",
+            "max_attempts": null,
+            "state_contract": {
+              "step_type": "objective",
+              "state_observable": true,
+              "observable_outcomes": ["succeeded", "failed"],
+              "supports_attempt_counts": true,
+              "fixed_attempts": 1
+            }
+          },
+          "finish": {
+            "name": "finish",
+            "step_type": "end",
+            "objective_address": "",
+            "predicate": null,
+            "next_step": "",
+            "on_success": "",
+            "on_failure": "",
+            "on_exhausted": "",
+            "then_step": "",
+            "else_step": "",
+            "branches": [],
+            "join_step": "",
+            "owning_parallel_step": "",
+            "max_attempts": null,
+            "state_contract": {
+              "step_type": "end",
+              "state_observable": false,
+              "observable_outcomes": [],
+              "supports_attempt_counts": false,
+              "fixed_attempts": null
+            }
+          }
+        },
+        "control_edges": {
+          "run": ["finish"],
+          "finish": []
+        },
+        "join_owners": {},
+        "step_condition_addresses": {},
+        "step_predicate_addresses": {},
+        "required_features": [],
+        "required_state_predicate_features": [],
+        "result_contract": {
+          "state_schema_version": "workflow-step-state/v1",
+          "observable_steps": {
+            "run": {
+              "step_type": "objective",
+              "state_observable": true,
+              "observable_outcomes": ["succeeded", "failed"],
+              "supports_attempt_counts": true,
+              "fixed_attempts": 1
+            }
+          }
+        },
+        "execution_contract": {
+          "state_schema_version": "workflow-step-state/v1",
+          "start_step": "run",
+          "steps": {
+            "run": {
+              "step_type": "objective",
+              "state_observable": true,
+              "observable_outcomes": ["succeeded", "failed"],
+              "supports_attempt_counts": true,
+              "fixed_attempts": 1
+            },
+            "finish": {
+              "step_type": "end",
+              "state_observable": false,
+              "observable_outcomes": [],
+              "supports_attempt_counts": false,
+              "fixed_attempts": null
+            }
+          },
+          "control_edges": {
+            "run": ["finish"],
+            "finish": []
+          },
+          "join_owners": {},
+          "observable_steps": ["run"]
+        },
+        "state_schema_version": "workflow-step-state/v1"
+      },
+      "ordering_dependencies": [],
+      "refresh_dependencies": ["evaluation.objective.validate"],
+      "status": "queued"
+    },
+    "evaluation.objective.validate": {
+      "address": "evaluation.objective.validate",
+      "domain": "evaluation",
+      "resource_type": "objective",
+      "payload": {
+        "name": "validate",
+        "spec": {
+          "name": "",
+          "description": "",
+          "agent": "",
+          "entity": "blue",
+          "actions": [],
+          "targets": [],
+          "success": {
+            "mode": "all_of",
+            "conditions": ["health"],
+            "metrics": [],
+            "evaluations": [],
+            "tlos": [],
+            "goals": []
+          },
+          "window": null,
+          "depends_on": []
+        },
+        "actor_type": "entity",
+        "actor_name": "blue",
+        "success_addresses": ["evaluation.condition.vm.health"],
+        "objective_dependencies": [],
+        "window_story_addresses": [],
+        "window_script_addresses": [],
+        "window_event_addresses": [],
+        "window_workflow_addresses": [],
+        "window_step_refs": [],
+        "window_step_workflow_addresses": [],
+        "window_references": [],
+        "result_contract": {
+          "state_schema_version": "evaluation-result-state/v1",
+          "resource_type": "objective",
+          "supports_passed": true,
+          "supports_score": false,
+          "fixed_max_score": null
+        },
+        "execution_contract": {
+          "state_schema_version": "evaluation-result-state/v1",
+          "resource_type": "objective",
+          "allowed_statuses": ["pending", "running", "ready", "failed"],
+          "history_event_types": ["evaluation_started", "evaluation_updated", "evaluation_ready", "evaluation_failed"],
+          "requires_start_event": true
+        }
+      },
+      "ordering_dependencies": ["evaluation.condition.vm.health"],
+      "refresh_dependencies": ["evaluation.condition.vm.health"],
+      "status": "scheduled"
+    }
+  },
+  "orchestration_results": {
+    "orchestration.workflow.response": {
+      "state_schema_version": "workflow-step-state/v1",
+      "workflow_status": "running",
+      "run_id": "orchestration.workflow.response-run",
+      "started_at": "2026-04-02T22:29:10Z",
+      "updated_at": "2026-04-02T22:29:10Z",
+      "terminal_reason": null,
+      "compensation_status": "not_required",
+      "compensation_started_at": null,
+      "compensation_updated_at": null,
+      "compensation_failures": [],
+      "steps": {
+        "run": {
+          "lifecycle": "pending",
+          "outcome": null,
+          "attempts": 0
+        }
+      }
+    }
+  },
+  "orchestration_history": {
+    "orchestration.workflow.response": [
+      {
+        "event_type": "workflow_started",
+        "timestamp": "2026-04-02T22:29:10Z",
+        "step_name": "run",
+        "branch_name": null,
+        "join_step": null,
+        "outcome": null,
+        "details": {}
+      }
+    ]
+  },
+  "evaluation_results": {
+    "evaluation.objective.validate": {
+      "state_schema_version": "evaluation-result-state/v1",
+      "resource_type": "objective",
+      "run_id": "evaluation-run",
+      "status": "ready",
+      "observed_at": "2026-04-02T22:29:10Z",
+      "updated_at": "2026-04-02T22:29:10Z",
+      "passed": true,
+      "score": null,
+      "max_score": null,
+      "detail": "stub result for evaluation.objective.validate",
+      "evidence_refs": []
+    }
+  },
+  "evaluation_history": {
+    "evaluation.objective.validate": [
+      {
+        "event_type": "evaluation_started",
+        "timestamp": "2026-04-02T22:29:10Z",
+        "status": "running",
+        "passed": null,
+        "score": null,
+        "max_score": null,
+        "detail": null,
+        "evidence_refs": [],
+        "details": {}
+      },
+      {
+        "event_type": "evaluation_ready",
+        "timestamp": "2026-04-02T22:29:10Z",
+        "status": "ready",
+        "passed": true,
+        "score": null,
+        "max_score": null,
+        "detail": "stub result for evaluation.objective.validate",
+        "evidence_refs": [],
+        "details": {}
+      }
+    ]
+  },
+  "metadata": {}
+}

@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PersistentSession, SSHConnectionManager } from '../src/ssh.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { PersistentSession, SSHConnectionManager, SSHError } from '../src/ssh.js';
 import { ShellType } from '../src/shells.js';
+import { EventEmitter } from 'node:events';
 
 // Test our business logic, not the ssh2 library
 describe('Session State Management', () => {
@@ -12,9 +13,7 @@ describe('Session State Management', () => {
       'test-user',
       'interactive',
       mockClient,
-      2222,
-      'normal',
-      60000
+      { port: 2222, mode: 'normal', timeoutMs: 60000 }
     );
 
     const info = session.getSessionInfo();
@@ -31,7 +30,7 @@ describe('Session State Management', () => {
   it('should return immutable session info copies', () => {
     const mockClient = {} as any;
     const session = new PersistentSession(
-      'test', 'host', 'user', 'interactive', mockClient, 22
+      'test', 'host', 'user', 'interactive', mockClient
     );
 
     const info1 = session.getSessionInfo();
@@ -54,7 +53,7 @@ describe('Session State Management', () => {
 
     const interactive = new PersistentSession('i', 'host', 'user', 'interactive', mockClient);
     const background = new PersistentSession('b', 'host', 'user', 'background', mockClient);
-    const raw = new PersistentSession('r', 'host', 'user', 'interactive', mockClient, 22, 'raw');
+    const raw = new PersistentSession('r', 'host', 'user', 'interactive', mockClient, { mode: 'raw' });
 
     expect(interactive.getSessionInfo().type).toBe('interactive');
     expect(interactive.getSessionInfo().mode).toBe('normal');
@@ -105,7 +104,7 @@ describe('Buffer Management Logic', () => {
   it('should handle buffer operations safely', () => {
     const mockClient = {} as any;
     const session = new PersistentSession(
-      'buffer-test', 'host', 'user', 'background', mockClient, 22
+      'buffer-test', 'host', 'user', 'background', mockClient
     );
 
     // Test empty buffer
@@ -124,7 +123,7 @@ describe('Buffer Management Logic', () => {
   it('should keep newest data when buffer overflows', () => {
     const mockClient = {} as any;
     const session = new PersistentSession(
-      'overflow-test', 'host', 'user', 'background', mockClient, 22
+      'overflow-test', 'host', 'user', 'background', mockClient
     );
 
     // Simulate the private method behavior by accessing outputBuffer
@@ -144,7 +143,7 @@ describe('Buffer Management Logic', () => {
     expect(buffer.length).toBe(5000);
     // Should keep lines 7000-11999 (newest)
     expect(buffer[0]).toBe('line 7000');
-    expect(buffer[buffer.length - 1]).toBe('line 11999');
+    expect(buffer.at(-1)).toBe('line 11999');
   });
 });
 
@@ -167,8 +166,7 @@ describe('Shell Type Support', () => {
       'test-host',
       'test-user',
       'interactive',
-      mockClient,
-      22
+      mockClient
     );
 
     // The shell type is handled internally by the formatter
@@ -187,10 +185,7 @@ describe('Shell Type Support', () => {
         'test-user',
         'interactive',
         mockClient,
-        22,
-        'normal',
-        60000,
-        shellType
+        { shellType }
       );
 
       const info = session.getSessionInfo();
@@ -220,10 +215,7 @@ describe('Shell Type Support', () => {
       'Administrator',
       'interactive',
       mockClient,
-      22,
-      'normal',
-      60000,
-      'powershell'
+      { shellType: 'powershell' }
     );
 
     // Initialize the session
@@ -232,5 +224,118 @@ describe('Shell Type Support', () => {
     expect(info.sessionId).toBe('ps-test');
     expect(info.target).toBe('windows-host');
     expect(info.username).toBe('Administrator');
+  });
+});
+
+describe('Session Cleanup and Timeout Handling', () => {
+  let mockStream: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn>; stderr: EventEmitter };
+  let mockClient: any;
+  let session: PersistentSession;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+
+    mockStream = Object.assign(new EventEmitter(), {
+      write: vi.fn(),
+      end: vi.fn(),
+      stderr: new EventEmitter(),
+    });
+
+    mockClient = {
+      shell: vi.fn((cb: any) => cb(null, mockStream)),
+    };
+
+    session = new PersistentSession(
+      'cleanup-test', 'host', 'user', 'interactive', mockClient, { timeoutMs: 600000 }
+    );
+
+    // initialize() has a setTimeout(resolve, 1000) that won't fire
+    // under fake timers unless we advance concurrently
+    const initPromise = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await initPromise;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('cleanup rejects in-flight command', async () => {
+    const commandPromise = session.executeCommand('sleep 999', 60000);
+
+    // Command is now in-flight; close the session
+    session.close();
+
+    await expect(commandPromise).rejects.toThrow('Session closed while command was in progress');
+    await expect(commandPromise).rejects.toBeInstanceOf(SSHError);
+  });
+
+  it('cleanup rejects queued commands', async () => {
+    // Queue three commands — first becomes current, rest are queued
+    const p1 = session.executeCommand('cmd1', 60000);
+    const p2 = session.executeCommand('cmd2', 60000);
+    const p3 = session.executeCommand('cmd3', 60000);
+
+    session.close();
+
+    await expect(p1).rejects.toThrow('Session closed while command was in progress');
+    await expect(p2).rejects.toThrow('Session closed while command was queued');
+    await expect(p3).rejects.toThrow('Session closed while command was queued');
+  });
+
+  it('per-command timeout cleared on success', async () => {
+    const commandPromise = session.executeCommand('echo hello', 5000);
+
+    // Simulate the shell producing delimiter-wrapped output
+    const delimiter = (session as any).commandDelimiter;
+    const cmdId = (session as any).currentCommand.id;
+    const startMarker = `${delimiter}_START_${cmdId}`;
+    const endMarker = `${delimiter}_END_${cmdId}`;
+
+    mockStream.emit('data', Buffer.from(`${startMarker}\nhello\n${endMarker}:0\n`));
+
+    const result = await commandPromise;
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe('hello');
+
+    // Advance past the 5000ms command timeout — should cause no side effects
+    await vi.advanceTimersByTimeAsync(6000);
+
+    // Session is still active and functional
+    expect(session.getSessionInfo().isActive).toBe(true);
+  });
+
+  it('per-command timeout cleared on cleanup', async () => {
+    const commandPromise = session.executeCommand('slow-cmd', 5000);
+
+    // Close before timeout fires
+    session.close();
+
+    // Should reject with session-closed, not timeout
+    await expect(commandPromise).rejects.toThrow('Session closed while command was in progress');
+
+    // Advance past the timeout — should be a no-op
+    await vi.advanceTimersByTimeAsync(6000);
+  });
+
+  it('cleanup is idempotent', async () => {
+    const commandPromise = session.executeCommand('cmd', 60000);
+
+    // First cleanup via close()
+    session.close();
+
+    await expect(commandPromise).rejects.toThrow('Session closed while command was in progress');
+
+    // Second cleanup via the shell 'close' event (simulates shell.end() triggering close)
+    mockStream.emit('close');
+
+    // No additional errors or throws — the second cleanup is a no-op
+    expect(session.getSessionInfo().isActive).toBe(false);
+  });
+
+  it('cleanup with nothing pending is a no-op', () => {
+    // No commands queued or in flight
+    expect(() => session.close()).not.toThrow();
+    expect(session.getSessionInfo().isActive).toBe(false);
   });
 });

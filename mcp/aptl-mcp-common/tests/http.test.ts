@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HTTPClient } from '../src/http.js';
 
 // Mock fetch globally
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 
 describe('HTTPClient', () => {
-  const mockFetch = vi.mocked(global.fetch);
+  const mockFetch = vi.mocked(globalThis.fetch);
 
   beforeEach(() => {
     vi.clearAllMocks();

@@ -1,16 +1,16 @@
 """Lab lifecycle management.
 
-Wraps docker compose commands for starting, stopping, and checking lab status.
-All Docker interactions go through subprocess calls to docker compose.
-Includes the full orchestration of lab startup.
+Wraps deployment backends for starting, stopping, and checking lab status.
+Docker interactions go through the DeploymentBackend protocol, with Docker
+Compose as the default backend.  Includes the full orchestration of lab
+startup.
 """
 
-import json
 import subprocess
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import yaml
 
@@ -29,9 +29,21 @@ from aptl.core.ssh import ensure_ssh_keys
 from aptl.core.sysreqs import check_max_map_count
 from aptl.utils.logging import get_logger
 
+if TYPE_CHECKING:
+    from aptl.core.deployment.backend import DeploymentBackend
+
 log = get_logger("lab")
 
 WAZUH_IMAGE_VERSION = "4.12.0"
+
+# All known Docker Compose profiles. Used as fallback when config is
+# unavailable (e.g. stop_lab, kill switch).  Keep in sync with
+# docker-compose.yml profile definitions.
+ALL_KNOWN_PROFILES = [
+    "wazuh", "victim", "kali", "reverse",
+    "enterprise", "soc", "mail", "fileshare", "dns",
+    "otel",
+]
 
 
 @dataclass
@@ -56,6 +68,27 @@ def docker_client():
     """Get a Docker client. Separated for easy mocking."""
     import docker  # noqa: delayed import for mocking
     return docker.from_env()
+
+
+def _get_backend(
+    project_dir: Path,
+    config: AptlConfig | None = None,
+) -> "DeploymentBackend":
+    """Create a deployment backend from config or defaults.
+
+    Args:
+        project_dir: Working directory for the deployment.
+        config: Optional config; if None, uses default Docker Compose.
+
+    Returns:
+        A DeploymentBackend instance.
+    """
+    from aptl.core.deployment import get_backend
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+
+    if config is not None:
+        return get_backend(config, project_dir)
+    return DockerComposeBackend(project_dir=project_dir)
 
 
 def build_compose_command(
@@ -87,39 +120,37 @@ def build_compose_command(
 def start_lab(
     config: AptlConfig,
     project_dir: Optional[Path] = None,
+    backend: Optional["DeploymentBackend"] = None,
 ) -> LabResult:
-    """Start the lab environment using docker compose.
+    """Start the lab environment.
+
+    Delegates to the deployment backend.  If no backend is provided,
+    one is created from the config.
 
     Args:
         config: Validated APTL configuration.
-        project_dir: Working directory for docker compose (where docker-compose.yml lives).
+        project_dir: Working directory (where docker-compose.yml lives).
+        backend: Optional pre-created deployment backend.
 
     Returns:
         LabResult indicating success or failure.
     """
     profiles = config.containers.enabled_profiles()
-    cmd = build_compose_command("up", profiles)
+    # OTel stack (Collector + Tempo + Grafana) is core infrastructure
+    if "otel" not in profiles:
+        profiles = [*profiles, "otel"]
 
-    log.info("Starting lab with profiles: %s", profiles)
-    log.debug("Command: %s", " ".join(cmd))
+    if backend is None:
+        resolved_dir = project_dir or Path(".")
+        backend = _get_backend(resolved_dir, config)
 
-    kwargs: dict = {"capture_output": True, "text": True}
-    if project_dir is not None:
-        kwargs["cwd"] = project_dir
-
-    result = subprocess.run(cmd, **kwargs)
-
-    if result.returncode != 0:
-        log.error("Lab start failed: %s", result.stderr)
-        return LabResult(success=False, error=result.stderr)
-
-    log.info("Lab started successfully")
-    return LabResult(success=True, message="Lab started")
+    return backend.start(profiles)
 
 
 def stop_lab(
     remove_volumes: bool = False,
     project_dir: Optional[Path] = None,
+    backend: Optional["DeploymentBackend"] = None,
 ) -> LabResult:
     """Stop the lab environment.
 
@@ -129,7 +160,8 @@ def stop_lab(
 
     Args:
         remove_volumes: If True, also remove Docker volumes (-v flag).
-        project_dir: Working directory for docker compose.
+        project_dir: Working directory for the deployment.
+        backend: Optional pre-created deployment backend.
 
     Returns:
         LabResult indicating success or failure.
@@ -138,6 +170,7 @@ def stop_lab(
     profiles: list[str] = []
     search_dir = project_dir or Path(".")
     config_path = find_config(search_dir)
+    config: AptlConfig | None = None
     if config_path is not None:
         try:
             config = load_config(config_path)
@@ -145,70 +178,54 @@ def stop_lab(
         except (FileNotFoundError, ValueError) as exc:
             log.warning("Could not load config for profiles: %s", exc)
     if not profiles:
-        profiles = [
-            "wazuh", "victim", "kali", "reverse",
-            "enterprise", "soc", "mail", "fileshare", "dns",
-        ]
+        profiles = list(ALL_KNOWN_PROFILES)
 
-    cmd = build_compose_command("down", profiles=profiles)
-    if remove_volumes:
-        cmd.append("-v")
+    if backend is None:
+        backend = _get_backend(search_dir, config)
 
-    log.info("Stopping lab (remove_volumes=%s)", remove_volumes)
-
-    kwargs: dict = {"capture_output": True, "text": True}
-    if project_dir is not None:
-        kwargs["cwd"] = project_dir
-
-    result = subprocess.run(cmd, **kwargs)
-
-    if result.returncode != 0:
-        log.error("Lab stop failed: %s", result.stderr)
-        return LabResult(success=False, error=result.stderr)
-
-    log.info("Lab stopped successfully")
-    return LabResult(success=True, message="Lab stopped")
+    return backend.stop(profiles, remove_volumes=remove_volumes)
 
 
 def lab_status(
     project_dir: Optional[Path] = None,
+    backend: Optional["DeploymentBackend"] = None,
 ) -> LabStatus:
-    """Get the current lab status by querying docker compose.
+    """Get the current lab status.
+
+    Delegates to the deployment backend.
 
     Args:
-        project_dir: Working directory for docker compose.
+        project_dir: Working directory for the deployment.
+        backend: Optional pre-created deployment backend.
 
     Returns:
         LabStatus with container information.
     """
-    cmd = ["docker", "compose", "ps", "--format", "json"]
+    resolved_dir = project_dir or Path(".")
 
-    kwargs: dict = {"capture_output": True, "text": True}
-    if project_dir is not None:
-        kwargs["cwd"] = project_dir
+    if backend is None:
+        backend = _get_backend(resolved_dir)
 
-    result = subprocess.run(cmd, **kwargs)
+    return backend.status()
 
-    if result.returncode != 0:
-        log.warning("Could not get lab status: %s", result.stderr)
-        return LabStatus(running=False, error=result.stderr)
 
-    try:
-        # docker compose ps --format json outputs one JSON object per line
-        # (NDJSON), not a JSON array. Try array first, fall back to NDJSON.
-        stripped = result.stdout.strip()
-        if not stripped:
-            containers = []
-        elif stripped.startswith("["):
-            containers = json.loads(stripped)
-        else:
-            containers = [json.loads(line) for line in stripped.splitlines() if line.strip()]
-    except json.JSONDecodeError:
-        log.warning("Could not parse compose ps output")
-        return LabStatus(running=False, error="Failed to parse container status")
-
-    running = len(containers) > 0
-    return LabStatus(running=running, containers=containers)
+def _check_service_volumes(
+    svc_name: str, svc_def: dict, project_dir: Path,
+) -> list[str]:
+    """Check bind-mount sources for a single service definition."""
+    errors: list[str] = []
+    for vol in svc_def.get("volumes", []):
+        if not isinstance(vol, str) or not vol.startswith("./"):
+            continue
+        src = vol.split(":")[0]
+        src_path = (project_dir / src).resolve()
+        if not src_path.exists():
+            errors.append(
+                f"Service '{svc_name}': bind-mount source "
+                f"'{src}' does not exist. Create it before "
+                f"starting the lab to avoid root-owned directories."
+            )
+    return errors
 
 
 def _check_bind_mounts(project_dir: Path) -> list[str]:
@@ -232,19 +249,145 @@ def _check_bind_mounts(project_dir: Path) -> list[str]:
     errors: list[str] = []
     services = data.get("services", {}) if isinstance(data, dict) else {}
     for svc_name, svc_def in services.items():
-        if not isinstance(svc_def, dict):
-            continue
-        for vol in svc_def.get("volumes", []):
-            if isinstance(vol, str) and vol.startswith("./"):
-                src = vol.split(":")[0]
-                src_path = (project_dir / src).resolve()
-                if not src_path.exists():
-                    errors.append(
-                        f"Service '{svc_name}': bind-mount source "
-                        f"'{src}' does not exist. Create it before "
-                        f"starting the lab to avoid root-owned directories."
-                    )
+        if isinstance(svc_def, dict):
+            errors.extend(_check_service_volumes(svc_name, svc_def, project_dir))
     return errors
+
+
+def _sync_config_credentials(project_dir: Path, env: EnvVars) -> None:
+    """Sync dashboard and manager configuration credentials (non-critical)."""
+    dashboard_config = project_dir / "config" / "wazuh_dashboard" / "wazuh.yml"
+    if dashboard_config.exists():
+        try:
+            sync_dashboard_config(dashboard_config, env.api_password)
+        except Exception as exc:
+            log.warning("Failed to sync dashboard config: %s", exc)
+    else:
+        log.warning("Dashboard config not found at %s", dashboard_config)
+
+    manager_config = project_dir / "config" / "wazuh_cluster" / "wazuh_manager.conf"
+    if manager_config.exists():
+        try:
+            sync_manager_config(manager_config, env.wazuh_cluster_key)
+        except Exception as exc:
+            log.warning("Failed to sync manager config: %s", exc)
+    else:
+        log.warning("Manager config not found at %s", manager_config)
+
+
+def _wait_for_wazuh_services(env: EnvVars) -> None:
+    """Wait for Wazuh Indexer and Manager API to become ready."""
+    indexer_result = wait_for_service(
+        check_fn=partial(
+            check_indexer_ready,
+            url="https://localhost:9200",
+            username=env.indexer_username,
+            password=env.indexer_password,
+        ),
+        timeout=300,
+        interval=10,
+        service_name="Wazuh Indexer",
+    )
+    if not indexer_result.ready:
+        log.warning("Indexer may still be initializing")
+
+    manager_result = wait_for_service(
+        check_fn=partial(
+            check_manager_api_ready,
+            container_name="aptl-wazuh-manager",
+        ),
+        timeout=120,
+        interval=5,
+        service_name="Wazuh Manager API",
+    )
+    if not manager_result.ready:
+        log.warning("Manager API may still be initializing")
+
+
+def _test_ssh_endpoints(config: AptlConfig, key_path: Path) -> None:
+    """Test SSH connectivity to configured containers (non-critical)."""
+    ssh_tests: list[tuple[str, int, str]] = []
+    if config.containers.victim:
+        ssh_tests.append(("victim", 2022, "labadmin"))
+    if config.containers.kali:
+        ssh_tests.append(("kali", 2023, "kali"))
+    if config.containers.reverse:
+        ssh_tests.append(("reverse", 2027, "labadmin"))
+
+    for name, port, user in ssh_tests:
+        ssh_wait = wait_for_service(
+            check_fn=partial(
+                test_ssh_connection,
+                host="localhost",
+                port=port,
+                user=user,
+                key_path=key_path,
+            ),
+            timeout=60,
+            interval=5,
+            service_name=f"SSH ({name})",
+        )
+        if ssh_wait.ready:
+            log.info("SSH to %s is ready", name)
+        else:
+            log.warning("SSH to %s not ready after %ds", name, int(ssh_wait.elapsed_seconds))
+
+
+def _build_mcp_servers(project_dir: Path) -> None:
+    """Build MCP servers (non-critical)."""
+    mcp_script = project_dir / "mcp" / "build-all-mcps.sh"
+    if not mcp_script.exists():
+        log.warning("MCP build script not found at %s", mcp_script)
+        return
+    try:
+        mcp_result = subprocess.run(
+            [str(mcp_script)],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+        )
+        if mcp_result.returncode != 0:
+            log.warning("MCP build had errors: %s", mcp_result.stderr)
+        else:
+            log.info("MCP servers built successfully")
+    except OSError as exc:
+        log.warning("Failed to build MCP servers: %s", exc)
+
+
+def _seed_soc_tools(
+    project_dir: Path, config: AptlConfig, skip_seed: bool,
+) -> None:
+    """Seed SOC tools via seed-prime.sh (non-critical)."""
+    if skip_seed:
+        log.info("Step 13: Skipping SOC seeding (--skip-seed)")
+        return
+
+    log.info("Step 13: Seeding SOC tools...")
+    seed_script = project_dir / "scripts" / "seed-prime.sh"
+
+    if not seed_script.exists():
+        log.debug("SOC seed script not found at %s", seed_script)
+        return
+    if not config.containers.soc:
+        log.debug("SOC profile not enabled, skipping seed")
+        return
+
+    try:
+        seed_result = subprocess.run(
+            [str(seed_script)],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=1200,
+        )
+        if seed_result.returncode != 0:
+            log.warning("SOC seeding had errors: %s", seed_result.stderr)
+        else:
+            log.info("SOC tools seeded successfully")
+    except subprocess.TimeoutExpired:
+        log.warning("SOC seeding timed out (non-fatal)")
+    except OSError as exc:
+        log.warning("Failed to seed SOC tools: %s", exc)
 
 
 def orchestrate_lab_start(
@@ -261,7 +404,7 @@ def orchestrate_lab_start(
       5. Sync config file credentials
       6. Generate SSL certificates
       7. Pre-pull container images
-      8. Start containers via docker compose
+      8. Start containers via deployment backend
       9. Wait for services to become ready
      10. Test SSH connectivity
      11. Generate connection info
@@ -302,9 +445,12 @@ def orchestrate_lab_start(
         log.error("Failed to load config: %s", exc)
         return LabResult(success=False, error=f"Failed to load config: {exc}")
 
+    # Create deployment backend from config
+    backend = _get_backend(project_dir, config)
+
     # Step 3: Generate SSH keys
     log.info("Step 3: Generating SSH keys...")
-    keys_dir = project_dir / "containers" / "keys"
+    keys_dir = project_dir / "keys"
     host_ssh_dir = Path.home() / ".ssh"
     ssh_result = ensure_ssh_keys(keys_dir=keys_dir, host_ssh_dir=host_ssh_dir)
     if not ssh_result.success:
@@ -334,23 +480,7 @@ def orchestrate_lab_start(
 
     # Step 5: Sync config file credentials
     log.info("Step 5: Syncing configuration credentials...")
-    dashboard_config = project_dir / "config" / "wazuh_dashboard" / "wazuh.yml"
-    if dashboard_config.exists():
-        try:
-            sync_dashboard_config(dashboard_config, env.api_password)
-        except Exception as exc:
-            log.warning("Failed to sync dashboard config: %s", exc)
-    else:
-        log.warning("Dashboard config not found at %s", dashboard_config)
-
-    manager_config = project_dir / "config" / "wazuh_cluster" / "wazuh_manager.conf"
-    if manager_config.exists():
-        try:
-            sync_manager_config(manager_config, env.wazuh_cluster_key)
-        except Exception as exc:
-            log.warning("Failed to sync manager config: %s", exc)
-    else:
-        log.warning("Manager config not found at %s", manager_config)
+    _sync_config_credentials(project_dir, env)
 
     # Step 6: Generate SSL certificates
     log.info("Step 6: Generating SSL certificates...")
@@ -373,31 +503,20 @@ def orchestrate_lab_start(
             error="Bind-mount pre-flight failed:\n" + "\n".join(mount_errors),
         )
 
-    # Step 7: Pre-pull container images (non-critical)
+    # Step 7: Pre-pull container images via backend (non-critical)
     log.info("Step 7: Pre-pulling container images...")
     images = [
         f"wazuh/wazuh-manager:{WAZUH_IMAGE_VERSION}",
         f"wazuh/wazuh-indexer:{WAZUH_IMAGE_VERSION}",
         f"wazuh/wazuh-dashboard:{WAZUH_IMAGE_VERSION}",
     ]
-    for image in images:
-        try:
-            pull_result = subprocess.run(
-                ["docker", "pull", image],
-                capture_output=True,
-                text=True,
-                cwd=project_dir,
-            )
-            if pull_result.returncode != 0:
-                log.warning("Failed to pull %s: %s", image, pull_result.stderr.strip())
-            else:
-                log.info("Pulled %s", image)
-        except (FileNotFoundError, OSError) as exc:
-            log.warning("Failed to pull %s: %s", image, exc)
+    pull_warnings = backend.pull_images(images)
+    for warning in pull_warnings:
+        log.warning(warning)
 
-    # Step 8: Start containers (retry once if SOC dependencies need more time)
+    # Step 8: Start containers via backend (retry once if SOC needs time)
     log.info("Step 8: Starting containers...")
-    start_result = start_lab(config, project_dir=project_dir)
+    start_result = start_lab(config, project_dir=project_dir, backend=backend)
     if not start_result.success and config.containers.soc:
         log.warning(
             "Initial compose up failed (SOC dependencies may still be "
@@ -405,7 +524,7 @@ def orchestrate_lab_start(
         )
         import time
         time.sleep(60)
-        start_result = start_lab(config, project_dir=project_dir)
+        start_result = start_lab(config, project_dir=project_dir, backend=backend)
     if not start_result.success:
         log.error("Lab start failed: %s", start_result.error)
         return LabResult(
@@ -416,60 +535,12 @@ def orchestrate_lab_start(
     # Step 9: Wait for services
     log.info("Step 9: Waiting for services...")
     if config.containers.wazuh:
-        indexer_result = wait_for_service(
-            check_fn=partial(
-                check_indexer_ready,
-                url="https://localhost:9200",
-                username=env.indexer_username,
-                password=env.indexer_password,
-            ),
-            timeout=300,
-            interval=10,
-            service_name="Wazuh Indexer",
-        )
-        if not indexer_result.ready:
-            log.warning("Indexer may still be initializing")
-
-        manager_result = wait_for_service(
-            check_fn=partial(
-                check_manager_api_ready,
-                container_name="aptl-wazuh-manager",
-            ),
-            timeout=120,
-            interval=5,
-            service_name="Wazuh Manager API",
-        )
-        if not manager_result.ready:
-            log.warning("Manager API may still be initializing")
+        _wait_for_wazuh_services(env)
 
     # Step 10: Test SSH connectivity (non-critical)
     log.info("Step 10: Testing SSH connectivity...")
     key_path = ssh_result.key_path or (Path.home() / ".ssh" / "aptl_lab_key")
-    ssh_tests = []
-    if config.containers.victim:
-        ssh_tests.append(("victim", 2022, "labadmin"))
-    if config.containers.kali:
-        ssh_tests.append(("kali", 2023, "kali"))
-    if config.containers.reverse:
-        ssh_tests.append(("reverse", 2027, "labadmin"))
-
-    for name, port, user in ssh_tests:
-        ssh_wait = wait_for_service(
-            check_fn=partial(
-                test_ssh_connection,
-                host="localhost",
-                port=port,
-                user=user,
-                key_path=key_path,
-            ),
-            timeout=60,
-            interval=5,
-            service_name=f"SSH ({name})",
-        )
-        if ssh_wait.ready:
-            log.info("SSH to %s is ready", name)
-        else:
-            log.warning("SSH to %s not ready after %ds", name, int(ssh_wait.elapsed_seconds))
+    _test_ssh_endpoints(config, key_path)
 
     # Step 11: Capture range snapshot
     log.info("Step 11: Capturing range snapshot...")
@@ -484,52 +555,10 @@ def orchestrate_lab_start(
 
     # Step 12: Build MCP servers (non-critical)
     log.info("Step 12: Building MCP servers...")
-    mcp_script = project_dir / "mcp" / "build-all-mcps.sh"
-    if mcp_script.exists():
-        try:
-            mcp_result = subprocess.run(
-                [str(mcp_script)],
-                capture_output=True,
-                text=True,
-                cwd=project_dir,
-            )
-            if mcp_result.returncode != 0:
-                log.warning("MCP build had errors: %s", mcp_result.stderr)
-            else:
-                log.info("MCP servers built successfully")
-        except (FileNotFoundError, OSError) as exc:
-            log.warning("Failed to build MCP servers: %s", exc)
-    else:
-        log.warning("MCP build script not found at %s", mcp_script)
+    _build_mcp_servers(project_dir)
 
     # Step 13: Seed SOC tools (non-critical)
-    if skip_seed:
-        log.info("Step 13: Skipping SOC seeding (--skip-seed)")
-    else:
-        log.info("Step 13: Seeding SOC tools...")
-        seed_script = project_dir / "scripts" / "seed-prime.sh"
-        if seed_script.exists() and config.containers.soc:
-            try:
-                seed_result = subprocess.run(
-                    [str(seed_script)],
-                    capture_output=True,
-                    text=True,
-                    cwd=project_dir,
-                    timeout=1200,
-                )
-                if seed_result.returncode != 0:
-                    log.warning("SOC seeding had errors: %s", seed_result.stderr)
-                else:
-                    log.info("SOC tools seeded successfully")
-            except subprocess.TimeoutExpired:
-                log.warning("SOC seeding timed out (non-fatal)")
-            except (FileNotFoundError, OSError) as exc:
-                log.warning("Failed to seed SOC tools: %s", exc)
-        else:
-            if not seed_script.exists():
-                log.debug("SOC seed script not found at %s", seed_script)
-            elif not config.containers.soc:
-                log.debug("SOC profile not enabled, skipping seed")
+    _seed_soc_tools(project_dir, config, skip_seed)
 
     log.info("APTL lab started successfully!")
     return LabResult(success=True, message="Lab started successfully")

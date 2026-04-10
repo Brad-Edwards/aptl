@@ -1,0 +1,1 @@
+- [Fix all failures](feedback_ownership.md) — Never dismiss failures as "pre-existing"; fix everything encountered

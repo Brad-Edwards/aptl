@@ -1,0 +1,682 @@
+name: port-authority-surge-response
+description: >
+  Port authority surge-day exercise covering customs coordination,
+  manifest integrity, yard OT disruption, and blackstart-style recovery
+  of crane operations during a cargo spike.
+
+nodes:
+  public-edge: {type: Switch, description: Public shipping and partner ingress}
+  terminal-it: {type: Switch, description: Terminal operating systems and portal tier}
+  customs-link: {type: Switch, description: Customs and partner integration boundary}
+  yard-ot: {type: Switch, description: Yard control and PLC zone}
+  safety-net: {type: Switch, description: Safety and camera analytics zone}
+  vendor-net: {type: Switch, description: Vendor maintenance path}
+  security-net: {type: Switch, description: SOC monitoring network}
+  backup-net: {type: Switch, description: Historian and backup network}
+
+  shipping-portal:
+    type: VM
+    os: linux
+    source: portal-app
+    resources: {ram: 4 gib, cpu: 2}
+    features: {shipping-portal-app: portal-admin}
+    conditions: {portal-healthy: portal-admin}
+    services:
+      - {port: 443, name: shipping-portal-https}
+    roles:
+      portal-admin:
+        username: portal
+        entities: [port-blue.it]
+
+  manifest-db:
+    type: VM
+    os: linux
+    source: manifest-db
+    resources: {ram: 8 gib, cpu: 4}
+    features: {manifest-store: dba}
+    conditions:
+      manifest-integrity-ok: dba
+      tampered-manifest-observed: dba
+    services:
+      - {port: 5432, name: manifest-postgres}
+    roles:
+      dba:
+        username: postgres
+        entities: [port-blue.it]
+    asset_value:
+      integrity: critical
+      availability: high
+
+  terminal-ops:
+    type: VM
+    os: linux
+    source: terminal-operating-system
+    resources: {ram: 6 gib, cpu: 4}
+    features: {terminal-service: tos-admin}
+    conditions: {terminal-throughput-healthy: tos-admin}
+    services:
+      - {port: 443, name: tos-https}
+    roles:
+      tos-admin:
+        username: tosadmin
+        entities: [port-blue.it]
+
+  port-idp:
+    type: VM
+    os: linux
+    source: port-idp
+    resources: {ram: 2 gib, cpu: 1}
+    features: {port-sso: idp-admin}
+    conditions: {port-sso-healthy: idp-admin}
+    services:
+      - {port: 443, name: port-sso-https}
+    roles:
+      idp-admin:
+        username: idpadmin
+        entities: [port-blue.it]
+
+  customs-gateway:
+    type: VM
+    os: linux
+    source: customs-gateway
+    resources: {ram: 2 gib, cpu: 2}
+    features: {customs-api: customs-admin}
+    conditions: {customs-link-healthy: customs-admin}
+    services:
+      - {port: 443, name: customs-api-https}
+    roles:
+      customs-admin:
+        username: customs
+        entities: [customs-agency]
+
+  yard-hmi:
+    type: VM
+    os: windows
+    os_version: "10"
+    source: yard-hmi
+    resources: {ram: 4 gib, cpu: 2}
+    features: {yard-hmi-app: hmi-admin}
+    conditions:
+      crane-safe-mode: hmi-admin
+      operator-visibility-healthy: hmi-admin
+    services:
+      - {port: 3389, name: yard-hmi-rdp}
+      - {port: 443, name: yard-hmi-web}
+    roles:
+      hmi-admin:
+        username: craneops
+        entities: [port-blue.yard-ops]
+    asset_value:
+      integrity: critical
+      availability: critical
+
+  crane-plc:
+    type: VM
+    os: other
+    source: crane-plc
+    resources: {ram: 512 mib, cpu: 1}
+    features: {crane-control: plc-admin}
+    conditions: {crane-plc-online: plc-admin}
+    services:
+      - {port: 4840, name: crane-opcua}
+    roles: {plc-admin: plcsvc}
+
+  gate-kiosk:
+    type: VM
+    os: windows
+    os_version: "11"
+    source: gate-kiosk
+    resources: {ram: 2 gib, cpu: 1}
+    conditions: {gate-processing-healthy: kiosk-admin}
+    services:
+      - {port: 443, name: gate-kiosk-https}
+    roles: {kiosk-admin: kiosk}
+
+  camera-analytics:
+    type: VM
+    os: linux
+    source: camera-analytics
+    resources: {ram: 4 gib, cpu: 2}
+    features: {camera-ai: camera-admin}
+    conditions: {camera-analytics-healthy: camera-admin}
+    services:
+      - {port: 443, name: camera-analytics-ui}
+    roles:
+      camera-admin:
+        username: camera
+        entities: [port-blue.yard-ops]
+
+  historian01:
+    type: VM
+    os: linux
+    source: ot-historian
+    resources: {ram: 4 gib, cpu: 2}
+    features: {historian-service: historian-admin}
+    conditions:
+      yard-telemetry-flowing: historian-admin
+      historian-replication-ok: historian-admin
+    services:
+      - {port: 443, name: historian-ui}
+    roles: {historian-admin: historian}
+
+  vendor-jump:
+    type: VM
+    os: linux
+    source: vendor-jump
+    resources: {ram: 2 gib, cpu: 1}
+    conditions: {vendor-jump-healthy: vendor-admin}
+    services:
+      - {port: 22, name: vendor-jump-ssh}
+    roles:
+      vendor-admin:
+        username: vendor
+        entities: [vendor-maintenance]
+
+  soc01:
+    type: VM
+    os: linux
+    source: siem-stack
+    resources: {ram: 8 gib, cpu: 4}
+    features:
+      port-siem: soc-admin
+      yard-edr: soc-admin
+    conditions:
+      soc-feed-healthy: soc-admin
+      surge-incident-ticketed: soc-admin
+    services:
+      - {port: 5601, name: port-soc-ui}
+    roles:
+      soc-admin:
+        username: soc
+        entities: [port-blue.incident-command]
+
+  backup-vault:
+    type: VM
+    os: linux
+    source: immutable-backup
+    resources: {ram: 4 gib, cpu: 2}
+    features: {yard-backup: backup-admin}
+    conditions: {blackstart-runbook-ready: backup-admin}
+    services:
+      - {port: 443, name: yard-backup-ui}
+    roles:
+      backup-admin:
+        username: backup
+        entities: [port-blue.incident-command]
+
+infrastructure:
+  public-edge:
+    count: 1
+    properties: {cidr: 10.110.0.0/24, gateway: 10.110.0.1}
+  terminal-it:
+    count: 1
+    properties: {cidr: 10.110.1.0/24, gateway: 10.110.1.1, internal: true}
+  customs-link:
+    count: 1
+    properties: {cidr: 10.110.2.0/24, gateway: 10.110.2.1}
+  yard-ot:
+    count: 1
+    properties: {cidr: 10.110.3.0/24, gateway: 10.110.3.1, internal: true}
+    acls:
+      - {name: allow-yard-control, direction: in, from_net: terminal-it, protocol: tcp, ports: [443, 4840], action: allow}
+      - {name: deny-public-yard, direction: in, from_net: public-edge, action: deny}
+  safety-net:
+    count: 1
+    properties: {cidr: 10.110.4.0/24, gateway: 10.110.4.1, internal: true}
+  vendor-net:
+    count: 1
+    properties: {cidr: 10.110.5.0/24, gateway: 10.110.5.1, internal: true}
+  security-net:
+    count: 1
+    properties: {cidr: 10.110.6.0/24, gateway: 10.110.6.1, internal: true}
+  backup-net:
+    count: 1
+    properties: {cidr: 10.110.7.0/24, gateway: 10.110.7.1, internal: true}
+
+  shipping-portal: {count: 1, links: [public-edge, terminal-it, customs-link]}
+  manifest-db:
+    count: 1
+    links: [terminal-it, backup-net]
+    dependencies: [backup-vault]
+  terminal-ops:
+    count: 1
+    links: [terminal-it, customs-link, yard-ot]
+    dependencies: [manifest-db, port-idp]
+  port-idp: {count: 1, links: [terminal-it, customs-link]}
+  customs-gateway: {count: 1, links: [customs-link, terminal-it]}
+  yard-hmi:
+    count: 1
+    links: [yard-ot, safety-net]
+    dependencies: [terminal-ops]
+  crane-plc:
+    count: 1
+    links: [yard-ot]
+  gate-kiosk: {count: 1, links: [terminal-it]}
+  camera-analytics: {count: 1, links: [safety-net, security-net]}
+  historian01:
+    count: 1
+    links: [yard-ot, backup-net]
+    dependencies: [backup-vault]
+  vendor-jump: {count: 1, links: [vendor-net, yard-ot]}
+  soc01: {count: 1, links: [security-net, terminal-it]}
+  backup-vault: {count: 1, links: [backup-net, security-net]}
+
+features:
+  shipping-portal-app: {type: Service, source: react-portal}
+  manifest-store: {type: Service, source: postgres-15}
+  terminal-service: {type: Service, source: tos-core}
+  port-sso: {type: Service, source: keycloak}
+  customs-api: {type: Service, source: customs-rest-bridge}
+  yard-hmi-app: {type: Service, source: yard-hmi}
+  crane-control: {type: Service, source: crane-plc}
+  camera-ai: {type: Service, source: vision-analytics}
+  historian-service: {type: Service, source: historian}
+  port-siem: {type: Service, source: wazuh-elastic-stack}
+  yard-edr: {type: Artifact, source: yard-edr-agent, destination: /opt/edr}
+  yard-backup: {type: Service, source: immutable-backup}
+
+conditions:
+  portal-healthy: {command: /usr/local/bin/check-portal, interval: 30}
+  manifest-integrity-ok: {command: /usr/local/bin/check-manifest-integrity, interval: 30}
+  tampered-manifest-observed: {command: /usr/local/bin/check-tampered-manifest, interval: 60}
+  terminal-throughput-healthy: {command: /usr/local/bin/check-terminal-throughput, interval: 30}
+  port-sso-healthy: {command: /usr/local/bin/check-port-sso, interval: 30}
+  customs-link-healthy: {command: /usr/local/bin/check-customs-link, interval: 30}
+  crane-safe-mode: {command: /usr/local/bin/check-crane-safe-mode, interval: 15}
+  operator-visibility-healthy: {command: /usr/local/bin/check-operator-visibility, interval: 30}
+  crane-plc-online: {command: /usr/local/bin/check-crane-plc, interval: 15}
+  gate-processing-healthy: {command: /usr/local/bin/check-gate-processing, interval: 30}
+  camera-analytics-healthy: {command: /usr/local/bin/check-camera-analytics, interval: 30}
+  yard-telemetry-flowing: {command: /usr/local/bin/check-yard-telemetry, interval: 15}
+  historian-replication-ok: {command: /usr/local/bin/check-historian-replication, interval: 30}
+  vendor-jump-healthy: {command: /usr/local/bin/check-vendor-jump, interval: 30}
+  soc-feed-healthy: {command: /usr/local/bin/check-soc-feed, interval: 30}
+  surge-incident-ticketed: {command: /usr/local/bin/check-surge-ticket, interval: 60}
+  blackstart-runbook-ready: {command: /usr/local/bin/check-blackstart-runbook, interval: 60}
+
+vulnerabilities:
+  stale-customs-token:
+    name: Stale customs federation token
+    description: Customs bridge accepts tokens beyond intended lifetime during surge conditions
+    technical: true
+    class: CWE-613
+  vendor-vpn-cred-reuse:
+    name: Vendor credential reuse
+    description: Shared maintenance credentials allow reuse from the jump host
+    technical: true
+    class: CWE-521
+  flat-yard-trust:
+    name: Flat yard trust
+    description: Yard HMI can directly manage crane PLC without an approval gate
+    technical: true
+    class: CWE-306
+
+metrics:
+  blue-customs-integrity:
+    type: CONDITIONAL
+    max-score: 100
+    condition: manifest-integrity-ok
+  blue-yard-safety:
+    type: CONDITIONAL
+    max-score: 100
+    condition: crane-safe-mode
+  blue-telemetry-retention:
+    type: CONDITIONAL
+    max-score: 100
+    condition: yard-telemetry-flowing
+  blue-ops-brief:
+    type: MANUAL
+    max-score: 50
+    artifact: true
+  red-manifest-impact:
+    type: CONDITIONAL
+    max-score: 100
+    condition: tampered-manifest-observed
+
+evaluations:
+  blue-surge-resilience:
+    metrics: [blue-customs-integrity, blue-yard-safety, blue-telemetry-retention, blue-ops-brief]
+    min-score: 75
+  red-yard-impact:
+    metrics: [red-manifest-impact]
+    min-score: {absolute: 80}
+
+tlos:
+  sustain-safe-throughput:
+    name: Sustain safe throughput
+    evaluation: blue-surge-resilience
+  achieve-yard-disruption:
+    name: Achieve yard disruption
+    evaluation: red-yard-impact
+
+goals:
+  port-blue-goal:
+    tlos: [sustain-safe-throughput]
+  red-cartel-goal:
+    tlos: [achieve-yard-disruption]
+
+entities:
+  port-blue:
+    name: Port Authority Blue Team
+    role: Blue
+    mission: Maintain customs integrity and safe yard operations during the surge
+    tlos: [sustain-safe-throughput]
+    entities:
+      it:
+        name: Port IT
+      yard-ops:
+        name: Yard Operations
+      incident-command:
+        name: Incident Command
+  customs-agency:
+    name: Customs Agency
+    role: Green
+    mission: Clear inbound cargo without compromising compliance
+  vendor-maintenance:
+    name: Vendor Maintenance
+    role: Green
+    mission: Maintain remote support path for crane systems
+  red-cartel:
+    name: Red Cartel
+    role: Red
+    mission: Corrupt manifests and degrade crane operations
+  white-cell:
+    name: White Cell
+    role: White
+
+injects:
+  surge-brief:
+    source: surge-day-brief
+    from_entity: white-cell
+    to_entities: [port-blue, customs-agency]
+    description: Cargo surge and priority humanitarian shipments announced
+  customs-priority-ticket:
+    source: customs-priority-ticket
+    from_entity: customs-agency
+    to_entities: [port-blue]
+    description: High-priority manifest validation request
+  safety-standdown:
+    source: safety-standdown-order
+    from_entity: white-cell
+    to_entities: [port-blue, vendor-maintenance]
+    description: Crane anomalies trigger a safety standdown
+
+events:
+  vessel-arrival:
+    injects: [surge-brief]
+  customs-surge-event:
+    injects: [customs-priority-ticket]
+  yard-standdown:
+    conditions: [tampered-manifest-observed]
+    injects: [safety-standdown]
+
+scripts:
+  arrival-phase:
+    start-time: 0
+    end-time: 2 hour
+    speed: 1
+    events:
+      vessel-arrival: 15 min
+  customs-surge-phase:
+    start-time: 2 hour
+    end-time: 4 hour
+    speed: 1
+    events:
+      customs-surge-event: 150 min
+  yard-disruption-phase:
+    start-time: 4 hour
+    end-time: 7 hour
+    speed: 1
+    events:
+      yard-standdown: 5 hour
+
+stories:
+  surge-day:
+    scripts: [arrival-phase, customs-surge-phase, yard-disruption-phase]
+
+content:
+  cargo-manifests:
+    type: dataset
+    target: manifest-db
+    format: csv
+    source: cargo-manifest-seed
+    sensitive: true
+  hazmat-list:
+    type: file
+    target: terminal-ops
+    path: /srv/tos/hazmat-list.csv
+    text: "container_id,classification\\nHZ-204,flammable\\nHZ-991,oxidizer"
+    sensitive: true
+  customs-holds:
+    type: dataset
+    target: customs-gateway
+    format: json
+    items:
+      - name: hold-HZ-204.json
+        tags: [customs, hold]
+        description: Hold order for hazardous container HZ-204
+      - name: hold-HZ-991.json
+        tags: [customs, hold]
+        description: Hold order for hazardous container HZ-991
+  yard-camera-clips:
+    type: dataset
+    target: camera-analytics
+    format: mp4
+    source: yard-camera-clip-seed
+    sensitive: true
+  blackstart-runbook:
+    type: file
+    target: backup-vault
+    path: /srv/runbooks/yard-blackstart.md
+    text: "Re-establish historian, validate PLC, then return HMI to service."
+    sensitive: true
+
+accounts:
+  harbor-master:
+    username: harbor.master
+    node: terminal-ops
+    groups: [Operations]
+    password_strength: strong
+  customs-officer:
+    username: customs.officer
+    node: customs-gateway
+    groups: [Customs]
+    password_strength: strong
+  crane-operator:
+    username: crane.ops
+    node: yard-hmi
+    groups: [YardOps]
+    password_strength: medium
+  vendor-tech:
+    username: vendor
+    node: vendor-jump
+    groups: [Vendors]
+    password_strength: medium
+  tos-service:
+    username: tos_svc
+    node: terminal-ops
+    groups: [AppServices]
+    password_strength: weak
+  historian-svc:
+    username: hist_svc
+    node: historian01
+    groups: [Historian]
+    password_strength: medium
+  soc-analyst:
+    username: socanalyst
+    node: soc01
+    groups: [SOC]
+    password_strength: strong
+
+relationships:
+  portal-to-manifest:
+    type: connects_to
+    source: shipping-portal-app
+    target: manifest-store
+    properties: {protocol: "tcp", port: "5432"}
+  terminal-auth-portidp:
+    type: authenticates_with
+    source: terminal-service
+    target: port-sso
+  customs-federates-port:
+    type: federates_with
+    source: customs-api
+    target: port-sso
+    properties: {protocol: "OIDC"}
+  hmi-manages-crane:
+    type: manages
+    source: yard-hmi-app
+    target: crane-control
+  historian-replicates-backup:
+    type: replicates_to
+    source: historian-service
+    target: yard-backup
+  vendor-support-path:
+    type: authenticates_with
+    source: vendor-tech
+    target: yard-hmi
+  terminal-depends-customs:
+    type: depends_on
+    source: terminal-service
+    target: customs-api
+
+agents:
+  red-yard-agent:
+    entity: red-cartel
+    actions: [Phish, Tamper, Disable, Pivot]
+    initial_knowledge:
+      hosts: [shipping-portal, vendor-jump, yard-hmi]
+      subnets: [public-edge, vendor-net, yard-ot]
+      services: [shipping-portal-https, vendor-jump-ssh, yard-hmi-web]
+      accounts: [vendor-tech]
+    allowed_subnets: [public-edge, vendor-net, yard-ot, terminal-it]
+    reward_calculator: OTImpact
+  blue-yard-agent:
+    entity: port-blue.yard-ops
+    actions: [Inspect, Isolate, Restore, Validate]
+    starting_accounts: [crane-operator]
+    initial_knowledge:
+      hosts: [yard-hmi, crane-plc, historian01]
+      subnets: [yard-ot, backup-net, safety-net]
+      services: [yard-hmi-rdp, crane-opcua, historian-ui]
+      accounts: [historian-svc]
+    allowed_subnets: [yard-ot, safety-net, backup-net]
+    reward_calculator: SafetyFirst
+  blue-soc-agent:
+    entity: port-blue.incident-command
+    actions: [Monitor, Triage, Coordinate, Recover]
+    starting_accounts: [soc-analyst]
+    initial_knowledge:
+      hosts: [soc01, shipping-portal, terminal-ops]
+      subnets: [security-net, terminal-it]
+      services: [port-soc-ui, shipping-portal-https, tos-https]
+      accounts: [harbor-master, customs-officer]
+    allowed_subnets: [security-net, terminal-it, customs-link, backup-net]
+    reward_calculator: CoordinatedResponse
+
+objectives:
+  red-corrupt-manifests:
+    agent: red-yard-agent
+    actions: [Phish, Tamper]
+    targets: [cargo-manifests, manifest-db, portal-to-manifest]
+    success:
+      conditions: [tampered-manifest-observed]
+      metrics: [red-manifest-impact]
+    window:
+      stories: [surge-day]
+      scripts: [arrival-phase, customs-surge-phase]
+  red-degrade-yard-ops:
+    entity: red-cartel
+    targets: [yard-hmi, crane-plc, hmi-manages-crane]
+    success:
+      goals: [red-cartel-goal]
+    depends_on: [red-corrupt-manifests]
+    window:
+      stories: [surge-day]
+      scripts: [yard-disruption-phase]
+      events: [yard-standdown]
+  blue-maintain-customs-integrity:
+    agent: blue-soc-agent
+    actions: [Monitor, Triage, Coordinate]
+    targets: [customs-gateway, manifest-db, customs-federates-port]
+    success:
+      metrics: [blue-customs-integrity]
+      conditions: [customs-link-healthy]
+    window:
+      stories: [surge-day]
+      scripts: [arrival-phase, customs-surge-phase]
+      workflows: [yard-recovery]
+      steps: [yard-recovery.maintain-integrity]
+  blue-blackstart-yard:
+    agent: blue-yard-agent
+    actions: [Inspect, Isolate, Restore, Validate]
+    targets:
+      - backup-vault
+      - historian01
+      - yard-hmi
+      - historian-replicates-backup
+      - nodes.crane-plc.services.crane-opcua
+      - infrastructure.yard-ot.acls.allow-yard-control
+    success:
+      goals: [port-blue-goal]
+    depends_on: [blue-maintain-customs-integrity, red-degrade-yard-ops]
+    window:
+      stories: [surge-day]
+      scripts: [yard-disruption-phase]
+      events: [yard-standdown]
+      workflows: [yard-recovery]
+      steps: [yard-recovery.restore-yard]
+  blue-validate-yard-telemetry:
+    agent: blue-yard-agent
+    actions: [Inspect, Validate]
+    targets:
+      - historian01
+      - camera-analytics
+      - nodes.historian01.services.historian-ui
+      - infrastructure.yard-ot.acls.allow-yard-control
+    success:
+      conditions: [yard-telemetry-flowing, historian-replication-ok]
+      metrics: [blue-telemetry-retention]
+    depends_on: [red-degrade-yard-ops]
+    window:
+      stories: [surge-day]
+      scripts: [yard-disruption-phase]
+      events: [yard-standdown]
+      workflows: [yard-recovery]
+      steps: [yard-recovery.validate-telemetry]
+
+workflows:
+  yard-recovery:
+    description: >
+      Recovery workflow that preserves customs integrity, branches into
+      blackstart-style OT recovery when tampering is observed, and joins
+      yard restoration with telemetry validation before declaring finish.
+    start: maintain-integrity
+    steps:
+      maintain-integrity:
+        type: objective
+        objective: blue-maintain-customs-integrity
+        on-success: assess-yard
+      assess-yard:
+        type: decision
+        when:
+          conditions: [tampered-manifest-observed]
+        then: fanout-blackstart
+        else: finish
+      fanout-blackstart:
+        type: parallel
+        branches: [restore-yard, validate-telemetry]
+        join: blackstart-joined
+      restore-yard:
+        type: objective
+        objective: blue-blackstart-yard
+        on-success: blackstart-joined
+      validate-telemetry:
+        type: objective
+        objective: blue-validate-yard-telemetry
+        on-success: blackstart-joined
+      blackstart-joined:
+        type: join
+        next: finish
+      finish:
+        type: end

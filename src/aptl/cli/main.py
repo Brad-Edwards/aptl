@@ -5,7 +5,7 @@ from typing import Optional
 import typer
 
 import aptl
-from aptl.cli import lab, config, container, scenario, runs
+from aptl.cli import config, container, kill, lab, runs, sdl, web
 
 app = typer.Typer(
     name="aptl",
@@ -16,8 +16,10 @@ app = typer.Typer(
 app.add_typer(lab.app, name="lab")
 app.add_typer(config.app, name="config")
 app.add_typer(container.app, name="container")
-app.add_typer(scenario.app, name="scenario")
 app.add_typer(runs.app, name="runs")
+app.add_typer(web.app, name="web")
+app.add_typer(kill.app, name="kill")
+app.add_typer(sdl.app, name="sdl")
 
 
 def _version_callback(value: bool) -> None:

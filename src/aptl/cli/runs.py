@@ -13,6 +13,9 @@ from aptl.utils.logging import get_logger
 
 log = get_logger("cli.runs")
 
+_HELP_PROJECT_DIR = "Path to the APTL project directory."
+_HELP_RUN_ID = "Run UUID (full or prefix)."
+
 app = typer.Typer(help="Experiment run management.")
 console = Console()
 
@@ -38,7 +41,7 @@ def list_runs(
         Path("."),
         "--project-dir",
         "-d",
-        help="Path to the APTL project directory.",
+        help=_HELP_PROJECT_DIR,
     ),
     limit: int = typer.Option(
         20,
@@ -98,14 +101,33 @@ def list_runs(
     typer.echo(f"\n{len(run_ids)} run(s) shown (of {len(store.list_runs())} total)")
 
 
+def _format_size(size: int) -> str:
+    """Format a file size as a human-readable string."""
+    if size > 1024 * 1024:
+        return f"{size / 1024 / 1024:.1f} MB"
+    if size > 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size} B"
+
+
+def _print_run_files(run_path: Path) -> None:
+    """Print the file listing for a run directory."""
+    typer.echo("")
+    typer.echo("Files:")
+    for item in sorted(run_path.rglob("*")):
+        if item.is_file():
+            rel = item.relative_to(run_path)
+            typer.echo(f"  {rel}  ({_format_size(item.stat().st_size)})")
+
+
 @app.command("show")
 def show_run(
-    run_id: str = typer.Argument(help="Run UUID (full or prefix)."),
+    run_id: str = typer.Argument(help=_HELP_RUN_ID),
     project_dir: Path = typer.Option(
         Path("."),
         "--project-dir",
         "-d",
-        help="Path to the APTL project directory.",
+        help=_HELP_PROJECT_DIR,
     ),
 ) -> None:
     """Show details of a specific run."""
@@ -148,29 +170,17 @@ def show_run(
     # List files in run directory
     run_path = store.get_run_path(resolved_id)
     if run_path.exists():
-        typer.echo("")
-        typer.echo("Files:")
-        for item in sorted(run_path.rglob("*")):
-            if item.is_file():
-                rel = item.relative_to(run_path)
-                size = item.stat().st_size
-                if size > 1024 * 1024:
-                    size_str = f"{size / 1024 / 1024:.1f} MB"
-                elif size > 1024:
-                    size_str = f"{size / 1024:.1f} KB"
-                else:
-                    size_str = f"{size} B"
-                typer.echo(f"  {rel}  ({size_str})")
+        _print_run_files(run_path)
 
 
 @app.command("path")
 def run_path(
-    run_id: str = typer.Argument(help="Run UUID (full or prefix)."),
+    run_id: str = typer.Argument(help=_HELP_RUN_ID),
     project_dir: Path = typer.Option(
         Path("."),
         "--project-dir",
         "-d",
-        help="Path to the APTL project directory.",
+        help=_HELP_PROJECT_DIR,
     ),
 ) -> None:
     """Print the filesystem path to a run directory."""
@@ -203,12 +213,12 @@ def _resolve_run_id(store: LocalRunStore, run_id: str) -> str:
 
 @app.command("export")
 def export_run(
-    run_id: str = typer.Argument(help="Run UUID (full or prefix)."),
+    run_id: str = typer.Argument(help=_HELP_RUN_ID),
     project_dir: Path = typer.Option(
         Path("."),
         "--project-dir",
         "-d",
-        help="Path to the APTL project directory.",
+        help=_HELP_PROJECT_DIR,
     ),
     output_dir: Path = typer.Option(
         Path("./exports"),

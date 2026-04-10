@@ -1,7 +1,7 @@
 
 
-import { homedir } from 'os';
-import { resolve } from 'path';
+import { homedir } from 'node:os';
+import { resolve } from 'node:path';
 
 /**
  * Expand tilde (~) in file paths to the user's home directory

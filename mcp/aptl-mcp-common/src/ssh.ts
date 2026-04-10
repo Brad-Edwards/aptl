@@ -67,6 +67,13 @@ export interface CommandRequest {
   raw?: boolean;
 }
 
+export interface SessionOptions {
+  port?: number;
+  mode?: SessionMode;
+  timeoutMs?: number;
+  shellType?: ShellType;
+}
+
 interface ConnectionInfo {
   client: Client;
   connected: boolean;
@@ -102,12 +109,10 @@ export class PersistentSession extends EventEmitter {
     username: string,
     type: SessionType,
     client: Client,
-    port: number = 22,
-    mode: SessionMode = 'normal',
-    timeoutMs: number = TIMEOUTS.DEFAULT_SESSION,
-    shellType: ShellType = 'bash'
+    options: SessionOptions = {}
   ) {
     super();
+    const { port = 22, mode = 'normal', timeoutMs = TIMEOUTS.DEFAULT_SESSION, shellType = 'bash' } = options;
     this.client = client;
     this.sessionTimeoutMs = timeoutMs;
     this.commandDelimiter = `___CMD_${Date.now()}_${Math.random().toString(36).substring(2, 11)}___`;
@@ -580,17 +585,15 @@ export class SSHConnectionManager {
     username: string,
     type: SessionType,
     privateKeyPath: string,
-    port: number = 22,
-    mode: SessionMode = 'normal',
-    timeoutMs: number = TIMEOUTS.DEFAULT_SESSION,
-    shellType: ShellType = 'bash'
+    options: SessionOptions = {}
   ): Promise<PersistentSession> {
     if (this.sessions.has(sessionId)) {
       throw new SSHError(`Session with ID '${sessionId}' already exists`);
     }
 
+    const { port = 22 } = options;
     const client = await this.getConnection(target, username, privateKeyPath, port);
-    const session = new PersistentSession(sessionId, target, username, type, client, port, mode, timeoutMs, shellType);
+    const session = new PersistentSession(sessionId, target, username, type, client, options);
 
     await session.initialize();
     this.sessions.set(sessionId, session);

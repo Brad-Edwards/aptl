@@ -21,7 +21,7 @@ const insecureAgent = new https.Agent({ rejectUnauthorized: false });
  * Generic HTTP client for API operations
  */
 export class HTTPClient {
-  constructor(private config: LabConfig['api']) {
+  constructor(private readonly config: LabConfig['api']) {
     if (!config) {
       throw new Error('API configuration is required');
     }
@@ -34,12 +34,13 @@ export class HTTPClient {
     const { auth } = this.config!;
 
     switch (auth.type) {
-      case 'basic':
+      case 'basic': {
         if (!auth.username || !auth.password) {
           throw new Error('Username and password required for basic auth');
         }
         const basicAuth = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
         return { 'Authorization': `Basic ${basicAuth}` };
+      }
 
       case 'bearer':
         if (!auth.token) {

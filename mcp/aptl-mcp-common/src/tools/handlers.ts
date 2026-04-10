@@ -183,10 +183,7 @@ const baseHandlers: Record<string, ToolHandler> = {
         credentials.username,
         'interactive',
         credentials.sshKey,
-        credentials.port,
-        'normal',
-        timeout_ms,
-        getShellType(labConfig)
+        { port: credentials.port, mode: 'normal', timeoutMs: timeout_ms, shellType: getShellType(labConfig) }
       );
 
       const sessionInfo = session.getSessionInfo();
@@ -239,10 +236,7 @@ const baseHandlers: Record<string, ToolHandler> = {
         credentials.username,
         'background',
         credentials.sshKey,
-        credentials.port,
-        raw ? 'raw' : 'normal',
-        timeout_ms,
-        getShellType(labConfig)
+        { port: credentials.port, mode: raw ? 'raw' : 'normal', timeoutMs: timeout_ms, shellType: getShellType(labConfig) }
       );
 
       const sessionInfo = session.getSessionInfo();

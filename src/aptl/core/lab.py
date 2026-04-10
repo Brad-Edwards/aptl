@@ -209,6 +209,25 @@ def lab_status(
     return backend.status()
 
 
+def _check_service_volumes(
+    svc_name: str, svc_def: dict, project_dir: Path,
+) -> list[str]:
+    """Check bind-mount sources for a single service definition."""
+    errors: list[str] = []
+    for vol in svc_def.get("volumes", []):
+        if not isinstance(vol, str) or not vol.startswith("./"):
+            continue
+        src = vol.split(":")[0]
+        src_path = (project_dir / src).resolve()
+        if not src_path.exists():
+            errors.append(
+                f"Service '{svc_name}': bind-mount source "
+                f"'{src}' does not exist. Create it before "
+                f"starting the lab to avoid root-owned directories."
+            )
+    return errors
+
+
 def _check_bind_mounts(project_dir: Path) -> list[str]:
     """Check that bind-mount source paths exist as files, not root-owned dirs.
 
@@ -230,18 +249,8 @@ def _check_bind_mounts(project_dir: Path) -> list[str]:
     errors: list[str] = []
     services = data.get("services", {}) if isinstance(data, dict) else {}
     for svc_name, svc_def in services.items():
-        if not isinstance(svc_def, dict):
-            continue
-        for vol in svc_def.get("volumes", []):
-            if isinstance(vol, str) and vol.startswith("./"):
-                src = vol.split(":")[0]
-                src_path = (project_dir / src).resolve()
-                if not src_path.exists():
-                    errors.append(
-                        f"Service '{svc_name}': bind-mount source "
-                        f"'{src}' does not exist. Create it before "
-                        f"starting the lab to avoid root-owned directories."
-                    )
+        if isinstance(svc_def, dict):
+            errors.extend(_check_service_volumes(svc_name, svc_def, project_dir))
     return errors
 
 

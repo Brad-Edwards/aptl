@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PersistentSession, SSHConnectionManager, SSHError } from '../src/ssh.js';
 import { ShellType } from '../src/shells.js';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 
 // Test our business logic, not the ssh2 library
 describe('Session State Management', () => {
@@ -13,9 +13,7 @@ describe('Session State Management', () => {
       'test-user',
       'interactive',
       mockClient,
-      2222,
-      'normal',
-      60000
+      { port: 2222, mode: 'normal', timeoutMs: 60000 }
     );
 
     const info = session.getSessionInfo();
@@ -32,7 +30,7 @@ describe('Session State Management', () => {
   it('should return immutable session info copies', () => {
     const mockClient = {} as any;
     const session = new PersistentSession(
-      'test', 'host', 'user', 'interactive', mockClient, 22
+      'test', 'host', 'user', 'interactive', mockClient
     );
 
     const info1 = session.getSessionInfo();
@@ -55,7 +53,7 @@ describe('Session State Management', () => {
 
     const interactive = new PersistentSession('i', 'host', 'user', 'interactive', mockClient);
     const background = new PersistentSession('b', 'host', 'user', 'background', mockClient);
-    const raw = new PersistentSession('r', 'host', 'user', 'interactive', mockClient, 22, 'raw');
+    const raw = new PersistentSession('r', 'host', 'user', 'interactive', mockClient, { mode: 'raw' });
 
     expect(interactive.getSessionInfo().type).toBe('interactive');
     expect(interactive.getSessionInfo().mode).toBe('normal');
@@ -106,7 +104,7 @@ describe('Buffer Management Logic', () => {
   it('should handle buffer operations safely', () => {
     const mockClient = {} as any;
     const session = new PersistentSession(
-      'buffer-test', 'host', 'user', 'background', mockClient, 22
+      'buffer-test', 'host', 'user', 'background', mockClient
     );
 
     // Test empty buffer
@@ -125,7 +123,7 @@ describe('Buffer Management Logic', () => {
   it('should keep newest data when buffer overflows', () => {
     const mockClient = {} as any;
     const session = new PersistentSession(
-      'overflow-test', 'host', 'user', 'background', mockClient, 22
+      'overflow-test', 'host', 'user', 'background', mockClient
     );
 
     // Simulate the private method behavior by accessing outputBuffer
@@ -168,8 +166,7 @@ describe('Shell Type Support', () => {
       'test-host',
       'test-user',
       'interactive',
-      mockClient,
-      22
+      mockClient
     );
 
     // The shell type is handled internally by the formatter
@@ -188,10 +185,7 @@ describe('Shell Type Support', () => {
         'test-user',
         'interactive',
         mockClient,
-        22,
-        'normal',
-        60000,
-        shellType
+        { shellType }
       );
 
       const info = session.getSessionInfo();
@@ -221,10 +215,7 @@ describe('Shell Type Support', () => {
       'Administrator',
       'interactive',
       mockClient,
-      22,
-      'normal',
-      60000,
-      'powershell'
+      { shellType: 'powershell' }
     );
 
     // Initialize the session
@@ -255,7 +246,7 @@ describe('Session Cleanup and Timeout Handling', () => {
     };
 
     session = new PersistentSession(
-      'cleanup-test', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
+      'cleanup-test', 'host', 'user', 'interactive', mockClient, { timeoutMs: 600000 }
     );
 
     // initialize() has a setTimeout(resolve, 1000) that won't fire

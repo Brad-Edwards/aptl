@@ -16,6 +16,8 @@ from aptl.utils.logging import get_logger
 
 log = get_logger("collectors")
 
+_UTC_SUFFIX = "+00:00"
+
 
 def _run_cmd(
     cmd: list[str], timeout: int = 30
@@ -143,7 +145,7 @@ def collect_suricata_eve(start_iso: str, end_iso: str) -> list[dict]:
         ts = entry.get("timestamp", "")
         if ts:
             try:
-                entry_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                entry_dt = datetime.fromisoformat(ts.replace("Z", _UTC_SUFFIX))
                 if start_dt <= entry_dt <= end_dt:
                     records.append(entry)
             except ValueError:
@@ -281,7 +283,7 @@ def collect_shuffle_executions(
         started = ex.get("started_at", "")
         if started:
             try:
-                ex_dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
+                ex_dt = datetime.fromisoformat(started.replace("Z", _UTC_SUFFIX))
                 if start_dt <= ex_dt <= end_dt:
                     filtered.append(ex)
             except ValueError:

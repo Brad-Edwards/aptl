@@ -113,7 +113,7 @@ def _run_cmd(args: list[str], timeout: int = 15) -> str:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
+    except (subprocess.TimeoutExpired, OSError) as e:
         log.debug("Command %s failed: %s", args, e)
     return ""
 
@@ -164,10 +164,56 @@ def _get_software_versions() -> SoftwareVersions:
     return versions
 
 
-def _get_container_snapshots() -> list[ContainerSnapshot]:
-    """Snapshot all aptl- containers with network IPs and port mappings."""
+def _parse_health(status: str) -> str:
+    """Extract health status from a docker status string."""
+    if "(healthy)" in status:
+        return "healthy"
+    if "(unhealthy)" in status:
+        return "unhealthy"
+    if "(health: starting)" in status:
+        return "starting"
+    return ""
+
+
+def _parse_labels(labels_str: str) -> dict[str, str]:
+    """Parse comma-separated key=value label pairs."""
+    labels: dict[str, str] = {}
+    if not labels_str:
+        return labels
+    for pair in labels_str.split(","):
+        if "=" in pair:
+            k, v = pair.split("=", 1)
+            labels[k.strip()] = v.strip()
+    return labels
+
+
+def _parse_network_ips(container_name: str) -> dict[str, str]:
+    """Get per-network IP addresses for a container via docker inspect."""
     import json as _json
 
+    networks: dict[str, str] = {}
+    inspect_out = _run_cmd([
+        "docker", "inspect", container_name,
+        "--format", "{{json .NetworkSettings.Networks}}",
+    ])
+    if not inspect_out:
+        return networks
+    try:
+        net_data = _json.loads(inspect_out)
+    except _json.JSONDecodeError:
+        return networks
+    if not isinstance(net_data, dict):
+        return networks
+    for net_name, net_cfg in net_data.items():
+        if isinstance(net_cfg, dict):
+            ip = net_cfg.get("IPAddress", "")
+            if ip:
+                networks[net_name] = ip
+    return networks
+
+
+def _get_container_snapshots() -> list[ContainerSnapshot]:
+    """Snapshot all aptl- containers with network IPs and port mappings."""
     fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
     out = _run_cmd([
         "docker", "ps", "-a", "--filter", "name=aptl-", "--format", fmt,
@@ -181,59 +227,18 @@ def _get_container_snapshots() -> list[ContainerSnapshot]:
         if len(parts) < 5:
             continue
 
-        name = parts[0]
-        image = parts[1]
-        image_id = parts[2]
-        status = parts[3]
-        labels_str = parts[4]
+        name, image, image_id, status, labels_str = parts[:5]
         ports_str = parts[5] if len(parts) > 5 else ""
-
-        # Parse health from status string
-        health = ""
-        if "(healthy)" in status:
-            health = "healthy"
-        elif "(unhealthy)" in status:
-            health = "unhealthy"
-        elif "(health: starting)" in status:
-            health = "starting"
-
-        # Parse labels
-        labels = {}
-        if labels_str:
-            for pair in labels_str.split(","):
-                if "=" in pair:
-                    k, v = pair.split("=", 1)
-                    labels[k.strip()] = v.strip()
-
-        # Parse port mappings
         ports = [p.strip() for p in ports_str.split(",") if p.strip()] if ports_str else []
-
-        # Get per-network IPs via docker inspect
-        networks: dict[str, str] = {}
-        inspect_out = _run_cmd([
-            "docker", "inspect", name,
-            "--format", "{{json .NetworkSettings.Networks}}",
-        ])
-        if inspect_out:
-            try:
-                net_data = _json.loads(inspect_out)
-                if isinstance(net_data, dict):
-                    for net_name, net_cfg in net_data.items():
-                        if isinstance(net_cfg, dict):
-                            ip = net_cfg.get("IPAddress", "")
-                            if ip:
-                                networks[net_name] = ip
-            except _json.JSONDecodeError:
-                pass
 
         snapshots.append(ContainerSnapshot(
             name=name,
             image=image,
             image_id=image_id,
             status=status,
-            health=health,
-            labels=labels,
-            networks=networks,
+            health=_parse_health(status),
+            labels=_parse_labels(labels_str),
+            networks=_parse_network_ips(name),
             ports=ports,
         ))
 

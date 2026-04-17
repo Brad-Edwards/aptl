@@ -1,15 +1,20 @@
 """Stub runtime backends for compiler/planner testing."""
 
+from datetime import UTC, datetime
+
 from aptl.core.runtime.capabilities import (
     BackendManifest,
     EvaluatorCapabilities,
     OrchestratorCapabilities,
     ProvisionerCapabilities,
+    WorkflowFeature,
+    WorkflowStatePredicateFeature,
 )
 from aptl.core.runtime.models import (
     ApplyResult,
     ChangeAction,
     Diagnostic,
+    EVALUATION_STATE_SCHEMA_VERSION,
     EvaluationPlan,
     OrchestrationPlan,
     ProvisioningPlan,
@@ -47,6 +52,25 @@ def create_stub_manifest(**config) -> BackendManifest:
             supports_workflows=True,
             supports_condition_refs=True,
             supports_inject_bindings=True,
+            supported_workflow_features=frozenset(
+                {
+                    WorkflowFeature.DECISION,
+                    WorkflowFeature.SWITCH,
+                    WorkflowFeature.CALL,
+                    WorkflowFeature.PARALLEL_BARRIER,
+                    WorkflowFeature.RETRY,
+                    WorkflowFeature.FAILURE_TRANSITIONS,
+                    WorkflowFeature.CANCELLATION,
+                    WorkflowFeature.TIMEOUTS,
+                    WorkflowFeature.COMPENSATION,
+                }
+            ),
+            supported_workflow_state_predicates=frozenset(
+                {
+                    WorkflowStatePredicateFeature.OUTCOME_MATCHING,
+                    WorkflowStatePredicateFeature.ATTEMPT_COUNTS,
+                }
+            ),
         ),
         evaluator=EvaluatorCapabilities(
             name="stub-evaluator",
@@ -103,6 +127,8 @@ class StubOrchestrator:
     def __init__(self) -> None:
         self._running = False
         self._startup_order: list[str] = []
+        self._results: dict[str, dict[str, object]] = {}
+        self._history: dict[str, list[dict[str, object]]] = {}
 
     def start(
         self,
@@ -110,10 +136,18 @@ class StubOrchestrator:
         snapshot: RuntimeSnapshot,
     ) -> ApplyResult:
         entries = dict(snapshot.entries)
+        results = dict(snapshot.orchestration_results)
+        history = {
+            workflow_address: list(events)
+            for workflow_address, events in snapshot.orchestration_history.items()
+        }
         changed_addresses: list[str] = []
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         for op in plan.operations:
             if op.action == ChangeAction.DELETE:
                 entries.pop(op.address, None)
+                results.pop(op.address, None)
+                history.pop(op.address, None)
                 changed_addresses.append(op.address)
                 continue
             status = "queued" if op.resource_type in {"event", "script", "story", "workflow"} else "bound"
@@ -126,13 +160,58 @@ class StubOrchestrator:
                 refresh_dependencies=op.refresh_dependencies,
                 status=status,
             )
+            if op.resource_type == "workflow":
+                result_contract = op.payload.get("result_contract", {})
+                observable_steps = result_contract.get("observable_steps", {})
+                observable_steps = {
+                    step_name: {
+                        "lifecycle": "pending",
+                        "outcome": None,
+                        "attempts": 0,
+                    }
+                    for step_name, step_payload in observable_steps.items()
+                    if isinstance(step_payload, dict)
+                }
+                results[op.address] = {
+                    "state_schema_version": result_contract.get(
+                        "state_schema_version",
+                        op.payload.get("state_schema_version", "workflow-step-state/v1"),
+                    ),
+                    "workflow_status": "running",
+                    "run_id": f"{op.address}-run",
+                    "started_at": now,
+                    "updated_at": now,
+                    "terminal_reason": None,
+                    "compensation_status": "not_required",
+                    "compensation_started_at": None,
+                    "compensation_updated_at": None,
+                    "compensation_failures": [],
+                    "steps": observable_steps,
+                }
+                history[op.address] = [
+                    {
+                        "event_type": "workflow_started",
+                        "timestamp": now,
+                        "step_name": op.payload.get("execution_contract", {}).get("start_step"),
+                        "branch_name": None,
+                        "join_step": None,
+                        "outcome": None,
+                        "details": {},
+                    }
+                ]
             if op.action != ChangeAction.UNCHANGED:
                 changed_addresses.append(op.address)
         self._running = bool(plan.resources)
         self._startup_order = list(plan.startup_order)
+        self._results = results
+        self._history = history
         return ApplyResult(
             success=True,
-            snapshot=snapshot.with_entries(entries),
+            snapshot=snapshot.with_entries(
+                entries,
+                orchestration_results=results,
+                orchestration_history=history,
+            ),
             changed_addresses=changed_addresses,
         )
 
@@ -140,6 +219,16 @@ class StubOrchestrator:
         return {
             "running": self._running,
             "startup_order": list(self._startup_order),
+            "results": len(self._results),
+        }
+
+    def results(self) -> dict[str, dict[str, object]]:
+        return dict(self._results)
+
+    def history(self) -> dict[str, list[dict[str, object]]]:
+        return {
+            workflow_address: list(events)
+            for workflow_address, events in self._history.items()
         }
 
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
@@ -155,9 +244,15 @@ class StubOrchestrator:
         ]
         self._running = False
         self._startup_order = []
+        self._results = {}
+        self._history = {}
         return ApplyResult(
             success=True,
-            snapshot=snapshot.with_entries(entries),
+            snapshot=snapshot.with_entries(
+                entries,
+                orchestration_results={},
+                orchestration_history={},
+            ),
             changed_addresses=removed,
         )
 
@@ -169,6 +264,7 @@ class StubEvaluator:
         self._running = False
         self._startup_order: list[str] = []
         self._results: dict[str, dict[str, object]] = {}
+        self._history: dict[str, list[dict[str, object]]] = {}
 
     def start(
         self,
@@ -178,10 +274,16 @@ class StubEvaluator:
         entries = dict(snapshot.entries)
         changed_addresses: list[str] = []
         results = dict(snapshot.evaluation_results)
+        history = {
+            address: list(events)
+            for address, events in snapshot.evaluation_history.items()
+        }
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         for op in plan.operations:
             if op.action == ChangeAction.DELETE:
                 entries.pop(op.address, None)
                 results.pop(op.address, None)
+                history.pop(op.address, None)
                 changed_addresses.append(op.address)
                 continue
             entries[op.address] = SnapshotEntry(
@@ -193,20 +295,64 @@ class StubEvaluator:
                 refresh_dependencies=op.refresh_dependencies,
                 status="evaluating",
             )
-            results[op.address] = {
-                "passed": True,
+            result_contract = op.payload.get("result_contract", {})
+            resource_type = str(result_contract.get("resource_type", op.resource_type))
+            result_payload: dict[str, object] = {
+                "state_schema_version": result_contract.get(
+                    "state_schema_version",
+                    EVALUATION_STATE_SCHEMA_VERSION,
+                ),
+                "resource_type": resource_type,
+                "run_id": "evaluation-run",
+                "status": "ready",
+                "observed_at": now,
+                "updated_at": now,
                 "detail": f"stub result for {op.address}",
+                "evidence_refs": [],
             }
+            if result_contract.get("supports_score"):
+                fixed_max_score = result_contract.get("fixed_max_score")
+                result_payload["score"] = fixed_max_score if fixed_max_score is not None else 100
+                result_payload["max_score"] = fixed_max_score if fixed_max_score is not None else 100
+            if result_contract.get("supports_passed"):
+                result_payload["passed"] = True
+            results[op.address] = result_payload
+            history[op.address] = [
+                {
+                    "event_type": "evaluation_started",
+                    "timestamp": now,
+                    "status": "running",
+                    "passed": None,
+                    "score": None,
+                    "max_score": None,
+                    "detail": None,
+                    "evidence_refs": [],
+                    "details": {},
+                },
+                {
+                    "event_type": "evaluation_ready",
+                    "timestamp": now,
+                    "status": "ready",
+                    "passed": result_payload.get("passed"),
+                    "score": result_payload.get("score"),
+                    "max_score": result_payload.get("max_score"),
+                    "detail": result_payload.get("detail"),
+                    "evidence_refs": list(result_payload.get("evidence_refs", [])),
+                    "details": {},
+                },
+            ]
             if op.action != ChangeAction.UNCHANGED:
                 changed_addresses.append(op.address)
         self._running = bool(plan.resources)
         self._startup_order = list(plan.startup_order)
         self._results = results
+        self._history = history
         return ApplyResult(
             success=True,
             snapshot=snapshot.with_entries(
                 entries,
                 evaluation_results=results,
+                evaluation_history=history,
             ),
             changed_addresses=changed_addresses,
         )
@@ -220,6 +366,12 @@ class StubEvaluator:
 
     def results(self) -> dict[str, dict[str, object]]:
         return dict(self._results)
+
+    def history(self) -> dict[str, list[dict[str, object]]]:
+        return {
+            address: list(events)
+            for address, events in self._history.items()
+        }
 
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         entries = {
@@ -235,9 +387,14 @@ class StubEvaluator:
         self._running = False
         self._startup_order = []
         self._results = {}
+        self._history = {}
         return ApplyResult(
             success=True,
-            snapshot=snapshot.with_entries(entries, evaluation_results={}),
+            snapshot=snapshot.with_entries(
+                entries,
+                evaluation_results={},
+                evaluation_history={},
+            ),
             changed_addresses=removed,
         )
 

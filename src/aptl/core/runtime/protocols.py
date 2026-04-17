@@ -43,6 +43,14 @@ class Orchestrator(Protocol):
         """Return current orchestration status."""
         ...
 
+    def results(self) -> dict[str, dict[str, Any]]:
+        """Return most recent workflow execution state envelope."""
+        ...
+
+    def history(self) -> dict[str, list[dict[str, Any]]]:
+        """Return workflow execution history events."""
+        ...
+
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         """Stop orchestration and clear orchestration state."""
         ...
@@ -65,6 +73,10 @@ class Evaluator(Protocol):
 
     def results(self) -> dict[str, dict[str, Any]]:
         """Return most recent evaluation results."""
+        ...
+
+    def history(self) -> dict[str, list[dict[str, Any]]]:
+        """Return evaluation history events."""
         ...
 
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:

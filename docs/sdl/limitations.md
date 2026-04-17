@@ -18,7 +18,8 @@ These are intentionally excluded from the specification layer:
 - **Extra hosts** (/etc/hosts overrides) — deployment detail
 - **Ulimits** (nofile, memlock) — deployment detail
 
-These will be addressed by a future SDL → Docker Compose / Terraform provider binding layer.
+These remain outside the language itself and are addressed by provider bindings
+and runtime deployment adapters rather than by the SDL surface.
 
 ### Specification-Layer Gaps (future SDL work)
 
@@ -26,10 +27,10 @@ These are things that *should* be expressible in the SDL but aren't yet:
 
 | Gap | Description | Candidate Precedent |
 |-----|-------------|-------------------|
-| **Module composition** | Import and compose scenario modules with version constraints and parameter overrides | Terraform modules, TOSCA type derivation |
-| **Switch / richer step effects** | SDL workflows support branching, parallel, loops (`while`), error recovery (`on-error`), and outcome-based conditionals (`step-outcomes`), but not switch/case routing or richer step effects beyond objective execution | CACAO v2.0 workflow types |
+| **Hosted registry operations / ecosystem distribution** | OCI-backed module resolution, lockfiles, trust policy, and publishable image-layout packaging now exist, but operating a shared registry service, signer distribution, and ecosystem-wide discovery policy are still future work | Terraform registry, OCI artifact delivery |
+| **Manual compensation APIs / advanced rollback patterns** | SDL workflows now support explicit automatic compensation targets, reverse-completion rollback ordering, and cancel/timeout/failure compensation observation, but not manual rollback triggers, nested compensation-of-compensation, or richer exception-style recovery surfaces | CACAO v2.0 workflow types, saga compensation patterns |
 | **Temporal operators** | STIX-style FOLLOWEDBY/WITHIN for time-ordered event assertions | STIX Patterning Language |
-| **Formal verification** | Pre-deployment verification that attack paths are reachable and defenses are consistent | VSDL SMT solver, CRACK Datalog |
+| **Full solver-backed verification** | Global proof-style verification that attack paths are reachable and defenses are consistent is still future work; today the repo adopts lightweight semantic modeling, invariants, typed contracts, and selective property/state-machine methods instead | VSDL SMT solver, CRACK Datalog |
 | **Agent framework bindings** | Gymnasium observation/action space definitions, reward function code | CybORG Gymnasium interface |
 | **User behavior profiles** | Normal user activity patterns (browsing, email, file access schedules) | CybORG Green agents |
 | **Multi-tenancy** | Multiple independent exercises sharing infrastructure | Locked Shields team-per-subnet model |
@@ -39,11 +40,13 @@ These are things that *should* be expressible in the SDL but aren't yet:
 Variables (`${var_name}`) are stored as literal strings in the model. They are **not** resolved at parse time. This means:
 
 - The validator can confirm that a full-value `${var}` reference has a matching variable definition
-- Cross-reference rules that depend on a placeholder's final concrete value are deferred to instantiation
+- Cross-reference rules that depend on a placeholder's final concrete value are deferred to the repo-owned instantiation phase
 - Selected leaf enum-backed property fields are parameterizable, but discriminant/schema-shaping enums and user-defined mapping keys are still concrete
-- Type checking of the substituted runtime value is still the instantiating backend's responsibility
+- Type checking of substituted runtime values happens during APTL instantiation, before compilation/runtime planning
 
-This is a deliberate design choice (matching CACAO's model) but it still leaves backend substitution semantics as future work.
+This is a deliberate design choice (matching CACAO's model), but substitution
+semantics are now owned by the repo rather than left to backend-specific
+interpretation.
 
 ## What Has Been Validated
 

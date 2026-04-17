@@ -17,6 +17,8 @@ from aptl.utils.logging import get_logger
 
 log = get_logger("cli.lab")
 
+_HELP_PROJECT_DIR = "Path to the APTL project directory."
+
 app = typer.Typer(help="Lab lifecycle management.")
 
 
@@ -26,7 +28,7 @@ def start(
         Path("."),
         "--project-dir",
         "-d",
-        help="Path to the APTL project directory.",
+        help=_HELP_PROJECT_DIR,
     ),
     skip_seed: bool = typer.Option(
         False,
@@ -64,7 +66,7 @@ def stop(
         Path("."),
         "--project-dir",
         "-d",
-        help="Path to the APTL project directory.",
+        help=_HELP_PROJECT_DIR,
     ),
 ) -> None:
     """Stop the APTL lab environment."""
@@ -98,7 +100,7 @@ def status(
         Path("."),
         "--project-dir",
         "-d",
-        help="Path to the APTL project directory.",
+        help=_HELP_PROJECT_DIR,
     ),
     output_json: bool = typer.Option(
         False,

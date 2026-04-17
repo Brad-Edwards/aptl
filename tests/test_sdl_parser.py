@@ -1,12 +1,13 @@
 """Tests for SDL parser — YAML loading, key normalization, shorthands."""
 
 import re
+from pathlib import Path
 
 import pytest
 
 from aptl.core.sdl._errors import SDLParseError, SDLValidationError
 from aptl.core.sdl.nodes import NodeType
-from aptl.core.sdl.parser import parse_sdl
+from aptl.core.sdl.parser import parse_sdl, parse_sdl_file
 
 
 class TestKeyNormalization:
@@ -189,7 +190,7 @@ workflows:
       validate:
         type: objective
         objective: validate-release
-        next: finish
+        on-success: finish
       finish:
         type: end
 """
@@ -629,6 +630,144 @@ class TestSkipSemanticValidation:
             skip_semantic_validation=True,
         )
         assert "g1" in s.goals
+
+
+class TestModuleImports:
+    def test_parse_sdl_rejects_imports_without_file_context(self):
+        with pytest.raises(SDLParseError, match="parse_sdl_file"):
+            parse_sdl(
+                """
+                name: root
+                imports:
+                  - path: common.yaml
+                """
+            )
+
+    def test_parse_sdl_file_expands_namespaced_imports(self, tmp_path: Path):
+        imported = tmp_path / "common.yaml"
+        imported.write_text(
+            """
+name: common
+version: 1.2.0
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles:
+      ops:
+        username: operator
+conditions:
+  health:
+    command: /bin/true
+    interval: 15
+entities:
+  blue:
+    role: blue
+objectives:
+  validate:
+    entity: blue
+    success:
+      conditions: [health]
+workflows:
+  response:
+    start: run
+    steps:
+      run:
+        type: objective
+        objective: validate
+        on-success: finish
+      finish:
+        type: end
+""",
+            encoding="utf-8",
+        )
+        root = tmp_path / "root.yaml"
+        root.write_text(
+            """
+name: root
+imports:
+  - path: common.yaml
+    namespace: shared
+    version: 1.2.0
+""",
+            encoding="utf-8",
+        )
+
+        scenario = parse_sdl_file(root)
+
+        assert "shared.vm" in scenario.nodes
+        assert "shared.health" in scenario.conditions
+        assert "shared.validate" in scenario.objectives
+        assert "shared.response" in scenario.workflows
+
+    def test_parse_sdl_file_rejects_version_mismatch(self, tmp_path: Path):
+        imported = tmp_path / "common.yaml"
+        imported.write_text(
+            """
+name: common
+version: 2.0.0
+nodes:
+  sw:
+    type: switch
+""",
+            encoding="utf-8",
+        )
+        root = tmp_path / "root.yaml"
+        root.write_text(
+            """
+name: root
+imports:
+  - path: common.yaml
+    version: 1.0.0
+""",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(SDLParseError, match="requested version"):
+            parse_sdl_file(root)
+
+    def test_parse_sdl_file_rejects_namespace_collisions(self, tmp_path: Path):
+        first = tmp_path / "first.yaml"
+        first.write_text(
+            """
+name: shared
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+""",
+            encoding="utf-8",
+        )
+        second = tmp_path / "second.yaml"
+        second.write_text(
+            """
+name: shared
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+""",
+            encoding="utf-8",
+        )
+        root = tmp_path / "root.yaml"
+        root.write_text(
+            """
+name: root
+imports:
+  - path: first.yaml
+    namespace: shared
+  - path: second.yaml
+    namespace: shared
+""",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(SDLParseError, match="collides"):
+            parse_sdl_file(root)
 
 
 class TestLoadRealScenarios:

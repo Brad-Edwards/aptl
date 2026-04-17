@@ -2,6 +2,12 @@
 
 The parser (`aptl.core.sdl.parser`) transforms raw YAML into a validated `Scenario` object through three stages: key normalization, shorthand expansion, and model construction.
 
+This layer is intentionally about syntax, normalization, and structural model
+construction. It is usually an `FM0` surface under the repository's
+[coding standards](../reference/coding-standards.md): parser work normally
+needs ordinary tests, not state-machine modeling or solver-backed formal
+artifacts, unless it also introduces new semantic invariants above raw syntax.
+
 ## Key Normalization
 
 YAML field keys (Pydantic struct fields) are normalized to lowercase with hyphens converted to underscores:
@@ -96,6 +102,23 @@ scenario = parse_sdl_file(Path("scenario.yaml"))
 # Structural validation only (skip cross-reference checks)
 scenario = parse_sdl(yaml_string, skip_semantic_validation=True)
 ```
+
+Use `parse_sdl_file(...)` for SDL that uses top-level `imports:`. Import
+expansion is file-backed and deterministic, so in-memory `parse_sdl(...)`
+rejects module/import composition by design.
+
+Top-level composition now supports:
+
+- optional `module` descriptors for publishable SDL modules
+- `imports` using backward-compatible `path:` or canonical `source:`
+- `source:` classes `local:`, `oci:`, and `locked:`
+- repo-owned trust and resolution files:
+  - `aptl.lock.json`
+  - `aptl-trust.yaml`
+
+Import `source:` values are not treated as ordinary SDL package-source
+shorthand. They are resolved by the composition layer, not expanded into
+`{name, version}` package dictionaries.
 
 ## Error Types
 

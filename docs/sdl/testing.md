@@ -1,5 +1,25 @@
 # SDL Testing
 
+The SDL and runtime stack use a layered testing strategy. Under the repository's
+[coding standards](../reference/coding-standards.md), not every change needs
+formal methods, but semantic and stateful changes should add the smallest
+adequate artifacts for their classification level.
+
+## Testing Ladder
+
+Use the smallest level that matches the change:
+
+1. **Unit tests** — parser/model/validator/compiler/planner behavior
+2. **Property-based tests** — generated inputs and invariant preservation
+3. **Semantic invariant tests** — explicit valid/invalid behavior for
+   cross-reference, graph, visibility, or portability rules
+4. **Abstract models for FM3 work** — optional state-machine/TLA+/Alloy support
+   for especially risky control or contract semantics
+
+Formal tools are not part of the default developer loop or CI in this first
+rollout. They are optional artifacts for selected `FM3` changes rather than a
+blanket requirement for SDL work.
+
 ## Test Suites
 
 ### Unit Tests (standard run)
@@ -78,7 +98,13 @@ The up-front design briefs for the new complex examples live in
 authoring issue log lives in
 [`docs/sdl/complex-scenario-authoring-notes.md`](complex-scenario-authoring-notes.md).
 
-Those example files now also serve as disk-backed coverage for the newest SDL surfaces: enum-backed variable values, direct service/ACL objective targets, and workflow branching / parallel fanout.
+Those example files now also serve as disk-backed coverage for the newest SDL surfaces: enum-backed variable values, direct service/ACL objective targets, and the redesigned workflow language (`decision`, `retry`, explicit join barriers, failure transitions, and workflow state predicates, including post-join branch-state inspection). The runtime/compiler unit suites additionally pin fail-closed behavior for missing same-node feature dependencies and malformed backend lifecycle payloads.
+
+For workflow and runtime semantics specifically, prefer explicit invariant tests
+that name the semantic rule being protected. Property-based tests are a strong
+fit when the graph/state space can be generated cheaply. Abstract models become
+appropriate only for `FM3` changes that materially alter branching, join,
+re-entry, or portable result-contract behavior.
 
 ## Adding New Scenarios
 

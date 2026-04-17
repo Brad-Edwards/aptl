@@ -1,0 +1,19 @@
+{
+  "state_schema_version": "workflow-step-state/v1",
+  "workflow_status": "running",
+  "run_id": "workflow-run",
+  "started_at": "2026-04-02T22:00:00Z",
+  "updated_at": "2026-04-02T22:00:05Z",
+  "terminal_reason": null,
+  "compensation_status": "not_required",
+  "compensation_started_at": null,
+  "compensation_updated_at": null,
+  "compensation_failures": [],
+  "steps": {
+    "run": {
+      "lifecycle": "pending",
+      "outcome": null,
+      "attempts": 0
+    }
+  }
+}

@@ -49,3 +49,23 @@ class SDLValidationError(SDLError):
         summary = f"{count} validation error{'s' if count != 1 else ''}"
         detail = "\n  ".join(errors)
         super().__init__(f"{prefix}{summary}:\n  {detail}")
+
+
+class SDLInstantiationError(SDLError):
+    """Scenario instantiation failed.
+
+    Raised when a parsed scenario cannot be converted into a fully concrete
+    instantiated scenario because parameter binding, default application, or
+    post-substitution validation failed.
+    """
+
+    def __init__(
+        self, errors: list[str], path: Optional[Path] = None
+    ) -> None:
+        self.errors = errors
+        self.path = path
+        prefix = f"{path}: " if path else ""
+        count = len(errors)
+        summary = f"{count} instantiation error{'s' if count != 1 else ''}"
+        detail = "\n  ".join(errors)
+        super().__init__(f"{prefix}{summary}:\n  {detail}")

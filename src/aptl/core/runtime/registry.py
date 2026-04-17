@@ -95,6 +95,18 @@ def _validate_runtime_target_shape(
     _require_invokable_method(
         orchestrator,
         label="orchestrator",
+        method_name="results",
+        invocation_args=(),
+    )
+    _require_invokable_method(
+        orchestrator,
+        label="orchestrator",
+        method_name="history",
+        invocation_args=(),
+    )
+    _require_invokable_method(
+        orchestrator,
+        label="orchestrator",
         method_name="stop",
         invocation_args=(sample_snapshot,),
     )
@@ -114,6 +126,12 @@ def _validate_runtime_target_shape(
         evaluator,
         label="evaluator",
         method_name="results",
+        invocation_args=(),
+    )
+    _require_invokable_method(
+        evaluator,
+        label="evaluator",
+        method_name="history",
         invocation_args=(),
     )
     _require_invokable_method(

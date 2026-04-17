@@ -1,0 +1,13 @@
+{
+  "state_schema_version": "evaluation-result-state/v1",
+  "resource_type": "objective",
+  "run_id": "evaluation-run",
+  "status": "ready",
+  "observed_at": "2026-04-02T22:00:00Z",
+  "updated_at": "2026-04-02T22:00:00Z",
+  "passed": true,
+  "score": null,
+  "max_score": null,
+  "detail": "ok",
+  "evidence_refs": []
+}

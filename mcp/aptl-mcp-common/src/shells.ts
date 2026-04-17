@@ -4,6 +4,16 @@
 
 export type ShellType = 'bash' | 'sh' | 'powershell' | 'cmd';
 
+/**
+ * Parse an exit code from shell output using a delimiter pattern.
+ * Shared implementation for all shell formatters.
+ */
+function parseExitCodeFromOutput(output: string, endDelimiter: string): number | null {
+  const pattern = new RegExp(`${endDelimiter}:(\\d+)`);
+  const match = pattern.exec(output);
+  return match?.[1] != null ? Number.parseInt(match[1], 10) : null;
+}
+
 export interface ShellFormatter {
   formatCommandWithDelimiters(command: string, startDelimiter: string, endDelimiter: string): string;
   getKeepAliveCommand(): string;
@@ -15,7 +25,7 @@ export interface ShellFormatter {
  * Formatter for Bash and sh shells (Linux/Unix)
  */
 export class BashShellFormatter implements ShellFormatter {
-  private shellName: string;
+  private readonly shellName: string;
 
   constructor(shellName: string = 'bash') {
     this.shellName = shellName;
@@ -32,14 +42,7 @@ export class BashShellFormatter implements ShellFormatter {
   }
 
   parseExitCode(output: string, endDelimiter: string): number | null {
-    const pattern = `${endDelimiter}:(\\d+)`;
-    const match = output.match(new RegExp(pattern));
-
-    if (match && match[1]) {
-      return parseInt(match[1], 10);
-    }
-
-    return null;
+    return parseExitCodeFromOutput(output, endDelimiter);
   }
 
   getShellName(): string {
@@ -63,14 +66,7 @@ export class PowerShellFormatter implements ShellFormatter {
   }
 
   parseExitCode(output: string, endDelimiter: string): number | null {
-    const pattern = `${endDelimiter}:(\\d+)`;
-    const match = output.match(new RegExp(pattern));
-
-    if (match && match[1]) {
-      return parseInt(match[1], 10);
-    }
-
-    return null;
+    return parseExitCodeFromOutput(output, endDelimiter);
   }
 
   getShellName(): string {
@@ -96,14 +92,7 @@ export class CmdShellFormatter implements ShellFormatter {
   }
 
   parseExitCode(output: string, endDelimiter: string): number | null {
-    const pattern = `${endDelimiter}:(\\d+)`;
-    const match = output.match(new RegExp(pattern));
-
-    if (match && match[1]) {
-      return parseInt(match[1], 10);
-    }
-
-    return null;
+    return parseExitCodeFromOutput(output, endDelimiter);
   }
 
   getShellName(): string {

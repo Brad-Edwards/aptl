@@ -1,0 +1,8 @@
+{
+  "schema_version": "runtime-operation/v1",
+  "operation_id": "op-1",
+  "domain": "orchestration",
+  "submitted_at": "2026-04-02T22:00:00Z",
+  "accepted": true,
+  "diagnostics": []
+}

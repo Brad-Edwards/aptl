@@ -209,6 +209,25 @@ def lab_status(
     return backend.status()
 
 
+def _check_service_volumes(
+    svc_name: str, svc_def: dict, project_dir: Path,
+) -> list[str]:
+    """Check bind-mount sources for a single service definition."""
+    errors: list[str] = []
+    for vol in svc_def.get("volumes", []):
+        if not isinstance(vol, str) or not vol.startswith("./"):
+            continue
+        src = vol.split(":")[0]
+        src_path = (project_dir / src).resolve()
+        if not src_path.exists():
+            errors.append(
+                f"Service '{svc_name}': bind-mount source "
+                f"'{src}' does not exist. Create it before "
+                f"starting the lab to avoid root-owned directories."
+            )
+    return errors
+
+
 def _check_bind_mounts(project_dir: Path) -> list[str]:
     """Check that bind-mount source paths exist as files, not root-owned dirs.
 
@@ -230,19 +249,145 @@ def _check_bind_mounts(project_dir: Path) -> list[str]:
     errors: list[str] = []
     services = data.get("services", {}) if isinstance(data, dict) else {}
     for svc_name, svc_def in services.items():
-        if not isinstance(svc_def, dict):
-            continue
-        for vol in svc_def.get("volumes", []):
-            if isinstance(vol, str) and vol.startswith("./"):
-                src = vol.split(":")[0]
-                src_path = (project_dir / src).resolve()
-                if not src_path.exists():
-                    errors.append(
-                        f"Service '{svc_name}': bind-mount source "
-                        f"'{src}' does not exist. Create it before "
-                        f"starting the lab to avoid root-owned directories."
-                    )
+        if isinstance(svc_def, dict):
+            errors.extend(_check_service_volumes(svc_name, svc_def, project_dir))
     return errors
+
+
+def _sync_config_credentials(project_dir: Path, env: EnvVars) -> None:
+    """Sync dashboard and manager configuration credentials (non-critical)."""
+    dashboard_config = project_dir / "config" / "wazuh_dashboard" / "wazuh.yml"
+    if dashboard_config.exists():
+        try:
+            sync_dashboard_config(dashboard_config, env.api_password)
+        except Exception as exc:
+            log.warning("Failed to sync dashboard config: %s", exc)
+    else:
+        log.warning("Dashboard config not found at %s", dashboard_config)
+
+    manager_config = project_dir / "config" / "wazuh_cluster" / "wazuh_manager.conf"
+    if manager_config.exists():
+        try:
+            sync_manager_config(manager_config, env.wazuh_cluster_key)
+        except Exception as exc:
+            log.warning("Failed to sync manager config: %s", exc)
+    else:
+        log.warning("Manager config not found at %s", manager_config)
+
+
+def _wait_for_wazuh_services(env: EnvVars) -> None:
+    """Wait for Wazuh Indexer and Manager API to become ready."""
+    indexer_result = wait_for_service(
+        check_fn=partial(
+            check_indexer_ready,
+            url="https://localhost:9200",
+            username=env.indexer_username,
+            password=env.indexer_password,
+        ),
+        timeout=300,
+        interval=10,
+        service_name="Wazuh Indexer",
+    )
+    if not indexer_result.ready:
+        log.warning("Indexer may still be initializing")
+
+    manager_result = wait_for_service(
+        check_fn=partial(
+            check_manager_api_ready,
+            container_name="aptl-wazuh-manager",
+        ),
+        timeout=120,
+        interval=5,
+        service_name="Wazuh Manager API",
+    )
+    if not manager_result.ready:
+        log.warning("Manager API may still be initializing")
+
+
+def _test_ssh_endpoints(config: AptlConfig, key_path: Path) -> None:
+    """Test SSH connectivity to configured containers (non-critical)."""
+    ssh_tests: list[tuple[str, int, str]] = []
+    if config.containers.victim:
+        ssh_tests.append(("victim", 2022, "labadmin"))
+    if config.containers.kali:
+        ssh_tests.append(("kali", 2023, "kali"))
+    if config.containers.reverse:
+        ssh_tests.append(("reverse", 2027, "labadmin"))
+
+    for name, port, user in ssh_tests:
+        ssh_wait = wait_for_service(
+            check_fn=partial(
+                test_ssh_connection,
+                host="localhost",
+                port=port,
+                user=user,
+                key_path=key_path,
+            ),
+            timeout=60,
+            interval=5,
+            service_name=f"SSH ({name})",
+        )
+        if ssh_wait.ready:
+            log.info("SSH to %s is ready", name)
+        else:
+            log.warning("SSH to %s not ready after %ds", name, int(ssh_wait.elapsed_seconds))
+
+
+def _build_mcp_servers(project_dir: Path) -> None:
+    """Build MCP servers (non-critical)."""
+    mcp_script = project_dir / "mcp" / "build-all-mcps.sh"
+    if not mcp_script.exists():
+        log.warning("MCP build script not found at %s", mcp_script)
+        return
+    try:
+        mcp_result = subprocess.run(
+            [str(mcp_script)],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+        )
+        if mcp_result.returncode != 0:
+            log.warning("MCP build had errors: %s", mcp_result.stderr)
+        else:
+            log.info("MCP servers built successfully")
+    except OSError as exc:
+        log.warning("Failed to build MCP servers: %s", exc)
+
+
+def _seed_soc_tools(
+    project_dir: Path, config: AptlConfig, skip_seed: bool,
+) -> None:
+    """Seed SOC tools via seed-prime.sh (non-critical)."""
+    if skip_seed:
+        log.info("Step 13: Skipping SOC seeding (--skip-seed)")
+        return
+
+    log.info("Step 13: Seeding SOC tools...")
+    seed_script = project_dir / "scripts" / "seed-prime.sh"
+
+    if not seed_script.exists():
+        log.debug("SOC seed script not found at %s", seed_script)
+        return
+    if not config.containers.soc:
+        log.debug("SOC profile not enabled, skipping seed")
+        return
+
+    try:
+        seed_result = subprocess.run(
+            [str(seed_script)],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=1200,
+        )
+        if seed_result.returncode != 0:
+            log.warning("SOC seeding had errors: %s", seed_result.stderr)
+        else:
+            log.info("SOC tools seeded successfully")
+    except subprocess.TimeoutExpired:
+        log.warning("SOC seeding timed out (non-fatal)")
+    except OSError as exc:
+        log.warning("Failed to seed SOC tools: %s", exc)
 
 
 def orchestrate_lab_start(
@@ -335,23 +480,7 @@ def orchestrate_lab_start(
 
     # Step 5: Sync config file credentials
     log.info("Step 5: Syncing configuration credentials...")
-    dashboard_config = project_dir / "config" / "wazuh_dashboard" / "wazuh.yml"
-    if dashboard_config.exists():
-        try:
-            sync_dashboard_config(dashboard_config, env.api_password)
-        except Exception as exc:
-            log.warning("Failed to sync dashboard config: %s", exc)
-    else:
-        log.warning("Dashboard config not found at %s", dashboard_config)
-
-    manager_config = project_dir / "config" / "wazuh_cluster" / "wazuh_manager.conf"
-    if manager_config.exists():
-        try:
-            sync_manager_config(manager_config, env.wazuh_cluster_key)
-        except Exception as exc:
-            log.warning("Failed to sync manager config: %s", exc)
-    else:
-        log.warning("Manager config not found at %s", manager_config)
+    _sync_config_credentials(project_dir, env)
 
     # Step 6: Generate SSL certificates
     log.info("Step 6: Generating SSL certificates...")
@@ -406,60 +535,12 @@ def orchestrate_lab_start(
     # Step 9: Wait for services
     log.info("Step 9: Waiting for services...")
     if config.containers.wazuh:
-        indexer_result = wait_for_service(
-            check_fn=partial(
-                check_indexer_ready,
-                url="https://localhost:9200",
-                username=env.indexer_username,
-                password=env.indexer_password,
-            ),
-            timeout=300,
-            interval=10,
-            service_name="Wazuh Indexer",
-        )
-        if not indexer_result.ready:
-            log.warning("Indexer may still be initializing")
-
-        manager_result = wait_for_service(
-            check_fn=partial(
-                check_manager_api_ready,
-                container_name="aptl-wazuh-manager",
-            ),
-            timeout=120,
-            interval=5,
-            service_name="Wazuh Manager API",
-        )
-        if not manager_result.ready:
-            log.warning("Manager API may still be initializing")
+        _wait_for_wazuh_services(env)
 
     # Step 10: Test SSH connectivity (non-critical)
     log.info("Step 10: Testing SSH connectivity...")
     key_path = ssh_result.key_path or (Path.home() / ".ssh" / "aptl_lab_key")
-    ssh_tests = []
-    if config.containers.victim:
-        ssh_tests.append(("victim", 2022, "labadmin"))
-    if config.containers.kali:
-        ssh_tests.append(("kali", 2023, "kali"))
-    if config.containers.reverse:
-        ssh_tests.append(("reverse", 2027, "labadmin"))
-
-    for name, port, user in ssh_tests:
-        ssh_wait = wait_for_service(
-            check_fn=partial(
-                test_ssh_connection,
-                host="localhost",
-                port=port,
-                user=user,
-                key_path=key_path,
-            ),
-            timeout=60,
-            interval=5,
-            service_name=f"SSH ({name})",
-        )
-        if ssh_wait.ready:
-            log.info("SSH to %s is ready", name)
-        else:
-            log.warning("SSH to %s not ready after %ds", name, int(ssh_wait.elapsed_seconds))
+    _test_ssh_endpoints(config, key_path)
 
     # Step 11: Capture range snapshot
     log.info("Step 11: Capturing range snapshot...")
@@ -474,52 +555,10 @@ def orchestrate_lab_start(
 
     # Step 12: Build MCP servers (non-critical)
     log.info("Step 12: Building MCP servers...")
-    mcp_script = project_dir / "mcp" / "build-all-mcps.sh"
-    if mcp_script.exists():
-        try:
-            mcp_result = subprocess.run(
-                [str(mcp_script)],
-                capture_output=True,
-                text=True,
-                cwd=project_dir,
-            )
-            if mcp_result.returncode != 0:
-                log.warning("MCP build had errors: %s", mcp_result.stderr)
-            else:
-                log.info("MCP servers built successfully")
-        except (FileNotFoundError, OSError) as exc:
-            log.warning("Failed to build MCP servers: %s", exc)
-    else:
-        log.warning("MCP build script not found at %s", mcp_script)
+    _build_mcp_servers(project_dir)
 
     # Step 13: Seed SOC tools (non-critical)
-    if skip_seed:
-        log.info("Step 13: Skipping SOC seeding (--skip-seed)")
-    else:
-        log.info("Step 13: Seeding SOC tools...")
-        seed_script = project_dir / "scripts" / "seed-prime.sh"
-        if seed_script.exists() and config.containers.soc:
-            try:
-                seed_result = subprocess.run(
-                    [str(seed_script)],
-                    capture_output=True,
-                    text=True,
-                    cwd=project_dir,
-                    timeout=1200,
-                )
-                if seed_result.returncode != 0:
-                    log.warning("SOC seeding had errors: %s", seed_result.stderr)
-                else:
-                    log.info("SOC tools seeded successfully")
-            except subprocess.TimeoutExpired:
-                log.warning("SOC seeding timed out (non-fatal)")
-            except (FileNotFoundError, OSError) as exc:
-                log.warning("Failed to seed SOC tools: %s", exc)
-        else:
-            if not seed_script.exists():
-                log.debug("SOC seed script not found at %s", seed_script)
-            elif not config.containers.soc:
-                log.debug("SOC profile not enabled, skipping seed")
+    _seed_soc_tools(project_dir, config, skip_seed)
 
     log.info("APTL lab started successfully!")
     return LabResult(success=True, message="Lab started successfully")

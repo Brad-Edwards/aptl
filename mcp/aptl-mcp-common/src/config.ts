@@ -1,7 +1,7 @@
 
 
-import { existsSync, readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 import { expandTilde } from './utils.js';
 
 // Lab configuration matching actual docker-lab-config.json structure
@@ -83,11 +83,11 @@ export function substituteEnvVars(
     }
     // Escape characters that would break a JSON string
     return value
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
-      .replace(/\t/g, '\\t');
+      .replaceAll('\\', '\\\\')
+      .replaceAll('"', '\\"')
+      .replaceAll('\n', '\\n')
+      .replaceAll('\r', '\\r')
+      .replaceAll('\t', '\\t');
   });
   return { result, missing };
 }
@@ -150,7 +150,7 @@ async function loadDockerLabConfig(configPath: string): Promise<LabConfig> {
     throw new Error(`Docker lab configuration not found at: ${configPath}`);
   }
 
-  const fs = await import('fs/promises');
+  const fs = await import('node:fs/promises');
   const rawContent = await fs.readFile(configPath, 'utf8');
 
   const env = loadEnvForConfig(configPath);
@@ -190,7 +190,7 @@ export async function loadLabConfig(configPath: string): Promise<LabConfig> {
   if (config.containers && config.server.configKey) {
     const configKey = config.server.configKey;
     const container = config.containers[configKey];
-    if (container && container.ssh_key.startsWith('~')) {
+    if (container?.ssh_key.startsWith('~')) {
       container.ssh_key = expandTilde(container.ssh_key);
     }
   }

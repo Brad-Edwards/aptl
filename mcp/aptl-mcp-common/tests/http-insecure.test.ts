@@ -57,19 +57,19 @@ function fakeRequest(response: IncomingMessage): ClientRequest & { writtenData: 
   return req;
 }
 
+function createClient(overrides = {}) {
+  return new HTTPClient({
+    baseUrl: 'https://wazuh.local:9200',
+    auth: { type: 'basic' as const, username: 'admin', password: 'admin' },
+    verify_ssl: false,
+    ...overrides,
+  });
+}
+
 describe('HTTPClient — verify_ssl=false path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-
-  function createClient(overrides = {}) {
-    return new HTTPClient({
-      baseUrl: 'https://wazuh.local:9200',
-      auth: { type: 'basic' as const, username: 'admin', password: 'admin' },
-      verify_ssl: false,
-      ...overrides,
-    });
-  }
 
   it('uses node:https transport when verify_ssl is false', async () => {
     const res = fakeResponse(200, '{"status":"ok"}');
@@ -212,11 +212,11 @@ describe('HTTPClient — verify_ssl=false path', () => {
 describe('HTTPClient — verify_ssl=true path (fetch)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    global.fetch = vi.fn();
+    globalThis.fetch = vi.fn();
   });
 
   it('uses fetch when verify_ssl is true (default)', async () => {
-    const mockFetch = vi.mocked(global.fetch);
+    const mockFetch = vi.mocked(globalThis.fetch);
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,

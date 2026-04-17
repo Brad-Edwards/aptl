@@ -6,6 +6,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.0] - 2026-04-02
+
+### Added
+
+- Registry-ready SDL composition with explicit `module` descriptors, canonical `imports.source` handling (`local:`, `oci:`, `locked:`), repo-owned lockfiles, and trust policy enforcement
+- `aptl sdl resolve`, `aptl sdl verify-imports`, and `aptl sdl publish` commands for import resolution, verification, and OCI layout packaging
+- OCI module publish/resolve support with digest pinning, signature verification, trust-policy gating, and deterministic lockfile records
+- Workflow compensation semantics with workflow-level `compensation` policy, step-level `compensate-with`, compiled compensation targets/order, and portable compensation status/history
+- Focused regression coverage for local and OCI composition, lockfile drift, signed remote imports, compensation validation, and cancel/timeout-triggered rollback observation
+
+### Changed
+
+- Import `source:` fields are now treated as composition inputs instead of generic SDL package-source shorthands
+- Implicit local modules normalize to canonical package identities so local composition and published modules share one descriptor model
+- Workflow execution envelopes now carry explicit compensation fields alongside the primary terminal workflow state
+- Control-plane cancellation and timeout reconciliation now emit compensation state/history when the compiled workflow contract requires it
+
+## [6.3.0] - 2026-04-02
+
+### Added
+
+- Canonical SDL instantiation phase (`instantiate_scenario`) producing concrete `InstantiatedScenario` objects before compilation/runtime planning
+- Repo-owned variable binding semantics: parameter values, defaults, allowed-value enforcement, unresolved-placeholder failure, and post-instantiation revalidation
+- Richer workflow execution contracts with workflow-level status, run identity, timestamps, terminal reason, portable history events, and compiled `execution_contract` metadata
+- Schema-first external contract models plus generated versioned JSON Schemas under `schemas/` for SDL/runtime boundary artifacts
+- Reference async-style runtime control plane (`RuntimeControlPlane`) and reference HTTP/JSON adapter for portable backend integration
+- Repo-owned backend conformance kit under `conformance/` with capability profiles, golden fixtures, portable reports, and a non-Python-friendly validation runner
+- Durable and secured per-target control-plane behavior: persisted operation state, audit log, idempotent submissions, request-size enforcement, and authenticated control-plane mutations
+- SDL module/import composition with deterministic local expansion, namespace-aware symbol rewriting, import parameters, and version matching before semantic validation
+- Workflow maturity core: workflow-level timeout policy, cancel/timeout control-plane operations, `switch` routing, reusable `call` subflows, and compiled call/timeout execution-contract metadata
+- Focused regression coverage for instantiation, workflow execution envelopes/history, contract schema publication, and control-plane behavior
+
+### Changed
+
+- `compile_runtime_model()` now compiles concrete instantiated scenarios instead of leaving variable interpretation to backends
+- Runtime workflow validation now checks backend-reported plain-data execution envelopes against compiled `result_contract` and `execution_contract`, rather than inferring semantics from planner payload internals
+- Objective window step analysis is centralized in shared semantics and reused by both validator and compiler to reduce FM2 drift
+- Runtime snapshots now preserve plain-data orchestration history alongside portable workflow execution state
+- Workflow names are now namespace-friendly canonical identifiers, while step names remain the `<workflow>.<step>` delimiter boundary
+- Runtime architecture docs and SDL guidance now describe repo-owned instantiation, language-neutral contracts, and the schema/control-plane boundary explicitly
+
 ## [6.2.0] - 2026-04-01
 
 ### Added

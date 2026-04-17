@@ -3,11 +3,22 @@
 from collections.abc import Callable
 from typing import Any
 
+from aptl.core.semantics.objectives import analyze_objective_window
+from aptl.core.semantics.workflow import (
+    WORKFLOW_STATE_SCHEMA_VERSION,
+    workflow_step_semantic_contract,
+)
+from aptl.core.runtime.capabilities import (
+    WorkflowFeature,
+    WorkflowStatePredicateFeature,
+)
 from aptl.core.runtime.models import (
     AccountPlacement,
     ConditionBinding,
     ContentPlacement,
     Diagnostic,
+    EvaluationExecutionContract,
+    EvaluationResultContract,
     EventRuntime,
     EvaluationRuntime,
     FeatureBinding,
@@ -18,16 +29,26 @@ from aptl.core.runtime.models import (
     NetworkRuntime,
     NodeRuntime,
     ObjectiveRuntime,
+    ObjectiveWindowReferenceRuntime,
     RuntimeModel,
     RuntimeTemplate,
     ScriptRuntime,
     StoryRuntime,
     TLORuntime,
+    WorkflowExecutionContract,
+    WorkflowPredicateRuntime,
+    WorkflowResultContract,
+    WorkflowStepOutcome,
+    WorkflowStepStatePredicateRuntime,
+    WorkflowStepRuntime,
+    WorkflowSwitchCaseRuntime,
     WorkflowRuntime,
 )
+from aptl.core.sdl import instantiate_scenario
+from aptl.core.sdl.orchestration import WorkflowStepType
 from aptl.core.sdl.entities import flatten_entities
 from aptl.core.sdl.nodes import NodeType
-from aptl.core.sdl.scenario import Scenario
+from aptl.core.sdl.scenario import InstantiatedScenario, Scenario
 
 
 def _dump(model: Any) -> dict[str, Any]:
@@ -44,6 +65,14 @@ def _address(*parts: str) -> str:
 
 def _dedupe(items: list[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(items))
+
+
+def _dedupe_by_value(items: list[Any]) -> tuple[Any, ...]:
+    ordered: dict[str, Any] = {}
+    for item in items:
+        key = getattr(item, "value", repr(item))
+        ordered.setdefault(key, item)
+    return tuple(item for _, item in sorted(ordered.items()))
 
 
 def _template_address(kind: str, name: str) -> str:
@@ -123,6 +152,46 @@ def _resource_address_for_node(scenario: Scenario, node_name: str) -> str:
     if node is not None and node.type == NodeType.SWITCH:
         return _network_address(node_name)
     return _node_address(node_name)
+
+
+def _evaluation_contracts(
+    resource_type: str,
+    spec: dict[str, Any] | None = None,
+) -> tuple[EvaluationResultContract, EvaluationExecutionContract]:
+    payload = spec or {}
+    if resource_type == "metric":
+        max_score_raw = payload.get("max-score", payload.get("max_score"))
+        fixed_max_score = (
+            max_score_raw
+            if isinstance(max_score_raw, int) and not isinstance(max_score_raw, bool)
+            else None
+        )
+        return (
+            EvaluationResultContract(
+                resource_type=resource_type,
+                supports_score=True,
+                fixed_max_score=fixed_max_score,
+            ),
+            EvaluationExecutionContract(resource_type=resource_type),
+        )
+    if resource_type in {
+        "condition-binding",
+        "evaluation",
+        "tlo",
+        "goal",
+        "objective",
+    }:
+        return (
+            EvaluationResultContract(
+                resource_type=resource_type,
+                supports_passed=True,
+            ),
+            EvaluationExecutionContract(resource_type=resource_type),
+        )
+    return (
+        EvaluationResultContract(resource_type=resource_type),
+        EvaluationExecutionContract(resource_type=resource_type),
+    )
 
 
 def _resolve_binding_ref(
@@ -320,67 +389,10 @@ def _resolve_node_ref(
     return _resource_address_for_node(scenario, ref_name), []
 
 
-def _resolve_workflow_step_refs(
-    scenario: Scenario,
-    *,
-    step_refs: list[str],
-    owner_address: str,
-    domain: str,
-    code_prefix: str,
-) -> tuple[tuple[str, ...], tuple[str, ...], list[Diagnostic]]:
-    valid_refs: list[str] = []
-    workflow_addresses: list[str] = []
-    diagnostics: list[Diagnostic] = []
-
-    for step_ref in dict.fromkeys(step_refs):
-        if "." not in step_ref:
-            diagnostics.append(
-                Diagnostic(
-                    code=f"{code_prefix}-invalid-format",
-                    domain=domain,
-                    address=owner_address,
-                    message=(
-                        f"Reference '{step_ref}' must use '<workflow>.<step>' syntax."
-                    ),
-                )
-            )
-            continue
-
-        workflow_name, step_name = step_ref.split(".", 1)
-        workflow = scenario.workflows.get(workflow_name)
-        if workflow is None:
-            diagnostics.append(
-                Diagnostic(
-                    code=f"{code_prefix}-workflow-unbound",
-                    domain=domain,
-                    address=owner_address,
-                    message=(
-                        f"Reference '{step_ref}' does not resolve to a defined workflow."
-                    ),
-                )
-            )
-            continue
-        if step_name not in workflow.steps:
-            diagnostics.append(
-                Diagnostic(
-                    code=f"{code_prefix}-step-unbound",
-                    domain=domain,
-                    address=owner_address,
-                    message=(
-                        f"Reference '{step_ref}' does not resolve to a defined workflow step."
-                    ),
-                )
-            )
-            continue
-
-        valid_refs.append(step_ref)
-        workflow_addresses.append(_workflow_address(workflow_name))
-
-    return _dedupe(valid_refs), _dedupe(workflow_addresses), diagnostics
-
-
-def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
+def compile_runtime_model(scenario: Scenario | InstantiatedScenario) -> RuntimeModel:
     """Compile an SDL scenario into bound runtime objects."""
+    if not isinstance(scenario, InstantiatedScenario):
+        scenario = instantiate_scenario(scenario, validate_semantics=False)
 
     diagnostics: list[Diagnostic] = []
 
@@ -515,11 +527,24 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                     )
                 )
                 continue
+            address = _feature_binding_address(node_name, feature_name)
             dep_addresses = [node_addr]
             for dep_name in feature.dependencies:
                 if dep_name in node.features:
                     dep_addresses.append(_feature_binding_address(node_name, dep_name))
-            address = _feature_binding_address(node_name, feature_name)
+                    continue
+                diagnostics.append(
+                    Diagnostic(
+                        code="provisioning.feature-dependency-binding-missing",
+                        domain="provisioning",
+                        address=address,
+                        message=(
+                            f"Feature binding '{feature_name}' on node '{node_name}' "
+                            f"requires feature dependency '{dep_name}' to also be "
+                            "bound on the same node."
+                        ),
+                    )
+                )
             feature_bindings[address] = FeatureBinding(
                 address=address,
                 name=feature_name,
@@ -560,6 +585,9 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 )
                 continue
             address = _condition_binding_address(node_name, condition_name)
+            result_contract, execution_contract = _evaluation_contracts(
+                "condition-binding"
+            )
             condition_bindings[address] = ConditionBinding(
                 address=address,
                 name=condition_name,
@@ -576,6 +604,8 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                     },
                     "template": template.spec,
                 },
+                result_contract=result_contract,
+                execution_contract=execution_contract,
             )
 
     injects = {
@@ -792,6 +822,10 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 binding_label="condition",
             )
             diagnostics.extend(metric_diagnostics)
+        result_contract, execution_contract = _evaluation_contracts(
+            "metric",
+            metric_spec,
+        )
         metrics[metric_address] = MetricRuntime(
             address=metric_address,
             name=name,
@@ -800,6 +834,8 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             ordering_dependencies=condition_addresses,
             refresh_dependencies=condition_addresses,
             spec=metric_spec,
+            result_contract=result_contract,
+            execution_contract=execution_contract,
         )
 
     evaluations = {}
@@ -815,6 +851,7 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             resource_label="metric",
         )
         diagnostics.extend(evaluation_diagnostics)
+        result_contract, execution_contract = _evaluation_contracts("evaluation")
         evaluations[evaluation_address] = EvaluationRuntime(
             address=evaluation_address,
             name=name,
@@ -822,6 +859,8 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             ordering_dependencies=metric_addresses,
             refresh_dependencies=metric_addresses,
             spec=_dump(evaluation),
+            result_contract=result_contract,
+            execution_contract=execution_contract,
         )
 
     tlos = {}
@@ -838,6 +877,7 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
         )
         diagnostics.extend(tlo_diagnostics)
         evaluation_address = evaluation_addresses[0] if evaluation_addresses else ""
+        result_contract, execution_contract = _evaluation_contracts("tlo")
         tlos[tlo_address] = TLORuntime(
             address=tlo_address,
             name=name,
@@ -845,6 +885,8 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             ordering_dependencies=evaluation_addresses,
             refresh_dependencies=evaluation_addresses,
             spec=_dump(tlo),
+            result_contract=result_contract,
+            execution_contract=execution_contract,
         )
 
     goals = {}
@@ -860,6 +902,7 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             resource_label="TLO",
         )
         diagnostics.extend(goal_diagnostics)
+        result_contract, execution_contract = _evaluation_contracts("goal")
         goals[goal_address] = GoalRuntime(
             address=goal_address,
             name=name,
@@ -867,6 +910,8 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             ordering_dependencies=tlo_addresses,
             refresh_dependencies=tlo_addresses,
             spec=_dump(goal),
+            result_contract=result_contract,
+            execution_contract=execution_contract,
         )
 
     objectives = {}
@@ -945,57 +990,172 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
         window_workflow_addresses: tuple[str, ...] = ()
         window_step_refs: tuple[str, ...] = ()
         window_step_workflow_addresses: tuple[str, ...] = ()
+        window_references: tuple[ObjectiveWindowReferenceRuntime, ...] = ()
         if objective.window is not None:
-            window_story_addresses, story_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.stories),
-                available_names=set(scenario.stories),
-                address_builder=_story_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.story-ref",
-                resource_label="story",
+            window_analysis = analyze_objective_window(
+                story_refs=list(objective.window.stories),
+                script_refs=list(objective.window.scripts),
+                event_refs=list(objective.window.events),
+                workflow_refs=list(objective.window.workflows),
+                step_refs=list(objective.window.steps),
+                stories_by_name=scenario.stories,
+                scripts_by_name=scenario.scripts,
+                events_by_name=scenario.events,
+                workflows_by_name=scenario.workflows,
             )
-            window_script_addresses, script_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.scripts),
-                available_names=set(scenario.scripts),
-                address_builder=_script_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.script-ref",
-                resource_label="script",
+            window_story_addresses = _dedupe(
+                [_story_address(name) for name in window_analysis.story_names]
             )
-            window_event_addresses, event_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.events),
-                available_names=set(scenario.events),
-                address_builder=_event_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.event-ref",
-                resource_label="event",
+            window_script_addresses = _dedupe(
+                [_script_address(name) for name in window_analysis.script_names]
             )
-            window_workflow_addresses, workflow_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.workflows),
-                available_names=set(scenario.workflows),
-                address_builder=_workflow_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.workflow-ref",
-                resource_label="workflow",
+            window_event_addresses = _dedupe(
+                [_event_address(name) for name in window_analysis.event_names]
             )
-            window_step_refs, window_step_workflow_addresses, step_diagnostics = (
-                _resolve_workflow_step_refs(
-                    scenario,
-                    step_refs=list(objective.window.steps),
-                    owner_address=objective_address,
-                    domain="evaluation",
-                    code_prefix="evaluation.workflow-step-ref",
+            window_workflow_addresses = _dedupe(
+                [_workflow_address(name) for name in window_analysis.workflow_names]
+            )
+            window_step_refs = window_analysis.workflow_step_refs
+            window_step_workflow_addresses = _dedupe(
+                [
+                    _workflow_address(workflow_name)
+                    for workflow_name in window_analysis.refresh_workflow_names
+                ]
+            )
+            window_references = tuple(
+                ObjectiveWindowReferenceRuntime(
+                    raw=ref.raw,
+                    canonical_name=ref.canonical_name,
+                    reference_kind=ref.reference_kind.value,
+                    dependency_roles=tuple(role.value for role in ref.dependency_roles),
+                    workflow_name=ref.workflow_name or "",
+                    step_name=ref.step_name or "",
+                    namespace_path=ref.namespace_path,
                 )
+                for ref in window_analysis.references
             )
-            diagnostics.extend(story_diagnostics)
-            diagnostics.extend(script_diagnostics)
-            diagnostics.extend(event_diagnostics)
-            diagnostics.extend(workflow_diagnostics)
-            diagnostics.extend(step_diagnostics)
+            for issue in window_analysis.issues:
+                if issue.code == "story-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.story-ref-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined story."
+                            ),
+                        )
+                    )
+                elif issue.code == "script-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.script-ref-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined script."
+                            ),
+                        )
+                    )
+                elif issue.code == "script-outside-window-stories":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.script-ref-outside-window-stories",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' is not included by the objective window's referenced stories."
+                            ),
+                        )
+                    )
+                elif issue.code == "event-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.event-ref-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined event."
+                            ),
+                        )
+                    )
+                elif issue.code == "event-outside-window-scripts":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.event-ref-outside-window-scripts",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' is not included by the objective window's referenced scripts."
+                            ),
+                        )
+                    )
+                elif issue.code == "workflow-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-ref-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined workflow."
+                            ),
+                        )
+                    )
+                elif issue.code == "step-requires-workflow-window":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-step-ref-window-missing-workflow",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                "Workflow step references require at least one referenced workflow."
+                            ),
+                        )
+                    )
+                elif issue.code == "step-invalid-format":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-step-ref-invalid-format",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' must use '<workflow>.<step>' syntax."
+                            ),
+                        )
+                    )
+                elif issue.code == "step-workflow-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-step-ref-workflow-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined workflow."
+                            ),
+                        )
+                    )
+                elif issue.code == "step-workflow-outside-window":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-step-ref-workflow-outside-window",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' is not part of the objective window's referenced workflows."
+                            ),
+                        )
+                    )
+                elif issue.code == "step-unbound":
+                    diagnostics.append(
+                        Diagnostic(
+                            code="evaluation.workflow-step-ref-step-unbound",
+                            domain="evaluation",
+                            address=objective_address,
+                            message=(
+                                f"Reference '{issue.ref}' does not resolve to a defined workflow step."
+                            ),
+                        )
+                    )
 
         actor_type = "agent" if objective.agent else "entity"
         actor_name = objective.agent or objective.entity
@@ -1011,6 +1171,7 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 *window_step_workflow_addresses,
             ]
         )
+        result_contract, execution_contract = _evaluation_contracts("objective")
         objectives[objective_address] = ObjectiveRuntime(
             address=objective_address,
             name=name,
@@ -1024,54 +1185,47 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             window_workflow_addresses=window_workflow_addresses,
             window_step_refs=window_step_refs,
             window_step_workflow_addresses=window_step_workflow_addresses,
+            window_references=window_references,
             ordering_dependencies=ordering_dependencies,
             refresh_dependencies=refresh_dependencies,
             spec=_dump(objective),
+            result_contract=result_contract,
+            execution_contract=execution_contract,
         )
 
     workflows = {}
     for name, workflow in scenario.workflows.items():
         workflow_address = _workflow_address(name)
-        step_graph: dict[str, tuple[str, ...]] = {}
+        join_owners = {
+            step.join: step_name
+            for step_name, step in workflow.steps.items()
+            if step.type == WorkflowStepType.PARALLEL and step.join
+        }
+        control_steps: dict[str, WorkflowStepRuntime] = {}
+        control_edges: dict[str, tuple[str, ...]] = {}
         referenced_objectives: list[str] = []
         step_condition_addresses: dict[str, tuple[str, ...]] = {}
         step_predicate_addresses: dict[str, tuple[str, ...]] = {}
+        required_features: list[WorkflowFeature] = []
+        required_state_predicate_features: list[
+            WorkflowStatePredicateFeature
+        ] = []
+        compensation_targets: dict[str, str] = {}
 
-        for step_name, step in workflow.steps.items():
-            edges: list[str] = []
-            if step.next:
-                edges.append(step.next)
-            if step.then_step:
-                edges.append(step.then_step)
-            if step.else_step:
-                edges.append(step.else_step)
-            if step.body:
-                edges.append(step.body)
-            if step.on_error:
-                edges.append(step.on_error)
-            edges.extend(step.branches)
-            step_graph[step_name] = _dedupe(edges)
-
-            if step.objective:
-                objective_addresses, objective_diagnostics = _resolve_named_refs(
-                    ref_names=[step.objective],
-                    available_names=set(scenario.objectives),
-                    address_builder=_objective_address,
-                    owner_address=workflow_address,
-                    domain="orchestration",
-                    code_prefix="orchestration.objective-ref",
-                    resource_label="objective",
-                )
-                diagnostics.extend(objective_diagnostics)
-                referenced_objectives.extend(objective_addresses)
-
-            if step.when is None:
-                continue
-
-            predicate_address = _address(workflow_address, "step", step_name)
+        def _compile_workflow_predicate(
+            predicate_source,
+            *,
+            predicate_address: str,
+        ) -> tuple[
+            WorkflowPredicateRuntime,
+            tuple[str, ...],
+            tuple[str, ...],
+            tuple[str, ...],
+            tuple[WorkflowStepStatePredicateRuntime, ...],
+        ]:
             condition_addresses, workflow_diagnostics = _resolve_binding_refs(
                 condition_bindings,
-                ref_names=list(step.when.conditions),
+                ref_names=list(predicate_source.conditions),
                 owner_address=predicate_address,
                 domain="orchestration",
                 code_prefix="orchestration.condition-ref",
@@ -1080,9 +1234,9 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             )
             diagnostics.extend(workflow_diagnostics)
 
-            predicate_addresses: list[str] = list(condition_addresses)
+            predicate_addresses = list(condition_addresses)
             metric_addresses, metric_diagnostics = _resolve_named_refs(
-                ref_names=list(step.when.metrics),
+                ref_names=list(predicate_source.metrics),
                 available_names=set(scenario.metrics),
                 address_builder=_metric_address,
                 owner_address=predicate_address,
@@ -1091,7 +1245,7 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 resource_label="metric",
             )
             evaluation_addresses, evaluation_diagnostics = _resolve_named_refs(
-                ref_names=list(step.when.evaluations),
+                ref_names=list(predicate_source.evaluations),
                 available_names=set(scenario.evaluations),
                 address_builder=_evaluation_address,
                 owner_address=predicate_address,
@@ -1100,7 +1254,7 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 resource_label="evaluation",
             )
             tlo_addresses, tlo_diagnostics = _resolve_named_refs(
-                ref_names=list(step.when.tlos),
+                ref_names=list(predicate_source.tlos),
                 available_names=set(scenario.tlos),
                 address_builder=_tlo_address,
                 owner_address=predicate_address,
@@ -1109,7 +1263,7 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 resource_label="TLO",
             )
             goal_addresses, goal_diagnostics = _resolve_named_refs(
-                ref_names=list(step.when.goals),
+                ref_names=list(predicate_source.goals),
                 available_names=set(scenario.goals),
                 address_builder=_goal_address,
                 owner_address=predicate_address,
@@ -1118,7 +1272,7 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 resource_label="goal",
             )
             predicate_objectives, objective_diagnostics = _resolve_named_refs(
-                ref_names=list(step.when.objectives),
+                ref_names=list(predicate_source.objectives),
                 available_names=set(scenario.objectives),
                 address_builder=_objective_address,
                 owner_address=predicate_address,
@@ -1135,13 +1289,230 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             predicate_addresses.extend(evaluation_addresses)
             predicate_addresses.extend(tlo_addresses)
             predicate_addresses.extend(goal_addresses)
-            referenced_objectives.extend(predicate_objectives)
             predicate_addresses.extend(predicate_objectives)
 
-            step_condition_addresses[step_name] = condition_addresses
-            step_predicate_addresses[step_name] = _dedupe(predicate_addresses)
+            step_state_predicates = tuple(
+                WorkflowStepStatePredicateRuntime(
+                    step_name=ref.step,
+                    outcomes=tuple(
+                        WorkflowStepOutcome(outcome.value)
+                        for outcome in ref.outcomes
+                    ),
+                    min_attempts=ref.min_attempts,
+                )
+                for ref in predicate_source.steps
+                if isinstance(ref.step, str) and ref.step
+            )
+            return (
+                WorkflowPredicateRuntime(
+                    condition_addresses=condition_addresses,
+                    metric_addresses=tuple(metric_addresses),
+                    evaluation_addresses=tuple(evaluation_addresses),
+                    tlo_addresses=tuple(tlo_addresses),
+                    goal_addresses=tuple(goal_addresses),
+                    objective_addresses=tuple(predicate_objectives),
+                    step_state_predicates=step_state_predicates,
+                ),
+                condition_addresses,
+                _dedupe(predicate_addresses),
+                tuple(predicate_objectives),
+                step_state_predicates,
+            )
+
+        for step_name, step in workflow.steps.items():
+            edges: list[str] = []
+            objective_address = ""
+            predicate: WorkflowPredicateRuntime | None = None
+            switch_cases: tuple[WorkflowSwitchCaseRuntime, ...] = ()
+            called_workflow_address = ""
+            compensation_workflow_address = ""
+            if step.type == WorkflowStepType.OBJECTIVE:
+                edges.append(step.on_success)
+                if step.on_failure:
+                    edges.append(step.on_failure)
+            elif step.type == WorkflowStepType.DECISION:
+                required_features.append(WorkflowFeature.DECISION)
+                edges.extend([step.then_step, step.else_step])
+            elif step.type == WorkflowStepType.SWITCH:
+                required_features.append(WorkflowFeature.SWITCH)
+                edges.extend(case.next_step for case in step.cases)
+                edges.append(step.default_step)
+            elif step.type == WorkflowStepType.PARALLEL:
+                required_features.append(WorkflowFeature.PARALLEL_BARRIER)
+                edges.extend(step.branches)
+                if step.on_failure:
+                    edges.append(step.on_failure)
+            elif step.type == WorkflowStepType.JOIN:
+                edges.append(step.next)
+            elif step.type == WorkflowStepType.RETRY:
+                required_features.append(WorkflowFeature.RETRY)
+                edges.append(step.on_success)
+                if step.on_exhausted:
+                    edges.append(step.on_exhausted)
+            elif step.type == WorkflowStepType.CALL:
+                required_features.append(WorkflowFeature.CALL)
+                edges.append(step.on_success)
+                if step.on_failure:
+                    edges.append(step.on_failure)
+
+            control_edges[step_name] = _dedupe([edge for edge in edges if edge])
+
+            if step.objective:
+                objective_addresses, objective_diagnostics = _resolve_named_refs(
+                    ref_names=[step.objective],
+                    available_names=set(scenario.objectives),
+                    address_builder=_objective_address,
+                    owner_address=workflow_address,
+                    domain="orchestration",
+                    code_prefix="orchestration.objective-ref",
+                    resource_label="objective",
+                )
+                diagnostics.extend(objective_diagnostics)
+                referenced_objectives.extend(objective_addresses)
+                objective_address = objective_addresses[0] if objective_addresses else ""
+            elif step.workflow:
+                workflow_addresses, workflow_diagnostics = _resolve_named_refs(
+                    ref_names=[step.workflow],
+                    available_names=set(scenario.workflows),
+                    address_builder=_workflow_address,
+                    owner_address=workflow_address,
+                    domain="orchestration",
+                    code_prefix="orchestration.workflow-ref",
+                    resource_label="workflow",
+                )
+                diagnostics.extend(workflow_diagnostics)
+                called_workflow_address = (
+                    workflow_addresses[0] if workflow_addresses else ""
+                )
+            if step.compensate_with:
+                workflow_addresses, workflow_diagnostics = _resolve_named_refs(
+                    ref_names=[step.compensate_with],
+                    available_names=set(scenario.workflows),
+                    address_builder=_workflow_address,
+                    owner_address=workflow_address,
+                    domain="orchestration",
+                    code_prefix="orchestration.workflow-ref",
+                    resource_label="workflow",
+                )
+                diagnostics.extend(workflow_diagnostics)
+                compensation_workflow_address = (
+                    workflow_addresses[0] if workflow_addresses else ""
+                )
+                if compensation_workflow_address:
+                    compensation_targets[step_name] = compensation_workflow_address
+                    required_features.append(WorkflowFeature.COMPENSATION)
+
+            if step.when is not None:
+                (
+                    predicate,
+                    condition_addresses,
+                    predicate_addresses,
+                    predicate_objectives,
+                    step_state_predicates,
+                ) = _compile_workflow_predicate(
+                    step.when,
+                    predicate_address=_address(workflow_address, "step", step_name),
+                )
+                referenced_objectives.extend(predicate_objectives)
+                step_condition_addresses[step_name] = condition_addresses
+                step_predicate_addresses[step_name] = predicate_addresses
+                if step_state_predicates:
+                    required_state_predicate_features.append(
+                        WorkflowStatePredicateFeature.OUTCOME_MATCHING
+                    )
+                if any(
+                    state_predicate.min_attempts is not None
+                    for state_predicate in step_state_predicates
+                ):
+                    required_state_predicate_features.append(
+                        WorkflowStatePredicateFeature.ATTEMPT_COUNTS
+                    )
+            elif step.type == WorkflowStepType.SWITCH:
+                switch_condition_addresses: list[str] = []
+                switch_predicate_addresses: list[str] = []
+                compiled_cases: list[WorkflowSwitchCaseRuntime] = []
+                for case_index, case in enumerate(step.cases):
+                    (
+                        case_predicate,
+                        condition_addresses,
+                        predicate_addresses,
+                        predicate_objectives,
+                        step_state_predicates,
+                    ) = _compile_workflow_predicate(
+                        case.when,
+                        predicate_address=_address(
+                            workflow_address, "step", step_name, "case", str(case_index)
+                        ),
+                    )
+                    referenced_objectives.extend(predicate_objectives)
+                    switch_condition_addresses.extend(condition_addresses)
+                    switch_predicate_addresses.extend(predicate_addresses)
+                    if step_state_predicates:
+                        required_state_predicate_features.append(
+                            WorkflowStatePredicateFeature.OUTCOME_MATCHING
+                        )
+                    if any(
+                        state_predicate.min_attempts is not None
+                        for state_predicate in step_state_predicates
+                    ):
+                        required_state_predicate_features.append(
+                            WorkflowStatePredicateFeature.ATTEMPT_COUNTS
+                        )
+                    compiled_cases.append(
+                        WorkflowSwitchCaseRuntime(
+                            case_index=case_index,
+                            predicate=case_predicate,
+                            next_step=case.next_step,
+                        )
+                    )
+                switch_cases = tuple(compiled_cases)
+                if switch_condition_addresses:
+                    step_condition_addresses[step_name] = _dedupe(
+                        switch_condition_addresses
+                    )
+                if switch_predicate_addresses:
+                    step_predicate_addresses[step_name] = _dedupe(
+                        switch_predicate_addresses
+                    )
+
+            if (
+                step.on_failure
+                or step.on_exhausted
+            ):
+                required_features.append(WorkflowFeature.FAILURE_TRANSITIONS)
+            if workflow.timeout is not None:
+                required_features.append(WorkflowFeature.TIMEOUTS)
+            if workflow.compensation is not None and workflow.compensation.mode.value != "disabled":
+                required_features.append(WorkflowFeature.COMPENSATION)
+
+            control_steps[step_name] = WorkflowStepRuntime(
+                name=step_name,
+                step_type=step.type.value,
+                objective_address=objective_address,
+                predicate=predicate,
+                next_step=step.next,
+                on_success=step.on_success,
+                on_failure=step.on_failure,
+                on_exhausted=step.on_exhausted,
+                then_step=step.then_step,
+                else_step=step.else_step,
+                switch_cases=switch_cases,
+                default_step=step.default_step,
+                branches=tuple(step.branches),
+                join_step=step.join,
+                owning_parallel_step=join_owners.get(step_name, ""),
+                called_workflow_address=called_workflow_address,
+                compensation_workflow_address=compensation_workflow_address,
+                max_attempts=step.max_attempts,
+                state_contract=workflow_step_semantic_contract(step.type.value),
+            )
 
         objective_addresses = _dedupe(referenced_objectives)
+        result_contract_steps = {
+            step_name: step_runtime.state_contract
+            for step_name, step_runtime in control_steps.items()
+            if step_runtime.state_contract.state_observable
+        }
         predicate_dependency_addresses = _dedupe(
             [
                 address
@@ -1152,13 +1523,72 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
         workflows[workflow_address] = WorkflowRuntime(
             address=workflow_address,
             name=name,
+            start_step=workflow.start,
             referenced_objective_addresses=objective_addresses,
+            control_steps=control_steps,
+            control_edges=control_edges,
+            join_owners=join_owners,
             step_condition_addresses=step_condition_addresses,
             step_predicate_addresses=step_predicate_addresses,
+            required_features=_dedupe_by_value(required_features),
+            required_state_predicate_features=_dedupe_by_value(
+                required_state_predicate_features
+            ),
+            result_contract=WorkflowResultContract(
+                state_schema_version=WORKFLOW_STATE_SCHEMA_VERSION,
+                observable_steps=result_contract_steps,
+            ),
+            execution_contract=WorkflowExecutionContract(
+                state_schema_version=WORKFLOW_STATE_SCHEMA_VERSION,
+                start_step=workflow.start,
+                timeout_seconds=(
+                    workflow.timeout.seconds
+                    if workflow.timeout is not None
+                    and isinstance(workflow.timeout.seconds, int)
+                    else None
+                ),
+                steps={
+                    step_name: step_runtime.state_contract
+                    for step_name, step_runtime in control_steps.items()
+                },
+                step_types={
+                    step_name: step_runtime.step_type
+                    for step_name, step_runtime in control_steps.items()
+                },
+                control_edges=control_edges,
+                join_owners=join_owners,
+                call_steps={
+                    step_name: step_runtime.called_workflow_address
+                    for step_name, step_runtime in control_steps.items()
+                    if step_runtime.called_workflow_address
+                },
+                compensation_mode=(
+                    workflow.compensation.mode.value
+                    if workflow.compensation is not None
+                    else "disabled"
+                ),
+                compensation_triggers=tuple(
+                    trigger.value
+                    for trigger in (
+                        workflow.compensation.on if workflow.compensation is not None else []
+                    )
+                ),
+                compensation_targets=compensation_targets,
+                compensation_ordering=(
+                    workflow.compensation.order
+                    if workflow.compensation is not None
+                    else "reverse_completion"
+                ),
+                compensation_failure_policy=(
+                    workflow.compensation.failure_policy.value
+                    if workflow.compensation is not None
+                    else "fail_workflow"
+                ),
+                observable_steps=tuple(sorted(result_contract_steps)),
+            ),
             refresh_dependencies=_dedupe(
                 [*objective_addresses, *predicate_dependency_addresses]
             ),
-            step_graph=step_graph,
             spec=_dump(workflow),
         )
 

@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "PlanOperationModel": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "address": {
+          "title": "Address",
+          "type": "string"
+        },
+        "ordering_dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ordering Dependencies",
+          "type": "array"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "refresh_dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Refresh Dependencies",
+          "type": "array"
+        },
+        "resource_type": {
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "address",
+        "resource_type"
+      ],
+      "title": "PlanOperationModel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "diagnostics": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "operations": {
+      "items": {
+        "$ref": "#/$defs/PlanOperationModel"
+      },
+      "title": "Operations",
+      "type": "array"
+    },
+    "startup_order": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Startup Order",
+      "type": "array"
+    }
+  },
+  "title": "EvaluationPlanModel",
+  "type": "object"
+}

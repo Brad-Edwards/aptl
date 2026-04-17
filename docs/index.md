@@ -63,6 +63,7 @@ aptl lab start
 - [Smoke Test Plan](testing/smoke-test-plan.md) — Historical full-stack plan for the pre-SDL scenario engine
 
 ### Reference
+- [Coding Standards](reference/coding-standards.md) — Semantic engineering policy and contributor guidance
 - [TechVault Company Profile](reference/techvault-company-profile.md)
 - [TechVault OSINT Readiness](reference/techvault-osint-readiness.md)
 - [Container Template Guide](containers/victim-template-guide.md)

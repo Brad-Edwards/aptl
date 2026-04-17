@@ -1,6 +1,20 @@
 # SDL Sections Reference
 
-A scenario is a YAML document with a required top-level `name` and up to 21 named sections. Aside from `name`, all sections are optional.
+A scenario is a YAML document with a required top-level `name`, optional
+top-level composition fields (`version`, `module`, `imports`), and up to 21 named SDL
+sections. Aside from `name`, all sections are optional.
+
+Top-level composition fields are:
+
+- `version` — scenario or module version
+- `module` — optional publishable module descriptor (`id`, `version`, `parameters`, `exports`, `description`)
+- `imports` — optional module imports using backward-compatible `path:` or canonical `source:`
+
+Canonical `imports.source` classes are:
+
+- `local:...` for repo-local files
+- `oci:...` for remote OCI-packaged modules
+- `locked:...` for lockfile-resolved concrete imports
 
 ## Section Overview
 
@@ -32,7 +46,7 @@ A scenario is a YAML document with a required top-level `name` and up to 21 name
 | `relationships` | `dict[str, Relationship]` | Typed edges between elements (auth, trust, federation) | STIX Relationship SRO |
 | `agents` | `dict[str, Agent]` | Autonomous participants (actions, knowledge, scope) | CybORG Agents |
 | `objectives` | `dict[str, Objective]` | Declarative experiment tasks binding actors, targets, windows, and success | OCR scoring + CACAO action/target/agent |
-| `workflows` | `dict[str, Workflow]` | Branching and parallel control graphs over declared objectives | CACAO workflow graph patterns |
+| `workflows` | `dict[str, Workflow]` | Branching and parallel control graphs over declared objectives | CACAO workflow graph patterns; semantics tightened using Step Functions / Argo / SCXML style control-flow rules |
 | `variables` | `dict[str, Variable]` | Parameterization (types, defaults, substitution) | CACAO playbook_variables |
 
 ---
@@ -148,6 +162,11 @@ features:
     destination: /opt/filebeat
     environment: ["ELASTICSEARCH_HOST=10.0.0.5"]
 ```
+
+Feature dependencies are hard same-node prerequisites at runtime. If a node
+binds a feature whose declared dependency is not also bound on that same node,
+runtime compilation emits a diagnostic and the plan is invalid rather than
+silently ignoring the missing prerequisite.
 
 ---
 
@@ -438,7 +457,7 @@ This section is intentionally declarative. It says who is trying to do what, aga
 
 ## Workflows
 
-Declarative branching and parallel control graphs over objectives. Inspired by CACAO workflow structure, but intentionally scoped to objective composition rather than a second action-step language.
+Declarative control programs over SDL-defined objectives and portable workflow state. Workflows remain backend-agnostic: they express experiment control intent, retries, failure handling, and concurrency without embedding backend-native commands.
 
 ```yaml
 workflows:
@@ -448,9 +467,9 @@ workflows:
       validate-release:
         type: objective
         objective: blue-validate-release
-        next: branch-on-promotion
+        on-success: branch-on-promotion
       branch-on-promotion:
-        type: if
+        type: decision
         when:
           conditions: [rogue-release-promoted]
         then: rollback-fanout
@@ -458,25 +477,95 @@ workflows:
       rollback-fanout:
         type: parallel
         branches: [revoke-artifact, rollback-edge]
-        next: finish
+        join: rollback-joined
       revoke-artifact:
         type: objective
         objective: blue-revoke-artifact
+        on-success: rollback-joined
       rollback-edge:
         type: objective
         objective: blue-preserve-service
+        on-success: rollback-joined
+      rollback-joined:
+        type: join
+        next: verify-rollback
+      verify-rollback:
+        type: decision
+        when:
+          steps:
+            - step: revoke-artifact
+              outcomes: [succeeded]
+        then: finish
+        else: revalidate-release
+      revalidate-release:
+        type: objective
+        objective: blue-validate-release
+        on-success: finish
       finish:
         type: end
 ```
 
 Workflow step types are:
 
-- `objective` — run a declared objective, then optionally continue via `next`
-- `if` — branch on declarative predicate refs (`conditions`, `metrics`, `evaluations`, `tlos`, `goals`, `objectives`)
-- `parallel` — fan out to multiple branches, then optionally join at `next`
+- `objective` — execute a declared objective; `on-success` is required and `on-failure` is optional. If `on-failure` is omitted, workflow execution fails terminally on objective failure.
+- `decision` — branch on a declarative predicate using `then` / `else`
+- `switch` — evaluate ordered `cases`, take the first matching case target, and fall back to `default` when no case predicate matches
+- `retry` — re-run a declared objective until it succeeds or `max-attempts` is exhausted; `on-success` is required and `on-exhausted` is optional
+- `call` — invoke another declared workflow as a reusable subflow; `workflow` and `on-success` are required, and `on-failure` is optional
+- `parallel` — launch two or more branch entry steps concurrently and require all explicit branch paths to converge on a named `join` step; `on-failure` is optional
+- `join` — an explicit barrier step, not a normal direct successor edge, that resumes linear control via `next` only after the owning `parallel` step has observed all branches converge
 - `end` — terminal node
 
-Workflow graphs are acyclic. Every referenced step must exist, every step must be reachable from `start`, and `parallel.branches` must be unique. Workflow names and step names may not contain `.` because objective window refs use `<workflow>.<step>` syntax.
+Compensation is step-attached and workflow-governed:
+
+- compensable steps are `objective` and `call`
+- those step kinds may declare `compensate-with: <workflow>`
+- workflows may declare a `compensation:` policy with:
+  - `mode: automatic | disabled`
+  - `on: [failed, cancelled, timed_out]`
+  - `failure_policy: fail_workflow | record_and_continue`
+  - `order: reverse_completion` (the only supported ordering in v1)
+
+Compensation targets are always declared workflows, never inline rollback step
+graphs. Successful compensable steps register rollback intent, and automatic
+compensation executes in reverse completion order when the primary workflow
+terminates with a configured trigger.
+
+Workflow predicates may observe:
+
+- scoring/evaluation data via `conditions`, `metrics`, `evaluations`, `tlos`, `goals`, and `objectives`
+- prior step state via `steps`, where each entry names a prior executable step plus one or more expected outcomes (`succeeded`, `failed`, `exhausted`) and an optional `min-attempts`
+
+Example predicate over prior step state:
+
+```yaml
+when:
+  steps:
+    - step: validate-release
+      outcomes: [failed]
+      min-attempts: 2
+```
+
+Workflow-visible step state is an immutable execution history. In v1, predicates may only inspect step outcomes and attempt counts; they may not inspect backend-specific failure classes. Step-state predicates must reference steps whose state is guaranteed to be known before the predicate executes.
+
+After a `join`, downstream predicates may inspect executable branch steps from that fanout, but only when those steps are guaranteed on every path within their own branch before the join. Branch-local step state does not leak across sibling branches before the join, and a `parallel.on-failure` bypass does not expose abandoned branch state.
+
+Workflow graphs remain acyclic. Every referenced step must exist, every step
+must be reachable from `start`, joins must be referenced by exactly one
+`parallel` step, every explicit branch path from a `parallel` step must
+converge on its declared join, and workflow call graphs must also remain
+acyclic. Workflow names may use canonical namespace-style dots, but workflow
+step names may not because objective window refs use `<workflow>.<step>`
+syntax and split on the final `.`.
+
+Migration from the exploratory workflow syntax:
+
+- replace `if` with `decision`
+- replace `while` with `retry` when the repeated work is a single objective
+- replace `next` on objective steps with required `on-success`
+- replace `on-error` with `on-failure` (for `objective` / `parallel`) or `on-exhausted` (for `retry`)
+- replace `parallel.next` with an explicit `join` step
+- replace `step-outcomes: [step-name]` with `steps: [{step: step-name, outcomes: [...]}]`
 
 ---
 
@@ -502,7 +591,7 @@ variables:
 
 Variables are referenced as `${var_name}` in other sections. They are **not resolved at parse time** — resolution happens at instantiation.
 
-Full-value placeholders are currently supported in ordinary string fields, common scalar fields (counts, booleans, scores, timings, RAM/CPU, ports), many reference values, and selected leaf enum-backed property fields such as `accounts.*.password_strength`, `entities.*.role`, `nodes.*.os`, `nodes.*.asset_value.*`, `infrastructure.*.acls[*].action`, and `objectives.*.success.mode`. The semantic validator checks that `${var_name}` refers to a declared variable, but substitution still happens later during instantiation. User-defined mapping keys and discriminant/schema-shaping enum fields such as section `type` tags still need concrete values, and placeholder keys are rejected at parse time.
+Full-value placeholders are currently supported in ordinary string fields, common scalar fields (counts, booleans, scores, timings, RAM/CPU, ports), many reference values, and selected leaf enum-backed property fields such as `accounts.*.password_strength`, `entities.*.role`, `nodes.*.os`, `nodes.*.asset_value.*`, `infrastructure.*.acls[*].action`, and `objectives.*.success.mode`. The semantic validator checks that `${var_name}` refers to a declared variable, and the repo-owned instantiation phase later substitutes concrete values before compilation/runtime planning. User-defined mapping keys and discriminant/schema-shaping enum fields such as section `type` tags still need concrete values, and placeholder keys are rejected at parse time.
 
 Think of variables as parameterizing **properties of declared objects**, not the object graph itself. For example, a node's hostname, a content file's text, or a subnet CIDR may be variable-backed, while top-level identifiers like `nodes.web`, `features.nginx`, or `accounts.domain-admin` must remain literal.
 

@@ -95,7 +95,7 @@ def check_indexer_ready(url: str, username: str, password: str) -> bool:
             timeout=10,
         )
         return result.returncode == 0
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         log.debug("Indexer check failed: %s", exc)
         return False
 
@@ -129,7 +129,7 @@ def check_manager_api_ready(container_name: str) -> bool:
         # Any HTTP response means the API is listening
         status = result.stdout.strip()
         return result.returncode == 0 and status.isdigit() and int(status) > 0
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         log.debug("Manager API check failed: %s", exc)
         return False
 
@@ -165,6 +165,6 @@ def test_ssh_connection(
             timeout=10,
         )
         return result.returncode == 0
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         log.debug("SSH connection test failed: %s", exc)
         return False

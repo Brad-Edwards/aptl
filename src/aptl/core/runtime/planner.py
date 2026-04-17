@@ -1,7 +1,13 @@
 """Planner for compiled SDL runtime models."""
 
-from collections import deque
-
+from aptl.core.semantics.planner import (
+    DependencyKind,
+    dependency_graph_for_resources,
+    reconcile_resource_actions,
+    resource_delete_order,
+    resource_dependency_cycles,
+    resource_topological_order,
+)
 from aptl.core.runtime.capabilities import BackendManifest
 from aptl.core.runtime.models import (
     ChangeAction,
@@ -164,63 +170,11 @@ def _collect_resources(model: RuntimeModel) -> dict[str, PlannedResource]:
 
 
 def _ordering_graph(resources: dict[str, PlannedResource]) -> dict[str, tuple[str, ...]]:
-    return {
-        address: tuple(
-            dependency
-            for dependency in resource.ordering_dependencies
-            if dependency in resources
-        )
-        for address, resource in resources.items()
-    }
+    return dependency_graph_for_resources(resources, kind=DependencyKind.ORDERING)
 
 
 def _ordering_cycles(resources: dict[str, PlannedResource]) -> list[tuple[str, ...]]:
-    graph = _ordering_graph(resources)
-    if not graph:
-        return []
-
-    index = 0
-    indices: dict[str, int] = {}
-    lowlinks: dict[str, int] = {}
-    stack: list[str] = []
-    on_stack: set[str] = set()
-    cycles: list[tuple[str, ...]] = []
-
-    def strongconnect(address: str) -> None:
-        nonlocal index
-        indices[address] = index
-        lowlinks[address] = index
-        index += 1
-        stack.append(address)
-        on_stack.add(address)
-
-        for dependency in graph[address]:
-            if dependency not in indices:
-                strongconnect(dependency)
-                lowlinks[address] = min(lowlinks[address], lowlinks[dependency])
-            elif dependency in on_stack:
-                lowlinks[address] = min(lowlinks[address], indices[dependency])
-
-        if lowlinks[address] != indices[address]:
-            return
-
-        component: list[str] = []
-        while stack:
-            member = stack.pop()
-            on_stack.remove(member)
-            component.append(member)
-            if member == address:
-                break
-
-        component = sorted(component)
-        if len(component) > 1 or component[0] in graph[component[0]]:
-            cycles.append(tuple(component))
-
-    for address in sorted(graph):
-        if address not in indices:
-            strongconnect(address)
-
-    return sorted(cycles)
+    return resource_dependency_cycles(resources)
 
 
 def _ordering_cycle_diagnostics(
@@ -252,30 +206,7 @@ def _ordering_cycle_diagnostics(
 
 
 def _topological_order(resources: dict[str, PlannedResource]) -> list[str]:
-    graph: dict[str, list[str]] = {address: [] for address in resources}
-    indegree: dict[str, int] = {address: 0 for address in resources}
-
-    for address, dependencies in _ordering_graph(resources).items():
-        for dependency in dependencies:
-            graph[dependency].append(address)
-            indegree[address] += 1
-
-    queue = deque(sorted(address for address, degree in indegree.items() if degree == 0))
-    order: list[str] = []
-
-    while queue:
-        current = queue.popleft()
-        order.append(current)
-        for dependent in sorted(graph[current]):
-            indegree[dependent] -= 1
-            if indegree[dependent] == 0:
-                queue.append(dependent)
-
-    if len(order) != len(resources):
-        remaining = [address for address in resources if address not in order]
-        order.extend(sorted(remaining))
-
-    return order
+    return resource_topological_order(resources)
 
 
 def _entry_matches_resource(entry: SnapshotEntry, resource: PlannedResource) -> bool:
@@ -701,6 +632,28 @@ def _validate_manifest(model: RuntimeModel, manifest: BackendManifest) -> list[D
                         message="Orchestrator does not support workflows.",
                     )
                 )
+            workflow_features = sorted(
+                {
+                    feature
+                    for workflow in model.workflows.values()
+                    for feature in workflow.required_features
+                },
+                key=lambda feature: feature.value,
+            )
+            for feature in workflow_features:
+                if feature in manifest.orchestrator.supported_workflow_features:
+                    continue
+                diagnostics.append(
+                    Diagnostic(
+                        code="orchestrator.workflow-feature-unsupported",
+                        domain="orchestration",
+                        address="orchestration.workflows",
+                        message=(
+                            "Orchestrator does not support workflow feature "
+                            f"'{feature.value}'."
+                        ),
+                    )
+                )
             orchestration_uses_condition_refs = any(
                 event.condition_addresses for event in model.events.values()
             ) or any(
@@ -720,6 +673,28 @@ def _validate_manifest(model: RuntimeModel, manifest: BackendManifest) -> list[D
                         message=(
                             "Orchestrator does not support condition-gated events "
                             "or workflow predicates."
+                        ),
+                    )
+                )
+            required_state_predicate_features = sorted(
+                {
+                    feature
+                    for workflow in model.workflows.values()
+                    for feature in workflow.required_state_predicate_features
+                },
+                key=lambda feature: feature.value,
+            )
+            for feature in required_state_predicate_features:
+                if feature in manifest.orchestrator.supported_workflow_state_predicates:
+                    continue
+                diagnostics.append(
+                    Diagnostic(
+                        code="orchestrator.step-state-predicate-feature-unsupported",
+                        domain="orchestration",
+                        address="orchestration.workflows",
+                        message=(
+                            "Orchestrator does not support workflow state "
+                            f"predicate feature '{feature.value}'."
                         ),
                     )
                 )
@@ -796,32 +771,16 @@ def _build_operations(
     resources: dict[str, PlannedResource],
     snapshot: RuntimeSnapshot,
 ) -> tuple[dict[str, ChangeAction], dict[str, SnapshotEntry]]:
-    actions: dict[str, ChangeAction] = {}
-    deleted_entries: dict[str, SnapshotEntry] = {}
-
-    for address, resource in resources.items():
-        existing = snapshot.get(address)
-        if existing is None:
-            actions[address] = ChangeAction.CREATE
-        elif _entry_matches_resource(existing, resource):
-            actions[address] = ChangeAction.UNCHANGED
-        else:
-            actions[address] = ChangeAction.UPDATE
-
-    for address, entry in snapshot.entries.items():
-        if address not in resources:
-            deleted_entries[address] = entry
-            actions[address] = ChangeAction.DELETE
-
-    for address in _topological_order(resources):
-        if actions[address] != ChangeAction.UNCHANGED:
-            continue
-        if any(
-            actions.get(dep) != ChangeAction.UNCHANGED
-            for dep in resources[address].refresh_dependencies
-        ):
-            actions[address] = ChangeAction.UPDATE
-
+    semantic_actions, deleted_entries = reconcile_resource_actions(
+        resources,
+        snapshot.entries,
+        resource_dependencies=lambda resource: resource,
+        matches=_entry_matches_resource,
+    )
+    actions = {
+        address: ChangeAction(action.value)
+        for address, action in semantic_actions.items()
+    }
     return actions, deleted_entries
 
 
@@ -837,7 +796,7 @@ def _delete_order(entries: dict[str, SnapshotEntry]) -> list[str]:
         )
         for address, entry in entries.items()
     }
-    return list(reversed(_topological_order(resources)))
+    return resource_delete_order(resources)
 
 
 def _build_provisioning_plan(

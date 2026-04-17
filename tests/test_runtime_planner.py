@@ -5,17 +5,21 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+import pytest
+
 from aptl.backends.stubs import create_stub_manifest
 from aptl.core.runtime.capabilities import (
     BackendManifest,
     EvaluatorCapabilities,
     OrchestratorCapabilities,
     ProvisionerCapabilities,
+    WorkflowFeature,
+    WorkflowStatePredicateFeature,
 )
 from aptl.core.runtime.compiler import compile_runtime_model
 from aptl.core.runtime.models import RuntimeDomain, RuntimeSnapshot, SnapshotEntry
 from aptl.core.runtime.planner import plan
-from aptl.core.sdl import parse_sdl
+from aptl.core.sdl import SDLInstantiationError, parse_sdl
 
 
 def _scenario(yaml_str: str):
@@ -316,6 +320,7 @@ events:
                 supported_sections=frozenset({"workflows"}),
                 supports_workflows=True,
                 supports_condition_refs=False,
+                supported_workflow_features=frozenset({WorkflowFeature.DECISION}),
             ),
             evaluator=create_stub_manifest().evaluator,
         )
@@ -337,7 +342,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: finish
         else: finish
@@ -348,6 +353,214 @@ workflows:
 
         codes = {diag.code for diag in execution_plan.diagnostics}
         assert "orchestrator.condition-refs-unsupported" in codes
+        assert not execution_plan.is_valid
+
+    def test_workflow_feature_requires_orchestrator_support(self):
+        limited = BackendManifest(
+            name="limited",
+            provisioner=create_stub_manifest().provisioner,
+            orchestrator=OrchestratorCapabilities(
+                name="limited-orchestrator",
+                supported_sections=frozenset({"workflows"}),
+                supports_workflows=True,
+                supported_workflow_features=frozenset(),
+            ),
+            evaluator=create_stub_manifest().evaluator,
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: workflows
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+entities:
+  blue: {role: blue}
+conditions:
+  health: {command: /bin/true, interval: 15}
+objectives:
+  defend:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  flow:
+    start: attempt
+    steps:
+      attempt:
+        type: retry
+        objective: defend
+        on-success: finish
+        max-attempts: 3
+      finish: {type: end}
+"""),),
+            limited,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+        assert "orchestrator.workflow-feature-unsupported" in codes
+        assert not execution_plan.is_valid
+
+    def test_step_state_predicates_require_orchestrator_support(self):
+        limited = BackendManifest(
+            name="limited",
+            provisioner=create_stub_manifest().provisioner,
+            orchestrator=OrchestratorCapabilities(
+                name="limited-orchestrator",
+                supported_sections=frozenset({"workflows"}),
+                supports_workflows=True,
+                supported_workflow_features=frozenset({WorkflowFeature.DECISION}),
+                supported_workflow_state_predicates=frozenset(),
+            ),
+            evaluator=create_stub_manifest().evaluator,
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: workflows
+entities:
+  blue: {role: blue}
+conditions:
+  health: {command: /bin/true, interval: 15}
+objectives:
+  defend:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  flow:
+    start: validate
+    steps:
+      validate:
+        type: objective
+        objective: defend
+        on-success: branch
+      branch:
+        type: decision
+        when:
+          steps:
+            - step: validate
+              outcomes: [succeeded]
+        then: finish
+        else: finish
+      finish: {type: end}
+""")),
+            limited,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+        assert "orchestrator.step-state-predicate-feature-unsupported" in codes
+        assert not execution_plan.is_valid
+
+    def test_attempt_count_predicates_require_specific_support(self):
+        limited = BackendManifest(
+            name="limited",
+            provisioner=create_stub_manifest().provisioner,
+            orchestrator=OrchestratorCapabilities(
+                name="limited-orchestrator",
+                supported_sections=frozenset({"workflows"}),
+                supports_workflows=True,
+                supported_workflow_features=frozenset({WorkflowFeature.DECISION}),
+                supported_workflow_state_predicates=frozenset(
+                    {WorkflowStatePredicateFeature.OUTCOME_MATCHING}
+                ),
+            ),
+            evaluator=create_stub_manifest().evaluator,
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: workflows
+entities:
+  blue: {role: blue}
+conditions:
+  health: {command: /bin/true, interval: 15}
+objectives:
+  defend:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  flow:
+    start: validate
+    steps:
+      validate:
+        type: retry
+        objective: defend
+        on-success: branch
+        max-attempts: 3
+      branch:
+        type: decision
+        when:
+          steps:
+            - step: validate
+              outcomes: [succeeded]
+              min-attempts: 2
+        then: finish
+        else: finish
+      finish: {type: end}
+""")),
+            limited,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+        assert "orchestrator.step-state-predicate-feature-unsupported" in codes
+        assert not execution_plan.is_valid
+
+    def test_parallel_barrier_requires_specific_support(self):
+        limited = BackendManifest(
+            name="limited",
+            provisioner=create_stub_manifest().provisioner,
+            orchestrator=OrchestratorCapabilities(
+                name="limited-orchestrator",
+                supported_sections=frozenset({"workflows"}),
+                supports_workflows=True,
+                supported_workflow_features=frozenset(),
+            ),
+            evaluator=create_stub_manifest().evaluator,
+        )
+
+        execution_plan = plan(
+            compile_runtime_model(_scenario("""
+name: workflows
+entities:
+  blue: {role: blue}
+conditions:
+  health: {command: /bin/true, interval: 15}
+objectives:
+  left:
+    entity: blue
+    success: {conditions: [health]}
+  right:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  flow:
+    start: fanout
+    steps:
+      fanout:
+        type: parallel
+        branches: [left-branch, right-branch]
+        join: joined
+      left-branch:
+        type: objective
+        objective: left
+        on-success: joined
+      right-branch:
+        type: objective
+        objective: right
+        on-success: joined
+      joined:
+        type: join
+        next: finish
+      finish: {type: end}
+""")),
+            limited,
+        )
+
+        codes = {diag.code for diag in execution_plan.diagnostics}
+        assert "orchestrator.workflow-feature-unsupported" in codes
         assert not execution_plan.is_valid
 
     def test_workflow_condition_bindings_force_workflow_refresh(self):
@@ -373,7 +586,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: finish
         else: finish
@@ -404,7 +617,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: finish
         else: finish
@@ -480,7 +693,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: finish
         else: finish
@@ -533,7 +746,7 @@ workflows:
     start: branch
     steps:
       branch:
-        type: if
+        type: decision
         when: {conditions: [health]}
         then: finish
         else: finish
@@ -684,7 +897,7 @@ workflows:
   flow:
     start: start
     steps:
-      start: {type: objective, objective: defend, next: end}
+      start: {type: objective, objective: defend, on-success: end}
       end: {type: end}
 """))
         execution_plan = plan(model, limited)
@@ -755,10 +968,10 @@ nodes:
 
         codes = {diag.code for diag in execution_plan.diagnostics}
 
-        assert "provisioner.unsupported-os-family" in codes
-        assert not execution_plan.is_valid
+        assert "provisioner.unsupported-os-family" not in codes
+        assert execution_plan.is_valid
 
-    def test_variable_backed_os_allowed_values_must_be_valid_for_nodes_os(self):
+    def test_variable_backed_os_defaults_must_be_valid_for_nodes_os(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -768,7 +981,7 @@ nodes:
             ),
         )
 
-        execution_plan = plan(
+        with pytest.raises(SDLInstantiationError) as exc:
             compile_runtime_model(_scenario("""
 name: variable-os
 variables:
@@ -778,17 +991,10 @@ variables:
     allowed_values: [banana]
 nodes:
   vm: {type: vm, os: '${os_name}', resources: {ram: 1 gib, cpu: 1}}
-""")),
-            manifest,
-        )
+"""))
+        assert "nodes.vm.os" in str(exc.value)
 
-        codes = {diag.code for diag in execution_plan.diagnostics}
-
-        assert "provisioner.os-family-variable-domain-invalid" in codes
-        assert "provisioner.unsupported-os-family" not in codes
-        assert not execution_plan.is_valid
-
-    def test_variable_backed_os_without_allowed_values_defers_validation(self):
+    def test_variable_backed_os_without_allowed_values_uses_instantiated_default(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -813,11 +1019,11 @@ nodes:
 
         codes = {diag.code for diag in execution_plan.diagnostics}
 
-        assert "provisioner.os-family-validation-deferred" in codes
+        assert "provisioner.os-family-validation-deferred" not in codes
         assert "provisioner.unsupported-os-family" not in codes
         assert execution_plan.is_valid
 
-    def test_variable_backed_os_with_undeclared_variable_fails_closed(self):
+    def test_variable_backed_os_with_undeclared_variable_fails_instantiation(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -835,13 +1041,9 @@ nodes:
             skip_semantic_validation=True,
         )
 
-        execution_plan = plan(compile_runtime_model(scenario), manifest)
-
-        codes = {diag.code for diag in execution_plan.diagnostics}
-
-        assert "provisioner.os-family-variable-ref-unbound" in codes
-        assert "provisioner.os-family-validation-deferred" not in codes
-        assert not execution_plan.is_valid
+        with pytest.raises(SDLInstantiationError) as exc:
+            compile_runtime_model(scenario)
+        assert "missing_os" in str(exc.value)
 
     def test_variable_backed_counts_with_allowed_values_enforce_max_nodes(self):
         manifest = BackendManifest(
@@ -872,10 +1074,10 @@ infrastructure:
 
         codes = {diag.code for diag in execution_plan.diagnostics}
 
-        assert "provisioner.max-total-nodes-exceeded" in codes
-        assert not execution_plan.is_valid
+        assert "provisioner.max-total-nodes-exceeded" not in codes
+        assert execution_plan.is_valid
 
-    def test_variable_backed_counts_allowed_values_must_be_valid_for_infrastructure_count(self):
+    def test_variable_backed_counts_defaults_must_be_valid_for_infrastructure_count(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -886,7 +1088,7 @@ infrastructure:
             ),
         )
 
-        execution_plan = plan(
+        with pytest.raises(SDLInstantiationError) as exc:
             compile_runtime_model(_scenario("""
 name: variable-count
 variables:
@@ -898,17 +1100,10 @@ nodes:
   vm: {type: vm, os: linux, resources: {ram: 1 gib, cpu: 1}}
 infrastructure:
   vm: ${node_count}
-""")),
-            manifest,
-        )
+"""))
+        assert "infrastructure.vm.count" in str(exc.value)
 
-        codes = {diag.code for diag in execution_plan.diagnostics}
-
-        assert "provisioner.count-variable-domain-invalid" in codes
-        assert "provisioner.max-total-nodes-exceeded" not in codes
-        assert not execution_plan.is_valid
-
-    def test_variable_backed_counts_without_allowed_values_defer_max_node_validation(self):
+    def test_variable_backed_counts_without_allowed_values_use_instantiated_default(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -936,11 +1131,11 @@ infrastructure:
 
         codes = {diag.code for diag in execution_plan.diagnostics}
 
-        assert "provisioner.max-total-nodes-validation-deferred" in codes
-        assert "provisioner.max-total-nodes-exceeded" not in codes
-        assert execution_plan.is_valid
+        assert "provisioner.max-total-nodes-validation-deferred" not in codes
+        assert "provisioner.max-total-nodes-exceeded" in codes
+        assert not execution_plan.is_valid
 
-    def test_variable_backed_counts_with_undeclared_variable_fail_closed(self):
+    def test_variable_backed_counts_with_undeclared_variable_fail_instantiation(self):
         manifest = BackendManifest(
             name="limited",
             provisioner=ProvisionerCapabilities(
@@ -961,13 +1156,9 @@ infrastructure:
             skip_semantic_validation=True,
         )
 
-        execution_plan = plan(compile_runtime_model(scenario), manifest)
-
-        codes = {diag.code for diag in execution_plan.diagnostics}
-
-        assert "provisioner.count-variable-ref-unbound" in codes
-        assert "provisioner.max-total-nodes-validation-deferred" not in codes
-        assert not execution_plan.is_valid
+        with pytest.raises(SDLInstantiationError) as exc:
+            compile_runtime_model(scenario)
+        assert "missing_count" in str(exc.value)
 
     def test_dependency_ordering_across_domain_plans(self):
         execution_plan = plan(
@@ -1020,7 +1211,7 @@ workflows:
   flow:
     start: start
     steps:
-      start: {type: objective, objective: initial, next: end}
+      start: {type: objective, objective: initial, on-success: end}
       end: {type: end}
 """)),
             create_stub_manifest(),

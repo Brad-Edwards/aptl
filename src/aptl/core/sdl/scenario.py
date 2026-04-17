@@ -10,7 +10,7 @@ Delivery-level concerns (Docker, Terraform, cloud APIs) are
 outside the SDL.
 """
 
-from pydantic import Field, PrivateAttr
+from pydantic import Field, PrivateAttr, model_validator
 
 from aptl.core.sdl._base import SDLModel
 from aptl.core.sdl.accounts import Account
@@ -29,6 +29,59 @@ from aptl.core.sdl.variables import Variable
 from aptl.core.sdl.vulnerabilities import Vulnerability
 
 
+class ModuleDescriptor(SDLModel):
+    """Published module metadata for SDL composition."""
+
+    id: str
+    version: str
+    parameters: list[str] = Field(default_factory=list)
+    exports: dict[str, list[str]] = Field(default_factory=dict)
+    description: str = ""
+
+    @model_validator(mode="after")
+    def validate_descriptor(self) -> "ModuleDescriptor":
+        if "/" not in self.id or self.id.startswith("/") or self.id.endswith("/"):
+            raise ValueError(
+                "module.id must use canonical 'publisher/name' format"
+            )
+        if len(self.parameters) != len(set(self.parameters)):
+            raise ValueError("module.parameters must be unique")
+        for section, names in self.exports.items():
+            if len(names) != len(set(names)):
+                raise ValueError(f"module.exports.{section} entries must be unique")
+        return self
+
+
+class ImportDecl(SDLModel):
+    """A module import expanded before full semantic validation."""
+
+    source: str = ""
+    path: str = ""
+    namespace: str = ""
+    version: str = "*"
+    parameters: dict[str, object] = Field(default_factory=dict)
+    digest: str = ""
+
+    @model_validator(mode="after")
+    def validate_source_fields(self) -> "ImportDecl":
+        if not self.source and not self.path:
+            raise ValueError("Import requires either 'source' or deprecated 'path'")
+        if self.source and self.path:
+            raise ValueError("Import may specify only one of 'source' or 'path'")
+        if self.path and not self.namespace:
+            # Local path imports remain backward compatible and may derive namespace.
+            return self
+        if self.source.startswith("oci:") and not self.namespace:
+            raise ValueError("OCI imports require an explicit namespace")
+        return self
+
+    @property
+    def normalized_source(self) -> str:
+        if self.source:
+            return self.source
+        return f"local:{self.path}"
+
+
 class Scenario(SDLModel):
     """Top-level scenario specification.
 
@@ -39,7 +92,10 @@ class Scenario(SDLModel):
 
     # --- Identity ---
     name: str
+    version: str = "*"
     description: str = ""
+    module: ModuleDescriptor | None = None
+    imports: list[ImportDecl] = Field(default_factory=list)
 
     # --- OCR SDL: 14 sections ---
     nodes: dict[str, Node] = Field(default_factory=dict)
@@ -67,6 +123,7 @@ class Scenario(SDLModel):
     variables: dict[str, Variable] = Field(default_factory=dict)
 
     _advisories: list[str] = PrivateAttr(default_factory=list)
+    _semantic_validated: bool = PrivateAttr(default=False)
 
     @property
     def advisories(self) -> list[str]:
@@ -75,3 +132,50 @@ class Scenario(SDLModel):
 
     def _set_advisories(self, advisories: list[str]) -> None:
         self._advisories = list(advisories)
+
+    @property
+    def semantic_validated(self) -> bool:
+        """Whether full semantic validation has already run on this scenario."""
+        return self._semantic_validated
+
+    def _set_semantic_validated(self, validated: bool) -> None:
+        self._semantic_validated = bool(validated)
+
+
+class InstantiatedScenario(Scenario):
+    """Scenario with all `${var}` references resolved to concrete values."""
+
+    _instantiation_parameters: dict[str, object] = PrivateAttr(default_factory=dict)
+    _instantiation_profile: str | None = PrivateAttr(default=None)
+
+    @property
+    def instantiation_parameters(self) -> dict[str, object]:
+        """Concrete parameter values used during instantiation."""
+        return dict(self._instantiation_parameters)
+
+    @property
+    def instantiation_profile(self) -> str | None:
+        """Optional instantiation profile name."""
+        return self._instantiation_profile
+
+    def _set_instantiation_context(
+        self,
+        *,
+        parameters: dict[str, object],
+        profile: str | None,
+    ) -> None:
+        self._instantiation_parameters = dict(parameters)
+        self._instantiation_profile = profile
+
+
+class ExpandedScenario(Scenario):
+    """Scenario produced by module/import expansion."""
+
+    _module_namespaces: dict[str, str] = PrivateAttr(default_factory=dict)
+
+    @property
+    def module_namespaces(self) -> dict[str, str]:
+        return dict(self._module_namespaces)
+
+    def _set_module_namespaces(self, namespaces: dict[str, str]) -> None:
+        self._module_namespaces = dict(namespaces)

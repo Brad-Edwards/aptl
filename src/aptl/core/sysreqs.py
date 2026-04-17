@@ -43,7 +43,7 @@ def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
             capture_output=True,
             text=True,
         )
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         log.error("Failed to run sysctl: %s", exc)
         return SysReqResult(
             passed=False,

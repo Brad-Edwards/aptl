@@ -5,6 +5,27 @@ It is a greenfield runtime architecture built for the SDL itself, not an
 adapter around any previous scenario/backend implementation. See
 [ADR-017](../adrs/adr-017-sdl-runtime-layer.md) for the decision record.
 
+Under the repository's [coding standards](../reference/coding-standards.md),
+this layer is where `FM2` and `FM3` work becomes most relevant. The
+formalization target here is not raw YAML, but the typed runtime model and the
+contracts that preserve semantic meaning across validation, compilation,
+planning, and backend execution.
+
+This layer also draws from a different precedent set than the author-facing SDL
+surface. OCR and CACAO still matter, but the strongest implementation models
+here come from mature workflow and distributed-runtime systems:
+
+- AWS Step Functions, Argo Workflows, and W3C SCXML for explicit control-flow
+  semantics
+- Kubernetes, Temporal, and OpenC2 for portable execution-state and
+  language-neutral contract boundaries
+
+Maintainer note: the focused follow-on implementation plans for evaluator
+contract symmetry, backend conformance, secure remote control, module/import
+composition, and workflow maturity live under `notes/runtime-evolution/` in the
+repository. This document stays scoped to settled architecture and current
+contracts.
+
 ## Package Boundary
 
 ```text
@@ -15,9 +36,20 @@ aptl.backends.*    -> concrete target implementations
 
 ## Runtime Stages
 
-### 1. Compile
+### 1. Instantiate + Compile
 
-`compile_runtime_model(scenario)` is a pure normalization pass.
+`instantiate_scenario(raw_scenario, parameters=None, profile=None)` is now the
+repo-owned concretization pass that runs before compilation.
+
+It:
+
+- applies explicit parameter values
+- applies SDL variable defaults
+- rejects unresolved `${var}` placeholders
+- rebuilds a fully concrete `InstantiatedScenario`
+
+`compile_runtime_model(scenario)` then normalizes the instantiated scenario
+into runtime objects.
 
 It separates reusable definitions from bound runtime instances:
 
@@ -28,7 +60,7 @@ It separates reusable definitions from bound runtime instances:
 - `injects` -> first-class orchestration inject resources
 - `node.injects` -> optional node-scoped inject bindings layered on top of top-level inject resources
 - `nodes` + `infrastructure` -> deployable network/node resources
-- orchestration and scoring/objective sections -> resolved graph nodes
+- orchestration and scoring/objective sections -> resolved runtime programs and graph nodes
 
 The output is a `RuntimeModel` with canonical addresses for every runtime-owned
 object.
@@ -37,6 +69,38 @@ Bound condition refs fail closed. An unqualified condition reference must
 resolve to exactly one bound runtime instance; zero matches and multiple matches
 are both compile-time diagnostics. Event inject refs resolve directly to
 top-level inject resources and fail if the named inject does not exist.
+Bound feature dependencies also fail closed: if a node-scoped feature binding
+declares a dependency on another feature that is not bound on the same node,
+the compiler emits a diagnostic instead of silently dropping that dependency.
+
+Compiled workflows are no longer just flattened successor maps. `WorkflowRuntime`
+now preserves:
+
+- `start_step`
+- optional workflow timeout policy in the compiled execution contract
+- per-step structured semantics (`objective`, `decision`, `switch`, `retry`, `call`, `parallel`, `join`, `end`)
+- explicit call targets and ordered switch-case predicates
+- explicit control edges
+- external predicate dependencies
+- prior-step state dependencies
+- declared workflow feature usage
+- a compiled `result_contract` for step-visible state
+- a compiled `execution_contract` for workflow-level state/history validation
+
+Workflow control is the flagship current `FM3` surface:
+
+- it has explicit branching and re-entry behavior
+- it defines portable execution-visible state
+- it relies on reachability and visibility guarantees across multiple layers
+
+That means workflow changes should be treated as state-machine work on the
+runtime model and contracts, not merely as YAML authoring changes.
+
+The intent is not to clone any one system. The SDL keeps its own
+objective-centric workflow surface, but its semantics deliberately follow the
+best-practice pattern from mature systems: explicit branching semantics,
+explicit convergence rules, typed observable state, and a runtime contract that
+is portable across backend implementations.
 
 ### 2. Plan
 
@@ -110,20 +174,22 @@ Validation is semantic, not section-only. Phase 1 checks include:
 - content types
 - account features
 - orchestration/workflow usage
+- fine-grained workflow feature usage (`decision`, `retry`, `parallel` barriers, failure transitions)
 - workflow predicate condition refs
+- workflow predicate prior-step state refs and state-predicate subfeatures (`outcome-matching`, `attempt-counts`)
 - scoring/objective usage
 
-Variable-backed capability fields are handled soundly:
+`OrchestratorCapabilities` now expose both coarse workflow support and fine-grained workflow semantics:
 
-- capability-relevant variable refs must be declared, even when SDL semantic
-  cross-reference validation was skipped earlier
-- if a referenced variable has finite `allowed_values`, the planner first
-  revalidates that domain against the SDL field being parameterized
-  (`nodes.os`, `infrastructure.count`) before any backend capability checks run
-- only field-valid finite domains are checked against backend capabilities
-- declared variables without a finite field-valid pre-instantiation domain emit
-  warning diagnostics and defer exact validation until instantiation rather
-  than guessing from defaults
+- `supports_workflows`
+- `supports_condition_refs`
+- `supported_workflow_features`
+- `supported_workflow_state_predicates`
+
+Capability validation now operates on concrete instantiated values rather than
+placeholder domains guessed by backends. This removes the old “defer until
+instantiation” gap for runtime-relevant fields such as `nodes.os` and
+`infrastructure.count`.
 
 ## Runtime Target Lifecycle
 
@@ -145,9 +211,82 @@ inspection from instantiation, and `create()` uses the manifest returned by
 7. on failed runtime-service startup, roll back started services while keeping provisioning state
 8. stop orchestrator -> stop evaluator -> delete provisioning resources
 
+The orchestration runtime contract now includes:
+
+- a plain-data workflow execution-state envelope
+- a plain-data workflow history stream
+- a compiled `result_contract` for step-visible state
+- a compiled `execution_contract` for workflow-level legality/history validation
+- control-plane operations for canceling running workflows and reconciling timeout expiry
+- explicit compensation status/history when a workflow declares rollback behavior
+
+Backends report portable execution envelopes rather than backend-native object
+identity. The manager validates raw backend payloads against the compiled
+contracts, not against incidental planner payload structure. Compiled workflow
+predicates are fully typed runtime data; orchestrators should not rely on raw
+SDL `spec` to execute workflow semantics.
+
+Python typed workflow result models remain useful internally, but only as
+normalization helpers after boundary validation. They are not the backend
+protocol.
+
+This is also why semantic modeling belongs here: backend-agnostic guarantees
+such as allowed transitions, result visibility, and portability of workflow
+state are runtime-contract questions, not parser questions.
+
+This mirrors the contract style used by mature multi-runtime systems:
+
+- a portable wire/data contract at the boundary
+- a compiled semantic contract between definition and execution
+- published machine-readable JSON Schemas under `schemas/`
+- an async-style control-plane surface (`RuntimeControlPlane`) that can be
+  adapted to HTTPS/JSON without changing backend semantics
+- typed in-process adapters behind that boundary
+
+APTL currently applies that pattern first to workflow results because workflow
+control is the sharpest semantic surface in the SDL/runtime stack.
+
+The evaluator side is now following the same contract discipline: compiled
+evaluation result/execution contracts are attached to observable evaluation
+resources, backends report plain-data evaluator result envelopes and history
+streams, and the manager validates those payloads against compiled contracts
+instead of accepting ad hoc evaluation dictionaries.
+
 Objective `window` refs remain declarative scope/refresh inputs. They can force
 objective refresh when referenced orchestration state changes, but they do not
 create executor ordering edges across domains.
+
+Objective windows now compile through one shared normalized semantic form. The
+compiler preserves explicit resolved window references alongside the legacy
+address sets so later planner/runtime work can reason from canonical reference
+identities instead of reparsing raw SDL strings.
+
+Planner FM2 semantics are also now explicit rather than incidental:
+
+- `ordering` edges define create/start and delete/teardown order
+- `refresh` edges define recomputation/update propagation
+- refresh propagation is transitive over the refresh graph
+- cross-domain refresh does not create startup ordering
+
+Those rules are owned by `aptl.core.semantics.planner`, not by local planner
+algorithm shape.
+
+This phase is also intentionally composition-ready. Module/import expansion now
+happens before semantic validation and compile, so the runtime layer operates
+only on canonical resolved identities rather than on source-file layout. That
+same foundation is what makes namespaced reusable workflow calls portable.
+
+Composition is now registry-ready as well:
+
+- local imports remain supported through `path:` and `source: local:...`
+- reusable remote modules use `source: oci:...`
+- concrete resolved imports may be pinned via `source: locked:...`
+- `aptl sdl resolve` writes `aptl.lock.json`
+- `aptl sdl verify-imports` verifies lockfile, trust, digests, and signatures
+- `aptl sdl publish` packages a publishable SDL module as an OCI image layout
+
+Resolution and trust happen before instantiation and semantic validation, but
+planner/runtime semantics still see only one fully expanded canonical scenario.
 
 `RuntimeManager.apply()` requires the plan provenance to match the manager:
 

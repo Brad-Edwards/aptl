@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "parameters": {
+      "additionalProperties": true,
+      "title": "Parameters",
+      "type": "object"
+    },
+    "profile": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Profile"
+    },
+    "schema_version": {
+      "const": "scenario-instantiation/v1",
+      "default": "scenario-instantiation/v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "title": "InstantiationRequestModel",
+  "type": "object"
+}

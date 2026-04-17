@@ -982,7 +982,7 @@ class TestVerifyObjectives:
                         "validate": {
                             "type": "objective",
                             "objective": "obj-1",
-                            "next": "finish",
+                            "on-success": "finish",
                         },
                         "finish": {"type": "end"},
                     },
@@ -993,7 +993,7 @@ class TestVerifyObjectives:
                         "validate": {
                             "type": "objective",
                             "objective": "obj-1",
-                            "next": "finish",
+                            "on-success": "finish",
                         },
                         "finish": {"type": "end"},
                     },
@@ -1069,7 +1069,7 @@ class TestVerifyWorkflows:
                         "validate": {
                             "type": "objective",
                             "objective": "missing-objective",
-                            "next": "finish",
+                            "on-success": "finish",
                         },
                         "finish": {"type": "end"},
                     },
@@ -1104,12 +1104,19 @@ class TestVerifyWorkflows:
                         "validate": {
                             "type": "objective",
                             "objective": "validate-release",
-                            "next": "branch",
+                            "on-success": "branch",
                         },
                         "branch": {
                             "type": "parallel",
-                            "branches": ["validate"],
+                            "branches": ["validate", "recover"],
+                            "join": "finish",
                         },
+                        "recover": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "join", "next": "validate"},
                     },
                 },
             },
@@ -1127,7 +1134,7 @@ class TestVerifyWorkflows:
                         "validate": {
                             "type": "objective",
                             "objective": "validate-release",
-                            "next": "finish",
+                            "on-success": "finish",
                         },
                         "finish": {"type": "end"},
                         "orphan": {"type": "end"},
@@ -1148,20 +1155,21 @@ class TestVerifyWorkflows:
                         "fanout": {
                             "type": "parallel",
                             "branches": ["rollback-edge", "missing-step"],
-                            "next": "finish",
+                            "join": "joined",
                         },
                         "rollback-edge": {
                             "type": "objective",
                             "objective": "rollback-edge",
-                            "next": "finish",
+                            "on-success": "joined",
                         },
+                        "joined": {"type": "join", "next": "finish"},
                         "finish": {"type": "end"},
                     },
                 },
             },
         )
         errors = _validate(s)
-        assert any("branch 'missing-step' is not defined" in e for e in errors)
+        assert any("branch step 'missing-step' is not defined" in e for e in errors)
 
     def test_valid_workflow(self):
         s = _make_scenario(
@@ -1173,10 +1181,10 @@ class TestVerifyWorkflows:
                         "validate": {
                             "type": "objective",
                             "objective": "validate-release",
-                            "next": "branch",
+                            "on-success": "branch",
                         },
                         "branch": {
-                            "type": "if",
+                            "type": "decision",
                             "when": {"objectives": ["validate-release"]},
                             "then": "fanout",
                             "else": "finish",
@@ -1184,16 +1192,19 @@ class TestVerifyWorkflows:
                         "fanout": {
                             "type": "parallel",
                             "branches": ["rollback", "confirm"],
-                            "next": "finish",
+                            "join": "joined",
                         },
                         "rollback": {
                             "type": "objective",
                             "objective": "rollback-edge",
+                            "on-success": "joined",
                         },
                         "confirm": {
                             "type": "objective",
                             "objective": "validate-release",
+                            "on-success": "joined",
                         },
+                        "joined": {"type": "join", "next": "finish"},
                         "finish": {"type": "end"},
                     },
                 },
@@ -1202,96 +1213,7 @@ class TestVerifyWorkflows:
         errors = _validate(s)
         assert not errors
 
-    def test_valid_while_step(self):
-        s = _make_scenario(
-            **self._base_kwargs(),
-            conditions={
-                "health-check": {
-                    "command": "curl -f http://localhost",
-                    "interval": 30,
-                },
-            },
-            workflows={
-                "retry-flow": {
-                    "start": "loop",
-                    "steps": {
-                        "loop": {
-                            "type": "while",
-                            "when": {"conditions": ["health-check"]},
-                            "body": "attempt",
-                            "next": "finish",
-                            "max-iterations": 5,
-                        },
-                        "attempt": {
-                            "type": "objective",
-                            "objective": "validate-release",
-                        },
-                        "finish": {"type": "end"},
-                    },
-                },
-            },
-        )
-        errors = _validate(s)
-        assert not errors
-
-    def test_while_missing_body_step_ref(self):
-        s = _make_scenario(
-            **self._base_kwargs(),
-            conditions={
-                "health-check": {
-                    "command": "curl -f http://localhost",
-                    "interval": 30,
-                },
-            },
-            workflows={
-                "retry-flow": {
-                    "start": "loop",
-                    "steps": {
-                        "loop": {
-                            "type": "while",
-                            "when": {"conditions": ["health-check"]},
-                            "body": "nonexistent",
-                            "next": "finish",
-                        },
-                        "finish": {"type": "end"},
-                    },
-                },
-            },
-        )
-        errors = _validate(s)
-        assert any("body step 'nonexistent' is not defined" in e for e in errors)
-
-    def test_while_missing_next_step_ref(self):
-        s = _make_scenario(
-            **self._base_kwargs(),
-            conditions={
-                "health-check": {
-                    "command": "curl -f http://localhost",
-                    "interval": 30,
-                },
-            },
-            workflows={
-                "retry-flow": {
-                    "start": "loop",
-                    "steps": {
-                        "loop": {
-                            "type": "while",
-                            "when": {"conditions": ["health-check"]},
-                            "body": "attempt",
-                            "next": "nonexistent",
-                        },
-                        "attempt": {
-                            "type": "objective",
-                            "objective": "validate-release",
-                        },
-                    },
-                },
-            },
-        )
-        errors = _validate(s)
-        assert any("next step 'nonexistent' is not defined" in e for e in errors)
-
-    def test_while_undefined_predicate_ref(self):
+    def test_valid_retry_step(self):
         s = _make_scenario(
             **self._base_kwargs(),
             workflows={
@@ -1299,72 +1221,16 @@ class TestVerifyWorkflows:
                     "start": "loop",
                     "steps": {
                         "loop": {
-                            "type": "while",
-                            "when": {"conditions": ["missing-cond"]},
-                            "body": "attempt",
-                            "next": "finish",
-                        },
-                        "attempt": {
-                            "type": "objective",
+                            "type": "retry",
                             "objective": "validate-release",
-                        },
-                        "finish": {"type": "end"},
-                    },
-                },
-            },
-        )
-        errors = _validate(s)
-        assert any("references undefined condition 'missing-cond'" in e for e in errors)
-
-    def test_while_does_not_create_cycle(self):
-        """WHILE is modeled as a single DAG node; it should not trigger cycle detection."""
-        s = _make_scenario(
-            **self._base_kwargs(),
-            conditions={
-                "health-check": {
-                    "command": "curl -f http://localhost",
-                    "interval": 30,
-                },
-            },
-            workflows={
-                "retry-flow": {
-                    "start": "loop",
-                    "steps": {
-                        "loop": {
-                            "type": "while",
-                            "when": {"conditions": ["health-check"]},
-                            "body": "attempt",
-                            "next": "finish",
-                        },
-                        "attempt": {
-                            "type": "objective",
-                            "objective": "validate-release",
-                        },
-                        "finish": {"type": "end"},
-                    },
-                },
-            },
-        )
-        errors = _validate(s)
-        assert not any("cycle" in e for e in errors)
-
-    def test_on_error_valid(self):
-        s = _make_scenario(
-            **self._base_kwargs(),
-            workflows={
-                "response": {
-                    "start": "validate",
-                    "steps": {
-                        "validate": {
-                            "type": "objective",
-                            "objective": "validate-release",
-                            "next": "finish",
-                            "on-error": "recover",
+                            "on-success": "finish",
+                            "max-attempts": 5,
+                            "on-exhausted": "recover",
                         },
                         "recover": {
                             "type": "objective",
                             "objective": "rollback-edge",
-                            "next": "finish",
+                            "on-success": "finish",
                         },
                         "finish": {"type": "end"},
                     },
@@ -1374,69 +1240,38 @@ class TestVerifyWorkflows:
         errors = _validate(s)
         assert not errors
 
-    def test_on_error_self_reference(self):
+    def test_valid_switch_and_call_workflow(self):
         s = _make_scenario(
             **self._base_kwargs(),
             workflows={
-                "response": {
-                    "start": "validate",
+                "child": {
+                    "start": "run",
                     "steps": {
-                        "validate": {
+                        "run": {
                             "type": "objective",
                             "objective": "validate-release",
-                            "next": "finish",
-                            "on-error": "validate",
+                            "on-success": "finish",
                         },
                         "finish": {"type": "end"},
                     },
                 },
-            },
-        )
-        errors = _validate(s)
-        assert any("on-error cannot reference itself" in e for e in errors)
-
-    def test_on_error_undefined_ref(self):
-        s = _make_scenario(
-            **self._base_kwargs(),
-            workflows={
-                "response": {
-                    "start": "validate",
+                "parent": {
+                    "start": "route",
                     "steps": {
-                        "validate": {
-                            "type": "objective",
-                            "objective": "validate-release",
-                            "next": "finish",
-                            "on-error": "nonexistent",
+                        "route": {
+                            "type": "switch",
+                            "cases": [
+                                {
+                                    "when": {"goals": ["pass-exercise"]},
+                                    "next": "delegate",
+                                }
+                            ],
+                            "default": "finish",
                         },
-                        "finish": {"type": "end"},
-                    },
-                },
-            },
-        )
-        errors = _validate(s)
-        assert any("on-error step 'nonexistent' is not defined" in e for e in errors)
-
-    def test_step_outcomes_valid(self):
-        s = _make_scenario(
-            **self._base_kwargs(),
-            workflows={
-                "response": {
-                    "start": "validate",
-                    "steps": {
-                        "validate": {
-                            "type": "objective",
-                            "objective": "validate-release",
-                            "next": "branch",
-                        },
-                        "branch": {
-                            "type": "if",
-                            "when": {"step-outcomes": ["validate"]},
-                            "then": "confirm",
-                            "else": "finish",
-                        },
-                        "confirm": {
-                            "type": "objective",
-                            "objective": "rollback-edge",
+                        "delegate": {
+                            "type": "call",
+                            "workflow": "child",
+                            "on-success": "finish",
                         },
                         "finish": {"type": "end"},
                     },
@@ -1446,7 +1281,60 @@ class TestVerifyWorkflows:
         errors = _validate(s)
         assert not errors
 
-    def test_step_outcomes_undefined_ref(self):
+    def test_workflow_call_cycle_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "a": {
+                    "start": "delegate",
+                    "steps": {
+                        "delegate": {
+                            "type": "call",
+                            "workflow": "b",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+                "b": {
+                    "start": "delegate",
+                    "steps": {
+                        "delegate": {
+                            "type": "call",
+                            "workflow": "a",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("Workflow call graph contains a cycle" in e for e in errors)
+
+    def test_retry_missing_exhausted_step_ref(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "retry-flow": {
+                    "start": "loop",
+                    "steps": {
+                        "loop": {
+                            "type": "retry",
+                            "objective": "validate-release",
+                            "on-success": "finish",
+                            "max-attempts": 3,
+                            "on-exhausted": "nonexistent",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("on-exhausted step 'nonexistent' is not defined" in e for e in errors)
+
+    def test_step_state_must_reference_prior_executable_step(self):
         s = _make_scenario(
             **self._base_kwargs(),
             workflows={
@@ -1456,11 +1344,15 @@ class TestVerifyWorkflows:
                         "validate": {
                             "type": "objective",
                             "objective": "validate-release",
-                            "next": "branch",
+                            "on-success": "branch",
                         },
                         "branch": {
-                            "type": "if",
-                            "when": {"step-outcomes": ["nonexistent"]},
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "validate", "outcomes": ["succeeded"]}
+                                ]
+                            },
                             "then": "finish",
                             "else": "finish",
                         },
@@ -1470,11 +1362,534 @@ class TestVerifyWorkflows:
             },
         )
         errors = _validate(s)
-        assert any(
-            "references undefined step outcome 'nonexistent'" in e for e in errors
-        )
+        assert not errors
 
-    def test_on_error_variable_ref_tolerated(self):
+    def test_step_state_undefined_ref(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "branch",
+                        },
+                        "branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "missing-step", "outcomes": ["failed"]}
+                                ]
+                            },
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("references undefined step state 'missing-step'" in e for e in errors)
+
+    def test_step_state_non_causal_ref_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "branch",
+                        },
+                        "branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "confirm", "outcomes": ["succeeded"]}
+                                ]
+                            },
+                            "then": "confirm",
+                            "else": "finish",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("not guaranteed to be known before this predicate" in e for e in errors)
+
+    def test_step_state_self_ref_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "branch",
+                    "steps": {
+                        "branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "branch", "outcomes": ["succeeded"]}
+                                ]
+                            },
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("cannot reference its own state in a predicate" in e for e in errors)
+
+    def test_step_state_non_executable_ref_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "branch",
+                        },
+                        "branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "finish", "outcomes": ["failed"]}
+                                ]
+                            },
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("cannot reference non-executable step 'finish'" in e for e in errors)
+
+    def test_step_state_decision_ref_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "branch",
+                        },
+                        "branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "gate", "outcomes": ["failed"]}
+                                ]
+                            },
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "gate": {
+                            "type": "decision",
+                            "when": {"conditions": ["service-restored"]},
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("cannot reference non-executable step 'gate'" in e for e in errors)
+
+    def test_step_state_impossible_outcome_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "branch",
+                        },
+                        "branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "validate", "outcomes": ["exhausted"]}
+                                ]
+                            },
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("impossible outcomes" in e for e in errors)
+
+    def test_join_rejects_foreign_predecessors(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "gate",
+                    "steps": {
+                        "gate": {
+                            "type": "decision",
+                            "when": {"conditions": ["service-restored"]},
+                            "then": "fanout",
+                            "else": "joined",
+                        },
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback", "confirm"],
+                            "join": "joined",
+                        },
+                        "rollback": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "on-success": "joined",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "joined",
+                        },
+                        "joined": {"type": "join", "next": "finish"},
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("may only be entered from the owning parallel's branch closure" in e for e in errors)
+
+    def test_parallel_join_must_be_join_step(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "fanout",
+                    "steps": {
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback", "confirm"],
+                            "join": "finish",
+                        },
+                        "rollback": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "on-success": "finish",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("is used as a parallel join but is not a join step" in e for e in errors)
+
+    def test_parallel_branch_paths_must_converge_on_join(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "fanout",
+                    "steps": {
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback", "confirm"],
+                            "join": "joined",
+                        },
+                        "rollback": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "on-success": "joined",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "finish",
+                        },
+                        "joined": {"type": "join", "next": "finish"},
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("requires every explicit branch path" in e for e in errors)
+
+    def test_join_step_must_be_referenced(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "validate",
+                    "steps": {
+                        "validate": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "finish",
+                        },
+                        "orphan-join": {"type": "join", "next": "finish"},
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("join step 'orphan-join' is not referenced" in e for e in errors)
+
+    def test_post_join_branch_state_ref_is_allowed(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "fanout",
+                    "steps": {
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback", "confirm"],
+                            "join": "joined",
+                        },
+                        "rollback": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "on-success": "joined",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "joined",
+                        },
+                        "joined": {"type": "join", "next": "branch"},
+                        "branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "rollback", "outcomes": ["succeeded"]}
+                                ]
+                            },
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_post_join_attempt_count_ref_is_allowed_when_guaranteed(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "fanout",
+                    "steps": {
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback", "confirm"],
+                            "join": "joined",
+                        },
+                        "rollback": {
+                            "type": "retry",
+                            "objective": "rollback-edge",
+                            "on-success": "joined",
+                            "max-attempts": 3,
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "joined",
+                        },
+                        "joined": {"type": "join", "next": "branch"},
+                        "branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {
+                                        "step": "rollback",
+                                        "outcomes": ["succeeded"],
+                                        "min-attempts": 2,
+                                    }
+                                ]
+                            },
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert not errors
+
+    def test_branch_local_state_ref_before_join_is_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "fanout",
+                    "steps": {
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback", "confirm"],
+                            "join": "joined",
+                        },
+                        "rollback": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "on-success": "branch-in-branch",
+                        },
+                        "branch-in-branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "confirm", "outcomes": ["succeeded"]}
+                                ]
+                            },
+                            "then": "joined",
+                            "else": "joined",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "joined",
+                        },
+                        "joined": {"type": "join", "next": "finish"},
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("not guaranteed to be known before this predicate" in e for e in errors)
+
+    def test_non_guaranteed_branch_internal_state_ref_after_join_is_rejected(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "fanout",
+                    "steps": {
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback", "confirm"],
+                            "join": "joined",
+                        },
+                        "rollback": {
+                            "type": "decision",
+                            "when": {"conditions": ["service-restored"]},
+                            "then": "rollback-success",
+                            "else": "joined",
+                        },
+                        "rollback-success": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "on-success": "joined",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "joined",
+                        },
+                        "joined": {"type": "join", "next": "branch"},
+                        "branch": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {
+                                        "step": "rollback-success",
+                                        "outcomes": ["succeeded"],
+                                    }
+                                ]
+                            },
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("not guaranteed to be known before this predicate" in e for e in errors)
+
+    def test_parallel_failure_bypass_does_not_expose_branch_state(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "fanout",
+                    "steps": {
+                        "fanout": {
+                            "type": "parallel",
+                            "branches": ["rollback", "confirm"],
+                            "join": "joined",
+                            "on-failure": "recover",
+                        },
+                        "rollback": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "on-success": "joined",
+                        },
+                        "confirm": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "on-success": "joined",
+                        },
+                        "joined": {"type": "join", "next": "finish"},
+                        "recover": {
+                            "type": "decision",
+                            "when": {
+                                "steps": [
+                                    {"step": "rollback", "outcomes": ["succeeded"]}
+                                ]
+                            },
+                            "then": "finish",
+                            "else": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("not guaranteed to be known before this predicate" in e for e in errors)
+
+    def test_on_failure_variable_ref_tolerated(self):
         s = _make_scenario(
             **self._base_kwargs(),
             variables={
@@ -1487,8 +1902,8 @@ class TestVerifyWorkflows:
                         "validate": {
                             "type": "objective",
                             "objective": "validate-release",
-                            "next": "finish",
-                            "on-error": "${recovery_step}",
+                            "on-success": "finish",
+                            "on-failure": "${recovery_step}",
                         },
                         "finish": {"type": "end"},
                     },
@@ -1496,36 +1911,58 @@ class TestVerifyWorkflows:
             },
         )
         errors = _validate(s)
-        assert not any("on-error" in e for e in errors)
+        assert not any("on-failure" in e for e in errors)
 
-    def test_while_with_on_error(self):
+    def test_non_compensable_workflow_step_rejects_compensation_target(self):
+        with pytest.raises(ValueError, match="Decision workflow step only supports"):
+            _make_scenario(
+                **self._base_kwargs(),
+                workflows={
+                    "response": {
+                        "start": "branch",
+                        "steps": {
+                            "branch": {
+                                "type": "decision",
+                                "when": {"conditions": ["check"]},
+                                "then": "finish",
+                                "else": "finish",
+                                "compensate-with": "rollback",
+                            },
+                            "finish": {"type": "end"},
+                        },
+                    },
+                    "rollback": {
+                        "start": "finish",
+                        "steps": {"finish": {"type": "end"}},
+                    },
+                },
+            )
+
+    def test_workflow_compensation_cycle_is_rejected(self):
         s = _make_scenario(
             **self._base_kwargs(),
-            conditions={
-                "health-check": {
-                    "command": "curl -f http://localhost",
-                    "interval": 30,
-                },
-            },
             workflows={
-                "retry-flow": {
-                    "start": "loop",
+                "response": {
+                    "start": "run",
+                    "compensation": {"mode": "automatic", "on": ["failed"]},
                     "steps": {
-                        "loop": {
-                            "type": "while",
-                            "when": {"conditions": ["health-check"]},
-                            "body": "attempt",
-                            "next": "finish",
-                            "on-error": "recover",
-                        },
-                        "attempt": {
+                        "run": {
                             "type": "objective",
                             "objective": "validate-release",
+                            "compensate-with": "rollback",
+                            "on-success": "finish",
                         },
-                        "recover": {
+                        "finish": {"type": "end"},
+                    },
+                },
+                "rollback": {
+                    "start": "undo",
+                    "steps": {
+                        "undo": {
                             "type": "objective",
                             "objective": "rollback-edge",
-                            "next": "finish",
+                            "compensate-with": "response",
+                            "on-success": "finish",
                         },
                         "finish": {"type": "end"},
                     },
@@ -1533,7 +1970,48 @@ class TestVerifyWorkflows:
             },
         )
         errors = _validate(s)
-        assert not errors
+        assert any(
+            "Combined workflow call/compensation graph contains a cycle" in e
+            for e in errors
+        )
+
+    def test_compensation_workflow_cannot_declare_compensate_with_steps(self):
+        s = _make_scenario(
+            **self._base_kwargs(),
+            workflows={
+                "response": {
+                    "start": "run",
+                    "compensation": {"mode": "automatic", "on": ["failed"]},
+                    "steps": {
+                        "run": {
+                            "type": "objective",
+                            "objective": "validate-release",
+                            "compensate-with": "rollback",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+                "rollback": {
+                    "start": "undo",
+                    "steps": {
+                        "undo": {
+                            "type": "objective",
+                            "objective": "rollback-edge",
+                            "compensate-with": "cleanup",
+                            "on-success": "finish",
+                        },
+                        "finish": {"type": "end"},
+                    },
+                },
+                "cleanup": {
+                    "start": "finish",
+                    "steps": {"finish": {"type": "end"}},
+                },
+            },
+        )
+        errors = _validate(s)
+        assert any("cannot be used as a compensation workflow" in e for e in errors)
 
 
 class TestVerifyVariables:

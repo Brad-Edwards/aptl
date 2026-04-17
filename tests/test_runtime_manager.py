@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import textwrap
+from datetime import UTC, datetime
 
 import pytest
 
-from aptl.backends.stubs import create_stub_manifest
+from aptl.backends.stubs import create_stub_manifest, create_stub_target
 from aptl.core.runtime.compiler import compile_runtime_model
 from aptl.core.runtime.manager import RuntimeManager
 from aptl.core.runtime.models import (
     ApplyResult,
     ChangeAction,
+    EVALUATION_STATE_SCHEMA_VERSION,
     RuntimeDomain,
     RuntimeSnapshot,
     SnapshotEntry,
@@ -83,6 +86,74 @@ nodes:
 """)
 
 
+def _workflow_scenario():
+    return _scenario("""
+name: workflow
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health: {command: /bin/true, interval: 15}
+entities:
+  blue: {role: blue}
+objectives:
+  validate:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  response:
+    start: run
+    steps:
+      run:
+        type: objective
+        objective: validate
+        on-success: finish
+      finish: {type: end}
+""")
+
+
+def _workflow_call_scenario():
+    return _scenario("""
+name: workflow-call
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health: {command: /bin/true, interval: 15}
+entities:
+  blue: {role: blue}
+objectives:
+  validate:
+    entity: blue
+    success: {conditions: [health]}
+workflows:
+  child:
+    start: run
+    steps:
+      run:
+        type: objective
+        objective: validate
+        on-success: finish
+      finish: {type: end}
+  parent:
+    start: delegate
+    steps:
+      delegate:
+        type: call
+        workflow: child
+        on-success: finish
+      finish: {type: end}
+""")
+
+
 class RecordingProvisioner:
     def __init__(self, calls: list[str]) -> None:
         self.calls = calls
@@ -127,30 +198,102 @@ class RecordingOrchestrator:
         self.calls = calls
         self.name = name
         self.running = False
+        self._results: dict[str, dict[str, object]] = {}
+        self._history: dict[str, list[dict[str, object]]] = {}
 
     def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
         self.calls.append(f"{self.name}-start")
         self.running = True
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         next_snapshot = _apply_ops(
             snapshot,
             RuntimeDomain.ORCHESTRATION,
             plan.operations,
             status="running",
         )
-        return ApplyResult(success=True, snapshot=next_snapshot)
+        self._results = {}
+        self._history = {}
+        for op in plan.operations:
+            if op.action == ChangeAction.DELETE or op.resource_type != "workflow":
+                continue
+            result_contract = op.payload.get("result_contract", {})
+            observable_steps = {
+                step_name: {
+                    "lifecycle": "pending",
+                    "outcome": None,
+                    "attempts": 0,
+                }
+                for step_name, step_payload in result_contract.get(
+                    "observable_steps", {}
+                ).items()
+                if isinstance(step_payload, dict)
+            }
+            self._results[op.address] = {
+                "state_schema_version": result_contract.get(
+                    "state_schema_version",
+                    "workflow-step-state/v1",
+                ),
+                "workflow_status": "running",
+                "run_id": f"{op.address}-run",
+                "started_at": now,
+                "updated_at": now,
+                "terminal_reason": None,
+                "compensation_status": "not_required",
+                "compensation_started_at": None,
+                "compensation_updated_at": None,
+                "compensation_failures": [],
+                "steps": observable_steps,
+            }
+            self._history[op.address] = [
+                {
+                    "event_type": "workflow_started",
+                    "timestamp": now,
+                    "step_name": op.payload.get("execution_contract", {}).get("start_step"),
+                    "branch_name": None,
+                    "join_step": None,
+                    "outcome": None,
+                    "details": {},
+                }
+            ]
+        return ApplyResult(
+            success=True,
+            snapshot=next_snapshot.with_entries(
+                next_snapshot.entries,
+                orchestration_results=self._results,
+                orchestration_history=self._history,
+            ),
+        )
 
     def status(self) -> dict:
         return {"running": self.running}
 
+    def results(self) -> dict[str, dict[str, object]]:
+        return dict(self._results)
+
+    def history(self) -> dict[str, list[dict[str, object]]]:
+        return {
+            workflow_address: list(events)
+            for workflow_address, events in self._history.items()
+        }
+
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         self.calls.append(f"{self.name}-stop")
         self.running = False
+        self._results = {}
+        self._history = {}
         entries = {
             address: entry
             for address, entry in snapshot.entries.items()
             if entry.domain != RuntimeDomain.ORCHESTRATION
         }
-        return ApplyResult(success=True, snapshot=snapshot.with_entries(entries))
+        return ApplyResult(
+            success=True,
+            snapshot=snapshot.with_entries(
+                entries,
+                orchestration_results={},
+                orchestration_history={},
+            ),
+        )
 
 
 class FailingStartOrchestrator(RecordingOrchestrator):
@@ -173,32 +316,315 @@ class FailingStopOrchestrator(RecordingOrchestrator):
         return ApplyResult(success=False, snapshot=snapshot)
 
 
+class InvalidWorkflowResultsOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        self.calls.append(f"{self.name}-start")
+        self.running = True
+        next_snapshot = _apply_ops(
+            snapshot,
+            RuntimeDomain.ORCHESTRATION,
+            plan.operations,
+            status="running",
+        )
+        workflow_address = next(
+            op.address
+            for op in plan.operations
+            if op.action != ChangeAction.DELETE and op.resource_type == "workflow"
+        )
+        self._results = {
+            workflow_address: {
+                "state_schema_version": "workflow-step-state/v1",
+                "steps": {
+                    "finish": {
+                        "lifecycle": "pending",
+                        "outcome": None,
+                        "attempts": 0,
+                    }
+                },
+            }
+        }
+        return ApplyResult(
+            success=True,
+            snapshot=next_snapshot.with_entries(
+                next_snapshot.entries,
+                orchestration_results=self._results,
+            ),
+        )
+
+
+class InvalidWorkflowSchemaVersionOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = next(iter(self._results))
+        self._results[workflow_address]["state_schema_version"] = "workflow-step-state/v999"
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+            ),
+        )
+
+
+class MissingWorkflowFieldsOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = next(iter(self._results))
+        self._results[workflow_address].pop("state_schema_version", None)
+        steps = self._results[workflow_address]["steps"]
+        assert isinstance(steps, dict)
+        step_name = next(iter(steps))
+        step_payload = steps[step_name]
+        assert isinstance(step_payload, dict)
+        step_payload.pop("attempts", None)
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+            ),
+        )
+
+
+class InvalidWorkflowLifecycleOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = next(iter(self._results))
+        steps = self._results[workflow_address]["steps"]
+        assert isinstance(steps, dict)
+        step_name = next(iter(steps))
+        step_payload = steps[step_name]
+        assert isinstance(step_payload, dict)
+        step_payload["lifecycle"] = "done"
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+            ),
+        )
+
+
+class InvalidWorkflowOutcomeOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = next(iter(self._results))
+        steps = self._results[workflow_address]["steps"]
+        assert isinstance(steps, dict)
+        step_name = next(iter(steps))
+        step_payload = steps[step_name]
+        assert isinstance(step_payload, dict)
+        step_payload["lifecycle"] = "completed"
+        step_payload["outcome"] = "exhausted"
+        step_payload["attempts"] = 1
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+            ),
+        )
+
+
+class InvalidWorkflowAttemptCountOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = next(iter(self._results))
+        steps = self._results[workflow_address]["steps"]
+        assert isinstance(steps, dict)
+        step_name = next(iter(steps))
+        step_payload = steps[step_name]
+        assert isinstance(step_payload, dict)
+        step_payload["lifecycle"] = "completed"
+        step_payload["outcome"] = "succeeded"
+        step_payload["attempts"] = 2
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+            ),
+        )
+
+
+class InvalidWorkflowPendingOutcomeOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = next(iter(self._results))
+        steps = self._results[workflow_address]["steps"]
+        assert isinstance(steps, dict)
+        step_name = next(iter(steps))
+        step_payload = steps[step_name]
+        assert isinstance(step_payload, dict)
+        step_payload["outcome"] = "succeeded"
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+            ),
+        )
+
+
+class MissingObservableWorkflowStepOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = next(iter(self._results))
+        steps = self._results[workflow_address]["steps"]
+        assert isinstance(steps, dict)
+        step_name = next(iter(steps))
+        steps.pop(step_name, None)
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+            ),
+        )
+
+
+class ResultContractOnlyOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        entries = dict(result.snapshot.entries)
+        for address, entry in list(entries.items()):
+            if entry.domain != RuntimeDomain.ORCHESTRATION or entry.resource_type != "workflow":
+                continue
+            payload = dict(entry.payload)
+            payload.pop("control_steps", None)
+            entries[address] = SnapshotEntry(
+                address=entry.address,
+                domain=entry.domain,
+                resource_type=entry.resource_type,
+                payload=payload,
+                ordering_dependencies=entry.ordering_dependencies,
+                refresh_dependencies=entry.refresh_dependencies,
+                status=entry.status,
+            )
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                entries,
+                orchestration_results=self._results,
+            ),
+        )
+
+
+class InvalidWorkflowCallHistoryOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = "orchestration.workflow.parent"
+        self._history[workflow_address].append(
+            {
+                "event_type": "call_started",
+                "timestamp": self._history[workflow_address][0]["timestamp"],
+                "step_name": "delegate",
+                "details": {"workflow_address": "orchestration.workflow.wrong"},
+            }
+        )
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+                orchestration_history=self._history,
+            ),
+        )
+
+
+class InvalidWorkflowCompensationOrchestrator(RecordingOrchestrator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        workflow_address = next(iter(self._results))
+        self._results[workflow_address]["compensation_status"] = "running"
+        self._results[workflow_address]["compensation_started_at"] = self._history[
+            workflow_address
+        ][0]["timestamp"]
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                orchestration_results=self._results,
+                orchestration_history=self._history,
+            ),
+        )
+
+
 class RecordingEvaluator:
     def __init__(self, calls: list[str], name: str) -> None:
         self.calls = calls
         self.name = name
         self.running = False
         self._results: dict[str, dict[str, object]] = {}
+        self._history: dict[str, list[dict[str, object]]] = {}
 
     def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
         self.calls.append(f"{self.name}-start")
         self.running = True
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         next_snapshot = _apply_ops(
             snapshot,
             RuntimeDomain.EVALUATION,
             plan.operations,
             status="running",
         )
-        self._results = {
-            op.address: {"passed": True}
-            for op in plan.operations
-            if op.action != ChangeAction.DELETE
-        }
+        self._results = {}
+        self._history = {}
+        for op in plan.operations:
+            if op.action == ChangeAction.DELETE:
+                continue
+            result_contract = op.payload.get("result_contract", {})
+            resource_type = str(result_contract.get("resource_type", op.resource_type))
+            result_payload: dict[str, object] = {
+                "state_schema_version": result_contract.get(
+                    "state_schema_version",
+                    EVALUATION_STATE_SCHEMA_VERSION,
+                ),
+                "resource_type": resource_type,
+                "run_id": "evaluation-run",
+                "status": "ready",
+                "observed_at": now,
+                "updated_at": now,
+                "detail": f"recorded result for {op.address}",
+                "evidence_refs": [],
+            }
+            if result_contract.get("supports_score"):
+                fixed_max_score = result_contract.get("fixed_max_score")
+                result_payload["score"] = fixed_max_score if fixed_max_score is not None else 100
+                result_payload["max_score"] = fixed_max_score if fixed_max_score is not None else 100
+            if result_contract.get("supports_passed"):
+                result_payload["passed"] = True
+            self._results[op.address] = result_payload
+            self._history[op.address] = [
+                {
+                    "event_type": "evaluation_started",
+                    "timestamp": now,
+                    "status": "running",
+                    "passed": None,
+                    "score": None,
+                    "max_score": None,
+                    "detail": None,
+                    "evidence_refs": [],
+                    "details": {},
+                },
+                {
+                    "event_type": "evaluation_ready",
+                    "timestamp": now,
+                    "status": "ready",
+                    "passed": result_payload.get("passed"),
+                    "score": result_payload.get("score"),
+                    "max_score": result_payload.get("max_score"),
+                    "detail": result_payload.get("detail"),
+                    "evidence_refs": [],
+                    "details": {},
+                },
+            ]
         return ApplyResult(
             success=True,
             snapshot=next_snapshot.with_entries(
                 next_snapshot.entries,
                 evaluation_results=self._results,
+                evaluation_history=self._history,
             ),
         )
 
@@ -208,10 +634,17 @@ class RecordingEvaluator:
     def results(self) -> dict[str, dict[str, object]]:
         return dict(self._results)
 
+    def history(self) -> dict[str, list[dict[str, object]]]:
+        return {
+            address: list(events)
+            for address, events in self._history.items()
+        }
+
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         self.calls.append(f"{self.name}-stop")
         self.running = False
         self._results = {}
+        self._history = {}
         entries = {
             address: entry
             for address, entry in snapshot.entries.items()
@@ -219,7 +652,11 @@ class RecordingEvaluator:
         }
         return ApplyResult(
             success=True,
-            snapshot=snapshot.with_entries(entries, evaluation_results={}),
+            snapshot=snapshot.with_entries(
+                entries,
+                evaluation_results={},
+                evaluation_history={},
+            ),
         )
 
 
@@ -237,7 +674,87 @@ class FailingStartEvaluator(RecordingEvaluator):
             success=False,
             snapshot=next_snapshot.with_entries(
                 next_snapshot.entries,
-                evaluation_results={"partial": {"passed": False}},
+                evaluation_results={
+                    "partial": {
+                        "state_schema_version": EVALUATION_STATE_SCHEMA_VERSION,
+                        "resource_type": "objective",
+                        "run_id": "evaluation-run",
+                        "status": "failed",
+                        "observed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                        "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                        "passed": None,
+                        "score": None,
+                        "max_score": None,
+                        "detail": "partial",
+                        "evidence_refs": [],
+                    }
+                },
+            ),
+        )
+
+
+class InvalidEvaluatorSchemaVersionEvaluator(RecordingEvaluator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        address = next(iter(self._results))
+        self._results[address]["state_schema_version"] = "evaluation-result-state/v999"
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                evaluation_results=self._results,
+                evaluation_history=self._history,
+            ),
+        )
+
+
+class MissingEvaluatorFieldsEvaluator(RecordingEvaluator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        address = next(iter(self._results))
+        self._results[address].pop("run_id", None)
+        self._results[address].pop("status", None)
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                evaluation_results=self._results,
+                evaluation_history=self._history,
+            ),
+        )
+
+
+class InvalidEvaluatorReadyPayloadEvaluator(RecordingEvaluator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        metric_address = next(
+            op.address
+            for op in plan.operations
+            if op.action != ChangeAction.DELETE and op.resource_type == "metric"
+        )
+        self._results[metric_address]["score"] = None
+        self._results[metric_address]["max_score"] = None
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                evaluation_results=self._results,
+                evaluation_history=self._history,
+            ),
+        )
+
+
+class MissingEvaluatorHistoryEvaluator(RecordingEvaluator):
+    def start(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        result = super().start(plan, snapshot)
+        address = next(iter(self._history))
+        self._history.pop(address, None)
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                result.snapshot.entries,
+                evaluation_results=self._results,
+                evaluation_history=self._history,
             ),
         )
 
@@ -253,6 +770,46 @@ class InvalidApplyProvisioner(RecordingProvisioner):
         del plan, snapshot
         self.calls.append("provision-apply")
         return None
+
+
+class InvalidApplySnapshotProvisioner(RecordingProvisioner):
+    def apply(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        del plan
+        self.calls.append("provision-apply")
+        return ApplyResult(success=True, snapshot=None)  # type: ignore[arg-type]
+
+
+class InvalidApplyDiagnosticsProvisioner(RecordingProvisioner):
+    def apply(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        del plan
+        self.calls.append("provision-apply")
+        return ApplyResult(
+            success=True,
+            snapshot=snapshot,
+            diagnostics=[object()],  # type: ignore[list-item]
+        )
+
+
+class InvalidApplyChangedAddressesProvisioner(RecordingProvisioner):
+    def apply(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        del plan
+        self.calls.append("provision-apply")
+        return ApplyResult(
+            success=True,
+            snapshot=snapshot,
+            changed_addresses=["provision.node.vm", 7],  # type: ignore[list-item]
+        )
+
+
+class InvalidApplyDetailsProvisioner(RecordingProvisioner):
+    def apply(self, plan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        del plan
+        self.calls.append("provision-apply")
+        return ApplyResult(
+            success=True,
+            snapshot=snapshot,
+            details="broken",  # type: ignore[arg-type]
+        )
 
 
 class RaisingStartOrchestrator(RecordingOrchestrator):
@@ -423,6 +980,38 @@ class TestRuntimeManager:
         }
         assert manager.snapshot.entries == {}
 
+    @pytest.mark.parametrize(
+        "provisioner_cls",
+        [
+            InvalidApplySnapshotProvisioner,
+            InvalidApplyDiagnosticsProvisioner,
+            InvalidApplyChangedAddressesProvisioner,
+            InvalidApplyDetailsProvisioner,
+        ],
+    )
+    def test_apply_fails_gracefully_on_malformed_apply_result_contents(
+        self,
+        provisioner_cls,
+    ):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=provisioner_cls(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_provisioning_only_scenario()))
+
+        assert not result.success
+        assert calls == ["provision-apply"]
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+        assert manager.snapshot.entries == {}
+
     def test_apply_fails_gracefully_on_backend_exception(self):
         calls: list[str] = []
         target = RuntimeTarget(
@@ -450,6 +1039,345 @@ class TestRuntimeManager:
         assert manager.snapshot.for_domain(RuntimeDomain.ORCHESTRATION) == {}
         assert manager.snapshot.for_domain(RuntimeDomain.EVALUATION) == {}
         assert manager.snapshot.for_domain(RuntimeDomain.PROVISIONING)
+
+    def test_apply_fails_on_invalid_workflow_result_contract(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=InvalidWorkflowResultsOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert not result.success
+        assert calls == [
+            "provision-apply",
+            "evaluator-start",
+            "orchestrator-start",
+            "orchestrator-stop",
+            "evaluator-stop",
+        ]
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_invalid_workflow_result_schema_version(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=InvalidWorkflowSchemaVersionOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_missing_workflow_result_fields(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=MissingWorkflowFieldsOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_invalid_workflow_result_lifecycle(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=InvalidWorkflowLifecycleOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_invalid_workflow_result_outcome(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=InvalidWorkflowOutcomeOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_fixed_attempt_mismatch(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=InvalidWorkflowAttemptCountOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_pending_step_with_outcome(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=InvalidWorkflowPendingOutcomeOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_missing_observable_workflow_step(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=MissingObservableWorkflowStepOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_validates_against_result_contract_not_control_steps(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=ResultContractOnlyOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert result.success
+        assert manager.snapshot.for_domain(RuntimeDomain.ORCHESTRATION)
+
+    def test_apply_fails_on_invalid_workflow_call_history(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=InvalidWorkflowCallHistoryOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_call_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_invalid_workflow_compensation_state(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=InvalidWorkflowCompensationOrchestrator(calls),
+            evaluator=RecordingEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_invalid_evaluation_result_schema_version(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=InvalidEvaluatorSchemaVersionEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_missing_evaluation_result_fields(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=MissingEvaluatorFieldsEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_invalid_ready_evaluation_payload(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=InvalidEvaluatorReadyPayloadEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_apply_fails_on_missing_evaluation_history(self):
+        calls: list[str] = []
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner(calls),
+            orchestrator=RecordingOrchestrator(calls),
+            evaluator=MissingEvaluatorHistoryEvaluator(calls, "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert not result.success
+        assert "runtime.backend-contract-invalid" in {
+            diag.code for diag in result.diagnostics
+        }
+
+    def test_status_exposes_plain_data_workflow_results(self):
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner([]),
+            orchestrator=RecordingOrchestrator([]),
+            evaluator=RecordingEvaluator([], "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert result.success
+        status = manager.status()
+        workflow_results = status["orchestration_results"]
+        assert isinstance(workflow_results, dict)
+        workflow_payload = workflow_results["orchestration.workflow.response"]
+        assert isinstance(workflow_payload, dict)
+        assert workflow_payload["state_schema_version"] == "workflow-step-state/v1"
+        assert isinstance(workflow_payload["steps"], dict)
+        assert workflow_payload["steps"]["run"]["lifecycle"] == "pending"
+        json.dumps(workflow_results)
+
+    def test_status_exposes_plain_data_evaluation_results_and_history(self):
+        target = RuntimeTarget(
+            name="recording",
+            manifest=create_stub_manifest(),
+            provisioner=RecordingProvisioner([]),
+            orchestrator=RecordingOrchestrator([]),
+            evaluator=RecordingEvaluator([], "evaluator"),
+        )
+        manager = RuntimeManager(target)
+
+        result = manager.apply(manager.plan(_full_scenario()))
+
+        assert result.success
+        status = manager.status()
+        evaluation_results = status["evaluation_results"]
+        evaluation_history = status["evaluation_history"]
+        assert isinstance(evaluation_results, dict)
+        assert isinstance(evaluation_history, dict)
+        metric_payload = evaluation_results["evaluation.metric.uptime"]
+        assert metric_payload["state_schema_version"] == EVALUATION_STATE_SCHEMA_VERSION
+        assert metric_payload["resource_type"] == "metric"
+        assert metric_payload["status"] == "ready"
+        assert metric_payload["score"] == 100
+        assert evaluation_history["evaluation.metric.uptime"][-1]["event_type"] == "evaluation_ready"
+        json.dumps(evaluation_results)
+        json.dumps(evaluation_history)
+
+    def test_stub_runtime_emits_plain_data_workflow_results(self):
+        manager = RuntimeManager(create_stub_target())
+
+        result = manager.apply(manager.plan(_workflow_scenario()))
+
+        assert result.success
+        workflow_payload = manager.snapshot.orchestration_results[
+            "orchestration.workflow.response"
+        ]
+        assert isinstance(workflow_payload, dict)
+        assert workflow_payload["state_schema_version"] == "workflow-step-state/v1"
+        assert isinstance(workflow_payload["steps"]["run"], dict)
+        json.dumps(manager.snapshot.orchestration_results)
 
     def test_runtime_manager_requires_explicit_manifest(self):
         with pytest.raises(ValueError, match="explicit manifest"):

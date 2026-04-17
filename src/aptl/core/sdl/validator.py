@@ -11,12 +11,17 @@ from ipaddress import ip_address, ip_network
 
 from pydantic import BaseModel
 
+from aptl.core.semantics.objectives import analyze_objective_window
+from aptl.core.semantics.workflow import (
+    branch_closure,
+    workflow_step_semantic_contract,
+)
 from aptl.core.sdl._errors import SDLValidationError
 from aptl.core.sdl._base import extract_variable_name, is_variable_ref
 from aptl.core.sdl.entities import flatten_entities
 from aptl.core.sdl.infrastructure import SimpleProperties
 from aptl.core.sdl.nodes import MAX_NODE_NAME_LENGTH, NodeType
-from aptl.core.sdl.orchestration import WorkflowPredicate, WorkflowStepType
+from aptl.core.sdl.orchestration import WorkflowPredicate, WorkflowStep, WorkflowStepType
 from aptl.core.sdl.scenario import Scenario
 from aptl.core.sdl.scoring import MetricType
 
@@ -647,112 +652,93 @@ class SemanticValidator:
                         )
 
             if objective.window:
-                referenced_story_scripts: set[str] = set()
-                referenced_scripts: set[str] = set()
-                referenced_workflows: set[str] = set()
+                window_analysis = analyze_objective_window(
+                    story_refs=[
+                        story_name
+                        for story_name in objective.window.stories
+                        if not self._is_unresolved_var(story_name)
+                    ],
+                    script_refs=[
+                        script_name
+                        for script_name in objective.window.scripts
+                        if not self._is_unresolved_var(script_name)
+                    ],
+                    event_refs=[
+                        event_name
+                        for event_name in objective.window.events
+                        if not self._is_unresolved_var(event_name)
+                    ],
+                    workflow_refs=[
+                        workflow_name
+                        for workflow_name in objective.window.workflows
+                        if not self._is_unresolved_var(workflow_name)
+                    ],
+                    step_refs=[
+                        step_ref
+                        for step_ref in objective.window.steps
+                        if not self._is_unresolved_var(step_ref)
+                    ],
+                    stories_by_name=self._s.stories,
+                    scripts_by_name=self._s.scripts,
+                    events_by_name=self._s.events,
+                    workflows_by_name=self._s.workflows,
+                )
 
-                for story_name in objective.window.stories:
-                    if self._is_unresolved_var(story_name):
-                        continue
-                    story = self._s.stories.get(story_name)
-                    if story is None:
+                for issue in window_analysis.issues:
+                    if issue.code == "story-unbound":
                         self._err(
                             f"Objective '{name}' references undefined story "
-                            f"'{story_name}' in window"
+                            f"'{issue.ref}' in window"
                         )
-                        continue
-                    referenced_story_scripts.update(story.scripts)
-
-                for script_name in objective.window.scripts:
-                    if self._is_unresolved_var(script_name):
-                        continue
-                    script = self._s.scripts.get(script_name)
-                    if script is None:
+                    elif issue.code == "script-unbound":
                         self._err(
                             f"Objective '{name}' references undefined script "
-                            f"'{script_name}' in window"
+                            f"'{issue.ref}' in window"
                         )
-                        continue
-                    referenced_scripts.add(script_name)
-                    if (
-                        referenced_story_scripts
-                        and script_name not in referenced_story_scripts
-                    ):
+                    elif issue.code == "script-outside-window-stories":
                         self._err(
-                            f"Objective '{name}' window script '{script_name}' "
+                            f"Objective '{name}' window script '{issue.ref}' "
                             "is not included by the referenced stories"
                         )
-
-                candidate_scripts = referenced_scripts or referenced_story_scripts
-                candidate_events: set[str] = set()
-                for script_name in candidate_scripts:
-                    script = self._s.scripts.get(script_name)
-                    if script is not None:
-                        candidate_events.update(script.events.keys())
-
-                for event_name in objective.window.events:
-                    if self._is_unresolved_var(event_name):
-                        continue
-                    if event_name not in self._s.events:
+                    elif issue.code == "event-unbound":
                         self._err(
                             f"Objective '{name}' references undefined event "
-                            f"'{event_name}' in window"
+                            f"'{issue.ref}' in window"
                         )
-                        continue
-                    if candidate_events and event_name not in candidate_events:
+                    elif issue.code == "event-outside-window-scripts":
                         self._err(
-                            f"Objective '{name}' window event '{event_name}' "
+                            f"Objective '{name}' window event '{issue.ref}' "
                             "is not included by the referenced scripts"
                         )
-
-                for workflow_name in objective.window.workflows:
-                    if self._is_unresolved_var(workflow_name):
-                        continue
-                    workflow = self._s.workflows.get(workflow_name)
-                    if workflow is None:
+                    elif issue.code == "workflow-unbound":
                         self._err(
                             f"Objective '{name}' references undefined workflow "
-                            f"'{workflow_name}' in window"
+                            f"'{issue.ref}' in window"
                         )
-                        continue
-                    referenced_workflows.add(workflow_name)
-
-                if objective.window.steps and not objective.window.workflows:
-                    self._err(
-                        f"Objective '{name}' window steps require at least one "
-                        "referenced workflow"
-                    )
-
-                for step_ref in objective.window.steps:
-                    if self._is_unresolved_var(step_ref):
-                        continue
-                    if "." not in step_ref:
+                    elif issue.code == "step-requires-workflow-window":
                         self._err(
-                            f"Objective '{name}' window step '{step_ref}' must "
+                            f"Objective '{name}' window steps require at least one "
+                            "referenced workflow"
+                        )
+                    elif issue.code == "step-invalid-format":
+                        self._err(
+                            f"Objective '{name}' window step '{issue.ref}' must "
                             "use '<workflow>.<step>' syntax"
                         )
-                        continue
-
-                    workflow_name, step_name = step_ref.split(".", 1)
-                    workflow = self._s.workflows.get(workflow_name)
-                    if workflow is None:
+                    elif issue.code == "step-workflow-unbound":
                         self._err(
-                            f"Objective '{name}' window step '{step_ref}' "
-                            f"references undefined workflow '{workflow_name}'"
+                            f"Objective '{name}' window step '{issue.ref}' "
+                            f"references undefined workflow '{issue.workflow_name}'"
                         )
-                        continue
-                    if (
-                        referenced_workflows
-                        and workflow_name not in referenced_workflows
-                    ):
+                    elif issue.code == "step-workflow-outside-window":
                         self._err(
-                            f"Objective '{name}' window step '{step_ref}' "
+                            f"Objective '{name}' window step '{issue.ref}' "
                             "is not part of the referenced workflows"
                         )
-                    if step_name not in workflow.steps:
+                    elif issue.code == "step-unbound":
                         self._err(
-                            f"Objective '{name}' window step '{step_ref}' "
-                            f"references undefined step '{step_name}'"
+                            f"Objective '{name}' window step '{issue.ref}' "
+                            f"references undefined step '{issue.step_name}'"
                         )
 
             for dep_name in objective.depends_on:
@@ -778,9 +764,10 @@ class SemanticValidator:
         workflow_name: str,
         step_name: str,
         predicate: WorkflowPredicate,
-        workflow_steps: dict,
-    ) -> None:
+        workflow_steps: dict[str, WorkflowStep],
+    ) -> list[str]:
         """Validate all references within a workflow predicate."""
+        step_refs: list[str] = []
         predicate_sections = (
             ("condition", predicate.conditions, self._s.conditions),
             ("metric", predicate.metrics, self._s.metrics),
@@ -799,24 +786,285 @@ class SemanticValidator:
                         f"'{step_name}' references undefined "
                         f"{label} '{ref}' in predicate"
                     )
-        for outcome_ref in predicate.step_outcomes:
-            if self._is_unresolved_var(outcome_ref):
+        for step_state in predicate.steps:
+            if self._is_unresolved_var(step_state.step):
                 continue
-            if outcome_ref not in workflow_steps:
+            if step_state.step not in workflow_steps:
                 self._err(
                     f"Workflow '{workflow_name}' step '{step_name}' "
-                    f"references undefined step outcome "
-                    f"'{outcome_ref}' in predicate"
+                    f"references undefined step state "
+                    f"'{step_state.step}' in predicate"
                 )
+                continue
+            if step_state.step == step_name:
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    "cannot reference its own state in a predicate"
+                )
+                continue
+            ref_step = workflow_steps[step_state.step]
+            contract = workflow_step_semantic_contract(ref_step.type.value)
+            if not contract.state_observable:
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"cannot reference non-executable step '{step_state.step}' "
+                    "in a predicate"
+                )
+                continue
+            invalid_outcomes = [
+                outcome.value
+                for outcome in step_state.outcomes
+                if outcome.value not in contract.observable_outcomes
+            ]
+            if invalid_outcomes:
+                allowed = ", ".join(contract.observable_outcomes)
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"references step '{step_state.step}' with impossible "
+                    f"outcomes {invalid_outcomes}; allowed outcomes are: {allowed}"
+                )
+                continue
+            step_refs.append(step_state.step)
+        return step_refs
+
+    def _is_executable_workflow_step(self, step: WorkflowStep) -> bool:
+        return workflow_step_semantic_contract(step.type.value).state_observable
+
+    def _validate_workflow_target_ref(
+        self,
+        workflow_name: str,
+        step_name: str,
+        field_name: str,
+        target: str,
+        workflow_steps: dict[str, WorkflowStep],
+    ) -> str | None:
+        if not target:
+            return None
+        if self._is_unresolved_var(target):
+            return None
+        if target not in workflow_steps:
+            self._err(
+                f"Workflow '{workflow_name}' step '{step_name}' "
+                f"{field_name} step '{target}' is not defined"
+            )
+            return None
+        return target
+
+    def _all_paths_reach_join(
+        self,
+        node: str,
+        join: str,
+        graph: dict[str, list[str]],
+        *,
+        memo: dict[str, bool],
+        visiting: set[str],
+    ) -> bool:
+        if node == join:
+            return True
+        if node in memo:
+            return memo[node]
+        if node in visiting:
+            return False
+
+        visiting.add(node)
+        successors = graph.get(node, [])
+        if not successors:
+            visiting.remove(node)
+            memo[node] = False
+            return False
+
+        result = all(
+            self._all_paths_reach_join(
+                successor,
+                join,
+                graph,
+                memo=memo,
+                visiting=visiting,
+            )
+            for successor in successors
+        )
+        visiting.remove(node)
+        memo[node] = result
+        return result
+
+    def _branch_guaranteed_states(
+        self,
+        node: str,
+        join: str,
+        graph: dict[str, list[str]],
+        workflow_steps: dict[str, WorkflowStep],
+        *,
+        memo: dict[tuple[str, str], set[str]],
+        visiting: set[tuple[str, str]],
+    ) -> set[str]:
+        if node == join:
+            return set()
+
+        key = (node, join)
+        if key in memo:
+            return set(memo[key])
+        if key in visiting:
+            return set()
+
+        visiting.add(key)
+        successors = graph.get(node, [])
+        guaranteed_after: set[str] = set()
+        if successors:
+            successor_sets: list[set[str]] = []
+            for successor in successors:
+                if successor == join:
+                    successor_sets.append(set())
+                    continue
+                if successor not in workflow_steps:
+                    continue
+                successor_sets.append(
+                    self._branch_guaranteed_states(
+                        successor,
+                        join,
+                        graph,
+                        workflow_steps,
+                        memo=memo,
+                        visiting=visiting,
+                    )
+                )
+            if successor_sets:
+                guaranteed_after = set.intersection(*successor_sets)
+
+        result = set(guaranteed_after)
+        step = workflow_steps[node]
+        if self._is_executable_workflow_step(step):
+            result.add(node)
+
+        visiting.remove(key)
+        memo[key] = set(result)
+        return result
+
+    def _edge_available_state(
+        self,
+        step_name: str,
+        successor: str,
+        workflow_steps: dict[str, WorkflowStep],
+        graph: dict[str, list[str]],
+        predecessors: dict[str, set[str]],
+        start: str,
+        join_targets: dict[str, list[str]],
+        *,
+        available_memo: dict[str, set[str]],
+        branch_memo: dict[tuple[str, str], set[str]],
+        visiting: set[str],
+    ) -> set[str]:
+        available = self._available_step_state_before(
+            step_name,
+            workflow_steps,
+            graph,
+            predecessors,
+            start,
+            join_targets,
+            available_memo=available_memo,
+            branch_memo=branch_memo,
+            visiting=visiting,
+        )
+        step = workflow_steps[step_name]
+        if step.type in {
+            WorkflowStepType.OBJECTIVE,
+            WorkflowStepType.RETRY,
+            WorkflowStepType.CALL,
+        }:
+            available.add(step_name)
+        elif (
+            step.type == WorkflowStepType.PARALLEL
+            and step.on_failure
+            and successor == step.on_failure
+        ):
+            available.add(step_name)
+        return available
+
+    def _available_step_state_before(
+        self,
+        step_name: str,
+        workflow_steps: dict[str, WorkflowStep],
+        graph: dict[str, list[str]],
+        predecessors: dict[str, set[str]],
+        start: str,
+        join_targets: dict[str, list[str]],
+        *,
+        available_memo: dict[str, set[str]],
+        branch_memo: dict[tuple[str, str], set[str]],
+        visiting: set[str],
+    ) -> set[str]:
+        if step_name in available_memo:
+            return set(available_memo[step_name])
+        if step_name in visiting:
+            return set()
+
+        visiting.add(step_name)
+        step = workflow_steps[step_name]
+
+        if step_name == start:
+            result = set()
+        elif step.type == WorkflowStepType.JOIN and join_targets.get(step_name):
+            owner = join_targets[step_name][0]
+            result = self._available_step_state_before(
+                owner,
+                workflow_steps,
+                graph,
+                predecessors,
+                start,
+                join_targets,
+                available_memo=available_memo,
+                branch_memo=branch_memo,
+                visiting=visiting,
+            )
+            result.add(owner)
+            owner_step = workflow_steps[owner]
+            for branch in owner_step.branches:
+                if branch not in workflow_steps:
+                    continue
+                result.update(
+                    self._branch_guaranteed_states(
+                        branch,
+                        step_name,
+                        graph,
+                        workflow_steps,
+                        memo=branch_memo,
+                        visiting=set(),
+                    )
+                )
+        else:
+            incoming_states: list[set[str]] = []
+            for predecessor in predecessors.get(step_name, set()):
+                if predecessor not in workflow_steps:
+                    continue
+                incoming_states.append(
+                    self._edge_available_state(
+                        predecessor,
+                        step_name,
+                        workflow_steps,
+                        graph,
+                        predecessors,
+                        start,
+                        join_targets,
+                        available_memo=available_memo,
+                        branch_memo=branch_memo,
+                        visiting=visiting,
+                    )
+                )
+            result = set.intersection(*incoming_states) if incoming_states else set()
+
+        visiting.remove(step_name)
+        available_memo[step_name] = set(result)
+        return result
 
     def _verify_workflows(self) -> None:
+        workflow_call_graph: dict[str, set[str]] = {
+            workflow_name: set() for workflow_name in self._s.workflows
+        }
+        workflow_compensation_graph: dict[str, set[str]] = {
+            workflow_name: set() for workflow_name in self._s.workflows
+        }
+        compensation_target_workflows: set[str] = set()
+        workflows_with_compensation_steps: set[str] = set()
         for workflow_name, workflow in self._s.workflows.items():
-            if "." in workflow_name:
-                self._err(
-                    f"Workflow '{workflow_name}' name cannot contain '.' "
-                    "because step references use '<workflow>.<step>' syntax"
-                )
-
             if (
                 not self._is_unresolved_var(workflow.start)
                 and workflow.start not in workflow.steps
@@ -829,6 +1077,8 @@ class SemanticValidator:
             graph: dict[str, list[str]] = {
                 step_name: [] for step_name in workflow.steps
             }
+            predicate_step_refs: dict[str, list[str]] = {}
+            join_targets: dict[str, list[str]] = defaultdict(list)
 
             for step_name, step in workflow.steps.items():
                 if "." in step_name:
@@ -837,8 +1087,6 @@ class SemanticValidator:
                         "contain '.' because objective windows use "
                         "'<workflow>.<step>' syntax"
                     )
-
-                edges: list[str] = []
 
                 if step.type == WorkflowStepType.OBJECTIVE:
                     if (
@@ -849,20 +1097,38 @@ class SemanticValidator:
                             f"Workflow '{workflow_name}' step '{step_name}' "
                             f"references undefined objective '{step.objective}'"
                         )
-                    if step.next:
+                    for field_name, target in (
+                        ("on-success", step.on_success),
+                        ("on-failure", step.on_failure),
+                    ):
+                        resolved = self._validate_workflow_target_ref(
+                            workflow_name,
+                            step_name,
+                            field_name,
+                            target,
+                            workflow.steps,
+                        )
+                        if resolved is not None:
+                            graph[step_name].append(resolved)
+                    if step.compensate_with:
+                        workflows_with_compensation_steps.add(workflow_name)
                         if (
-                            not self._is_unresolved_var(step.next)
-                            and step.next not in workflow.steps
+                            not self._is_unresolved_var(step.compensate_with)
+                            and step.compensate_with not in self._s.workflows
                         ):
                             self._err(
                                 f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"next step '{step.next}' is not defined"
+                                "references undefined compensation workflow "
+                                f"'{step.compensate_with}'"
                             )
-                        elif not self._is_unresolved_var(step.next):
-                            edges.append(step.next)
+                        elif not self._is_unresolved_var(step.compensate_with):
+                            workflow_compensation_graph.setdefault(workflow_name, set()).add(
+                                step.compensate_with
+                            )
+                            compensation_target_workflows.add(step.compensate_with)
 
-                elif step.type == WorkflowStepType.IF:
-                    self._validate_workflow_predicate(
+                elif step.type == WorkflowStepType.DECISION:
+                    predicate_step_refs[step_name] = self._validate_workflow_predicate(
                         workflow_name, step_name, step.when, workflow.steps,
                     )
 
@@ -870,85 +1136,184 @@ class SemanticValidator:
                         ("then", step.then_step),
                         ("else", step.else_step),
                     ):
-                        if self._is_unresolved_var(branch_ref):
-                            continue
-                        if branch_ref not in workflow.steps:
-                            self._err(
-                                f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"{branch_label} step '{branch_ref}' is not "
-                                "defined"
+                        resolved = self._validate_workflow_target_ref(
+                            workflow_name,
+                            step_name,
+                            branch_label,
+                            branch_ref,
+                            workflow.steps,
+                        )
+                        if resolved is not None:
+                            graph[step_name].append(resolved)
+
+                elif step.type == WorkflowStepType.SWITCH:
+                    aggregated_refs: list[str] = []
+                    for case_index, case in enumerate(step.cases):
+                        aggregated_refs.extend(
+                            self._validate_workflow_predicate(
+                                workflow_name,
+                                f"{step_name}.case[{case_index}]",
+                                case.when,
+                                workflow.steps,
                             )
-                            continue
-                        edges.append(branch_ref)
+                        )
+                        resolved = self._validate_workflow_target_ref(
+                            workflow_name,
+                            step_name,
+                            f"case[{case_index}] next",
+                            case.next_step,
+                            workflow.steps,
+                        )
+                        if resolved is not None:
+                            graph[step_name].append(resolved)
+                    predicate_step_refs[step_name] = aggregated_refs
+                    resolved_default = self._validate_workflow_target_ref(
+                        workflow_name,
+                        step_name,
+                        "default",
+                        step.default_step,
+                        workflow.steps,
+                    )
+                    if resolved_default is not None:
+                        graph[step_name].append(resolved_default)
 
                 elif step.type == WorkflowStepType.PARALLEL:
                     for branch_ref in step.branches:
-                        if self._is_unresolved_var(branch_ref):
-                            continue
-                        if branch_ref not in workflow.steps:
-                            self._err(
-                                f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"branch '{branch_ref}' is not defined"
-                            )
-                            continue
-                        edges.append(branch_ref)
+                        resolved = self._validate_workflow_target_ref(
+                            workflow_name,
+                            step_name,
+                            "branch",
+                            branch_ref,
+                            workflow.steps,
+                        )
+                        if resolved is not None:
+                            graph[step_name].append(resolved)
+                    resolved_join = self._validate_workflow_target_ref(
+                        workflow_name,
+                        step_name,
+                        "join",
+                        step.join,
+                        workflow.steps,
+                    )
+                    if resolved_join is not None:
+                        join_targets[resolved_join].append(step_name)
+                    resolved_failure = self._validate_workflow_target_ref(
+                        workflow_name,
+                        step_name,
+                        "on-failure",
+                        step.on_failure,
+                        workflow.steps,
+                    )
+                    if resolved_failure is not None:
+                        graph[step_name].append(resolved_failure)
 
-                    if step.next:
+                elif step.type == WorkflowStepType.JOIN:
+                    resolved = self._validate_workflow_target_ref(
+                        workflow_name,
+                        step_name,
+                        "next",
+                        step.next,
+                        workflow.steps,
+                    )
+                    if resolved is not None:
+                        graph[step_name].append(resolved)
+
+                elif step.type == WorkflowStepType.RETRY:
+                    if (
+                        not self._is_unresolved_var(step.objective)
+                        and step.objective not in self._s.objectives
+                    ):
+                        self._err(
+                            f"Workflow '{workflow_name}' step '{step_name}' "
+                            f"references undefined objective '{step.objective}'"
+                        )
+                    for field_name, target in (
+                        ("on-success", step.on_success),
+                        ("on-exhausted", step.on_exhausted),
+                    ):
+                        resolved = self._validate_workflow_target_ref(
+                            workflow_name,
+                            step_name,
+                            field_name,
+                            target,
+                            workflow.steps,
+                        )
+                        if resolved is not None:
+                            graph[step_name].append(resolved)
+
+                elif step.type == WorkflowStepType.CALL:
+                    if (
+                        not self._is_unresolved_var(step.workflow)
+                        and step.workflow not in self._s.workflows
+                    ):
+                        self._err(
+                            f"Workflow '{workflow_name}' step '{step_name}' "
+                            f"references undefined workflow '{step.workflow}'"
+                        )
+                    elif not self._is_unresolved_var(step.workflow):
+                        workflow_call_graph.setdefault(workflow_name, set()).add(
+                            step.workflow
+                        )
+                    for field_name, target in (
+                        ("on-success", step.on_success),
+                        ("on-failure", step.on_failure),
+                    ):
+                        resolved = self._validate_workflow_target_ref(
+                            workflow_name,
+                            step_name,
+                            field_name,
+                            target,
+                            workflow.steps,
+                        )
+                        if resolved is not None:
+                            graph[step_name].append(resolved)
+                    if step.compensate_with:
+                        workflows_with_compensation_steps.add(workflow_name)
                         if (
-                            not self._is_unresolved_var(step.next)
-                            and step.next not in workflow.steps
+                            not self._is_unresolved_var(step.compensate_with)
+                            and step.compensate_with not in self._s.workflows
                         ):
                             self._err(
                                 f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"join step '{step.next}' is not defined"
+                                "references undefined compensation workflow "
+                                f"'{step.compensate_with}'"
                             )
-                        elif not self._is_unresolved_var(step.next):
-                            edges.append(step.next)
+                        elif not self._is_unresolved_var(step.compensate_with):
+                            workflow_compensation_graph.setdefault(workflow_name, set()).add(
+                                step.compensate_with
+                            )
+                            compensation_target_workflows.add(step.compensate_with)
 
-                elif step.type == WorkflowStepType.WHILE:
-                    self._validate_workflow_predicate(
-                        workflow_name, step_name, step.when, workflow.steps,
+                elif step.type == WorkflowStepType.END:
+                    graph[step_name] = []
+
+                if step_name not in graph:
+                    graph[step_name] = []
+
+            for join_step, sources in join_targets.items():
+                if self._is_unresolved_var(join_step):
+                    continue
+                join_def = workflow.steps.get(join_step)
+                if join_def is not None and join_def.type != WorkflowStepType.JOIN:
+                    self._err(
+                        f"Workflow '{workflow_name}' step '{join_step}' is used "
+                        "as a parallel join but is not a join step"
+                    )
+                if len(sources) > 1:
+                    self._err(
+                        f"Workflow '{workflow_name}' join step '{join_step}' "
+                        "may only be targeted by one parallel step"
                     )
 
-                    if not self._is_unresolved_var(step.body):
-                        if step.body not in workflow.steps:
-                            self._err(
-                                f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"body step '{step.body}' is not defined"
-                            )
-                        else:
-                            edges.append(step.body)
-
-                    if step.next:
-                        if (
-                            not self._is_unresolved_var(step.next)
-                            and step.next not in workflow.steps
-                        ):
-                            self._err(
-                                f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"next step '{step.next}' is not defined"
-                            )
-                        elif not self._is_unresolved_var(step.next):
-                            edges.append(step.next)
-
-                # Validate on_error for applicable step types
-                if step.on_error:
-                    if self._is_unresolved_var(step.on_error):
-                        pass
-                    elif step.on_error == step_name:
-                        self._err(
-                            f"Workflow '{workflow_name}' step '{step_name}' "
-                            f"on-error cannot reference itself"
-                        )
-                    elif step.on_error not in workflow.steps:
-                        self._err(
-                            f"Workflow '{workflow_name}' step '{step_name}' "
-                            f"on-error step '{step.on_error}' is not defined"
-                        )
-                    else:
-                        edges.append(step.on_error)
-
-                graph[step_name] = edges
+            for step_name, step in workflow.steps.items():
+                if step.type != WorkflowStepType.JOIN:
+                    continue
+                sources = join_targets.get(step_name, [])
+                if not sources:
+                    self._err(
+                        f"Workflow '{workflow_name}' join step '{step_name}' "
+                        "is not referenced by any parallel step"
+                    )
 
             if graph and _topological_sort(graph) is None:
                 self._err(
@@ -975,6 +1340,130 @@ class SemanticValidator:
                 self._err(
                     f"Workflow '{workflow_name}' contains unreachable steps: "
                     + ", ".join(unreachable)
+                )
+
+            predecessors: dict[str, set[str]] = {
+                step_name: set() for step_name in reachable
+            }
+            for source, edges in graph.items():
+                if source not in reachable:
+                    continue
+                for target in edges:
+                    if target in reachable:
+                        predecessors[target].add(source)
+
+            for step_name, step in workflow.steps.items():
+                if step.type != WorkflowStepType.PARALLEL:
+                    continue
+                if (
+                    self._is_unresolved_var(step.join)
+                    or step.join not in workflow.steps
+                    or step.join not in reachable
+                ):
+                    continue
+                allowed_predecessors = branch_closure(
+                    graph,
+                    branches=(
+                        branch
+                        for branch in step.branches
+                        if branch in reachable and branch in workflow.steps
+                    ),
+                    join_step=step.join,
+                )
+                foreign_predecessors = sorted(
+                    predecessor
+                    for predecessor in predecessors.get(step.join, set())
+                    if predecessor not in allowed_predecessors
+                )
+                if foreign_predecessors:
+                    self._err(
+                        f"Workflow '{workflow_name}' join step '{step.join}' "
+                        "may only be entered from the owning parallel's branch "
+                        "closure; unexpected predecessors: "
+                        + ", ".join(foreign_predecessors)
+                    )
+
+            available_memo: dict[str, set[str]] = {}
+            branch_memo: dict[tuple[str, str], set[str]] = {}
+
+            for step_name, refs in predicate_step_refs.items():
+                if step_name not in reachable:
+                    continue
+                available_before = self._available_step_state_before(
+                    step_name,
+                    workflow.steps,
+                    graph,
+                    predecessors,
+                    workflow.start,
+                    join_targets,
+                    available_memo=available_memo,
+                    branch_memo=branch_memo,
+                    visiting=set(),
+                )
+                for ref_name in refs:
+                    if self._is_unresolved_var(ref_name):
+                        continue
+                    if ref_name not in available_before:
+                        self._err(
+                            f"Workflow '{workflow_name}' step '{step_name}' "
+                            f"references step state '{ref_name}' that is not "
+                            "guaranteed to be known before this predicate"
+                        )
+
+            for step_name, step in workflow.steps.items():
+                if step.type != WorkflowStepType.PARALLEL:
+                    continue
+                if (
+                    self._is_unresolved_var(step.join)
+                    or step.join not in workflow.steps
+                ):
+                    continue
+                for branch_ref in step.branches:
+                    if self._is_unresolved_var(branch_ref) or branch_ref not in workflow.steps:
+                        continue
+                    if not self._all_paths_reach_join(
+                        branch_ref,
+                        step.join,
+                        graph,
+                        memo={},
+                        visiting=set(),
+                    ):
+                        self._err(
+                            f"Workflow '{workflow_name}' parallel step "
+                            f"'{step_name}' requires every explicit branch path "
+                            f"from '{branch_ref}' to converge on join "
+                            f"'{step.join}'"
+                        )
+
+        if workflow_call_graph and _topological_sort(
+            {
+                workflow_name: sorted(
+                    callee
+                    for callee in callees
+                    if callee in workflow_call_graph
+                )
+                for workflow_name, callees in workflow_call_graph.items()
+            }
+        ) is None:
+            self._err("Workflow call graph contains a cycle")
+
+        combined_workflow_graph = {
+            workflow_name: sorted(
+                workflow_call_graph.get(workflow_name, set())
+                | workflow_compensation_graph.get(workflow_name, set())
+            )
+            for workflow_name in self._s.workflows
+        }
+        if combined_workflow_graph and _topological_sort(combined_workflow_graph) is None:
+            self._err(
+                "Combined workflow call/compensation graph contains a cycle"
+            )
+
+        for workflow_name in sorted(compensation_target_workflows):
+            if workflow_name in workflows_with_compensation_steps:
+                self._err(
+                    f"Workflow '{workflow_name}' cannot be used as a compensation "
+                    "workflow because it also declares compensate-with steps"
                 )
 
     def _verify_variables(self) -> None:

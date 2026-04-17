@@ -1,0 +1,9 @@
+{
+  "profile": "provisioning-only",
+  "required_contracts": [
+    "backend-manifest-v1",
+    "operation-receipt-v1",
+    "operation-status-v1",
+    "runtime-snapshot-v1"
+  ]
+}

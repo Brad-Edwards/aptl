@@ -77,7 +77,7 @@ None by design. This branch establishes an SDL-only boundary:
 ### Negative
 
 - 21 source files in `aptl.core.sdl/` — significant surface area
-- Variables (`${var}`) are still unresolved at parse time; existence is checked, but backend substitution semantics remain future work
+- Variables (`${var}`) are still unresolved at parse time; concrete binding now happens in the repo-owned instantiation phase before compilation/runtime planning
 - Existing APTL scenario YAMLs require migration to SDL format
 - No module composition system yet (Terraform-style imports)
 - No formal verification (VSDL's SMT / CRACK's Datalog)
@@ -87,4 +87,4 @@ None by design. This branch establishes an SDL-only boundary:
 
 - The SDL was designed and tested by one system (this project). Practitioner feedback may reveal ergonomic issues or missing concepts
 - The relationship model uses a flat `properties` dict which could become a maintenance burden as relationship types proliferate
-- Variable resolution semantics are undefined — instantiation backends will need to agree on substitution rules
+- Variable resolution semantics are now repo-defined, but composition/import semantics still need a mature multi-file design

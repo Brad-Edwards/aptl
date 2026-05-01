@@ -521,5 +521,69 @@ def orchestrate_lab_start(
             elif not config.containers.soc:
                 log.debug("SOC profile not enabled, skipping seed")
 
+    # Step 14: Sync MCP client config with freshly-seeded API keys
+    # `.mcp.json` is the canonical config Claude Code, Cursor, and Cline read
+    # to spawn MCP servers. Seed-prime writes API keys (TheHive provisioned,
+    # MISP/Shuffle defaults) to `.env`. If the user has a local `.mcp.json`,
+    # surface those keys into per-server env blocks so the MCPs authenticate
+    # without manual rewiring after a fresh `lab stop -v` + `lab start`.
+    log.info("Step 14: Syncing MCP client config with seeded API keys...")
+    try:
+        _sync_mcp_config_keys(project_dir)
+    except Exception as exc:  # pragma: no cover - non-fatal
+        log.warning("MCP config sync skipped: %s", exc)
+
     log.info("APTL lab started successfully!")
     return LabResult(success=True, message="Lab started successfully")
+
+
+def _sync_mcp_config_keys(project_dir: Path) -> None:
+    """Update `.mcp.json` env entries for dynamic API keys from `.env`.
+
+    Idempotent: runs after seed-prime, only touches the three known dynamic
+    server names, only updates keys the seed script defines. If `.mcp.json`
+    does not exist (e.g. fresh checkout, user hasn't configured an MCP
+    client yet) this is a no-op.
+    """
+    import json
+
+    mcp_path = project_dir / ".mcp.json"
+    env_path = project_dir / ".env"
+    if not mcp_path.exists() or not env_path.exists():
+        log.debug("MCP sync: missing %s or %s, skipping",
+                  mcp_path.name, env_path.name)
+        return
+
+    env_vals: dict[str, str] = {}
+    for ln in env_path.read_text().splitlines():
+        ln = ln.strip()
+        if ln and not ln.startswith("#") and "=" in ln:
+            k, v = ln.split("=", 1)
+            env_vals[k.strip()] = v.strip()
+
+    # server name -> env keys it expects
+    SERVER_KEYS = {
+        "aptl-casemgmt": ["THEHIVE_API_KEY"],
+        "aptl-threatintel": ["MISP_API_KEY"],
+        "aptl-soar": ["SHUFFLE_API_KEY"],
+    }
+
+    cfg = json.loads(mcp_path.read_text())
+    servers = cfg.get("mcpServers", {})
+    updated = []
+    for server_name, keys in SERVER_KEYS.items():
+        spec = servers.get(server_name)
+        if not spec:
+            continue
+        spec_env = spec.setdefault("env", {})
+        for key in keys:
+            if key in env_vals and env_vals[key] != spec_env.get(key):
+                spec_env[key] = env_vals[key]
+                updated.append(f"{server_name}.{key}")
+
+    if updated:
+        mcp_path.write_text(json.dumps(cfg, indent=2) + "\n")
+        log.info("MCP sync: refreshed %s in %s",
+                 ", ".join(updated), mcp_path.name)
+    else:
+        log.debug("MCP sync: no changes needed")

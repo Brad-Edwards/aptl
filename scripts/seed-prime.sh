@@ -64,6 +64,34 @@ if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
     if [ -n "$THEHIVE_API_KEY" ]; then
         export THEHIVE_API_KEY
         echo "  TheHive API key provisioned: ${THEHIVE_API_KEY:0:8}..."
+
+        # Persist provisioned + default seed keys back to .env so MCP servers
+        # (which spawn fresh per tool call and load .env at startup) can
+        # authenticate to TheHive, MISP, and Shuffle without manual rewiring.
+        # The shared aptl-mcp-common library walks up the directory tree from
+        # each MCP server's docker-lab-config.json and merges .env defaults
+        # under process.env, so the values land in every MCP child process.
+        ENV_FILE="$PROJECT_DIR/.env"
+        if [ ! -f "$ENV_FILE" ]; then
+            touch "$ENV_FILE"
+            chmod 600 "$ENV_FILE"
+        fi
+        update_env_var() {
+            local key="$1"
+            local value="$2"
+            if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+                # update in place using sed; escape | in value (none of ours have it)
+                sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+            else
+                printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+            fi
+        }
+        update_env_var THEHIVE_API_KEY "$THEHIVE_API_KEY"
+        # MISP and Shuffle use stable defaults baked into the lab; persist them
+        # too so future MCP startups read a single canonical source.
+        update_env_var MISP_API_KEY "${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
+        update_env_var SHUFFLE_API_KEY "${SHUFFLE_API_KEY:-31a211c4-ea5c-4a49-b022-5e2434e758a7}"
+        echo "  TheHive/MISP/Shuffle API keys written to .env (mode 600)"
     else
         echo "  WARNING: Could not provision TheHive API key (non-fatal)"
     fi

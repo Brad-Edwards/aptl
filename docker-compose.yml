@@ -524,6 +524,8 @@ services:
       - DB_PASSWORD=techvault_db_pass
       - FLASK_ENV=production
       - SIEM_IP=172.20.2.30
+    volumes:
+      - webapp_logs:/var/log/gunicorn
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
       interval: 15s
@@ -716,6 +718,178 @@ services:
     networks:
       aptl-internal:
         ipv4_address: 172.20.2.12
+
+  # ==========================================================================
+  # WAZUH AGENT SIDECARS
+  #
+  # One sidecar per service container that does not host an in-process Wazuh
+  # agent. Each mounts the target's existing log volume read-only and ships
+  # log lines through to the manager. These exist so a fresh `aptl lab start`
+  # produces SIEM visibility into samba, BIND9, the webapp, postgres, and
+  # Suricata without modifying upstream container images.
+  # ==========================================================================
+
+  wazuh-sidecar-fileshare:
+    profiles: ["soc"]
+    image: aptl-wazuh-sidecar:local
+    build:
+      context: ./containers/wazuh-sidecar
+      dockerfile: Dockerfile
+    container_name: aptl-wazuh-sidecar-fileshare
+    hostname: wazuh-sidecar-fileshare
+    restart: unless-stopped
+    environment:
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-fileshare-agent
+      - LOG_PATHS=/logs/log.smbd,/logs/log.winbindd,/logs/log.nmbd,/logs/log.smbd.old,/logs/log.winbindd.old
+      - LOG_FORMAT=syslog
+    volumes:
+      - fileshare_logs:/logs:ro
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.31
+
+  wazuh-sidecar-ad:
+    profiles: ["soc"]
+    image: aptl-wazuh-sidecar:local
+    build:
+      context: ./containers/wazuh-sidecar
+      dockerfile: Dockerfile
+    container_name: aptl-wazuh-sidecar-ad
+    hostname: wazuh-sidecar-ad
+    restart: unless-stopped
+    environment:
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-ad-agent
+      - LOG_PATHS=/logs/log.samba,/logs/log.smbd,/logs/log.winbindd,/logs/log.nmbd
+      - LOG_FORMAT=syslog
+    volumes:
+      - ad_logs:/logs:ro
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.32
+
+  wazuh-sidecar-dns:
+    profiles: ["soc"]
+    image: aptl-wazuh-sidecar:local
+    build:
+      context: ./containers/wazuh-sidecar
+      dockerfile: Dockerfile
+    container_name: aptl-wazuh-sidecar-dns
+    hostname: wazuh-sidecar-dns
+    restart: unless-stopped
+    environment:
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-dns-agent
+      - LOG_PATHS=/logs/query.log,/logs/default.log
+      - LOG_FORMAT=syslog
+    volumes:
+      - dns_logs:/logs:ro
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.33
+
+  wazuh-sidecar-webapp:
+    profiles: ["soc"]
+    image: aptl-wazuh-sidecar:local
+    build:
+      context: ./containers/wazuh-sidecar
+      dockerfile: Dockerfile
+    container_name: aptl-wazuh-sidecar-webapp
+    hostname: wazuh-sidecar-webapp
+    restart: unless-stopped
+    environment:
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-webapp-agent
+      - LOG_PATHS=/logs/access.log,/logs/error.log,/logs/app.log
+      - LOG_FORMAT=syslog
+    volumes:
+      - webapp_logs:/logs:ro
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.34
+
+  wazuh-sidecar-db:
+    profiles: ["soc"]
+    image: aptl-wazuh-sidecar:local
+    build:
+      context: ./containers/wazuh-sidecar
+      dockerfile: Dockerfile
+    container_name: aptl-wazuh-sidecar-db
+    hostname: wazuh-sidecar-db
+    restart: unless-stopped
+    environment:
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-db-agent
+      - LOG_PATHS=/logs/pg_log/postgresql.log
+      - LOG_FORMAT=syslog
+    volumes:
+      - db_data:/logs:ro
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.35
+
+  wazuh-sidecar-suricata:
+    profiles: ["soc"]
+    image: aptl-wazuh-sidecar:local
+    build:
+      context: ./containers/wazuh-sidecar
+      dockerfile: Dockerfile
+    container_name: aptl-wazuh-sidecar-suricata
+    hostname: wazuh-sidecar-suricata
+    restart: unless-stopped
+    environment:
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-suricata-agent
+      - LOG_PATHS=/logs/eve.json
+      - LOG_FORMAT=json
+    volumes:
+      - suricata_logs:/logs:ro
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.36
 
   # Victim Container - Linux Application Server
   victim:
@@ -1111,6 +1285,7 @@ volumes:
   fileshare_data:
   fileshare_logs:
   dns_logs:
+  webapp_logs:
 
   # Mail server
   mailserver_data:

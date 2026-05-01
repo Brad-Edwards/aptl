@@ -97,11 +97,20 @@ const baseAPIHandlers = {
   },
 
   predefined_query: async (args: PredefinedQueryArgs, context: APIToolContext, queryConfig: NonNullable<LabConfig['queries']>[string]) => {
-    const { params = {}, body = {} } = args;
+    const { params = {}, body } = args as any;
 
-    // Merge provided params/body with template
+    // Merge provided params with template
     const finalParams = { ...queryConfig.params, ...params };
-    const finalBody = queryConfig.body ? { ...queryConfig.body, ...body } : body;
+    // Body handling: a string passes through as raw payload (e.g. XML for
+    // Wazuh rule uploads). Otherwise merge with the template object.
+    let finalBody: any;
+    if (typeof body === 'string') {
+      finalBody = body;
+    } else if (body === undefined || body === null) {
+      finalBody = queryConfig.body;
+    } else {
+      finalBody = queryConfig.body ? { ...queryConfig.body, ...body } : body;
+    }
 
     // Substitute {key} path parameters in URL and remove them from query params
     let url = queryConfig.url;

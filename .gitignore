@@ -398,6 +398,16 @@ config/wazuh_indexer_ssl_certs/*
 
 .cursor/mcp.json
 .mcp.json
+.mcp.json.bak
+
+# Purple-loop archive directories (per-run state moved aside before fresh runs)
+.aptl_archive_*
+
+# Playwright MCP session cache
+.playwright-mcp/
+
+# Local deck render assets (slide PNGs are not part of the source artifact)
+deck-loop-*.png
 
 notes/
 

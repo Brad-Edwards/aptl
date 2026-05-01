@@ -6,6 +6,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.0] - 2026-05-01
+
+### Added
+
+- `wazuh-jwt` auth type in the shared `aptl-mcp-common` library, with one-time `POST {auth_url}` exchange against the Wazuh manager and per-`HTTPClient` token cache, so MCP servers can call manager endpoints that require Bearer JWT (rule file uploads, manager restart) without each tool re-authenticating
+- Raw-string body passthrough in `aptl-mcp-common`'s `predefined_query` handler, so MCPs can ship raw XML payloads (Wazuh rule files) through `tools/call` without object-merge corruption
+- `restart_manager` and `get_rule_file` actions on `mcp-indexer` for full create-author-restart-verify rule-management cycles from a blue-team agent's MCP surface
+- `wazuh-sidecar` container template (Debian 12 + wazuh-agent 4.12.0) — single image used by six per-service sidecars (`fileshare`, `ad`, `dns`, `webapp`, `db`, `suricata`) configured via `WAZUH_MANAGER` / `AGENT_NAME` / `LOG_PATHS` / `LOG_FORMAT` env so a fresh `aptl lab start` ships samba, BIND9 query, gunicorn access/error, postgres query, and Suricata `eve.json` events into the SIEM without modifying upstream container images
+- `webapp_logs` named volume bound to `aptl-webapp:/var/log/gunicorn`, picked up by the webapp sidecar so HTTP access events reach Wazuh independently of the `aptl-webapp -> rsyslog -> SIEM_IP:514` forwarder (which had been intermittent across iterations)
+
+### Changed
+
+- `mcp-indexer.create_rule` writes to `/var/ossec/etc/rules/zzz_purple_loop.xml` via `wazuh-jwt` auth instead of overwriting `local_rules.xml` with HTTP basic; rules authored during purple-loop iterations now land in a dedicated, namespaced file and the manager loads them after `webapp_rules.xml` so child rules can `<if_sid>` into the existing 302xxx surface
+- `mcp-red.docker-lab-config.json` targets the kali container at its docker-internal address `172.20.4.30:22` instead of the host-port `localhost:2023`, so MCP-mediated commands reach the kali interface inside the lab subnets rather than the host port mapping that depends on profile-specific port exposure
+- `wazuh_manager.conf` now declares `<rule_dir>etc/rules</rule_dir>` alongside the bundled `<rule_dir>ruleset/rules</rule_dir>`; without this, every API-driven `PUT /rules/files/<name>` failed with API error 1209 even though the rule_include lines below it referenced files in that directory
+- `kali_redteam_rules.xml` rules 300001 / 300002 / 300003 demoted from level 3 to level 1 — these fire per SSH session boundary and the MCP-mediated red-team agent generates 30-40 of them per iteration, which previously buried higher-severity authored detections in dashboard scrolling
+- `seed-prime.sh` now persists provisioned `THEHIVE_API_KEY` plus the lab's stable `MISP_API_KEY` and `SHUFFLE_API_KEY` defaults back to `.env` (mode 600), so the `aptl-casemgmt`, `aptl-threatintel`, and `aptl-soar` MCP servers — which spawn fresh per tool call and load `.env` at startup via `aptl-mcp-common` — authenticate cleanly to TheHive, MISP, and Shuffle without manual rewiring of `.mcp.json`
+- `orchestrate_lab_start` step 14: after `seed-prime.sh` completes, sync any existing project `.mcp.json`'s per-server env blocks for `aptl-casemgmt` / `aptl-threatintel` / `aptl-soar` from the freshly-written `.env`. Idempotent — only refreshes the three known dynamic key entries, and is a no-op if `.mcp.json` does not exist (fresh checkouts) or already matches
+
+### Notes
+
+- These changes ground a real, MCP-only AI purple-team loop and address the telemetry-layer gaps that produced "open" verdicts in the 2026-04-30 evidentiary run: fileshare/postgres/dns containers having no Wazuh agent, intermittent webapp log shipping, and Suricata `eve.json` not being ingested. POST-body invisibility in Wazuh's web access decoder remains a structural limitation; closing it requires app-level structured logging, which is out of scope for this version.
+
 ## [6.2.0] - 2026-04-01
 
 ### Added

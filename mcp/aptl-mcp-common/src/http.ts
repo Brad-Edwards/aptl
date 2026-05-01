@@ -27,8 +27,12 @@ export class HTTPClient {
     }
   }
 
+  // cached JWT for wazuh-jwt mode (per HTTPClient instance)
+  private cachedJwt: string | null = null;
+
   /**
-   * Build authentication headers based on config
+   * Build authentication headers based on config (sync paths only).
+   * For 'wazuh-jwt' use getAuthHeadersAsync.
    */
   private buildAuthHeaders(): Record<string, string> {
     const { auth } = this.config!;
@@ -59,9 +63,94 @@ export class HTTPClient {
         }
         return { [auth.header]: auth.token };
 
+      case 'wazuh-jwt':
+        if (this.cachedJwt) {
+          return { 'Authorization': `Bearer ${this.cachedJwt}` };
+        }
+        // Should have been exchanged before sync call; placeholder so auth runs anyway
+        return {};
+
       default:
         return {};
     }
+  }
+
+  /**
+   * Async-aware auth header builder. For 'wazuh-jwt' mode, performs a one-time
+   * POST {auth_url} with basic credentials, caches the returned JWT, and
+   * returns a Bearer header. Subsequent calls reuse the cached token.
+   */
+  private async getAuthHeadersAsync(): Promise<Record<string, string>> {
+    const { auth } = this.config!;
+    if (auth.type !== 'wazuh-jwt') return this.buildAuthHeaders();
+
+    if (this.cachedJwt) {
+      return { 'Authorization': `Bearer ${this.cachedJwt}` };
+    }
+
+    if (!auth.username || !auth.password || !auth.auth_url) {
+      throw new Error('wazuh-jwt requires username, password, auth_url');
+    }
+
+    const basicAuth = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
+    const verify_ssl = this.config!.verify_ssl !== false; // default true
+    const tokenResp = await this.lowLevelRequest(
+      auth.auth_url,
+      'POST',
+      { 'Authorization': `Basic ${basicAuth}` },
+      undefined,
+      this.config!.timeout || 30000,
+      verify_ssl
+    );
+    let parsed: any;
+    try { parsed = JSON.parse(tokenResp.text); } catch { parsed = {}; }
+    const token = parsed?.data?.token;
+    if (!token) {
+      throw new Error(`wazuh-jwt: no token in auth response (status ${tokenResp.status})`);
+    }
+    this.cachedJwt = token;
+    return { 'Authorization': `Bearer ${token}` };
+  }
+
+  /**
+   * Low-level helper used by the JWT exchange path. Does not apply auth.
+   */
+  private lowLevelRequest(
+    url: string,
+    method: string,
+    headers: Record<string, string>,
+    body: string | undefined,
+    timeout: number,
+    verify_ssl: boolean
+  ): Promise<{ status: number; text: string }> {
+    return new Promise((resolve, reject) => {
+      const parsed = new URL(url);
+      const transport = parsed.protocol === 'https:' ? https : http;
+      const reqOpts: https.RequestOptions = {
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method,
+        headers: {
+          ...headers,
+          ...(body ? { 'Content-Length': String(Buffer.byteLength(body)) } : {}),
+        },
+        timeout,
+        ...(parsed.protocol === 'https:' && !verify_ssl ? { agent: insecureAgent } : {}),
+      };
+      const req = transport.request(reqOpts, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => resolve({
+          status: res.statusCode ?? 0,
+          text: Buffer.concat(chunks).toString(),
+        }));
+      });
+      req.on('timeout', () => { req.destroy(); reject(new Error(`token timeout after ${timeout}ms`)); });
+      req.on('error', reject);
+      if (body) req.write(body);
+      req.end();
+    });
   }
 
   /**
@@ -93,8 +182,8 @@ export class HTTPClient {
       }
     }
 
-    // Build headers
-    const authHeaders = this.buildAuthHeaders();
+    // Build headers (await for wazuh-jwt path, no-op for others)
+    const authHeaders = await this.getAuthHeadersAsync();
     const headers = {
       'Content-Type': 'application/json',
       ...default_headers,
@@ -102,10 +191,24 @@ export class HTTPClient {
       ...options.headers,
     };
 
+    // String body passes through raw (e.g. XML for Wazuh rule upload). Set
+    // Content-Type to octet-stream unless caller already set one.
+    let bodyStr: string | undefined;
+    if (options.body !== undefined && options.body !== null) {
+      if (typeof options.body === 'string') {
+        bodyStr = options.body;
+        if (!('Content-Type' in (options.headers || {}))) {
+          headers['Content-Type'] = 'application/octet-stream';
+        }
+      } else {
+        bodyStr = JSON.stringify(options.body);
+      }
+    }
+
     // Use node:https with per-request agent when SSL verification is disabled,
     // avoiding the process-global NODE_TLS_REJECT_UNAUTHORIZED race condition
     if (!verify_ssl) {
-      return this.makeRequestWithAgent(url, method, headers, options, timeout);
+      return this.makeRequestWithAgent(url, method, headers, { ...options, body: bodyStr } as any, timeout);
     }
 
     try {
@@ -115,7 +218,7 @@ export class HTTPClient {
       const response = await fetch(url, {
         method,
         headers,
-        body: options.body ? JSON.stringify(options.body) : undefined,
+        body: bodyStr,
         signal: controller.signal,
       });
 
@@ -166,7 +269,10 @@ export class HTTPClient {
     return new Promise((resolve, reject) => {
       const parsed = new URL(url);
       const transport = parsed.protocol === 'https:' ? https : http;
-      const bodyStr = options.body ? JSON.stringify(options.body) : undefined;
+      // body may already be a pre-stringified raw payload (XML / JSON) at this point
+      const bodyStr: string | undefined = options.body === undefined || options.body === null
+        ? undefined
+        : (typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
 
       const reqOptions: https.RequestOptions = {
         hostname: parsed.hostname,

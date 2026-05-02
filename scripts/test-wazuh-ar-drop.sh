@@ -99,7 +99,17 @@ curl_from_kali() {
 }
 
 # --- preflight --------------------------------------------------------------
-trap cleanup_rule EXIT
+# Cleanup on ANY exit: remove the manager-side rule + AR block AND
+# remove the kali drop from the target's iptables. Without the
+# iptables cleanup, a mid-test failure (after AR fired) would leave
+# kali blocked from the target, breaking subsequent lab runs for
+# unrelated reasons. Both are idempotent and safe to call when no
+# state was created.
+on_exit() {
+    cleanup_rule || true
+    restore_iptables || true
+}
+trap on_exit EXIT
 
 for c in "${MANAGER}" "${TARGET}" "${KALI}"; do
     if ! docker ps --format '{{.Names}}' | grep -q "^${c}$"; then

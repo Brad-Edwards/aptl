@@ -551,8 +551,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      wazuh.manager:
-        condition: service_healthy
+    # No `depends_on: wazuh.manager` — the in-process bootstrap waits
+    # 180s for the manager port and then continues regardless, so the
+    # target can boot independently of the SOC profile.
     networks:
       aptl-dmz:
         ipv4_address: 172.20.1.20
@@ -631,9 +632,12 @@ services:
       resources:
         limits:
           memory: 512m
-    depends_on:
-      wazuh.manager:
-        condition: service_healthy
+    # No `depends_on: wazuh.manager` — the in-process bootstrap waits
+    # 180s for the manager port and then continues regardless, so the
+    # target can boot independently of the SOC profile. Targets and
+    # the manager live in different compose profiles; a hard dependency
+    # would make `aptl lab start --profile enterprise` fail when SOC
+    # is not selected.
     networks:
       aptl-dmz:
         ipv4_address: 172.20.1.22
@@ -662,9 +666,13 @@ services:
       - DNS_FORWARDER=172.20.1.22
       - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
       # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-ad.
+      # log.nmbd is intentionally absent: Samba in AD-DC mode does not
+      # run nmbd and never writes log.nmbd. The previous sidecar config
+      # included it and the agent emitted "Could not open file" on every
+      # restart.
       - WAZUH_MANAGER=wazuh.manager
       - AGENT_NAME=aptl-ad-agent
-      - LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd,/var/log/samba/log.nmbd
+      - LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd
       - LOG_FORMAT=syslog
     volumes:
       - ad_data:/var/lib/samba
@@ -682,9 +690,12 @@ services:
       resources:
         limits:
           memory: 512m
-    depends_on:
-      wazuh.manager:
-        condition: service_healthy
+    # No `depends_on: wazuh.manager` — the in-process bootstrap waits
+    # 180s for the manager port and then continues regardless, so the
+    # target can boot independently of the SOC profile. Targets and
+    # the manager live in different compose profiles; a hard dependency
+    # would make `aptl lab start --profile enterprise` fail when SOC
+    # is not selected.
     networks:
       aptl-internal:
         ipv4_address: 172.20.2.10
@@ -737,9 +748,15 @@ services:
     environment:
       - SIEM_IP=172.20.0.10
       # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-fileshare.
+      # samba's `log file = /var/log/samba/log.%m` writes per-client logs;
+      # the only deterministic file that always exists is log.samba-bgqd
+      # (the smbd housekeeping process). The previous sidecar tailed
+      # log.smbd / log.winbindd / log.nmbd which never existed and
+      # produced "Could not open file" noise. Restoring full per-client
+      # log shipping for fileshare is tracked separately.
       - WAZUH_MANAGER=wazuh.manager
       - AGENT_NAME=aptl-fileshare-agent
-      - LOG_PATHS=/var/log/samba/log.smbd,/var/log/samba/log.winbindd,/var/log/samba/log.nmbd,/var/log/samba/log.smbd.old,/var/log/samba/log.winbindd.old
+      - LOG_PATHS=/var/log/samba/log.samba-bgqd
       - LOG_FORMAT=syslog
     volumes:
       - fileshare_data:/srv/shares
@@ -756,9 +773,12 @@ services:
       resources:
         limits:
           memory: 512m
-    depends_on:
-      wazuh.manager:
-        condition: service_healthy
+    # No `depends_on: wazuh.manager` — the in-process bootstrap waits
+    # 180s for the manager port and then continues regardless, so the
+    # target can boot independently of the SOC profile. Targets and
+    # the manager live in different compose profiles; a hard dependency
+    # would make `aptl lab start --profile enterprise` fail when SOC
+    # is not selected.
     networks:
       aptl-internal:
         ipv4_address: 172.20.2.12

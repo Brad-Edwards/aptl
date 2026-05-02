@@ -74,14 +74,19 @@ rm -f "$LF_FILE"
 chown root:wazuh "${TARGET}" 2>/dev/null || true
 chmod 640 "${TARGET}" 2>/dev/null || true
 
-# 4. Register with the manager. Wazuh 4.12's agent-auth has no `-F`
-#    flag; the manager auto-replaces a same-named agent record, so the
-#    in-process registration takes over from any prior sidecar
-#    registration. If client.keys is already populated from an earlier
-#    successful registration, agent-auth is a no-op refresh; if it is
-#    empty (fresh container) and registration fails, the agent has no
-#    identity and would silently fail to connect — fail fast in that
-#    case so supervisord/`startretries` retries the bootstrap.
+# 4. Register with the manager. The replacement mechanism for an
+#    in-process takeover from a previous sidecar registration is
+#    *manager-side*: `<auth><force><enabled>yes</force></enabled>` in
+#    `wazuh_manager.conf` lets agent-auth re-register a same-named
+#    agent at a new IP. (Wazuh 4.12's agent-auth has no `-F` flag, so
+#    we cannot force from the agent side.)
+#
+#    If client.keys is already populated from an earlier successful
+#    registration, agent-auth's "duplicate name" error is benign — we
+#    keep the existing identity. If client.keys is empty (fresh
+#    container) AND agent-auth fails, the agent has no identity to
+#    connect with; exit so supervisord/startretries retries the
+#    bootstrap rather than starting a daemon that will silently fail.
 log "registering as '${AGENT_NAME}' with ${WAZUH_MANAGER}..."
 if ! /var/ossec/bin/agent-auth -m "${WAZUH_MANAGER}" -A "${AGENT_NAME}" 2>&1 | tee /tmp/agent-auth.log; then
     log "agent-auth returned non-zero"

@@ -228,6 +228,45 @@ class TestInProcessAgents:
             f"shipping is broken: {stale}"
         )
 
+    def test_in_process_agents_log_paths_exist_in_container(self) -> None:
+        """Every path the manager-side LOG_PATHS env var declares must
+        exist as a real, readable file inside the target. Pre-#248 the
+        sidecars mounted these paths at `/logs:ro`, so the agent saw them.
+        Now that the agent runs in the target, the LOG_PATHS values point
+        at filesystem paths inside the container itself — a typo here
+        would silently kill log shipping while keepalive and daemon
+        checks still pass. This is the regression guard for AC#5."""
+        # (container, [paths]) — must match docker-compose.yml LOG_PATHS env.
+        # Maintained by hand; if compose's LOG_PATHS changes, update here.
+        # Includes only the deterministic-on-disk paths the in-process
+        # agent ships; samba's per-client log.<machine> files (fileshare)
+        # are dynamic and not part of the contract.
+        expected: dict[str, list[str]] = {
+            "aptl-webapp": ["/var/log/gunicorn/access.log"],
+            "aptl-fileshare": ["/var/log/samba/log.samba-bgqd"],
+            "aptl-ad": [
+                "/var/log/samba/log.samba",
+                "/var/log/samba/log.smbd",
+                "/var/log/samba/log.winbindd",
+            ],
+            "aptl-dns": [
+                "/var/log/named/query.log",
+                "/var/log/named/default.log",
+            ],
+        }
+        missing: list[str] = []
+        for container, paths in expected.items():
+            for p in paths:
+                result = docker_exec(container, f"test -f {p} && test -r {p}")
+                if result.returncode != 0:
+                    missing.append(f"{container}:{p}")
+        assert not missing, (
+            f"LOG_PATHS files missing or unreadable inside the target "
+            f"container — log shipping is silently broken: {missing}. "
+            f"If a path is intentionally optional (rotated-out, lazily "
+            f"created), drop it from compose's LOG_PATHS env."
+        )
+
     def test_in_process_agents_daemons_running(self) -> None:
         """Each in-process target's `wazuh-control status` must report
         all four expected agent daemons running (`wazuh-modulesd`,

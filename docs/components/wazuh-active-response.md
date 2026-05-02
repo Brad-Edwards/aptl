@@ -103,7 +103,22 @@ The `aptl-firewall-drop` wrapper consults this file before forwarding to the ups
 
 ## Severity gate
 
-Every block ships `<level>10</level>`. Wazuh evaluates the gate as: AR fires only if the rule's level **and** the rule_id match the block. With a level-10 gate, low-severity informational rules (level < 10) can't accidentally chain into a ban even if blue forgets to scope `<rules_id>`.
+The `<active-response>` matchers (`<rules_id>`, `<rules_group>`, `<level>`) are **OR'd, not AND'd** in Wazuh. Putting `<level>10</level>` next to `<rules_id>302010</rules_id>` does NOT mean "rule 302010 at level 10+" — it means "rule 302010 OR any level-10+ alert," which broadens the block to every high-severity alert in the lab.
+
+Because of this, **#249 ships every `<active-response>` block with a specific `<rules_id>` only and no `<level>` directive**. The severity gate is implicit: the rule IDs in scope (302010, 302060, 301002, 304040, 5763) are all defined at level ≥ 10 in the lab's custom rule files. Blue authoring a low-severity custom rule and pointing AR at it is the gap to watch for.
+
+If blue wants a **catch-all level gate** (any rule at level ≥ N triggers AR), use `<level>` alone:
+
+```xml
+<active-response>
+  <command>aptl-firewall-drop</command>
+  <location>local</location>
+  <level>12</level>             <!-- only level-12+ alerts -->
+  <timeout>120</timeout>
+</active-response>
+```
+
+That's much broader and rarely what you want; prefer per-rule blocks.
 
 ## Timeout strategy
 

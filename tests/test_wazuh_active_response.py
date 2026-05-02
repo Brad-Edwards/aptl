@@ -409,12 +409,9 @@ class TestWazuhActiveResponseWrapper:
             done
             exit 0
         """)
-        write = docker_exec(
-            "aptl-webapp",
-            f"sh -c {shlex.quote(f'cat > {fake_iptables}')}",
-        )
-        # Re-write via cat heredoc since docker_exec consumed the input.
-        # Use a single docker exec writing the script content:
+        # Write the fake iptables script in a single docker exec —
+        # printf then chmod, both inside one bash -c so the file is
+        # executable when the wrapper invokes it below.
         write = docker_exec(
             "aptl-webapp",
             f"bash -c {shlex.quote(f'printf %s {shlex.quote(fake_script)} > {fake_iptables} && chmod +x {fake_iptables}')}",

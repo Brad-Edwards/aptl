@@ -99,5 +99,6 @@ This ADR closes #247 with no functional change to Suricata. Suricata's `docker-c
 - [#249](https://github.com/Brad-Edwards/aptl/issues/249) — AR command/block wiring with carve-outs (delivers actual drops).
 - [#252](https://github.com/Brad-Edwards/aptl/issues/252) — purple-team continuity model (orchestrator-level carve-outs that complement the in-band whitelist in #249).
 - [ADR-008](adr-008-soc-stack-integration.md) — Suricata IDS selection rationale, updated with a forward-pointer to this ADR.
+- [ADR-021](adr-021-active-response-whitelist-via-wrapper.md) — the kali-IP whitelist mechanism that makes the AR layer this ADR chose usable in a purple loop.
 - Suricata Support [#2135](https://redmine.openinfosecfoundation.org/issues/2135) — upstream "bridge+nfqueue has never worked well" reference.
 - Suricata Bug [#228](https://redmine.openinfosecfoundation.org/issues/228) — older instance of the same drop-on-bridge class.

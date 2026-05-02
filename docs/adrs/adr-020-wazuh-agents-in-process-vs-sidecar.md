@@ -80,3 +80,4 @@ Document the carve-out in CHANGELOG and link back to this ADR. Don't extend the 
 - [#249](https://github.com/Brad-Edwards/aptl/issues/249) — AR `<command>` + `<active-response>` wiring with kali-IP carve-outs. Builds on this ADR's in-process agents.
 - [ADR-019](adr-019-suricata-ids-only-prevention-via-wazuh-ar.md) — chose Wazuh AR as the prevention layer; this ADR is the precondition that makes it work.
 - [ADR-002](adr-002-wazuh-siem.md) — original Wazuh selection rationale; the "Dual Log Collection" subsection is updated with a forward-pointer to this ADR.
+- [ADR-021](adr-021-active-response-whitelist-via-wrapper.md) — the in-band whitelist that the in-process agents shipped here enforce.

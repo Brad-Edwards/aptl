@@ -25,7 +25,9 @@ apt-get install -y --no-install-recommends \
     lsb-release \
     ca-certificates \
     procps \
-    netcat-openbsd
+    netcat-openbsd \
+    jq \
+    iptables
 
 curl -fsSL https://packages.wazuh.com/key/GPG-KEY-WAZUH \
     | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
@@ -39,3 +41,24 @@ WAZUH_MANAGER=PLACEHOLDER apt-get install -y wazuh-agent=4.12.0-1
 
 apt-get clean
 rm -rf /var/lib/apt/lists/*
+
+# Active-response wrapper + kali whitelist (issue #249, ADR-021). If
+# the calling Dockerfile pre-COPYed the wrapper script and whitelist
+# file into /tmp before running this installer, place them in the
+# canonical AR locations on the agent. This keeps the per-Dockerfile
+# boilerplate to three COPYs + one RUN; the install logic lives in
+# one place.
+WRAPPER_SRC=/tmp/aptl-firewall-drop.sh
+WHITELIST_SRC=/tmp/active-response-whitelist
+if [ -f "${WRAPPER_SRC}" ]; then
+    # Use `install -D` to create parent dirs as needed (the agent
+    # package's bin dir always exists, but be explicit for safety).
+    install -D -m 0755 -o root -g wazuh "${WRAPPER_SRC}" /var/ossec/active-response/bin/aptl-firewall-drop
+fi
+if [ -f "${WHITELIST_SRC}" ]; then
+    # `/var/ossec/etc/lists/` doesn't exist in a fresh wazuh-agent
+    # install (manager creates it for CDB lists; agents don't have
+    # it by default). `install -D` creates the lists/ dir at mode 0755
+    # owned by root:root, then drops the file with the right perms.
+    install -D -m 0640 -o root -g wazuh "${WHITELIST_SRC}" /var/ossec/etc/lists/active-response-whitelist
+fi

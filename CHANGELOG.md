@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.5.0] - 2026-05-02
+
+### Changed
+
+- Wazuh agents on the four service-target containers (`webapp`, `fileshare`, `ad`, `dns`) now run **in-process** alongside the primary service under `supervisord`, replacing the sidecar pattern introduced in v6.3.0. Each target gains `cap_add: [NET_ADMIN]` and a memory bump to 512m so active-response (`firewall-drop`) installed by Wazuh can call `iptables` on the target's own network namespace — the precondition the sidecars couldn't deliver because their iptables operated on a different namespace. Issue [#248](https://github.com/Brad-Edwards/aptl/issues/248); architectural rationale in [ADR-020](docs/adrs/adr-020-wazuh-agents-in-process-vs-sidecar.md).
+- Shared `containers/_wazuh-agent/` directory now houses the registration script, ossec.conf template, and apt-install helper used by both the in-process targets and the remaining sidecar image; the four affected target images plus the sidecar build from the repo root so the shared files resolve.
+- The four sidecar service entries `wazuh-sidecar-{webapp,fileshare,ad,dns}` are deleted from `docker-compose.yml`. `wazuh-sidecar-db` remains as a documented carve-out (postgres:16-alpine has no first-party Wazuh package; deferred). `wazuh-sidecar-suricata` remains because Suricata's deployment is governed by ADR-019.
+- `agent-auth` is invoked with `-F 1` in the shared bootstrap so an in-process registration cleanly replaces a same-named agent record left over from a previous sidecar deployment.
+
+### Notes
+
+- Issue [#248](https://github.com/Brad-Edwards/aptl/issues/248) is the second of three in the prevention chain set by [ADR-019](docs/adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md): #247 closed (Suricata stays IDS), #248 ships in this release (in-process agents), [#249](https://github.com/Brad-Edwards/aptl/issues/249) wires the AR `<command>` + `<active-response>` blocks with the mandatory kali-IP whitelist.
+- The db carve-out is documented; if a future scenario needs AR on db specifically, plan a custom postgres-with-agent image as separate work. The carve-out is not a permanent design choice.
+
 ## [6.4.0] - 2026-05-02
 
 ### Notes

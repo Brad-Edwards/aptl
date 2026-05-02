@@ -509,8 +509,8 @@ services:
   webapp:
     profiles: ["enterprise"]
     build:
-      context: ./containers/webapp
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: containers/webapp/Dockerfile
     container_name: aptl-webapp
     hostname: webapp
     restart: unless-stopped
@@ -524,20 +524,29 @@ services:
       - DB_PASSWORD=techvault_db_pass
       - FLASK_ENV=production
       - SIEM_IP=172.20.2.30
+      # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-webapp.
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-webapp-agent
+      - LOG_PATHS=/var/log/gunicorn/access.log,/var/log/gunicorn/error.log,/var/log/gunicorn/app.log
+      - LOG_FORMAT=syslog
     volumes:
       - webapp_logs:/var/log/gunicorn
+    cap_add:
+      - NET_ADMIN  # required so the in-process agent's `firewall-drop` AR can iptables on this container's namespace
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 30s
     deploy:
       resources:
         limits:
-          memory: 256m
+          memory: 512m
     depends_on:
       db:
+        condition: service_healthy
+      wazuh.manager:
         condition: service_healthy
     networks:
       aptl-dmz:
@@ -589,26 +598,37 @@ services:
   dns:
     profiles: ["dns"]
     build:
-      context: ./containers/dns
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: containers/dns/Dockerfile
     container_name: aptl-dns
     hostname: ns1.techvault.local
     restart: unless-stopped
     ports:
       - "5353:53/tcp"
       - "5353:53/udp"
+    environment:
+      # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-dns.
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-dns-agent
+      - LOG_PATHS=/var/log/named/query.log,/var/log/named/default.log
+      - LOG_FORMAT=syslog
     volumes:
       - dns_logs:/var/log/named
+    cap_add:
+      - NET_ADMIN  # required so the in-process agent's `firewall-drop` AR can iptables on this container's namespace
     healthcheck:
       test: ["CMD-SHELL", "dig @localhost techvault.local SOA +short || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
     deploy:
       resources:
         limits:
-          memory: 128m
+          memory: 512m
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
     networks:
       aptl-dmz:
         ipv4_address: 172.20.1.22
@@ -625,8 +645,8 @@ services:
   ad:
     profiles: ["enterprise"]
     build:
-      context: ./containers/ad
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: containers/ad/Dockerfile
     container_name: aptl-ad
     hostname: dc.techvault.local
     restart: unless-stopped
@@ -636,11 +656,17 @@ services:
       - SAMBA_ADMIN_PASSWORD=Admin123!
       - DNS_FORWARDER=172.20.1.22
       - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
+      # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-ad.
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-ad-agent
+      - LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd,/var/log/samba/log.nmbd
+      - LOG_FORMAT=syslog
     volumes:
       - ad_data:/var/lib/samba
       - ad_logs:/var/log/samba
     cap_add:
       - SYS_ADMIN
+      - NET_ADMIN  # required so the in-process agent's `firewall-drop` AR can iptables on this container's namespace
     healthcheck:
       test: ["CMD-SHELL", "samba-tool domain info 127.0.0.1 || exit 1"]
       interval: 30s
@@ -651,6 +677,9 @@ services:
       resources:
         limits:
           memory: 512m
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
     networks:
       aptl-internal:
         ipv4_address: 172.20.2.10
@@ -695,26 +724,36 @@ services:
   fileshare:
     profiles: ["fileshare"]
     build:
-      context: ./containers/fileshare
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: containers/fileshare/Dockerfile
     container_name: aptl-fileshare
     hostname: files.techvault.local
     restart: unless-stopped
     environment:
       - SIEM_IP=172.20.0.10
+      # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-fileshare.
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-fileshare-agent
+      - LOG_PATHS=/var/log/samba/log.smbd,/var/log/samba/log.winbindd,/var/log/samba/log.nmbd,/var/log/samba/log.smbd.old,/var/log/samba/log.winbindd.old
+      - LOG_FORMAT=syslog
     volumes:
       - fileshare_data:/srv/shares
       - fileshare_logs:/var/log/samba
+    cap_add:
+      - NET_ADMIN  # required so the in-process agent's `firewall-drop` AR can iptables on this container's namespace
     healthcheck:
       test: ["CMD-SHELL", "smbclient -L localhost -N || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 30s
     deploy:
       resources:
         limits:
-          memory: 256m
+          memory: 512m
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
     networks:
       aptl-internal:
         ipv4_address: 172.20.2.12
@@ -729,120 +768,18 @@ services:
   # Suricata without modifying upstream container images.
   # ==========================================================================
 
-  wazuh-sidecar-fileshare:
-    profiles: ["soc"]
-    image: aptl-wazuh-sidecar:local
-    build:
-      context: ./containers/wazuh-sidecar
-      dockerfile: Dockerfile
-    container_name: aptl-wazuh-sidecar-fileshare
-    hostname: wazuh-sidecar-fileshare
-    restart: unless-stopped
-    environment:
-      - WAZUH_MANAGER=wazuh.manager
-      - AGENT_NAME=aptl-fileshare-agent
-      - LOG_PATHS=/logs/log.smbd,/logs/log.winbindd,/logs/log.nmbd,/logs/log.smbd.old,/logs/log.winbindd.old
-      - LOG_FORMAT=syslog
-    volumes:
-      - fileshare_logs:/logs:ro
-    depends_on:
-      wazuh.manager:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-    networks:
-      aptl-security:
-        ipv4_address: 172.20.0.31
-
-  wazuh-sidecar-ad:
-    profiles: ["soc"]
-    image: aptl-wazuh-sidecar:local
-    build:
-      context: ./containers/wazuh-sidecar
-      dockerfile: Dockerfile
-    container_name: aptl-wazuh-sidecar-ad
-    hostname: wazuh-sidecar-ad
-    restart: unless-stopped
-    environment:
-      - WAZUH_MANAGER=wazuh.manager
-      - AGENT_NAME=aptl-ad-agent
-      - LOG_PATHS=/logs/log.samba,/logs/log.smbd,/logs/log.winbindd,/logs/log.nmbd
-      - LOG_FORMAT=syslog
-    volumes:
-      - ad_logs:/logs:ro
-    depends_on:
-      wazuh.manager:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-    networks:
-      aptl-security:
-        ipv4_address: 172.20.0.32
-
-  wazuh-sidecar-dns:
-    profiles: ["soc"]
-    image: aptl-wazuh-sidecar:local
-    build:
-      context: ./containers/wazuh-sidecar
-      dockerfile: Dockerfile
-    container_name: aptl-wazuh-sidecar-dns
-    hostname: wazuh-sidecar-dns
-    restart: unless-stopped
-    environment:
-      - WAZUH_MANAGER=wazuh.manager
-      - AGENT_NAME=aptl-dns-agent
-      - LOG_PATHS=/logs/query.log,/logs/default.log
-      - LOG_FORMAT=syslog
-    volumes:
-      - dns_logs:/logs:ro
-    depends_on:
-      wazuh.manager:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-    networks:
-      aptl-security:
-        ipv4_address: 172.20.0.33
-
-  wazuh-sidecar-webapp:
-    profiles: ["soc"]
-    image: aptl-wazuh-sidecar:local
-    build:
-      context: ./containers/wazuh-sidecar
-      dockerfile: Dockerfile
-    container_name: aptl-wazuh-sidecar-webapp
-    hostname: wazuh-sidecar-webapp
-    restart: unless-stopped
-    environment:
-      - WAZUH_MANAGER=wazuh.manager
-      - AGENT_NAME=aptl-webapp-agent
-      - LOG_PATHS=/logs/access.log,/logs/error.log,/logs/app.log
-      - LOG_FORMAT=syslog
-    volumes:
-      - webapp_logs:/logs:ro
-    depends_on:
-      wazuh.manager:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-    networks:
-      aptl-security:
-        ipv4_address: 172.20.0.34
+  # wazuh-sidecar-{fileshare,ad,dns,webapp} were removed in #248 — those
+  # four targets now run wazuh-agent in-process via supervisord. The two
+  # remaining sidecars below cover the carve-outs documented in ADR-020:
+  # `db` (postgres:16-alpine has no first-party Wazuh package; deferred)
+  # and `suricata` (deployment governed by ADR-019).
 
   wazuh-sidecar-db:
     profiles: ["soc"]
     image: aptl-wazuh-sidecar:local
     build:
-      context: ./containers/wazuh-sidecar
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: containers/wazuh-sidecar/Dockerfile
     container_name: aptl-wazuh-sidecar-db
     hostname: wazuh-sidecar-db
     restart: unless-stopped
@@ -868,8 +805,8 @@ services:
     profiles: ["soc"]
     image: aptl-wazuh-sidecar:local
     build:
-      context: ./containers/wazuh-sidecar
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: containers/wazuh-sidecar/Dockerfile
     container_name: aptl-wazuh-sidecar-suricata
     hostname: wazuh-sidecar-suricata
     restart: unless-stopped

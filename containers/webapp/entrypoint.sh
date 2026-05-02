@@ -17,9 +17,6 @@ input(type="imfile"
       Facility="local6")
 EOF
 
-# Start rsyslog
-rsyslogd
-
 # Generate CTF flags
 python3 -c "
 import os, hashlib
@@ -36,10 +33,7 @@ for level, path, mode in [('user', '/app/user.txt', 0o644), ('root', '/root/root
 print('CTF flags generated for webapp')
 "
 
-# Start gunicorn with access log to file AND stdout (tee)
-exec gunicorn \
-    --bind 0.0.0.0:8080 \
-    --workers 2 \
-    --access-logfile /var/log/gunicorn/access.log \
-    --error-logfile - \
-    app:app
+# Hand off to supervisord — it owns gunicorn, rsyslog, and the in-process
+# Wazuh agent (issue #248). Previously this script started rsyslog in the
+# background and exec'd gunicorn directly.
+exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf

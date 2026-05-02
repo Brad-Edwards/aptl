@@ -24,7 +24,10 @@ repos:
     hooks:
       - id: pytest
         name: Python tests (pytest)
-        entry: pytest tests/ -q -k "not integration"
+        # Prefer the repo's .venv (so contributors don't need to activate it
+        # before committing). Fall back to PATH for contributors using a
+        # different venv layout that they've already activated.
+        entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/ -q -k "not integration"; else exec pytest tests/ -q -k "not integration"; fi'
         language: system
         pass_filenames: false
         files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml)$

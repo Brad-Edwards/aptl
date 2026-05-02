@@ -74,23 +74,65 @@ rm -f "$LF_FILE"
 chown root:wazuh "${TARGET}" 2>/dev/null || true
 chmod 640 "${TARGET}" 2>/dev/null || true
 
-# 4. Register with the manager. The Wazuh manager auto-replaces a
-#    same-named agent record, so the in-process registration takes
-#    over from any prior sidecar registration without an explicit
-#    force flag (Wazuh 4.12's agent-auth does not expose `-F`).
+# 4. Register with the manager. Wazuh 4.12's agent-auth has no `-F`
+#    flag; the manager auto-replaces a same-named agent record, so the
+#    in-process registration takes over from any prior sidecar
+#    registration. If client.keys is already populated from an earlier
+#    successful registration, agent-auth is a no-op refresh; if it is
+#    empty (fresh container) and registration fails, the agent has no
+#    identity and would silently fail to connect — fail fast in that
+#    case so supervisord/`startretries` retries the bootstrap.
 log "registering as '${AGENT_NAME}' with ${WAZUH_MANAGER}..."
 if ! /var/ossec/bin/agent-auth -m "${WAZUH_MANAGER}" -A "${AGENT_NAME}" 2>&1 | tee /tmp/agent-auth.log; then
-    log "agent-auth returned non-zero; will let agentd retry"
+    log "agent-auth returned non-zero"
+    if ! [ -s /var/ossec/etc/client.keys ]; then
+        log "ERROR: client.keys is empty and agent-auth failed; cannot start agent. Exiting so the supervisor can retry."
+        exit 1
+    fi
+    log "client.keys is populated from a previous registration; continuing with the existing identity"
 fi
 
 # 5. Make sure no stale pids prevent startup.
 rm -f /var/ossec/var/run/*.pid /var/ossec/queue/sockets/* 2>/dev/null || true
 
-# 6. Start the agent.
+# 6. Start the agent processes (wazuh-control launches the daemons in
+#    the background; we then watch the main agentd process so the
+#    supervisor sees the actual agent, not just a `tail`).
 log "starting wazuh-agent..."
 /var/ossec/bin/wazuh-control start
 
-# 7. Stay attached so the supervising process (docker / supervisord)
-#    can manage lifecycle and surface logs.
-log "ready; tailing /var/ossec/logs/ossec.log"
-exec tail -F /var/ossec/logs/ossec.log
+# Find the wazuh-agentd PID. wazuh-control runs detached, so we have
+# to discover it after start.
+deadline=$(( $(date +%s) + 30 ))
+AGENTD_PID=""
+while [ "$(date +%s)" -lt "${deadline}" ]; do
+    AGENTD_PID="$(pgrep -x wazuh-agentd 2>/dev/null | head -1 || true)"
+    if [ -n "${AGENTD_PID}" ]; then
+        break
+    fi
+    sleep 1
+done
+if [ -z "${AGENTD_PID}" ]; then
+    log "ERROR: wazuh-agentd did not start within 30s; exiting so the supervisor can retry"
+    exit 1
+fi
+
+log "ready; agentd pid=${AGENTD_PID}; surfacing /var/ossec/logs/ossec.log"
+
+# 7. Stream the agent log in the background, then `wait` on agentd
+#    itself. If agentd dies, this script exits with its exit code so
+#    the supervising process (docker for the sidecar; supervisord for
+#    in-process targets) restarts it. tail-F alone would mask agent
+#    crashes — supervisord would see a healthy `tail` and never
+#    restart the actual agent.
+tail -F /var/ossec/logs/ossec.log &
+TAIL_PID=$!
+trap 'kill -TERM "${TAIL_PID}" 2>/dev/null || true' EXIT
+
+# `wait` on a non-child PID is not portable; use a polling loop.
+while kill -0 "${AGENTD_PID}" 2>/dev/null; do
+    sleep 5
+done
+
+log "wazuh-agentd (pid ${AGENTD_PID}) exited; this script will exit so the supervisor restarts it"
+exit 1

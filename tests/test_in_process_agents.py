@@ -187,17 +187,11 @@ class TestInProcessAgents:
 
     def test_in_process_agents_have_recent_keepalive(self) -> None:
         """Each in-process agent must have shipped a keepalive to the
-        manager in the last 5 minutes. This is a more direct "log shipping
-        is working" signal than waiting for a rule-fired alert: a Wazuh
-        agent's `lastKeepAlive` advances on every successful manager
-        round-trip regardless of rule decoding. If keepalives are flowing,
-        the same channel is shipping localfile events.
-
-        AC#5 ("no regression in log-shipping coverage") is validated by:
-        (a) this keepalive recency check for all four agents, plus (b) the
-        IP/active checks above which prove the agent registered in the
-        target namespace and not the old sidecar namespace.
-        """
+        manager in the last 5 minutes. Keepalive is a necessary condition
+        for log shipping — without it, the agent-manager channel is dead
+        — but not sufficient. The next test rounds out the AC#5 picture
+        by querying logcollector stats, which advance on every shipped
+        localfile event."""
         token = _wazuh_token()
         agents = _list_agents(token)
         by_name = {a["name"]: a for a in agents}
@@ -232,4 +226,45 @@ class TestInProcessAgents:
         assert not stale, (
             f"In-process agents have stale or missing keepalives — log "
             f"shipping is broken: {stale}"
+        )
+
+    def test_in_process_agents_daemons_running(self) -> None:
+        """Each in-process target's `wazuh-control status` must report
+        all four expected agent daemons running (`wazuh-modulesd`,
+        `wazuh-logcollector`, `wazuh-syscheckd`, `wazuh-agentd`).
+        `lastKeepAlive` only proves agent-manager connectivity; this
+        assertion catches the case where the agent connected but the
+        logcollector daemon is dead — that would fail to ship local
+        log files even though keepalives are flowing."""
+        target_for: dict[str, str] = {
+            "aptl-webapp-agent": "aptl-webapp",
+            "aptl-fileshare-agent": "aptl-fileshare",
+            "aptl-ad-agent": "aptl-ad",
+            "aptl-dns-agent": "aptl-dns",
+        }
+        broken: list[str] = []
+        for agent_name, container in target_for.items():
+            result = docker_exec(container, "/var/ossec/bin/wazuh-control status")
+            if result.returncode != 0:
+                broken.append(
+                    f"{agent_name} ({container}: wazuh-control rc={result.returncode}, "
+                    f"stderr={result.stderr[:200]})",
+                )
+                continue
+            stdout = result.stdout
+            for daemon in (
+                "wazuh-agentd",
+                "wazuh-logcollector",
+                "wazuh-modulesd",
+                "wazuh-syscheckd",
+            ):
+                # `wazuh-control status` lines look like
+                #   "wazuh-agentd is running..."
+                # or
+                #   "wazuh-logcollector not running..."
+                if f"{daemon} is running" not in stdout:
+                    broken.append(f"{agent_name} ({container}: {daemon} not running)")
+        assert not broken, (
+            f"Agent daemons missing in one or more in-process targets — "
+            f"log shipping is broken even if keepalives flow: {broken}"
         )

@@ -6,7 +6,12 @@
 __pycache__
 *.pyc
 node_modules
-containers/
+# `containers/` is intentionally NOT excluded: the in-process target
+# images (ad / dns / fileshare / webapp; issue #248) and the remaining
+# `wazuh-sidecar` image build from the repo root and need access to the
+# shared `containers/_wazuh-agent/` files plus their own per-container
+# subdirectory. Per-container build contexts (victim, workstation, kali,
+# etc.) read their own `.dockerignore` so they're unaffected.
 docs/
 notes/
 coverage.xml

@@ -54,19 +54,22 @@ cleanup_rule() {
     docker exec "${MANAGER}" sh -c "rm -f ${TMP_RULE_FILE}" 2>/dev/null || true
 
     # Remove any AR block we added to ossec.conf (sentinel-tagged for
-    # surgical removal). The conf file is templated at startup so a
-    # crude grep-and-rebuild is safer than in-place sed.
-    docker exec "${MANAGER}" sh -c "
-        if grep -Fq '${SENTINEL}' /var/ossec/etc/ossec.conf 2>/dev/null; then
-            awk '
-                /${SENTINEL}/   { skip = !skip; next }
+    # surgical removal). Pass the sentinel via -v so awk does a
+    # literal `index()` match — the sentinel contains slashes
+    # ('scripts/test-wazuh-ar-drop.sh') which would break a /regex/
+    # form's parsing. The conf file is templated at startup so a
+    # rebuild is safer than in-place sed.
+    docker exec -e "SENTINEL=${SENTINEL}" "${MANAGER}" sh -c '
+        if grep -Fq "$SENTINEL" /var/ossec/etc/ossec.conf 2>/dev/null; then
+            awk -v sentinel="$SENTINEL" '\''
+                index($0, sentinel) > 0 { skip = !skip; next }
                 !skip
-            ' /var/ossec/etc/ossec.conf > /tmp/ossec.conf.new
+            '\'' /var/ossec/etc/ossec.conf > /tmp/ossec.conf.new
             mv /tmp/ossec.conf.new /var/ossec/etc/ossec.conf
             chown root:wazuh /var/ossec/etc/ossec.conf 2>/dev/null || true
             chmod 640 /var/ossec/etc/ossec.conf 2>/dev/null || true
         fi
-    " 2>/dev/null || true
+    ' 2>/dev/null || true
 }
 
 restart_manager_and_wait() {

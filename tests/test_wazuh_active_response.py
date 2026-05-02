@@ -155,24 +155,43 @@ class TestWazuhActiveResponseConfig:
 
     def test_aptl_firewall_drop_command_is_declared(self) -> None:
         """The wrapper command must be registered with the manager so
-        `<active-response>` blocks can reference it."""
+        `<active-response>` blocks can reference it. Required directives:
+        `<name>` = `aptl-firewall-drop`, `<executable>` = same,
+        `<expect>srcip</expect>` (manager skips dispatch when the alert
+        doesn't carry srcip), `<timeout_allowed>yes`."""
         content = _read_manager_ossec()
-        # Must contain a `<command>` block whose `<name>` is exactly
-        # `aptl-firewall-drop` and whose `<executable>` is the same.
+        # Find the <command> block by name; check each required child.
         m = re.search(
-            r"<command>\s*<name>aptl-firewall-drop</name>\s*"
-            r"<executable>aptl-firewall-drop</executable>\s*"
-            r"<timeout_allowed>yes</timeout_allowed>\s*</command>",
+            r"<command>(?P<body>.*?</command>)",
+            content[content.find("<name>aptl-firewall-drop</name>") - 50:]
+                if "<name>aptl-firewall-drop</name>" in content else "",
+            re.DOTALL,
+        )
+        assert "<name>aptl-firewall-drop</name>" in content, (
+            "Manager ossec.conf has no <command> block named "
+            "aptl-firewall-drop. Without this registration, every "
+            "<active-response> block referencing aptl-firewall-drop "
+            "is a no-op."
+        )
+        # Pull the surrounding <command>...</command> block by name match.
+        m = re.search(
+            r"<command>[^<]*<name>aptl-firewall-drop</name>.*?</command>",
             content,
             re.DOTALL,
         )
-        assert m is not None, (
-            "Expected `<command><name>aptl-firewall-drop</name>"
-            "<executable>aptl-firewall-drop</executable>"
-            "<timeout_allowed>yes</timeout_allowed></command>` block in "
-            "manager ossec.conf. The manager dispatches AR by command "
-            "name; without this registration, every `<active-response>` "
-            "block referencing `aptl-firewall-drop` is a no-op."
+        assert m is not None, "could not locate aptl-firewall-drop <command> block"
+        block = m.group(0)
+        assert "<executable>aptl-firewall-drop</executable>" in block, (
+            "aptl-firewall-drop <command> missing matching <executable>"
+        )
+        assert "<expect>srcip</expect>" in block, (
+            "aptl-firewall-drop <command> missing <expect>srcip</expect>; "
+            "without this, the manager dispatches AR for alerts that "
+            "don't carry srcip and the script no-ops without surfacing "
+            "the misfire to the manager."
+        )
+        assert "<timeout_allowed>yes</timeout_allowed>" in block, (
+            "aptl-firewall-drop <command> missing <timeout_allowed>yes</timeout_allowed>"
         )
 
     def test_active_response_blocks_have_required_carve_outs(self) -> None:
@@ -529,16 +548,24 @@ class TestWazuhActiveResponseSource:
 
     def test_manager_conf_declares_wrapper_command(self) -> None:
         """The repo's manager config must declare the `aptl-firewall-
-        drop` `<command>` block."""
+        drop` `<command>` block, including `<expect>srcip</expect>` so
+        the manager skips dispatch when an alert carries no srcip."""
         content = SRC_MANAGER_CONF.read_text()
-        assert (
-            "<name>aptl-firewall-drop</name>" in content
-            and "<executable>aptl-firewall-drop</executable>" in content
-        ), (
-            "Manager config missing aptl-firewall-drop <command> block. "
-            "Without this declaration, the manager has no name to dispatch "
-            "for the wrapper, and every <active-response> referencing it "
-            "is a no-op."
+        assert "<name>aptl-firewall-drop</name>" in content, (
+            "Manager config missing aptl-firewall-drop <command> block."
+        )
+        m = re.search(
+            r"<command>[^<]*<name>aptl-firewall-drop</name>.*?</command>",
+            content,
+            re.DOTALL,
+        )
+        assert m is not None, "could not locate aptl-firewall-drop <command> block"
+        block = m.group(0)
+        assert "<executable>aptl-firewall-drop</executable>" in block, (
+            "aptl-firewall-drop <command> missing matching <executable>"
+        )
+        assert "<expect>srcip</expect>" in block, (
+            "aptl-firewall-drop <command> missing <expect>srcip</expect>"
         )
 
     def test_manager_conf_active_response_blocks_disabled_by_default(self) -> None:

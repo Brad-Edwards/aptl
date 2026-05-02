@@ -65,10 +65,10 @@ EOF
 log "step 1: AR add with srcip=${KALI_IP} (kali, whitelisted) — expect skip"
 PAYLOAD=$(ar_payload add "${KALI_IP}")
 docker exec -i "${TARGET}" \
-    env APTL_AR_ORIGINAL=/bin/false "${WRAPPER}" <<<"${PAYLOAD}" \
+    env APTL_AR_IPTABLES=/bin/false "${WRAPPER}" <<<"${PAYLOAD}" \
     && rc1=0 || rc1=$?
 if [ "${rc1}" -ne 0 ]; then
-    fail "wrapper exited ${rc1} for whitelisted ${KALI_IP}; expected 0 (short-circuit)"
+    fail "wrapper exited ${rc1} for whitelisted ${KALI_IP}; expected 0 (short-circuit, no iptables)"
 fi
 pass "wrapper short-circuited on whitelisted ${KALI_IP}"
 
@@ -80,26 +80,29 @@ if ! docker exec "${TARGET}" grep -F "SKIPPED for whitelisted ${KALI_IP}" "${LOG
 fi
 pass "log entry present in ${LOG}"
 
-# --- step 2: attacker srcip on `add` -- expect forward (rc!=0 with /bin/false)
-log "step 2: AR add with srcip=${ATTACKER_IP} (non-whitelisted) — expect forward"
+# --- step 2: attacker srcip on `add` -- expect iptables call (rc!=0 with /bin/false)
+log "step 2: AR add with srcip=${ATTACKER_IP} (non-whitelisted) — expect iptables call"
 PAYLOAD=$(ar_payload add "${ATTACKER_IP}")
 docker exec -i "${TARGET}" \
-    env APTL_AR_ORIGINAL=/bin/false "${WRAPPER}" <<<"${PAYLOAD}" \
+    env APTL_AR_IPTABLES=/bin/false "${WRAPPER}" <<<"${PAYLOAD}" \
     && rc2=0 || rc2=$?
 if [ "${rc2}" -eq 0 ]; then
-    fail "wrapper exited 0 for non-whitelisted ${ATTACKER_IP}; expected non-zero (mock /bin/false)"
+    fail "wrapper exited 0 for non-whitelisted ${ATTACKER_IP}; expected non-zero (mock iptables=/bin/false makes -I fail)"
 fi
-pass "wrapper forwarded non-whitelisted ${ATTACKER_IP} (rc=${rc2})"
+pass "wrapper invoked iptables for non-whitelisted ${ATTACKER_IP} (rc=${rc2})"
 
-# --- step 3: kali srcip on `delete` -- expect forward (cleanup is unconditional)
-log "step 3: AR delete with srcip=${KALI_IP} — expect forward (cleanup must run)"
+# --- step 3: kali srcip on `delete` -- delete branch must run unconditionally
+log "step 3: AR delete with srcip=${KALI_IP} — expect delete branch to run (cleanup unconditional)"
 PAYLOAD=$(ar_payload delete "${KALI_IP}")
 docker exec -i "${TARGET}" \
-    env APTL_AR_ORIGINAL=/bin/false "${WRAPPER}" <<<"${PAYLOAD}" \
+    env APTL_AR_IPTABLES=/bin/false "${WRAPPER}" <<<"${PAYLOAD}" \
     && rc3=0 || rc3=$?
-if [ "${rc3}" -eq 0 ]; then
-    fail "wrapper short-circuited on delete for whitelisted ${KALI_IP}; cleanup must always run"
+# With /bin/false, iptables -C returns 1 (rule not present), wrapper
+# exits 0 and logs 'removed 0 DROP rule(s)'. The CRITICAL check: did
+# we hit the delete branch (proves the whitelist didn't short-circuit)?
+if ! docker exec "${TARGET}" grep -F "removed" "${LOG}" | grep -F "${KALI_IP}" >/dev/null; then
+    fail "no 'removed N DROP rule(s) for ${KALI_IP}' line in ${LOG}; wrapper short-circuited on delete (cleanup must always run)"
 fi
-pass "wrapper forwarded delete for ${KALI_IP} (rc=${rc3})"
+pass "wrapper ran delete branch for ${KALI_IP} (rc=${rc3})"
 
 log "all checks PASS — kali whitelist carve-out is wired correctly on ${TARGET}"

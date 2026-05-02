@@ -128,12 +128,14 @@ def _read_manager_ossec() -> str:
 
 def _all_active_response_blocks(content: str) -> list[str]:
     """Return every `<active-response>...</active-response>` block as
-    raw XML. Naive regex but sufficient for the manager config we own —
-    no nested AR blocks exist in Wazuh."""
+    raw XML. Anchor on a line-start `<active-response>` to avoid
+    matching the literal text inside `<!-- ... <active-response> ... -->`
+    comments (which our manager config has — the comments describe the
+    framework above the actual AR blocks)."""
     return re.findall(
-        r"<active-response>.*?</active-response>",
+        r"^\s*<active-response>.*?</active-response>",
         content,
-        re.DOTALL,
+        re.DOTALL | re.MULTILINE,
     )
 
 
@@ -175,11 +177,16 @@ class TestWazuhActiveResponseConfig:
 
     def test_active_response_blocks_have_required_carve_outs(self) -> None:
         """Every `<active-response>` block in the manager config must
-        ship `<disabled>yes</disabled>`, a finite `<timeout>` between
-        60 and 300, and `<level>` >= 10. Together these are the per-
-        target carve-outs the issue calls for: starting posture is off
-        (blue enables per iter), drops auto-roll-back, and only high-
-        severity rules can fire AR."""
+        ship `<disabled>yes</disabled>` (default OFF), a finite
+        `<timeout>` in [60, 300] (auto-rollback), and a specific
+        `<rules_id>` (per-rule scoping).
+
+        We deliberately do NOT require `<level>`. Wazuh AR's matchers
+        (`<rules_id>`, `<rules_group>`, `<level>`) are OR'd, not AND'd
+        — adding `<level>10</level>` to a block that already has
+        `<rules_id>` BROADENS the block to fire on every level-10+
+        alert. The severity gate is enforced implicitly by selecting
+        level-10+ rules in `<rules_id>`."""
         content = _read_manager_ossec()
         blocks = _all_active_response_blocks(content)
         assert len(blocks) >= 3, (
@@ -204,16 +211,17 @@ class TestWazuhActiveResponseConfig:
                         f"block #{i}: timeout={timeout}s outside [60, 300] "
                         f"(carve-out: timeout-bounded so drops auto-rollback)",
                     )
-            level_match = re.search(r"<level>(\d+)</level>", block)
-            if not level_match:
+            if not re.search(r"<rules_id>\d+</rules_id>", block):
                 violations.append(
-                    f"block #{i}: missing `<level>` directive (severity gate "
-                    f"prevents low-severity alerts from chaining into bans)",
+                    f"block #{i}: missing `<rules_id>` (per-rule scoping is "
+                    f"the only correct severity-gate pattern in Wazuh AR)",
                 )
-            elif int(level_match.group(1)) < 10:
+            # Reject `<level>` next to `<rules_id>` — Wazuh OR's them.
+            if "<level>" in block and "<rules_id>" in block:
                 violations.append(
-                    f"block #{i}: level={level_match.group(1)} < 10 (gate "
-                    f"requires level >= 10)",
+                    f"block #{i}: `<level>` AND `<rules_id>` together — "
+                    f"Wazuh OR's matchers, broadening the block to every "
+                    f"level-N+ alert. Drop the `<level>`.",
                 )
         assert not violations, (
             "Per-target carve-outs not enforced on every block:\n  "
@@ -319,12 +327,11 @@ class TestWazuhActiveResponseWrapper:
 
     def test_wrapper_skips_whitelisted_srcip(self) -> None:
         """When invoked with a Wazuh AR `add` command and a srcip
-        present in the whitelist, the wrapper exits 0 without calling
-        the upstream firewall-drop. We mock the upstream by setting
-        `APTL_AR_ORIGINAL=/bin/false` — if the wrapper forwards, the
-        process exits non-zero. With the whitelist short-circuit, it
-        never forwards and exits 0."""
-        # Use kali's redteam IP, which must be on the whitelist.
+        present in the whitelist, the wrapper exits 0 without running
+        any iptables operation. Mock the iptables binary with
+        `APTL_AR_IPTABLES=/bin/false` — if the wrapper invokes
+        iptables for an `add`, the process exits non-zero. Whitelist
+        short-circuit means it never reaches iptables."""
         ar_payload = json.dumps(
             {
                 "version": 1,
@@ -336,31 +343,23 @@ class TestWazuhActiveResponseWrapper:
                 },
             },
         )
-        # Run inside aptl-webapp (any in-process target works). Use
-        # `printf '%s'` not `echo` for predictable stdin, and rely on
-        # docker_exec's `bash -c` as the only shell layer (no nested
-        # `sh -c '...'` — the inner quoting collides with the JSON's
-        # double quotes).
         cmd = (
             f"printf %s {shlex.quote(ar_payload)} | "
-            f"APTL_AR_ORIGINAL=/bin/false {WRAPPER_PATH}"
+            f"APTL_AR_IPTABLES=/bin/false {WRAPPER_PATH}"
         )
         result = docker_exec("aptl-webapp", cmd)
         assert result.returncode == 0, (
             f"Wrapper did not short-circuit for whitelisted srcip "
             f"{KALI_IPS[0]}. rc={result.returncode}, stderr="
-            f"{result.stderr[:200]}. With APTL_AR_ORIGINAL=/bin/false, "
-            f"a non-zero exit means the wrapper forwarded to /bin/false "
-            f"instead of skipping."
+            f"{result.stderr[:200]}"
         )
 
-    def test_wrapper_forwards_non_whitelisted_srcip(self) -> None:
-        """When invoked with a non-whitelisted srcip, the wrapper must
-        forward to the upstream. We mock the upstream with /bin/true
-        (exits 0 regardless of input) and assert the wrapper exits 0
-        — confirming forward semantics. To distinguish from the skip
-        path, we then re-run with /bin/false and assert non-zero exit
-        (forward picked up the non-zero from the mock upstream)."""
+    def test_wrapper_runs_iptables_for_non_whitelisted_srcip(self) -> None:
+        """When invoked with a non-whitelisted srcip on `add`, the
+        wrapper must call iptables. Mock with `/bin/true` (exits 0) for
+        the success path, then `/bin/false` (exits 1) to confirm a
+        non-zero from iptables propagates — proving the wrapper isn't
+        short-circuiting."""
         ar_payload = json.dumps(
             {
                 "version": 1,
@@ -374,31 +373,35 @@ class TestWazuhActiveResponseWrapper:
         )
         cmd_true = (
             f"printf %s {shlex.quote(ar_payload)} | "
-            f"APTL_AR_ORIGINAL=/bin/true {WRAPPER_PATH}"
+            f"APTL_AR_IPTABLES=/bin/true {WRAPPER_PATH}"
         )
         result_true = docker_exec("aptl-webapp", cmd_true)
         assert result_true.returncode == 0, (
-            f"Wrapper rc={result_true.returncode} when forwarding to "
-            f"/bin/true; expected 0. stderr={result_true.stderr[:200]}"
+            f"Wrapper rc={result_true.returncode} with /bin/true mock; "
+            f"expected 0. stderr={result_true.stderr[:200]}"
         )
 
+        # /bin/false makes `iptables -C` fail (rule "not present"), so
+        # the wrapper proceeds to the insert path which also fails.
+        # The wrapper should exit non-zero to signal iptables failure.
         cmd_false = (
             f"printf %s {shlex.quote(ar_payload)} | "
-            f"APTL_AR_ORIGINAL=/bin/false {WRAPPER_PATH}"
+            f"APTL_AR_IPTABLES=/bin/false {WRAPPER_PATH}"
         )
         result_false = docker_exec("aptl-webapp", cmd_false)
         assert result_false.returncode != 0, (
-            "Wrapper exited 0 when forwarding to /bin/false; expected "
+            "Wrapper exited 0 with /bin/false iptables mock; expected "
             "non-zero. The wrapper may have short-circuited (treating "
-            "10.99.99.99 as whitelisted) when it should have forwarded."
+            "10.99.99.99 as whitelisted)."
         )
 
-    def test_wrapper_forwards_delete_command_even_for_whitelisted(self) -> None:
-        """The `delete` phase (timeout cleanup) must always forward,
-        even for whitelisted IPs. Otherwise a previously-installed drop
-        rule (added before the IP joined the whitelist) would never get
-        cleaned up. We assert: command="delete" + whitelisted srcip
-        still forwards to the upstream."""
+    def test_wrapper_runs_delete_even_for_whitelisted(self) -> None:
+        """The `delete` phase (timeout cleanup) must always run iptables
+        delete, even for whitelisted IPs — otherwise drops installed
+        before an IP joined the whitelist would never be reaped. With
+        `/bin/false` mock for iptables, the wrapper's delete path
+        attempts `iptables -C` (returns 1, "not present") and exits 0
+        — that's correct delete-cleanup behavior."""
         ar_payload = json.dumps(
             {
                 "version": 1,
@@ -410,17 +413,29 @@ class TestWazuhActiveResponseWrapper:
                 },
             },
         )
-        # If the wrapper forwards, it pipes to /bin/false → rc=1.
-        # If it short-circuits (wrong behavior on delete), rc=0.
+        # Mock with /bin/false — iptables -C returns 1, the wrapper
+        # treats that as "no matching rule to delete" and exits 0.
+        # The CRITICAL check: wrapper did NOT short-circuit on the
+        # whitelist. We verify by checking the log for a 'removed N
+        # DROP rule(s)' line — only present if the delete branch ran.
         cmd = (
             f"printf %s {shlex.quote(ar_payload)} | "
-            f"APTL_AR_ORIGINAL=/bin/false {WRAPPER_PATH}"
+            f"APTL_AR_IPTABLES=/bin/false {WRAPPER_PATH}"
         )
         result = docker_exec("aptl-webapp", cmd)
-        assert result.returncode != 0, (
-            "Wrapper short-circuited on `command=delete` for whitelisted "
-            "srcip. Cleanup must always forward — otherwise stale drop "
-            "rules accumulate."
+        assert result.returncode == 0, (
+            f"Wrapper rc={result.returncode} on delete with /bin/false "
+            f"mock; expected 0 (no rule to delete is OK). "
+            f"stderr={result.stderr[:200]}"
+        )
+        log_check = docker_exec(
+            "aptl-webapp",
+            f"grep -F 'removed' /var/ossec/logs/active-responses.log "
+            f"| grep -F '{KALI_IPS[0]}'",
+        )
+        assert log_check.returncode == 0, (
+            f"Wrapper short-circuited on `command=delete` for whitelisted "
+            f"{KALI_IPS[0]}. The delete branch must always run."
         )
 
     def test_wrapper_logs_skip_to_active_responses_log(self) -> None:
@@ -440,10 +455,12 @@ class TestWazuhActiveResponseWrapper:
                 },
             },
         )
-        # Trigger the skip.
+        # Trigger the skip. iptables mock /bin/false ensures the wrapper
+        # doesn't actually mutate iptables; if the wrapper failed to
+        # short-circuit, /bin/false would propagate non-zero.
         cmd = (
             f"printf %s {shlex.quote(ar_payload)} | "
-            f"APTL_AR_ORIGINAL=/bin/false {WRAPPER_PATH}"
+            f"APTL_AR_IPTABLES=/bin/false {WRAPPER_PATH}"
         )
         trigger = docker_exec("aptl-webapp", cmd)
         assert trigger.returncode == 0, (
@@ -494,12 +511,13 @@ class TestWazuhActiveResponseSource:
 
     def test_manager_conf_active_response_blocks_disabled_by_default(self) -> None:
         """Source-level mirror of test_active_response_blocks_have_required_
-        carve_outs — runs without the lab."""
+        carve_outs — runs without the lab. Anchored regex avoids
+        matching the `<active-response>` text inside XML comments."""
         content = SRC_MANAGER_CONF.read_text()
         blocks = re.findall(
-            r"<active-response>.*?</active-response>",
+            r"^\s*<active-response>.*?</active-response>",
             content,
-            re.DOTALL,
+            re.DOTALL | re.MULTILINE,
         )
         assert len(blocks) >= 3, (
             f"Source manager config has {len(blocks)} <active-response> "
@@ -509,10 +527,17 @@ class TestWazuhActiveResponseSource:
         for i, block in enumerate(blocks):
             if "<disabled>yes</disabled>" not in block:
                 violations.append(f"block #{i}: not disabled by default")
-            if "<level>" not in block:
-                violations.append(f"block #{i}: missing <level>")
             if "<timeout>" not in block:
                 violations.append(f"block #{i}: missing <timeout>")
+            if not re.search(r"<rules_id>\d+</rules_id>", block):
+                violations.append(f"block #{i}: missing <rules_id>")
+            # Wazuh OR's matchers — `<level>` next to `<rules_id>` broadens
+            # the block. Reject the combination.
+            if "<level>" in block and "<rules_id>" in block:
+                violations.append(
+                    f"block #{i}: `<level>` AND `<rules_id>` together — "
+                    f"Wazuh OR's matchers; drop the `<level>`",
+                )
         assert not violations, "Carve-outs not enforced in source:\n  " + "\n  ".join(
             violations,
         )
@@ -523,9 +548,9 @@ class TestWazuhActiveResponseSource:
         must use the `aptl-firewall-drop` wrapper."""
         content = SRC_MANAGER_CONF.read_text()
         blocks = re.findall(
-            r"<active-response>.*?</active-response>",
+            r"^\s*<active-response>.*?</active-response>",
             content,
-            re.DOTALL,
+            re.DOTALL | re.MULTILINE,
         )
         leaks: list[str] = []
         for i, block in enumerate(blocks):
@@ -558,19 +583,36 @@ class TestWazuhActiveResponseSource:
         missing = [ip for ip in KALI_IPS if ip not in ip_lines]
         assert not missing, f"Kali IPs missing from source whitelist: {missing}"
 
-    def test_wrapper_script_rejects_invalid_ipv4(self, tmp_path: Path) -> None:
-        """The wrapper's IPv4 validation must reject malformed input —
-        notably a srcip with an embedded newline + whitelisted IP, which
-        without validation would let `grep -Fxq` match the embedded
-        line and short-circuit. We exercise the wrapper directly (bash,
-        no Docker) with `APTL_AR_ORIGINAL=/bin/false` so any forward
-        path exits 1; a short-circuit (rc=0) on an INVALID srcip would
-        signal a regression."""
+    def _run_wrapper(self, tmp_path: Path, payload: str, iptables: str = "/bin/true") -> tuple[subprocess.CompletedProcess, Path]:
+        """Helper: run the source wrapper with a temp whitelist + log
+        and a mock iptables. Returns (result, log_path)."""
         wl = tmp_path / "whitelist"
         wl.write_text("172.20.4.30\n")
         log = tmp_path / "log"
-        # srcip="evil\n172.20.4.30" — the validation must reject the
-        # newline; the wrapper must NOT short-circuit.
+        env = {
+            **os.environ,
+            "APTL_AR_WHITELIST": str(wl),
+            "APTL_AR_IPTABLES": iptables,
+            "APTL_AR_LOG": str(log),
+        }
+        result = subprocess.run(
+            ["bash", str(SRC_WRAPPER)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10,
+        )
+        return result, log
+
+    def test_wrapper_script_rejects_invalid_ipv4(self, tmp_path: Path) -> None:
+        """The wrapper's IPv4 validation must reject a srcip with an
+        embedded newline + whitelisted IP. Without validation,
+        `grep -Fxq` would match the embedded whitelisted line and
+        short-circuit. With validation, the wrapper logs the rejection
+        and exits 0 without invoking iptables — so /bin/false mock for
+        iptables doesn't matter; we just verify no SKIPPED log line
+        and a 'rejecting invalid srcip' line is present."""
         payload = json.dumps(
             {
                 "command": "add",
@@ -579,91 +621,61 @@ class TestWazuhActiveResponseSource:
                 },
             },
         )
-        env = {
-            **os.environ,
-            "APTL_AR_WHITELIST": str(wl),
-            "APTL_AR_ORIGINAL": "/bin/false",
-            "APTL_AR_LOG": str(log),
-        }
-        result = subprocess.run(
-            ["bash", str(SRC_WRAPPER)],
-            input=payload,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=10,
+        result, log = self._run_wrapper(tmp_path, payload, iptables="/bin/false")
+        # Wrapper returns 0 on rejection (no work to do, no error).
+        log_content = log.read_text() if log.exists() else ""
+        assert "SKIPPED for whitelisted" not in log_content, (
+            "Wrapper short-circuited on a malformed srcip with an "
+            "embedded newline — IPv4 validation regression."
         )
-        assert result.returncode != 0, (
-            "Wrapper short-circuited on a srcip with an embedded "
-            "newline. Without IPv4 validation, an attacker controlling "
-            "a Wazuh decoder srcip field could spoof a whitelist hit "
-            "by including a real whitelisted IP after a newline."
+        assert "rejecting invalid srcip" in log_content, (
+            f"Wrapper did not log a srcip rejection; log content: "
+            f"{log_content!r}"
         )
 
     def test_wrapper_script_short_circuits_valid_whitelisted(self, tmp_path: Path) -> None:
-        """Source-level happy-path: a valid whitelisted IPv4 must short-
-        circuit (rc=0 with /bin/false mock means the wrapper didn't
-        forward)."""
-        wl = tmp_path / "whitelist"
-        wl.write_text("172.20.4.30\n")
-        log = tmp_path / "log"
+        """Source-level happy-path: a whitelisted IPv4 must short-
+        circuit. With APTL_AR_IPTABLES=/bin/false, any iptables call
+        propagates a non-zero exit; rc=0 means the wrapper never
+        invoked iptables."""
         payload = json.dumps(
             {
                 "command": "add",
                 "parameters": {"alert": {"data": {"srcip": "172.20.4.30"}}},
             },
         )
-        env = {
-            **os.environ,
-            "APTL_AR_WHITELIST": str(wl),
-            "APTL_AR_ORIGINAL": "/bin/false",
-            "APTL_AR_LOG": str(log),
-        }
-        result = subprocess.run(
-            ["bash", str(SRC_WRAPPER)],
-            input=payload,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=10,
-        )
+        result, log = self._run_wrapper(tmp_path, payload, iptables="/bin/false")
         assert result.returncode == 0, (
             f"Wrapper failed to short-circuit on whitelisted 172.20.4.30; "
             f"rc={result.returncode}, stderr={result.stderr[:200]}"
         )
-        # Log file must contain the SKIPPED entry.
         assert log.exists() and "SKIPPED for whitelisted 172.20.4.30" in log.read_text(), (
             f"Log file missing or no SKIPPED entry; contents: "
             f"{log.read_text() if log.exists() else '<no file>'}"
         )
 
-    def test_wrapper_script_forwards_delete_unconditionally(self, tmp_path: Path) -> None:
-        """delete + whitelisted IP must still forward."""
-        wl = tmp_path / "whitelist"
-        wl.write_text("172.20.4.30\n")
-        log = tmp_path / "log"
+    def test_wrapper_script_runs_delete_unconditionally(self, tmp_path: Path) -> None:
+        """delete + whitelisted IP must still proceed to the iptables
+        delete branch (cleanup is unconditional). With /bin/false
+        iptables mock, `iptables -C` returns 1 ('rule not present')
+        and the wrapper exits 0 — but the log shows 'removed 0 DROP
+        rule(s)', proving the delete branch ran."""
         payload = json.dumps(
             {
                 "command": "delete",
                 "parameters": {"alert": {"data": {"srcip": "172.20.4.30"}}},
             },
         )
-        env = {
-            **os.environ,
-            "APTL_AR_WHITELIST": str(wl),
-            "APTL_AR_ORIGINAL": "/bin/false",
-            "APTL_AR_LOG": str(log),
-        }
-        result = subprocess.run(
-            ["bash", str(SRC_WRAPPER)],
-            input=payload,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=10,
+        result, log = self._run_wrapper(tmp_path, payload, iptables="/bin/false")
+        assert result.returncode == 0, (
+            f"Wrapper rc={result.returncode} on delete; expected 0 "
+            f"(no rule to delete is OK). stderr={result.stderr[:200]}"
         )
-        assert result.returncode != 0, (
-            "Wrapper short-circuited on delete; cleanup must always forward."
+        log_content = log.read_text() if log.exists() else ""
+        assert "removed 0 DROP rule(s) for 172.20.4.30" in log_content, (
+            f"Wrapper short-circuited on delete + whitelisted srcip "
+            f"(no 'removed' log line). cleanup must always run. "
+            f"Log: {log_content!r}"
         )
 
     def test_install_script_handles_optional_ar_extras(self) -> None:

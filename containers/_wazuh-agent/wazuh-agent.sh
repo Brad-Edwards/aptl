@@ -78,23 +78,45 @@ chmod 640 "${TARGET}" 2>/dev/null || true
 #    in-process takeover from a previous sidecar registration is
 #    *manager-side*: `<auth><force><enabled>yes</force></enabled>` in
 #    `wazuh_manager.conf` lets agent-auth re-register a same-named
-#    agent at a new IP. (Wazuh 4.12's agent-auth has no `-F` flag, so
-#    we cannot force from the agent side.)
+#    agent at a new IP. The manager only allows the replacement after
+#    a 1-minute force window has elapsed (default `<after_registration_time>`),
+#    so the in-process agent that boots immediately after a sidecar
+#    deregisters can hit "Duplicate agent name" for up to 60s. Retry
+#    with backoff so the bootstrap recovers without supervisor going
+#    FATAL.
+#
+#    Wazuh 4.12's agent-auth has no `-F` flag, so the force semantics
+#    live in the manager config.
 #
 #    If client.keys is already populated from an earlier successful
-#    registration, agent-auth's "duplicate name" error is benign — we
-#    keep the existing identity. If client.keys is empty (fresh
-#    container) AND agent-auth fails, the agent has no identity to
-#    connect with; exit so supervisord/startretries retries the
-#    bootstrap rather than starting a daemon that will silently fail.
+#    registration, the duplicate-name error is benign — we keep the
+#    existing identity and continue. If client.keys is empty AND every
+#    retry fails, exit so supervisord/`startretries` triggers a clean
+#    restart of the whole bootstrap.
+AGENT_AUTH_RETRY_LIMIT="${AGENT_AUTH_RETRY_LIMIT:-12}"      # 12 * 10s = 120s, longer than the 60s force window
+AGENT_AUTH_RETRY_INTERVAL="${AGENT_AUTH_RETRY_INTERVAL:-10}"
 log "registering as '${AGENT_NAME}' with ${WAZUH_MANAGER}..."
-if ! /var/ossec/bin/agent-auth -m "${WAZUH_MANAGER}" -A "${AGENT_NAME}" 2>&1 | tee /tmp/agent-auth.log; then
-    log "agent-auth returned non-zero"
-    if ! [ -s /var/ossec/etc/client.keys ]; then
-        log "ERROR: client.keys is empty and agent-auth failed; cannot start agent. Exiting so the supervisor can retry."
-        exit 1
+attempt=0
+auth_ok=0
+while [ "${attempt}" -lt "${AGENT_AUTH_RETRY_LIMIT}" ]; do
+    attempt=$((attempt + 1))
+    if /var/ossec/bin/agent-auth -m "${WAZUH_MANAGER}" -A "${AGENT_NAME}" 2>&1 | tee /tmp/agent-auth.log; then
+        auth_ok=1
+        break
     fi
-    log "client.keys is populated from a previous registration; continuing with the existing identity"
+    if [ -s /var/ossec/etc/client.keys ]; then
+        # We have a prior identity; the duplicate-name error from a
+        # repeat registration is fine — break out and use the keys.
+        log "agent-auth duplicate-name error (attempt ${attempt}); existing client.keys retains identity"
+        auth_ok=1
+        break
+    fi
+    log "agent-auth attempt ${attempt}/${AGENT_AUTH_RETRY_LIMIT} failed (no existing client.keys); waiting ${AGENT_AUTH_RETRY_INTERVAL}s for the manager force window"
+    sleep "${AGENT_AUTH_RETRY_INTERVAL}"
+done
+if [ "${auth_ok}" -ne 1 ]; then
+    log "ERROR: agent-auth failed ${AGENT_AUTH_RETRY_LIMIT} times and client.keys is still empty. Exiting so the supervisor can retry the whole bootstrap."
+    exit 1
 fi
 
 # 5. Make sure no stale pids prevent startup.

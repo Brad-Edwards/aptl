@@ -57,6 +57,8 @@ Wazuh supports both collection methods APTL needs:
 1. **Agent-based** (port 1514/tcp): Wazuh agents installed on victim and reverse engineering containers provide host-level visibility — file integrity monitoring, rootkit detection, system call auditing, process monitoring.
 2. **Syslog forwarding** (port 514/udp): All containers forward application logs via rsyslog. This captures web server logs, database queries, authentication events, and SOC tool outputs without requiring an agent on every container.
 
+> **Update (ADR-020, 2026-05-02):** Agent placement on the five service-target containers (`webapp`, `fileshare`, `ad`, `dns`, `db`) was reworked in #248. Four of them now run `wazuh-agent` **in-process** so active-response can install `iptables` rules in the target's own namespace; `db` keeps its sidecar as a carve-out for the postgres-on-alpine case. The default for any future container is in-process — see [ADR-020](adr-020-wazuh-agents-in-process-vs-sidecar.md).
+
 ### Version Pinning
 
 All Wazuh components are pinned to version 4.12.0 to prevent agent/manager version mismatches that caused failures in earlier versions (see CHANGELOG v3.0.13).

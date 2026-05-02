@@ -25,8 +25,12 @@ skips the file cleanly.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
+import subprocess
+import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -35,7 +39,7 @@ from tests.helpers import (
     docker_exec,
 )
 
-# The four kali-side IPs (kali multi-homed across redteam, dmz, internal).
+# The three kali-side IPs (kali multi-homed across redteam, dmz, internal).
 # All three must be in the whitelist file so AR refuses to drop kali on
 # any interface it might present.
 KALI_IPS: tuple[str, ...] = ("172.20.4.30", "172.20.1.30", "172.20.2.35")
@@ -48,10 +52,41 @@ IN_PROCESS_TARGETS: tuple[str, ...] = (
     "aptl-dns",
 )
 
+# Sidecar agents that also receive the wrapper + whitelist at image
+# build time (db and suricata are the carve-outs from #248).
+SIDECAR_AGENTS: tuple[str, ...] = (
+    "aptl-wazuh-sidecar-db",
+    "aptl-wazuh-sidecar-suricata",
+)
+
+# Every Wazuh agent in the lab — used for "the AR contract is honored
+# everywhere" assertions. The wrapper script and whitelist file ship
+# on each.
+ALL_AGENTS: tuple[str, ...] = IN_PROCESS_TARGETS + SIDECAR_AGENTS
+
 WAZUH_MANAGER = "aptl-wazuh-manager"
 WHITELIST_PATH = "/var/ossec/etc/lists/active-response-whitelist"
 WRAPPER_PATH = "/var/ossec/active-response/bin/aptl-firewall-drop"
 MANAGER_OSSEC = "/var/ossec/etc/ossec.conf"
+
+# Repo paths for source-level tests that don't require the lab to be
+# up. These let CI catch regressions in the source files without
+# spinning up Docker.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SRC_MANAGER_CONF = REPO_ROOT / "config" / "wazuh_cluster" / "wazuh_manager.conf"
+SRC_WHITELIST = REPO_ROOT / "config" / "wazuh_cluster" / "etc" / "lists" / "active-response-whitelist"
+SRC_WRAPPER = REPO_ROOT / "containers" / "_wazuh-agent" / "aptl-firewall-drop.sh"
+SRC_INSTALL = REPO_ROOT / "containers" / "_wazuh-agent" / "install.sh"
+
+# Dockerfiles that must each install the wrapper + whitelist via the
+# install.sh /tmp pre-COPY pattern.
+AGENT_DOCKERFILES: tuple[Path, ...] = (
+    REPO_ROOT / "containers" / "webapp" / "Dockerfile",
+    REPO_ROOT / "containers" / "fileshare" / "Dockerfile",
+    REPO_ROOT / "containers" / "ad" / "Dockerfile",
+    REPO_ROOT / "containers" / "dns" / "Dockerfile",
+    REPO_ROOT / "containers" / "wazuh-sidecar" / "Dockerfile",
+)
 
 
 def _container_running(name: str) -> bool:
@@ -65,11 +100,11 @@ def _container_running(name: str) -> bool:
 
 
 def _require_lab_up() -> None:
-    """Skip the test if the manager OR any in-process target is missing.
-    These tests exercise live-lab integration; without all required
-    containers present, a failure is environmental, not a real
+    """Skip the test if the manager OR any agent (in-process or sidecar)
+    is missing. These tests exercise live-lab integration; without all
+    required containers present, a failure is environmental, not a real
     regression."""
-    needed = (WAZUH_MANAGER, *IN_PROCESS_TARGETS)
+    needed = (WAZUH_MANAGER, *ALL_AGENTS)
     missing = [c for c in needed if not _container_running(c)]
     if missing:
         pytest.skip(
@@ -102,14 +137,17 @@ def _all_active_response_blocks(content: str) -> list[str]:
     )
 
 
-@pytest.fixture(autouse=True)
-def _autocheck_lab_up() -> None:
-    """Skip every test in this module when the lab is not up. Removes
-    boilerplate from each test method."""
+@pytest.fixture
+def _check_lab_up() -> None:
+    """Skip a test when the lab is not up. Applied via
+    `@pytest.mark.usefixtures("_check_lab_up")` on live-lab classes
+    only (not on TestWazuhActiveResponseSource, which runs without
+    Docker)."""
     _require_lab_up()
 
 
 @LIVE_LAB
+@pytest.mark.usefixtures("_check_lab_up")
 class TestWazuhActiveResponseConfig:
     """Manager-side AR config: command, AR blocks, and whitelist."""
 
@@ -206,17 +244,21 @@ class TestWazuhActiveResponseConfig:
         )
 
 @LIVE_LAB
+@pytest.mark.usefixtures("_check_lab_up")
 class TestWazuhActiveResponseWhitelist:
     """The kali-IP whitelist file is installed on every in-process
     agent and populated with kali's three lab IPs. The wrapper script
     runs on the agent, so the file ships in each agent's image at
     build time."""
 
-    def test_whitelist_file_present_on_each_agent(self) -> None:
-        """Whitelist file must exist at the canonical path inside each
-        in-process Wazuh agent. The wrapper consults it at exec time."""
+    def test_whitelist_file_present_on_every_agent(self) -> None:
+        """Whitelist file must exist at the canonical path inside every
+        Wazuh agent — both the in-process targets (4) AND the remaining
+        sidecars (db, suricata). The wrapper consults it at exec time;
+        ADR-021's contract is that the file ships on EVERY agent so
+        any AR rule that fires honors the carve-out."""
         missing: list[str] = []
-        for target in IN_PROCESS_TARGETS:
+        for target in ALL_AGENTS:
             result = docker_exec(target, f"test -f {WHITELIST_PATH}")
             if result.returncode != 0:
                 missing.append(target)
@@ -251,16 +293,19 @@ class TestWazuhActiveResponseWhitelist:
 
 
 @LIVE_LAB
+@pytest.mark.usefixtures("_check_lab_up")
 class TestWazuhActiveResponseWrapper:
     """The wrapper script is installed on every Wazuh agent and behaves
     correctly for both whitelisted and non-whitelisted source IPs."""
 
-    def test_wrapper_installed_on_each_in_process_agent(self) -> None:
-        """Each in-process target must have the wrapper at the canonical
-        path with execute bit set. The agent's wazuh-execd runs scripts
-        from this directory by name."""
+    def test_wrapper_installed_on_every_agent(self) -> None:
+        """Every Wazuh agent — in-process targets (4) AND sidecars (db,
+        suricata) — must have the wrapper at the canonical path with
+        execute bit set. The agent's wazuh-execd runs scripts from this
+        directory by name; missing on a sidecar means AR fired against
+        that agent would bypass the kali whitelist."""
         broken: list[str] = []
-        for target in IN_PROCESS_TARGETS:
+        for target in ALL_AGENTS:
             result = docker_exec(target, f"test -x {WRAPPER_PATH}")
             if result.returncode != 0:
                 broken.append(
@@ -268,7 +313,7 @@ class TestWazuhActiveResponseWrapper:
                     f"(rc={result.returncode})",
                 )
         assert not broken, (
-            "Wrapper script missing on one or more in-process agents:\n  "
+            "Wrapper script missing on one or more agents:\n  "
             + "\n  ".join(broken)
         )
 
@@ -415,4 +460,254 @@ class TestWazuhActiveResponseWrapper:
             f"/var/ossec/logs/active-responses.log. Without an audit "
             f"trail, blue can't tell which AR invocations the whitelist "
             f"suppressed."
+        )
+
+
+# =============================================================================
+# Source-level tests — no lab required.
+#
+# These run in CI without Docker; they parse the repo's source files to
+# catch regressions that the live-lab integration tests would miss when
+# the lab is down. The wrapper unit-tests use a temp whitelist and a
+# /bin/true mock upstream so we exercise the script logic locally.
+# =============================================================================
+
+
+class TestWazuhActiveResponseSource:
+    """Source-file integrity. No Docker, no lab — these are pytest's
+    floor of safety: if these fail, the next live-lab run won't even
+    have a chance of being correct."""
+
+    def test_manager_conf_declares_wrapper_command(self) -> None:
+        """The repo's manager config must declare the `aptl-firewall-
+        drop` `<command>` block."""
+        content = SRC_MANAGER_CONF.read_text()
+        assert (
+            "<name>aptl-firewall-drop</name>" in content
+            and "<executable>aptl-firewall-drop</executable>" in content
+        ), (
+            "Manager config missing aptl-firewall-drop <command> block. "
+            "Without this declaration, the manager has no name to dispatch "
+            "for the wrapper, and every <active-response> referencing it "
+            "is a no-op."
+        )
+
+    def test_manager_conf_active_response_blocks_disabled_by_default(self) -> None:
+        """Source-level mirror of test_active_response_blocks_have_required_
+        carve_outs — runs without the lab."""
+        content = SRC_MANAGER_CONF.read_text()
+        blocks = re.findall(
+            r"<active-response>.*?</active-response>",
+            content,
+            re.DOTALL,
+        )
+        assert len(blocks) >= 3, (
+            f"Source manager config has {len(blocks)} <active-response> "
+            f"blocks; expected >= 3"
+        )
+        violations: list[str] = []
+        for i, block in enumerate(blocks):
+            if "<disabled>yes</disabled>" not in block:
+                violations.append(f"block #{i}: not disabled by default")
+            if "<level>" not in block:
+                violations.append(f"block #{i}: missing <level>")
+            if "<timeout>" not in block:
+                violations.append(f"block #{i}: missing <timeout>")
+        assert not violations, "Carve-outs not enforced in source:\n  " + "\n  ".join(
+            violations,
+        )
+
+    def test_manager_conf_uses_wrapper_for_firewall_drop_blocks(self) -> None:
+        """No <active-response> block in source may reference bare
+        `firewall-drop` — every block that wants firewall-drop semantics
+        must use the `aptl-firewall-drop` wrapper."""
+        content = SRC_MANAGER_CONF.read_text()
+        blocks = re.findall(
+            r"<active-response>.*?</active-response>",
+            content,
+            re.DOTALL,
+        )
+        leaks: list[str] = []
+        for i, block in enumerate(blocks):
+            cmd = re.search(r"<command>([^<]+)</command>", block)
+            if cmd and cmd.group(1).strip() == "firewall-drop":
+                leaks.append(
+                    f"block #{i}: bare firewall-drop (use aptl-firewall-drop)",
+                )
+        assert not leaks, "\n  ".join(leaks)
+
+    def test_whitelist_file_format(self) -> None:
+        """The repo's whitelist file must contain kali's three IPs as
+        bare IPv4 addresses, one per line — `grep -Fxq` semantics
+        require whole-line matching with no inline content."""
+        content = SRC_WHITELIST.read_text()
+        ip_lines = [
+            ln.strip()
+            for ln in content.splitlines()
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+        # Each non-comment line must be a bare IPv4. Inline comments
+        # like "172.20.4.30  # kali" would be a silent regression.
+        bare_ipv4 = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+        bad = [ln for ln in ip_lines if not bare_ipv4.match(ln)]
+        assert not bad, (
+            f"Whitelist source file contains non-bare-IPv4 lines: {bad}. "
+            f"`grep -Fxq` matches the entire line, so `172.20.4.30  # kali` "
+            f"on one line silently fails to match."
+        )
+        missing = [ip for ip in KALI_IPS if ip not in ip_lines]
+        assert not missing, f"Kali IPs missing from source whitelist: {missing}"
+
+    def test_wrapper_script_rejects_invalid_ipv4(self, tmp_path: Path) -> None:
+        """The wrapper's IPv4 validation must reject malformed input —
+        notably a srcip with an embedded newline + whitelisted IP, which
+        without validation would let `grep -Fxq` match the embedded
+        line and short-circuit. We exercise the wrapper directly (bash,
+        no Docker) with `APTL_AR_ORIGINAL=/bin/false` so any forward
+        path exits 1; a short-circuit (rc=0) on an INVALID srcip would
+        signal a regression."""
+        wl = tmp_path / "whitelist"
+        wl.write_text("172.20.4.30\n")
+        log = tmp_path / "log"
+        # srcip="evil\n172.20.4.30" — the validation must reject the
+        # newline; the wrapper must NOT short-circuit.
+        payload = json.dumps(
+            {
+                "command": "add",
+                "parameters": {
+                    "alert": {"data": {"srcip": "evil\n172.20.4.30"}},
+                },
+            },
+        )
+        env = {
+            **os.environ,
+            "APTL_AR_WHITELIST": str(wl),
+            "APTL_AR_ORIGINAL": "/bin/false",
+            "APTL_AR_LOG": str(log),
+        }
+        result = subprocess.run(
+            ["bash", str(SRC_WRAPPER)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10,
+        )
+        assert result.returncode != 0, (
+            "Wrapper short-circuited on a srcip with an embedded "
+            "newline. Without IPv4 validation, an attacker controlling "
+            "a Wazuh decoder srcip field could spoof a whitelist hit "
+            "by including a real whitelisted IP after a newline."
+        )
+
+    def test_wrapper_script_short_circuits_valid_whitelisted(self, tmp_path: Path) -> None:
+        """Source-level happy-path: a valid whitelisted IPv4 must short-
+        circuit (rc=0 with /bin/false mock means the wrapper didn't
+        forward)."""
+        wl = tmp_path / "whitelist"
+        wl.write_text("172.20.4.30\n")
+        log = tmp_path / "log"
+        payload = json.dumps(
+            {
+                "command": "add",
+                "parameters": {"alert": {"data": {"srcip": "172.20.4.30"}}},
+            },
+        )
+        env = {
+            **os.environ,
+            "APTL_AR_WHITELIST": str(wl),
+            "APTL_AR_ORIGINAL": "/bin/false",
+            "APTL_AR_LOG": str(log),
+        }
+        result = subprocess.run(
+            ["bash", str(SRC_WRAPPER)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10,
+        )
+        assert result.returncode == 0, (
+            f"Wrapper failed to short-circuit on whitelisted 172.20.4.30; "
+            f"rc={result.returncode}, stderr={result.stderr[:200]}"
+        )
+        # Log file must contain the SKIPPED entry.
+        assert log.exists() and "SKIPPED for whitelisted 172.20.4.30" in log.read_text(), (
+            f"Log file missing or no SKIPPED entry; contents: "
+            f"{log.read_text() if log.exists() else '<no file>'}"
+        )
+
+    def test_wrapper_script_forwards_delete_unconditionally(self, tmp_path: Path) -> None:
+        """delete + whitelisted IP must still forward."""
+        wl = tmp_path / "whitelist"
+        wl.write_text("172.20.4.30\n")
+        log = tmp_path / "log"
+        payload = json.dumps(
+            {
+                "command": "delete",
+                "parameters": {"alert": {"data": {"srcip": "172.20.4.30"}}},
+            },
+        )
+        env = {
+            **os.environ,
+            "APTL_AR_WHITELIST": str(wl),
+            "APTL_AR_ORIGINAL": "/bin/false",
+            "APTL_AR_LOG": str(log),
+        }
+        result = subprocess.run(
+            ["bash", str(SRC_WRAPPER)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10,
+        )
+        assert result.returncode != 0, (
+            "Wrapper short-circuited on delete; cleanup must always forward."
+        )
+
+    def test_install_script_handles_optional_ar_extras(self) -> None:
+        """install.sh must check for /tmp/aptl-firewall-drop.sh and
+        /tmp/active-response-whitelist and `install` them with the
+        right perms when present. Centralizing the install in install.sh
+        is the fix for codex finding #4 (Dockerfile boilerplate
+        duplication); a regression here breaks every Dockerfile's
+        AR install at build time."""
+        content = SRC_INSTALL.read_text()
+        assert "/tmp/aptl-firewall-drop.sh" in content, (
+            "install.sh missing /tmp/aptl-firewall-drop.sh handling — "
+            "Dockerfiles pre-COPY the wrapper to that path expecting "
+            "install.sh to install it."
+        )
+        assert "/tmp/active-response-whitelist" in content, (
+            "install.sh missing /tmp/active-response-whitelist handling"
+        )
+        assert re.search(r"install -D? ?-m 0755 -o root -g wazuh", content), (
+            "install.sh wrapper install must set mode 0755 root:wazuh"
+        )
+        assert re.search(r"install -D? ?-m 0640 -o root -g wazuh", content), (
+            "install.sh whitelist install must set mode 0640 root:wazuh"
+        )
+
+    def test_every_agent_dockerfile_pre_copies_ar_extras(self) -> None:
+        """Every Wazuh-agent-bearing Dockerfile must pre-COPY the
+        wrapper + whitelist into /tmp before install.sh runs, then
+        rm them in the same RUN. This is the contract that lets the
+        centralized install.sh handle the AR-extras step."""
+        violations: list[str] = []
+        for dockerfile in AGENT_DOCKERFILES:
+            text = dockerfile.read_text()
+            for required in (
+                "containers/_wazuh-agent/aptl-firewall-drop.sh",
+                "config/wazuh_cluster/etc/lists/active-response-whitelist",
+                "/tmp/aptl-firewall-drop.sh",
+                "/tmp/active-response-whitelist",
+            ):
+                if required not in text:
+                    violations.append(
+                        f"{dockerfile.relative_to(REPO_ROOT)}: missing reference to '{required}'"
+                    )
+        assert not violations, (
+            "Dockerfile AR-extras contract violated:\n  "
+            + "\n  ".join(violations)
         )

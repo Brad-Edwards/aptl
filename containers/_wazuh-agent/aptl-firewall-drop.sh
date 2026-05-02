@@ -69,11 +69,32 @@ except Exception:
 COMMAND=$(_extract '.command')
 SRCIP=$(_extract '.parameters.alert.data.srcip')
 
+# Validate SRCIP is a single dotted-decimal IPv4 with no control
+# characters. A Wazuh decoder that pulls srcip from a hostile log line
+# could embed a newline + a whitelisted IP; without validation,
+# `grep -Fxq` treats multi-line input as multiple patterns and would
+# short-circuit on the embedded whitelisted line. The regex permits
+# only `<octet>.<octet>.<octet>.<octet>` with each octet 0-255, no
+# trailing whitespace, no other characters.
+_is_valid_ipv4() {
+    local ip="$1"
+    [[ "$ip" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+    local oct
+    for oct in "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}"; do
+        # Reject leading zeros except literal "0"; reject octets > 255.
+        if [ "${#oct}" -gt 1 ] && [ "${oct:0:1}" = "0" ]; then return 1; fi
+        if [ "$oct" -gt 255 ]; then return 1; fi
+    done
+    return 0
+}
+
 # Only the `add` command may be short-circuited. `delete` must always
 # forward so timeouts clean up rules installed before the IP joined the
-# whitelist.
-if [ "${COMMAND}" = "add" ] && [ -n "${SRCIP}" ] && [ -f "${WHITELIST}" ]; then
-    if grep -Fxq "${SRCIP}" "${WHITELIST}" 2>/dev/null; then
+# whitelist. Also require SRCIP to validate as a single IPv4 — a
+# decoder-injected newline or extra characters would otherwise let an
+# attacker spoof a whitelist hit.
+if [ "${COMMAND}" = "add" ] && _is_valid_ipv4 "${SRCIP}" && [ -f "${WHITELIST}" ]; then
+    if grep -Fxq -- "${SRCIP}" "${WHITELIST}" 2>/dev/null; then
         # Belt-and-braces: only log if the log dir is writable; the
         # agent runs as root so this should always succeed inside the
         # container.

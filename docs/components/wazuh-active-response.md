@@ -77,14 +77,21 @@ To wire AR for a rule that doesn't yet have a block, add one matching the same s
 
 ## Whitelist (kali-IP carve-out)
 
-`/var/ossec/etc/lists/active-response-whitelist` is a flat file, one IPv4 per line, `#` comments allowed:
+`/var/ossec/etc/lists/active-response-whitelist` is a flat file, one IPv4 per line, `#` comment lines allowed.
+
+**The wrapper uses `grep -Fxq` (whole-line match), so inline comments after an IP do NOT match** — keep comments on their own lines:
 
 ```
-# Active-response source-IP whitelist
-172.20.4.30      # kali on aptl-redteam
-172.20.1.30      # kali on aptl-dmz
-172.20.2.35      # kali on aptl-internal
+# Active-response source-IP whitelist (kali interfaces)
+# 172.20.4.30 — kali on aptl-redteam
+172.20.4.30
+# 172.20.1.30 — kali on aptl-dmz
+172.20.1.30
+# 172.20.2.35 — kali on aptl-internal
+172.20.2.35
 ```
+
+The shipped `config/wazuh_cluster/etc/lists/active-response-whitelist` follows this format. Adding `172.20.4.30  # kali` on one line would silently fail to match — the wrapper would forward to `firewall-drop` and kali could be dropped. Validate with `bash scripts/test-wazuh-ar-whitelist.sh` after editing.
 
 The `aptl-firewall-drop` wrapper consults this file before forwarding to the upstream `firewall-drop`:
 

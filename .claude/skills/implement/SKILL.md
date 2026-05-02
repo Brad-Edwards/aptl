@@ -93,6 +93,15 @@ Explore the codebase to determine whether the work described in the issue is alr
 - Search for relevant classes, methods, tests, and configurations touching the subsystems the issue describes.
 - Consult the repository's existing documentation during exploration. APTL keeps design context in `docs/` — ADRs (`docs/adrs/`), architecture (`docs/architecture/`), components (`docs/components/`), and the SDL reference (`docs/sdl/`). Grep these for keywords matching the issue's subject area and read any pages that match before designing changes.
 - Check if the described behavior already exists.
+- **Before designing new code, inventory the existing cross-cutting concerns the change will need.** Do not skip this — it is the single biggest defense against re-implementing helpers that already exist. For each concern the new code will touch, find and read the project's existing implementation:
+  - Logger (`logger = ...` patterns; project's chosen logging library; structured-logging conventions)
+  - Validation / schemas (Pydantic models, Zod schemas, JSON Schema files, ground-control schema definitions)
+  - Error types and error-response builders
+  - Authentication / authorization helpers
+  - Configuration loaders and environment-variable access
+  - HTTP client wrappers, database session helpers, retry / backoff utilities
+  - Test fixtures, factory helpers, and mock builders
+  Use the existing helper. If you genuinely need a new one, justify the new helper in the plan (Step 4) and note why the existing one didn't fit. Re-implementing what's already there is the failure mode Step 12.5 is designed to catch — catch it here first.
 - For each requirement in `in_scope_requirements[]`, review its existing traceability links (IMPLEMENTS, TESTS) via `gc_get_traceability` on the requirement UUID. Some or all clauses may already be satisfied.
 - Reuse the architecture-preflight guidance from Step 2.5 while assessing existing coverage and planning changes.
 
@@ -285,9 +294,56 @@ For every cycle, after applying fixes, commit and push BEFORE re-running the rev
       - **`status: "resolved"`** — the review thread has already been marked resolved on GitHub. Move on to the next comment.
       - **`status: "unresolved"`** — codex posted a threaded reply with `reply_body` containing concrete new directions. Read `reply_body`, fix per those directions, and re-invoke `gc_codex_verify_finding`. **Per-finding cap: 2 verify calls.** If the third call would be needed, STOP and escalate to the user with the finding, your fix history, and the latest `reply_body`.
 7. After all findings in the returned `comments` list are marked `resolved`, commit and push the fixes (one commit per fix cycle, message `Fix review findings (codex, cycle <N>)`), then re-invoke `gc_codex_review` with the same arguments to confirm no new issues surfaced after your fixes.
-8. **Overall step cap: 5 iterations of `gc_codex_review`.** If the fifth invocation still returns findings, STOP and escalate to the user.
+8. **Overall step cap: 3 iterations of `gc_codex_review`.** Tightened from 5 — if the third invocation still returns findings, the diff has structural issues that need a human conversation, not another auto-fix pass. STOP and escalate to the user with the full history of findings, fixes, and remaining issues.
 
 **Tool shape**: `gc_codex_verify_finding` accepts only `repo_path`, `pr_number`, and `comment_id`. It reads the comment directly from GitHub; do not try to paraphrase the finding or pass additional context through the tool.
+
+### Step 12.5: Refactor & Cross-Cutting Concerns Review
+
+This review is the corrective for two systemic failure modes that bloat the codebase if left unchecked: **god classes / god methods / god functions / oversized files**, and **rebuilding helpers locally** instead of using the cross-cutting concerns the codebase already has (project logger, validation schemas, error types, config loaders, HTTP/DB session wrappers, test fixtures). Both compound silently if every PR adds another instance.
+
+**Every finding gets fixed.** No HARD/SOFT split, no "out of scope" carve-out, no deferred-to-follow-up bucket. If the review surfaces it, the PR addresses it before shipping. This applies to pre-existing bloat in any file the PR touched: "it was already like that" is not a valid skip — the goal is to sort the codebase out as we go, not to ratchet quality down by deferring. The same "no triage, ask user permission for any specific finding you believe should not be fixed" rule from Step 12 applies; the default answer is fix.
+
+#### Run the review
+
+Run a refactor-focused codex review against the PR diff. Mechanism (in order of preference):
+
+1. **`gc_codex_review`** if it exposes a refactor reviewer set (`reviewer_set: "refactor"` or equivalent). Same fix/verify loop machinery as Step 12.
+2. **Direct codex invocation** via Bash (`codex exec`) using the prompt template below. Post findings as PR review comments yourself; track them through the same fix loop.
+3. **Subagent fallback** via the Agent tool (`subagent_type: general-purpose`) with the prompt template below. Have the subagent return findings as a structured markdown list; you walk the list applying fixes.
+
+Use the same prompt regardless of mechanism:
+
+```
+Review PR #<N> (diff: `gh pr diff <N>`, branch: <branch-name>) for refactor and cross-cutting-concerns issues. Anchor every finding to a specific file:line range.
+
+Scope: every PRODUCTION file the PR added or modified (skip pure test files, doc files, and configuration). Pre-existing bloat in those files IS in scope — if a file the PR touched contains a god unit or a duplicated helper, surface it regardless of whether the PR introduced it.
+
+For each file, check:
+
+1. **God units.** Flag any single file > 400 LOC, any function/method > 80 LOC or with cyclomatic complexity ≥ 10, any class with > 15 public methods, any unit carrying multiple unrelated responsibilities. For each, propose a concrete extraction: which lines move where, what the resulting unit's single responsibility is.
+
+2. **Cross-cutting concern reuse.** SEARCH THE REPO before flagging — if the existing helper exists, name it (file:line). Check that the PR's new code uses, not re-implements:
+   - The project's logger
+   - Validation schemas (Pydantic / Zod / JSON Schema)
+   - Error types and error-response builders
+   - Auth / authz helpers
+   - Configuration loaders and env-var access
+   - HTTP client / DB session wrappers, retry / backoff utilities
+   - Test fixtures, factory helpers, mock builders
+   For each duplication, show the offending new code AND the existing helper that should be used instead.
+
+3. **Modularity & testability.** Flag code that mixes I/O with pure logic (extract pure functions), code that requires heavy mocking to test, code with implicit shared mutable state. Suggest the explicit-interface refactor.
+
+Return findings as markdown, one per finding:
+- `file:line-range` — `category` — concrete fix (specific extraction targets, specific existing helper file:line to reuse).
+```
+
+#### Fix loop
+
+Apply the **Review loop rules** (above Step 12). Fix every finding the review surfaces. After fixes, commit with message `Refactor per review (cycle <N>)` and re-run the review. If you genuinely believe a specific finding should be left unfixed, STOP and ask the user — do not decide unilaterally — but the default answer is always fix.
+
+**Cycle cap: 2 iterations.** Tight by design — if a second pass still surfaces findings, the diff has structural issues that need a design conversation, not another auto-fix pass. STOP and escalate to the user with the full finding history.
 
 ### Step 13: Test Quality Review
 

@@ -525,9 +525,14 @@ services:
       - FLASK_ENV=production
       - SIEM_IP=172.20.2.30
       # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-webapp.
+      # gunicorn writes errors to stderr (captured by docker), so only
+      # access.log is a real file the agent can tail. The previous
+      # sidecar's LOG_PATHS listed error.log / app.log too but they
+      # never existed and the agent logged "Could not open file" on
+      # every restart — pruned here.
       - WAZUH_MANAGER=wazuh.manager
       - AGENT_NAME=aptl-webapp-agent
-      - LOG_PATHS=/var/log/gunicorn/access.log,/var/log/gunicorn/error.log,/var/log/gunicorn/app.log
+      - LOG_PATHS=/var/log/gunicorn/access.log
       - LOG_FORMAT=syslog
     volumes:
       - webapp_logs:/var/log/gunicorn

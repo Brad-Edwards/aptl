@@ -76,15 +76,17 @@ restart_manager_and_wait() {
     sleep "${WAIT_MGR_SEC}"
 }
 
-restart_target_and_wait() {
-    # The target's in-process agent reconnects automatically on manager
-    # restart; the target itself does not need to be restarted. This
-    # function exists for the cleanup phase if the iptables state needs
-    # to be flushed faster than the AR timeout.
-    log "flushing iptables in ${TARGET} as a belt-and-braces cleanup"
-    docker exec "${TARGET}" sh -c '
-        iptables -F INPUT 2>/dev/null || true
-    ' 2>/dev/null || true
+restore_iptables() {
+    # Surgically remove ONLY the AR-installed drop for KALI_SRC_IP from
+    # ${TARGET}. Flushing INPUT entirely would clobber any unrelated
+    # rules left behind by other tests or by Docker's own networking
+    # plumbing — that masks bugs and can break the lab.
+    log "removing AR drop for ${KALI_SRC_IP} from ${TARGET}"
+    docker exec "${TARGET}" sh -c "
+        while iptables -C INPUT -s ${KALI_SRC_IP} -j DROP 2>/dev/null; do
+            iptables -D INPUT -s ${KALI_SRC_IP} -j DROP || break
+        done
+    " 2>/dev/null || true
 }
 
 curl_from_kali() {
@@ -189,7 +191,7 @@ fi
 # --- step 5: cleanup --------------------------------------------------------
 cleanup_rule
 restart_manager_and_wait
-restart_target_and_wait
+restore_iptables
 
 # --- step 6: sanity (connectivity restored after rule removal) -------------
 log "sanity: kali -> webapp after AR cleanup"

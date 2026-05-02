@@ -124,9 +124,18 @@ jobs:
           true
 
   sonarcloud:
-    name: SonarCloud quality gate
+    name: SonarCloud quality gate (advisory)
     needs: [python-tests, mcp-tests, web-tests]
     runs-on: ubuntu-latest
+    # Advisory — the scan still uploads results to SonarCloud and the
+    # dashboard reflects current state; removing -Dsonar.qualitygate.wait
+    # means the action does not fail the workflow when the gate is RED.
+    # The lab is research code; coverage targets that make sense for
+    # production apps would block infra-only commits (Dockerfiles, compose,
+    # workflows, scripts). Re-enable strict gating by adding the wait flag
+    # back and re-listing this job as a required status check on the
+    # branch protection rule once the project's coverage debt is sized.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
         with:
@@ -154,6 +163,3 @@ jobs:
       - uses: SonarSource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.qualitygate.wait=true

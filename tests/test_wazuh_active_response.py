@@ -356,10 +356,13 @@ class TestWazuhActiveResponseWrapper:
 
     def test_wrapper_runs_iptables_for_non_whitelisted_srcip(self) -> None:
         """When invoked with a non-whitelisted srcip on `add`, the
-        wrapper must call iptables. Mock with `/bin/true` (exits 0) for
-        the success path, then `/bin/false` (exits 1) to confirm a
-        non-zero from iptables propagates — proving the wrapper isn't
-        short-circuiting."""
+        wrapper must call iptables `-I` (insert). A naive `/bin/true`
+        mock makes `iptables -C` succeed (rule "already present") and
+        the wrapper short-circuits with a no-op — never exercising the
+        insert. Use a smarter mock that returns 1 for `-C` (rule not
+        present) and 0 for `-I` (insert succeeded), then assert the
+        wrapper logged 'added DROP' for the srcip — proving the
+        insert branch ran."""
         ar_payload = json.dumps(
             {
                 "version": 1,
@@ -371,28 +374,57 @@ class TestWazuhActiveResponseWrapper:
                 },
             },
         )
-        cmd_true = (
-            f"printf %s {shlex.quote(ar_payload)} | "
-            f"APTL_AR_IPTABLES=/bin/true {WRAPPER_PATH}"
+        # Install a fake iptables in /tmp/aptl-fake-iptables that:
+        #   -C → exit 1 (rule not present)
+        #   -I → exit 0 (insert succeeds)
+        #   -D → exit 0
+        fake_iptables = "/tmp/aptl-fake-iptables.sh"
+        fake_script = textwrap.dedent("""\
+            #!/bin/bash
+            for arg in "$@"; do
+                case "$arg" in
+                    -C) exit 1 ;;
+                    -I) exit 0 ;;
+                    -D) exit 0 ;;
+                esac
+            done
+            exit 0
+        """)
+        write = docker_exec(
+            "aptl-webapp",
+            f"sh -c {shlex.quote(f'cat > {fake_iptables}')}",
         )
-        result_true = docker_exec("aptl-webapp", cmd_true)
-        assert result_true.returncode == 0, (
-            f"Wrapper rc={result_true.returncode} with /bin/true mock; "
-            f"expected 0. stderr={result_true.stderr[:200]}"
+        # Re-write via cat heredoc since docker_exec consumed the input.
+        # Use a single docker exec writing the script content:
+        write = docker_exec(
+            "aptl-webapp",
+            f"bash -c {shlex.quote(f'printf %s {shlex.quote(fake_script)} > {fake_iptables} && chmod +x {fake_iptables}')}",
+        )
+        assert write.returncode == 0, (
+            f"could not install fake iptables: rc={write.returncode}, "
+            f"stderr={write.stderr[:200]}"
         )
 
-        # /bin/false makes `iptables -C` fail (rule "not present"), so
-        # the wrapper proceeds to the insert path which also fails.
-        # The wrapper should exit non-zero to signal iptables failure.
-        cmd_false = (
+        cmd = (
             f"printf %s {shlex.quote(ar_payload)} | "
-            f"APTL_AR_IPTABLES=/bin/false {WRAPPER_PATH}"
+            f"APTL_AR_IPTABLES={fake_iptables} {WRAPPER_PATH}"
         )
-        result_false = docker_exec("aptl-webapp", cmd_false)
-        assert result_false.returncode != 0, (
-            "Wrapper exited 0 with /bin/false iptables mock; expected "
-            "non-zero. The wrapper may have short-circuited (treating "
-            "10.99.99.99 as whitelisted)."
+        result = docker_exec("aptl-webapp", cmd)
+        assert result.returncode == 0, (
+            f"Wrapper rc={result.returncode} with smart mock; expected "
+            f"0 (insert succeeded). stderr={result.stderr[:200]}"
+        )
+        # Verify the insert branch actually ran via the audit log.
+        log_check = docker_exec(
+            "aptl-webapp",
+            "grep -F 'added DROP for 10.99.99.99' "
+            "/var/ossec/logs/active-responses.log",
+        )
+        assert log_check.returncode == 0, (
+            "Wrapper did not log 'added DROP for 10.99.99.99' — the "
+            "insert branch did not run. With the smart mock returning "
+            "1 for -C and 0 for -I, the wrapper should have called -I "
+            "and logged the addition."
         )
 
     def test_wrapper_runs_delete_even_for_whitelisted(self) -> None:

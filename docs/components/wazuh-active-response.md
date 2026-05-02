@@ -54,7 +54,6 @@ To enable AR for an existing block:
   <command>aptl-firewall-drop</command>
   <location>local</location>
   <rules_id>302010</rules_id>          <!-- webapp SQL injection -->
-  <level>10</level>
   <timeout>120</timeout>
 </active-response>
 ```
@@ -67,11 +66,12 @@ To wire AR for a rule that doesn't yet have a block, add one matching the same s
 <active-response>
   <command>aptl-firewall-drop</command>
   <location>local</location>
-  <rules_id>YOUR_RULE_ID</rules_id>
-  <level>10</level>             <!-- severity gate; see below -->
-  <timeout>120</timeout>        <!-- 60-300s recommended -->
+  <rules_id>YOUR_RULE_ID</rules_id>     <!-- pick a level-10+ rule -->
+  <timeout>120</timeout>                <!-- 60-300s recommended -->
 </active-response>
 ```
+
+**Do NOT add `<level>10</level>` next to `<rules_id>`.** Wazuh OR's its matchers — see "Severity gate" below — so the combination broadens the block to every level-10+ alert. The severity gate is implicit: pick a `<rules_id>` whose underlying rule is already at level ≥ 10.
 
 `<location>local</location>` runs the AR on the agent that triggered the rule (the most common case). Other values: `all` (every agent), `defined-agent` + `<agent_id>`, `server` (run on the manager itself), `remote` (deprecated).
 
@@ -144,7 +144,6 @@ All `<active-response>` blocks ship `<disabled>yes</disabled>`. The starting pos
      <command>disable-account</command>
      <location>local</location>
      <rules_id>5760</rules_id>           <!-- example: failed AD login -->
-     <level>10</level>
      <timeout>180</timeout>
    </active-response>
    ```
@@ -165,7 +164,7 @@ All `<active-response>` blocks ship `<disabled>yes</disabled>`. The starting pos
 
 ## Troubleshooting
 
-**"AR doesn't fire when I trigger the rule."** Check `<disabled>yes</disabled>` is removed. Restart the manager so the new block loads. Check `docker logs aptl-wazuh-manager | grep -i active.response` for dispatch errors. Verify the rule actually fired in `/var/ossec/logs/alerts/alerts.json` — AR only fires on alerts that match the block's `<rules_id>` AND `<level>`.
+**"AR doesn't fire when I trigger the rule."** Check `<disabled>yes</disabled>` is removed. Restart the manager so the new block loads. Check `docker logs aptl-wazuh-manager | grep -i active.response` for dispatch errors. Verify the rule actually fired in `/var/ossec/logs/alerts/alerts.json`. Remember the matchers (`<rules_id>`, `<rules_group>`, `<level>`) are OR'd — if your block has only `<rules_id>` set, AR fires when that rule triggers; if you also added `<level>10</level>`, AR additionally fires on every level-10+ alert.
 
 **"Rule fired, AR dispatched, but no iptables drop on the target."** Check the agent's `/var/ossec/logs/active-responses.log` for the wrapper's behavior. A `SKIPPED for whitelisted` line means the carve-out engaged (intended for kali). Otherwise: `docker exec <target> iptables -L INPUT -n -v` to see if the rule landed; check `wazuh-execd` is running (`docker exec <target> supervisorctl status wazuh-agent`).
 

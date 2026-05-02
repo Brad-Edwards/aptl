@@ -25,7 +25,7 @@ Issue [#248](https://github.com/Brad-Edwards/Brad-Edwards/aptl/issues/248) is th
 The four target containers `webapp`, `fileshare`, `ad`, `dns` run `wazuh-agent` directly inside the container's own namespace, supervised by `supervisord` alongside the primary service. Each Dockerfile uses the shared bootstrap layer at `containers/_wazuh-agent/`:
 
 - `install.sh` — apt-repo + key + `wazuh-agent=4.12.0-1` install. Run once during image build.
-- `wazuh-agent.sh` — runtime bootstrap: wait for manager auth port, render `ossec.conf` from template, register via `agent-auth -F 1` (replaces stale same-name records), start the agent, exec `tail -F` on `ossec.log` so the supervising process (docker for sidecar, supervisord for in-process) owns lifecycle.
+- `wazuh-agent.sh` — runtime bootstrap: wait for manager auth port, render `ossec.conf` from template, register via `agent-auth -A <name>` (replacement of stale same-name records is handled *manager-side* by `<auth><force><enabled>yes</enabled></force></auth>` in `wazuh_manager.conf` — Wazuh 4.12's agent-auth does not have a `-F` flag, so the force semantics live in the manager config), start the agent, watch the `wazuh-agentd` PID and exit when the daemon dies so the supervisor restarts the bootstrap.
 - `ossec.conf.template` — base ossec.conf with `__WAZUH_MANAGER__` / `__AGENT_NAME__` / `__LOCALFILE_BLOCKS__` substitution.
 
 Each target's compose entry adds:

@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.0] - 2026-05-02
+
+### Notes
+
+- Issue [#247](https://github.com/Brad-Edwards/aptl/issues/247) (switch Suricata to inline IPS via NFQ) closed as "decision recorded" via [ADR-019](docs/adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md). Two implementation paths were attempted on the branch: NFQ on the host's `DOCKER-USER` chain — failed due to upstream-acknowledged "bridge+nfqueue has never worked well" ([Suricata Support #2135](https://redmine.openinfosecfoundation.org/issues/2135)) — and L3-routing IPS via a multi-homed Suricata container — failed because Docker 26+ installs anti-spoof rules in `ip raw PREROUTING` (`ip daddr X iifname != bridge_X drop`) that block cross-bridge routed traffic before it reaches the routing namespace. Suricata's deployment is unchanged from the v6.3.0 baseline (passive IDS, pcap on dmz/internal/security). Packet-level prevention is delivered via Wazuh active-response on in-process agents in [#248](https://github.com/Brad-Edwards/aptl/issues/248) and [#249](https://github.com/Brad-Edwards/aptl/issues/249), which together give blue real packet drops at the host firewall layer with kali-IP carve-outs that keep the purple loop functional.
+
 ## [6.3.0] - 2026-05-01
 
 ### Added

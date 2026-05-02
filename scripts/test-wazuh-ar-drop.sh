@@ -99,14 +99,20 @@ curl_from_kali() {
 }
 
 # --- preflight --------------------------------------------------------------
-# Cleanup on ANY exit: remove the manager-side rule + AR block AND
+# Cleanup on ANY exit: remove the manager-side rule + AR block, kick
+# the manager so the in-memory rule cache drops the temp rule, AND
 # remove the kali drop from the target's iptables. Without the
-# iptables cleanup, a mid-test failure (after AR fired) would leave
-# kali blocked from the target, breaking subsequent lab runs for
-# unrelated reasons. Both are idempotent and safe to call when no
-# state was created.
+# manager restart, the temp <active-response> block stays loaded in
+# manager memory until something else triggers a reload — a later
+# unrelated test run could see the AR fire on stale state. Without
+# the iptables cleanup, a mid-test failure (after AR fired) would
+# leave kali blocked from the target. All three steps are idempotent
+# and safe to call when no state was created.
 on_exit() {
     cleanup_rule || true
+    if grep -Fq 'cleanup performed' /dev/null 2>&1; then :; fi  # no-op for pipefail-friendliness
+    docker restart "${MANAGER}" >/dev/null 2>&1 || true
+    sleep 5
     restore_iptables || true
 }
 trap on_exit EXIT

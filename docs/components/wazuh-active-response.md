@@ -10,7 +10,7 @@ The architectural framing lives in three ADRs:
 
 - **[ADR-019](../adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md)** chose Wazuh AR (over Suricata NFQ) as the prevention layer.
 - **[ADR-020](../adrs/adr-020-wazuh-agents-in-process-vs-sidecar.md)** placed Wazuh agents in-process on `webapp` / `fileshare` / `ad` / `dns` so AR's `iptables` mutates the target's own namespace.
-- **[ADR-021](../adrs/adr-021-active-response-whitelist-via-wrapper.md)** records the kali-IP whitelist enforcement via a wrapper script.
+- **[ADR-021](../adrs/adr-021-active-response-whitelist-via-wrapper.md)** records the kali-IP whitelist enforcement via a standalone iptables AR script.
 
 ## Architecture
 
@@ -21,13 +21,13 @@ detection → manager rule → <active-response> block → agent's wazuh-execd
                                                           ↓
                                   consults /var/ossec/etc/lists/active-response-whitelist
                                                           ↓
-                                  whitelisted? → log + exit 0 (no drop)
-                                  not whitelisted? → forward to upstream firewall-drop
+                                  whitelisted on `add`? → log + exit 0 (no iptables call)
+                                  otherwise → run iptables -I/-D INPUT -s <srcip> -j DROP
                                                           ↓
-                                  iptables -I INPUT 1 -s <srcip> -j DROP (timeout-bounded)
+                                  log result to /var/ossec/logs/active-responses.log
 ```
 
-The wrapper deploys to every Wazuh agent in the lab (4 in-process + 2 sidecars = 6). The whitelist file is identical on each agent, COPYed at image build time from `config/wazuh_cluster/etc/lists/active-response-whitelist`. To update either, edit in the repo and run `aptl lab stop -v && aptl lab start`.
+The script deploys to every Wazuh agent in the lab (4 in-process + 2 sidecars = 6). It is a **standalone implementation** — not a wrapper around upstream `firewall-drop` — because Wazuh's stateful AR protocol can hold the agent→script stdin channel open after the initial JSON, and a forwarding wrapper that buffers stdin would deadlock or break the protocol. See [ADR-021](../adrs/adr-021-active-response-whitelist-via-wrapper.md) for the full rationale. The whitelist file is identical on each agent, COPYed at image build time from `config/wazuh_cluster/etc/lists/active-response-whitelist`. To update either, edit in the repo and run `aptl lab stop -v && aptl lab start`.
 
 ## Available commands
 
@@ -79,7 +79,7 @@ To wire AR for a rule that doesn't yet have a block, add one matching the same s
 
 `/var/ossec/etc/lists/active-response-whitelist` is a flat file, one IPv4 per line, `#` comment lines allowed.
 
-**The wrapper uses `grep -Fxq` (whole-line match), so inline comments after an IP do NOT match** — keep comments on their own lines:
+**The script uses `grep -Fxq` (whole-line match), so inline comments after an IP do NOT match** — keep comments on their own lines:
 
 ```
 # Active-response source-IP whitelist (kali interfaces)
@@ -91,13 +91,13 @@ To wire AR for a rule that doesn't yet have a block, add one matching the same s
 172.20.2.35
 ```
 
-The shipped `config/wazuh_cluster/etc/lists/active-response-whitelist` follows this format. Adding `172.20.4.30  # kali` on one line would silently fail to match — the wrapper would forward to `firewall-drop` and kali could be dropped. Validate with `bash scripts/test-wazuh-ar-whitelist.sh` after editing.
+The shipped `config/wazuh_cluster/etc/lists/active-response-whitelist` follows this format. Adding `172.20.4.30  # kali` on one line would silently fail to match — the script would invoke `iptables` and kali could be dropped. Validate with `bash scripts/test-wazuh-ar-whitelist.sh` after editing.
 
-The `aptl-firewall-drop` wrapper consults this file before forwarding to the upstream `firewall-drop`:
+The `aptl-firewall-drop` script consults this file before running any iptables operation:
 
-- `command="add"` + srcip in whitelist → wrapper exits 0 with a `SKIPPED for whitelisted <ip>` line in `/var/ossec/logs/active-responses.log`. No iptables change.
-- `command="add"` + srcip NOT in whitelist → wrapper forwards stdin to `/var/ossec/active-response/bin/firewall-drop`. iptables drop installed.
-- `command="delete"` (timeout cleanup) → wrapper **always** forwards. Stale rules from previous invocations get reaped on schedule.
+- `command="add"` + srcip in whitelist → script exits 0 with a `SKIPPED for whitelisted <ip>` line in `/var/ossec/logs/active-responses.log`. No iptables change.
+- `command="add"` + srcip NOT in whitelist → script runs `iptables -I INPUT 1 -s <srcip> -j DROP` (idempotent — checks `iptables -C` first to avoid duplicates). Logs `added DROP for <ip>`.
+- `command="delete"` (timeout cleanup) → script **always** runs the iptables removal branch (`iptables -C` + `iptables -D` per match). Stale rules from previous invocations get reaped on schedule. Logs `removed N DROP rule(s) for <ip>`.
 
 **Why kali is whitelisted:** without the carve-out, the moment blue enables AR against any rule kali's recon hits, kali's IP goes on every target's iptables and red can't operate in iter N+1. The whitelist forces blue to author granular rules (per-pattern, per-payload, per-behavior) rather than the coarse "ban the source" shortcut. See [ADR-021](../adrs/adr-021-active-response-whitelist-via-wrapper.md) for the architectural rationale.
 
@@ -122,7 +122,7 @@ That's much broader and rarely what you want; prefer per-rule blocks.
 
 ## Timeout strategy
 
-Every block ships `<timeout>120</timeout>` (120 seconds). After the timeout, wazuh-execd dispatches the same command with `command="delete"`, the wrapper forwards (cleanup is unconditional), and the iptables rule is removed. This matches real-SOC TTL pattern and prevents stale rules accumulating across iterations.
+Every block ships `<timeout>120</timeout>` (120 seconds). After the timeout, wazuh-execd dispatches the same command with `command="delete"`, the script runs the iptables removal branch (cleanup is unconditional, regardless of whitelist), and the iptables rule is removed. This matches real-SOC TTL pattern and prevents stale rules accumulating across iterations.
 
 Recommended bound: 60–300s. Shorter than 60s makes blue's drops too ephemeral to be useful; longer than 300s risks the rule outliving the iteration that installed it.
 
@@ -166,15 +166,15 @@ All `<active-response>` blocks ship `<disabled>yes</disabled>`. The starting pos
 
 **"AR doesn't fire when I trigger the rule."** Check `<disabled>yes</disabled>` is removed. Restart the manager so the new block loads. Check `docker logs aptl-wazuh-manager | grep -i active.response` for dispatch errors. Verify the rule actually fired in `/var/ossec/logs/alerts/alerts.json`. Remember the matchers (`<rules_id>`, `<rules_group>`, `<level>`) are OR'd — if your block has only `<rules_id>` set, AR fires when that rule triggers; if you also added `<level>10</level>`, AR additionally fires on every level-10+ alert.
 
-**"Rule fired, AR dispatched, but no iptables drop on the target."** Check the agent's `/var/ossec/logs/active-responses.log` for the wrapper's behavior. A `SKIPPED for whitelisted` line means the carve-out engaged (intended for kali). Otherwise: `docker exec <target> iptables -L INPUT -n -v` to see if the rule landed; check `wazuh-execd` is running (`docker exec <target> supervisorctl status wazuh-agent`).
+**"Rule fired, AR dispatched, but no iptables drop on the target."** Check the agent's `/var/ossec/logs/active-responses.log` for the script's behavior. A `SKIPPED for whitelisted` line means the carve-out engaged (intended for kali). An `added DROP` line means the script ran iptables but maybe a higher-priority chain rule overrode it; `docker exec <target> iptables -L INPUT -n -v` to see if the rule landed and is being matched. No log line at all means wazuh-execd never dispatched — check `docker exec <target> supervisorctl status wazuh-agent` and the manager's dispatch log.
 
 **"AR drops kali on the first iter, even though it's whitelisted."** Verify `/var/ossec/etc/lists/active-response-whitelist` on the agent (not the manager) contains all three kali IPs (`docker exec <target> cat /var/ossec/etc/lists/active-response-whitelist`). Verify `<command>` references `aptl-firewall-drop` not bare `firewall-drop` (`grep -A 5 active-response /var/ossec/etc/ossec.conf` inside the manager). If both look right, run `bash scripts/test-wazuh-ar-whitelist.sh` to bisect.
 
-**"I want AR for `host-deny` / `disable-account` against kali to also be carved out."** Currently only `aptl-firewall-drop` honors the whitelist. Generalizing the wrapper pattern is recorded as future work in [ADR-021](../adrs/adr-021-active-response-whitelist-via-wrapper.md). For now, scope `<rules_id>` and `<level>` carefully or avoid those commands for kali-affecting paths.
+**"I want AR for `host-deny` / `disable-account` against kali to also be carved out."** Currently only `aptl-firewall-drop` honors the whitelist. Generalizing the standalone-script pattern to `aptl-host-deny` / `aptl-disable-account` is recorded as future work in [ADR-021](../adrs/adr-021-active-response-whitelist-via-wrapper.md). For now, scope `<rules_id>` carefully or avoid those commands for kali-affecting paths.
 
 ## Related
 
 - [Issue #249](https://github.com/Brad-Edwards/aptl/issues/249) — implementation issue.
 - [#252](https://github.com/Brad-Edwards/aptl/issues/252) — orchestrator-side post-iter cleanup, complementary to the in-band whitelist.
-- [tests/test_wazuh_active_response.py](../../tests/test_wazuh_active_response.py) — pytest assertions on the AR config + wrapper.
+- [tests/test_wazuh_active_response.py](../../tests/test_wazuh_active_response.py) — pytest assertions on the AR config + standalone script.
 - [scripts/test-wazuh-ar-whitelist.sh](../../scripts/test-wazuh-ar-whitelist.sh) — manual E2E for the carve-out.

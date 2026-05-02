@@ -141,18 +141,28 @@ case "${COMMAND}" in
         ;;
     delete)
         # Remove every matching rule — Wazuh's delete is "remove the
-        # most recent add", but we be conservative and clean all
-        # exact-match rules to avoid leaks.
+        # most recent add", but we are conservative and clean all
+        # exact-match rules to avoid leaks. If a delete FAILS while
+        # the matching rule is still present (`iptables -C` succeeds
+        # but `iptables -D` fails), exit non-zero so wazuh-execd
+        # surfaces the cleanup failure — otherwise the manager
+        # believes cleanup succeeded while the DROP rule remains.
         removed=0
+        delete_rc=0
         while "${IPTABLES}" -C INPUT -s "${SRCIP}" -j DROP >/dev/null 2>&1; do
             if "${IPTABLES}" -D INPUT -s "${SRCIP}" -j DROP; then
                 removed=$((removed + 1))
             else
-                _log "iptables delete FAILED for ${SRCIP} (rc=$?)"
+                rc=$?
+                _log "iptables delete FAILED for ${SRCIP} (rc=${rc})"
+                delete_rc=${rc}
                 break
             fi
         done
         _log "removed ${removed} DROP rule(s) for ${SRCIP}"
+        if [ "${delete_rc}" -ne 0 ]; then
+            exit "${delete_rc}"
+        fi
         ;;
     *)
         _log "unknown command: ${COMMAND@Q}"

@@ -10,9 +10,13 @@
 #   1. waits for the manager's auth port (1515) to accept connections,
 #   2. renders /var/ossec/etc/ossec.conf from the template using the
 #      WAZUH_MANAGER, AGENT_NAME, LOG_PATHS, and LOG_FORMAT env vars,
-#   3. registers with the manager via agent-auth (idempotent — `-F 1`
-#      replaces a same-named agent record left over from a previous
-#      sidecar deployment when the in-process container takes over),
+#   3. registers with the manager via agent-auth, retrying with
+#      backoff so the bootstrap survives the manager-side force window
+#      (`<auth><force><enabled>yes</enabled>...` in `wazuh_manager.conf`)
+#      that allows replacing a same-named agent record left over from
+#      a previous sidecar deployment. Wazuh 4.12's agent-auth has no
+#      `-F` flag — the force semantics live in the manager config, not
+#      on the agent side,
 #   4. starts wazuh-control,
 #   5. exec tails ossec.log so the calling supervisor (docker for the
 #      sidecar; supervisord for the in-process targets) can manage

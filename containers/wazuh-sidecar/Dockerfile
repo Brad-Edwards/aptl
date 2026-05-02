@@ -22,7 +22,13 @@ FROM debian:12-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 COPY containers/_wazuh-agent/install.sh /tmp/install-wazuh.sh
-RUN /tmp/install-wazuh.sh && rm /tmp/install-wazuh.sh
+RUN /tmp/install-wazuh.sh && rm /tmp/install-wazuh.sh && \
+    # Sidecar-only image trim: the install.sh helper keeps curl/gnupg
+    # because target containers (webapp / dns / fileshare / ad) often
+    # need them anyway; the sidecar image has no other use for them
+    # so purge here to keep the image small.
+    apt-get purge -y curl gnupg && apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY containers/_wazuh-agent/ossec.conf.template /opt/aptl/wazuh/ossec.conf.template
 COPY containers/_wazuh-agent/wazuh-agent.sh      /opt/aptl/wazuh/wazuh-agent.sh

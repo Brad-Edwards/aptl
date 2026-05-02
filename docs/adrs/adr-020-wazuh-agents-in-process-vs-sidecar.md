@@ -14,7 +14,7 @@ The v6.3.0 work (CHANGELOG 2026-05-01) added six **Wazuh sidecar** containers â€
 
 The sidecar pattern has a structural limitation that became load-bearing once the lab's prevention story crystallised in [ADR-019](adr-019-suricata-ids-only-prevention-via-wazuh-ar.md): **a sidecar's iptables operate on the sidecar's own network namespace, not the target's**. Wazuh active-response (AR) on a sidecar can install a `firewall-drop` rule, but the target's traffic transits a different namespace and is unaffected â€” the rule is real, but irrelevant. ADR-019 chose Wazuh AR as the lab's packet-level prevention layer (NFQ-on-Suricata wasn't viable cleanly under modern Docker); for AR to do anything, the agent must run **in the namespace whose traffic must be controlled**, which means in-process on the target.
 
-Issue [#248](https://github.com/Brad-Edwards/Brad-Edwards/aptl/issues/248) is the implementation. This ADR records the agent-placement decision as a permanent design rule, so future containers added to the lab pick the right pattern by default.
+Issue [#248](https://github.com/Brad-Edwards/aptl/issues/248) is the implementation. This ADR records the agent-placement decision as a permanent design rule, so future containers added to the lab pick the right pattern by default.
 
 ## Decision
 

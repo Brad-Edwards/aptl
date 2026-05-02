@@ -48,6 +48,8 @@ Add five SOC tools under the `soc` Docker Compose profile ([ADR-005](adr-005-doc
 - Requires `NET_ADMIN`, `NET_RAW`, `SYS_NICE` capabilities for packet capture
 - MCP server: `mcp-network` — query alerts, manage rules, search flow data
 
+> **Update (ADR-019, 2026-05-02):** Inline IPS via NFQ was evaluated and deferred — bridge+NFQ is upstream-broken (Suricata Support #2135) and Docker 26+'s `ip raw PREROUTING` anti-spoof rules block the L3-routing-IPS alternative. Suricata remains IDS-only; packet-level prevention is delivered by Wazuh active-response on in-process agents (#248, #249). See [ADR-019](adr-019-suricata-ids-only-prevention-via-wazuh-ar.md).
+
 #### 2. MISP Threat Intel (`aptl-misp`, 172.20.0.16)
 
 **Chosen over OpenCTI**. MISP is the more mature threat intelligence platform with better Wazuh integration (CDB lists, IOC matching), a simpler deployment model (single container + MySQL), and a well-documented REST API via PyMISP. OpenCTI offers a modern GraphQL API and STIX-native data model but requires more infrastructure (Elasticsearch, Redis, MinIO, multiple workers) and ~4GB RAM minimum.

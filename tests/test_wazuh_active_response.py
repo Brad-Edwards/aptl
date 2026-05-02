@@ -1,0 +1,418 @@
+"""Verify Wazuh active-response wiring + carve-outs (issue #249).
+
+Pre-#249 the manager declared seven `<command>` blocks but only one
+`<active-response>` block (rule 5763 SSH brute-force → bare `firewall-
+drop`, 600s, enabled). Every other detection rule fired and nothing
+happened. The framework was present but inert.
+
+After #249, the manager:
+  - Adds an `<aptl-firewall-drop>` `<command>` that wraps the upstream
+    `firewall-drop` and consults a kali-IP whitelist.
+  - Adds `<active-response>` blocks for representative high-severity
+    rules (webapp / AD / database).
+  - Ships every `<active-response>` block with `<disabled>yes</disabled>`,
+    `<timeout>` between 60 and 300, and `<level>` >= 10. Blue removes
+    the disabled tag per iteration.
+  - Bind-mounts a flat-file whitelist at /var/ossec/etc/lists/active-
+    response-whitelist with kali's three lab IPs preloaded.
+  - Installs the wrapper script at /var/ossec/active-response/bin/aptl-
+    firewall-drop on every Wazuh agent in the lab.
+
+These are integration tests gated by `APTL_SMOKE=1`. CI without the lab
+skips the file cleanly.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import shlex
+
+import pytest
+
+from tests.helpers import (
+    LIVE_LAB,
+    docker_exec,
+)
+
+# The four kali-side IPs (kali multi-homed across redteam, dmz, internal).
+# All three must be in the whitelist file so AR refuses to drop kali on
+# any interface it might present.
+KALI_IPS: tuple[str, ...] = ("172.20.4.30", "172.20.1.30", "172.20.2.35")
+
+# Containers running an in-process Wazuh agent (per #248).
+IN_PROCESS_TARGETS: tuple[str, ...] = (
+    "aptl-webapp",
+    "aptl-fileshare",
+    "aptl-ad",
+    "aptl-dns",
+)
+
+WAZUH_MANAGER = "aptl-wazuh-manager"
+WHITELIST_PATH = "/var/ossec/etc/lists/active-response-whitelist"
+WRAPPER_PATH = "/var/ossec/active-response/bin/aptl-firewall-drop"
+MANAGER_OSSEC = "/var/ossec/etc/ossec.conf"
+
+
+def _container_running(name: str) -> bool:
+    """Return True if the named container is in `docker ps` output."""
+    from tests.helpers import run_cmd
+
+    result = run_cmd(["docker", "ps", "--format", "{{.Names}}"], timeout=10)
+    if result.returncode != 0:
+        return False
+    return name in result.stdout.split()
+
+
+def _require_lab_up() -> None:
+    """Skip the test if the manager OR any in-process target is missing.
+    These tests exercise live-lab integration; without all required
+    containers present, a failure is environmental, not a real
+    regression."""
+    needed = (WAZUH_MANAGER, *IN_PROCESS_TARGETS)
+    missing = [c for c in needed if not _container_running(c)]
+    if missing:
+        pytest.skip(
+            f"Lab not fully up; missing containers: {missing}. "
+            f"Run `aptl lab start` first.",
+        )
+
+
+def _read_manager_ossec() -> str:
+    """Read the deployed manager ossec.conf content. Skips if the lab
+    or manager is not running."""
+    _require_lab_up()
+    result = docker_exec(WAZUH_MANAGER, f"cat {MANAGER_OSSEC}")
+    if result.returncode != 0:
+        pytest.skip(
+            f"{WAZUH_MANAGER} not reachable or ossec.conf missing "
+            f"(rc={result.returncode}, stderr={result.stderr[:200]})",
+        )
+    return result.stdout
+
+
+def _all_active_response_blocks(content: str) -> list[str]:
+    """Return every `<active-response>...</active-response>` block as
+    raw XML. Naive regex but sufficient for the manager config we own —
+    no nested AR blocks exist in Wazuh."""
+    return re.findall(
+        r"<active-response>.*?</active-response>",
+        content,
+        re.DOTALL,
+    )
+
+
+@pytest.fixture(autouse=True)
+def _autocheck_lab_up() -> None:
+    """Skip every test in this module when the lab is not up. Removes
+    boilerplate from each test method."""
+    _require_lab_up()
+
+
+@LIVE_LAB
+class TestWazuhActiveResponseConfig:
+    """Manager-side AR config: command, AR blocks, and whitelist."""
+
+    def test_aptl_firewall_drop_command_is_declared(self) -> None:
+        """The wrapper command must be registered with the manager so
+        `<active-response>` blocks can reference it."""
+        content = _read_manager_ossec()
+        # Must contain a `<command>` block whose `<name>` is exactly
+        # `aptl-firewall-drop` and whose `<executable>` is the same.
+        m = re.search(
+            r"<command>\s*<name>aptl-firewall-drop</name>\s*"
+            r"<executable>aptl-firewall-drop</executable>\s*"
+            r"<timeout_allowed>yes</timeout_allowed>\s*</command>",
+            content,
+            re.DOTALL,
+        )
+        assert m is not None, (
+            "Expected `<command><name>aptl-firewall-drop</name>"
+            "<executable>aptl-firewall-drop</executable>"
+            "<timeout_allowed>yes</timeout_allowed></command>` block in "
+            "manager ossec.conf. The manager dispatches AR by command "
+            "name; without this registration, every `<active-response>` "
+            "block referencing `aptl-firewall-drop` is a no-op."
+        )
+
+    def test_active_response_blocks_have_required_carve_outs(self) -> None:
+        """Every `<active-response>` block in the manager config must
+        ship `<disabled>yes</disabled>`, a finite `<timeout>` between
+        60 and 300, and `<level>` >= 10. Together these are the per-
+        target carve-outs the issue calls for: starting posture is off
+        (blue enables per iter), drops auto-roll-back, and only high-
+        severity rules can fire AR."""
+        content = _read_manager_ossec()
+        blocks = _all_active_response_blocks(content)
+        assert len(blocks) >= 3, (
+            f"Expected >= 3 `<active-response>` blocks (the rule-5763 "
+            f"original plus at least 2 representative new ones). Found "
+            f"{len(blocks)}."
+        )
+        violations: list[str] = []
+        for i, block in enumerate(blocks):
+            if "<disabled>yes</disabled>" not in block:
+                violations.append(
+                    f"block #{i}: missing `<disabled>yes</disabled>` (default "
+                    f"posture is OFF; blue enables per iteration)",
+                )
+            timeout_match = re.search(r"<timeout>(\d+)</timeout>", block)
+            if not timeout_match:
+                violations.append(f"block #{i}: missing `<timeout>` directive")
+            else:
+                timeout = int(timeout_match.group(1))
+                if not (60 <= timeout <= 300):
+                    violations.append(
+                        f"block #{i}: timeout={timeout}s outside [60, 300] "
+                        f"(carve-out: timeout-bounded so drops auto-rollback)",
+                    )
+            level_match = re.search(r"<level>(\d+)</level>", block)
+            if not level_match:
+                violations.append(
+                    f"block #{i}: missing `<level>` directive (severity gate "
+                    f"prevents low-severity alerts from chaining into bans)",
+                )
+            elif int(level_match.group(1)) < 10:
+                violations.append(
+                    f"block #{i}: level={level_match.group(1)} < 10 (gate "
+                    f"requires level >= 10)",
+                )
+        assert not violations, (
+            "Per-target carve-outs not enforced on every block:\n  "
+            + "\n  ".join(violations)
+        )
+
+    def test_active_response_uses_wrapper_not_bare_firewall_drop(self) -> None:
+        """No `<active-response>` block may reference bare `firewall-
+        drop`. Every block must use the `aptl-firewall-drop` wrapper so
+        the kali whitelist is consulted at exec time. (Other commands
+        like `host-deny` are fine and may appear.)"""
+        content = _read_manager_ossec()
+        blocks = _all_active_response_blocks(content)
+        leaks: list[str] = []
+        for i, block in enumerate(blocks):
+            cmd_match = re.search(r"<command>([^<]+)</command>", block)
+            if not cmd_match:
+                continue
+            cmd = cmd_match.group(1).strip()
+            if cmd == "firewall-drop":
+                leaks.append(
+                    f"block #{i} uses bare `firewall-drop` instead of "
+                    f"`aptl-firewall-drop` — kali whitelist will be "
+                    f"bypassed",
+                )
+        assert not leaks, "AR blocks must use the wrapper:\n  " + "\n  ".join(
+            leaks,
+        )
+
+@LIVE_LAB
+class TestWazuhActiveResponseWhitelist:
+    """The kali-IP whitelist file is installed on every in-process
+    agent and populated with kali's three lab IPs. The wrapper script
+    runs on the agent, so the file ships in each agent's image at
+    build time."""
+
+    def test_whitelist_file_present_on_each_agent(self) -> None:
+        """Whitelist file must exist at the canonical path inside each
+        in-process Wazuh agent. The wrapper consults it at exec time."""
+        missing: list[str] = []
+        for target in IN_PROCESS_TARGETS:
+            result = docker_exec(target, f"test -f {WHITELIST_PATH}")
+            if result.returncode != 0:
+                missing.append(target)
+        assert not missing, (
+            f"{WHITELIST_PATH} missing inside agents: {missing}. The "
+            f"Dockerfile's COPY + install of the whitelist may have "
+            f"been removed."
+        )
+
+    def test_whitelist_contains_kali_ips(self) -> None:
+        """Each of kali's three lab IPs must appear in the whitelist
+        on its own line (the wrapper uses `grep -Fxq` to match). Sample
+        from one agent — file content is identical across all agents
+        because they all COPY the same source file."""
+        result = docker_exec("aptl-webapp", f"cat {WHITELIST_PATH}")
+        assert result.returncode == 0, (
+            f"could not read {WHITELIST_PATH} on aptl-webapp: "
+            f"{result.stderr[:200]}"
+        )
+        # Strip comments and blank lines for the membership check.
+        lines = [
+            ln.strip()
+            for ln in result.stdout.splitlines()
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+        missing = [ip for ip in KALI_IPS if ip not in lines]
+        assert not missing, (
+            f"Kali IPs missing from whitelist: {missing}. Without all "
+            f"three present, the wrapper will allow `firewall-drop` to "
+            f"fire on the missing kali interface, ending the purple loop."
+        )
+
+
+@LIVE_LAB
+class TestWazuhActiveResponseWrapper:
+    """The wrapper script is installed on every Wazuh agent and behaves
+    correctly for both whitelisted and non-whitelisted source IPs."""
+
+    def test_wrapper_installed_on_each_in_process_agent(self) -> None:
+        """Each in-process target must have the wrapper at the canonical
+        path with execute bit set. The agent's wazuh-execd runs scripts
+        from this directory by name."""
+        broken: list[str] = []
+        for target in IN_PROCESS_TARGETS:
+            result = docker_exec(target, f"test -x {WRAPPER_PATH}")
+            if result.returncode != 0:
+                broken.append(
+                    f"{target}: {WRAPPER_PATH} missing or not executable "
+                    f"(rc={result.returncode})",
+                )
+        assert not broken, (
+            "Wrapper script missing on one or more in-process agents:\n  "
+            + "\n  ".join(broken)
+        )
+
+    def test_wrapper_skips_whitelisted_srcip(self) -> None:
+        """When invoked with a Wazuh AR `add` command and a srcip
+        present in the whitelist, the wrapper exits 0 without calling
+        the upstream firewall-drop. We mock the upstream by setting
+        `APTL_AR_ORIGINAL=/bin/false` — if the wrapper forwards, the
+        process exits non-zero. With the whitelist short-circuit, it
+        never forwards and exits 0."""
+        # Use kali's redteam IP, which must be on the whitelist.
+        ar_payload = json.dumps(
+            {
+                "version": 1,
+                "command": "add",
+                "parameters": {
+                    "extra_args": [],
+                    "alert": {"data": {"srcip": KALI_IPS[0]}},
+                    "program": "firewall-drop",
+                },
+            },
+        )
+        # Run inside aptl-webapp (any in-process target works). Use
+        # `printf '%s'` not `echo` for predictable stdin, and rely on
+        # docker_exec's `bash -c` as the only shell layer (no nested
+        # `sh -c '...'` — the inner quoting collides with the JSON's
+        # double quotes).
+        cmd = (
+            f"printf %s {shlex.quote(ar_payload)} | "
+            f"APTL_AR_ORIGINAL=/bin/false {WRAPPER_PATH}"
+        )
+        result = docker_exec("aptl-webapp", cmd)
+        assert result.returncode == 0, (
+            f"Wrapper did not short-circuit for whitelisted srcip "
+            f"{KALI_IPS[0]}. rc={result.returncode}, stderr="
+            f"{result.stderr[:200]}. With APTL_AR_ORIGINAL=/bin/false, "
+            f"a non-zero exit means the wrapper forwarded to /bin/false "
+            f"instead of skipping."
+        )
+
+    def test_wrapper_forwards_non_whitelisted_srcip(self) -> None:
+        """When invoked with a non-whitelisted srcip, the wrapper must
+        forward to the upstream. We mock the upstream with /bin/true
+        (exits 0 regardless of input) and assert the wrapper exits 0
+        — confirming forward semantics. To distinguish from the skip
+        path, we then re-run with /bin/false and assert non-zero exit
+        (forward picked up the non-zero from the mock upstream)."""
+        ar_payload = json.dumps(
+            {
+                "version": 1,
+                "command": "add",
+                "parameters": {
+                    "extra_args": [],
+                    "alert": {"data": {"srcip": "10.99.99.99"}},
+                    "program": "firewall-drop",
+                },
+            },
+        )
+        cmd_true = (
+            f"printf %s {shlex.quote(ar_payload)} | "
+            f"APTL_AR_ORIGINAL=/bin/true {WRAPPER_PATH}"
+        )
+        result_true = docker_exec("aptl-webapp", cmd_true)
+        assert result_true.returncode == 0, (
+            f"Wrapper rc={result_true.returncode} when forwarding to "
+            f"/bin/true; expected 0. stderr={result_true.stderr[:200]}"
+        )
+
+        cmd_false = (
+            f"printf %s {shlex.quote(ar_payload)} | "
+            f"APTL_AR_ORIGINAL=/bin/false {WRAPPER_PATH}"
+        )
+        result_false = docker_exec("aptl-webapp", cmd_false)
+        assert result_false.returncode != 0, (
+            "Wrapper exited 0 when forwarding to /bin/false; expected "
+            "non-zero. The wrapper may have short-circuited (treating "
+            "10.99.99.99 as whitelisted) when it should have forwarded."
+        )
+
+    def test_wrapper_forwards_delete_command_even_for_whitelisted(self) -> None:
+        """The `delete` phase (timeout cleanup) must always forward,
+        even for whitelisted IPs. Otherwise a previously-installed drop
+        rule (added before the IP joined the whitelist) would never get
+        cleaned up. We assert: command="delete" + whitelisted srcip
+        still forwards to the upstream."""
+        ar_payload = json.dumps(
+            {
+                "version": 1,
+                "command": "delete",
+                "parameters": {
+                    "extra_args": [],
+                    "alert": {"data": {"srcip": KALI_IPS[0]}},
+                    "program": "firewall-drop",
+                },
+            },
+        )
+        # If the wrapper forwards, it pipes to /bin/false → rc=1.
+        # If it short-circuits (wrong behavior on delete), rc=0.
+        cmd = (
+            f"printf %s {shlex.quote(ar_payload)} | "
+            f"APTL_AR_ORIGINAL=/bin/false {WRAPPER_PATH}"
+        )
+        result = docker_exec("aptl-webapp", cmd)
+        assert result.returncode != 0, (
+            "Wrapper short-circuited on `command=delete` for whitelisted "
+            "srcip. Cleanup must always forward — otherwise stale drop "
+            "rules accumulate."
+        )
+
+    def test_wrapper_logs_skip_to_active_responses_log(self) -> None:
+        """When the wrapper short-circuits, it must log a `SKIPPED for
+        whitelisted <ip>` line to /var/ossec/logs/active-responses.log
+        so blue can audit which AR invocations were suppressed by the
+        whitelist."""
+        sentinel_ip = KALI_IPS[1]  # different IP from skip test for clarity
+        ar_payload = json.dumps(
+            {
+                "version": 1,
+                "command": "add",
+                "parameters": {
+                    "extra_args": [],
+                    "alert": {"data": {"srcip": sentinel_ip}},
+                    "program": "firewall-drop",
+                },
+            },
+        )
+        # Trigger the skip.
+        cmd = (
+            f"printf %s {shlex.quote(ar_payload)} | "
+            f"APTL_AR_ORIGINAL=/bin/false {WRAPPER_PATH}"
+        )
+        trigger = docker_exec("aptl-webapp", cmd)
+        assert trigger.returncode == 0, (
+            f"wrapper failed to short-circuit (rc={trigger.returncode})"
+        )
+        # Verify log entry.
+        log_check = docker_exec(
+            "aptl-webapp",
+            f"grep -F 'SKIPPED for whitelisted {sentinel_ip}' "
+            f"/var/ossec/logs/active-responses.log",
+        )
+        assert log_check.returncode == 0, (
+            f"Wrapper did not log the skip for {sentinel_ip} to "
+            f"/var/ossec/logs/active-responses.log. Without an audit "
+            f"trail, blue can't tell which AR invocations the whitelist "
+            f"suppressed."
+        )

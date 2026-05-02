@@ -6,6 +6,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.0] - 2026-05-02
+
+### Added
+
+- `containers/_wazuh-agent/aptl-firewall-drop.sh` — wrapper script that consults a kali-IP whitelist before forwarding to Wazuh's upstream `firewall-drop` active-response (AR) script. Installed at `/var/ossec/active-response/bin/aptl-firewall-drop` on every Wazuh agent in the lab (4 in-process + 2 sidecars) at image build time. Issue [#249](https://github.com/Brad-Edwards/aptl/issues/249); architectural rationale in [ADR-021](docs/adrs/adr-021-active-response-whitelist-via-wrapper.md).
+- `config/wazuh_cluster/etc/lists/active-response-whitelist` — kali source-IP whitelist consulted by the wrapper. Pre-seeded with kali's three lab IPs (`172.20.4.30`, `172.20.1.30`, `172.20.2.35`); update by editing this file and running `aptl lab stop -v && aptl lab start`.
+- `config/wazuh_cluster/wazuh_manager.conf` — new `<command>` block for `aptl-firewall-drop` and four representative `<active-response>` blocks (webapp brute force / SQL injection, AD Kerberos attack, database exfiltration). All blocks ship `<disabled>yes</disabled>`, severity-gated at `<level>10</level>`, timeout-bounded at 120s. Blue removes the `<disabled>` tag per iteration to enable.
+- `tests/test_wazuh_active_response.py` — pytest integration tests (lab-up). Asserts the wrapper-command declaration, every `<active-response>` block enforces the carve-outs, the whitelist file is present on each agent with the kali IPs, and the wrapper short-circuits / forwards / logs correctly across `add` / `delete` and whitelisted / non-whitelisted srcip cases.
+- `scripts/test-wazuh-ar-whitelist.sh` — manual end-to-end script proving the wrapper consults the whitelist and forwards cleanup unconditionally.
+- `docs/components/wazuh-active-response.md` — blue-facing reference covering the AR architecture, available commands, wiring procedure, whitelist design, severity gate, timeout strategy, default posture, `disable-account` manual procedure (AC#4), and troubleshooting.
+- `docs/adrs/adr-021-active-response-whitelist-via-wrapper.md` — records the wrapper-vs-CDB-list decision and notes the orchestrator-side complement in [#252](https://github.com/Brad-Edwards/aptl/issues/252).
+
+### Changed
+
+- The pre-existing rule-5763 SSH brute-force `<active-response>` block — was enabled and used bare `firewall-drop` with a 600s timeout. Now `<disabled>yes</disabled>` by default, references `aptl-firewall-drop` (so the kali whitelist is consulted), gated at `<level>10</level>`, timeout reduced to 120s. Behavior is preserved and re-enable-able by deleting the `<disabled>` tag.
+- `containers/_wazuh-agent/install.sh` — adds `jq` to the agent base image so the wrapper can parse Wazuh AR JSON cleanly.
+
+### Notes
+
+- Issue [#249](https://github.com/Brad-Edwards/aptl/issues/249) is the third milestone in the prevention chain set by [ADR-019](docs/adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md): #247 closed (Suricata stays IDS), #248 shipped in v6.5.0 (in-process agents), #249 ships in this release (AR wiring + kali whitelist). The orchestrator-side post-iter complement to the in-band whitelist is [#252](https://github.com/Brad-Edwards/aptl/issues/252) and ships separately.
+- Only `aptl-firewall-drop` honors the whitelist in this release. The `<command>` blocks for `host-deny` / `disable-account` / `route-null` remain declared (so blue can wire AR to them per-iteration) but do not consult the whitelist; scope `<rules_id>` and `<level>` conservatively when enabling AR via those commands. Generalizing the wrapper pattern to additional AR scripts is documented as future work in ADR-021.
+
 ## [6.5.0] - 2026-05-02
 
 ### Changed

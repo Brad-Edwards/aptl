@@ -25,7 +25,8 @@ apt-get install -y --no-install-recommends \
     lsb-release \
     ca-certificates \
     procps \
-    netcat-openbsd
+    netcat-openbsd \
+    jq
 
 curl -fsSL https://packages.wazuh.com/key/GPG-KEY-WAZUH \
     | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg

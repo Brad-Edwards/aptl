@@ -183,8 +183,10 @@ log "waiting ${WAIT_AR_SEC}s for AR to install iptables drop in ${TARGET}"
 deadline=$(( $(date +%s) + WAIT_AR_SEC ))
 ar_seen=0
 while [ "$(date +%s)" -lt "${deadline}" ]; do
-    if docker exec "${TARGET}" iptables -L INPUT -n 2>/dev/null \
-        | grep -q "${KALI_SRC_IP}"; then
+    # `iptables -C` checks for an exact rule match, so we know AR (and
+    # not some unrelated rule that happens to mention KALI_SRC_IP)
+    # installed the drop.
+    if docker exec "${TARGET}" iptables -C INPUT -s "${KALI_SRC_IP}" -j DROP 2>/dev/null; then
         ar_seen=1
         break
     fi

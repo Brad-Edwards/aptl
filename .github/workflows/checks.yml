@@ -27,7 +27,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pre-commit
+      # Skip the local test hooks here — the dedicated python-tests /
+      # mcp-tests / web-tests jobs below already run them with the right
+      # toolchain (deps installed, node available, etc). The test hooks
+      # exist for local pre-commit safety, not CI redundancy.
       - run: pre-commit run --all-files --show-diff-on-failure
+        env:
+          SKIP: pytest,vitest-mcp-common,vitest-web
 
   python-tests:
     name: Python tests + coverage

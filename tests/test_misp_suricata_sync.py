@@ -586,59 +586,55 @@ class TestRenderHashListFile:
 # ---------------------------------------------------------------------------
 
 
-class TestRuleFileWriter:
+class TestWriteIfChanged:
+    """Tests for the atomic, idempotent rule-file writer."""
+
+
     def test_creates_file_when_missing(self, tmp_path: Path):
-        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
+        from aptl.services.misp_suricata_sync.rule_writer import write_if_changed
 
         target = tmp_path / "misp-iocs.rules"
-        writer = RuleFileWriter(target)
-        changed = writer.write_if_changed("hello\n")
-        assert changed is True
+        assert write_if_changed(target, "hello\n") is True
         assert target.read_text() == "hello\n"
 
     def test_returns_false_when_content_identical(self, tmp_path: Path):
-        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
+        from aptl.services.misp_suricata_sync.rule_writer import write_if_changed
 
         target = tmp_path / "misp-iocs.rules"
         target.write_text("same\n")
-        writer = RuleFileWriter(target)
-        assert writer.write_if_changed("same\n") is False
+        assert write_if_changed(target, "same\n") is False
 
     def test_returns_true_and_replaces_when_different(self, tmp_path: Path):
-        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
+        from aptl.services.misp_suricata_sync.rule_writer import write_if_changed
 
         target = tmp_path / "misp-iocs.rules"
         target.write_text("old\n")
-        writer = RuleFileWriter(target)
-        assert writer.write_if_changed("new\n") is True
+        assert write_if_changed(target, "new\n") is True
         assert target.read_text() == "new\n"
 
     def test_atomic_write_uses_temp_then_rename(self, tmp_path: Path, mocker):
-        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
+        from aptl.services.misp_suricata_sync.rule_writer import write_if_changed
 
         target = tmp_path / "misp-iocs.rules"
         target.write_text("old\n")
         spy = mocker.spy(Path, "replace")
-        writer = RuleFileWriter(target)
-        writer.write_if_changed("new\n")
+        write_if_changed(target, "new\n")
         assert spy.call_count == 1
 
     def test_creates_parent_directory_if_missing(self, tmp_path: Path):
-        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
+        from aptl.services.misp_suricata_sync.rule_writer import write_if_changed
 
         target = tmp_path / "nested" / "misp-iocs.rules"
-        writer = RuleFileWriter(target)
-        assert writer.write_if_changed("x\n") is True
+        assert write_if_changed(target, "x\n") is True
         assert target.read_text() == "x\n"
 
     def test_does_not_truncate_when_caller_passes_none(self, tmp_path: Path):
-        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
+        from aptl.services.misp_suricata_sync.rule_writer import write_if_changed
 
         target = tmp_path / "misp-iocs.rules"
         target.write_text("preserved\n")
-        writer = RuleFileWriter(target)
         with pytest.raises(TypeError):
-            writer.write_if_changed(None)  # type: ignore[arg-type]
+            write_if_changed(target, None)  # type: ignore[arg-type]
         assert target.read_text() == "preserved\n"
 
 
@@ -1016,18 +1012,22 @@ class TestSyncLoop:
 
     def test_skips_write_when_misp_returns_none(self, tmp_path: Path, mocker):
         from aptl.services.misp_suricata_sync.main import SyncRunner
+        from aptl.services.misp_suricata_sync import main as main_mod
 
         cfg = self._cfg(tmp_path)
         cfg.rules_out_path.write_text("preserved\n")
 
         client = MagicMock()
         client.fetch_tagged_attributes.return_value = None
-        writer = MagicMock()
         reloader = MagicMock()
 
-        SyncRunner(cfg, client=client, writer=writer, reloader=reloader).run_once()
+        write_spy = mocker.patch.object(
+            main_mod, "write_if_changed", return_value=False
+        )
 
-        writer.write_if_changed.assert_not_called()
+        SyncRunner(cfg, client=client, reloader=reloader).run_once()
+
+        write_spy.assert_not_called()
         reloader.reload_rules.assert_not_called()
         assert cfg.rules_out_path.read_text() == "preserved\n"
 
@@ -1035,60 +1035,68 @@ class TestSyncLoop:
         self, tmp_path: Path, mocker
     ):
         from aptl.services.misp_suricata_sync.main import SyncRunner
-        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
+        from aptl.services.misp_suricata_sync import main as main_mod
 
         cfg = self._cfg(tmp_path)
         client = MagicMock()
         client.fetch_tagged_attributes.return_value = []
-        writer = MagicMock()
-        writer.write_if_changed.return_value = False
         reloader = MagicMock()
 
-        # Force the sidecar list writers SyncRunner constructs internally
-        # to also report "no change", so this test exercises the
-        # reload-skip path even after the loop started writing every
-        # hash list every tick (cycle-5 fix #5).
-        mocker.patch.object(
-            RuleFileWriter, "write_if_changed", return_value=False
+        write_spy = mocker.patch.object(
+            main_mod, "write_if_changed", return_value=False
         )
 
-        SyncRunner(cfg, client=client, writer=writer, reloader=reloader).run_once()
+        SyncRunner(cfg, client=client, reloader=reloader).run_once()
 
-        writer.write_if_changed.assert_called_once()
+        # 1 main rule file + 3 hash sidecars (always written every tick).
+        assert write_spy.call_count == 1 + len(
+            __import__("aptl.services.misp_suricata_sync.translator",
+                       fromlist=["HASH_TYPES"]).HASH_TYPES
+        )
         reloader.reload_rules.assert_not_called()
 
-    def test_triggers_reload_when_writer_reports_change(self, tmp_path: Path):
+    def test_triggers_reload_when_writer_reports_change(
+        self, tmp_path: Path, mocker
+    ):
         from aptl.services.misp_suricata_sync.main import SyncRunner
+        from aptl.services.misp_suricata_sync import main as main_mod
 
         cfg = self._cfg(tmp_path)
         client = MagicMock()
         client.fetch_tagged_attributes.return_value = []
-        writer = MagicMock()
-        writer.write_if_changed.return_value = True
         reloader = MagicMock()
         reloader.reload_rules.return_value = True
 
-        SyncRunner(cfg, client=client, writer=writer, reloader=reloader).run_once()
+        mocker.patch.object(main_mod, "write_if_changed", return_value=True)
+
+        SyncRunner(cfg, client=client, reloader=reloader).run_once()
 
         reloader.reload_rules.assert_called_once()
 
-    def test_reload_retried_on_next_tick_after_failure(self, tmp_path: Path):
+    def test_reload_retried_on_next_tick_after_failure(
+        self, tmp_path: Path, mocker
+    ):
         """If reload fails after a successful write, the next tick must retry
         even though the file is no longer changing."""
         from aptl.services.misp_suricata_sync.main import SyncRunner
+        from aptl.services.misp_suricata_sync import main as main_mod
 
         cfg = self._cfg(tmp_path)
         client = MagicMock()
         client.fetch_tagged_attributes.return_value = []
-        writer = MagicMock()
-        # Tick 1 changes the file; tick 2 is a no-op write.
-        writer.write_if_changed.side_effect = [True, False]
         reloader = MagicMock()
         reloader.reload_rules.side_effect = [False, True]
 
-        runner = SyncRunner(
-            cfg, client=client, writer=writer, reloader=reloader
+        # Tick 1: writer reports change. Tick 2: writer reports no change.
+        # 4 calls per tick (3 sidecars + main rule); first tick all True,
+        # second tick all False.
+        n_writes_per_tick = 1 + 3
+        side_effect = [True] * n_writes_per_tick + [False] * n_writes_per_tick
+        mocker.patch.object(
+            main_mod, "write_if_changed", side_effect=side_effect
         )
+
+        runner = SyncRunner(cfg, client=client, reloader=reloader)
         runner.run_once()
         assert runner.reload_pending is True
         runner.run_once()
@@ -1100,11 +1108,10 @@ class TestSyncLoop:
     ):
         """Suricata's rule file references hash list files; the lists must be
         in place before the rule file is replaced or Suricata could read a
-        rule pointing at a stale or missing list. This asserts true
-        cross-writer ordering by routing every write — sidecar AND main
-        — through the same shared call log."""
+        rule pointing at a stale or missing list. This asserts true ordering
+        by capturing every write through the same module-level function."""
         from aptl.services.misp_suricata_sync.main import SyncRunner
-        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
+        from aptl.services.misp_suricata_sync import main as main_mod
 
         cfg = self._cfg(tmp_path)
         attrs = [
@@ -1115,32 +1122,16 @@ class TestSyncLoop:
 
         write_order: list[str] = []
 
-        # Patch RuleFileWriter so EVERY writer instance — both the
-        # sidecar list writers SyncRunner constructs internally and the
-        # primary writer the runner is initialised with — appends to
-        # `write_order`.
-        def init_spy(self, target):
-            self._target = target
-
-        def write_spy(self, content):
-            write_order.append(str(self._target))
+        def write_spy(target, content):
+            write_order.append(str(target))
             return True
 
-        mocker.patch.object(RuleFileWriter, "__init__", init_spy)
-        mocker.patch.object(
-            RuleFileWriter, "write_if_changed", write_spy
-        )
+        mocker.patch.object(main_mod, "write_if_changed", side_effect=write_spy)
 
-        primary_writer = RuleFileWriter(cfg.rules_out_path)
         reloader = MagicMock()
         reloader.reload_rules.return_value = True
 
-        SyncRunner(
-            cfg,
-            client=client,
-            writer=primary_writer,
-            reloader=reloader,
-        ).run_once()
+        SyncRunner(cfg, client=client, reloader=reloader).run_once()
 
         # Both the sidecar list and the rule file got written.
         assert any("misp-sha256.list" in p for p in write_order), write_order
@@ -1161,10 +1152,9 @@ class TestSyncLoop:
 
         client = MagicMock()
         client.wait_for_ready.return_value = True
-        writer = MagicMock()
         reloader = MagicMock()
 
-        run_loop(cfg, stop=stop, client=client, writer=writer, reloader=reloader)
+        run_loop(cfg, stop=stop, client=client, reloader=reloader)
         client.fetch_tagged_attributes.assert_not_called()
 
     def test_main_fails_fast_on_missing_api_key(self, monkeypatch):

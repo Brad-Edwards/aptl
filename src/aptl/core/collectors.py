@@ -12,10 +12,16 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from aptl.utils.curl_safe import curl_json as _shared_curl_json
+from aptl.utils.curl_safe import curl_json as _curl_json
 from aptl.utils.logging import get_logger
 
 log = get_logger("collectors")
+
+# 120s timeout for SOC-tool collection calls — these scrape large
+# windows of historical data (Wazuh scroll, MISP rest-search, TheHive
+# query) and the default 30s is too aggressive. Pass this constant
+# explicitly at every call site so the choice is visible.
+_COLLECTOR_HTTP_TIMEOUT = 120
 
 
 def _run_cmd(
@@ -29,31 +35,6 @@ def _run_cmd(
     except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
         log.warning("Command failed: %s: %s", " ".join(cmd[:3]), e)
         return None
-
-
-def _curl_json(
-    url: str,
-    *,
-    auth: tuple[str, str] | None = None,
-    auth_header: str | None = None,
-    body: dict | None = None,
-    insecure: bool = False,
-    timeout: int = 120,
-) -> dict | list | None:
-    """Thin wrapper preserving the legacy collector signature.
-
-    Delegates to :func:`aptl.utils.curl_safe.curl_json` which centralises
-    secret-safe header handling, TLS posture, and timeout/error
-    semantics for every component that talks to a SOC tool.
-    """
-    return _shared_curl_json(
-        url,
-        auth=auth,
-        auth_header=auth_header,
-        body=body,
-        insecure=insecure,
-        timeout=timeout,
-    )
 
 
 def collect_wazuh_alerts(
@@ -85,7 +66,13 @@ def collect_wazuh_alerts(
     try:
         # Initial search with scroll
         url = f"{indexer_url}/wazuh-alerts-4.x-*/_search?scroll=2m"
-        data = _curl_json(url, auth=auth, body=query, insecure=True)
+        data = _curl_json(
+            url,
+            auth=auth,
+            body=query,
+            insecure=True,
+            timeout=_COLLECTOR_HTTP_TIMEOUT,
+        )
         if data is None:
             log.warning("Failed to query Wazuh Indexer for alerts")
             return []
@@ -99,7 +86,11 @@ def collect_wazuh_alerts(
             scroll_body = {"scroll": "2m", "scroll_id": scroll_id}
             scroll_url = f"{indexer_url}/_search/scroll"
             data = _curl_json(
-                scroll_url, auth=auth, body=scroll_body, insecure=True
+                scroll_url,
+                auth=auth,
+                body=scroll_body,
+                insecure=True,
+                timeout=_COLLECTOR_HTTP_TIMEOUT,
             )
             if data is None:
                 break
@@ -179,6 +170,7 @@ def collect_thehive_cases(
         f"{url}/api/v1/query",
         auth_header=f"Bearer {api_key}",
         body=query_body,
+        timeout=_COLLECTOR_HTTP_TIMEOUT,
     )
 
     if data is None:
@@ -218,6 +210,7 @@ def collect_misp_events(
         auth_header=api_key,
         body=query_body,
         insecure=True,
+        timeout=_COLLECTOR_HTTP_TIMEOUT,
     )
 
     if data is None:
@@ -261,6 +254,7 @@ def collect_shuffle_executions(
     data = _curl_json(
         f"{url}/api/v1/workflows/executions",
         auth_header=f"Bearer {api_key}",
+        timeout=_COLLECTOR_HTTP_TIMEOUT,
     )
 
     if data is None:

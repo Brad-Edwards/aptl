@@ -9,7 +9,7 @@ from __future__ import annotations
 import ipaddress
 import re
 import zlib
-from typing import Iterable
+from typing import Callable, Iterable
 from urllib.parse import urlparse
 
 from aptl.services.misp_suricata_sync.models import (
@@ -111,6 +111,107 @@ def _hash_list_rule_arg(hash_type: str) -> str:
     return f"misp/misp-{hash_type}.list"
 
 
+def _event_id_metadata(attr: MispAttribute) -> str:
+    """Render the optional ``metadata:misp_event_id N`` directive.
+
+    Splices a numeric ``event_id`` into rule metadata when present;
+    drops malformed values with a warning so they cannot inject syntax
+    into the rule file (which would break the next Suricata reload).
+    """
+    if not attr.event_id or not attr.event_id.strip():
+        return ""
+    ev = attr.event_id.strip()
+    if _NUMERIC_RE.match(ev):
+        return f"; metadata:misp_event_id {ev}"
+    log.warning(
+        "Ignoring non-numeric event_id %r on %s=%s",
+        attr.event_id, attr.type, attr.value,
+    )
+    return ""
+
+
+def _render_ip_src(value: str, sid: int, meta: str) -> str | None:
+    if not _is_valid_ip(value):
+        log.warning("Skipping malformed ip-src value %r", value)
+        return None
+    value = value.strip()
+    msg = _escape_content(f"APTL MISP IOC ip-src: {value}")
+    return (
+        f'alert ip {value} any -> any any '
+        f'(msg:"{msg}"; sid:{sid}; rev:1{meta};)'
+    )
+
+
+def _render_ip_dst(value: str, sid: int, meta: str) -> str | None:
+    if not _is_valid_ip(value):
+        log.warning("Skipping malformed ip-dst value %r", value)
+        return None
+    value = value.strip()
+    msg = _escape_content(f"APTL MISP IOC ip-dst: {value}")
+    return (
+        f'alert ip any any -> {value} any '
+        f'(msg:"{msg}"; sid:{sid}; rev:1{meta};)'
+    )
+
+
+def _render_domain(value: str, sid: int, meta: str) -> str | None:
+    content = _escape_content(value)
+    msg = _escape_content(f"APTL MISP IOC domain: {value}")
+    # ``dotprefix`` anchors the left side (start of buffer or preceded
+    # by a dot); ``endswith`` anchors the right side. Together they
+    # cover exact + subdomain matches without false positives like
+    # "bad.com.evil".
+    return (
+        f'alert dns any any -> any any '
+        f'(msg:"{msg}"; dns.query; content:"{content}"; nocase; '
+        f'dotprefix; endswith; sid:{sid}; rev:1{meta};)'
+    )
+
+
+def _render_url(value: str, sid: int, meta: str) -> str | None:
+    scheme, host, path = _split_url(value)
+    if not host:
+        log.warning("URL IOC %r has no host; skipping", value)
+        return None
+    host_content = _escape_content(host)
+    msg = _escape_content(f"APTL MISP IOC url: {value}")
+    if scheme == "https":
+        # HTTPS URI is encrypted; SNI is the only field a passive IDS
+        # can see, so match that instead of emitting a dead http rule.
+        return (
+            f'alert tls any any -> any any '
+            f'(msg:"{msg}"; tls.sni; content:"{host_content}"; '
+            f'nocase; dotprefix; endswith; sid:{sid}; rev:1{meta};)'
+        )
+    parts = [
+        'alert http any any -> any any (msg:"',
+        msg,
+        f'"; http.host; content:"{host_content}"; nocase; '
+        f"dotprefix; endswith",
+    ]
+    if path and path != "/":
+        parts.append(
+            f'; http.uri; content:"{_escape_content(path)}"; nocase'
+        )
+    parts.append(f"; sid:{sid}; rev:1{meta};)")
+    return "".join(parts)
+
+
+# Per-type renderer signature: (value, sid, meta) -> rule text or None.
+_Renderer = Callable[[str, int, str], "str | None"]
+
+# Dispatch table for inline renderers, keyed by MISP attribute type.
+# Hash types are aggregated separately and rendered in the translator's
+# main loop, so they do not appear here.
+_RENDERERS: dict[str, _Renderer] = {
+    "ip-src": _render_ip_src,
+    "ip-dst": _render_ip_dst,
+    "domain": _render_domain,
+    "hostname": _render_domain,
+    "url": _render_url,
+}
+
+
 class IocTranslator:
     """Render MISP attributes as Suricata rule strings."""
 
@@ -198,82 +299,12 @@ class IocTranslator:
         return TranslationResult(rules=inline_rules, hash_lists=hash_lists)
 
     def _render_inline(self, attr: MispAttribute, sid: int) -> str | None:
-        # Only splice an event_id into rule metadata when it is a numeric
-        # string MISP-side. A malformed value would inject syntax into
-        # the rule file and break the next reload.
-        meta = ""
-        if attr.event_id and attr.event_id.strip():
-            ev = attr.event_id.strip()
-            if _NUMERIC_RE.match(ev):
-                meta = f"; metadata:misp_event_id {ev}"
-            else:
-                log.warning(
-                    "Ignoring non-numeric event_id %r on %s=%s",
-                    attr.event_id, attr.type, attr.value,
-                )
-        type_ = attr.type
-        value = attr.value
-
-        if type_ in ("ip-src", "ip-dst"):
-            if not _is_valid_ip(value):
-                log.warning("Skipping malformed %s value %r", type_, value)
-                return None
-            value = value.strip()
-            msg = _escape_content(f"APTL MISP IOC {type_}: {value}")
-            if type_ == "ip-src":
-                header = f"alert ip {value} any -> any any"
-            else:
-                header = f"alert ip any any -> {value} any"
-            return f'{header} (msg:"{msg}"; sid:{sid}; rev:1{meta};)'
-
-        if type_ in ("domain", "hostname"):
-            content = _escape_content(value)
-            msg = _escape_content(f"APTL MISP IOC domain: {value}")
-            # ``dotprefix`` anchors the left side (start of buffer or
-            # preceded by a dot); ``endswith`` anchors the right side
-            # (match must end at the buffer end). Together they cover
-            # exact and subdomain matches without false-positive matches
-            # like "bad.com.evil".
-            return (
-                f'alert dns any any -> any any '
-                f'(msg:"{msg}"; dns.query; content:"{content}"; nocase; '
-                f'dotprefix; endswith; sid:{sid}; rev:1{meta};)'
-            )
-
-        if type_ == "url":
-            scheme, host, path = _split_url(value)
-            if not host:
-                log.warning("URL IOC %r has no host; skipping", value)
-                return None
-            host_content = _escape_content(host)
-            msg = _escape_content(f"APTL MISP IOC url: {value}")
-            if scheme == "https":
-                # HTTPS URI is encrypted; SNI is the only field the
-                # passive IDS can still observe. Match that instead of
-                # emitting a dead http rule.
-                return (
-                    f'alert tls any any -> any any '
-                    f'(msg:"{msg}"; tls.sni; content:"{host_content}"; '
-                    f'nocase; dotprefix; endswith; sid:{sid}; rev:1{meta};)'
-                )
-            # Plain HTTP — match host header + URI (path/query) when
-            # the path carries useful information.
-            parts = [
-                'alert http any any -> any any (msg:"',
-                msg,
-                f'"; http.host; content:"{host_content}"; nocase; '
-                f"dotprefix; endswith",
-            ]
-            if path and path != "/":
-                path_content = _escape_content(path)
-                parts.append(
-                    f'; http.uri; content:"{path_content}"; nocase'
-                )
-            parts.append(f"; sid:{sid}; rev:1{meta};)")
-            return "".join(parts)
-
-        log.warning("Unsupported MISP IOC type %r; skipping", type_)
-        return None
+        meta = _event_id_metadata(attr)
+        renderer = _RENDERERS.get(attr.type)
+        if renderer is None:
+            log.warning("Unsupported MISP IOC type %r; skipping", attr.type)
+            return None
+        return renderer(attr.value, sid, meta)
 
 
 def render_rules_file(

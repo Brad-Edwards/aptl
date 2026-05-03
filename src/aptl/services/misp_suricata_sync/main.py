@@ -15,7 +15,7 @@ from pathlib import Path
 
 from aptl.services.misp_suricata_sync.config import ServiceConfig
 from aptl.services.misp_suricata_sync.misp_client import MispClient
-from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
+from aptl.services.misp_suricata_sync.rule_writer import write_if_changed
 from aptl.services.misp_suricata_sync.suricata_reloader import SuricataReloader
 from aptl.services.misp_suricata_sync.translator import (
     HASH_TYPES,
@@ -42,12 +42,10 @@ class SyncRunner:
         cfg: ServiceConfig,
         *,
         client: MispClient,
-        writer: RuleFileWriter,
         reloader: SuricataReloader,
     ) -> None:
         self._cfg = cfg
         self._client = client
-        self._writer = writer
         self._reloader = reloader
         self._reload_pending = False
 
@@ -75,22 +73,22 @@ class SyncRunner:
             sid_base=self._cfg.sid_base,
         )
 
-        # Order matters: write each per-type hash list BEFORE the rule file
-        # that references it, so Suricata never reads a rule pointing at a
-        # stale or missing list. Every hash type is rewritten on every
-        # tick — even if MISP has zero IOCs of that type — so the last
-        # IOC of a type being removed does not leave a stale list behind.
+        # Order matters: write each per-type hash list BEFORE the rule
+        # file that references it, so Suricata never reads a rule
+        # pointing at a stale or missing list. Every hash type is
+        # rewritten on every tick — even if MISP has zero IOCs of that
+        # type — so the last IOC of a type being removed does not leave
+        # a stale list behind.
         any_changed = False
         for hash_type in HASH_TYPES:
             digests = result.hash_lists.get(hash_type, [])
-            list_path = _hash_list_path(self._cfg.rules_out_path, hash_type)
-            list_writer = RuleFileWriter(list_path)
-            if list_writer.write_if_changed(
-                render_hash_list_file(hash_type, digests)
+            if write_if_changed(
+                _hash_list_path(self._cfg.rules_out_path, hash_type),
+                render_hash_list_file(hash_type, digests),
             ):
                 any_changed = True
 
-        if self._writer.write_if_changed(rules_text):
+        if write_if_changed(self._cfg.rules_out_path, rules_text):
             any_changed = True
 
         if not (any_changed or self._reload_pending):
@@ -115,7 +113,6 @@ def run_loop(
     *,
     stop: threading.Event,
     client: MispClient,
-    writer: RuleFileWriter,
     reloader: SuricataReloader,
 ) -> None:
     """Block until ``stop`` is set, executing one tick per interval."""
@@ -124,32 +121,27 @@ def run_loop(
             break
         log.info("Waiting for MISP to become reachable...")
 
-    runner = SyncRunner(cfg, client=client, writer=writer, reloader=reloader)
+    runner = SyncRunner(cfg, client=client, reloader=reloader)
     while not stop.is_set():
         runner.run_once()
         stop.wait(cfg.sync_interval_seconds)
 
 
-# Backwards-compatible function entry point used by tests that don't need
-# multi-tick state. Each call constructs a fresh :class:`SyncRunner`, so
-# reload-retry is a no-op in the function form.
-def run_once(
+def _build_collaborators(
     cfg: ServiceConfig,
-    *,
-    client: MispClient,
-    writer: RuleFileWriter,
-    reloader: SuricataReloader,
-) -> None:
-    SyncRunner(
-        cfg, client=client, writer=writer, reloader=reloader
-    ).run_once()
+) -> tuple[MispClient, SuricataReloader]:
+    """Construct the live client + reloader for production runs."""
+    return MispClient(cfg), SuricataReloader(cfg.suricata_socket_path)
 
 
 def main() -> int:
-    setup_logging(level=logging.INFO)
+    """Service entrypoint. Returns process exit code."""
     try:
         cfg = ServiceConfig.from_env()
     except Exception as exc:  # noqa: BLE001 - explicit fail-fast on bad env
+        # Use a one-shot logger init at WARNING so the failure is visible
+        # without committing to the (potentially-bogus) configured level.
+        setup_logging(level=logging.WARNING)
         log.error("misp-suricata-sync failed to start: %s", exc)
         return 2
 
@@ -167,11 +159,8 @@ def main() -> int:
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())
 
-    client = MispClient(cfg)
-    writer = RuleFileWriter(cfg.rules_out_path)
-    reloader = SuricataReloader(cfg.suricata_socket_path)
-
-    run_loop(cfg, stop=stop, client=client, writer=writer, reloader=reloader)
+    client, reloader = _build_collaborators(cfg)
+    run_loop(cfg, stop=stop, client=client, reloader=reloader)
     log.info("misp-suricata-sync exiting cleanly")
     return 0
 

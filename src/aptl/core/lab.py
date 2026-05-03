@@ -250,6 +250,29 @@ def _check_bind_mounts(project_dir: Path) -> list[str]:
     return errors
 
 
+def _validate_env_secrets(raw_env: dict[str, str]) -> "LabResult | None":
+    """Refuse to start when sensitive .env values are still placeholders.
+
+    Returns a failed :class:`LabResult` ready to bubble out of
+    :func:`orchestrate_lab_start`, or ``None`` if every sensitive var
+    looks real. Kept separate from the orchestrator so the rule has a
+    single test seam and the orchestrator stays a sequence of
+    short-circuiting checks.
+    """
+    placeholders = find_placeholder_env_values(raw_env)
+    if not placeholders:
+        return None
+    msg = (
+        "Refusing to start lab: .env values for "
+        f"{', '.join(placeholders)} are still set to .env.example "
+        "placeholders. Replace them with real secrets before "
+        "starting the lab — the SOC stack would otherwise come up "
+        "with admin API keys anyone can read in the repo."
+    )
+    log.error(msg)
+    return LabResult(success=False, error=msg)
+
+
 def orchestrate_lab_start(
     project_dir: Path,
     skip_seed: bool = False,
@@ -290,17 +313,9 @@ def orchestrate_lab_start(
         log.error("Failed to load .env: %s", exc)
         return LabResult(success=False, error=f"Failed to load .env: {exc}")
 
-    placeholders = find_placeholder_env_values(raw_env)
-    if placeholders:
-        msg = (
-            "Refusing to start lab: .env values for "
-            f"{', '.join(placeholders)} are still set to .env.example "
-            "placeholders. Replace them with real secrets before "
-            "starting the lab — the SOC stack would otherwise come up "
-            "with admin API keys anyone can read in the repo."
-        )
-        log.error(msg)
-        return LabResult(success=False, error=msg)
+    secrets_check = _validate_env_secrets(raw_env)
+    if secrets_check is not None:
+        return secrets_check
 
     # Step 2: Load aptl.json config
     log.info("Step 2: Loading configuration...")
@@ -571,12 +586,14 @@ def _sync_mcp_config_keys(project_dir: Path) -> None:
                   mcp_path.name, env_path.name)
         return
 
-    env_vals: dict[str, str] = {}
-    for ln in env_path.read_text().splitlines():
-        ln = ln.strip()
-        if ln and not ln.startswith("#") and "=" in ln:
-            k, v = ln.split("=", 1)
-            env_vals[k.strip()] = v.strip()
+    # Use the canonical .env parser so quoted values, `export` prefixes,
+    # and trailing comments are handled identically to lab startup.
+    try:
+        env_vals = load_dotenv(env_path)
+    except FileNotFoundError:
+        log.debug("MCP sync: %s vanished between checks; skipping",
+                  env_path.name)
+        return
 
     # server name -> env keys it expects
     SERVER_KEYS = {

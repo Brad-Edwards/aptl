@@ -7,6 +7,10 @@ notes/
 # Scenario runtime state
 .aptl/
 
+# Claude Code harness — local-only bookkeeping (wakeup-loop locks, etc.)
+.claude/*.lock
+.claude/scheduled_tasks.lock
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

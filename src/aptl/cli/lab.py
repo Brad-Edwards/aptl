@@ -1,6 +1,7 @@
 """CLI commands for lab lifecycle management."""
 
 import json
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -223,11 +224,12 @@ def _validate_continuity_targets(
 
     When the user passes ``--target`` explicitly, every name must
     belong to this compose project; an unknown name is a hard error
-    (security finding S1, cycle 1). When the user takes the defaults,
-    a missing default in the active profile is *not* a hard error —
-    it just means that profile isn't running this lab session, and
-    auditing the remaining defaults is still useful (codex finding C8,
-    cycle 2). In that case we filter to the present subset and warn.
+    so a stray ``--target foreign-container`` cannot redirect at
+    another project on a shared Docker daemon. When the user takes
+    the defaults, a missing default in the active profile is *not*
+    a hard error — that profile just isn't running this lab session,
+    and auditing the remaining defaults is still useful. In that
+    case we filter to the present subset and warn.
 
     Returns the list to audit (possibly narrowed). Raises ``typer.Exit``
     on the strict-validation-failure paths.
@@ -260,29 +262,73 @@ def _validate_continuity_targets(
     return present
 
 
+_SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _validate_run_id_shape(run_id: str) -> None:
+    """Reject ``run_id`` values that are unsafe to use as a path segment.
+
+    Without this gate, a value like ``../../escape`` would resolve
+    ``LocalRunStore.append_jsonl`` outside the run-storage base
+    directory, writing JSONL to an attacker-chosen path.
+    """
+    if not _SAFE_RUN_ID.match(run_id):
+        typer.echo(
+            f"error: --run-id must match {_SAFE_RUN_ID.pattern!r}; got {run_id!r}",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+
 def _resolve_continuity_run_archive(
     project_root: Path, config, *, override: str | None = None,
 ) -> tuple[object | None, str | None]:
     """Resolve the (run_store, run_id) pair for archive emission.
 
     Resolution order:
-      1. An explicit ``--run-id`` override (CLI flag) wins.
-      2. The active scenario session's ``run_id`` (when populated).
+      1. An explicit ``--run-id`` override (CLI flag) wins. The id must
+         match a safe character class and reference an existing run
+         (the run directory and its ``manifest.json`` must already be
+         present, so a typo creates a clear error rather than a stray
+         orphan archive that ``aptl runs list`` cannot find).
+      2. The active scenario session's ``run_id`` (when populated). A
+         corrupt ``.aptl/session.json`` is non-fatal here — the audit
+         should still repair iptables even if archive discovery fails.
       3. ``(None, None)`` — audit runs but events are not persisted.
 
     Step 2 is currently never populated by ``ScenarioSession.start()``
     in production flows; the session-bound archival path lights up
     once #263/RTE-001 wires the runtime engine. Until then, the
     ``--run-id`` override is the supported path for archive emission.
-    Codex finding C10 (cycle 3).
     """
+    from aptl.core.scenarios import ScenarioStateError
     from aptl.core.session import ScenarioSession
 
     if override:
-        return _resolve_run_store(project_root, config), override
+        _validate_run_id_shape(override)
+        store = _resolve_run_store(project_root, config)
+        run_dir = store.get_run_path(override)
+        manifest = run_dir / "manifest.json"
+        if not manifest.exists():
+            typer.echo(
+                f"error: --run-id {override!r} does not exist in the run"
+                f" store ({run_dir} has no manifest.json). Create the"
+                " run first or omit --run-id.",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        return store, override
 
     state_dir = project_root / ".aptl"
-    session = ScenarioSession(state_dir).get_active()
+    try:
+        session = ScenarioSession(state_dir).get_active()
+    except ScenarioStateError as exc:
+        log.warning(
+            "Continuity audit: could not load session at %s (%s);"
+            " events will not be archived.",
+            state_dir, exc,
+        )
+        return None, None
     if session is None or not session.run_id:
         return None, None
     return _resolve_run_store(project_root, config), session.run_id
@@ -364,7 +410,7 @@ def continuity_audit(
         # Empty whitelist means the audit would protect zero source IPs —
         # the carve-out is effectively disabled. A silent zero-exit lets
         # automation believe the run is clean while it's actually
-        # uninstrumented. Fail loudly. Codex finding C7 (cycle 2).
+        # uninstrumented. Fail loudly.
         typer.echo(
             f"error: no kali IPs found in {wl_path}; whitelist appears to"
             " be empty or missing. Refusing to run an audit that would"
@@ -395,6 +441,5 @@ def continuity_audit(
 
     # Exit non-zero if any target failed inspection or any reversion
     # failed — automation watching the exit code must see the signal.
-    # Codex finding C5 (cycle 1).
     if any(e.action != "REVERTED" for e in events):
         raise typer.Exit(code=1)

@@ -159,8 +159,7 @@ def kali_source_ips(*, whitelist_path: Path) -> list[str]:
         # accepting CIDR forms in the whitelist would let a misplaced
         # entry like ``172.20.4.0/24`` cause the audit to revert a
         # defender's blanket subnet ban. ``/32`` is allowed and stripped
-        # so the rest of the audit treats it as a bare IPv4. Codex
-        # security finding S2 (cycle 3).
+        # so the rest of the audit treats it as a bare IPv4.
         candidate = line[:-3] if line.endswith("/32") else line
         try:
             ipaddress.IPv4Address(candidate)
@@ -305,10 +304,9 @@ def parse_iptables_rule(line: str) -> ParsedRule | None:
 
     # Use shlex.split so quoted values (e.g. `--comment "manual edit"`)
     # are tokenized as a single token. Plain ``str.split`` would break
-    # the quoted span into multiple tokens, the parser would reject the
-    # rule as malformed, and the audit would silently preserve a
-    # blanket kali DROP with an attached comment. Codex finding C6
-    # (cycle 2) / S2 root cause.
+    # the quoted span into multiple tokens, the parser would reject
+    # the rule as malformed, and the audit would silently preserve a
+    # blanket kali DROP with an attached comment.
     try:
         tokens = shlex.split(stripped)
     except ValueError:
@@ -404,10 +402,10 @@ def audit_target(
     """Inspect one target's INPUT chain and return blanket kali findings.
 
     Raises :class:`ContinuityAuditError` if ``iptables -S`` cannot be
-    queried (exec exception or non-zero return). Codex review (cycle 1):
-    silently returning ``[]`` on failure was indistinguishable from a
-    clean chain, so a backend hiccup looked like success. The caller
-    (typically :func:`audit_and_revert`) wraps the error into an
+    queried (exec exception or non-zero return). Silently returning
+    ``[]`` on failure was indistinguishable from a clean chain, so
+    a backend hiccup looked like success. The caller — typically
+    :func:`audit_and_revert` — wraps the error into an
     ``AUDIT_FAILED`` event so the failure is captured in the run
     archive and surfaces in the CLI exit code.
     """
@@ -564,7 +562,7 @@ def audit_and_revert(
             case with a clear error, but library callers must also be
             prevented from believing a clean-empty-events return means
             "no wedges found" when in fact the audit was protecting
-            zero source IPs. Codex finding C11 (cycle 3).
+            zero source IPs.
     """
     if not kali_ips:
         raise ValueError(

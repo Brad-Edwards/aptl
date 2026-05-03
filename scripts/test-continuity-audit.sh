@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-/home/atomik/src/aptl}"
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 # ``aptl-webapp`` is in IN_PROCESS_TARGETS (#248): NET_ADMIN + in-process
 # agent. ``aptl-victim``/``aptl-workstation`` ship without NET_ADMIN and
 # are not in ``default_targets()`` — this script needs a target the

@@ -723,9 +723,11 @@ behavioral contract:
   `scenario.mode == PURPLE` gate at the orchestration call site, so `red`
   and `blue` runs are explicitly skipped (a defender's source-IP ban
   remains a valid outcome there);
-- logs each reversion as a structured `KaliCarveOutEvent` to the active
-  run's `continuity-events.jsonl` (when a run is open) plus a stdout
-  summary;
+- logs each reversion as a structured `KaliCarveOutEvent` to a
+  specific run's `continuity-events.jsonl` when invoked with
+  `--run-id <existing-run>` (and always emits a stdout summary). The
+  session-bound archival path is plumbed but inactive until the
+  runtime engine populates `ScenarioSession.run_id` (#263);
 - preserves ADR-021's in-band whitelist as the first defense rather than
   moving whitelist semantics into the Wazuh manager or bare
   `firewall-drop`;

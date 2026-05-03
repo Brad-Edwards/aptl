@@ -571,13 +571,20 @@ class TestLabContinuityAuditCommand:
         assert "skipping defaults not in active profile" in result.output
 
     def test_run_id_override_wires_archive(self, runner, mocker, tmp_path):
-        # Codex finding C10 (cycle 3): without --run-id, the
-        # archival path was unreachable in production because
-        # ScenarioSession.start() never populates run_id. Explicit
-        # --run-id makes the archive reachable today; full session
-        # wiring lands with #263/RTE-001.
+        # Without --run-id, the archival path is unreachable today
+        # (ScenarioSession.start() doesn't populate run_id). Explicit
+        # --run-id makes the archive reachable; full session wiring
+        # lands with #263/RTE-001.
         from aptl.cli.main import app
         from aptl.core.continuity import KaliCarveOutEvent
+
+        # Pre-create the run directory + manifest so --run-id passes
+        # the existence validation.
+        runs_dir = tmp_path / "runs"
+        run_id = "explicit-run-7f3"
+        run_dir = runs_dir / run_id
+        run_dir.mkdir(parents=True)
+        (run_dir / "manifest.json").write_text("{}")
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
@@ -602,14 +609,101 @@ class TestLabContinuityAuditCommand:
             [
                 "lab", "continuity-audit",
                 "--project-dir", str(tmp_path),
-                "--run-id", "explicit-run-7f3",
+                "--run-id", run_id,
             ],
         )
 
         assert result.exit_code == 0
         kwargs = mock_audit.call_args.kwargs
-        assert kwargs.get("run_id") == "explicit-run-7f3"
+        assert kwargs.get("run_id") == run_id
         assert kwargs.get("run_store") is not None
+
+    def test_run_id_traversal_rejected(self, runner, mocker, tmp_path):
+        # Path-traversal in --run-id would let LocalRunStore.append_jsonl
+        # write outside the run-storage base directory. Reject.
+        from aptl.cli.main import app
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch("aptl.core.continuity.audit_and_revert")
+
+        result = runner.invoke(
+            app,
+            [
+                "lab", "continuity-audit",
+                "--project-dir", str(tmp_path),
+                "--run-id", "../../escape",
+            ],
+        )
+
+        assert result.exit_code != 0
+        mock_audit.assert_not_called()
+
+    def test_run_id_must_exist_in_store(self, runner, mocker, tmp_path):
+        # A typo in --run-id would otherwise create an orphan archive
+        # directory that ``aptl runs list/show`` cannot discover. Fail
+        # loudly when the referenced run has no manifest.
+        from aptl.cli.main import app
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch("aptl.core.continuity.audit_and_revert")
+
+        result = runner.invoke(
+            app,
+            [
+                "lab", "continuity-audit",
+                "--project-dir", str(tmp_path),
+                "--run-id", "typo-not-a-real-run",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "does not exist" in result.output
+        mock_audit.assert_not_called()
+
+    def test_corrupt_session_does_not_block_audit(self, runner, mocker, tmp_path):
+        # A corrupt .aptl/session.json must degrade to "no archive",
+        # not block the audit. The firewall repair is more important
+        # than archive discovery.
+        from aptl.cli.main import app
+        from aptl.cli._common import resolve_config_for_cli  # noqa: F401
+        from aptl.core.config import AptlConfig
+        from aptl.core.scenarios import ScenarioStateError
+        from aptl.core.session import ScenarioSession
+
+        mocker.patch(
+            "aptl.cli._common.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+        backend = mocker.MagicMock()
+        backend.container_exists.return_value = True
+        mocker.patch("aptl.core.deployment.get_backend", return_value=backend)
+        mocker.patch.object(
+            ScenarioSession, "get_active",
+            side_effect=ScenarioStateError("corrupt session"),
+        )
+        mocker.patch(
+            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch(
+            "aptl.core.continuity.audit_and_revert", return_value=[],
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        # Audit ran; no archive was wired.
+        assert result.exit_code == 0
+        mock_audit.assert_called_once()
+        kwargs = mock_audit.call_args.kwargs
+        assert kwargs.get("run_id") is None
+        assert kwargs.get("run_store") is None
 
     def test_fails_when_no_default_targets_present(
         self, runner, mocker, tmp_path,

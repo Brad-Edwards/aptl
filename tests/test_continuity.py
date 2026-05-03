@@ -886,17 +886,21 @@ class TestDefaultTargets:
                 needle in text
             ), f"docker-compose.yml has no '{needle}' declaration"
 
-    def test_targets_match_in_process_agent_set(self) -> None:
-        # The audit only works on containers that have NET_ADMIN AND
-        # an in-process Wazuh agent (#248 / ADR-020). default_targets()
-        # must equal the canonical IN_PROCESS_TARGETS used by the
-        # active-response tests; including non-NET_ADMIN containers
-        # (victim, workstation) would silently produce AUDIT_FAILED
-        # events on every invocation. Codex finding C1 (cycle 1).
+    def test_default_targets_count_pins_audit_surface(self) -> None:
+        # Pin the size so accidental additions or removals fail loudly.
+        # Combined with ``test_targets_are_real_compose_services`` and
+        # ``test_every_default_target_has_net_admin``, this gives full
+        # drift protection on the AR-capable agent set without coupling
+        # to another test module.
         from aptl.core.continuity import default_targets
-        from tests.test_wazuh_active_response import IN_PROCESS_TARGETS
 
-        assert tuple(default_targets()) == IN_PROCESS_TARGETS
+        assert len(default_targets()) == 4
+        assert set(default_targets()) == {
+            "aptl-webapp",
+            "aptl-fileshare",
+            "aptl-ad",
+            "aptl-dns",
+        }
 
     def test_every_default_target_has_net_admin(self) -> None:
         # Drift guard: if anyone removes NET_ADMIN from one of the

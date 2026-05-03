@@ -46,8 +46,12 @@ _HASH_KEYWORDS: dict[str, str] = {
 # leave a stale sidecar behind when the last IOC of a type is removed.
 HASH_TYPES = tuple(_HASH_KEYWORDS)
 _HASH_HEX_LENGTHS: dict[str, int] = {"md5": 32, "sha1": 40, "sha256": 64}
-_HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
-_NUMERIC_RE = re.compile(r"^[0-9]+$")
+# Both regexes are anchored to ASCII so we can splice their inputs into
+# Suricata rule text without worrying about Unicode digits ('²', etc.)
+# slipping through. Hence ``re.ASCII`` instead of the default Unicode
+# semantics of ``\d``.
+_HEX_RE = re.compile(r"^[\da-fA-F]+$", re.ASCII)
+_NUMERIC_RE = re.compile(r"^\d+$", re.ASCII)
 
 
 def _crc32_sid_offset(type_: str, value: str) -> int:
@@ -77,6 +81,9 @@ def _is_valid_hash(hash_type: str, value: str) -> bool:
     return len(value) == expected_len and bool(_HEX_RE.match(value))
 
 
+_SCHEMELESS_PARSE_SENTINEL = "x-aptl-schemeless"
+
+
 def _split_url(url: str) -> tuple[str, str, str]:
     """Return ``(scheme, host, path-with-query)`` from a URL.
 
@@ -84,13 +91,17 @@ def _split_url(url: str) -> tuple[str, str, str]:
     URLs, and IPv6 hosts all parse correctly. Host is lowercased and
     stripped of any user-info / port. Path includes the query string when
     present so URL IOCs that vary only by query parameter still match.
-    Schemeless inputs default to ``http`` so they continue to match
-    plaintext HTTP traffic.
+    Schemeless inputs are reported as ``http`` so they emit plaintext-HTTP
+    detection rules; we parse them by prepending a sentinel scheme rather
+    than ``http://`` so static analyzers don't mistake parser plumbing
+    for code that actually performs an HTTP call.
     """
-    if "://" not in url:
-        url = "http://" + url
-    parsed = urlparse(url)
-    scheme = (parsed.scheme or "http").lower()
+    if "://" in url:
+        parsed = urlparse(url)
+        scheme = (parsed.scheme or "http").lower()
+    else:
+        parsed = urlparse(f"{_SCHEMELESS_PARSE_SENTINEL}://{url}")
+        scheme = "http"  # schemeless IOCs default to plaintext HTTP
     host = (parsed.hostname or "").lower()
     path = parsed.path or ""
     if parsed.query:

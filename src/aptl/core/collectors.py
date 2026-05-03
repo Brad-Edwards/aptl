@@ -306,7 +306,7 @@ def collect_container_logs(
     for container in containers:
         try:
             result = backend.container_logs_capture(
-                container, since=start_iso, until=end_iso
+                container, since=start_iso, until=end_iso, timeout=30
             )
         except (subprocess.TimeoutExpired, OSError) as e:
             log.warning("Log collection failed for %s: %s", container, e)

@@ -300,12 +300,26 @@ class DockerComposeBackend:
                 warnings.append(msg)
         return warnings
 
+    def host_run(
+        self,
+        args: list[str],
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Run an arbitrary docker / docker-compose command via `_run`.
+
+        Public wrapper so callers outside the deployment module (snapshot
+        capture, network inspection) get the same env construction —
+        crucially the SSH override's ``DOCKER_HOST=ssh://…`` injection.
+        """
+        return self._run(args, timeout=timeout)
+
     # Container interaction (CLI-004, ADR-023) ----------------------------
 
     def container_list(
         self, *, all_containers: bool = True
     ) -> list[dict]:
-        cmd = ["docker", "compose", "ps"]
+        cmd = ["docker", "compose", "-p", self._project_name, "ps"]
         if all_containers:
             cmd.append("-a")
         cmd.extend(["--format", "json"])
@@ -351,6 +365,7 @@ class DockerComposeBackend:
         *,
         since: str | None = None,
         until: str | None = None,
+        timeout: int | None = None,
     ) -> subprocess.CompletedProcess:
         cmd = ["docker", "logs"]
         if since is not None:
@@ -358,7 +373,7 @@ class DockerComposeBackend:
         if until is not None:
             cmd.extend(["--until", until])
         cmd.append(name)
-        return self._run(cmd)
+        return self._run(cmd, timeout=timeout)
 
     def container_shell(
         self, name: str, *, shell: str | None = None

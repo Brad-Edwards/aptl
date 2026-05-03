@@ -357,7 +357,13 @@ class TestDockerComposeBackendContainerInteraction:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
             backend.container_list()
         cmd = mock_run.call_args[0][0]
-        assert cmd[:3] == ["docker", "compose", "ps"]
+        assert cmd[0] == "docker"
+        assert cmd[1] == "compose"
+        # `-p <project_name>` scopes the listing to the configured
+        # compose project (CLI-004 codex finding).
+        assert cmd[2] == "-p"
+        assert cmd[3] == "test"
+        assert "ps" in cmd
         assert "-a" in cmd
         assert "--format" in cmd
         assert "json" in cmd

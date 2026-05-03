@@ -126,6 +126,7 @@ class DeploymentBackend(Protocol):
         *,
         since: str | None = None,
         until: str | None = None,
+        timeout: int | None = None,
     ) -> subprocess.CompletedProcess:
         """Capture a container's logs (for programmatic consumption).
 
@@ -133,6 +134,9 @@ class DeploymentBackend(Protocol):
             name: Container name.
             since: Optional RFC3339 timestamp; only logs >= this point.
             until: Optional RFC3339 timestamp; only logs <= this point.
+            timeout: Optional timeout in seconds. Set this for
+                archive collection so a stalled docker daemon doesn't
+                hang the run forever.
 
         Returns:
             CompletedProcess with captured stdout/stderr.
@@ -187,5 +191,31 @@ class DeploymentBackend(Protocol):
             The first element of the ``docker inspect`` JSON array, or
             an empty dict on any failure (missing container, parse
             error, etc.).
+        """
+        ...
+
+    def host_run(
+        self,
+        args: list[str],
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Run an arbitrary host-level command (typically `docker …` /
+        `docker compose …`) against the backend's Docker daemon.
+
+        Used by callers that need docker capabilities not covered by the
+        typed container-interaction methods — for example the snapshot
+        module's `docker version`, `docker compose version`, `docker ps
+        -a --filter`, and `docker network ls/inspect` calls. SSH backends
+        route this through the same `DOCKER_HOST=ssh://…` environment as
+        the rest of the Protocol so a snapshot taken against a remote
+        lab actually inspects the remote daemon.
+
+        Args:
+            args: argv list to execute (e.g. `["docker", "version", …]`).
+            timeout: optional timeout in seconds.
+
+        Returns:
+            The captured CompletedProcess.
         """
         ...

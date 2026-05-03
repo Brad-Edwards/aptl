@@ -25,8 +25,20 @@ def project_dir(tmp_path):
 
 @pytest.fixture
 def fake_backend(mocker):
-    """Patch ``aptl.cli.container.get_backend`` to return a MagicMock."""
+    """Patch ``aptl.cli.container.get_backend`` to return a MagicMock.
+
+    Pre-populates ``container_list`` with the names the tests pass to
+    ``logs``/``shell`` so the CLI's project-membership guard accepts them
+    by default. Tests that need to exercise the rejection path can
+    override ``container_list.return_value``.
+    """
     backend = MagicMock()
+    backend.container_list.return_value = [
+        {"Name": "aptl-victim"},
+        {"Name": "aptl-kali"},
+        {"Name": "aptl-alpine"},
+        {"Name": "aptl-missing"},
+    ]
     mocker.patch("aptl.cli.container.get_backend", return_value=backend)
     return backend
 
@@ -220,3 +232,44 @@ class TestContainerCommandErrorHandling:
         result = runner.invoke(app, full)
         assert result.exit_code != 0
         backend_factory.assert_not_called()
+
+
+class TestContainerProjectMembershipGuard:
+    """``logs`` and ``shell`` must reject names not in the project's
+    container list (Codex security finding for shared-daemon scenarios)."""
+
+    def test_logs_rejects_non_project_container(
+        self, runner, project_dir, fake_backend
+    ):
+        fake_backend.container_list.return_value = [{"Name": "aptl-victim"}]
+        result = runner.invoke(
+            app,
+            [
+                "container",
+                "logs",
+                "evil-other-project",
+                "--project-dir",
+                str(project_dir),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "not part of this lab" in result.stderr.lower()
+        fake_backend.container_logs.assert_not_called()
+
+    def test_shell_rejects_non_project_container(
+        self, runner, project_dir, fake_backend
+    ):
+        fake_backend.container_list.return_value = [{"Name": "aptl-victim"}]
+        result = runner.invoke(
+            app,
+            [
+                "container",
+                "shell",
+                "evil-other-project",
+                "--project-dir",
+                str(project_dir),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "not part of this lab" in result.stderr.lower()
+        fake_backend.container_shell.assert_not_called()

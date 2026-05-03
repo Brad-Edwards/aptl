@@ -12,6 +12,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from aptl.utils.placeholders import contains_placeholder
+
 
 _DEFAULT_RULES_PATH = "/var/lib/suricata/rules/misp/misp-iocs.rules"
 _DEFAULT_SOCKET_PATH = "/var/run/suricata/suricata-command.socket"
@@ -27,22 +29,12 @@ _SID_BASE_MIN = 10_000_000
 _SID_BASE_MAX = 2_000_000_000 - _SID_OFFSET_MAX
 _DEFAULT_SID_BASE = 99_000_000
 
-# Marker substrings that indicate the operator pasted a placeholder from
-# `.env.example` instead of a real key. Rejected at startup so the lab
-# fails loudly rather than running with a known-bogus credential.
-_PLACEHOLDER_MARKERS = (
-    "CHANGE_ME",
-    "CHANGEME",
-    "PLEASEREPLACEME",
-    "REPLACE_ME",
-)
-
 
 _TRUE_TOKENS = frozenset({"1", "true", "yes", "on"})
 _FALSE_TOKENS = frozenset({"0", "false", "no", "off"})
 
 
-def _bool_env(value: str | None, default: bool) -> bool:
+def _bool_env(name: str, value: str | None, default: bool) -> bool:
     """Strict boolean env-var parser.
 
     Unknown tokens (typos like ``ture``) raise ``ValueError`` rather than
@@ -60,9 +52,26 @@ def _bool_env(value: str | None, default: bool) -> bool:
     if token in _FALSE_TOKENS:
         return False
     raise ValueError(
-        f"Invalid boolean env value {value!r}; "
+        f"Invalid boolean value for {name}: {value!r}; "
         f"expected one of {sorted(_TRUE_TOKENS | _FALSE_TOKENS)}"
     )
+
+
+def _int_env(name: str, value: str | None, default: int) -> int:
+    """Strict integer env-var parser.
+
+    Raises ``ValueError`` with a name-attributed message rather than the
+    raw ``invalid literal for int()`` Python emits, so a typo in the
+    operator's ``.env`` is unambiguous in service logs.
+    """
+    if value is None or not value.strip():
+        return default
+    try:
+        return int(value.strip())
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid integer value for {name}: {value!r}"
+        ) from exc
 
 
 class ServiceConfig(BaseModel):
@@ -86,13 +95,11 @@ class ServiceConfig(BaseModel):
     def _validate_api_key(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("MISP_API_KEY must be set")
-        upper = v.strip().upper()
-        for marker in _PLACEHOLDER_MARKERS:
-            if marker in upper:
-                raise ValueError(
-                    "MISP_API_KEY is a placeholder; replace it in .env "
-                    "with a real value (see .env.example for instructions)"
-                )
+        if contains_placeholder(v):
+            raise ValueError(
+                "MISP_API_KEY is a placeholder; replace it in .env "
+                "with a real value (see .env.example for instructions)"
+            )
         return v
 
     @field_validator("sync_interval_seconds")
@@ -132,11 +139,15 @@ class ServiceConfig(BaseModel):
         return cls(
             misp_url=os.environ.get("MISP_URL", "https://misp"),
             misp_api_key=api_key,
-            misp_verify_ssl=_bool_env(os.environ.get("MISP_VERIFY_SSL"), False),
+            misp_verify_ssl=_bool_env(
+                "MISP_VERIFY_SSL", os.environ.get("MISP_VERIFY_SSL"), False
+            ),
             misp_ca_cert_path=ca_cert,
             ioc_tag_filter=os.environ.get("IOC_TAG_FILTER", "aptl:enforce"),
-            sync_interval_seconds=int(
-                os.environ.get("SYNC_INTERVAL_SECONDS", "300")
+            sync_interval_seconds=_int_env(
+                "SYNC_INTERVAL_SECONDS",
+                os.environ.get("SYNC_INTERVAL_SECONDS"),
+                300,
             ),
             rules_out_path=Path(
                 os.environ.get("RULES_OUT_PATH", _DEFAULT_RULES_PATH)
@@ -144,6 +155,8 @@ class ServiceConfig(BaseModel):
             suricata_socket_path=Path(
                 os.environ.get("SURICATA_SOCKET_PATH", _DEFAULT_SOCKET_PATH)
             ),
-            sid_base=int(os.environ.get("SID_BASE", str(_DEFAULT_SID_BASE))),
+            sid_base=_int_env(
+                "SID_BASE", os.environ.get("SID_BASE"), _DEFAULT_SID_BASE
+            ),
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
         )

@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 aptl = "aptl.cli.main:app"
+aptl-misp-suricata-sync = "aptl.services.misp_suricata_sync.main:main"
 
 [project.optional-dependencies]
 s3 = [

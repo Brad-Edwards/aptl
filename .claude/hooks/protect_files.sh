@@ -8,8 +8,14 @@ fi
 
 BASENAME=$(basename "$FILE_PATH")
 
-# Block .env files
-if [[ "$BASENAME" == .env* ]] || [[ "$BASENAME" == "local_settings.py" ]]; then
+# Block .env files, but allow committed templates (`.env.example`,
+# `.env.*.example`) since those carry placeholders, not secrets.
+if [[ "$BASENAME" == .env* ]] && [[ "$BASENAME" != *.example ]]; then
+    echo "BLOCKED: Editing $BASENAME is not allowed. These files contain secrets." >&2
+    exit 2
+fi
+
+if [[ "$BASENAME" == "local_settings.py" ]]; then
     echo "BLOCKED: Editing $BASENAME is not allowed. These files contain secrets." >&2
     exit 2
 fi

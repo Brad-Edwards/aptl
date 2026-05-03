@@ -6,6 +6,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `aptl-misp-suricata-sync` service — first long-running Python daemon in the lab. Polls MISP's `POST /attributes/restSearch` filtered by the configured tag (default `aptl:enforce`), translates each IOC into a Suricata `alert` rule, and triggers Suricata rule reload via its unix-command socket. Translator output: `ip-src` matches source side, `ip-dst` matches destination side, `domain`/`hostname` match `dns.query`, `url` matches `http.host` plus `http.uri` (path only when non-trivial), and `sha256`/`sha1`/`md5` are aggregated into per-type sidecar list files (`misp-<type>.list`) referenced by a single `file.data; filesha256:<list>` rule each — Suricata's hash keywords take a list file, not an inline digest. Rules go to a dedicated `/etc/suricata/rules/misp/misp-iocs.rules` separate from operator-authored `local.rules`. Issue [#250](https://github.com/Brad-Edwards/aptl/issues/250); architectural rationale in [ADR-022](docs/adrs/adr-022-misp-driven-suricata-rules.md).
+- `src/aptl/services/misp_suricata_sync/` — service implementation under a new `aptl.services` namespace (sets the layout precedent for future Python daemons): `config.py` (Pydantic v2 env-driven `ServiceConfig`), `models.py` (`MispAttribute`, `RenderedRule`, `TranslationResult` DTOs), `misp_client.py` (curl-subprocess client with bare-API-key `Authorization` header — never logged), `translator.py` (pure rendering: hard-codes `alert` action per ADR-019, deterministic `SID_BASE + crc32(type|value)` allocation, `|XX|`-hex content escaping, timestamp-free header for write idempotency), `rule_writer.py` (atomic `<path>.tmp`+`replace`, idempotent), `suricata_reloader.py` (~30-line unix-command JSON client; no `suricatasc` dependency), `main.py` (SIGTERM-aware loop, also writes per-type hash list sidecars).
+- `containers/misp-suricata-sync/Dockerfile` — `python:3.11-slim` + curl + the aptl wheel, installed via `pip install .`. Runs as root so it can write to the bind-mounted host directory `./config/suricata/rules/misp/` (matches the lab's broader pattern; see ADR-020).
+- `config/suricata/rules/misp/misp-iocs.rules` plus empty `misp-md5.list` / `misp-sha1.list` / `misp-sha256.list` — seed files shipped in the repo so Suricata's `rule-files:` list and any `filemd5:`/`filesha1:`/`filesha256:` directives resolve cleanly on the very first `aptl lab start`, before the sync service has had a chance to write.
+- `tests/test_misp_suricata_sync.py` — 58 unit tests covering every submodule. Includes the ADR-019 regression guard `test_action_is_always_alert_never_drop`, the rule-injection guard `test_rejects_quote_or_semicolon_in_value_via_escape`, the destination-direction guard `test_ip_dst_emits_destination_side_alert_ip_rule`, and the idempotency guard `test_header_has_no_timestamp_so_render_is_idempotent`.
+- `docs/adrs/adr-022-misp-driven-suricata-rules.md` — design decisions: tag-graduated enforcement, alert-only per ADR-019, dedicated rule file, deterministic SIDs, MISP-down preserves last-known-good, unix-command socket for live reload, per-type hash list sidecars for correct Suricata hash matching.
+
+### Changed
+
+- `config/suricata/suricata.yaml` — adds `unix-command:` socket at `/var/run/suricata/suricata-command.socket` (used by the sync service for live rule reload) and includes `/etc/suricata/rules/misp/misp-iocs.rules` in the `rule-files:` list. The operator-authored `local.rules` is unchanged.
+- `docker-compose.yml` — new `misp-suricata-sync` service on the `soc` profile (`172.20.0.19` on `aptl-security`, depends on `misp` health + `suricata` started, 128m memory limit). Suricata and the sync service share `./config/suricata/rules/misp/` as a host-side bind mount so the seed files are available on first start; the sync service additionally shares the `suricata_command_socket` named volume with Suricata so it can speak the unix-command JSON protocol.
+- `pyproject.toml` — adds `aptl-misp-suricata-sync` console script entry pointing at `aptl.services.misp_suricata_sync.main:main`.
+- `README.md` — adds one-line mention of the MISP→Suricata sync under the SOC Stack section, with a pointer to ADR-019 explaining the alert-only constraint.
+
+- `MISP_API_KEY` is now a required env var (no hardcoded default) for both the MISP server and every downstream consumer in this PR. `.env.example` ships a placeholder; the server's `ADMIN_KEY` and the sync service's `MISP_API_KEY` resolve to the same `${MISP_API_KEY:?...}` reference so they stay aligned. Implements SEC-005 for the SOC IOC pipeline.
+- `MISP_CA_CERT_PATH` is wired through `aptl-misp-suricata-sync`'s config and curl wrapper as the verify-ON hook for SOC stack consumers. Lab default is `MISP_VERIFY_SSL=false` because MISP self-signs and there is no shared lab CA today; flipping the env var with a CA bundle enables real verification. Full lab-managed CA / verify-on-by-default work is tracked in **SEC-006** (DRAFT) and [#258](https://github.com/Brad-Edwards/Brad-Edwards/aptl/issues/258).
+
+### Notes
+
+- Default lab posture is the service running with zero IOCs tagged `aptl:enforce` — blue's job per iteration is to populate intel and graduate it. Submitting an IOC via the `aptl-threatintel` MCP with the `aptl:enforce` tag, then waiting one sync interval (default 300s), produces a rule in `misp-iocs.rules` and a Suricata reload.
+- This issue's "blocking" framing in #250 is updated by ADR-019: in the lab's current IDS-only posture, MISP-driven rules are detection, not prevention. Real packet-level enforcement remains the Wazuh AR path (#248/#249).
+- **Upgrade note for existing labs:** the `aptl-misp` container only honors `ADMIN_KEY` on first database init. If you're upgrading from a lab that ran with the previous hardcoded admin key (`JHx...`), MISP's database still has that old key and the new `${MISP_API_KEY}` env var won't take effect — the sync service will then fail to authenticate forever. Run `aptl lab stop -v` to wipe the persisted MISP volume, set `MISP_API_KEY` in `.env`, and `aptl lab start` for a fresh init. Skip this step only if you can rotate the admin key in MISP's UI yourself before the next sync attempt.
+
 ## [6.6.0] - 2026-05-02
 
 ### Added

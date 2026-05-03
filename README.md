@@ -31,7 +31,7 @@ A Docker-based purple team lab. One command brings up an isolated network with e
 
 - Wazuh SIEM (manager + indexer + dashboard) collecting logs from all containers
 - Suricata IDS for network-level detection (C2, lateral movement, exfiltration)
-- MISP threat intelligence platform with IOC feeds
+- MISP threat intelligence platform with IOC feeds, with a sync service that translates MISP indicators tagged `aptl:enforce` into Suricata `alert` rules (per [ADR-019](docs/adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md), Suricata stays IDS-only)
 - TheHive case management with Cortex analyzers for automated enrichment
 - Shuffle SOAR for automated response playbooks
 

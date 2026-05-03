@@ -182,6 +182,11 @@ services:
       - ./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml
       - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules
       - suricata_logs:/var/log/suricata
+      - suricata_command_socket:/var/run/suricata
+      # Bind under default-rule-path so misp-iocs.rules and its
+      # filemd5/filesha1/filesha256 hash-list sidecars resolve via
+      # Suricata's documented relative-path lookup.
+      - ./config/suricata/rules/misp:/var/lib/suricata/rules/misp
     command: ["-c", "/etc/suricata/suricata.yaml", "--pcap"]
     deploy:
       resources:
@@ -215,7 +220,11 @@ services:
       - MYSQL_PASSWORD=misp_db_password
       - ADMIN_EMAIL=admin@admin.test
       - ADMIN_PASSWORD=admin
-      - ADMIN_KEY=JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw
+      # Same value as misp-suricata-sync's MISP_API_KEY so server and
+      # client stay aligned; sourced from .env per SEC-005. The previous
+      # hardcoded default was removed in #250 after a codex security
+      # review flagged it.
+      - ADMIN_KEY=${MISP_API_KEY:?MISP_API_KEY must be set in .env (copy .env.example to .env)}
       - BASE_URL=https://localhost
       - REDIS_HOST=misp-redis
     volumes:
@@ -278,6 +287,49 @@ services:
           memory: 128m
     networks:
       aptl-security:
+
+  # MISP -> Suricata IOC sync (intel-driven detection per ADR-019)
+  misp-suricata-sync:
+    profiles: ["soc"]
+    build:
+      context: .
+      dockerfile: containers/misp-suricata-sync/Dockerfile
+    container_name: aptl-misp-suricata-sync
+    hostname: misp-suricata-sync
+    restart: unless-stopped
+    environment:
+      - MISP_URL=https://misp
+      # Required, no default — set in .env (see .env.example). Both this
+      # service and the MISP server (ADMIN_KEY) read the same value so
+      # they stay aligned. Per SEC-005, secrets live only in .env.
+      - MISP_API_KEY=${MISP_API_KEY:?MISP_API_KEY must be set in .env (copy .env.example to .env)}
+      # MISP self-signs its certificate at first boot and there is no
+      # shared lab CA today, so verification defaults to off. Once issue
+      # #258 (SEC-006: lab-managed CA) ships, flip this to true and
+      # point MISP_CA_CERT_PATH at the lab CA bundle.
+      - MISP_VERIFY_SSL=${MISP_VERIFY_SSL:-false}
+      - MISP_CA_CERT_PATH=${MISP_CA_CERT_PATH:-}
+      - IOC_TAG_FILTER=aptl:enforce
+      - SYNC_INTERVAL_SECONDS=300
+      - RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules
+      - SURICATA_SOCKET_PATH=/var/run/suricata/suricata-command.socket
+      - SID_BASE=99000000
+      - LOG_LEVEL=INFO
+    volumes:
+      - suricata_command_socket:/var/run/suricata
+      - ./config/suricata/rules/misp:/var/lib/suricata/rules/misp
+    depends_on:
+      misp:
+        condition: service_healthy
+      suricata:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.19
 
   # TheHive - Case Management
   thehive:
@@ -1223,6 +1275,7 @@ volumes:
 
   # Suricata
   suricata_logs:
+  suricata_command_socket:
 
   # MISP
   misp_data:

@@ -500,41 +500,9 @@ class TestDockerComposeBackendContainerInteraction:
         # Streaming: no capture_output
         assert "capture_output" not in mock_run.call_args[1]
 
-    def test_container_shell_default_shell_is_bash_with_sh_fallback(self, tmp_path):
-        """When shell is None, try /bin/bash, fall back to /bin/sh on 126/127."""
-        backend = self._make_backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            # First call: bash returns 127 (not found)
-            # Second call: sh returns 0
-            mock_run.side_effect = [
-                MagicMock(returncode=127),
-                MagicMock(returncode=0),
-            ]
-            exit_code = backend.container_shell("aptl-alpine")
-        assert exit_code == 0
-        assert mock_run.call_count == 2
-        first_cmd = mock_run.call_args_list[0][0][0]
-        assert first_cmd[-1] == "/bin/bash"
-        second_cmd = mock_run.call_args_list[1][0][0]
-        assert second_cmd[-1] == "/bin/sh"
-
-    def test_container_shell_no_fallback_when_shell_explicit(self, tmp_path):
-        """Explicit --shell skips the fallback."""
-        backend = self._make_backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=127)
-            exit_code = backend.container_shell("aptl-alpine", shell="/bin/zsh")
-        assert exit_code == 127
-        assert mock_run.call_count == 1
-
-    def test_container_shell_no_fallback_on_non_127_exit(self, tmp_path):
-        """Fallback only triggers on 126/127 (command-not-executable / not-found)."""
-        backend = self._make_backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1)
-            exit_code = backend.container_shell("aptl-victim")
-        assert exit_code == 1
-        assert mock_run.call_count == 1
+    # The bash-vs-sh auto-detect is now driven by a non-interactive
+    # probe (see TestDockerComposeBackendContainerInteraction.
+    # test_container_shell_probe_*).
 
     # container_exec -------------------------------------------------------
 
@@ -594,6 +562,162 @@ class TestDockerComposeBackendContainerInteraction:
             mock_run.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
             data = backend.container_inspect("aptl-victim")
         assert data == {}
+
+    # Host inventory ------------------------------------------------------
+
+    def test_host_versions_returns_docker_and_compose(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        def _fake(args, **kw):
+            if "compose" in args:
+                return MagicMock(returncode=0, stdout="2.23.0\n", stderr="")
+            return MagicMock(returncode=0, stdout="24.0.7\n", stderr="")
+        with patch("subprocess.run", side_effect=_fake):
+            versions = backend.host_versions()
+        assert versions == {"docker": "24.0.7", "compose": "2.23.0"}
+
+    def test_host_versions_handles_failure(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
+            versions = backend.host_versions()
+        assert versions == {"docker": "", "compose": ""}
+
+    def test_host_list_lab_containers_parses_tsv(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        line = (
+            "aptl-victim\taptl/victim:latest\tabc\tUp 5m (healthy)\t"
+            "service=victim\t0.0.0.0:2022->22/tcp"
+        )
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=line, stderr="")
+            rows = backend.host_list_lab_containers()
+        cmd = mock_run.call_args[0][0]
+        assert "docker" in cmd and "ps" in cmd and "-a" in cmd
+        assert any("name=aptl-" in arg for arg in cmd)
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["name"] == "aptl-victim"
+        assert row["image"] == "aptl/victim:latest"
+        assert row["id"] == "abc"
+        assert row["status"] == "Up 5m (healthy)"
+        assert row["labels"] == {"service": "victim"}
+        assert row["ports"] == ["0.0.0.0:2022->22/tcp"]
+
+    def test_host_list_lab_containers_skips_short_lines(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="too\tfew", stderr="")
+            assert backend.host_list_lab_containers() == []
+
+    def test_host_list_lab_containers_returns_empty_on_error(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="docker missing")
+            assert backend.host_list_lab_containers() == []
+
+    def test_host_list_lab_networks_filters_by_prefix(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="aptl_security\naptl_internal\n", stderr=""
+            )
+            nets = backend.host_list_lab_networks("aptl")
+        assert nets == ["aptl_security", "aptl_internal"]
+        cmd = mock_run.call_args[0][0]
+        assert any("name=aptl" in arg for arg in cmd)
+
+    def test_host_list_lab_networks_returns_empty_on_error(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
+            assert backend.host_list_lab_networks("aptl") == []
+
+    def test_host_inspect_network_parses_subnet_and_containers(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        payload = json.dumps([{
+            "IPAM": {"Config": [{"Subnet": "172.20.0.0/16", "Gateway": "172.20.0.1"}]},
+            "Containers": {
+                "abc": {"Name": "aptl-victim"},
+                "def": {"Name": "aptl-kali"},
+            },
+        }])
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=payload, stderr="")
+            info = backend.host_inspect_network("aptl_security")
+        assert info["name"] == "aptl_security"
+        assert info["subnet"] == "172.20.0.0/16"
+        assert info["gateway"] == "172.20.0.1"
+        assert info["containers"] == ["aptl-kali", "aptl-victim"]
+
+    def test_host_inspect_network_empty_on_failure(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="not found")
+            assert backend.host_inspect_network("missing") == {}
+
+    def test_host_inspect_network_empty_on_invalid_json(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="not-json", stderr="")
+            assert backend.host_inspect_network("net") == {}
+
+    def test_container_shell_probe_then_bash_when_available(self, tmp_path):
+        """Auto-fallback probes bash non-interactively first."""
+        backend = self._make_backend(tmp_path)
+        # First call: probe (captured). Second call: streaming bash.
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                MagicMock(returncode=0, stdout="", stderr=""),  # probe ok
+                MagicMock(returncode=0),                          # interactive
+            ]
+            rc = backend.container_shell("aptl-victim")
+        assert rc == 0
+        assert mock_run.call_count == 2
+        probe_cmd = mock_run.call_args_list[0][0][0]
+        assert "/bin/bash" in probe_cmd
+        assert "-c" in probe_cmd
+        assert "true" in probe_cmd
+        # Probe is captured (returns CompletedProcess).
+        assert mock_run.call_args_list[0][1].get("capture_output") is True
+        # Interactive call streams (no capture_output).
+        interactive_cmd = mock_run.call_args_list[1][0][0]
+        assert interactive_cmd[:3] == ["docker", "exec", "-it"]
+        assert interactive_cmd[-1] == "/bin/bash"
+        assert "capture_output" not in mock_run.call_args_list[1][1]
+
+    def test_container_shell_probe_falls_back_to_sh_on_127(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                MagicMock(returncode=127, stdout="", stderr=""),  # probe says no bash
+                MagicMock(returncode=0),                          # interactive sh
+            ]
+            rc = backend.container_shell("aptl-alpine")
+        assert rc == 0
+        sh_cmd = mock_run.call_args_list[1][0][0]
+        assert sh_cmd[-1] == "/bin/sh"
+
+    def test_container_shell_probe_failure_returns_probe_exit(self, tmp_path):
+        """Non-bash-related probe failures (no such container, etc.)
+        propagate the exit code rather than masking with sh."""
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="No such container"
+            )
+            rc = backend.container_shell("aptl-missing")
+        assert rc == 1
+        assert mock_run.call_count == 1  # no fallback to sh
+
+    def test_container_shell_explicit_shell_skips_probe(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            backend.container_shell("aptl-kali", shell="/bin/zsh")
+        # Only one call, the interactive one.
+        assert mock_run.call_count == 1
+        cmd = mock_run.call_args[0][0]
+        assert cmd[-1] == "/bin/zsh"
 
 
 # ---------------------------------------------------------------------------

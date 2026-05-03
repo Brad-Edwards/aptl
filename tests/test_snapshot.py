@@ -16,7 +16,6 @@ from aptl.core.snapshot import (
     SSHEndpoint,
     capture_snapshot,
     _hash_config_files,
-    _docker_out,
     _get_software_versions,
     _get_container_snapshots,
     _get_wazuh_rules_snapshot,
@@ -155,64 +154,16 @@ class TestDataclasses:
         assert loaded["config_hashes"]["f.json"] == "deadbeef"
 
 
-class TestDockerOut:
-    """Tests for the ``_docker_out`` helper that wraps ``backend.host_run``."""
-
-    def test_returns_stdout_on_success(self):
-        backend = MagicMock()
-        backend.host_run.return_value = MagicMock(
-            returncode=0, stdout="hello\n", stderr=""
-        )
-        assert _docker_out(backend, ["docker", "version"]) == "hello"
-
-    def test_returns_empty_on_nonzero_exit(self):
-        backend = MagicMock()
-        backend.host_run.return_value = MagicMock(
-            returncode=1, stdout="error", stderr="boom"
-        )
-        assert _docker_out(backend, ["docker", "version"]) == ""
-
-    def test_returns_empty_on_timeout(self):
-        backend = MagicMock()
-        backend.host_run.side_effect = subprocess.TimeoutExpired(
-            cmd="docker", timeout=15
-        )
-        assert _docker_out(backend, ["docker", "version"]) == ""
-
-    def test_returns_empty_on_oserror(self):
-        backend = MagicMock()
-        backend.host_run.side_effect = OSError("docker not found")
-        assert _docker_out(backend, ["docker", "version"]) == ""
-
-    def test_routes_through_backend_host_run(self):
-        """Ensures the helper actually goes through the backend so SSH
-        labs route through DOCKER_HOST=ssh://… instead of the local daemon."""
-        backend = MagicMock()
-        backend.host_run.return_value = MagicMock(
-            returncode=0, stdout="ok", stderr=""
-        )
-        _docker_out(backend, ["docker", "version"], timeout=20)
-        backend.host_run.assert_called_once_with(
-            ["docker", "version"], timeout=20
-        )
-
-
 class TestGetSoftwareVersions:
-    """Tests for _get_software_versions with mocked subprocess + backend."""
+    """Tests for ``_get_software_versions`` with a mocked backend."""
 
-    def test_collects_all_versions(self, mocker):
-        # Host-level: docker version + docker compose version
-        def fake_run_cmd(_backend, args, timeout=15):
-            cmd_str = " ".join(args)
-            if "docker version" in cmd_str:
-                return "24.0.7"
-            if "compose version" in cmd_str:
-                return "2.23.0"
-            return ""
-
-        mocker.patch("aptl.core.snapshot._docker_out", side_effect=fake_run_cmd)
-
+    def test_collects_all_versions(self):
         backend = MagicMock()
+        backend.host_versions.return_value = {
+            "docker": "24.0.7",
+            "compose": "2.23.0",
+        }
+
         def _exec(container, cmd, *, timeout=None):
             cmd_str = " ".join(cmd)
             if "wazuh-control" in cmd_str:
@@ -233,9 +184,9 @@ class TestGetSoftwareVersions:
         assert sv.wazuh_indexer_version == "2.19.1"
         assert sv.python_version  # always set from sys.version
 
-    def test_handles_empty_docker_output(self, mocker):
-        mocker.patch("aptl.core.snapshot._docker_out", return_value="")
+    def test_handles_empty_docker_output(self):
         backend = MagicMock()
+        backend.host_versions.return_value = {"docker": "", "compose": ""}
         backend.container_exec.return_value = MagicMock(
             returncode=1, stdout="", stderr=""
         )
@@ -247,12 +198,16 @@ class TestGetSoftwareVersions:
 
 
 class TestGetContainerSnapshots:
-    """Tests for _get_container_snapshots with mocked subprocess + backend."""
+    """Tests for ``_get_container_snapshots`` driven by typed backend methods."""
 
-    DOCKER_PS_LINE = (
-        "aptl-victim\taptl/victim:latest\tabc123\tUp 5 minutes (healthy)\t"
-        "com.docker.compose.service=victim\t0.0.0.0:2022->22/tcp"
-    )
+    LAB_CONTAINER_ROW = {
+        "name": "aptl-victim",
+        "image": "aptl/victim:latest",
+        "id": "abc123",
+        "status": "Up 5 minutes (healthy)",
+        "labels": {"com.docker.compose.service": "victim"},
+        "ports": ["0.0.0.0:2022->22/tcp"],
+    }
 
     INSPECT_DICT = {
         "NetworkSettings": {
@@ -260,70 +215,61 @@ class TestGetContainerSnapshots:
         }
     }
 
-    def _backend_with_inspect(self, inspect=None):
+    def _backend(self, *, rows=None, inspect=None):
         backend = MagicMock()
+        backend.host_list_lab_containers.return_value = (
+            rows if rows is not None else [self.LAB_CONTAINER_ROW]
+        )
         backend.container_inspect.return_value = (
             inspect if inspect is not None else self.INSPECT_DICT
         )
         return backend
 
-    def test_parses_container_output(self, mocker):
-        mocker.patch(
-            "aptl.core.snapshot._docker_out",
-            side_effect=lambda b, a, **kw: self.DOCKER_PS_LINE if "ps" in a else "",
-        )
-        backend = self._backend_with_inspect()
-        containers = _get_container_snapshots(backend)
+    def test_parses_container_row(self):
+        containers = _get_container_snapshots(self._backend())
         assert len(containers) == 1
         c = containers[0]
         assert c.name == "aptl-victim"
         assert c.image == "aptl/victim:latest"
+        assert c.image_id == "abc123"
         assert c.health == "healthy"
         assert c.networks["aptl_aptl-internal"] == "172.20.2.20"
-        assert "2022->22/tcp" in c.ports[0]
+        assert c.ports == ["0.0.0.0:2022->22/tcp"]
         assert c.labels["com.docker.compose.service"] == "victim"
 
-    def test_parses_unhealthy_status(self, mocker):
-        line = "aptl-foo\timg\tid\tUp 1 minute (unhealthy)\tlabel=val\t"
-        mocker.patch("aptl.core.snapshot._docker_out", side_effect=lambda b, a, **kw: line if "ps" in a else "")
-        containers = _get_container_snapshots(self._backend_with_inspect({}))
+    def test_parses_unhealthy_status(self):
+        row = {**self.LAB_CONTAINER_ROW, "status": "Up 1 minute (unhealthy)"}
+        containers = _get_container_snapshots(
+            self._backend(rows=[row], inspect={})
+        )
         assert containers[0].health == "unhealthy"
 
-    def test_parses_starting_status(self, mocker):
-        line = "aptl-foo\timg\tid\tUp 5s (health: starting)\tlabel=val\t"
-        mocker.patch("aptl.core.snapshot._docker_out", side_effect=lambda b, a, **kw: line if "ps" in a else "")
-        containers = _get_container_snapshots(self._backend_with_inspect({}))
+    def test_parses_starting_status(self):
+        row = {**self.LAB_CONTAINER_ROW, "status": "Up 5s (health: starting)"}
+        containers = _get_container_snapshots(
+            self._backend(rows=[row], inspect={})
+        )
         assert containers[0].health == "starting"
 
-    def test_returns_empty_on_no_output(self, mocker):
-        mocker.patch("aptl.core.snapshot._docker_out", return_value="")
-        assert _get_container_snapshots(self._backend_with_inspect({})) == []
+    def test_returns_empty_when_backend_lists_none(self):
+        assert _get_container_snapshots(self._backend(rows=[], inspect={})) == []
 
-    def test_handles_bad_inspect_response(self, mocker):
-        mocker.patch(
-            "aptl.core.snapshot._docker_out",
-            side_effect=lambda b, a, **kw: self.DOCKER_PS_LINE if "ps" in a else "",
-        )
-        # Empty dict simulates the "no such container / parse error" case
-        # ``container_inspect`` returns on failure.
-        containers = _get_container_snapshots(self._backend_with_inspect({}))
+    def test_handles_empty_inspect_dict(self):
+        # `container_inspect` returns {} on failure. Snapshot must
+        # tolerate that without crashing.
+        containers = _get_container_snapshots(self._backend(inspect={}))
         assert len(containers) == 1
         assert containers[0].networks == {}
 
-    def test_skips_short_lines(self, mocker):
-        mocker.patch("aptl.core.snapshot._docker_out", side_effect=lambda b, a, **kw: "too\tfew" if "ps" in a else "")
-        assert _get_container_snapshots(self._backend_with_inspect({})) == []
-
-    def test_multiple_containers(self, mocker):
-        lines = (
-            "aptl-victim\timg1\tid1\tUp 5m\tlabel=a\t2022->22/tcp\n"
-            "aptl-kali\timg2\tid2\tUp 3m\tlabel=b\t2023->22/tcp"
+    def test_multiple_containers(self):
+        rows = [
+            {**self.LAB_CONTAINER_ROW, "name": "aptl-victim"},
+            {**self.LAB_CONTAINER_ROW, "name": "aptl-kali", "image": "kali:latest"},
+        ]
+        containers = _get_container_snapshots(
+            self._backend(rows=rows, inspect={})
         )
-        mocker.patch("aptl.core.snapshot._docker_out", side_effect=lambda b, a, **kw: lines if "ps" in a else "")
-        containers = _get_container_snapshots(self._backend_with_inspect({}))
-        assert len(containers) == 2
-        names = {c.name for c in containers}
-        assert names == {"aptl-victim", "aptl-kali"}
+        assert {c.name for c in containers} == {"aptl-victim", "aptl-kali"}
 
 
 class TestGetWazuhRulesSnapshot:
@@ -397,82 +343,56 @@ class TestGetWazuhRulesSnapshot:
 
 
 class TestGetNetworkSnapshots:
-    """Tests for _get_network_snapshots with mocked subprocess."""
+    """Tests for ``_get_network_snapshots`` with a mocked backend."""
 
-    NETWORK_INSPECT = json.dumps([{
-        "Name": "aptl_aptl-internal",
-        "IPAM": {"Config": [{"Subnet": "172.20.2.0/24", "Gateway": "172.20.2.1"}]},
-        "Containers": {
-            "abc": {"Name": "aptl-victim"},
-            "def": {"Name": "aptl-workstation"},
-        },
-    }])
+    INSPECT_FULL = {
+        "name": "aptl_aptl-internal",
+        "subnet": "172.20.2.0/24",
+        "gateway": "172.20.2.1",
+        "containers": ["aptl-victim", "aptl-workstation"],
+    }
 
-    def test_parses_network_info(self, mocker):
-        def fake_run_cmd(_backend, args, timeout=15):
-            if "network" in args and "ls" in args:
-                return "aptl_aptl-internal"
-            if "network" in args and "inspect" in args:
-                return self.NETWORK_INSPECT
-            return ""
-
-        mocker.patch("aptl.core.snapshot._docker_out", side_effect=fake_run_cmd)
-        nets = _get_network_snapshots(MagicMock())
+    def test_parses_network_info(self):
+        backend = MagicMock()
+        backend.host_list_lab_networks.return_value = ["aptl_aptl-internal"]
+        backend.host_inspect_network.return_value = self.INSPECT_FULL
+        nets = _get_network_snapshots(backend)
         assert len(nets) == 1
         assert nets[0].name == "aptl_aptl-internal"
         assert nets[0].subnet == "172.20.2.0/24"
         assert nets[0].gateway == "172.20.2.1"
         assert "aptl-victim" in nets[0].containers
 
-    def test_returns_empty_when_no_networks(self, mocker):
-        mocker.patch("aptl.core.snapshot._docker_out", return_value="")
-        assert _get_network_snapshots(MagicMock()) == []
+    def test_returns_empty_when_no_networks(self):
+        backend = MagicMock()
+        backend.host_list_lab_networks.return_value = []
+        assert _get_network_snapshots(backend) == []
 
-    def test_handles_bad_inspect_json(self, mocker):
-        def fake_run_cmd(_backend, args, timeout=15):
-            if "ls" in args:
-                return "aptl_aptl-internal"
-            return "not-json"
-
-        mocker.patch("aptl.core.snapshot._docker_out", side_effect=fake_run_cmd)
-        nets = _get_network_snapshots(MagicMock())
+    def test_handles_empty_inspect(self):
+        # ``host_inspect_network`` returns {} on failure (bad JSON,
+        # missing network, etc.). Snapshot must still produce a
+        # NetworkSnapshot with the bare name.
+        backend = MagicMock()
+        backend.host_list_lab_networks.return_value = ["aptl_aptl-internal"]
+        backend.host_inspect_network.return_value = {}
+        nets = _get_network_snapshots(backend)
         assert len(nets) == 1
         assert nets[0].name == "aptl_aptl-internal"
         assert nets[0].subnet == ""
+        assert nets[0].containers == []
 
-    def test_handles_missing_ipam_config(self, mocker):
-        inspect = json.dumps([{"Name": "net", "IPAM": {"Config": []}, "Containers": {}}])
-
-        def fake_run_cmd(_backend, args, timeout=15):
-            if "ls" in args:
-                return "aptl_aptl-internal"
-            return inspect
-
-        mocker.patch("aptl.core.snapshot._docker_out", side_effect=fake_run_cmd)
-        nets = _get_network_snapshots(MagicMock())
-        assert nets[0].subnet == ""
-
-    def test_multiple_networks(self, mocker):
-        def fake_run_cmd(_backend, args, timeout=15):
-            if "ls" in args:
-                return "aptl_aptl-security\naptl_aptl-internal\naptl_aptl-dmz"
-            return json.dumps([{"Name": "n", "IPAM": {"Config": []}, "Containers": {}}])
-
-        mocker.patch("aptl.core.snapshot._docker_out", side_effect=fake_run_cmd)
-        nets = _get_network_snapshots(MagicMock())
+    def test_multiple_networks(self):
+        backend = MagicMock()
+        backend.host_list_lab_networks.return_value = [
+            "aptl_aptl-security",
+            "aptl_aptl-internal",
+            "aptl_aptl-dmz",
+        ]
+        backend.host_inspect_network.return_value = {
+            "name": "n", "subnet": "", "gateway": "", "containers": []
+        }
+        nets = _get_network_snapshots(backend)
         assert len(nets) == 3
-
-    def test_fallback_on_empty_inspect(self, mocker):
-        def fake_run_cmd(_backend, args, timeout=15):
-            if "ls" in args:
-                return "aptl_aptl-internal"
-            return ""
-
-        mocker.patch("aptl.core.snapshot._docker_out", side_effect=fake_run_cmd)
-        nets = _get_network_snapshots(MagicMock())
-        assert len(nets) == 1
-        assert nets[0].name == "aptl_aptl-internal"
-        assert nets[0].subnet == ""
 
 
 class TestHashConfigFiles:

@@ -194,28 +194,43 @@ class DeploymentBackend(Protocol):
         """
         ...
 
-    def host_run(
-        self,
-        args: list[str],
-        *,
-        timeout: int | None = None,
-    ) -> subprocess.CompletedProcess:
-        """Run an arbitrary host-level command (typically `docker …` /
-        `docker compose …`) against the backend's Docker daemon.
+    # Host inventory (CLI-004 / ADR-023) ----------------------------------
+    #
+    # These return parsed host-level information instead of exposing a
+    # generic argv passthrough. Future non-Docker backends implement
+    # them in their own terms; today both backends back them with the
+    # docker CLI but the Protocol stays Docker-shape-agnostic.
 
-        Used by callers that need docker capabilities not covered by the
-        typed container-interaction methods — for example the snapshot
-        module's `docker version`, `docker compose version`, `docker ps
-        -a --filter`, and `docker network ls/inspect` calls. SSH backends
-        route this through the same `DOCKER_HOST=ssh://…` environment as
-        the rest of the Protocol so a snapshot taken against a remote
-        lab actually inspects the remote daemon.
-
-        Args:
-            args: argv list to execute (e.g. `["docker", "version", …]`).
-            timeout: optional timeout in seconds.
+    def host_versions(self) -> dict[str, str]:
+        """Return parsed daemon-side software versions.
 
         Returns:
-            The captured CompletedProcess.
+            Dict with keys ``docker`` and ``compose``. Each value is the
+            version string as reported by the daemon, or empty string
+            on probe failure (missing binary, daemon down, etc.).
+        """
+        ...
+
+    def host_list_lab_containers(self) -> list[dict]:
+        """Enumerate ``aptl-*`` containers visible to the daemon.
+
+        Each row carries ``name``, ``image``, ``id``, ``status``,
+        ``labels`` (dict), and ``ports`` (list of port-mapping strings).
+        Catches containers outside the current compose project that
+        nevertheless follow the lab's naming convention.
+        """
+        ...
+
+    def host_list_lab_networks(self, name_prefix: str) -> list[str]:
+        """List network names whose names start with ``name_prefix``."""
+        ...
+
+    def host_inspect_network(self, name: str) -> dict:
+        """Return parsed network metadata.
+
+        Returns:
+            Dict with keys ``name``, ``subnet``, ``gateway``,
+            ``containers`` (sorted list of attached container names).
+            Empty dict on any failure.
         """
         ...

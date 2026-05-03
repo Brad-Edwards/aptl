@@ -57,11 +57,11 @@ meant to eliminate.
 
 ## Decision
 
-Extend the existing `DeploymentBackend` Protocol with **six**
-container-interaction methods. Both `DockerComposeBackend` and
-`SSHComposeBackend` implement them; the SSH backend reuses its existing
-env-injection pattern (and gains a parallel `_run_streaming` override for
-the non-captured cases).
+Extend the existing `DeploymentBackend` Protocol with **ten** new methods —
+six for container interaction (CLI surface) and four for host inventory
+(snapshot capture). Both `DockerComposeBackend` and `SSHComposeBackend`
+implement them; the SSH backend reuses its existing env-injection pattern
+(and gains a parallel `_run_streaming` override for the non-captured cases).
 
 ```python
 class DeploymentBackend(Protocol):
@@ -90,6 +90,12 @@ class DeploymentBackend(Protocol):
     ) -> subprocess.CompletedProcess: ...
 
     def container_inspect(self, name: str) -> dict: ...
+
+    # Host inventory (typed; no generic argv passthrough)
+    def host_versions(self) -> dict[str, str]: ...
+    def host_list_lab_containers(self) -> list[dict]: ...
+    def host_list_lab_networks(self, name_prefix: str) -> list[str]: ...
+    def host_inspect_network(self, name: str) -> dict: ...
 ```
 
 Implementation rules:
@@ -103,11 +109,23 @@ Implementation rules:
   `container_list` output. `DOCKER_HOST=ssh://…` is honoured uniformly by
   both `docker` and `docker compose` CLIs, so SSH-remote works without
   per-method special handling.
-- `container_shell` with `shell=None` tries `/bin/bash` first and falls
-  back to `/bin/sh` if bash exits with 126 or 127 (command-not-executable
-  / not-found). An explicit `--shell` skips the fallback. This keeps the
-  default ergonomic for the lab's bash-heavy containers without breaking
-  on alpine-based images.
+- `container_shell` with `shell=None` **probes bash non-interactively**
+  via `docker exec <name> /bin/bash -c true` first; if that exits 0 it
+  launches an interactive `bash` TTY, if it exits 126/127 it falls back
+  to `/bin/sh`, otherwise it surfaces the probe error code. The probe
+  is required so the user's own `exit 126`/`exit 127` from inside an
+  interactive shell isn't misread as "bash is missing." An explicit
+  `--shell` skips the probe entirely.
+- The host inventory methods replace what would otherwise be a generic
+  `host_run(args)` argv-passthrough escape hatch. Typed methods keep the
+  Protocol Docker-shape-agnostic so a future non-Docker backend (e.g.,
+  Podman, Kubernetes, Nomad) can implement them in its own terms instead
+  of having to emulate Docker CLI behaviour. Snapshot capture
+  (`core/snapshot.py`) is the only consumer today: `_get_software_versions`
+  uses `host_versions`, `_get_container_snapshots` uses
+  `host_list_lab_containers` (plus per-container `container_inspect` for
+  network IPs), and `_get_network_snapshots` uses `host_list_lab_networks`
+  + `host_inspect_network`.
 - Streaming methods (`container_logs`, `container_shell`) inherit the
   parent's stdin/stdout/stderr — no capture — so the user sees logs
   arrive live and shells get a real TTY. A new `_run_streaming` helper
@@ -149,10 +167,11 @@ containers, and don't fit the Protocol's container-interaction model.
 
 ### Negative
 
-- **Protocol grew from 5 to 11 methods.** Adding a new backend now
-  involves implementing six more methods. Mitigated by inheritance:
-  `SSHComposeBackend` overrides only the two `_run*` helpers and
-  inherits the rest from `DockerComposeBackend`.
+- **Protocol grew from 5 to 15 methods.** Adding a new backend now
+  involves implementing ten more methods (six container-interaction +
+  four host inventory). Mitigated by inheritance: `SSHComposeBackend`
+  overrides only the two `_run*` helpers and inherits the rest from
+  `DockerComposeBackend`.
 - **Two log methods (`container_logs` / `container_logs_capture`).**
   Streaming and captured semantics genuinely differ; collapsing them
   into a single method would have required either a `capture` flag with

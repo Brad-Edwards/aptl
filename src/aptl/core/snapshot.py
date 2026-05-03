@@ -116,27 +116,6 @@ class RangeSnapshot:
         return asdict(self)
 
 
-def _docker_out(
-    backend: "DeploymentBackend",
-    args: list[str],
-    timeout: int = 15,
-) -> str:
-    """Run a host-level docker command via the backend; return stripped
-    stdout or empty on any failure.
-
-    Goes through ``backend.host_run`` so SSH-remote labs route through
-    ``DOCKER_HOST=ssh://…`` and the snapshot inspects the right daemon.
-    """
-    try:
-        result = backend.host_run(args, timeout=timeout)
-    except (subprocess.TimeoutExpired, OSError) as e:
-        log.debug("host_run %s failed: %s", args, e)
-        return ""
-    if result.returncode == 0:
-        return result.stdout.strip()
-    return ""
-
-
 def _backend_exec(
     backend: "DeploymentBackend",
     container: str,
@@ -160,15 +139,9 @@ def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
 
     versions.python_version = sys.version.split()[0]
 
-    docker_out = _docker_out(
-        backend, ["docker", "version", "--format", "{{.Server.Version}}"]
-    )
-    if docker_out:
-        versions.docker_version = docker_out
-
-    compose_out = _docker_out(backend, ["docker", "compose", "version", "--short"])
-    if compose_out:
-        versions.compose_version = compose_out
+    daemon_versions = backend.host_versions()
+    versions.docker_version = daemon_versions.get("docker", "")
+    versions.compose_version = daemon_versions.get("compose", "")
 
     # Wazuh manager version from container
     wm_out = _backend_exec(
@@ -221,23 +194,6 @@ def _parse_health(status: str) -> str:
     return ""
 
 
-def _parse_labels(labels_str: str) -> dict[str, str]:
-    if not labels_str:
-        return {}
-    labels: dict[str, str] = {}
-    for pair in labels_str.split(","):
-        if "=" in pair:
-            k, v = pair.split("=", 1)
-            labels[k.strip()] = v.strip()
-    return labels
-
-
-def _parse_ports(ports_str: str) -> list[str]:
-    if not ports_str:
-        return []
-    return [p.strip() for p in ports_str.split(",") if p.strip()]
-
-
 def _container_networks(
     backend: "DeploymentBackend", name: str
 ) -> dict[str, str]:
@@ -255,18 +211,19 @@ def _container_networks(
 
 
 def _row_to_snapshot(
-    backend: "DeploymentBackend", parts: list[str]
+    backend: "DeploymentBackend", row: dict
 ) -> ContainerSnapshot:
-    name = parts[0]
+    name = row.get("name", "")
+    status = row.get("status", "")
     return ContainerSnapshot(
         name=name,
-        image=parts[1],
-        image_id=parts[2],
-        status=parts[3],
-        health=_parse_health(parts[3]),
-        labels=_parse_labels(parts[4]),
+        image=row.get("image", ""),
+        image_id=row.get("id", ""),
+        status=status,
+        health=_parse_health(status),
+        labels=row.get("labels", {}),
         networks=_container_networks(backend, name),
-        ports=_parse_ports(parts[5] if len(parts) > 5 else ""),
+        ports=row.get("ports", []),
     )
 
 
@@ -275,25 +232,14 @@ def _get_container_snapshots(
 ) -> list[ContainerSnapshot]:
     """Snapshot all aptl- containers with network IPs and port mappings.
 
-    Goes through ``backend.host_run`` so SSH-remote labs enumerate the
-    remote daemon. Filters by the ``aptl-`` name prefix to catch any
-    containers the user named that way even if they're outside the
-    current compose project — defensive coverage.
+    Goes through ``backend.host_list_lab_containers`` (and per-container
+    ``backend.container_inspect``) so SSH-remote labs enumerate the
+    remote daemon. The backend filters by the ``aptl-`` name prefix to
+    catch any containers the user named that way even if they're outside
+    the current compose project — defensive coverage.
     """
-    fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
-    out = _docker_out(
-        backend,
-        ["docker", "ps", "-a", "--filter", "name=aptl-", "--format", fmt],
-    )
-    if not out:
-        return []
-    snapshots: list[ContainerSnapshot] = []
-    for line in out.splitlines():
-        parts = line.split("\t", 5)
-        if len(parts) < 5:
-            continue
-        snapshots.append(_row_to_snapshot(backend, parts))
-    return snapshots
+    rows = backend.host_list_lab_containers()
+    return [_row_to_snapshot(backend, row) for row in rows]
 
 
 def _get_wazuh_rules_snapshot(
@@ -377,53 +323,15 @@ def _get_network_snapshots(
     backend: "DeploymentBackend",
 ) -> list[NetworkSnapshot]:
     """Snapshot Docker networks with aptl prefix."""
-    import json as _json
-
-    out = _docker_out(
-        backend,
-        ["docker", "network", "ls", "--filter", "name=aptl", "--format", "{{.Name}}"],
-    )
-    if not out:
-        return []
-
-    snapshots = []
-    for net_name in out.splitlines():
-        net_name = net_name.strip()
-        if not net_name:
-            continue
-
-        inspect_out = _docker_out(backend, ["docker", "network", "inspect", net_name])
-        if not inspect_out:
-            snapshots.append(NetworkSnapshot(name=net_name))
-            continue
-
-        try:
-            info = _json.loads(inspect_out)
-            if isinstance(info, list) and info:
-                info = info[0]
-
-            subnet = ""
-            gateway = ""
-            ipam_configs = info.get("IPAM", {}).get("Config", [])
-            if ipam_configs:
-                subnet = ipam_configs[0].get("Subnet", "")
-                gateway = ipam_configs[0].get("Gateway", "")
-
-            containers_map = info.get("Containers", {})
-            container_names = [
-                c.get("Name", "") for c in containers_map.values()
-            ]
-
-            snapshots.append(NetworkSnapshot(
-                name=net_name,
-                subnet=subnet,
-                gateway=gateway,
-                containers=sorted(container_names),
-            ))
-        except (_json.JSONDecodeError, KeyError, IndexError) as e:
-            log.debug("Failed to parse network inspect for %s: %s", net_name, e)
-            snapshots.append(NetworkSnapshot(name=net_name))
-
+    snapshots: list[NetworkSnapshot] = []
+    for net_name in backend.host_list_lab_networks("aptl"):
+        info = backend.host_inspect_network(net_name)
+        snapshots.append(NetworkSnapshot(
+            name=net_name,
+            subnet=info.get("subnet", ""),
+            gateway=info.get("gateway", ""),
+            containers=info.get("containers", []),
+        ))
     return snapshots
 
 

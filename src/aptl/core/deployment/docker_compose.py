@@ -19,6 +19,11 @@ log = get_logger("deployment.docker_compose")
 # won't block the kill switch indefinitely.
 _DOCKER_TIMEOUT = 30
 
+# Bound for snapshot / host-inventory probes. A stalled docker daemon
+# (especially the SSH transport) must not hang `aptl lab status --json`
+# or the lab-start snapshot step indefinitely.
+_HOST_INVENTORY_TIMEOUT = 15
+
 
 def _parse_labels(labels_str: str) -> dict[str, str]:
     """Parse a comma-separated `k=v,k=v` labels string from `docker ps`."""
@@ -342,21 +347,36 @@ class DockerComposeBackend:
 
     def host_versions(self) -> dict[str, str]:
         result = {"docker": "", "compose": ""}
-        docker_out = self._run([
-            "docker", "version", "--format", "{{.Server.Version}}",
-        ])
+        docker_out = self._run(
+            ["docker", "version", "--format", "{{.Server.Version}}"],
+            timeout=_HOST_INVENTORY_TIMEOUT,
+        )
         if docker_out.returncode == 0:
             result["docker"] = docker_out.stdout.strip()
-        compose_out = self._run(["docker", "compose", "version", "--short"])
+        compose_out = self._run(
+            ["docker", "compose", "version", "--short"],
+            timeout=_HOST_INVENTORY_TIMEOUT,
+        )
         if compose_out.returncode == 0:
             result["compose"] = compose_out.stdout.strip()
         return result
 
     def host_list_lab_containers(self) -> list[dict]:
+        # Scope to the configured compose project via the standard
+        # com.docker.compose.project label rather than just the
+        # ``aptl-`` name prefix, so a snapshot taken against a shared
+        # SSH daemon doesn't expose other tenants' containers that
+        # happen to use the same naming convention.
         fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
-        result = self._run([
-            "docker", "ps", "-a", "--filter", "name=aptl-", "--format", fmt,
-        ])
+        result = self._run(
+            [
+                "docker", "ps", "-a",
+                "--filter", f"label=com.docker.compose.project={self._project_name}",
+                "--filter", "name=aptl-",
+                "--format", fmt,
+            ],
+            timeout=_HOST_INVENTORY_TIMEOUT,
+        )
         if result.returncode != 0 or not result.stdout.strip():
             return []
         return [
@@ -366,11 +386,18 @@ class DockerComposeBackend:
         ]
 
     def host_list_lab_networks(self, name_prefix: str) -> list[str]:
-        result = self._run([
-            "docker", "network", "ls",
-            "--filter", f"name={name_prefix}",
-            "--format", "{{.Name}}",
-        ])
+        # Scope to the current compose project's networks. Combined with
+        # the user-supplied name prefix, this prevents leaking other
+        # tenants' aptl-* networks on a shared SSH daemon.
+        result = self._run(
+            [
+                "docker", "network", "ls",
+                "--filter", f"label=com.docker.compose.project={self._project_name}",
+                "--filter", f"name={name_prefix}",
+                "--format", "{{.Name}}",
+            ],
+            timeout=_HOST_INVENTORY_TIMEOUT,
+        )
         if result.returncode != 0:
             return []
         return [
@@ -380,7 +407,10 @@ class DockerComposeBackend:
         ]
 
     def host_inspect_network(self, name: str) -> dict:
-        result = self._run(["docker", "network", "inspect", name])
+        result = self._run(
+            ["docker", "network", "inspect", name],
+            timeout=_HOST_INVENTORY_TIMEOUT,
+        )
         if result.returncode != 0 or not result.stdout.strip():
             return {}
         try:
@@ -504,7 +534,10 @@ class DockerComposeBackend:
         return self._run(argv, timeout=timeout)
 
     def container_inspect(self, name: str) -> dict:
-        result = self._run(["docker", "inspect", name])
+        result = self._run(
+            ["docker", "inspect", name],
+            timeout=_HOST_INVENTORY_TIMEOUT,
+        )
         if result.returncode != 0:
             log.debug("container_inspect failed for %s: %s", name, result.stderr.strip())
             return {}

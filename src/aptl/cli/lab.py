@@ -110,7 +110,10 @@ def _resolve_status_backend(project_dir: Path):
     if config_path is None:
         return None
     cfg = load_config(config_path)
-    return get_backend(cfg, project_dir)
+    # Use config_path.parent as the backend project_dir so compose
+    # commands run in the directory that owns aptl.json, even if
+    # find_config ever grows upward-walking discovery.
+    return get_backend(cfg, config_path.parent)
 
 
 def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:

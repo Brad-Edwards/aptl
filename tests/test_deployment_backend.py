@@ -594,6 +594,13 @@ class TestDockerComposeBackendContainerInteraction:
         cmd = mock_run.call_args[0][0]
         assert "docker" in cmd and "ps" in cmd and "-a" in cmd
         assert any("name=aptl-" in arg for arg in cmd)
+        # Scoping by compose project label keeps shared-daemon snapshots
+        # from leaking other tenants' aptl-* containers.
+        assert any(
+            "label=com.docker.compose.project=test" in arg for arg in cmd
+        )
+        # Bounded execution: a stalled daemon must not hang snapshot capture.
+        assert mock_run.call_args[1]["timeout"] == 15
         assert len(rows) == 1
         row = rows[0]
         assert row["name"] == "aptl-victim"
@@ -625,6 +632,11 @@ class TestDockerComposeBackendContainerInteraction:
         assert nets == ["aptl_security", "aptl_internal"]
         cmd = mock_run.call_args[0][0]
         assert any("name=aptl" in arg for arg in cmd)
+        # Compose-project scoping prevents shared-daemon network leak.
+        assert any(
+            "label=com.docker.compose.project=test" in arg for arg in cmd
+        )
+        assert mock_run.call_args[1]["timeout"] == 15
 
     def test_host_list_lab_networks_returns_empty_on_error(self, tmp_path):
         backend = self._make_backend(tmp_path)

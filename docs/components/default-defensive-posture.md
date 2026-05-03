@@ -12,37 +12,47 @@ researchers reading run results can tell the difference between:
 - A gap that **was already wired but inactive** (e.g., the
   active-response block existed in the config but stayed disabled).
 
-Issue [#251](https://github.com/Brad-Edwards/Brad-Edwards/aptl/issues/251)
+Issue [#251](https://github.com/Brad-Edwards/aptl/issues/251)
 introduced this contract. ADRs
-[019](adr-019-suricata-ids-only-prevention-via-wazuh-ar.md),
-[021](adr-021-active-response-whitelist-via-wrapper.md), and
-[022](adr-022-misp-driven-suricata-rules.md) anchor the architectural
+[019](../adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md),
+[021](../adrs/adr-021-active-response-whitelist-via-wrapper.md), and
+[022](../adrs/adr-022-misp-driven-suricata-rules.md) anchor the architectural
 decisions behind individual surfaces.
 
 ## How to read this doc
 
-Every section in this document is tagged with one of two banners:
+Every section in this document is tagged with one of three banners:
 
 - **WEAKNESS BY DESIGN** — the *target's* intentional vulnerability.
   The lab ships these unhardened on purpose so red has something to
   attack. Blue defends *against* them by hardening (e.g., rotating to
   strong passwords) or detecting-then-blocking. Examples: AD weak
-  passwords, anonymous SMB null-sessions, Kerberoastable service
-  accounts.
+  passwords, Kerberoastable service accounts.
 - **STARTING POSTURE** — a *defensive tool* that ships installed and
-  wired but disabled or empty. Blue *enables, configures, or populates*
-  these per iteration to raise the posture. Examples: Wazuh
-  active-response blocks (all `<disabled>yes</disabled>`), MISP IOC
-  store (empty), `zzz_purple_loop.xml` (absent until blue authors it).
+  wired but **disabled, empty, or absent**. Blue *enables, configures,
+  or populates* these per iteration to raise the posture. Examples:
+  Wazuh active-response blocks (all `<disabled>yes</disabled>`), MISP
+  IOC store (empty), `zzz_purple_loop.xml` (absent until blue authors
+  it).
+- **BASELINE ENABLED** — a *defensive tool* that **is on at first
+  boot** and produces output (alerts, logs, traces). Blue does **not**
+  need to enable these; they fire on their own. What blue *does*
+  control is the downstream coupling: which baseline detections feed
+  enforcement (active-response) or workflow (Shuffle → TheHive).
+  Examples: Wazuh detection rules, Suricata IDS alerting.
 
-If you can't tell whether a surface is `WEAKNESS BY DESIGN` or
-`STARTING POSTURE`, ask: "*Does the per-iteration blue task involve
-turning it on, or hardening the thing it points at?*" If the former,
-it's STARTING POSTURE; if the latter, it's WEAKNESS BY DESIGN.
+If you can't tell whether a surface is `WEAKNESS BY DESIGN`,
+`STARTING POSTURE`, or `BASELINE ENABLED`, ask:
+
+- "*Is the per-iteration blue task to turn it on?*" → STARTING POSTURE.
+- "*Is the per-iteration blue task to harden the thing it points at?*"
+  → WEAKNESS BY DESIGN.
+- "*Is the tool already producing output that blue couples downstream?*"
+  → BASELINE ENABLED.
 
 Each section follows the same template:
 
-- **Tag** — `WEAKNESS BY DESIGN` or `STARTING POSTURE`.
+- **Tag** — `WEAKNESS BY DESIGN`, `STARTING POSTURE`, or `BASELINE ENABLED`.
 - **Default state** — what ships, with file:line citations.
 - **Why it ships this way** — design rationale.
 - **What blue would do to raise it** — the per-iteration action.
@@ -52,14 +62,16 @@ Each section follows the same template:
 
 ## Suricata IDS
 
-**Tag:** `STARTING POSTURE`
+**Tag:** `BASELINE ENABLED` for the IDS itself + bundled / local alert
+rules. `STARTING POSTURE` for the MISP-driven IOC chain (empty until
+blue graduates IOCs).
 
 **Default state**
 
 - IDS-only mode. Suricata runs with `command: ["-c",
   "/etc/suricata/suricata.yaml", "--pcap"]`
   ([`docker-compose.yml:190`](../../docker-compose.yml)) — no NFQ, no
-  `inline:`, no `nfqueue:`. Per [ADR-019](adr-019-suricata-ids-only-prevention-via-wazuh-ar.md),
+  `inline:`, no `nfqueue:`. Per [ADR-019](../adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md),
   packet-level prevention is delivered by Wazuh active-response, **not**
   Suricata.
 - Loaded rule files
@@ -91,7 +103,7 @@ contract*, not a misconfiguration.
   ([`src/aptl/services/misp_suricata_sync/main.py`](../../src/aptl/services/misp_suricata_sync/main.py))
   picks them up at the next interval (default 300 s) and writes them
   to `misp-iocs.rules` as `alert` rules. See
-  [ADR-022](adr-022-misp-driven-suricata-rules.md).
+  [ADR-022](../adrs/adr-022-misp-driven-suricata-rules.md).
 - Author additional `alert` rules in `local.rules`. **Do not add `drop`
   rules** — they violate ADR-019 and the
   `test_action_is_always_alert_never_drop` regression guard in
@@ -111,8 +123,12 @@ contract*, not a misconfiguration.
 
 ## Wazuh detection rules
 
-**Tag:** `STARTING POSTURE` *(rules are loaded but no enforcement is
-coupled at first boot — see Wazuh active-response below)*
+**Tag:** `BASELINE ENABLED`. Detection rules are loaded and active at
+first boot — they generate alerts on matching events. What is **not**
+coupled at first boot is the *downstream response*: every
+`<active-response>` block ships `<disabled>yes</disabled>` (see next
+section), and `zzz_purple_loop.xml` (the hot file where blue authors
+custom child rules) ships absent.
 
 **Default state**
 
@@ -201,15 +217,15 @@ TheHive). Both of those are wired but disabled at first boot.
   ([`config/wazuh_cluster/etc/lists/active-response-whitelist`](../../config/wazuh_cluster/etc/lists/active-response-whitelist))
   pre-seeds the kali IPs `172.20.4.30`, `172.20.1.30`, `172.20.2.35`.
 - Companion ADRs:
-  [ADR-021](adr-021-active-response-whitelist-via-wrapper.md) (wrapper
-  rationale), [ADR-019](adr-019-suricata-ids-only-prevention-via-wazuh-ar.md)
+  [ADR-021](../adrs/adr-021-active-response-whitelist-via-wrapper.md) (wrapper
+  rationale), [ADR-019](../adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md)
   (why AR is the prevention path), and the
   [Wazuh active-response component reference](wazuh-active-response.md)
   (architecture, severity gate, timeout strategy).
 
 **Why it ships this way**
 
-Issue [#249](https://github.com/Brad-Edwards/Brad-Edwards/aptl/issues/249)
+Issue [#249](https://github.com/Brad-Edwards/aptl/issues/249)
 established the rule that all active-response blocks ship disabled by
 default — researchers reading a run result can then distinguish "blue
 turned this on during iteration N" from "blue inherited an active
@@ -263,7 +279,7 @@ kali's own IPs and wedging the purple loop.
 
 **Why it ships this way**
 
-[ADR-022](adr-022-misp-driven-suricata-rules.md) defines a
+[ADR-022](../adrs/adr-022-misp-driven-suricata-rules.md) defines a
 **tag-graduated enforcement model**: blue authors and curates
 intelligence in MISP, then graduates an indicator to enforcement by
 adding the `aptl:enforce` tag. The starting state has zero graduated
@@ -286,7 +302,7 @@ An empty store is normal default behavior, not a workflow failure.
 | Sync service config | [`src/aptl/services/misp_suricata_sync/config.py`](../../src/aptl/services/misp_suricata_sync/config.py) |
 | Sync service main loop | [`src/aptl/services/misp_suricata_sync/main.py`](../../src/aptl/services/misp_suricata_sync/main.py) |
 | Generated rule output | [`config/suricata/rules/misp/misp-iocs.rules`](../../config/suricata/rules/misp/misp-iocs.rules) |
-| ADR | [ADR-022](adr-022-misp-driven-suricata-rules.md) |
+| ADR | [ADR-022](../adrs/adr-022-misp-driven-suricata-rules.md) |
 
 ---
 
@@ -299,16 +315,23 @@ An empty store is normal default behavior, not a workflow failure.
 - Wazuh forwards level-≥10 alerts to Shuffle via a `<integration>`
   block at
   [`config/wazuh_cluster/wazuh_manager.conf:316-320`](../../config/wazuh_cluster/wazuh_manager.conf).
-- The lab ships **one seeded workflow**, `APTL Alert to Case`, that
-  receives the Wazuh JSON payload and creates a TheHive case. Blue
-  authors any additional workflows.
+- **No APTL-side Shuffle workflow seeds exist in the repo.** A search
+  for `*shuffle*workflow*` / `*workflow.json` returns zero results.
+  The Wazuh→Shuffle integration is wired (Wazuh will POST alerts), but
+  Shuffle itself ships with whatever its upstream image carries — no
+  workflows authored under source control by APTL.
+- Any "APTL Alert to Case"–style workflow that exists in a running
+  Shuffle instance was provisioned via the Shuffle UI/API at runtime
+  (likely by a previous lab session, manual operator action, or future
+  blue iteration). It is **not** part of the repo's default contract.
 
 **Why it ships this way**
 
-The single seeded workflow is the minimum needed to demonstrate the
-end-to-end Wazuh → Shuffle → TheHive integration (per SOC-006). Beyond
-that, what playbooks exist is iteration content — blue's per-run job
-to define case enrichment, escalation, auto-isolation, etc.
+Shuffle workflow design is iteration content: blue's per-run job is to
+define case enrichment, escalation, auto-isolation, etc. Pre-seeding
+playbooks would steer the experiment. The integration boundary
+(Wazuh's `<integration>` forwarder) is in source control; the workflow
+content is not.
 
 **What blue would do to raise it**
 
@@ -317,13 +340,16 @@ to define case enrichment, escalation, auto-isolation, etc.
   outside the Wazuh AR path (where appropriate).
 - Lower the `<level>` threshold in the integration block if blue wants
   Shuffle to see medium-severity alerts.
+- If a workflow becomes part of the lab's permanent baseline, export
+  it from Shuffle and check the JSON into `config/shuffle/` (a path
+  that does not yet exist) so the contract is verifiable from the repo.
 
 **Source of truth**
 
 | Surface | File |
 |---|---|
 | Wazuh→Shuffle forwarder | [`config/wazuh_cluster/wazuh_manager.conf:316-320`](../../config/wazuh_cluster/wazuh_manager.conf) |
-| Seeded workflow | `APTL Alert to Case` (provisioned in Shuffle UI; not authored in repo) |
+| Shuffle workflow seeds | none in repo — runtime-only |
 
 ---
 
@@ -379,8 +405,28 @@ seeds these intentional vulnerabilities:
 | Kerberoastable — `svc-sql` | SPN set on `MSSQLSvc/db.techvault.local` | [104-105](../../containers/ad/provision-users.sh) |
 | Kerberoastable — `svc-web` | SPN set on `HTTP/webapp.techvault.local` | [112](../../containers/ad/provision-users.sh) |
 
-Anonymous SMB null-session is enabled via Samba defaults — no override
-in the repo turns it off.
+**Samba configuration baseline**
+
+The AD DC's `smb.conf` is generated by `samba-tool domain provision`
+([`containers/ad/setup-ad.sh:21-28`](../../containers/ad/setup-ad.sh))
+with stock provisioning parameters (`--server-role=dc`,
+`--use-rfc2307`, `--dns-backend=SAMBA_INTERNAL`). The repo does **not**
+ship an override `smb.conf`, an `extra_smb_conf` snippet, or any
+post-provision sed/append that locks down anonymous null-session
+policy, RPC pipe access, or SMB1 fallback. Whether the running DC
+permits anonymous SMB enumeration depends on Samba's stock defaults
+for the AD DC role at the version baked into the container image
+([`containers/ad/Dockerfile`](../../containers/ad/Dockerfile)) — and
+those defaults historically have been permissive enough that a SOC-101
+"check what an unauthenticated null-session can list" exercise
+produces meaningful output.
+
+If blue rotates this from a passive baseline to a hardened one, the
+expected per-iteration action is to drop an override `smb.conf` (or
+`samba-tool` post-provision step) into the AD container that
+explicitly sets `restrict anonymous = 2`, removes guest fallback, and
+disables SMB1 — and check that override into the repo so the new
+baseline is verifiable.
 
 **Why it ships this way**
 
@@ -461,67 +507,12 @@ researcher cognitive load.
 
 ---
 
-## Scenario `mode` field (forward-looking contract)
-
-**Tag:** `STARTING POSTURE` *(not yet implemented — contract documented for forward planning)*
-
-**Default state**
-
-[SCN-001](https://github.com/Brad-Edwards/Brad-Edwards/aptl/issues/263)'s
-statement (in Ground Control) describes a `mode (red/blue/purple)`
-field on each scenario YAML that gates which posture defaults apply
-per run. **The current Scenario SDL
-([`src/aptl/core/sdl/scenario.py`](../../src/aptl/core/sdl/scenario.py))
-does not have a `mode` field.** The SDL post-refactor (ADRs
-[014](adr-014-scenario-description-language.md),
-[015](adr-015-declarative-sdl-objectives.md),
-[017](adr-017-sdl-runtime-layer.md)) defines `name`, `description`,
-and 21 OCR/extended sections — none named `mode`. SCN-001's
-vocabulary is being reconciled in
-[issue #263](https://github.com/Brad-Edwards/Brad-Edwards/aptl/issues/263).
-
-**The forward-looking contract** (when `mode` lands):
-
-- `red` runs assume the full WEAKNESS-BY-DESIGN baseline; STARTING
-  POSTURE surfaces stay disabled. Red's job is to exploit the
-  weaknesses; defenders are pure observers.
-- `blue` runs assume the same WEAKNESS-BY-DESIGN baseline but expose
-  the blue-side MCP surfaces (`aptl-wazuh`, `aptl-threatintel`,
-  `aptl-casemgmt`, `aptl-soar`, `aptl-network`, `aptl-indexer`) so
-  blue can enable, configure, and graduate STARTING POSTURE surfaces.
-- `purple` runs expose both red and blue MCP surfaces. Each iteration
-  alternates: red drives an attack with weaknesses unhardened, blue
-  observes and raises the posture (enables an AR block, adds an IOC,
-  authors a `zzz_purple_loop.xml` rule), red attacks again under the
-  new posture.
-
-**Why it ships this way**
-
-The doc captures the *contract* even though the SDL field doesn't
-exist yet — so when mode lands, the per-mode posture-default switch
-has a documented home, not an implicit unwritten rule.
-
-**What blue would do to raise it**
-
-N/A until the field lands. Track
-[#263](https://github.com/Brad-Edwards/Brad-Edwards/aptl/issues/263)
-for SCN-001 reconciliation.
-
-**Source of truth**
-
-| Surface | File |
-|---|---|
-| Current Scenario SDL | [`src/aptl/core/sdl/scenario.py`](../../src/aptl/core/sdl/scenario.py) |
-| Vocabulary mismatch follow-up | [issue #263](https://github.com/Brad-Edwards/Brad-Edwards/aptl/issues/263) |
-
----
-
 ## Cross-references
 
-- [ADR-019: Suricata stays IDS-only; prevention via Wazuh AR](adr-019-suricata-ids-only-prevention-via-wazuh-ar.md)
-- [ADR-020: Wazuh agents in-process vs sidecar](adr-020-wazuh-agents-in-process-vs-sidecar.md)
-- [ADR-021: Active-response whitelist via wrapper](adr-021-active-response-whitelist-via-wrapper.md)
-- [ADR-022: MISP-driven Suricata rules](adr-022-misp-driven-suricata-rules.md)
+- [ADR-019: Suricata stays IDS-only; prevention via Wazuh AR](../adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md)
+- [ADR-020: Wazuh agents in-process vs sidecar](../adrs/adr-020-wazuh-agents-in-process-vs-sidecar.md)
+- [ADR-021: Active-response whitelist via wrapper](../adrs/adr-021-active-response-whitelist-via-wrapper.md)
+- [ADR-022: MISP-driven Suricata rules](../adrs/adr-022-misp-driven-suricata-rules.md)
 - [Wazuh Active Response component reference](wazuh-active-response.md)
 - [Wazuh SIEM component reference](wazuh-siem.md)
 
@@ -551,3 +542,42 @@ graduation lane), the contract is:
 The goal is researchers reading a run result should always be able to
 look up *exactly* what the lab gave blue at first boot — no surprises,
 no hidden enforcement, no "this rule already fires on its own."
+
+---
+
+## Appendix: forward-looking notes (NOT current contract)
+
+This section captures contracts that **do not yet exist in the code**.
+Read it as design intent, not as documentation of today's behavior.
+
+### Per-run mode-gated posture (SCN-001)
+
+[SCN-001](https://github.com/Brad-Edwards/aptl/issues/263)'s statement
+in Ground Control describes a `mode (red/blue/purple)` field on each
+scenario YAML that would gate which posture defaults apply per run.
+**The current Scenario SDL
+([`src/aptl/core/sdl/scenario.py`](../../src/aptl/core/sdl/scenario.py))
+does not have a `mode` field.** The post-refactor SDL (ADRs
+[014](../adrs/adr-014-scenario-description-language.md),
+[015](../adrs/adr-015-declarative-sdl-objectives.md),
+[017](../adrs/adr-017-sdl-runtime-layer.md)) defines `name`,
+`description`, and 21 OCR/extended sections — none named `mode`.
+SCN-001's vocabulary is being reconciled in
+[issue #263](https://github.com/Brad-Edwards/aptl/issues/263).
+
+When `mode` lands, the intended contract is:
+
+- `red` runs — full WEAKNESS-BY-DESIGN baseline; STARTING POSTURE
+  surfaces stay disabled. Red exploits; defenders observe.
+- `blue` runs — same baseline, plus blue-side MCP surfaces
+  (`aptl-wazuh`, `aptl-threatintel`, `aptl-casemgmt`, `aptl-soar`,
+  `aptl-network`, `aptl-indexer`) so blue can enable, configure, and
+  graduate STARTING POSTURE surfaces.
+- `purple` runs — both red and blue MCP surfaces exposed. Each
+  iteration alternates: red attacks under the current posture; blue
+  raises the posture (enables AR, adds an IOC, authors a
+  `zzz_purple_loop.xml` rule); red attacks again.
+
+**Today, none of this is enforced by the SDL.** Per-run posture
+defaults are whatever this document says they are: the same baseline
+regardless of "scenario mode," because no scenario carries a mode.

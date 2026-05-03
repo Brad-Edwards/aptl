@@ -17,6 +17,7 @@ See ADR-024 for the full design and ADR-021 for the in-band counterpart.
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -277,7 +278,16 @@ def parse_iptables_rule(line: str) -> ParsedRule | None:
     if not stripped or not stripped.startswith("-A "):
         return None
 
-    tokens = stripped.split()
+    # Use shlex.split so quoted values (e.g. `--comment "manual edit"`)
+    # are tokenized as a single token. Plain ``str.split`` would break
+    # the quoted span into multiple tokens, the parser would reject the
+    # rule as malformed, and the audit would silently preserve a
+    # blanket kali DROP with an attached comment. Codex finding C6
+    # (cycle 2) / S2 root cause.
+    try:
+        tokens = shlex.split(stripped)
+    except ValueError:
+        return None
     # Require at minimum: -A <chain> -j <action>. The shortest valid
     # rule has 4 tokens.
     if len(tokens) < 4 or tokens[0] != "-A":

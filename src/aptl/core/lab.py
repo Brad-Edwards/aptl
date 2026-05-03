@@ -16,13 +16,20 @@ import yaml
 
 from aptl.core.certs import ensure_ssl_certs
 from aptl.core.config import AptlConfig, find_config, load_config
-from aptl.core.credentials import sync_dashboard_config, sync_manager_config
+from aptl.core.credentials import (
+    PathContainmentError,
+    sync_dashboard_config,
+    sync_manager_config,
+)
 from aptl.core.env import (
     EnvVars,
     env_vars_from_dict,
     find_placeholder_env_values,
     load_dotenv,
 )
+# Re-export LabResult and LabStatus from the leaf module (#266). The
+# leaf has no back-edges, so this is a normal top-level import.
+from aptl.core.lab_types import LabResult, LabStatus  # noqa: F401
 from aptl.core.services import (
     check_indexer_ready,
     check_manager_api_ready,
@@ -49,24 +56,6 @@ ALL_KNOWN_PROFILES = [
     "enterprise", "soc", "mail", "fileshare", "dns",
     "otel",
 ]
-
-
-@dataclass
-class LabResult:
-    """Result of a lab lifecycle operation."""
-
-    success: bool
-    message: str = ""
-    error: str = ""
-
-
-@dataclass
-class LabStatus:
-    """Current status of the lab environment."""
-
-    running: bool
-    containers: list[dict] = field(default_factory=list)
-    error: str = ""
 
 
 def docker_client():
@@ -360,31 +349,48 @@ def _step_check_sysreqs(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
+def _run_credential_sync(label: str, fn, *args) -> LabResult | None:
+    """Run one credential sync with the standard failure-class split.
+
+    Two outcomes the orchestrator cares about:
+
+    - ``PathContainmentError``: a security guardrail breach. Returns a
+      failure ``LabResult`` so the orchestrator aborts lab start.
+    - Anything else: non-fatal. Logs a warning and returns ``None`` so
+      the orchestrator continues to the next step.
+    """
+    try:
+        fn(*args)
+    except PathContainmentError as exc:
+        log.error("%s containment violation: %s", label, exc)
+        return LabResult(success=False, error=f"{label}: {exc}")
+    except Exception as exc:  # noqa: BLE001 - non-fatal sync warning
+        log.warning("Failed to sync %s: %s", label.lower(), exc)
+    return None
+
+
 def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 5: Syncing configuration credentials...")
     assert ctx.env is not None  # _step_load_env populated this
-    dashboard_config = (
-        ctx.project_dir / "config" / "wazuh_dashboard" / "wazuh.yml"
+    # Both writers own their canonical project-relative target paths and
+    # validate containment internally; the orchestrator only passes the
+    # trusted project root. See ADR-007 (security guardrail) and #266.
+    # PathContainmentError aborts; any other exception is a non-fatal
+    # warning per ``_run_credential_sync``.
+    result = _run_credential_sync(
+        "Dashboard config",
+        sync_dashboard_config,
+        ctx.project_dir,
+        ctx.env.api_password,
     )
-    if dashboard_config.exists():
-        try:
-            sync_dashboard_config(dashboard_config, ctx.env.api_password)
-        except Exception as exc:  # noqa: BLE001 - non-fatal sync warning
-            log.warning("Failed to sync dashboard config: %s", exc)
-    else:
-        log.warning("Dashboard config not found at %s", dashboard_config)
-
-    manager_config = (
-        ctx.project_dir / "config" / "wazuh_cluster" / "wazuh_manager.conf"
+    if result is not None:
+        return result
+    return _run_credential_sync(
+        "Manager config",
+        sync_manager_config,
+        ctx.project_dir,
+        ctx.env.wazuh_cluster_key,
     )
-    if manager_config.exists():
-        try:
-            sync_manager_config(manager_config, ctx.env.wazuh_cluster_key)
-        except Exception as exc:  # noqa: BLE001 - non-fatal sync warning
-            log.warning("Failed to sync manager config: %s", exc)
-    else:
-        log.warning("Manager config not found at %s", manager_config)
-    return None
 
 
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:

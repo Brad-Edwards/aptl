@@ -17,6 +17,7 @@ See ADR-024 for the full design and ADR-021 for the in-band counterpart.
 
 from __future__ import annotations
 
+import ipaddress
 import shlex
 import subprocess
 from dataclasses import asdict, dataclass, field
@@ -151,7 +152,24 @@ def kali_source_ips(*, whitelist_path: Path) -> list[str]:
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        ips.append(line)
+        # Reject anything that isn't a single bare IPv4 address. ADR-024
+        # explicitly leaves subnet bans (``/24`` etc.) out of scope, so
+        # accepting CIDR forms in the whitelist would let a misplaced
+        # entry like ``172.20.4.0/24`` cause the audit to revert a
+        # defender's blanket subnet ban. ``/32`` is allowed and stripped
+        # so the rest of the audit treats it as a bare IPv4. Codex
+        # security finding S2 (cycle 3).
+        candidate = line[:-3] if line.endswith("/32") else line
+        try:
+            ipaddress.IPv4Address(candidate)
+        except ValueError:
+            log.warning(
+                "Skipping non-IPv4 whitelist entry %r in %s; only bare"
+                " IPv4 (optionally with /32) is allowed.",
+                line, whitelist_path,
+            )
+            continue
+        ips.append(candidate)
     return ips
 
 
@@ -533,7 +551,22 @@ def audit_and_revert(
         failure during reversion; each AUDIT_FAILED event is a backend
         failure during inspection. Empty when no targets had blanket
         kali rules — idempotent re-runs are a no-op.
+
+    Raises:
+        ValueError: when ``kali_ips`` is empty. The CLI guards this
+            case with a clear error, but library callers must also be
+            prevented from believing a clean-empty-events return means
+            "no wedges found" when in fact the audit was protecting
+            zero source IPs. Codex finding C11 (cycle 3).
     """
+    if not kali_ips:
+        raise ValueError(
+            "audit_and_revert called with empty kali_ips; refusing to"
+            " run an audit that protects no source IPs. Load kali IPs"
+            " from the active-response whitelist file or pass them"
+            " explicitly."
+        )
+
     events: list[KaliCarveOutEvent] = []
     for target in targets:
         try:

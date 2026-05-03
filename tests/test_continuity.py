@@ -77,6 +77,39 @@ class TestKaliSourceIps:
 
         assert kali_source_ips(whitelist_path=missing) == []
 
+    def test_rejects_cidr_subnet_entries(self, tmp_path: Path) -> None:
+        # Codex security finding S2 (cycle 3): a whitelist entry like
+        # 172.20.4.0/24 would cause the audit to revert a defender's
+        # blanket subnet ban — out of scope per ADR-024. Reject any
+        # entry that isn't a single bare IPv4.
+        from aptl.core.continuity import kali_source_ips
+
+        whitelist = tmp_path / "wl"
+        whitelist.write_text("172.20.4.0/24\n10.0.0.1\n")
+
+        ips = kali_source_ips(whitelist_path=whitelist)
+
+        assert ips == ["10.0.0.1"]
+        assert "172.20.4.0/24" not in ips
+
+    def test_normalizes_slash_32(self, tmp_path: Path) -> None:
+        # /32 is the bare-host equivalent and should be accepted, with
+        # the suffix stripped so downstream comparisons work uniformly.
+        from aptl.core.continuity import kali_source_ips
+
+        whitelist = tmp_path / "wl"
+        whitelist.write_text("172.20.4.30/32\n")
+
+        assert kali_source_ips(whitelist_path=whitelist) == ["172.20.4.30"]
+
+    def test_rejects_non_ipv4_garbage(self, tmp_path: Path) -> None:
+        from aptl.core.continuity import kali_source_ips
+
+        whitelist = tmp_path / "wl"
+        whitelist.write_text("not-an-ip\n300.0.0.1\n10.0.0.5\n")
+
+        assert kali_source_ips(whitelist_path=whitelist) == ["10.0.0.5"]
+
 
 class TestParseIptablesRule:
     """Tokenize ``iptables -S`` output lines into ParsedRule records."""
@@ -794,6 +827,18 @@ class TestAuditAndRevert:
         actions = [e.action for e in events]
         assert "AUDIT_FAILED" in actions
         assert "REVERTED" in actions
+
+    def test_raises_valueerror_on_empty_kali_ips(self) -> None:
+        # Codex finding C11 (cycle 3): the CLI guards an empty whitelist,
+        # but a programmatic caller (future runtime engine, MCP server)
+        # could pass kali_ips=set() by mistake. The core path must
+        # refuse so an unprotected audit doesn't masquerade as clean.
+        from aptl.core.continuity import audit_and_revert
+
+        backend = _StubBackend(default_response=_completed())
+
+        with pytest.raises(ValueError, match="empty kali_ips"):
+            audit_and_revert(backend, ["aptl-webapp"], kali_ips=set())
 
     def test_audit_and_revert_issues_both_S_and_D_calls(
         self, kali_ips: set[str]

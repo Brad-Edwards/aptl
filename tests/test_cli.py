@@ -570,6 +570,47 @@ class TestLabContinuityAuditCommand:
         assert targets_arg == ["aptl-webapp"]
         assert "skipping defaults not in active profile" in result.output
 
+    def test_run_id_override_wires_archive(self, runner, mocker, tmp_path):
+        # Codex finding C10 (cycle 3): without --run-id, the
+        # archival path was unreachable in production because
+        # ScenarioSession.start() never populates run_id. Explicit
+        # --run-id makes the archive reachable today; full session
+        # wiring lands with #263/RTE-001.
+        from aptl.cli.main import app
+        from aptl.core.continuity import KaliCarveOutEvent
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch(
+            "aptl.core.continuity.audit_and_revert",
+            return_value=[
+                KaliCarveOutEvent(
+                    timestamp="2026-05-03T12:00:00+00:00",
+                    target="aptl-webapp",
+                    source_ip="172.20.4.30/32",
+                    rule_text="-A INPUT -s 172.20.4.30/32 -j DROP",
+                    action="REVERTED",
+                    error=None,
+                ),
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "lab", "continuity-audit",
+                "--project-dir", str(tmp_path),
+                "--run-id", "explicit-run-7f3",
+            ],
+        )
+
+        assert result.exit_code == 0
+        kwargs = mock_audit.call_args.kwargs
+        assert kwargs.get("run_id") == "explicit-run-7f3"
+        assert kwargs.get("run_store") is not None
+
     def test_fails_when_no_default_targets_present(
         self, runner, mocker, tmp_path,
     ):

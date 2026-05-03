@@ -261,10 +261,25 @@ def _validate_continuity_targets(
 
 
 def _resolve_continuity_run_archive(
-    project_root: Path, config,
+    project_root: Path, config, *, override: str | None = None,
 ) -> tuple[object | None, str | None]:
-    """If a scenario session is active with a run_id, build a RunStore."""
+    """Resolve the (run_store, run_id) pair for archive emission.
+
+    Resolution order:
+      1. An explicit ``--run-id`` override (CLI flag) wins.
+      2. The active scenario session's ``run_id`` (when populated).
+      3. ``(None, None)`` — audit runs but events are not persisted.
+
+    Step 2 is currently never populated by ``ScenarioSession.start()``
+    in production flows; the session-bound archival path lights up
+    once #263/RTE-001 wires the runtime engine. Until then, the
+    ``--run-id`` override is the supported path for archive emission.
+    Codex finding C10 (cycle 3).
+    """
     from aptl.core.session import ScenarioSession
+
+    if override:
+        return _resolve_run_store(project_root, config), override
 
     state_dir = project_root / ".aptl"
     session = ScenarioSession(state_dir).get_active()
@@ -302,6 +317,15 @@ def continuity_audit(
         False,
         "--json",
         help="Emit the full event list as JSON instead of a text summary.",
+    ),
+    run_id_override: Optional[str] = typer.Option(
+        None,
+        "--run-id",
+        help=(
+            "Archive events under this run id. Falls back to the active"
+            " session's run_id if a session is open. Without either, the"
+            " audit runs but events are not persisted."
+        ),
     ),
 ) -> None:
     """Audit each target's INPUT chain and revert blanket kali source-IP DROPs.
@@ -349,7 +373,9 @@ def continuity_audit(
         )
         raise typer.Exit(code=2)
 
-    run_store, run_id = _resolve_continuity_run_archive(project_root, config)
+    run_store, run_id = _resolve_continuity_run_archive(
+        project_root, config, override=run_id_override,
+    )
     log.info(
         "Continuity audit: targets=%s run_id=%s", target_list, run_id or "(none)",
     )

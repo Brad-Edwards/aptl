@@ -460,20 +460,31 @@ def continuity_audit(
         "Continuity audit: targets=%s run_id=%s", target_list, run_id or "(none)",
     )
 
-    events = audit_and_revert(
+    result = audit_and_revert(
         backend,
         target_list,
         kali_ips=kali_ips,
         run_store=run_store,
         run_id=run_id,
     )
+    events = result.events
+    archived = run_id is not None and result.archive_error is None
 
     if output_json:
         typer.echo(json.dumps([asdict(e) for e in events], indent=2))
     else:
-        _emit_continuity_text(events, target_list, run_id)
+        _emit_continuity_text(
+            events, target_list, run_id if archived else None,
+        )
+        if result.archive_error:
+            typer.echo(
+                f"  ERROR: events were NOT archived to run {run_id}:"
+                f" {result.archive_error}",
+                err=True,
+            )
 
-    # Exit non-zero if any target failed inspection or any reversion
-    # failed — automation watching the exit code must see the signal.
-    if any(e.action != "REVERTED" for e in events):
+    # Exit non-zero if any target failed inspection, any reversion
+    # failed, or the archive write failed — automation watching the
+    # exit code must see all three failure classes.
+    if any(e.action != "REVERTED" for e in events) or result.archive_error:
         raise typer.Exit(code=1)

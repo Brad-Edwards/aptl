@@ -8,6 +8,7 @@ and SSH-remote deployments behave identically.
 """
 
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -92,7 +93,7 @@ def logs(
     follow: bool = typer.Option(
         False, "--follow", "-f", help="Stream logs as they arrive."
     ),
-    tail: int = typer.Option(
+    tail: Optional[int] = typer.Option(
         None,
         "--tail",
         help="Show only the last N lines.",
@@ -110,7 +111,7 @@ def logs(
 @app.command()
 def shell(
     name: str = typer.Argument(..., help="Container name (e.g. aptl-kali)."),
-    shell: str = typer.Option(
+    shell: Optional[str] = typer.Option(
         None,
         "--shell",
         help="Shell to launch (default: try /bin/bash, fall back to /bin/sh).",

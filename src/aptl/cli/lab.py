@@ -7,8 +7,6 @@ from typing import Optional
 import typer
 
 from aptl.core.lab import (
-    LabResult,
-    LabStatus,
     lab_status,
     orchestrate_lab_start,
     stop_lab,

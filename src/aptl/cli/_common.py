@@ -10,7 +10,6 @@ across CLI surfaces. Subcommand-specific logic stays in the respective
 """
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -46,13 +45,3 @@ def resolve_config_for_cli(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     return config, config_path.parent
-
-
-def find_config_for_cli(project_dir: Path) -> Optional[Path]:
-    """Find ``aptl.json`` without exiting on absence.
-
-    Some CLI commands (``lab status`` text mode) want to keep working
-    when no config file exists. They can use this helper for discovery
-    and decide locally what to do with ``None``.
-    """
-    return find_config(project_dir)

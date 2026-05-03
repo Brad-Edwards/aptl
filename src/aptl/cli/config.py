@@ -13,7 +13,6 @@ from rich.console import Console
 from rich.table import Table
 
 from aptl.cli._common import resolve_config_for_cli
-from aptl.core.config import AptlConfig
 from aptl.utils.logging import get_logger
 
 log = get_logger("cli.config")

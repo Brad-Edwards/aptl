@@ -107,6 +107,20 @@ Each step reports its status and fails the entire sequence on error, with a clea
 
 587+ tests across 12 test files covering all core modules. Tests use mocking for Docker and subprocess calls to run without a live lab environment.
 
+### Security Guardrail: Project-Rooted Credential Writes
+
+Wazuh credential synchronization is part of lab startup and writes only the
+known in-repository config files under `config/wazuh_dashboard/` and
+`config/wazuh_cluster/`. The synchronization API should own construction of
+those known relative paths from the caller's `project_dir`, resolve the target,
+and reject any path that is not contained by the resolved project root before
+reading or writing.
+
+Do not expose arbitrary caller-provided output paths for these credential
+writers. If future startup steps need to write project-owned files, keep the
+same boundary: accept a project root plus a hardcoded project-relative target,
+validate containment at the core-module boundary, then perform I/O.
+
 ## Consequences
 
 ### Positive

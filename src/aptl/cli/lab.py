@@ -230,23 +230,19 @@ def _validate_continuity_targets(
     cycle 2). In that case we filter to the present subset and warn.
 
     Returns the list to audit (possibly narrowed). Raises ``typer.Exit``
-    only on the explicit-targets-with-unknown-name path, with exit
-    code 2.
+    on the strict-validation-failure paths.
     """
     present = [t for t in targets if backend.container_exists(t)]
     missing = [t for t in targets if t not in present]
 
-    if not missing:
-        return present
-
-    if explicit:
+    if missing and explicit:
         typer.echo(
             f"error: not part of this lab project: {', '.join(missing)}",
             err=True,
         )
         raise typer.Exit(code=2)
 
-    if not present:
+    if missing and not present:
         typer.echo(
             "error: none of the default targets are present in the active"
             f" compose profile (looked for {', '.join(targets)}).",
@@ -254,11 +250,13 @@ def _validate_continuity_targets(
         )
         raise typer.Exit(code=2)
 
-    typer.echo(
-        "Continuity audit: skipping defaults not in active profile: "
-        f"{', '.join(missing)}",
-        err=True,
-    )
+    if missing:
+        typer.echo(
+            "Continuity audit: skipping defaults not in active profile: "
+            f"{', '.join(missing)}",
+            err=True,
+        )
+
     return present
 
 

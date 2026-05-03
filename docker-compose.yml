@@ -182,6 +182,8 @@ services:
       - ./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml
       - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules
       - suricata_logs:/var/log/suricata
+      - suricata_command_socket:/var/run/suricata
+      - suricata_misp_rules:/etc/suricata/rules/misp
     command: ["-c", "/etc/suricata/suricata.yaml", "--pcap"]
     deploy:
       resources:
@@ -278,6 +280,41 @@ services:
           memory: 128m
     networks:
       aptl-security:
+
+  # MISP -> Suricata IOC sync (intel-driven detection per ADR-019)
+  misp-suricata-sync:
+    profiles: ["soc"]
+    build:
+      context: .
+      dockerfile: containers/misp-suricata-sync/Dockerfile
+    container_name: aptl-misp-suricata-sync
+    hostname: misp-suricata-sync
+    restart: unless-stopped
+    environment:
+      - MISP_URL=https://misp
+      - MISP_API_KEY=${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}
+      - MISP_VERIFY_SSL=false
+      - IOC_TAG_FILTER=aptl:enforce
+      - SYNC_INTERVAL_SECONDS=300
+      - RULES_OUT_PATH=/etc/suricata/rules/misp/misp-iocs.rules
+      - SURICATA_SOCKET_PATH=/var/run/suricata/suricata-command.socket
+      - SID_BASE=2000000
+      - LOG_LEVEL=INFO
+    volumes:
+      - suricata_command_socket:/var/run/suricata
+      - suricata_misp_rules:/etc/suricata/rules/misp
+    depends_on:
+      misp:
+        condition: service_healthy
+      suricata:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.19
 
   # TheHive - Case Management
   thehive:
@@ -1223,6 +1260,8 @@ volumes:
 
   # Suricata
   suricata_logs:
+  suricata_command_socket:
+  suricata_misp_rules:
 
   # MISP
   misp_data:

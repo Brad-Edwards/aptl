@@ -1,0 +1,141 @@
+"""MISP REST client tailored for IOC sync.
+
+Reuses the curl-subprocess pattern established by ``aptl.core.collectors``:
+a fault-tolerant ``_curl_json`` helper that returns ``None`` on any failure
+instead of raising. Auth is bare API key in the ``Authorization`` header,
+matching the existing ``aptl-threatintel`` MCP convention.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import time
+from typing import Any
+
+from aptl.services.misp_suricata_sync.config import ServiceConfig
+from aptl.services.misp_suricata_sync.models import MispAttribute
+from aptl.utils.logging import get_logger
+
+log = get_logger("misp_suricata_sync")
+
+_HTTP_TIMEOUT_SECONDS = 30
+_READY_POLL_SECONDS = 5
+
+
+def _curl_json(
+    url: str,
+    *,
+    auth_header: str,
+    body: dict | None = None,
+    insecure: bool,
+    method: str = "POST",
+    timeout: int = _HTTP_TIMEOUT_SECONDS,
+) -> Any | None:
+    """POST/GET JSON via curl; return parsed JSON or None on failure.
+
+    Mirrors :func:`aptl.core.collectors._curl_json` but with the auth-header
+    plumbing the MISP integration needs. The curl process never sees the
+    parsed body, only its JSON form on stdin via ``-d``; the API key never
+    appears on the command line.
+    """
+    cmd = ["curl", "-sf", "-X", method, url]
+    if insecure:
+        cmd.insert(1, "-k")
+    cmd += ["-H", "Authorization: " + auth_header]
+    cmd += ["-H", "Content-Type: application/json"]
+    cmd += ["-H", "Accept: application/json"]
+    if body is not None:
+        cmd += ["-d", json.dumps(body)]
+
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout
+        )
+    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as exc:
+        log.warning("MISP curl failed: %s", exc.__class__.__name__)
+        return None
+
+    if result.returncode != 0:
+        log.warning(
+            "MISP request to %s returned curl exit %d",
+            url, result.returncode,
+        )
+        return None
+
+    try:
+        return json.loads(result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        log.warning("MISP response from %s was not valid JSON", url)
+        return None
+
+
+class MispClient:
+    """Polls MISP for IOC attributes carrying a configured tag."""
+
+    def __init__(self, cfg: ServiceConfig) -> None:
+        self._cfg = cfg
+
+    def wait_for_ready(self, timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        while True:
+            data = _curl_json(
+                f"{self._cfg.misp_url}/servers/getVersion",
+                auth_header=self._cfg.misp_api_key,
+                body=None,
+                insecure=not self._cfg.misp_verify_ssl,
+                method="GET",
+            )
+            if isinstance(data, dict) and data.get("version"):
+                log.info("MISP reachable; version=%s", data.get("version"))
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(_READY_POLL_SECONDS)
+
+    def fetch_tagged_attributes(self) -> list[MispAttribute] | None:
+        body = {
+            "returnFormat": "json",
+            "tags": [self._cfg.ioc_tag_filter],
+        }
+        data = _curl_json(
+            f"{self._cfg.misp_url}/attributes/restSearch",
+            auth_header=self._cfg.misp_api_key,
+            body=body,
+            insecure=not self._cfg.misp_verify_ssl,
+            method="POST",
+        )
+        if data is None:
+            return None
+        return self._parse_attributes(data)
+
+    @staticmethod
+    def _parse_attributes(data: Any) -> list[MispAttribute]:
+        if not isinstance(data, dict):
+            return []
+        response = data.get("response")
+        if not isinstance(response, dict):
+            return []
+        raw = response.get("Attribute")
+        if not isinstance(raw, list):
+            return []
+
+        attrs: list[MispAttribute] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            type_ = item.get("type")
+            value = item.get("value")
+            if not isinstance(type_, str) or not isinstance(value, str):
+                continue
+            event_id = item.get("event_id")
+            event_id_str = (
+                str(event_id) if isinstance(event_id, (str, int)) else None
+            )
+            try:
+                attrs.append(
+                    MispAttribute(type=type_, value=value, event_id=event_id_str)
+                )
+            except ValueError:
+                continue
+        return attrs

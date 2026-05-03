@@ -17,20 +17,34 @@ log = get_logger("misp_suricata_sync")
 
 _PROTOCOL_VERSION = "0.2"
 _RECV_BUFFER = 4096
-_DEFAULT_TIMEOUT = 5.0
+# Connect + version handshake are fast (the server replies immediately).
+_HANDSHAKE_TIMEOUT = 5.0
+# ``reload-rules`` is synchronous on the Suricata side: the response only
+# comes back once the new ruleset has been loaded. Empirically the
+# baseline lab + ET Open + local + misp rules reload in ~10s on a cold
+# engine, so the per-command timeout is sized well above that to absorb
+# growth in the rule set without flapping. A permanently-stuck Suricata
+# would still block the loop for at most this long per tick.
+_RELOAD_TIMEOUT = 60.0
 
 
 class SuricataReloader:
     """Speak Suricata's unix-command JSON protocol to trigger rule reload."""
 
-    def __init__(self, socket_path: Path, timeout: float = _DEFAULT_TIMEOUT) -> None:
+    def __init__(
+        self,
+        socket_path: Path,
+        handshake_timeout: float = _HANDSHAKE_TIMEOUT,
+        reload_timeout: float = _RELOAD_TIMEOUT,
+    ) -> None:
         self._socket_path = socket_path
-        self._timeout = timeout
+        self._handshake_timeout = handshake_timeout
+        self._reload_timeout = reload_timeout
 
     def reload_rules(self) -> bool:
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-                sock.settimeout(self._timeout)
+                sock.settimeout(self._handshake_timeout)
                 sock.connect(str(self._socket_path))
 
                 if not self._send_command(
@@ -41,6 +55,8 @@ class SuricataReloader:
                     )
                     return False
 
+                # Reload is synchronous; widen the deadline before issuing.
+                sock.settimeout(self._reload_timeout)
                 if not self._send_command(sock, {"command": "reload-rules"}):
                     log.warning("Suricata rule reload command failed")
                     return False

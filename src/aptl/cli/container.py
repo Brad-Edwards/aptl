@@ -34,6 +34,9 @@ _PROJECT_DIR_OPTION = typer.Option(
 def _resolve_backend(project_dir: Path) -> DeploymentBackend:
     """Locate ``aptl.json``, load it, and build the configured backend.
 
+    Uses ``config_path.parent`` as the backend's project_dir so docker
+    compose runs in the directory that actually owns ``aptl.json`` —
+    important if ``find_config`` ever grows upward-walking discovery.
     Raises ``typer.Exit(1)`` with a stderr message on any failure.
     """
     config_path = find_config(project_dir)
@@ -45,7 +48,7 @@ def _resolve_backend(project_dir: Path) -> DeploymentBackend:
     except (OSError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
-    return get_backend(config, project_dir)
+    return get_backend(config, config_path.parent)
 
 
 def _ensure_project_container(backend: DeploymentBackend, name: str) -> None:

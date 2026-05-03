@@ -238,6 +238,20 @@ def continuity_audit(
 
     target_list = list(targets) if targets else default_targets()
 
+    # Validate every target belongs to this compose project. Without
+    # this gate, a `--target aptl-victim` could redirect to any other
+    # container on a shared Docker daemon — `backend.container_exec`
+    # has no project-ownership check, but `backend.container_exists`
+    # does (it inspects compose-project labels). Codex security
+    # finding S1 (cycle 1).
+    unknown = [t for t in target_list if not backend.container_exists(t)]
+    if unknown:
+        typer.echo(
+            f"error: not part of this lab project: {', '.join(unknown)}",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
     wl_path = whitelist_path or (project_root / _DEFAULT_WHITELIST_RELPATH)
     kali_ips = set(kali_source_ips(whitelist_path=wl_path))
     if not kali_ips:
@@ -274,6 +288,10 @@ def continuity_audit(
         from dataclasses import asdict
 
         typer.echo(json.dumps([asdict(e) for e in events], indent=2))
+        # Even in JSON mode, exit non-zero if anything failed so
+        # automation can detect partial success without parsing output.
+        if any(e.action != "REVERTED" for e in events):
+            raise typer.Exit(code=1)
         return
 
     if not events:
@@ -281,16 +299,30 @@ def continuity_audit(
         return
 
     reverted = sum(1 for e in events if e.action == "REVERTED")
-    failed = sum(1 for e in events if e.action == "REVERT_FAILED")
+    revert_failed = sum(1 for e in events if e.action == "REVERT_FAILED")
+    audit_failed = sum(1 for e in events if e.action == "AUDIT_FAILED")
     typer.echo(
-        f"Continuity audit: {reverted} reverted, {failed} failed across "
-        f"{len(target_list)} targets."
+        f"Continuity audit: {reverted} reverted, {revert_failed} revert-failed, "
+        f"{audit_failed} audit-failed across {len(target_list)} targets."
     )
     for event in events:
-        prefix = "REVERTED" if event.action == "REVERTED" else "FAILED  "
-        line = f"  [{prefix}] {event.target}: {event.rule_text}"
+        if event.action == "REVERTED":
+            prefix = "REVERTED  "
+            detail = event.rule_text
+        elif event.action == "REVERT_FAILED":
+            prefix = "REVERT-FAIL"
+            detail = event.rule_text
+        else:
+            prefix = "AUDIT-FAIL "
+            detail = "iptables inspection failed"
+        line = f"  [{prefix}] {event.target}: {detail}"
         if event.error:
             line += f"  ({event.error})"
         typer.echo(line)
     if run_id:
         typer.echo(f"  events archived to run {run_id} continuity-events.jsonl")
+    # Exit non-zero if any target failed inspection or any reversion
+    # failed — automation watching the exit code must see the signal.
+    # Codex finding C5 (cycle 1).
+    if revert_failed or audit_failed:
+        raise typer.Exit(code=1)

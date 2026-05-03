@@ -43,6 +43,10 @@ class RunStorageBackend(Protocol):
         self, run_id: str, relative_path: str, records: list[dict]
     ) -> None: ...
 
+    def append_jsonl(
+        self, run_id: str, relative_path: str, records: list[dict]
+    ) -> None: ...
+
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None: ...
 
     def list_runs(self) -> list[str]: ...
@@ -88,6 +92,26 @@ class LocalRunStore:
         lines = [json.dumps(r, separators=(",", ":"), default=str) for r in records]
         data = ("\n".join(lines) + "\n").encode("utf-8") if lines else b""
         self.write_file(run_id, relative_path, data)
+
+    def append_jsonl(
+        self, run_id: str, relative_path: str, records: list[dict]
+    ) -> None:
+        """Append ``records`` to a JSONL file, creating it if missing.
+
+        Used for evidence streams that accumulate across multiple
+        invocations within one run — e.g. ``continuity-events.jsonl``,
+        which would lose earlier audits' evidence under
+        :meth:`write_jsonl`'s overwrite semantics.
+        """
+        if not records:
+            return
+        target = self._base_dir / run_id / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        lines = [json.dumps(r, separators=(",", ":"), default=str) for r in records]
+        chunk = ("\n".join(lines) + "\n").encode("utf-8")
+        with open(target, "ab") as fh:
+            fh.write(chunk)
+        log.debug("Appended %d JSONL records to %s", len(records), target)
 
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None:
         target = self._base_dir / run_id / relative_path

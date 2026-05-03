@@ -489,3 +489,99 @@ class TestLabContinuityAuditCommand:
         # mix_stderr=False; the runner mixes by default so the warning
         # ends up in result.output.
         assert "no kali IPs found" in result.output
+
+    def test_rejects_target_not_in_compose_project(
+        self, runner, mocker, tmp_path
+    ):
+        # Codex security finding S1 (cycle 1): without project-ownership
+        # validation, --target accepts any container name on the daemon.
+        # The CLI must reject targets that backend.container_exists()
+        # rules out, before they reach container_exec.
+        from aptl.cli.main import app
+        from aptl.core.config import AptlConfig
+        from aptl.core.session import ScenarioSession
+
+        mocker.patch(
+            "aptl.cli._common.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+        backend = mocker.MagicMock()
+        backend.container_exists.return_value = False
+        mocker.patch("aptl.core.deployment.get_backend", return_value=backend)
+        mocker.patch.object(ScenarioSession, "get_active", return_value=None)
+        # Make sure the audit isn't reached.
+        mock_audit = mocker.patch("aptl.core.continuity.audit_and_revert")
+
+        result = runner.invoke(
+            app,
+            [
+                "lab", "continuity-audit",
+                "--project-dir", str(tmp_path),
+                "--target", "foreign-container",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "foreign-container" in result.output
+        mock_audit.assert_not_called()
+
+    def test_exits_nonzero_on_revert_failed(self, runner, mocker, tmp_path):
+        # Codex finding C5 (cycle 1): a REVERT_FAILED event must surface
+        # as a non-zero exit code so automation sees the signal.
+        from aptl.cli.main import app
+        from aptl.core.continuity import KaliCarveOutEvent
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mocker.patch(
+            "aptl.core.continuity.audit_and_revert",
+            return_value=[
+                KaliCarveOutEvent(
+                    timestamp="2026-05-03T12:00:00+00:00",
+                    target="aptl-webapp",
+                    source_ip="172.20.4.30/32",
+                    rule_text="-A INPUT -s 172.20.4.30/32 -j DROP",
+                    action="REVERT_FAILED",
+                    error="iptables: bad rule",
+                ),
+            ],
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code != 0
+
+    def test_exits_nonzero_on_audit_failed(self, runner, mocker, tmp_path):
+        # AUDIT_FAILED (backend inspection failure) must also surface as
+        # a non-zero exit. Silent zero-exit on inspection failure was
+        # the precondition for codex finding C3.
+        from aptl.cli.main import app
+        from aptl.core.continuity import KaliCarveOutEvent
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mocker.patch(
+            "aptl.core.continuity.audit_and_revert",
+            return_value=[
+                KaliCarveOutEvent(
+                    timestamp="2026-05-03T12:00:00+00:00",
+                    target="aptl-webapp",
+                    source_ip="",
+                    rule_text="",
+                    action="AUDIT_FAILED",
+                    error="iptables -S on aptl-webapp failed: ...",
+                ),
+            ],
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code != 0

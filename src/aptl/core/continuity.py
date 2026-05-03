@@ -31,19 +31,24 @@ log = get_logger("continuity")
 
 # Default target containers for the carve-out audit. Names are docker
 # container names (``aptl-<svc>``) — the same form
-# ``backend.container_exec`` expects. Set mirrors the in-process Wazuh
-# agents installed by #248. ``aptl-db`` is excluded because postgres
-# still ships with a sidecar agent (deferred per #248); iptables on a
-# sidecar's namespace doesn't affect the target. A unit test
-# (``test_default_targets_are_real_compose_services``) catches drift
-# if a service is renamed in docker-compose.yml.
+# ``backend.container_exec`` expects. Set mirrors the in-process
+# Wazuh-agent containers installed by #248 — the only ones with both
+# ``NET_ADMIN`` (required to mutate iptables) and a co-located agent
+# whose ruleset can wedge red→target ingress. ``aptl-victim`` and
+# ``aptl-workstation`` are intentionally excluded: they ship without
+# ``NET_ADMIN`` so iptables introspection silently fails there; their
+# agents are sidecars whose iptables don't affect the target's
+# namespace anyway. ``aptl-db`` is excluded for the same sidecar
+# reason (postgres deferred per #248). ``test_targets_match_in_process_agent_set``
+# pins this to the canonical IN_PROCESS_TARGETS set in
+# ``tests/test_wazuh_active_response.py``;
+# ``test_every_default_target_has_net_admin`` catches compose drift if
+# a target loses the cap.
 _DEFAULT_TARGETS = (
     "aptl-webapp",
     "aptl-fileshare",
     "aptl-ad",
     "aptl-dns",
-    "aptl-victim",
-    "aptl-workstation",
 )
 
 
@@ -53,7 +58,17 @@ def default_targets() -> list[str]:
 
 
 # Action enum for events.jsonl. Stable surface.
-CarveOutAction = Literal["REVERTED", "REVERT_FAILED"]
+CarveOutAction = Literal["REVERTED", "REVERT_FAILED", "AUDIT_FAILED"]
+
+
+class ContinuityAuditError(Exception):
+    """Raised when ``audit_target`` cannot inspect a target's iptables.
+
+    Distinguishes "backend exec failed / non-zero return" from "found
+    nothing on a clean tree". ``audit_and_revert`` catches this and
+    emits an ``AUDIT_FAILED`` event for downstream archive evidence
+    instead of swallowing the failure.
+    """
 
 
 class _ContainerExecBackend(Protocol):
@@ -87,7 +102,25 @@ _FLAGS_WITH_VALUE = frozenset({
     "--reject-with", "--icmp-type", "--state", "--ctstate",
     "--limit", "--limit-burst", "--string", "--algo", "--to",
     "--mac-source", "--uid-owner", "--gid-owner",
+    "--comment",
 })
+
+# Flags that are *not* packet matchers and so must not contribute to
+# qualifiers. Two cases:
+#  - `--reject-with <reason>` modifies the REJECT action specifier,
+#    not what packets the rule matches. iptables auto-inserts
+#    `--reject-with icmp-port-unreachable` on a bare `-j REJECT`, so
+#    treating it as a qualifier preserves blanket REJECT rules.
+#  - `--comment <text>` is annotation-only (paired with `-m comment`).
+#    A blue actor must not be able to bypass the audit by attaching
+#    a comment to a wedge rule.
+_NON_RESTRICTIVE_FLAGS = frozenset({"--reject-with", "--comment"})
+
+# Match modules that are non-restrictive when seen as the value of `-m`.
+# `-m comment` is the only iptables match module that doesn't constrain
+# packet matching; everything else (`-m tcp`, `-m state`, `-m conntrack`,
+# `-m string`, `-m mac`, …) is a real matcher and stays a qualifier.
+_NON_RESTRICTIVE_MATCH_MODULES = frozenset({"comment"})
 
 
 def kali_source_ips(*, whitelist_path: Path) -> list[str]:
@@ -156,6 +189,16 @@ def _walk_iptables_options(
     Returns ``(source, action, qualifiers)`` on a well-formed sequence
     or ``None`` for any malformed shape (bare value with no flag,
     flag-with-value missing its value, no ``-j`` clause).
+
+    Three flag classes are recognized:
+
+    - ``-s``/``-j`` are anchor fields and never enter qualifiers.
+    - ``--reject-with``, ``--comment``, and ``-m comment`` are
+      non-restrictive (action-modifier or annotation-only) and never
+      enter qualifiers.
+    - Everything else with the form of an option flag enters
+      qualifiers and is therefore treated as a granular matcher by
+      :func:`is_blanket_kali_drop`.
     """
     source: str | None = None
     action: str | None = None
@@ -178,6 +221,10 @@ def _walk_iptables_options(
             continue
         if flag == "-j":
             action = value
+            continue
+        if flag in _NON_RESTRICTIVE_FLAGS:
+            continue
+        if flag == "-m" and value in _NON_RESTRICTIVE_MATCH_MODULES:
             continue
         qualifiers.add(flag)
 
@@ -297,25 +344,30 @@ def audit_target(
 ) -> list[KaliCarveOutFinding]:
     """Inspect one target's INPUT chain and return blanket kali findings.
 
-    Fault-tolerant by design (codex's "warnings and empty results"
-    guardrail): if iptables can't be queried — exec raised, container
-    missing, returncode non-zero — log a warning and return ``[]`` so
-    the rest of the audit continues for other targets.
+    Raises :class:`ContinuityAuditError` if ``iptables -S`` cannot be
+    queried (exec exception or non-zero return). Codex review (cycle 1):
+    silently returning ``[]`` on failure was indistinguishable from a
+    clean chain, so a backend hiccup looked like success. The caller
+    (typically :func:`audit_and_revert`) wraps the error into an
+    ``AUDIT_FAILED`` event so the failure is captured in the run
+    archive and surfaces in the CLI exit code.
     """
     try:
         result = backend.container_exec(
             target, ["iptables", "-S", "INPUT"], timeout=_IPTABLES_TIMEOUT_S,
         )
-    except Exception as exc:  # noqa: BLE001 - any failure is non-fatal
-        log.warning("iptables -S on %s failed: %s", target, exc)
-        return []
+    except Exception as exc:  # noqa: BLE001 - propagated as ContinuityAuditError
+        msg = f"iptables -S on {target} failed: {exc}"
+        log.warning(msg)
+        raise ContinuityAuditError(msg) from exc
 
     if result.returncode != 0:
-        log.warning(
-            "iptables -S on %s returned %d: %s",
-            target, result.returncode, result.stderr.strip(),
+        msg = (
+            f"iptables -S on {target} returned {result.returncode}: "
+            f"{result.stderr.strip()}"
         )
-        return []
+        log.warning(msg)
+        raise ContinuityAuditError(msg)
 
     findings: list[KaliCarveOutFinding] = []
     for line in result.stdout.splitlines():
@@ -407,9 +459,15 @@ def revert_finding(
 
 
 class _RunStoreProto(Protocol):
-    """Protocol slice of :class:`aptl.core.runstore.RunStorageBackend`."""
+    """Protocol slice of :class:`aptl.core.runstore.RunStorageBackend`.
 
-    def write_jsonl(
+    Audit events must *append* across multiple invocations within a
+    single run — every reversion in a run remains auditable. The
+    overwriting :meth:`write_jsonl` semantics would lose evidence from
+    earlier audits, so the audit uses :meth:`append_jsonl` instead.
+    """
+
+    def append_jsonl(
         self, run_id: str, relative_path: str, records: list[dict]
     ) -> None: ...
 
@@ -436,17 +494,33 @@ def audit_and_revert(
         run_id: Run identifier in ``run_store``.
 
     Returns:
-        Ordered list of events produced (one per finding reverted or
-        attempted). Empty when no targets had blanket kali rules —
-        idempotent re-runs are a no-op.
+        Ordered list of events produced. Each REVERTED event is one
+        successful reversion; each REVERT_FAILED event is a backend
+        failure during reversion; each AUDIT_FAILED event is a backend
+        failure during inspection. Empty when no targets had blanket
+        kali rules — idempotent re-runs are a no-op.
     """
     events: list[KaliCarveOutEvent] = []
     for target in targets:
-        for finding in audit_target(backend, target, kali_ips):
+        try:
+            findings = audit_target(backend, target, kali_ips)
+        except ContinuityAuditError as exc:
+            events.append(
+                KaliCarveOutEvent(
+                    timestamp=_utc_now_iso(),
+                    target=target,
+                    source_ip="",
+                    rule_text="",
+                    action="AUDIT_FAILED",
+                    error=str(exc),
+                )
+            )
+            continue
+        for finding in findings:
             events.append(revert_finding(backend, finding))
 
     if events and run_store is not None and run_id is not None:
         records = [asdict(event) for event in events]
-        run_store.write_jsonl(run_id, "continuity-events.jsonl", records)
+        run_store.append_jsonl(run_id, "continuity-events.jsonl", records)
 
     return events

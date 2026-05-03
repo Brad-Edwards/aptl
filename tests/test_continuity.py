@@ -121,7 +121,15 @@ class TestParseIptablesRule:
         assert rule is not None
         assert rule.chain == "FORWARD"
 
-    def test_reject_action(self) -> None:
+    def test_reject_action_with_reject_with_has_empty_qualifiers(self) -> None:
+        # When blue runs `iptables -I INPUT -s <ip> -j REJECT` without
+        # an explicit `--reject-with`, iptables auto-inserts the default
+        # `--reject-with icmp-port-unreachable` into the running rule
+        # set. ``iptables -S`` dumps it back with the modifier visible.
+        # Treating that modifier as a qualifier would preserve a rule
+        # that's behaviorally a blanket kali REJECT — the audit must
+        # revert it. The action modifier is part of the action specifier,
+        # not a matcher.
         from aptl.core.continuity import parse_iptables_rule
 
         rule = parse_iptables_rule(
@@ -130,9 +138,46 @@ class TestParseIptablesRule:
 
         assert rule is not None
         assert rule.action == "REJECT"
-        # `--reject-with ...` modifies the action, so it's a qualifier:
-        # reverting the *bare* form would not match this rule by argv.
-        assert rule.qualifiers, "REJECT modifiers count as qualifiers"
+        assert rule.qualifiers == set()
+        # delete_args still carries `--reject-with` so the eventual
+        # `iptables -D` matches the rule iptables actually emitted.
+        assert "--reject-with" in rule.tokens
+        assert "icmp-port-unreachable" in rule.tokens
+
+    def test_comment_module_does_not_count_as_qualifier(self) -> None:
+        # `-m comment --comment "<text>"` is annotation-only — the comment
+        # match module never restricts packet matching. A blanket kali
+        # rule with only a `--comment` annotation is still a wedge and
+        # must be reverted; treating `-m`/`--comment` as a qualifier
+        # would let blue paper over the wedge with any string.
+        from aptl.core.continuity import parse_iptables_rule
+
+        rule = parse_iptables_rule(
+            '-A INPUT -s 172.20.4.30 -m comment --comment keep -j DROP'
+        )
+
+        assert rule is not None
+        assert rule.action == "DROP"
+        assert rule.qualifiers == set()
+        # delete_args still carries the annotation so the iptables -D
+        # matches the rule byte-for-byte.
+        assert "-m" in rule.tokens
+        assert "comment" in rule.tokens
+        assert "--comment" in rule.tokens
+
+    def test_other_match_module_still_counts_as_qualifier(self) -> None:
+        # `-m tcp`, `-m state`, `-m conntrack` etc. are *restrictive*.
+        # Only `-m comment` is annotation-only; everything else stays
+        # in qualifiers.
+        from aptl.core.continuity import parse_iptables_rule
+
+        rule = parse_iptables_rule(
+            "-A INPUT -s 172.20.4.30 -m state --state NEW -j DROP"
+        )
+
+        assert rule is not None
+        # `-m state` is a real match module; rule is granular.
+        assert rule.qualifiers, "non-comment -m modules are restrictive"
 
     def test_policy_line_is_not_a_rule(self) -> None:
         from aptl.core.continuity import parse_iptables_rule
@@ -199,6 +244,31 @@ class TestIsBlanketKaliDrop:
         from aptl.core.continuity import is_blanket_kali_drop
 
         assert is_blanket_kali_drop(self._rule(action="REJECT"), kali_ips) is True
+
+    def test_blanket_kali_reject_with_default_reason_is_revertable(
+        self, kali_ips: set[str]
+    ) -> None:
+        # Round-trip: parse what iptables -S actually emits for a bare
+        # `iptables -j REJECT`, then classify.
+        from aptl.core.continuity import is_blanket_kali_drop, parse_iptables_rule
+
+        rule = parse_iptables_rule(
+            "-A INPUT -s 172.20.4.30 -j REJECT --reject-with icmp-port-unreachable"
+        )
+        assert rule is not None
+        assert is_blanket_kali_drop(rule, kali_ips) is True
+
+    def test_blanket_kali_drop_with_only_comment_is_revertable(
+        self, kali_ips: set[str]
+    ) -> None:
+        # A blue actor cannot paper over a wedge by attaching a comment.
+        from aptl.core.continuity import is_blanket_kali_drop, parse_iptables_rule
+
+        rule = parse_iptables_rule(
+            '-A INPUT -s 172.20.4.30 -m comment --comment whatever -j DROP'
+        )
+        assert rule is not None
+        assert is_blanket_kali_drop(rule, kali_ips) is True
 
     def test_other_action_is_preserved(self, kali_ips: set[str]) -> None:
         from aptl.core.continuity import is_blanket_kali_drop
@@ -392,33 +462,29 @@ class TestAuditTarget:
 
         assert audit_target(backend, "victim", kali_ips) == []
 
-    def test_handles_exec_failure_gracefully(
-        self, kali_ips: set[str], caplog
-    ) -> None:
-        # Codex's "fault-tolerant collection with warnings and empty
-        # results" guardrail: a missing/broken target should not crash
-        # the audit for the rest of the targets.
-        from aptl.core.continuity import audit_target
+    def test_raises_on_backend_exception(self, kali_ips: set[str]) -> None:
+        # Backend failure is distinguishable from "clean chain". Codex
+        # finding C3 (cycle 1): silent empty-list return conflated
+        # success with failure; downstream callers (audit_and_revert,
+        # the CLI) need the failure signal to surface.
+        from aptl.core.continuity import ContinuityAuditError, audit_target
 
         backend = _StubBackend(raise_for={("nonexistent", "iptables")})
 
-        with caplog.at_level("WARNING", logger="aptl.continuity"):
-            findings = audit_target(backend, "nonexistent", kali_ips)
+        with pytest.raises(ContinuityAuditError) as exc_info:
+            audit_target(backend, "nonexistent", kali_ips)
 
-        assert findings == []
-        assert any("nonexistent" in r.message for r in caplog.records)
+        assert "nonexistent" in str(exc_info.value)
 
-    def test_handles_nonzero_exit_gracefully(
-        self, kali_ips: set[str], caplog
-    ) -> None:
-        from aptl.core.continuity import audit_target
+    def test_raises_on_nonzero_exit(self, kali_ips: set[str]) -> None:
+        from aptl.core.continuity import ContinuityAuditError, audit_target
 
-        backend = _StubBackend(default_response=_completed(returncode=1, stderr="iptables: not found"))
+        backend = _StubBackend(
+            default_response=_completed(returncode=1, stderr="iptables: not found"),
+        )
 
-        with caplog.at_level("WARNING", logger="aptl.continuity"):
-            findings = audit_target(backend, "victim", kali_ips)
-
-        assert findings == []
+        with pytest.raises(ContinuityAuditError):
+            audit_target(backend, "victim", kali_ips)
 
 
 def _finding(
@@ -610,6 +676,90 @@ class TestAuditAndRevert:
         # Empty audit must not create a phantom file.
         assert not events_path.exists()
 
+    def test_appends_to_existing_events_jsonl(
+        self, kali_ips: set[str], tmp_path: Path
+    ) -> None:
+        # Codex finding C4 (cycle 1): write_jsonl overwrote, so a
+        # second audit invocation in the same run lost the first's
+        # evidence. Audit and revert must *append* — every reversion
+        # in a run must remain auditable.
+        from aptl.core.continuity import audit_and_revert
+        from aptl.core.runstore import LocalRunStore
+
+        store = LocalRunStore(tmp_path)
+        run_id = "run-append-test"
+        store.create_run(run_id)
+
+        # First invocation reverts one rule.
+        first_audit_backend = self._audit_backend()
+        audit_and_revert(
+            first_audit_backend, ["victim"], kali_ips=kali_ips,
+            run_store=store, run_id=run_id,
+        )
+
+        # Second invocation reverts another rule (different target +
+        # rule text so the JSONL is identifiable).
+        second_audit_backend = _StubBackend(responses={
+            ("webapp", "iptables"): _completed(
+                stdout="-A INPUT -s 172.20.1.30 -j DROP\n",
+            ),
+        })
+        audit_and_revert(
+            second_audit_backend, ["webapp"], kali_ips=kali_ips,
+            run_store=store, run_id=run_id,
+        )
+
+        events_path = tmp_path / run_id / "continuity-events.jsonl"
+        lines = events_path.read_text().strip().splitlines()
+        assert len(lines) == 2, f"expected 2 events appended, got {len(lines)}"
+        recs = [json.loads(line) for line in lines]
+        targets = {r["target"] for r in recs}
+        assert targets == {"victim", "webapp"}
+
+    def test_emits_audit_failed_event_when_backend_fails(
+        self, kali_ips: set[str], tmp_path: Path
+    ) -> None:
+        # Codex finding C3 (cycle 1): backend exec failure must be
+        # captured as a structured event, not collapsed into "no
+        # findings". audit_and_revert wraps ContinuityAuditError into
+        # an AUDIT_FAILED event and continues to the next target.
+        from aptl.core.continuity import audit_and_revert
+
+        backend = _StubBackend(raise_for={("victim", "iptables")})
+
+        events = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
+
+        assert len(events) == 1
+        ev = events[0]
+        assert ev.action == "AUDIT_FAILED"
+        assert ev.target == "victim"
+        assert ev.error is not None
+
+    def test_continues_after_one_target_fails(
+        self, kali_ips: set[str]
+    ) -> None:
+        # First target inspection raises; second target succeeds and
+        # surfaces a finding. The audit must not abort on the first
+        # failure.
+        from aptl.core.continuity import audit_and_revert
+
+        backend = _StubBackend(
+            responses={
+                ("webapp", "iptables"): _completed(
+                    stdout="-A INPUT -s 172.20.4.30 -j DROP\n",
+                ),
+            },
+            raise_for={("victim", "iptables")},
+        )
+
+        events = audit_and_revert(
+            backend, ["victim", "webapp"], kali_ips=kali_ips,
+        )
+
+        actions = [e.action for e in events]
+        assert "AUDIT_FAILED" in actions
+        assert "REVERTED" in actions
+
 
 class TestDefaultTargets:
     """``default_targets`` must match real services in docker-compose.yml."""
@@ -628,10 +778,51 @@ class TestDefaultTargets:
                 needle in text
             ), f"docker-compose.yml has no '{needle}' declaration"
 
+    def test_targets_match_in_process_agent_set(self) -> None:
+        # The audit only works on containers that have NET_ADMIN AND
+        # an in-process Wazuh agent (#248 / ADR-020). default_targets()
+        # must equal the canonical IN_PROCESS_TARGETS used by the
+        # active-response tests; including non-NET_ADMIN containers
+        # (victim, workstation) would silently produce AUDIT_FAILED
+        # events on every invocation. Codex finding C1 (cycle 1).
+        from aptl.core.continuity import default_targets
+        from tests.test_wazuh_active_response import IN_PROCESS_TARGETS
 
-# Reused live-lab target. ``aptl-victim`` always exists (default lab
-# profile) and runs under NET_ADMIN per #248, so iptables works.
-_LIVE_TARGET = "aptl-victim"
+        assert tuple(default_targets()) == IN_PROCESS_TARGETS
+
+    def test_every_default_target_has_net_admin(self) -> None:
+        # Drift guard: if anyone removes NET_ADMIN from one of the
+        # default targets in compose, this test fails before the audit
+        # silently breaks in production.
+        from aptl.core.continuity import default_targets
+
+        compose_text = (PROJECT_ROOT / "docker-compose.yml").read_text()
+
+        for target in default_targets():
+            # Locate the per-service block by container_name and walk
+            # forward until the next service to find that target's
+            # cap_add list.
+            anchor = f"container_name: {target}\n"
+            idx = compose_text.find(anchor)
+            assert idx >= 0, f"no compose entry for {target}"
+            # Slice from this anchor to the next "container_name:" or
+            # the end of the file — that's roughly this service's body.
+            tail = compose_text[idx:]
+            next_anchor = tail.find("\n    container_name: ", 1)
+            block = tail[:next_anchor] if next_anchor > 0 else tail
+            assert "NET_ADMIN" in block, (
+                f"{target} compose block lacks NET_ADMIN; iptables audit"
+                " will fail there. Either add the cap or remove the"
+                " target from default_targets()."
+            )
+
+
+# Reused live-lab target. ``aptl-webapp`` is in IN_PROCESS_TARGETS
+# (#248) — NET_ADMIN cap + in-process Wazuh agent — so iptables in its
+# namespace works under ``docker exec``. ``aptl-victim`` ships without
+# NET_ADMIN (codex finding C1, cycle 1) and is not in default_targets,
+# so it's not a valid live-lab integration target for this audit.
+_LIVE_TARGET = "aptl-webapp"
 _KALI_LIVE_IP = "172.20.4.30"
 
 

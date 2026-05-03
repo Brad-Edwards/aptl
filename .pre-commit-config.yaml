@@ -14,3 +14,34 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
         exclude: ^tests/
+
+  # Test suites — mirror the three CI test jobs in .github/workflows/checks.yml.
+  # Each hook is gated by a `files:` regex so a commit that doesn't touch a
+  # given language's surface skips that suite. `pre-commit run --all-files`
+  # (and CI) still runs everything because every repo file matches at least
+  # one regex collectively.
+  - repo: local
+    hooks:
+      - id: pytest
+        name: Python tests (pytest)
+        # Prefer the repo's .venv (so contributors don't need to activate it
+        # before committing). Fall back to PATH for contributors using a
+        # different venv layout that they've already activated.
+        entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/ -q -k "not integration"; else exec pytest tests/ -q -k "not integration"; fi'
+        language: system
+        pass_filenames: false
+        files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml)$
+
+      - id: vitest-mcp-common
+        name: MCP TypeScript tests (aptl-mcp-common vitest)
+        entry: bash -c 'cd mcp/aptl-mcp-common && { [ -d node_modules ] || npm install --silent; } && npx vitest run'
+        language: system
+        pass_filenames: false
+        files: ^mcp/aptl-mcp-common/
+
+      - id: vitest-web
+        name: Web frontend tests (vitest)
+        entry: bash -c 'cd web && { [ -d node_modules ] || npm install --silent; } && npx svelte-kit sync && npx vitest run'
+        language: system
+        pass_filenames: false
+        files: ^web/

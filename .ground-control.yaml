@@ -1,0 +1,13 @@
+schema_version: 1
+project: aptl
+github_repo: Brad-Edwards/aptl
+workflow:
+  test_command: pytest
+  completion_command: pytest
+  lint_command: pre-commit run --all-files
+  format_command: pre-commit run --all-files
+sonarcloud:
+  project_key: Brad-Edwards_aptl
+  organization: brad-edwards
+rules:
+  plan_rules: .gc/plan-rules.md

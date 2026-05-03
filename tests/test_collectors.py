@@ -9,89 +9,120 @@ import pytest
 
 from aptl.core.collectors import (
     collect_container_logs,
-    collect_mcp_traces,
     collect_suricata_eve,
     collect_thehive_cases,
     collect_misp_events,
     collect_shuffle_executions,
+    collect_traces,
     collect_wazuh_alerts,
 )
 
 
-class TestCollectMCPTraces:
-    """Tests for MCP trace collection."""
+class TestCollectTraces:
+    """Tests for Tempo trace collection."""
 
-    def test_collect_from_empty_dir(self, tmp_path):
-        traces = collect_mcp_traces(
-            tmp_path, "2020-01-01T00:00:00+00:00", "2030-01-01T00:00:00+00:00"
-        )
-        assert traces == []
+    @patch("aptl.core.collectors._curl_json")
+    def test_returns_spans_from_tempo(self, mock_curl):
+        mock_curl.return_value = {
+            "resourceSpans": [
+                {
+                    "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "aptl-cli"}}]},
+                    "scopeSpans": [
+                        {
+                            "spans": [
+                                {"name": "aptl.scenario.run", "traceId": "abc123"},
+                                {"name": "execute_tool", "traceId": "abc123"},
+                            ]
+                        }
+                    ],
+                }
+            ]
+        }
 
-    def test_collect_nonexistent_dir(self, tmp_path):
-        traces = collect_mcp_traces(
-            tmp_path / "nope", "2020-01-01T00:00:00+00:00", "2030-01-01T00:00:00+00:00"
-        )
-        assert traces == []
+        spans = collect_traces("abc123def456" * 2 + "0" * 8)
+        assert len(spans) == 2
+        assert spans[0]["name"] == "aptl.scenario.run"
+        assert spans[1]["name"] == "execute_tool"
+        # Resource should be attached to each span
+        assert "resource" in spans[0]
 
-    def test_collect_filters_by_time(self, tmp_path):
-        traces = [
-            {"timestamp": "2025-01-01T10:00:00+00:00", "tool_name": "early"},
-            {"timestamp": "2025-01-01T12:00:00+00:00", "tool_name": "in_window"},
-            {"timestamp": "2025-01-01T14:00:00+00:00", "tool_name": "late"},
-        ]
-        trace_file = tmp_path / "server.jsonl"
-        trace_file.write_text(
-            "\n".join(json.dumps(t) for t in traces) + "\n"
-        )
+    @patch("aptl.core.collectors._curl_json")
+    def test_returns_empty_on_failure(self, mock_curl):
+        mock_curl.return_value = None
+        spans = collect_traces("abc123")
+        assert spans == []
 
-        result = collect_mcp_traces(
-            tmp_path,
-            "2025-01-01T11:00:00+00:00",
-            "2025-01-01T13:00:00+00:00",
-        )
-        assert len(result) == 1
-        assert result[0]["tool_name"] == "in_window"
+    def test_returns_empty_without_trace_id(self):
+        spans = collect_traces("")
+        assert spans == []
 
-    def test_collect_merges_multiple_files(self, tmp_path):
-        (tmp_path / "server-a.jsonl").write_text(
-            json.dumps({"timestamp": "2025-01-01T12:00:00+00:00", "server": "a"}) + "\n"
-        )
-        (tmp_path / "server-b.jsonl").write_text(
-            json.dumps({"timestamp": "2025-01-01T11:00:00+00:00", "server": "b"}) + "\n"
-        )
+    @patch("aptl.core.collectors._curl_json")
+    def test_handles_empty_response(self, mock_curl):
+        mock_curl.return_value = {}
+        spans = collect_traces("abc123")
+        assert spans == []
 
-        result = collect_mcp_traces(
-            tmp_path,
-            "2025-01-01T10:00:00+00:00",
-            "2025-01-01T13:00:00+00:00",
-        )
-        assert len(result) == 2
-        # Should be sorted chronologically
-        assert result[0]["server"] == "b"
-        assert result[1]["server"] == "a"
+    @patch("aptl.core.collectors._curl_json")
+    def test_handles_batches_format(self, mock_curl):
+        """Tempo v2 uses 'batches' key."""
+        mock_curl.return_value = {
+            "batches": [
+                {
+                    "resource": {},
+                    "scopeSpans": [
+                        {"spans": [{"name": "test-span"}]}
+                    ],
+                }
+            ]
+        }
+        spans = collect_traces("abc123")
+        assert len(spans) == 1
+        assert spans[0]["name"] == "test-span"
 
-    def test_collect_skips_invalid_json(self, tmp_path):
-        (tmp_path / "bad.jsonl").write_text(
-            "not json\n"
-            + json.dumps({"timestamp": "2025-01-01T12:00:00+00:00", "ok": True})
-            + "\n"
-        )
+    @patch("aptl.core.collectors._curl_json")
+    def test_uses_tempo_url_env(self, mock_curl, monkeypatch):
+        mock_curl.return_value = {"resourceSpans": []}
+        monkeypatch.setenv("TEMPO_URL", "http://custom:9999")
 
-        result = collect_mcp_traces(
-            tmp_path,
-            "2025-01-01T10:00:00+00:00",
-            "2025-01-01T13:00:00+00:00",
-        )
-        assert len(result) == 1
-        assert result[0]["ok"] is True
+        collect_traces("abc123")
+
+        called_url = mock_curl.call_args[0][0]
+        assert called_url.startswith("http://custom:9999/api/traces/")
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_uses_explicit_tempo_url(self, mock_curl):
+        mock_curl.return_value = {"resourceSpans": []}
+
+        collect_traces("abc123", tempo_url="http://explicit:7777")
+
+        called_url = mock_curl.call_args[0][0]
+        assert called_url == "http://explicit:7777/api/traces/abc123"
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_does_not_mutate_input_spans(self, mock_curl):
+        """collect_traces should not mutate the parsed Tempo response."""
+        original_span = {"name": "test", "traceId": "abc"}
+        mock_curl.return_value = {
+            "resourceSpans": [
+                {
+                    "resource": {"attrs": "val"},
+                    "scopeSpans": [{"spans": [original_span]}],
+                }
+            ]
+        }
+        spans = collect_traces("abc123")
+        assert len(spans) == 1
+        assert "resource" in spans[0]
+        # Original span dict should not have been mutated
+        assert "resource" not in original_span
 
 
 class TestCollectContainerLogs:
     """Tests for container log collection."""
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_collects_logs(self, mock_run):
-        mock_run.return_value = MagicMock(
+    def test_collects_logs(self):
+        backend = MagicMock()
+        backend.container_logs_capture.return_value = MagicMock(
             returncode=0,
             stdout="log line 1\nlog line 2\n",
             stderr="",
@@ -101,24 +132,34 @@ class TestCollectContainerLogs:
             ["aptl-victim"],
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            backend,
         )
         assert "aptl-victim" in logs
         assert "log line 1" in logs["aptl-victim"]
+        backend.container_logs_capture.assert_called_once_with(
+            "aptl-victim",
+            since="2025-01-01T00:00:00+00:00",
+            until="2025-01-01T23:59:59+00:00",
+            timeout=30,
+        )
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_skips_failed_container(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+    def test_skips_failed_container(self):
+        backend = MagicMock()
+        backend.container_logs_capture.return_value = MagicMock(
+            returncode=1, stdout="", stderr="error"
+        )
 
         logs = collect_container_logs(
             ["aptl-missing"],
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            backend,
         )
         assert logs == {}
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_combines_stdout_stderr(self, mock_run):
-        mock_run.return_value = MagicMock(
+    def test_combines_stdout_stderr(self):
+        backend = MagicMock()
+        backend.container_logs_capture.return_value = MagicMock(
             returncode=0,
             stdout="stdout line",
             stderr="stderr line",
@@ -128,18 +169,22 @@ class TestCollectContainerLogs:
             ["aptl-victim"],
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            backend,
         )
         assert "stdout line" in logs["aptl-victim"]
         assert "stderr line" in logs["aptl-victim"]
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_skips_empty_output(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    def test_skips_empty_output(self):
+        backend = MagicMock()
+        backend.container_logs_capture.return_value = MagicMock(
+            returncode=0, stdout="", stderr=""
+        )
 
         logs = collect_container_logs(
             ["aptl-victim"],
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            backend,
         )
         assert logs == {}
 
@@ -180,30 +225,34 @@ class TestCollectWazuhAlerts:
 class TestCollectSuricataEve:
     """Tests for Suricata EVE collection."""
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_returns_empty_when_container_missing(self, mock_run):
-        mock_run.return_value = None
+    def test_returns_empty_when_container_missing(self):
+        backend = MagicMock()
+        backend.container_exec.return_value = MagicMock(
+            returncode=1, stdout="", stderr="No such container"
+        )
 
         result = collect_suricata_eve(
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            backend,
         )
         assert result == []
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_filters_by_time(self, mock_run):
+    def test_filters_by_time(self):
         entries = [
             json.dumps({"timestamp": "2025-01-01T10:00:00+00:00", "event_type": "dns"}),
             json.dumps({"timestamp": "2025-01-01T12:00:00+00:00", "event_type": "alert"}),
             json.dumps({"timestamp": "2025-01-01T14:00:00+00:00", "event_type": "flow"}),
         ]
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout="\n".join(entries)
+        backend = MagicMock()
+        backend.container_exec.return_value = MagicMock(
+            returncode=0, stdout="\n".join(entries), stderr=""
         )
 
         result = collect_suricata_eve(
             "2025-01-01T11:00:00+00:00",
             "2025-01-01T13:00:00+00:00",
+            backend,
         )
         assert len(result) == 1
         assert result[0]["event_type"] == "alert"

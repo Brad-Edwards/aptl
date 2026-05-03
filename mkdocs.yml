@@ -89,6 +89,20 @@ nav:
     - Overview: troubleshooting/index.md
     - Common Issues: troubleshooting/common-issues.md
     - Debugging: troubleshooting/debugging.md
+  - Decisions:
+    - Index: adrs/README.md
+    - ADR-000 Use ADRs: adrs/adr-000-use-adrs.md
+    - ADR-001 Docker Deployment: adrs/adr-001-docker-compose-deployment.md
+    - ADR-002 Wazuh SIEM: adrs/adr-002-wazuh-siem.md
+    - ADR-003 MCP Common Library: adrs/adr-003-mcp-common-library.md
+    - ADR-004 Persistent SSH: adrs/adr-004-persistent-ssh-sessions.md
+    - ADR-005 Docker Profiles: adrs/adr-005-docker-compose-profiles.md
+    - ADR-006 Network Segmentation: adrs/adr-006-four-network-segmentation.md
+    - ADR-007 Python CLI: adrs/adr-007-python-cli-control-plane.md
+    - ADR-008 SOC Stack: adrs/adr-008-soc-stack-integration.md
+    - ADR-009 Scenario Engine: adrs/adr-009-scenario-engine.md
+    - ADR-010 SonarCloud: adrs/adr-010-sonarcloud-quality.md
+    - ADR-011 Web UI: adrs/adr-011-web-ui.md
   - Reference:
     - Commands: reference/commands.md
     - API: reference/api.md

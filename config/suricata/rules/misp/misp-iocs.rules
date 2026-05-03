@@ -1,0 +1,6 @@
+# APTL MISP-to-Suricata sync — generated, do not edit by hand.
+# All rules are 'alert' per ADR-019 (Suricata IDS-only).
+# misp_url=
+# tag_filter=
+# sid_base=
+# ioc_count=0

@@ -150,8 +150,7 @@ FLAGEOF
 done
 echo "CTF flags generated for fileshare"
 
-# Start rsyslog in background
-rsyslogd
-
-# Start samba
-exec smbd --foreground --no-process-group --debug-stdout
+# Hand off to supervisord — it owns samba, rsyslog, and the in-process
+# Wazuh agent. Issue #248 introduced the agent here; supervisord is the
+# uniform daemonization choice across the affected target containers.
+exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf

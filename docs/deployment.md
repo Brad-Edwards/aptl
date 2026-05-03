@@ -92,8 +92,8 @@ Wait 5-10 minutes for Wazuh indexer initialization.
 ## Verification
 
 ```bash
-# Check status
-docker compose ps
+# Check status (works against local or SSH-remote labs)
+aptl container list
 
 # Test endpoints
 curl -k https://localhost:443          # Dashboard

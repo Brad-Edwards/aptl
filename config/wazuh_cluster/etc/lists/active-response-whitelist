@@ -1,0 +1,34 @@
+# Active-response source-IP whitelist (issue #249, ADR-021).
+#
+# The aptl-firewall-drop wrapper consults this file before applying any
+# Wazuh AR drop. Source IPs listed here are exempt from `firewall-drop`
+# regardless of which rule fires — blue can detect+alert on these
+# sources but cannot drop them.
+#
+# Why kali's three lab IPs are here:
+#   purple-team continuity. Without the carve-out, the moment blue
+#   wires firewall-drop against any rule kali's recon hits (port scan,
+#   web probe, brute force), kali's IP goes on every target's iptables
+#   and red can't operate in iter N+1. That ends the exercise after
+#   one iter — degenerate equilibrium. The whitelist forces blue to
+#   author granular rules (per-pattern, per-payload, per-behavior)
+#   rather than the coarse "ban the source" shortcut. See ADR-021 for
+#   the architectural rationale and #252 for the orchestrator-side
+#   complement.
+#
+# Format: one IPv4 address per line. `#` lines and blank lines are
+# ignored. The wrapper uses `grep -Fxq` so the match is exact on a
+# single line — no CIDR support here. Add entries for new kali
+# interfaces if the lab topology grows.
+#
+# Installed on each Wazuh agent image at build time at:
+#   /var/ossec/etc/lists/active-response-whitelist (read-only)
+# The wrapper runs on the agent, so the file ships in each agent's
+# image rather than being mounted on the manager. To update the
+# whitelist, edit this file and rebuild the affected agent images via
+# `aptl lab stop -v && aptl lab start`. See ADR-021 for why we deploy
+# at image build time rather than via a runtime mount.
+
+172.20.4.30
+172.20.1.30
+172.20.2.35

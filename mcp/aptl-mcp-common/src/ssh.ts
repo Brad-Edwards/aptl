@@ -82,11 +82,19 @@ export class PersistentSession extends EventEmitter {
   private commandDelimiter: string;
   private keepAliveInterval: NodeJS.Timeout | null = null;
   private sessionTimeout: NodeJS.Timeout | null = null;
+  private commandTimeout: NodeJS.Timeout | null = null;
   private isInitialized = false;
   private outputData = '';
   private shellFormatter: ShellFormatter;
 
   private sessionTimeoutMs: number;
+
+  private clearCommandTimeout(): void {
+    if (this.commandTimeout) {
+      clearTimeout(this.commandTimeout);
+      this.commandTimeout = null;
+    }
+  }
 
   constructor(
     sessionId: string,
@@ -226,6 +234,7 @@ export class PersistentSession extends EventEmitter {
 
     this.currentCommand = this.commandQueue.shift()!;
     this.outputData = '';
+    this.clearCommandTimeout();
 
     if (this.currentCommand.raw) {
       // Raw mode: send command directly without wrapping
@@ -235,10 +244,11 @@ export class PersistentSession extends EventEmitter {
       if (this.currentCommand.timeout) {
         const commandId = this.currentCommand.id;
         const timeoutDuration = this.currentCommand.timeout;
-        setTimeout(() => {
+        this.commandTimeout = setTimeout(() => {
           if (this.currentCommand?.id === commandId) {
             // In raw mode, resolve with whatever output we've collected
             const output = this.outputData;
+            this.commandTimeout = null;
             this.currentCommand!.resolve({
               stdout: output,
               stderr: '',
@@ -265,8 +275,9 @@ export class PersistentSession extends EventEmitter {
 
       if (this.currentCommand.timeout) {
         const commandId = this.currentCommand.id;
-        setTimeout(() => {
+        this.commandTimeout = setTimeout(() => {
           if (this.currentCommand?.id === commandId) {
+            this.commandTimeout = null;
             this.currentCommand!.reject(new SSHError(`Command timeout: ${this.currentCommand!.command}`));
             this.currentCommand = null;
             this.processNextCommand();
@@ -327,6 +338,7 @@ export class PersistentSession extends EventEmitter {
 
         const cleanOutput = filteredLines.join('\n');
 
+        this.clearCommandTimeout();
         this.currentCommand.resolve({
           stdout: cleanOutput,
           stderr: '',
@@ -394,8 +406,20 @@ export class PersistentSession extends EventEmitter {
     }
 
     this.sessionInfo.isActive = false;
-    this.currentCommand = null;
+
+    this.clearCommandTimeout();
+
+    if (this.currentCommand) {
+      const current = this.currentCommand;
+      this.currentCommand = null;
+      current.reject(new SSHError('Session closed while command was in progress'));
+    }
+
+    const queued = this.commandQueue;
     this.commandQueue = [];
+    for (const request of queued) {
+      request.reject(new SSHError('Session closed while command was queued'));
+    }
   }
 }
 

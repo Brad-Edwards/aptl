@@ -1,7 +1,12 @@
 <group name="kali_redteam">
 
-  <!-- Kali Authentication Events (Login/Logout) - No Alerts -->
-  <rule id="300001" level="3">
+  <!-- Kali Authentication Events (Login/Logout) - level 1, indexed but
+       suppressed at the analyst dashboard level. The MCP-mediated SSH-into-kali
+       pattern that drives the AI red agent generates one of these per command
+       (typically 30-40 per iteration), which buried higher-severity signal in
+       earlier purple-loop runs. Level 1 keeps the events queryable for
+       reconstruction without drowning the dashboard. -->
+  <rule id="300001" level="1">
     <if_group>authentication</if_group>
     <hostname>kali-redteam</hostname>
     <description>Kali Red Team Authentication Event</description>
@@ -9,7 +14,7 @@
   </rule>
 
   <!-- SSH Login Success -->
-  <rule id="300002" level="3">
+  <rule id="300002" level="1">
     <if_sid>5715</if_sid>
     <hostname>kali-redteam</hostname>
     <description>Kali Red Team SSH Login Success</description>
@@ -17,7 +22,7 @@
   </rule>
 
   <!-- SSH Logout -->
-  <rule id="300003" level="3">
+  <rule id="300003" level="1">
     <if_sid>5502</if_sid>
     <hostname>kali-redteam</hostname>
     <description>Kali Red Team SSH Logout</description>

@@ -23,23 +23,29 @@ from aptl.core.lab import LabResult, LabStatus
 
 
 class TestSelectShell:
-    """Pure-logic tests for the bash/sh selection table."""
+    """Pure-logic tests for the bash/sh selection table.
 
-    def test_returncode_0_picks_bash(self):
-        assert _select_shell(0) == ("/bin/bash", True)
+    Covers the four interesting branches:
+    - probe rc 0  -> bash (canonical happy path)
+    - probe rc 126/127 -> sh (bash is missing or not-executable)
+    - other rc -> caller surfaces the probe error instead of running a shell
+    """
 
-    def test_returncode_127_picks_sh(self):
-        assert _select_shell(127) == ("/bin/sh", True)
+    @pytest.mark.parametrize(
+        "probe_rc, expected",
+        [
+            (0, ("/bin/bash", True)),
+            (126, ("/bin/sh", True)),
+            (127, ("/bin/sh", True)),
+        ],
+        ids=["bash-available", "126-not-executable", "127-not-found"],
+    )
+    def test_runs_shell(self, probe_rc, expected):
+        assert _select_shell(probe_rc) == expected
 
-    def test_returncode_126_picks_sh(self):
-        assert _select_shell(126) == ("/bin/sh", True)
-
-    def test_other_returncode_signals_no_run(self):
-        shell, should_run = _select_shell(1)
-        assert should_run is False
-
-    def test_negative_returncode_signals_no_run(self):
-        shell, should_run = _select_shell(-1)
+    @pytest.mark.parametrize("probe_rc", [1, 2, 125, -1])
+    def test_does_not_run_on_other_returncodes(self, probe_rc):
+        shell, should_run = _select_shell(probe_rc)
         assert should_run is False
 
 

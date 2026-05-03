@@ -52,32 +52,39 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
 
 ## Architecture
 
-```
-┌──── Red Team (172.20.4.0/24) ─┐   ┌──── DMZ (172.20.1.0/24) ──────────────┐
-│  Kali (.30)                    │──>│  Web App (.20/.25)   Mail (.21)        │
-│  pentest tools, MCP-controlled │   │  DNS (.22)                             │
-└────────────────────────────────┘   └──────────────┬────────────────────────-┘
-                                                    │ pivot
-                                     ┌──── Internal (172.20.2.0/24) ─────────┐
-                                     │  Samba AD DC (.10)  PostgreSQL (.11)   │
-                                     │  File Server (.12)  Victim (.20)       │
-                                     └──────────────┬────────────────────────-┘
-                                                    │ logs
-┌──── Security (172.20.0.0/24) ──────────────────────────────────────────────┐
-│  Wazuh Manager (.10)  Indexer (.12)  Dashboard (.11)                       │
-│  Suricata IDS (.50)   MISP (.16)     TheHive (.18) + Cortex (.22)         │
-│  Shuffle SOAR (.20/.21)              Reverse Engineering (.27)             │
-└──────────────────────────────────┬─────────────────────────────────────────┘
-                                   │
-┌──── MCP Server Layer ────────────────────────────────────────────────────-─┐
-│  mcp-red       mcp-wazuh      mcp-indexer     mcp-network                  │
-│  mcp-reverse   mcp-casemgmt   mcp-soar        mcp-threatintel              │
-└──────────────────────────────────┬─────────────────────────────────────────┘
-                                   │
-                              AI Agents
+```mermaid
+flowchart TD
+    AI([AI Agents])
+
+    subgraph MCP[MCP Server Layer]
+        direction LR
+        m1[mcp-red] ~~~ m2[mcp-wazuh] ~~~ m3[mcp-indexer] ~~~ m4[mcp-network]
+        m5[mcp-casemgmt] ~~~ m6[mcp-soar] ~~~ m7[mcp-threatintel] ~~~ m8[mcp-reverse]
+    end
+
+    Kali[Kali Red Team]
+    Reverse[Malware Analysis]
+
+    subgraph Scenario[Scenario Environment]
+        Targets[Scenario-defined target topology<br/>AD · web · DB · file share · DNS · mail · victim hosts · etc.]
+    end
+
+    subgraph SOC[SOC Stack]
+        direction LR
+        S1[Wazuh SIEM] ~~~ S2[Suricata IDS] ~~~ S3[MISP TI]
+        S4[TheHive + Cortex] ~~~ S5[Shuffle SOAR]
+    end
+
+    AI <--> MCP
+    MCP --> Kali
+    MCP --> SOC
+    MCP --> Reverse
+
+    Kali -->|attack| Scenario
+    Scenario -.->|logs / telemetry| SOC
 ```
 
-Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
+The scenario environment is whatever the YAML scenario defines — there's a default TechVault topology (AD, web, DB, file share, DNS, mail, victims) but scenarios can compose other shapes. Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
 
 ## AI Agents (MCP)
 

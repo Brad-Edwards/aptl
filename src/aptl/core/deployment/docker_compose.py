@@ -77,6 +77,9 @@ class DockerComposeBackend:
     ) -> subprocess.CompletedProcess:
         """Run a subprocess command in the project directory.
 
+        Captures stdout/stderr; suitable for commands whose output the
+        caller wants to parse or log.
+
         Args:
             cmd: Command as a list of strings.
             timeout: Optional timeout in seconds.
@@ -92,6 +95,33 @@ class DockerComposeBackend:
         if timeout is not None:
             kwargs["timeout"] = timeout
         return subprocess.run(cmd, **kwargs)
+
+    def _run_streaming(
+        self,
+        cmd: list[str],
+        *,
+        timeout: int | None = None,
+    ) -> int:
+        """Run a subprocess command inheriting parent stdin/stdout/stderr.
+
+        Used for interactive sessions (``container_shell``) and live log
+        streams (``container_logs``). The parent terminal is connected
+        directly to the child process — no capturing.
+
+        Args:
+            cmd: Command as a list of strings.
+            timeout: Optional timeout in seconds.
+
+        Returns:
+            Exit code of the child process.
+        """
+        kwargs: dict = {
+            "cwd": self._project_dir,
+            "check": False,
+        }
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return subprocess.run(cmd, **kwargs).returncode
 
     def start(self, profiles: list[str], *, build: bool = True) -> LabResult:
         """Start lab services via docker compose up.
@@ -269,3 +299,103 @@ class DockerComposeBackend:
                 log.warning(msg)
                 warnings.append(msg)
         return warnings
+
+    # Container interaction (CLI-004, ADR-023) ----------------------------
+
+    def container_list(
+        self, *, all_containers: bool = True
+    ) -> list[dict]:
+        cmd = ["docker", "compose", "ps"]
+        if all_containers:
+            cmd.append("-a")
+        cmd.extend(["--format", "json"])
+        result = self._run(cmd)
+        if result.returncode != 0:
+            log.warning("container_list failed: %s", result.stderr.strip())
+            return []
+        stripped = result.stdout.strip()
+        if not stripped:
+            return []
+        try:
+            if stripped.startswith("["):
+                parsed = json.loads(stripped)
+            else:
+                parsed = [
+                    json.loads(line)
+                    for line in stripped.splitlines()
+                    if line.strip()
+                ]
+        except json.JSONDecodeError:
+            log.warning("container_list could not parse compose ps output")
+            return []
+        return parsed
+
+    def container_logs(
+        self,
+        name: str,
+        *,
+        follow: bool = False,
+        tail: int | None = None,
+    ) -> int:
+        cmd = ["docker", "logs"]
+        if follow:
+            cmd.append("-f")
+        if tail is not None:
+            cmd.extend(["--tail", str(tail)])
+        cmd.append(name)
+        return self._run_streaming(cmd)
+
+    def container_logs_capture(
+        self,
+        name: str,
+        *,
+        since: str | None = None,
+        until: str | None = None,
+    ) -> subprocess.CompletedProcess:
+        cmd = ["docker", "logs"]
+        if since is not None:
+            cmd.extend(["--since", since])
+        if until is not None:
+            cmd.extend(["--until", until])
+        cmd.append(name)
+        return self._run(cmd)
+
+    def container_shell(
+        self, name: str, *, shell: str | None = None
+    ) -> int:
+        if shell is not None:
+            cmd = ["docker", "exec", "-it", name, shell]
+            return self._run_streaming(cmd)
+        # Auto-detect: try bash, fall back to sh on 126/127.
+        bash_cmd = ["docker", "exec", "-it", name, "/bin/bash"]
+        rc = self._run_streaming(bash_cmd)
+        if rc in (126, 127):
+            log.info("bash unavailable in %s (exit %d); retrying with sh", name, rc)
+            sh_cmd = ["docker", "exec", "-it", name, "/bin/sh"]
+            return self._run_streaming(sh_cmd)
+        return rc
+
+    def container_exec(
+        self,
+        name: str,
+        cmd: list[str],
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        argv = ["docker", "exec", name, *cmd]
+        return self._run(argv, timeout=timeout)
+
+    def container_inspect(self, name: str) -> dict:
+        result = self._run(["docker", "inspect", name])
+        if result.returncode != 0:
+            log.debug("container_inspect failed for %s: %s", name, result.stderr.strip())
+            return {}
+        try:
+            parsed = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            log.warning("container_inspect could not parse output for %s", name)
+            return {}
+        if not isinstance(parsed, list) or not parsed:
+            return {}
+        first = parsed[0]
+        return first if isinstance(first, dict) else {}

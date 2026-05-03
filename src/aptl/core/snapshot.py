@@ -3,6 +3,13 @@
 Captures the current state of the lab environment including software
 versions, container status, Wazuh rules, network topology, and
 configuration file hashes.
+
+Container interaction (exec, inspect) is routed through the deployment
+backend (CLI-004 / ADR-023) so that snapshots taken against an SSH-remote
+deployment behave identically to local Docker Compose. Host-level
+operations that talk to the daemon directly — ``docker version``,
+``docker compose version``, ``docker ps`` (project-wide enumeration),
+``docker network ls/inspect`` — remain raw subprocess calls.
 """
 
 import hashlib
@@ -10,8 +17,12 @@ import subprocess
 import sys
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aptl.core.deployment import DeploymentBackend
 
 log = get_logger("snapshot")
 
@@ -118,7 +129,24 @@ def _run_cmd(args: list[str], timeout: int = 15) -> str:
     return ""
 
 
-def _get_software_versions() -> SoftwareVersions:
+def _backend_exec(
+    backend: "DeploymentBackend",
+    container: str,
+    cmd: list[str],
+    timeout: int = 15,
+) -> str:
+    """Run a one-shot command via the backend; return stripped stdout or empty."""
+    try:
+        result = backend.container_exec(container, cmd, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
+        log.debug("backend.container_exec %s %s failed: %s", container, cmd, e)
+        return ""
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return ""
+
+
+def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
     """Collect software version information."""
     versions = SoftwareVersions()
 
@@ -133,19 +161,24 @@ def _get_software_versions() -> SoftwareVersions:
         versions.compose_version = compose_out
 
     # Wazuh manager version from container
-    wm_out = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "/var/ossec/bin/wazuh-control", "info", "-v",
-    ])
+    wm_out = _backend_exec(
+        backend,
+        "aptl-wazuh-manager",
+        ["/var/ossec/bin/wazuh-control", "info", "-v"],
+    )
     if wm_out:
         versions.wazuh_manager_version = wm_out.strip().lstrip("v")
 
     # Wazuh indexer version (extract from opensearch jar filename)
-    wi_out = _run_cmd([
-        "docker", "exec", "aptl-wazuh-indexer",
-        "bash", "-c",
-        "ls /usr/share/wazuh-indexer/lib/opensearch-[0-9]*.jar 2>/dev/null | head -1",
-    ])
+    wi_out = _backend_exec(
+        backend,
+        "aptl-wazuh-indexer",
+        [
+            "bash",
+            "-c",
+            "ls /usr/share/wazuh-indexer/lib/opensearch-[0-9]*.jar 2>/dev/null | head -1",
+        ],
+    )
     if wi_out:
         # Extract version from e.g. "opensearch-2.19.1.jar"
         jar_name = Path(wi_out.strip()).name
@@ -164,10 +197,17 @@ def _get_software_versions() -> SoftwareVersions:
     return versions
 
 
-def _get_container_snapshots() -> list[ContainerSnapshot]:
-    """Snapshot all aptl- containers with network IPs and port mappings."""
-    import json as _json
+def _get_container_snapshots(
+    backend: "DeploymentBackend",
+) -> list[ContainerSnapshot]:
+    """Snapshot all aptl- containers with network IPs and port mappings.
 
+    Container enumeration still uses raw ``docker ps`` to catch any
+    container the user named ``aptl-*`` even if it's outside the current
+    compose project — that's intentional, defensive coverage. Per-container
+    inspection routes through the backend so SSH-remote labs work the same
+    way.
+    """
     fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
     out = _run_cmd([
         "docker", "ps", "-a", "--filter", "name=aptl-", "--format", fmt,
@@ -208,23 +248,16 @@ def _get_container_snapshots() -> list[ContainerSnapshot]:
         # Parse port mappings
         ports = [p.strip() for p in ports_str.split(",") if p.strip()] if ports_str else []
 
-        # Get per-network IPs via docker inspect
+        # Per-network IPs via the deployment backend (CLI-004 / ADR-023).
         networks: dict[str, str] = {}
-        inspect_out = _run_cmd([
-            "docker", "inspect", name,
-            "--format", "{{json .NetworkSettings.Networks}}",
-        ])
-        if inspect_out:
-            try:
-                net_data = _json.loads(inspect_out)
-                if isinstance(net_data, dict):
-                    for net_name, net_cfg in net_data.items():
-                        if isinstance(net_cfg, dict):
-                            ip = net_cfg.get("IPAddress", "")
-                            if ip:
-                                networks[net_name] = ip
-            except _json.JSONDecodeError:
-                pass
+        info = backend.container_inspect(name)
+        net_data = info.get("NetworkSettings", {}).get("Networks", {})
+        if isinstance(net_data, dict):
+            for net_name, net_cfg in net_data.items():
+                if isinstance(net_cfg, dict):
+                    ip = net_cfg.get("IPAddress", "")
+                    if ip:
+                        networks[net_name] = ip
 
         snapshots.append(ContainerSnapshot(
             name=name,
@@ -240,54 +273,77 @@ def _get_container_snapshots() -> list[ContainerSnapshot]:
     return snapshots
 
 
-def _get_wazuh_rules_snapshot() -> WazuhRulesSnapshot:
+def _get_wazuh_rules_snapshot(
+    backend: "DeploymentBackend",
+) -> WazuhRulesSnapshot:
     """Snapshot Wazuh rule/decoder counts."""
     snap = WazuhRulesSnapshot()
+    manager = "aptl-wazuh-manager"
 
     # Count total rules
-    rule_count = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "bash", "-c",
-        "find /var/ossec/ruleset/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-    ])
+    rule_count = _backend_exec(
+        backend,
+        manager,
+        [
+            "bash",
+            "-c",
+            "find /var/ossec/ruleset/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
+        ],
+    )
     if rule_count and rule_count.isdigit():
         snap.total_rules = int(rule_count)
 
     # Count custom rules
-    custom_count = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "bash", "-c",
-        "find /var/ossec/etc/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-    ])
+    custom_count = _backend_exec(
+        backend,
+        manager,
+        [
+            "bash",
+            "-c",
+            "find /var/ossec/etc/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
+        ],
+    )
     if custom_count and custom_count.isdigit():
         snap.custom_rules = int(custom_count)
 
     # List custom rule files
-    custom_files = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "bash", "-c",
-        "ls /var/ossec/etc/rules/*.xml 2>/dev/null",
-    ])
+    custom_files = _backend_exec(
+        backend,
+        manager,
+        [
+            "bash",
+            "-c",
+            "ls /var/ossec/etc/rules/*.xml 2>/dev/null",
+        ],
+    )
     if custom_files:
         snap.custom_rule_files = [
             Path(f).name for f in custom_files.splitlines() if f.strip()
         ]
 
     # Count total decoders
-    decoder_count = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "bash", "-c",
-        "find /var/ossec/ruleset/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-    ])
+    decoder_count = _backend_exec(
+        backend,
+        manager,
+        [
+            "bash",
+            "-c",
+            "find /var/ossec/ruleset/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
+        ],
+    )
     if decoder_count and decoder_count.isdigit():
         snap.total_decoders = int(decoder_count)
 
     # Count custom decoders
-    custom_dec = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "bash", "-c",
-        "find /var/ossec/etc/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-    ])
+    custom_dec = _backend_exec(
+        backend,
+        manager,
+        [
+            "bash",
+            "-c",
+            "find /var/ossec/etc/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
+        ],
+    )
     if custom_dec and custom_dec.isdigit():
         snap.custom_decoders = int(custom_dec)
 
@@ -405,12 +461,19 @@ def _get_ssh_endpoints(containers: list[ContainerSnapshot]) -> list[SSHEndpoint]
     return endpoints
 
 
-def capture_snapshot(config_dir: Path | None = None) -> RangeSnapshot:
+def capture_snapshot(
+    config_dir: Path | None = None,
+    backend: "DeploymentBackend | None" = None,
+) -> RangeSnapshot:
     """Capture a complete snapshot of the current lab state.
 
     Args:
         config_dir: Directory containing config files to hash.
                     Defaults to current working directory.
+        backend: Deployment backend used for container interaction
+                 (``container_exec`` and ``container_inspect``). When
+                 omitted (e.g. legacy callers), a local Docker Compose
+                 backend is created against ``config_dir``.
 
     Returns:
         A RangeSnapshot with all collected data.
@@ -419,12 +482,19 @@ def capture_snapshot(config_dir: Path | None = None) -> RangeSnapshot:
 
     log.info("Capturing range snapshot")
 
-    containers = _get_container_snapshots()
+    if backend is None:
+        from aptl.core.deployment import DockerComposeBackend
+
+        backend = DockerComposeBackend(
+            project_dir=config_dir if config_dir is not None else Path(".")
+        )
+
+    containers = _get_container_snapshots(backend)
     snapshot = RangeSnapshot(
         timestamp=datetime.now(timezone.utc).isoformat(),
-        software=_get_software_versions(),
+        software=_get_software_versions(backend),
         containers=containers,
-        wazuh_rules=_get_wazuh_rules_snapshot(),
+        wazuh_rules=_get_wazuh_rules_snapshot(backend),
         networks=_get_network_snapshots(),
         config_hashes=_hash_config_files(config_dir),
         services=_get_service_endpoints(containers),

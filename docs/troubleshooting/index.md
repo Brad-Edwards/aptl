@@ -3,15 +3,15 @@
 ## Quick Checks
 
 ```bash
-# Container status
-docker compose ps
+# Container status (works against local or SSH-remote labs)
+aptl container list
 
 # Service logs
-docker compose logs wazuh.manager
-docker compose logs victim
-docker compose logs kali
+aptl container logs aptl-wazuh-manager
+aptl container logs aptl-victim
+aptl container logs aptl-kali
 
-# Network connectivity
+# Network connectivity (raw docker exec is fine for one-off ping/etc.)
 docker exec aptl-kali ping 172.20.2.20
 docker exec aptl-victim ping 172.20.2.30
 ```
@@ -22,7 +22,8 @@ docker exec aptl-victim ping 172.20.2.30
 
 **Check logs:**
 ```bash
-docker compose logs [service_name]
+aptl container logs <container-name>
+# e.g. aptl container logs aptl-wazuh-manager
 ```
 
 **Port conflicts:**
@@ -57,15 +58,16 @@ docker exec aptl-kali systemctl status ssh
 
 **Direct container access:**
 ```bash
-docker exec -it aptl-victim /bin/bash
-docker exec -it aptl-kali /bin/bash
+aptl container shell aptl-victim
+aptl container shell aptl-kali
+# Or, against an alpine-based image: aptl container shell <name> --shell /bin/sh
 ```
 
 ### Wazuh Dashboard not accessible
 
 **Check container:**
 ```bash
-docker compose logs wazuh.dashboard
+aptl container logs aptl-wazuh-dashboard
 ```
 
 **Test port:**

@@ -8,8 +8,12 @@ import hashlib
 import re
 import subprocess
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aptl.core.deployment import DeploymentBackend
 
 log = get_logger("flags")
 
@@ -58,19 +62,22 @@ class CapturedFlag:
     description: str
 
 
-def _docker_exec_read(container: str, path: str) -> str | None:
-    """Read a file from a running container. Returns None on failure."""
+def _docker_exec_read(
+    backend: "DeploymentBackend", container: str, path: str
+) -> str | None:
+    """Read a file from a running container via the deployment backend.
+
+    Returns None on failure (timeout, missing container, non-zero exit).
+    """
     try:
-        result = subprocess.run(
-            ["docker", "exec", container, "cat", path],
-            capture_output=True,
-            text=True,
-            timeout=10,
+        result = backend.container_exec(
+            container, ["cat", path], timeout=10
         )
-        if result.returncode == 0:
-            return result.stdout
     except (subprocess.TimeoutExpired, OSError) as e:
         log.debug("Failed to read %s:%s: %s", container, path, e)
+        return None
+    if result.returncode == 0:
+        return result.stdout
     return None
 
 
@@ -84,11 +91,14 @@ def _parse_flag_file(content: str) -> tuple[str, str] | None:
 
 
 def collect_flags(
+    backend: "DeploymentBackend",
     containers: list[str] | None = None,
 ) -> dict[str, dict[str, dict]]:
     """Collect CTF flags from running lab containers.
 
     Args:
+        backend: Deployment backend used to ``cat`` flag files inside
+            containers (works for local Docker Compose and SSH-remote).
         containers: Optional list of container names to collect from.
             If None, collects from all known containers.
 
@@ -107,7 +117,7 @@ def collect_flags(
         container_flags: dict[str, dict] = {}
 
         for level, (path, description) in levels.items():
-            content = _docker_exec_read(container, path)
+            content = _docker_exec_read(backend, container, path)
             if content is None:
                 log.warning(
                     "Could not read %s flag from %s:%s",

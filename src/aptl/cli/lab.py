@@ -117,9 +117,25 @@ def status(
     log.info("Checking lab status")
 
     if output_json or output_file:
+        from aptl.core.config import find_config, load_config
+        from aptl.core.deployment import get_backend
         from aptl.core.snapshot import capture_snapshot
 
-        snapshot = capture_snapshot(config_dir=project_dir)
+        # Resolve backend from config so SSH-remote labs are snapshotted
+        # against the right Docker daemon. Falls back to defaults if no
+        # aptl.json is present (status remains useful in fresh dirs).
+        config_path = find_config(project_dir)
+        if config_path is None:
+            backend = None
+        else:
+            try:
+                cfg = load_config(config_path)
+            except (FileNotFoundError, ValueError):
+                backend = None
+            else:
+                backend = get_backend(cfg, project_dir)
+
+        snapshot = capture_snapshot(config_dir=project_dir, backend=backend)
         data = json.dumps(snapshot.to_dict(), indent=2)
 
         if output_file:

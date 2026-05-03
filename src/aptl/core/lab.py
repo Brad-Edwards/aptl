@@ -520,7 +520,7 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
 
 def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 11: Capturing range snapshot...")
-    snapshot = capture_snapshot(config_dir=ctx.project_dir)
+    snapshot = capture_snapshot(config_dir=ctx.project_dir, backend=ctx.backend)
     log.info(
         "Range: %d containers, %d networks, %d services, %d SSH endpoints",
         len(snapshot.containers),

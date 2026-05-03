@@ -135,6 +135,37 @@ class SSHComposeBackend(DockerComposeBackend):
         )
         return subprocess.run(cmd, **kwargs)
 
+    def _run_streaming(
+        self,
+        cmd: list[str],
+        *,
+        timeout: int | None = None,
+    ) -> int:
+        """Streaming variant of ``_run`` with the same env injection.
+
+        Inherits parent stdin/stdout/stderr (no capture) so the user can
+        interact with a remote shell or watch logs live; sets
+        ``DOCKER_HOST`` and optionally ``DOCKER_SSH_IDENTITY`` exactly as
+        the captured ``_run`` override does.
+        """
+        env = os.environ.copy()
+        env["DOCKER_HOST"] = self._docker_host
+        if self._ssh_key:
+            env["DOCKER_SSH_IDENTITY"] = self._ssh_key
+        kwargs: dict = {
+            "cwd": self._project_dir,
+            "env": env,
+            "check": False,
+        }
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        log.debug(
+            "Streaming via DOCKER_HOST=%s: %s",
+            self._docker_host,
+            " ".join(cmd),
+        )
+        return subprocess.run(cmd, **kwargs).returncode
+
     def validate_connection(self) -> tuple[bool, str]:
         """Test SSH connectivity to the remote Docker daemon.
 

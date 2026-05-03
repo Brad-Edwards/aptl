@@ -105,6 +105,49 @@ under the `soc` compose profile. Architecture and invariants:
    `test_rejects_quote_or_semicolon_in_value_via_escape` is the
    regression guard.
 
+9. **Validation at the IOC boundary.** IPs are validated via
+   :mod:`ipaddress` before being spliced into rule headers (a malformed
+   value would render an unparseable rule and break Suricata reload);
+   hashes are validated for hex format and per-type length (md5=32,
+   sha1=40, sha256=64) before being written to a list file (bad data
+   would make the entire hash list unloadable). Invalid IOCs are
+   skipped with a warning rather than poisoning the output.
+
+10. **URL parsing via stdlib.** ``urllib.parse.urlparse`` handles
+    credentials, ports, fragments, query strings, IPv6 hosts, and
+    schemeless inputs correctly — none of which a hand-rolled splitter
+    gets right. Hosts are lowercased and stripped of userinfo / port;
+    path includes the query string when present so URL IOCs that vary
+    by query parameter still match.
+
+11. **Anchored domain / host matching.** ``dns.query`` and ``http.host``
+    matches use the ``dotprefix`` modifier so an IOC for ``bad.com``
+    matches ``bad.com`` and ``sub.bad.com`` but not ``notbad.com``.
+    Without ``dotprefix`` the ``content:`` directive is a substring
+    match and produces avoidable false positives on every domain
+    sharing a suffix with the IOC.
+
+12. **Reload retry on failure.** ``SyncRunner`` carries a
+    ``reload_pending`` flag across ticks. If a Suricata reload fails
+    (socket not yet ready on first start, transient signal failure),
+    the next tick retries the reload even when the rule file is
+    unchanged, so transient reload failures cannot leave generated
+    rules permanently inactive.
+
+13. **Transactional file ordering.** Per-type hash list files
+    (``misp-<type>.list``) are written *before* ``misp-iocs.rules`` on
+    each tick. Suricata's hash rules reference the list files; writing
+    them first means the rule file's references are always resolved
+    against fresh content, never stale.
+
+14. **MISP envelope drift preservation.** ``MispClient`` returns
+    ``None`` for both transport failures *and* malformed envelope
+    structures (missing ``response`` key, non-list ``Attribute``,
+    etc.), and only returns ``[]`` for a structurally valid empty IOC
+    set. Treating drift as ``[]`` would wipe the rule file on API
+    changes; treating it as ``None`` preserves the last-known-good
+    file.
+
 ### Translator IOC matrix
 
 | MISP type      | Generated rule shape                                                                       |

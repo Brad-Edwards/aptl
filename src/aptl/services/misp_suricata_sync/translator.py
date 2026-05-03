@@ -6,8 +6,11 @@ rendering. ADR-019 invariant: action is always ``alert``.
 
 from __future__ import annotations
 
+import ipaddress
+import re
 import zlib
 from typing import Iterable
+from urllib.parse import urlparse
 
 from aptl.services.misp_suricata_sync.models import (
     MispAttribute,
@@ -25,12 +28,15 @@ _CONTENT_SAFE = frozenset(
 )
 _SID_OFFSET_MASK = 0x7FFFFFF
 
-# Suricata file-hash keyword per MISP attribute type.
+# Suricata file-hash keyword per MISP attribute type, plus expected digest
+# length in hex characters.
 _HASH_KEYWORDS: dict[str, str] = {
     "md5": "filemd5",
     "sha1": "filesha1",
     "sha256": "filesha256",
 }
+_HASH_HEX_LENGTHS: dict[str, int] = {"md5": 32, "sha1": 40, "sha256": 64}
+_HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
 
 
 def _crc32_sid_offset(type_: str, value: str) -> int:
@@ -47,13 +53,35 @@ def _escape_content(value: str) -> str:
     return "".join(out)
 
 
+def _is_valid_ip(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value.strip())
+        return True
+    except ValueError:
+        return False
+
+
+def _is_valid_hash(hash_type: str, value: str) -> bool:
+    expected_len = _HASH_HEX_LENGTHS[hash_type]
+    return len(value) == expected_len and bool(_HEX_RE.match(value))
+
+
 def _split_url(url: str) -> tuple[str, str]:
-    """Return ``(host, path)`` for a URL. Path is empty if URL has no path."""
-    rest = url.split("://", 1)[-1]
-    slash = rest.find("/")
-    if slash == -1:
-        return rest, ""
-    return rest[:slash], rest[slash:]
+    """Return ``(host, path-with-query)`` from a URL.
+
+    Uses :mod:`urllib.parse` so credentials, ports, fragments, query-only
+    URLs, and IPv6 hosts all parse correctly. Host is lowercased and
+    stripped of any user-info / port. Path includes the query string when
+    present so URL IOCs that vary only by query parameter still match.
+    """
+    if "://" not in url:
+        url = "http://" + url
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    path = parsed.path or ""
+    if parsed.query:
+        path = f"{path}?{parsed.query}"
+    return host, path
 
 
 def _hash_list_path(rules_out_dir: str, hash_type: str) -> str:
@@ -79,7 +107,15 @@ class IocTranslator:
         for attr in ordered:
             if attr.type in _HASH_KEYWORDS:
                 # Aggregated rule emitted later; just collect the digest.
-                hash_lists[attr.type].append(attr.value)
+                if not _is_valid_hash(attr.type, attr.value):
+                    log.warning(
+                        "Skipping malformed %s digest %r (expected %d hex chars)",
+                        attr.type,
+                        attr.value,
+                        _HASH_HEX_LENGTHS[attr.type],
+                    )
+                    continue
+                hash_lists[attr.type].append(attr.value.lower())
                 continue
 
             sid = self._sid_base + _crc32_sid_offset(attr.type, attr.value)
@@ -148,27 +184,27 @@ class IocTranslator:
         type_ = attr.type
         value = attr.value
 
-        if type_ == "ip-src":
-            msg = _escape_content(f"APTL MISP IOC ip-src: {value}")
-            return (
-                f'alert ip {value} any -> any any '
-                f'(msg:"{msg}"; sid:{sid}; rev:1{meta};)'
-            )
-
-        if type_ == "ip-dst":
-            msg = _escape_content(f"APTL MISP IOC ip-dst: {value}")
-            return (
-                f'alert ip any any -> {value} any '
-                f'(msg:"{msg}"; sid:{sid}; rev:1{meta};)'
-            )
+        if type_ in ("ip-src", "ip-dst"):
+            if not _is_valid_ip(value):
+                log.warning("Skipping malformed %s value %r", type_, value)
+                return None
+            value = value.strip()
+            msg = _escape_content(f"APTL MISP IOC {type_}: {value}")
+            if type_ == "ip-src":
+                header = f"alert ip {value} any -> any any"
+            else:
+                header = f"alert ip any any -> {value} any"
+            return f'{header} (msg:"{msg}"; sid:{sid}; rev:1{meta};)'
 
         if type_ in ("domain", "hostname"):
             content = _escape_content(value)
             msg = _escape_content(f"APTL MISP IOC domain: {value}")
+            # ``dotprefix`` anchors the match: "bad.com" matches "bad.com"
+            # and "sub.bad.com" but not "notbad.com".
             return (
                 f'alert dns any any -> any any '
                 f'(msg:"{msg}"; dns.query; content:"{content}"; nocase; '
-                f'sid:{sid}; rev:1{meta};)'
+                f'dotprefix; sid:{sid}; rev:1{meta};)'
             )
 
         if type_ == "url":
@@ -178,9 +214,9 @@ class IocTranslator:
                 return None
             host_content = _escape_content(host)
             parts = [
-                f'alert http any any -> any any (msg:"',
+                'alert http any any -> any any (msg:"',
                 _escape_content(f"APTL MISP IOC url: {value}"),
-                f'"; http.host; content:"{host_content}"; nocase',
+                f'"; http.host; content:"{host_content}"; nocase; dotprefix',
             ]
             if path and path != "/":
                 path_content = _escape_content(path)

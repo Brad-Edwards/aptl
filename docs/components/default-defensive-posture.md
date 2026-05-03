@@ -155,27 +155,35 @@ custom child rules) ships absent.
   [`config/wazuh_cluster/{kali,postgresql,samba}_decoders.xml`](../../config/wazuh_cluster/).
 - **`zzz_purple_loop.xml` ships absent from the repo by design.** It
   only appears under `.aptl/loop/run-*/iter-NN/` (runtime artifacts
-  produced by purple-loop runs). The `etc/rules/` directory is
-  hot-reloaded by the manager, so blue can author it at runtime and
-  Wazuh picks it up without a restart. The filename's `zzz_` prefix
-  guarantees it loads after `webapp_rules.xml` (which provides the
-  302xxx parent rule IDs that purple-loop children typically `<if_sid>`
-  into).
+  produced by purple-loop runs). The mechanism is: blue authors XML
+  via the `mcp-indexer` MCP server's `create_rule` tool, which PUTs
+  to `/rules/files/zzz_purple_loop.xml` on the Wazuh Manager API
+  (auth via `wazuh-jwt`, `overwrite=true`); blue then triggers the
+  matching `restart_manager` tool which hits `/manager/restart` —
+  the manager is unavailable for ~30-90 s while daemons cycle, then
+  the new rules take effect. See
+  [`mcp/mcp-indexer/docker-lab-config.json:49-72`](../../mcp/mcp-indexer/docker-lab-config.json).
+  The filename's `zzz_` prefix guarantees it loads after
+  `webapp_rules.xml` (which provides the 302xxx parent rule IDs that
+  purple-loop children typically `<if_sid>` into).
 
 **Why it ships this way**
 
 Detection content is part of the lab's static surface — rules don't
-move during a run. What *is* dynamic is whether their detections lead
+move during a run, and the Wazuh manager would have to restart to
+pick up changes. What *is* dynamic is whether their detections lead
 to enforcement (active-response) or to incident workflow (Shuffle →
 TheHive). Both of those are wired but disabled at first boot.
 
 **What blue would do to raise it**
 
-- Author `zzz_purple_loop.xml` to add custom child rules during a
-  purple-loop iteration. The manager hot-reloads it.
-- Add custom rules to `etc/rules/` and reference them from
-  `<active-response>` blocks (see next section) to couple detection to
-  enforcement.
+- Author `zzz_purple_loop.xml` via the `mcp-indexer` MCP server's
+  `create_rule` tool, then call `restart_manager` to apply. The
+  ~30-90 s manager downtime is the cost of a rule update during a
+  purple-loop iteration.
+- Add custom rules to `etc/rules/` (manager image rebuild + `lab
+  start`) and reference them from `<active-response>` blocks (see
+  next section) to couple detection to enforcement.
 
 **Source of truth**
 
@@ -259,18 +267,33 @@ kali's own IPs and wedging the purple loop.
 
 ## MISP IOCs
 
-**Tag:** `STARTING POSTURE`
+**Tag:** `STARTING POSTURE` for the `aptl:enforce` graduation lane.
+The MISP store itself ships **empty at first lab boot**, but a prime
+research scenario seed exists out-of-band — see below.
 
 **Default state**
 
-- The MISP container starts with upstream image defaults. **No
-  APTL-side seed IOCs**, no pre-loaded events, no `aptl:enforce` tags.
+- The MISP container starts with upstream image defaults. **At first
+  `aptl lab start`, no APTL-side IOCs are loaded**: there are no
+  pre-existing events, no `aptl:enforce`-tagged attributes, no
+  graduated indicators.
+- An optional seed script
+  ([`scripts/seed-misp.sh`](../../scripts/seed-misp.sh)) creates an
+  "APTL Lab - Known Threat Actors" event with kali-IP indicators and
+  injection-pattern signatures. It is **not run automatically by
+  `aptl lab start`** — it must be invoked explicitly (or via
+  [`scripts/seed-prime.sh`](../../scripts/seed-prime.sh), which is
+  the prime-scenario master seed). The seed script is idempotent.
+  IOCs created by `seed-misp.sh` are **not tagged `aptl:enforce`** at
+  seed time — graduation to enforcement is still blue's per-iteration
+  decision.
 - The `aptl-misp-suricata-sync` daemon
   ([`src/aptl/services/misp_suricata_sync/main.py`](../../src/aptl/services/misp_suricata_sync/main.py))
   runs continuously and polls MISP for attributes tagged
   `aptl:enforce` (default tag in
   [`src/aptl/services/misp_suricata_sync/config.py:150`](../../src/aptl/services/misp_suricata_sync/config.py)).
-  An empty MISP returns zero attributes; the service writes an empty
+  An empty MISP — or a seeded MISP with no `aptl:enforce` tags —
+  returns zero matching attributes; the sync service writes an empty
   rule file (`ioc_count=0`) and reloads Suricata.
 - If MISP is briefly unreachable, the sync service preserves
   last-known-good rules
@@ -280,11 +303,13 @@ kali's own IPs and wedging the purple loop.
 **Why it ships this way**
 
 [ADR-022](../adrs/adr-022-misp-driven-suricata-rules.md) defines a
-**tag-graduated enforcement model**: blue authors and curates
-intelligence in MISP, then graduates an indicator to enforcement by
-adding the `aptl:enforce` tag. The starting state has zero graduated
-indicators on purpose — the lab gives blue *somewhere to grow into*.
-An empty store is normal default behavior, not a workflow failure.
+**tag-graduated enforcement model**: an indicator's presence in MISP
+does not by itself trigger enforcement. Blue must add the
+`aptl:enforce` tag to graduate it. This separates
+"intelligence-curation" (which seed scripts can prime) from
+"enforcement" (which the default posture leaves empty). At first
+boot — and even after the optional seed runs — the enforcement lane
+has zero graduated indicators on purpose.
 
 **What blue would do to raise it**
 
@@ -312,44 +337,59 @@ An empty store is normal default behavior, not a workflow failure.
 
 **Default state**
 
-- Wazuh forwards level-≥10 alerts to Shuffle via a `<integration>`
-  block at
-  [`config/wazuh_cluster/wazuh_manager.conf:316-320`](../../config/wazuh_cluster/wazuh_manager.conf).
-- **No APTL-side Shuffle workflow seeds exist in the repo.** A search
-  for `*shuffle*workflow*` / `*workflow.json` returns zero results.
-  The Wazuh→Shuffle integration is wired (Wazuh will POST alerts), but
-  Shuffle itself ships with whatever its upstream image carries — no
-  workflows authored under source control by APTL.
-- Any "APTL Alert to Case"–style workflow that exists in a running
-  Shuffle instance was provisioned via the Shuffle UI/API at runtime
-  (likely by a previous lab session, manual operator action, or future
-  blue iteration). It is **not** part of the repo's default contract.
+- Wazuh declares an `<integration>` block forwarding level-≥10 alerts
+  to Shuffle
+  ([`config/wazuh_cluster/wazuh_manager.conf:316-320`](../../config/wazuh_cluster/wazuh_manager.conf)).
+- The integration is gated by a **runtime-written webhook URL**. The
+  custom forwarder script
+  ([`config/wazuh_cluster/custom-shuffle:3`](../../config/wazuh_cluster/custom-shuffle))
+  reads the URL from `/var/ossec/etc/shuffle_webhook_url` inside the
+  manager container and **silently exits if the file does not exist**.
+  Until that file is written, Wazuh's `<integration>` block is wired
+  but inert.
+- The seed script
+  ([`scripts/seed-shuffle.sh`](../../scripts/seed-shuffle.sh)) creates
+  the `APTL Alert to Case` workflow inside the running Shuffle
+  instance via Shuffle's REST API, captures the resulting webhook
+  URL, and writes it into the Wazuh manager container at
+  `/var/ossec/etc/shuffle_webhook_url`. The prime master seed
+  ([`scripts/seed-prime.sh:165-169`](../../scripts/seed-prime.sh))
+  invokes it. The seed script is idempotent.
+- **`seed-shuffle.sh` is not run by `aptl lab start`.** Until an
+  operator (or `seed-prime.sh`) runs it, no `APTL Alert to Case`
+  workflow exists in Shuffle and the Wazuh→Shuffle forwarder no-ops.
 
 **Why it ships this way**
 
-Shuffle workflow design is iteration content: blue's per-run job is to
-define case enrichment, escalation, auto-isolation, etc. Pre-seeding
-playbooks would steer the experiment. The integration boundary
-(Wazuh's `<integration>` forwarder) is in source control; the workflow
-content is not.
+The integration boundary (Wazuh's `<integration>` block, the
+`custom-shuffle` forwarder, the webhook-file gate) is in source
+control. The workflow *content* is created by an explicit seed step
+so iteration runbooks can choose whether to prime the prime-scenario
+defaults or start fresh. The `custom-shuffle` script's silent-exit
+behaviour means a freshly-started lab has no half-wired forwarder
+firing into a missing webhook.
 
 **What blue would do to raise it**
 
-- Author Shuffle workflows that consume Wazuh alerts, query MISP for
-  context, enrich TheHive cases, or trigger automated containment
-  outside the Wazuh AR path (where appropriate).
-- Lower the `<level>` threshold in the integration block if blue wants
-  Shuffle to see medium-severity alerts.
-- If a workflow becomes part of the lab's permanent baseline, export
-  it from Shuffle and check the JSON into `config/shuffle/` (a path
-  that does not yet exist) so the contract is verifiable from the repo.
+- Run `scripts/seed-shuffle.sh` to provision the prime workflow and
+  webhook gate, or `scripts/seed-prime.sh` for the full prime-scenario
+  seed.
+- Author additional Shuffle workflows that consume Wazuh alerts,
+  query MISP for context, enrich TheHive cases, or trigger automated
+  containment outside the Wazuh AR path. Workflow content lives in
+  Shuffle's own DB; check exports into `scripts/seed-*.sh` patterns
+  if a workflow becomes part of the permanent baseline.
+- Lower the `<level>` threshold in the manager `<integration>` block
+  if blue wants Shuffle to see medium-severity alerts.
 
 **Source of truth**
 
 | Surface | File |
 |---|---|
-| Wazuh→Shuffle forwarder | [`config/wazuh_cluster/wazuh_manager.conf:316-320`](../../config/wazuh_cluster/wazuh_manager.conf) |
-| Shuffle workflow seeds | none in repo — runtime-only |
+| Wazuh→Shuffle forwarder (declaration) | [`config/wazuh_cluster/wazuh_manager.conf:316-320`](../../config/wazuh_cluster/wazuh_manager.conf) |
+| Forwarder script (gated by webhook file) | [`config/wazuh_cluster/custom-shuffle`](../../config/wazuh_cluster/custom-shuffle) |
+| Workflow seed script | [`scripts/seed-shuffle.sh`](../../scripts/seed-shuffle.sh) |
+| Prime master seed | [`scripts/seed-prime.sh`](../../scripts/seed-prime.sh) |
 
 ---
 
@@ -398,12 +438,21 @@ seeds these intentional vulnerabilities:
 
 | Surface | What ships | Line |
 |---|---|---|
-| Weak password — `michael.thompson` | `Summer2024` (seasonal, no special char) | [65](../../containers/ad/provision-users.sh) |
-| Weak password — `jessica.williams` | `password123` (trivial) | [82](../../containers/ad/provision-users.sh) |
+| Weak password — `michael.thompson` | trivial seasonal pattern (string in source) | [65](../../containers/ad/provision-users.sh) |
+| Weak password — `jessica.williams` | trivial dictionary pattern (string in source) | [82](../../containers/ad/provision-users.sh) |
 | Over-privilege — `emily.chen` | DevOps account in `Domain Admins` | [62](../../containers/ad/provision-users.sh) |
 | Over-privilege — `svc-backup` | service account in `Domain Admins` | [119](../../containers/ad/provision-users.sh) |
 | Kerberoastable — `svc-sql` | SPN set on `MSSQLSvc/db.techvault.local` | [104-105](../../containers/ad/provision-users.sh) |
 | Kerberoastable — `svc-web` | SPN set on `HTTP/webapp.techvault.local` | [112](../../containers/ad/provision-users.sh) |
+
+The actual password literals are in
+[`containers/ad/provision-users.sh`](../../containers/ad/provision-users.sh) —
+this document deliberately does not reproduce them. Running labs are
+intended to be isolated by `internal: true` Docker networks; if a
+deployment exposes the AD container externally, the in-source
+passwords become a credential-reuse risk against that deployment.
+Operators should rotate them post-provision when the container is not
+strictly local.
 
 **Samba configuration baseline**
 
@@ -441,13 +490,19 @@ intentional weaknesses on stdout for transparency
 
 **What blue would do to raise it**
 
-- *Detect:* enable AD detection rules
-  ([`ad_rules.xml`](../../config/wazuh_cluster/ad_rules.xml)) and the
-  `301002` AD Kerberos active-response block.
-- *Harden:* rotate weak passwords, remove `emily.chen` /
+- *Observe:* AD detection rules
+  ([`ad_rules.xml`](../../config/wazuh_cluster/ad_rules.xml)) are
+  already loaded and fire on matches by default (BASELINE ENABLED).
+  Blue does not need to enable them — they observe automatically.
+- *Couple to enforcement:* enable the `301002` AD Kerberos
+  `<active-response>` block (delete `<disabled>yes</disabled>` in
+  [`config/wazuh_cluster/wazuh_manager.conf:289-295`](../../config/wazuh_cluster/wazuh_manager.conf))
+  to convert detections of rule 301002 into an `aptl-firewall-drop`
+  action.
+- *Harden the target:* rotate weak passwords, remove `emily.chen` /
   `svc-backup` from `Domain Admins`, set SPN protections on
   `svc-sql`/`svc-web`, override the Samba default to disable
-  anonymous null-sessions.
+  anonymous null-session policy.
 
 **Source of truth**
 
@@ -524,14 +579,18 @@ When adding a new defensive surface (a new SOAR playbook, a new
 active-response command, a new Suricata rule family, a new MISP tag
 graduation lane), the contract is:
 
-1. **Ship it disabled by default.** No new feature should silently
-   raise the lab's starting posture. If the surface is a tool, ship
-   it wired but inactive (`<disabled>yes</disabled>`, empty seed,
-   absent file). If the surface is a target weakness, document why
-   it's intentional.
-2. **Tag it.** Edit this document and add a section (or row) under the
-   right banner: `STARTING POSTURE` for new wired-but-inactive blue
-   tools; `WEAKNESS BY DESIGN` for new intentional target flaws.
+1. **Default to inert downstream coupling.** New *detection content*
+   (Wazuh rules, Suricata `alert` rules) may ship enabled — that's
+   BASELINE ENABLED — but the *response coupling* (active-response
+   blocks, Shuffle workflows, MISP `aptl:enforce` graduation, AR
+   webhook URLs) must ship disabled, empty, or absent. The rule of
+   thumb: *raising baseline detection sensitivity is fine; coupling a
+   detection to automated action by default is not*. Blue's per-iter
+   work is to flip the coupling on.
+2. **Tag it.** Edit this document and add a section (or row) under
+   the right banner: `STARTING POSTURE` for new wired-but-inactive
+   coupling; `BASELINE ENABLED` for new always-on detection;
+   `WEAKNESS BY DESIGN` for new intentional target flaws.
 3. **Cite source of truth.** Every new section must cite the
    files/lines where the default is set so a developer can grep to
    confirm.
@@ -555,17 +614,38 @@ Read it as design intent, not as documentation of today's behavior.
 [SCN-001](https://github.com/Brad-Edwards/aptl/issues/263)'s statement
 in Ground Control describes a `mode (red/blue/purple)` field on each
 scenario YAML that would gate which posture defaults apply per run.
-**The current Scenario SDL
-([`src/aptl/core/sdl/scenario.py`](../../src/aptl/core/sdl/scenario.py))
-does not have a `mode` field.** The post-refactor SDL (ADRs
-[014](../adrs/adr-014-scenario-description-language.md),
-[015](../adrs/adr-015-declarative-sdl-objectives.md),
-[017](../adrs/adr-017-sdl-runtime-layer.md)) defines `name`,
-`description`, and 21 OCR/extended sections — none named `mode`.
-SCN-001's vocabulary is being reconciled in
-[issue #263](https://github.com/Brad-Edwards/aptl/issues/263).
 
-When `mode` lands, the intended contract is:
+**Today's reality is split:**
+
+- Multiple scenario YAML files **do carry a `mode:` field** at the
+  top level — for example
+  [`scenarios/prime-enterprise.yaml:50`](../../scenarios/prime-enterprise.yaml)
+  declares `mode: purple`, and similar declarations exist in
+  `ad-domain-compromise.yaml`, `detect-brute-force.yaml`,
+  `lateral-movement-data-theft.yaml`, `webapp-compromise.yaml`, and
+  `recon-nmap-scan.yaml`. These were authored against the
+  pre-refactor scenario format.
+- The current post-refactor Scenario SDL
+  ([`src/aptl/core/sdl/scenario.py`](../../src/aptl/core/sdl/scenario.py))
+  has **no `mode` field**. The SDL post-refactor (ADRs
+  [014](../adrs/adr-014-scenario-description-language.md),
+  [015](../adrs/adr-015-declarative-sdl-objectives.md),
+  [017](../adrs/adr-017-sdl-runtime-layer.md)) defines `name`,
+  `description`, and 21 OCR/extended sections — none named `mode`.
+  Combined with `extra="forbid"` on `SDLModel`
+  ([`src/aptl/core/sdl/_base.py:14`](../../src/aptl/core/sdl/_base.py)),
+  these scenarios will fail Pydantic structural validation if loaded
+  through `parse_sdl`. They are effectively pre-refactor fixtures.
+
+**No runtime mode-gating exists.** Even when a scenario YAML's `mode:`
+is read, no code branches on the value to apply per-mode posture
+defaults. The split is being reconciled in
+[issue #263](https://github.com/Brad-Edwards/aptl/issues/263) — the
+options there are to update SCN-001's vocabulary to match the current
+SDL, restore the missing fields, or split SCN-001 into a current-state
+piece plus a forward-looking mode-gating requirement.
+
+When mode lands as a real SDL feature, the intended contract is:
 
 - `red` runs — full WEAKNESS-BY-DESIGN baseline; STARTING POSTURE
   surfaces stay disabled. Red exploits; defenders observe.
@@ -578,6 +658,6 @@ When `mode` lands, the intended contract is:
   raises the posture (enables AR, adds an IOC, authors a
   `zzz_purple_loop.xml` rule); red attacks again.
 
-**Today, none of this is enforced by the SDL.** Per-run posture
-defaults are whatever this document says they are: the same baseline
-regardless of "scenario mode," because no scenario carries a mode.
+**Until #263 is resolved, the per-run posture is whatever this
+document describes** — the same baseline regardless of any `mode:`
+value present in scenario YAML.

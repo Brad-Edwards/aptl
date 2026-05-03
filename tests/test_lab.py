@@ -727,14 +727,15 @@ class TestSyncCredentialsStep:
             ),
         )
 
-    def test_dashboard_value_error_fails_lab_start(self, mocker, tmp_path):
-        """A containment ValueError from sync_dashboard_config aborts the step."""
+    def test_dashboard_containment_breach_fails_lab_start(self, mocker, tmp_path):
+        """A PathContainmentError from sync_dashboard_config aborts the step."""
+        from aptl.core.credentials import PathContainmentError
         from aptl.core.lab import _step_sync_credentials
 
         ctx = self._ctx(mocker, tmp_path)
         mocker.patch(
             "aptl.core.lab.sync_dashboard_config",
-            side_effect=ValueError(
+            side_effect=PathContainmentError(
                 "Resolved config path /etc/passwd escapes project root /tmp/x"
             ),
         )
@@ -748,15 +749,16 @@ class TestSyncCredentialsStep:
         # Manager sync must not run after a guardrail breach.
         manager_mock.assert_not_called()
 
-    def test_manager_value_error_fails_lab_start(self, mocker, tmp_path):
-        """A containment ValueError from sync_manager_config aborts the step."""
+    def test_manager_containment_breach_fails_lab_start(self, mocker, tmp_path):
+        """A PathContainmentError from sync_manager_config aborts the step."""
+        from aptl.core.credentials import PathContainmentError
         from aptl.core.lab import _step_sync_credentials
 
         ctx = self._ctx(mocker, tmp_path)
         mocker.patch("aptl.core.lab.sync_dashboard_config")
         mocker.patch(
             "aptl.core.lab.sync_manager_config",
-            side_effect=ValueError(
+            side_effect=PathContainmentError(
                 "Resolved config path /etc/something escapes project root /tmp/x"
             ),
         )
@@ -781,6 +783,26 @@ class TestSyncCredentialsStep:
         result = _step_sync_credentials(ctx)
 
         # None means the step is non-fatal and orchestration continues.
+        assert result is None
+
+    def test_bare_value_error_is_warned_not_fatal(self, mocker, tmp_path):
+        """ValueError that is *not* PathContainmentError is non-fatal.
+
+        Future regex/parsing/validation errors raised from the credential
+        writers must not be misclassified as security guardrail breaches.
+        """
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(mocker, tmp_path)
+        mocker.patch(
+            "aptl.core.lab.sync_dashboard_config",
+            side_effect=ValueError("regex parse failed: invalid escape"),
+        )
+        mocker.patch("aptl.core.lab.sync_manager_config")
+
+        result = _step_sync_credentials(ctx)
+
+        # Bare ValueError → non-fatal warning, lab start continues.
         assert result is None
 
     def test_happy_path_returns_none(self, mocker, tmp_path):

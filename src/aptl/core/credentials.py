@@ -32,6 +32,17 @@ _DASHBOARD_RELPATH = Path("config/wazuh_dashboard/wazuh.yml")
 _MANAGER_RELPATH = Path("config/wazuh_cluster/wazuh_manager.conf")
 
 
+class PathContainmentError(ValueError):
+    """Raised when a resolved config path escapes the project root.
+
+    Subclasses :class:`ValueError` for backward compatibility — every
+    historical caller that does ``except ValueError`` keeps working —
+    but lets policy code (e.g. ``_step_sync_credentials``) match on
+    the narrow type so unrelated parsing/validation ``ValueError``\\ s
+    are not misclassified as security guardrail breaches.
+    """
+
+
 def _resolve_within_project(
     project_dir: Path, relative_path: Path,
 ) -> Path:
@@ -42,13 +53,13 @@ def _resolve_within_project(
     location cannot escape the project root.
 
     Raises:
-        ValueError: if the resolved target is not contained under the
-            resolved project root.
+        PathContainmentError: if the resolved target is not contained
+            under the resolved project root.
     """
     project_root = project_dir.resolve()
     target = (project_dir / relative_path).resolve()
     if not target.is_relative_to(project_root):
-        raise ValueError(
+        raise PathContainmentError(
             f"Resolved config path {target} escapes project root"
             f" {project_root}; refusing to read or write."
         )

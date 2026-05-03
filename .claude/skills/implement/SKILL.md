@@ -247,7 +247,7 @@ Otherwise:
    - Request every page until all issues are retrieved (`ps=500` plus `p=2,3,...` until `total` is covered). Do not truncate.
    - Repeat the same query with `types=SECURITY_HOTSPOT` via `api/hotspots/search?projectKey=...&pullRequest=...&status=TO_REVIEW` so security hotspots are not missed — they are a separate endpoint from plain issues.
 
-4. **Fix ALL open issues the query returns — code-smell, bug, vulnerability, and security hotspot, regardless of severity (INFO through BLOCKER).** This follows the same "fix everything, no triage" rule as the review loop (see `Review loop rules` below): no "low priority", "out of scope", "follow-up PR", or "style-only" deferrals. If you believe a specific finding should be left unfixed (false positive, intentional pattern, etc.), STOP and ask the user for explicit permission before marking it resolved in SonarCloud or skipping it.
+4. **Fix every open issue the query returns — code-smell, bug, vulnerability, and security hotspot, every severity from INFO to BLOCKER, pre-existing or not.** Same rule as the review loop below. If you think a finding is dangerous to fix, unwise in context, or a false positive, STOP and ask the user. Wait for their answer; do not push commits while the question is open.
 
 5. For each fix cycle:
    - Apply the fixes.
@@ -266,11 +266,10 @@ Every review step below (Codex cross-model, test quality review) follows the **s
 
 1. **Invoke the review.**
 2. **Read the FULL output.** Do not stop after the first few findings.
-3. **Fix ALL issues the reviewer identifies — blocking or not, severity-rated or not, "nitpick" or not.** There is no triage bucket. "Low priority", "nice to have", "follow-up PR", "out of scope" are not valid reasons to skip a finding.
-4. **If you cannot or believe you should not fix a specific finding**, you MUST stop and ask the user for explicit permission to leave it unfixed. Do not decide unilaterally. State the finding, why you think it should be skipped, and wait for the user's answer. Resume only after they explicitly confirm.
-5. **Re-run the SAME review after fixing.** Do not assume your fixes are complete — the re-run is the verification.
-6. **Repeat until the reviewer reports zero findings, OR the cycle cap is hit.**
-7. **Cycle cap: 5 iterations per review step.** If a review still reports findings after 5 invoke→fix→re-run cycles, STOP and escalate to the user with the full history of findings, fixes, and remaining issues. Do not loop indefinitely.
+3. **Fix every finding, pre-existing or not.** If you think a finding is dangerous to fix, unwise in context, or a false positive, STOP and ask the user. Wait for their answer; do not push commits while the question is open.
+4. **Re-run the SAME review after fixing.** Do not assume your fixes are complete — the re-run is the verification.
+5. **Repeat until the reviewer reports zero findings, OR the cycle cap is hit.**
+6. **Cycle cap: 5 iterations per review step.** If a review still reports findings after 5 invoke→fix→re-run cycles, STOP and escalate to the user with the full history of findings, fixes, and remaining issues. Do not loop indefinitely.
 
 For every cycle, after applying fixes, commit and push BEFORE re-running the review so the reviewer sees the updated tree. Format every fix commit as `Fix review findings (<reviewer>, cycle <N>)` so the loop history is visible in git log.
 
@@ -288,7 +287,7 @@ For every cycle, after applying fixes, commit and push BEFORE re-running the rev
 5. If `finding_count` is 0, skip to Step 13.
 6. Otherwise, for EACH entry in `comments`, run the following fix/verify loop:
    1. Read the comment body if needed: `gh api /repos/<owner>/<repo>/pulls/comments/<comment_id>`.
-   2. Fix the finding locally. Apply the same "fix every finding, no triage, ask user permission if you will not fix" rules from the **Review loop rules** section above.
+   2. Fix the finding locally. Apply the **Review loop rules** above: fix every finding, pre-existing or not; STOP and ask the user only if you think a specific finding is dangerous to fix, unwise in context, or a false positive.
    3. Run the local completion gate to make sure nothing regressed locally.
    4. Call `gc_codex_verify_finding` with `repo_path`, `pr_number`, and the `comment_id`. Codex will read your local changes and decide:
       - **`status: "resolved"`** — the review thread has already been marked resolved on GitHub. Move on to the next comment.
@@ -302,7 +301,7 @@ For every cycle, after applying fixes, commit and push BEFORE re-running the rev
 
 This review is the corrective for two systemic failure modes that bloat the codebase if left unchecked: **god classes / god methods / god functions / oversized files**, and **rebuilding helpers locally** instead of using the cross-cutting concerns the codebase already has (project logger, validation schemas, error types, config loaders, HTTP/DB session wrappers, test fixtures). Both compound silently if every PR adds another instance.
 
-**Every finding gets fixed.** No HARD/SOFT split, no "out of scope" carve-out, no deferred-to-follow-up bucket. If the review surfaces it, the PR addresses it before shipping. This applies to pre-existing bloat in any file the PR touched: "it was already like that" is not a valid skip — the goal is to sort the codebase out as we go, not to ratchet quality down by deferring. The same "no triage, ask user permission for any specific finding you believe should not be fixed" rule from Step 12 applies; the default answer is fix.
+**Every finding gets fixed, pre-existing or not.** This applies to bloat in any file the PR touched: "it was already like that" is not a valid skip — the goal is to sort the codebase out as we go, not to ratchet quality down by deferring. If you think a specific finding is dangerous to fix, unwise in context, or a false positive, STOP and ask the user. Wait for their answer; do not push commits while the question is open.
 
 #### Run the review
 
@@ -350,7 +349,7 @@ Apply the **Review loop rules** (above Step 12). Fix every finding the review su
 **CRITICAL: You MUST use the Skill tool to invoke the review-tests skill.**
 
 1. Call the Skill tool with `skill="review-tests"` to invoke the test quality review.
-2. Apply the **Review loop rules** above: fix every finding, ask user permission for anything you will not fix (including "warning" level — the review loop rules apply to warnings too, there is no triage bucket), re-invoke `skill="review-tests"` after each fix cycle, cap at 5 cycles.
+2. Apply the **Review loop rules** above: fix every finding, pre-existing or not, including "warning" level. STOP and ask the user only if you think a specific finding is dangerous to fix, unwise in context, or a false positive. Re-invoke `skill="review-tests"` after each fix cycle, cap at 5 cycles.
 
 ### Step 14: Final CI re-verification
 

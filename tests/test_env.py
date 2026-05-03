@@ -263,21 +263,25 @@ class TestFindPlaceholderEnvValues:
         }
         assert find_placeholder_env_values(env) == []
 
-    def test_flags_unchanged_misp_api_key_placeholder(self):
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "PLEASEREPLACEMEPLEASEREPLACEMEPLEASEREPLACE",
+            "CHANGE_ME_misp_api_key",
+            "changeme",
+            "ReplaceMeWithRealKey",
+            "REPLACE_ME_with_real_key",
+        ],
+    )
+    def test_flags_each_placeholder_marker(self, value):
+        """Every documented marker (case-insensitive) must trigger the
+        placeholder guard so the lab refuses to start with an unmodified
+        .env.example value."""
         from aptl.core.env import find_placeholder_env_values
 
-        env = {
-            "MISP_API_KEY": "PLEASEREPLACEMEPLEASEREPLACEMEPLEASEREPLACE",
-        }
-        assert find_placeholder_env_values(env) == ["MISP_API_KEY"]
-
-    def test_flags_change_me_prefix(self):
-        from aptl.core.env import find_placeholder_env_values
-
-        env = {
-            "MISP_API_KEY": "CHANGE_ME_misp_api_key",
-        }
-        assert find_placeholder_env_values(env) == ["MISP_API_KEY"]
+        assert find_placeholder_env_values({"MISP_API_KEY": value}) == [
+            "MISP_API_KEY"
+        ]
 
     def test_skips_absent_or_empty_values(self):
         from aptl.core.env import find_placeholder_env_values

@@ -17,6 +17,7 @@ PLACEHOLDER_MARKERS: tuple[str, ...] = (
     "CHANGEME",
     "PLEASEREPLACEME",
     "REPLACE_ME",
+    "REPLACEME",
 )
 
 

@@ -337,15 +337,25 @@ class TestTranslator:
         assert len(result.rules) == 1
         assert "2001:db8::1" in result.rules[0].text
 
-    def test_sha256_collected_into_hash_list(self):
-        h = "a" * 64
-        result = _make_translator().translate([_attr("sha256", h)])
-        assert result.hash_lists == {"sha256": [h]}
+    @pytest.mark.parametrize(
+        "hash_type, digest_len, keyword",
+        [
+            ("md5", 32, "filemd5"),
+            ("sha1", 40, "filesha1"),
+            ("sha256", 64, "filesha256"),
+        ],
+    )
+    def test_hash_collected_into_per_type_sidecar_list(
+        self, hash_type, digest_len, keyword
+    ):
+        h = "a" * digest_len
+        result = _make_translator().translate([_attr(hash_type, h)])
+        assert result.hash_lists == {hash_type: [h]}
         assert len(result.rules) == 1
         rule = result.rules[0].text
         # Path is relative to Suricata's default-rule-path so the
         # documented filemd5/filesha1/filesha256 lookup works.
-        assert "filesha256:misp/misp-sha256.list" in rule
+        assert f"{keyword}:misp/misp-{hash_type}.list" in rule
         assert h not in rule  # the hash itself lives in the sidecar list
 
     def test_malformed_hash_skipped_with_warning(self, caplog):
@@ -373,19 +383,6 @@ class TestTranslator:
         h_upper = "A" * 64
         result = _make_translator().translate([_attr("sha256", h_upper)])
         assert result.hash_lists == {"sha256": ["a" * 64]}
-
-    def test_md5_collected_into_hash_list(self):
-        h = "b" * 32
-        result = _make_translator().translate([_attr("md5", h)])
-        assert result.hash_lists == {"md5": [h]}
-        rule = result.rules[0].text
-        assert "filemd5:misp/misp-md5.list" in rule
-
-    def test_sha1_collected_into_hash_list(self):
-        h = "c" * 40
-        result = _make_translator().translate([_attr("sha1", h)])
-        assert result.hash_lists == {"sha1": [h]}
-        assert "filesha1:misp/misp-sha1.list" in result.rules[0].text
 
     def test_one_hash_rule_emitted_per_type_regardless_of_count(self):
         attrs = [
@@ -877,42 +874,28 @@ class TestMispClient:
         for record in caplog.records:
             assert "super-secret-key-XYZ" not in record.getMessage()
 
+    @pytest.mark.parametrize(
+        "verify_ssl, ca_cert, want_insecure, want_ca_str",
+        [
+            (False, None, True, None),
+            (True, Path("/etc/aptl/lab-ca.pem"), False, "/etc/aptl/lab-ca.pem"),
+            (True, None, False, None),
+        ],
+        ids=["insecure", "verify_with_ca", "verify_system_trust"],
+    )
     @patch("aptl.services.misp_suricata_sync.misp_client._curl_json")
-    def test_passes_insecure_when_verify_ssl_false(self, mock_curl):
-        from aptl.services.misp_suricata_sync.misp_client import MispClient
-
-        mock_curl.return_value = {"response": {"Attribute": []}}
-        MispClient(self._cfg(misp_verify_ssl=False)).fetch_tagged_attributes()
-        kwargs = mock_curl.call_args.kwargs
-        assert kwargs["insecure"] is True
-        assert kwargs["ca_cert_path"] is None
-
-    @patch("aptl.services.misp_suricata_sync.misp_client._curl_json")
-    def test_passes_ca_cert_when_verify_ssl_true_with_path(self, mock_curl):
-        from aptl.services.misp_suricata_sync.misp_client import MispClient
-
-        mock_curl.return_value = {"response": {"Attribute": []}}
-        MispClient(
-            self._cfg(
-                misp_verify_ssl=True,
-                misp_ca_cert_path=Path("/etc/aptl/lab-ca.pem"),
-            )
-        ).fetch_tagged_attributes()
-        kwargs = mock_curl.call_args.kwargs
-        assert kwargs["insecure"] is False
-        assert kwargs["ca_cert_path"] == "/etc/aptl/lab-ca.pem"
-
-    @patch("aptl.services.misp_suricata_sync.misp_client._curl_json")
-    def test_uses_system_trust_when_verify_ssl_true_no_path(self, mock_curl):
+    def test_translates_tls_config_to_curl_kwargs(
+        self, mock_curl, verify_ssl, ca_cert, want_insecure, want_ca_str
+    ):
         from aptl.services.misp_suricata_sync.misp_client import MispClient
 
         mock_curl.return_value = {"response": {"Attribute": []}}
         MispClient(
-            self._cfg(misp_verify_ssl=True, misp_ca_cert_path=None)
+            self._cfg(misp_verify_ssl=verify_ssl, misp_ca_cert_path=ca_cert)
         ).fetch_tagged_attributes()
         kwargs = mock_curl.call_args.kwargs
-        assert kwargs["insecure"] is False
-        assert kwargs["ca_cert_path"] is None
+        assert kwargs["insecure"] is want_insecure
+        assert kwargs["ca_cert_path"] == want_ca_str
 
 
 class TestCurlTLSWiring:
@@ -952,26 +935,29 @@ class TestCurlTLSWiring:
         )
         return captured, result
 
-    def test_insecure_emits_dash_k_and_no_cacert(self, monkeypatch):
-        cap, _ = self._run(monkeypatch, insecure=True)
-        cmd = cap["cmd"]
-        assert "-k" in cmd
-        assert "--cacert" not in cmd
-
-    def test_verify_with_ca_emits_cacert_no_dash_k(self, monkeypatch):
+    @pytest.mark.parametrize(
+        "insecure, ca_cert_path, want_dash_k, want_cacert",
+        [
+            # mode 1: insecure → -k, no --cacert
+            (True, None, True, False),
+            # mode 2: verify-on with CA bundle → --cacert, no -k
+            (False, "/etc/aptl/lab-ca.pem", False, True),
+            # mode 3: verify-on, no CA bundle → system trust (neither flag)
+            (False, None, False, False),
+        ],
+        ids=["insecure", "verify_with_ca", "verify_system_trust"],
+    )
+    def test_tls_argv_matches_posture(
+        self, monkeypatch, insecure, ca_cert_path, want_dash_k, want_cacert
+    ):
         cap, _ = self._run(
-            monkeypatch, insecure=False, ca_cert_path="/etc/aptl/lab-ca.pem"
+            monkeypatch, insecure=insecure, ca_cert_path=ca_cert_path
         )
         cmd = cap["cmd"]
-        assert "-k" not in cmd
-        assert "--cacert" in cmd
-        assert "/etc/aptl/lab-ca.pem" in cmd
-
-    def test_verify_no_ca_uses_system_trust(self, monkeypatch):
-        cap, _ = self._run(monkeypatch, insecure=False, ca_cert_path=None)
-        cmd = cap["cmd"]
-        assert "-k" not in cmd
-        assert "--cacert" not in cmd
+        assert ("-k" in cmd) is want_dash_k
+        assert ("--cacert" in cmd) is want_cacert
+        if want_cacert:
+            assert ca_cert_path in cmd
 
     def test_api_key_never_appears_in_argv(self, monkeypatch):
         """The Authorization header — which carries the MISP API key — is

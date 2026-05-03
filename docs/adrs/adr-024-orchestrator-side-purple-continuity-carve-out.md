@@ -16,7 +16,7 @@ Three classes of bypass slip past the in-band defense:
 
 1. **Custom AR scripts.** Blue can author their own active-response binary that calls `iptables` directly without consulting the whitelist. The wrapper protects only the canonical command; nothing in Wazuh forces blue to use it.
 2. **Manager-side raw commands.** Wazuh `<command>` blocks accept arbitrary shell argv. A blue-authored command that calls `iptables` from the manager (or from another path) inside an in-process agent's namespace bypasses the whitelist entirely.
-3. **Manual researcher mistakes.** A researcher debugging blue's tradecraft might `docker exec aptl-victim iptables -I INPUT -s 172.20.4.30 -j DROP` and forget to undo it. Subsequent iterations look broken without an obvious cause.
+3. **Manual researcher mistakes.** A researcher debugging blue's tradecraft might `docker exec aptl-webapp iptables -I INPUT -s 172.20.4.30 -j DROP` and forget to undo it. Subsequent iterations look broken without an obvious cause.
 
 In every case, the symptom is the same: a target's `iptables -L INPUT` ends up with a `-A INPUT -s <kali_ip> -j DROP|REJECT` rule that has no port, protocol, payload, or behavior qualifier. That rule wedges the loop.
 

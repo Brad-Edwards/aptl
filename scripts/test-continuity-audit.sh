@@ -22,7 +22,11 @@
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-/home/atomik/src/aptl}"
-TARGET="${TARGET:-aptl-victim}"
+# ``aptl-webapp`` is in IN_PROCESS_TARGETS (#248): NET_ADMIN + in-process
+# agent. ``aptl-victim``/``aptl-workstation`` ship without NET_ADMIN and
+# are not in ``default_targets()`` — this script needs a target the
+# audit will actually inspect.
+TARGET="${TARGET:-aptl-webapp}"
 KALI_SRC_IP="${KALI_SRC_IP:-172.20.4.30}"
 
 log()  { echo "[test-continuity-audit] $*"; }

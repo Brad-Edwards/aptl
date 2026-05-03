@@ -42,10 +42,31 @@ def _resolve_backend(project_dir: Path) -> DeploymentBackend:
         raise typer.Exit(code=1)
     try:
         config = load_config(config_path)
-    except (FileNotFoundError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     return get_backend(config, project_dir)
+
+
+def _ensure_project_container(backend: DeploymentBackend, name: str) -> None:
+    """Reject container names that aren't part of this lab's compose project.
+
+    Defense-in-depth against typos and against shared-daemon scenarios
+    where the docker host has containers from other projects: ``aptl
+    container shell`` / ``logs`` should never `exec`/`logs` into a
+    non-APTL container even if the user types its name.
+    """
+    project_names = {
+        c.get("Name") for c in backend.container_list(all_containers=True)
+    }
+    project_names.discard(None)
+    if name not in project_names:
+        typer.echo(
+            f"container {name!r} is not part of this lab's compose project. "
+            f"Run `aptl container list` to see valid names.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
 
 
 @app.command("list")
@@ -89,6 +110,7 @@ def logs(
 ) -> None:
     """Show logs for a specific container."""
     backend = _resolve_backend(project_dir)
+    _ensure_project_container(backend, name)
     exit_code = backend.container_logs(name, follow=follow, tail=tail)
     if exit_code != 0:
         raise typer.Exit(code=exit_code)
@@ -106,6 +128,7 @@ def shell(
 ) -> None:
     """Open an interactive shell inside a running container."""
     backend = _resolve_backend(project_dir)
+    _ensure_project_container(backend, name)
     exit_code = backend.container_shell(name, shell=shell)
     if exit_code != 0:
         raise typer.Exit(code=exit_code)

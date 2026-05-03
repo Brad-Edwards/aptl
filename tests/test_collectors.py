@@ -140,6 +140,7 @@ class TestCollectContainerLogs:
             "aptl-victim",
             since="2025-01-01T00:00:00+00:00",
             until="2025-01-01T23:59:59+00:00",
+            timeout=30,
         )
 
     def test_skips_failed_container(self):

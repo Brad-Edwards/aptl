@@ -116,16 +116,24 @@ class RangeSnapshot:
         return asdict(self)
 
 
-def _run_cmd(args: list[str], timeout: int = 15) -> str:
-    """Run a command and return stdout, or empty string on failure."""
+def _docker_out(
+    backend: "DeploymentBackend",
+    args: list[str],
+    timeout: int = 15,
+) -> str:
+    """Run a host-level docker command via the backend; return stripped
+    stdout or empty on any failure.
+
+    Goes through ``backend.host_run`` so SSH-remote labs route through
+    ``DOCKER_HOST=ssh://…`` and the snapshot inspects the right daemon.
+    """
     try:
-        result = subprocess.run(
-            args, capture_output=True, text=True, timeout=timeout
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
-        log.debug("Command %s failed: %s", args, e)
+        result = backend.host_run(args, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError) as e:
+        log.debug("host_run %s failed: %s", args, e)
+        return ""
+    if result.returncode == 0:
+        return result.stdout.strip()
     return ""
 
 
@@ -152,11 +160,13 @@ def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
 
     versions.python_version = sys.version.split()[0]
 
-    docker_out = _run_cmd(["docker", "version", "--format", "{{.Server.Version}}"])
+    docker_out = _docker_out(
+        backend, ["docker", "version", "--format", "{{.Server.Version}}"]
+    )
     if docker_out:
         versions.docker_version = docker_out
 
-    compose_out = _run_cmd(["docker", "compose", "version", "--short"])
+    compose_out = _docker_out(backend, ["docker", "compose", "version", "--short"])
     if compose_out:
         versions.compose_version = compose_out
 
@@ -265,16 +275,16 @@ def _get_container_snapshots(
 ) -> list[ContainerSnapshot]:
     """Snapshot all aptl- containers with network IPs and port mappings.
 
-    Container enumeration still uses raw ``docker ps`` to catch any
-    container the user named ``aptl-*`` even if it's outside the current
-    compose project — that's intentional, defensive coverage. Per-container
-    inspection routes through the backend so SSH-remote labs work the same
-    way.
+    Goes through ``backend.host_run`` so SSH-remote labs enumerate the
+    remote daemon. Filters by the ``aptl-`` name prefix to catch any
+    containers the user named that way even if they're outside the
+    current compose project — defensive coverage.
     """
     fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
-    out = _run_cmd([
-        "docker", "ps", "-a", "--filter", "name=aptl-", "--format", fmt,
-    ])
+    out = _docker_out(
+        backend,
+        ["docker", "ps", "-a", "--filter", "name=aptl-", "--format", fmt],
+    )
     if not out:
         return []
     snapshots: list[ContainerSnapshot] = []
@@ -363,11 +373,16 @@ def _get_wazuh_rules_snapshot(
     return snap
 
 
-def _get_network_snapshots() -> list[NetworkSnapshot]:
+def _get_network_snapshots(
+    backend: "DeploymentBackend",
+) -> list[NetworkSnapshot]:
     """Snapshot Docker networks with aptl prefix."""
     import json as _json
 
-    out = _run_cmd(["docker", "network", "ls", "--filter", "name=aptl", "--format", "{{.Name}}"])
+    out = _docker_out(
+        backend,
+        ["docker", "network", "ls", "--filter", "name=aptl", "--format", "{{.Name}}"],
+    )
     if not out:
         return []
 
@@ -377,7 +392,7 @@ def _get_network_snapshots() -> list[NetworkSnapshot]:
         if not net_name:
             continue
 
-        inspect_out = _run_cmd(["docker", "network", "inspect", net_name])
+        inspect_out = _docker_out(backend, ["docker", "network", "inspect", net_name])
         if not inspect_out:
             snapshots.append(NetworkSnapshot(name=net_name))
             continue
@@ -508,7 +523,7 @@ def capture_snapshot(
         software=_get_software_versions(backend),
         containers=containers,
         wazuh_rules=_get_wazuh_rules_snapshot(backend),
-        networks=_get_network_snapshots(),
+        networks=_get_network_snapshots(backend),
         config_hashes=_hash_config_files(config_dir),
         services=_get_service_endpoints(containers),
         ssh=_get_ssh_endpoints(containers),

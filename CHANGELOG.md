@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Default lab posture is the service running with zero IOCs tagged `aptl:enforce` — blue's job per iteration is to populate intel and graduate it. Submitting an IOC via the `aptl-threatintel` MCP with the `aptl:enforce` tag, then waiting one sync interval (default 300s), produces a rule in `misp-iocs.rules` and a Suricata reload.
 - This issue's "blocking" framing in #250 is updated by ADR-019: in the lab's current IDS-only posture, MISP-driven rules are detection, not prevention. Real packet-level enforcement remains the Wazuh AR path (#248/#249).
+- **Upgrade note for existing labs:** the `aptl-misp` container only honors `ADMIN_KEY` on first database init. If you're upgrading from a lab that ran with the previous hardcoded admin key (`JHx...`), MISP's database still has that old key and the new `${MISP_API_KEY}` env var won't take effect — the sync service will then fail to authenticate forever. Run `aptl lab stop -v` to wipe the persisted MISP volume, set `MISP_API_KEY` in `.env`, and `aptl lab start` for a fresh init. Skip this step only if you can rotate the admin key in MISP's UI yourself before the next sync attempt.
 
 ## [6.6.0] - 2026-05-02
 

@@ -241,3 +241,60 @@ class TestEnvVarsFromDict:
         }
         with pytest.raises(ValueError, match="INDEXER_PASSWORD"):
             env_vars_from_dict(env)
+
+
+class TestFindPlaceholderEnvValues:
+    """Tests for the .env.example placeholder guard.
+
+    The check exists because consumers like the MISP server accept
+    whatever ADMIN_KEY env they're given without their own placeholder
+    rejection. Without this guard, an operator who copies .env.example
+    and forgets to replace MISP_API_KEY ends up with MISP running using
+    the documented placeholder as its admin API key.
+    """
+
+    def test_returns_empty_list_when_all_values_replaced(self):
+        from aptl.core.env import find_placeholder_env_values
+
+        env = {
+            "MISP_API_KEY": "abc123def456" * 4,
+            "THEHIVE_SECRET": "real-thehive-secret",
+            "SHUFFLE_API_KEY": "real-shuffle-key",
+        }
+        assert find_placeholder_env_values(env) == []
+
+    def test_flags_unchanged_misp_api_key_placeholder(self):
+        from aptl.core.env import find_placeholder_env_values
+
+        env = {
+            "MISP_API_KEY": "PLEASEREPLACEMEPLEASEREPLACEMEPLEASEREPLACE",
+        }
+        assert find_placeholder_env_values(env) == ["MISP_API_KEY"]
+
+    def test_flags_change_me_prefix(self):
+        from aptl.core.env import find_placeholder_env_values
+
+        env = {
+            "MISP_API_KEY": "CHANGE_ME_misp_api_key",
+        }
+        assert find_placeholder_env_values(env) == ["MISP_API_KEY"]
+
+    def test_skips_absent_or_empty_values(self):
+        from aptl.core.env import find_placeholder_env_values
+
+        env = {
+            "MISP_API_KEY": "",
+            # THEHIVE_SECRET intentionally absent
+        }
+        assert find_placeholder_env_values(env) == []
+
+    def test_flags_multiple_placeholders(self):
+        from aptl.core.env import find_placeholder_env_values
+
+        env = {
+            "MISP_API_KEY": "PLEASEREPLACEME...",
+            "THEHIVE_SECRET": "real-secret",
+            "SHUFFLE_API_KEY": "REPLACE_ME_with_real_key",
+        }
+        flagged = find_placeholder_env_values(env)
+        assert sorted(flagged) == ["MISP_API_KEY", "SHUFFLE_API_KEY"]

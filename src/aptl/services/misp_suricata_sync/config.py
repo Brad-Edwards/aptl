@@ -16,8 +16,16 @@ from pydantic import BaseModel, ConfigDict, field_validator
 _DEFAULT_RULES_PATH = "/var/lib/suricata/rules/misp/misp-iocs.rules"
 _DEFAULT_SOCKET_PATH = "/var/run/suricata/suricata-command.socket"
 _MIN_INTERVAL_SECONDS = 30
-_SID_BASE_MIN = 1_500_000
-_SID_BASE_MAX = 2_999_999
+
+# SID_BASE bounds + the 24-bit translator offset (16_777_216) must keep
+# generated SIDs inside Suricata's 32-bit SID space (max 2**31-1 by
+# convention) and clear of the bundled ET Open / local.rules ranges
+# (~1M-3M). The default 99_000_000 + 0xFFFFFF lands at ~115_777_215,
+# well above any standard ruleset.
+_SID_OFFSET_MAX = 0xFFFFFF
+_SID_BASE_MIN = 10_000_000
+_SID_BASE_MAX = 2_000_000_000 - _SID_OFFSET_MAX
+_DEFAULT_SID_BASE = 99_000_000
 
 # Marker substrings that indicate the operator pasted a placeholder from
 # `.env.example` instead of a real key. Rejected at startup so the lab
@@ -30,10 +38,31 @@ _PLACEHOLDER_MARKERS = (
 )
 
 
+_TRUE_TOKENS = frozenset({"1", "true", "yes", "on"})
+_FALSE_TOKENS = frozenset({"0", "false", "no", "off"})
+
+
 def _bool_env(value: str | None, default: bool) -> bool:
+    """Strict boolean env-var parser.
+
+    Unknown tokens (typos like ``ture``) raise ``ValueError`` rather than
+    silently falling through to ``False`` — the silent path turned a
+    harmless typo into a security regression once already
+    (``MISP_VERIFY_SSL=ture`` would disable verification).
+    """
     if value is None:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    token = value.strip().lower()
+    if not token:
+        return default
+    if token in _TRUE_TOKENS:
+        return True
+    if token in _FALSE_TOKENS:
+        return False
+    raise ValueError(
+        f"Invalid boolean env value {value!r}; "
+        f"expected one of {sorted(_TRUE_TOKENS | _FALSE_TOKENS)}"
+    )
 
 
 class ServiceConfig(BaseModel):
@@ -115,6 +144,6 @@ class ServiceConfig(BaseModel):
             suricata_socket_path=Path(
                 os.environ.get("SURICATA_SOCKET_PATH", _DEFAULT_SOCKET_PATH)
             ),
-            sid_base=int(os.environ.get("SID_BASE", "2000000")),
+            sid_base=int(os.environ.get("SID_BASE", str(_DEFAULT_SID_BASE))),
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
         )

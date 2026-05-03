@@ -12,6 +12,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from aptl.utils.curl_safe import curl_json as _shared_curl_json
 from aptl.utils.logging import get_logger
 
 log = get_logger("collectors")
@@ -39,25 +40,20 @@ def _curl_json(
     insecure: bool = False,
     timeout: int = 120,
 ) -> dict | list | None:
-    """Make an HTTP request via curl and return parsed JSON, or None."""
-    cmd = ["curl", "-sf", url]
-    if insecure:
-        cmd.insert(1, "-k")
-    if auth:
-        cmd += ["-u", f"{auth[0]}:{auth[1]}"]
-    if auth_header:
-        cmd += ["-H", f"Authorization: {auth_header}"]
-    cmd += ["-H", "Content-Type: application/json"]
-    if body is not None:
-        cmd += ["-d", json.dumps(body)]
+    """Thin wrapper preserving the legacy collector signature.
 
-    result = _run_cmd(cmd, timeout=timeout)
-    if result is None or result.returncode != 0:
-        return None
-    try:
-        return json.loads(result.stdout)
-    except (json.JSONDecodeError, ValueError):
-        return None
+    Delegates to :func:`aptl.utils.curl_safe.curl_json` which centralises
+    secret-safe header handling, TLS posture, and timeout/error
+    semantics for every component that talks to a SOC tool.
+    """
+    return _shared_curl_json(
+        url,
+        auth=auth,
+        auth_header=auth_header,
+        body=body,
+        insecure=insecure,
+        timeout=timeout,
+    )
 
 
 def collect_wazuh_alerts(

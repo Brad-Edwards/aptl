@@ -26,12 +26,13 @@ log = get_logger("misp_suricata_sync")
 _CONTENT_SAFE = frozenset(
     b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/?=&"
 )
-# 20-bit mask gives ~1M offsets per SID_BASE so the generated range
-# (default 2_000_000 to 3_048_575) does not encroach on Suricata's bundled
-# `suricata.rules` (ET Open) or the operator-authored `local.rules`
-# regions. Collisions within the generated set are still detected and
-# logged; this just keeps the upper bound tight.
-_SID_OFFSET_MASK = 0xFFFFF
+# 24-bit mask gives ~16M slots so the birthday-paradox collision rate
+# stays low for realistic IOC counts (≤ 1000 IOCs ⇒ < 0.003% per pair,
+# ≤ 100k IOCs ⇒ ~30%). Combined with `SID_BASE = 99_000_000` (default)
+# this lands the generated range entirely outside Suricata's bundled
+# ET Open (2.x million range) and any sane operator-authored band.
+_SID_OFFSET_MASK = 0xFFFFFF
+_SID_OFFSET_RANGE = _SID_OFFSET_MASK + 1
 
 # Suricata file-hash keyword per MISP attribute type, plus expected digest
 # length in hex characters.
@@ -40,6 +41,10 @@ _HASH_KEYWORDS: dict[str, str] = {
     "sha1": "filesha1",
     "sha256": "filesha256",
 }
+# Public tuple consumers iterate over so they always touch every hash
+# type (even when MISP currently has zero IOCs of that type) and don't
+# leave a stale sidecar behind when the last IOC of a type is removed.
+HASH_TYPES = tuple(_HASH_KEYWORDS)
 _HASH_HEX_LENGTHS: dict[str, int] = {"md5": 32, "sha1": 40, "sha256": 64}
 _HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
 _NUMERIC_RE = re.compile(r"^[0-9]+$")

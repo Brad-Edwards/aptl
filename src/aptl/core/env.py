@@ -107,6 +107,46 @@ def validate_required_env(
     return missing
 
 
+# Substrings that identify a `.env.example` placeholder rather than a
+# real value. Checked case-insensitively. Matches the same set the
+# misp-suricata-sync service rejects at runtime so the lab fails the
+# same way at every layer when an operator forgets to replace a value.
+_PLACEHOLDER_MARKERS = (
+    "CHANGE_ME",
+    "CHANGEME",
+    "PLEASEREPLACEME",
+    "REPLACE_ME",
+)
+# Variables that, if present in .env, must not be the example placeholder.
+# These are values that consumers (MISP server, MCPs, sync service) accept
+# without their own placeholder check, so a fall-through here can land an
+# operator in a lab where MISP itself runs with the documented placeholder
+# as its admin API key.
+_NO_PLACEHOLDER_VARS = (
+    "MISP_API_KEY",
+    "THEHIVE_SECRET",
+    "SHUFFLE_API_KEY",
+)
+
+
+def find_placeholder_env_values(env: dict[str, str]) -> list[str]:
+    """Return the names of any sensitive vars whose value is a placeholder.
+
+    Returns an empty list when every sensitive var in ``env`` carries a
+    real-looking value or is absent. Caller decides whether to fail
+    closed; this function never raises.
+    """
+    bad: list[str] = []
+    for var in _NO_PLACEHOLDER_VARS:
+        value = env.get(var)
+        if not value:
+            continue
+        upper = value.upper()
+        if any(marker in upper for marker in _PLACEHOLDER_MARKERS):
+            bad.append(var)
+    return bad
+
+
 def env_vars_from_dict(env: dict[str, str]) -> EnvVars:
     """Build a typed EnvVars instance from a raw env dict.
 

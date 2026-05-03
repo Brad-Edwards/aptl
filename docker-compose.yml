@@ -313,7 +313,7 @@ services:
       - SYNC_INTERVAL_SECONDS=300
       - RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules
       - SURICATA_SOCKET_PATH=/var/run/suricata/suricata-command.socket
-      - SID_BASE=2000000
+      - SID_BASE=99000000
       - LOG_LEVEL=INFO
     volumes:
       - suricata_command_socket:/var/run/suricata

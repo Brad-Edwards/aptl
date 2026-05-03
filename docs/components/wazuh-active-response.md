@@ -33,7 +33,7 @@ The script deploys to every Wazuh agent in the lab (4 in-process + 2 sidecars = 
 
 | Command | Honors whitelist? | What it does | Use case |
 |---|---|---|---|
-| `aptl-firewall-drop` | yes | Wraps upstream `firewall-drop`; consults the kali whitelist before applying iptables drop | Source-IP-based blocking (the canonical AR command) |
+| `aptl-firewall-drop` | yes | Standalone iptables AR script; consults the kali whitelist before applying an INPUT-chain drop | Source-IP-based blocking (the canonical AR command) |
 | `firewall-drop` | **no** | Bare upstream script; iptables drop without whitelist check | Avoid in this lab — use `aptl-firewall-drop` instead |
 | `host-deny` | no | Appends to `/etc/hosts.deny` via TCP wrappers | SSH/SMB source bans |
 | `disable-account` | no | Disables an OS or AD user account | Credential abuse / compromised account scenarios |

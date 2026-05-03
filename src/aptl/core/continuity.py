@@ -181,6 +181,42 @@ class ParsedRule:
     tokens: list[str] = field(default_factory=list)
 
 
+def _peek_flag_value(
+    rule_tokens: list[str], i: int,
+) -> tuple[str | None, int] | None:
+    """Read the value (if any) for the flag at ``rule_tokens[i]``.
+
+    Returns ``(value, advance)`` on success — ``value`` is ``None`` for
+    standalone flags, ``advance`` is the number of tokens consumed (1
+    or 2). Returns ``None`` if a flag-with-value is missing its value.
+    """
+    flag = rule_tokens[i]
+    takes_value = flag in _FLAGS_WITH_VALUE
+    if takes_value:
+        if i + 1 >= len(rule_tokens):
+            return None
+        return rule_tokens[i + 1], 2
+    return None, 1
+
+
+def _classify_flag(flag: str, value: str | None) -> str:
+    """Classify an iptables option flag for the parser dispatch.
+
+    Returns ``"source"``, ``"action"``, ``"ignore"`` (non-restrictive
+    annotation/action-modifier flags), or ``"qualifier"`` (everything
+    else — treated as a granular matcher by :func:`is_blanket_kali_drop`).
+    """
+    if flag == "-s":
+        return "source"
+    if flag == "-j":
+        return "action"
+    if flag in _NON_RESTRICTIVE_FLAGS:
+        return "ignore"
+    if flag == "-m" and value in _NON_RESTRICTIVE_MATCH_MODULES:
+        return "ignore"
+    return "qualifier"
+
+
 def _walk_iptables_options(
     rule_tokens: list[str],
 ) -> tuple[str | None, str, set[str]] | None:
@@ -188,17 +224,8 @@ def _walk_iptables_options(
 
     Returns ``(source, action, qualifiers)`` on a well-formed sequence
     or ``None`` for any malformed shape (bare value with no flag,
-    flag-with-value missing its value, no ``-j`` clause).
-
-    Three flag classes are recognized:
-
-    - ``-s``/``-j`` are anchor fields and never enter qualifiers.
-    - ``--reject-with``, ``--comment``, and ``-m comment`` are
-      non-restrictive (action-modifier or annotation-only) and never
-      enter qualifiers.
-    - Everything else with the form of an option flag enters
-      qualifiers and is therefore treated as a granular matcher by
-      :func:`is_blanket_kali_drop`.
+    flag-with-value missing its value, no ``-j`` clause). Per-flag
+    classification lives in :func:`_classify_flag`.
     """
     source: str | None = None
     action: str | None = None
@@ -209,24 +236,21 @@ def _walk_iptables_options(
         flag = rule_tokens[i]
         if not flag.startswith("-"):
             return None
-
-        takes_value = flag in _FLAGS_WITH_VALUE
-        if takes_value and i + 1 >= len(rule_tokens):
+        peeked = _peek_flag_value(rule_tokens, i)
+        if peeked is None:
             return None
-        value = rule_tokens[i + 1] if takes_value else None
-        i += 2 if takes_value else 1
+        value, advance = peeked
+        i += advance
 
-        if flag == "-s":
+        kind = _classify_flag(flag, value)
+        if kind == "source":
             source = value
-            continue
-        if flag == "-j":
+        elif kind == "action":
             action = value
-            continue
-        if flag in _NON_RESTRICTIVE_FLAGS:
-            continue
-        if flag == "-m" and value in _NON_RESTRICTIVE_MATCH_MODULES:
-            continue
-        qualifiers.add(flag)
+        elif kind == "qualifier":
+            qualifiers.add(flag)
+        # "ignore" — non-restrictive flag; consumed but does not
+        # contribute to source/action/qualifiers.
 
     if action is None:
         return None

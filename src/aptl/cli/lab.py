@@ -182,6 +182,71 @@ def _resolve_run_store(project_root: Path, config) -> "LocalRunStore":
     return LocalRunStore(local_path)
 
 
+def _emit_continuity_text(events, target_list, run_id) -> None:
+    """Render the human-readable summary for ``aptl lab continuity-audit``."""
+    if not events:
+        typer.echo("Continuity audit: no blanket kali source-IP rules found.")
+        return
+
+    reverted = sum(1 for e in events if e.action == "REVERTED")
+    revert_failed = sum(1 for e in events if e.action == "REVERT_FAILED")
+    audit_failed = sum(1 for e in events if e.action == "AUDIT_FAILED")
+    typer.echo(
+        f"Continuity audit: {reverted} reverted, {revert_failed} revert-failed, "
+        f"{audit_failed} audit-failed across {len(target_list)} targets."
+    )
+    for event in events:
+        prefix, detail = _format_continuity_event_line(event)
+        line = f"  [{prefix}] {event.target}: {detail}"
+        if event.error:
+            line += f"  ({event.error})"
+        typer.echo(line)
+    if run_id:
+        typer.echo(
+            f"  events archived to run {run_id} continuity-events.jsonl"
+        )
+
+
+def _format_continuity_event_line(event) -> tuple[str, str]:
+    """Pick the per-event ``[PREFIX] target: detail`` shape."""
+    if event.action == "REVERTED":
+        return "REVERTED  ", event.rule_text
+    if event.action == "REVERT_FAILED":
+        return "REVERT-FAIL", event.rule_text
+    return "AUDIT-FAIL ", "iptables inspection failed"
+
+
+def _validate_continuity_targets(backend, targets: list[str]) -> None:
+    """Reject targets that don't belong to this compose project.
+
+    Codex security finding S1 (cycle 1): without this gate, ``--target``
+    could redirect ``container_exec`` at any container on a shared
+    daemon. ``backend.container_exists`` performs the compose-project
+    label check.
+    """
+    unknown = [t for t in targets if not backend.container_exists(t)]
+    if not unknown:
+        return
+    typer.echo(
+        f"error: not part of this lab project: {', '.join(unknown)}",
+        err=True,
+    )
+    raise typer.Exit(code=2)
+
+
+def _resolve_continuity_run_archive(
+    project_root: Path, config,
+) -> tuple[object | None, str | None]:
+    """If a scenario session is active with a run_id, build a RunStore."""
+    from aptl.core.session import ScenarioSession
+
+    state_dir = project_root / ".aptl"
+    session = ScenarioSession(state_dir).get_active()
+    if session is None or not session.run_id:
+        return None, None
+    return _resolve_run_store(project_root, config), session.run_id
+
+
 @app.command("continuity-audit")
 def continuity_audit(
     project_dir: Path = typer.Option(
@@ -224,6 +289,8 @@ def continuity_audit(
     formalizes a ``mode`` field (issue #263) the audit will gate on
     ``scenario.mode == PURPLE``.
     """
+    from dataclasses import asdict
+
     from aptl.cli._common import resolve_config_for_cli
     from aptl.core.continuity import (
         audit_and_revert,
@@ -231,26 +298,12 @@ def continuity_audit(
         kali_source_ips,
     )
     from aptl.core.deployment import get_backend
-    from aptl.core.session import ScenarioSession
 
     config, project_root = resolve_config_for_cli(project_dir)
     backend = get_backend(config, project_root)
 
     target_list = list(targets) if targets else default_targets()
-
-    # Validate every target belongs to this compose project. Without
-    # this gate, a `--target aptl-victim` could redirect to any other
-    # container on a shared Docker daemon — `backend.container_exec`
-    # has no project-ownership check, but `backend.container_exists`
-    # does (it inspects compose-project labels). Codex security
-    # finding S1 (cycle 1).
-    unknown = [t for t in target_list if not backend.container_exists(t)]
-    if unknown:
-        typer.echo(
-            f"error: not part of this lab project: {', '.join(unknown)}",
-            err=True,
-        )
-        raise typer.Exit(code=2)
+    _validate_continuity_targets(backend, target_list)
 
     wl_path = whitelist_path or (project_root / _DEFAULT_WHITELIST_RELPATH)
     kali_ips = set(kali_source_ips(whitelist_path=wl_path))
@@ -260,18 +313,7 @@ def continuity_audit(
             err=True,
         )
 
-    # If a scenario session is active with a run_id, archive the audit
-    # events to that run's events.jsonl. Otherwise the audit still runs;
-    # only the persistence layer is skipped (safe for ad-hoc smoke tests).
-    state_dir = project_root / ".aptl"
-    session_mgr = ScenarioSession(state_dir)
-    session = session_mgr.get_active()
-    run_store = None
-    run_id: Optional[str] = None
-    if session is not None and session.run_id:
-        run_store = _resolve_run_store(project_root, config)
-        run_id = session.run_id
-
+    run_store, run_id = _resolve_continuity_run_archive(project_root, config)
     log.info(
         "Continuity audit: targets=%s run_id=%s", target_list, run_id or "(none)",
     )
@@ -285,44 +327,12 @@ def continuity_audit(
     )
 
     if output_json:
-        from dataclasses import asdict
-
         typer.echo(json.dumps([asdict(e) for e in events], indent=2))
-        # Even in JSON mode, exit non-zero if anything failed so
-        # automation can detect partial success without parsing output.
-        if any(e.action != "REVERTED" for e in events):
-            raise typer.Exit(code=1)
-        return
+    else:
+        _emit_continuity_text(events, target_list, run_id)
 
-    if not events:
-        typer.echo("Continuity audit: no blanket kali source-IP rules found.")
-        return
-
-    reverted = sum(1 for e in events if e.action == "REVERTED")
-    revert_failed = sum(1 for e in events if e.action == "REVERT_FAILED")
-    audit_failed = sum(1 for e in events if e.action == "AUDIT_FAILED")
-    typer.echo(
-        f"Continuity audit: {reverted} reverted, {revert_failed} revert-failed, "
-        f"{audit_failed} audit-failed across {len(target_list)} targets."
-    )
-    for event in events:
-        if event.action == "REVERTED":
-            prefix = "REVERTED  "
-            detail = event.rule_text
-        elif event.action == "REVERT_FAILED":
-            prefix = "REVERT-FAIL"
-            detail = event.rule_text
-        else:
-            prefix = "AUDIT-FAIL "
-            detail = "iptables inspection failed"
-        line = f"  [{prefix}] {event.target}: {detail}"
-        if event.error:
-            line += f"  ({event.error})"
-        typer.echo(line)
-    if run_id:
-        typer.echo(f"  events archived to run {run_id} continuity-events.jsonl")
     # Exit non-zero if any target failed inspection or any reversion
     # failed — automation watching the exit code must see the signal.
     # Codex finding C5 (cycle 1).
-    if revert_failed or audit_failed:
+    if any(e.action != "REVERTED" for e in events):
         raise typer.Exit(code=1)

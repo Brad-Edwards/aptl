@@ -138,7 +138,7 @@ def _backend_exec(
     """Run a one-shot command via the backend; return stripped stdout or empty."""
     try:
         result = backend.container_exec(container, cmd, timeout=timeout)
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
+    except (subprocess.TimeoutExpired, OSError) as e:
         log.debug("backend.container_exec %s %s failed: %s", container, cmd, e)
         return ""
     if result.returncode == 0:
@@ -197,6 +197,69 @@ def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
     return versions
 
 
+_HEALTH_MARKERS = (
+    ("(healthy)", "healthy"),
+    ("(unhealthy)", "unhealthy"),
+    ("(health: starting)", "starting"),
+)
+
+
+def _parse_health(status: str) -> str:
+    for marker, label in _HEALTH_MARKERS:
+        if marker in status:
+            return label
+    return ""
+
+
+def _parse_labels(labels_str: str) -> dict[str, str]:
+    if not labels_str:
+        return {}
+    labels: dict[str, str] = {}
+    for pair in labels_str.split(","):
+        if "=" in pair:
+            k, v = pair.split("=", 1)
+            labels[k.strip()] = v.strip()
+    return labels
+
+
+def _parse_ports(ports_str: str) -> list[str]:
+    if not ports_str:
+        return []
+    return [p.strip() for p in ports_str.split(",") if p.strip()]
+
+
+def _container_networks(
+    backend: "DeploymentBackend", name: str
+) -> dict[str, str]:
+    networks: dict[str, str] = {}
+    info = backend.container_inspect(name)
+    net_data = info.get("NetworkSettings", {}).get("Networks", {})
+    if not isinstance(net_data, dict):
+        return networks
+    for net_name, net_cfg in net_data.items():
+        if isinstance(net_cfg, dict):
+            ip = net_cfg.get("IPAddress", "")
+            if ip:
+                networks[net_name] = ip
+    return networks
+
+
+def _row_to_snapshot(
+    backend: "DeploymentBackend", parts: list[str]
+) -> ContainerSnapshot:
+    name = parts[0]
+    return ContainerSnapshot(
+        name=name,
+        image=parts[1],
+        image_id=parts[2],
+        status=parts[3],
+        health=_parse_health(parts[3]),
+        labels=_parse_labels(parts[4]),
+        networks=_container_networks(backend, name),
+        ports=_parse_ports(parts[5] if len(parts) > 5 else ""),
+    )
+
+
 def _get_container_snapshots(
     backend: "DeploymentBackend",
 ) -> list[ContainerSnapshot]:
@@ -214,62 +277,12 @@ def _get_container_snapshots(
     ])
     if not out:
         return []
-
-    snapshots = []
+    snapshots: list[ContainerSnapshot] = []
     for line in out.splitlines():
         parts = line.split("\t", 5)
         if len(parts) < 5:
             continue
-
-        name = parts[0]
-        image = parts[1]
-        image_id = parts[2]
-        status = parts[3]
-        labels_str = parts[4]
-        ports_str = parts[5] if len(parts) > 5 else ""
-
-        # Parse health from status string
-        health = ""
-        if "(healthy)" in status:
-            health = "healthy"
-        elif "(unhealthy)" in status:
-            health = "unhealthy"
-        elif "(health: starting)" in status:
-            health = "starting"
-
-        # Parse labels
-        labels = {}
-        if labels_str:
-            for pair in labels_str.split(","):
-                if "=" in pair:
-                    k, v = pair.split("=", 1)
-                    labels[k.strip()] = v.strip()
-
-        # Parse port mappings
-        ports = [p.strip() for p in ports_str.split(",") if p.strip()] if ports_str else []
-
-        # Per-network IPs via the deployment backend (CLI-004 / ADR-023).
-        networks: dict[str, str] = {}
-        info = backend.container_inspect(name)
-        net_data = info.get("NetworkSettings", {}).get("Networks", {})
-        if isinstance(net_data, dict):
-            for net_name, net_cfg in net_data.items():
-                if isinstance(net_cfg, dict):
-                    ip = net_cfg.get("IPAddress", "")
-                    if ip:
-                        networks[net_name] = ip
-
-        snapshots.append(ContainerSnapshot(
-            name=name,
-            image=image,
-            image_id=image_id,
-            status=status,
-            health=health,
-            labels=labels,
-            networks=networks,
-            ports=ports,
-        ))
-
+        snapshots.append(_row_to_snapshot(backend, parts))
     return snapshots
 
 

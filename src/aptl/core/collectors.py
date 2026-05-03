@@ -121,7 +121,7 @@ def collect_suricata_eve(
             ["cat", "/var/log/suricata/eve.json"],
             timeout=30,
         )
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
+    except (subprocess.TimeoutExpired, OSError) as e:
         log.warning("Suricata EVE collection failed: %s", e)
         return []
     if result.returncode != 0:
@@ -308,7 +308,7 @@ def collect_container_logs(
             result = backend.container_logs_capture(
                 container, since=start_iso, until=end_iso
             )
-        except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
+        except (subprocess.TimeoutExpired, OSError) as e:
             log.warning("Log collection failed for %s: %s", container, e)
             continue
         if result.returncode != 0:

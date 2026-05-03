@@ -18,6 +18,7 @@ from typing import Optional
 import typer
 
 from aptl.cli._common import resolve_config_for_cli, resolve_run_store
+from aptl.core.config import AptlConfig
 from aptl.core.continuity import (
     ContinuityAuditResult,
     KaliCarveOutEvent,
@@ -26,6 +27,10 @@ from aptl.core.continuity import (
     kali_source_ips,
 )
 from aptl.core.deployment import get_backend
+from aptl.core.deployment.backend import DeploymentBackend
+from aptl.core.runstore import LocalRunStore
+from aptl.core.scenarios import ScenarioStateError
+from aptl.core.session import ScenarioSession
 from aptl.utils.logging import get_logger
 
 
@@ -175,7 +180,7 @@ def _continuity_exit_code(result: ContinuityAuditResult) -> int:
 
 
 def _validate_continuity_targets(
-    backend, targets: list[str], *, explicit: bool,
+    backend: DeploymentBackend, targets: list[str], *, explicit: bool,
 ) -> list[str]:
     """Resolve which targets the audit should actually inspect.
 
@@ -219,7 +224,11 @@ def _validate_continuity_targets(
     return present
 
 
-def _emit_continuity_text(events, target_list, run_id) -> None:
+def _emit_continuity_text(
+    events: list[KaliCarveOutEvent],
+    target_list: list[str],
+    run_id: str | None,
+) -> None:
     """Render the human-readable summary for ``aptl lab continuity-audit``."""
     if not events:
         typer.echo("Continuity audit: no blanket kali source-IP rules found.")
@@ -254,8 +263,11 @@ def _format_continuity_event_line(event: KaliCarveOutEvent) -> tuple[str, str]:
 
 
 def _resolve_continuity_run_archive(
-    project_root: Path, config, *, override: str | None = None,
-) -> tuple[object | None, str | None]:
+    project_root: Path,
+    config: AptlConfig,
+    *,
+    override: str | None = None,
+) -> tuple[LocalRunStore | None, str | None]:
     """Resolve the (run_store, run_id) pair for archive emission.
 
     Resolution order:
@@ -279,9 +291,6 @@ def _resolve_continuity_run_archive(
     once #263/RTE-001 wires the runtime engine. Until then, the
     ``--run-id`` override is the supported path for archive emission.
     """
-    from aptl.core.scenarios import ScenarioStateError
-    from aptl.core.session import ScenarioSession
-
     if override:
         store = resolve_run_store(project_root, config)
         _validate_run_id_for_archive(store, override, source="--run-id")
@@ -316,7 +325,11 @@ def _resolve_continuity_run_archive(
 
 
 def _validate_run_id_for_archive(
-    store, run_id: str, *, source: str, strict: bool = True,
+    store: LocalRunStore,
+    run_id: str,
+    *,
+    source: str,
+    strict: bool = True,
 ) -> None:
     """Common validation for explicit and session-derived run ids.
 

@@ -13,23 +13,20 @@ caring whether the daemon is local or remote.
 Follows the same Protocol pattern as RunStorageBackend in runstore.py.
 """
 
-from __future__ import annotations
-
 import subprocess
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 from aptl.core.deployment.errors import BackendTimeoutError  # noqa: F401  (re-export)
+from aptl.core.lab_types import LabResult, LabStatus
 
-if TYPE_CHECKING:
-    # Imported from ``aptl.core.lab_types`` (the leaf module) rather
-    # than ``aptl.core.lab``. Pre-#266 the import landed on lab.py
-    # directly, which created a load-order cycle (lab.py -> snapshot
-    # -> deployment.__init__ -> backend.py -> lab.py-mid-load) when
-    # lab.py was the first module loaded fresh. Together with
-    # ``from __future__ import annotations`` this keeps the types
-    # checkable without dragging the full lab module into the import
-    # graph at runtime.
-    from aptl.core.lab_types import LabResult, LabStatus
+# Imported from ``aptl.core.lab_types`` (the leaf module) rather than
+# ``aptl.core.lab``. Pre-#266 the import landed on lab.py directly,
+# which created a load-order cycle (lab.py -> snapshot ->
+# deployment.__init__ -> backend.py -> lab.py-mid-load) when lab.py
+# was the first module loaded fresh. The leaf module has no back-edges,
+# so the import is safe at runtime — keeping the names resolvable for
+# ``typing.get_type_hints(DeploymentBackend.start)`` and other runtime
+# introspection.
 
 
 class DeploymentBackend(Protocol):

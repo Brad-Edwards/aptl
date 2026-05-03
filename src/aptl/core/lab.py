@@ -16,7 +16,11 @@ import yaml
 
 from aptl.core.certs import ensure_ssl_certs
 from aptl.core.config import AptlConfig, find_config, load_config
-from aptl.core.credentials import sync_dashboard_config, sync_manager_config
+from aptl.core.credentials import (
+    PathContainmentError,
+    sync_dashboard_config,
+    sync_manager_config,
+)
 from aptl.core.env import (
     EnvVars,
     env_vars_from_dict,
@@ -356,15 +360,18 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     # trusted project root. See ADR-007 (security guardrail) and #266.
     #
     # Distinguishing two failure classes:
-    #   - ValueError from _resolve_within_project: a path-containment
-    #     guardrail breach. Treat as a hard lab-start failure — the
-    #     project layout is rejected and silently continuing would
-    #     defeat the security gate.
+    #   - PathContainmentError from _resolve_within_project: a
+    #     path-containment guardrail breach. Treat as a hard lab-start
+    #     failure — the project layout is rejected and silently
+    #     continuing would defeat the security gate. Catching the
+    #     narrow subclass (not bare ValueError) avoids misclassifying
+    #     unrelated parsing/validation errors as security violations.
     #   - Anything else (FileNotFoundError, regex no-match, write
-    #     errors): non-fatal. Log a warning, continue.
+    #     errors, parsing ValueErrors): non-fatal. Log a warning,
+    #     continue.
     try:
         sync_dashboard_config(ctx.project_dir, ctx.env.api_password)
-    except ValueError as exc:
+    except PathContainmentError as exc:
         log.error("Dashboard config containment violation: %s", exc)
         return LabResult(
             success=False, error=f"Dashboard config: {exc}",
@@ -373,7 +380,7 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
         log.warning("Failed to sync dashboard config: %s", exc)
     try:
         sync_manager_config(ctx.project_dir, ctx.env.wazuh_cluster_key)
-    except ValueError as exc:
+    except PathContainmentError as exc:
         log.error("Manager config containment violation: %s", exc)
         return LabResult(
             success=False, error=f"Manager config: {exc}",

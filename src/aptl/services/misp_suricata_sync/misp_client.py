@@ -3,13 +3,17 @@
 Reuses the curl-subprocess pattern established by ``aptl.core.collectors``:
 a fault-tolerant ``_curl_json`` helper that returns ``None`` on any failure
 instead of raising. Auth is bare API key in the ``Authorization`` header,
-matching the existing ``aptl-threatintel`` MCP convention.
+matching the existing ``aptl-threatintel`` MCP convention. The header is
+written to a 0600 temp file and passed to curl via ``-H @file`` so the API
+key never appears in argv (avoiding ``ps`` / ``/proc/*/cmdline`` leaks).
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 import time
 from typing import Any
 
@@ -52,19 +56,46 @@ def _curl_json(
         cmd.insert(1, "-k")
     elif ca_cert_path:
         cmd += ["--cacert", ca_cert_path]
-    cmd += ["-H", "Authorization: " + auth_header]
-    cmd += ["-H", "Content-Type: application/json"]
-    cmd += ["-H", "Accept: application/json"]
-    if body is not None:
-        cmd += ["-d", json.dumps(body)]
 
+    # Write the Authorization header to a 0600 temp file and pass curl
+    # `-H @file` so the API key never appears in argv. Same idea applies
+    # to the request body — `-d @file` keeps it off the command line.
+    fd, header_path = tempfile.mkstemp(prefix="aptl-misp-hdr-", text=True)
+    body_path: str | None = None
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout
-        )
-    except (subprocess.TimeoutExpired, OSError) as exc:
-        log.warning("MISP curl failed: %s", exc.__class__.__name__)
-        return None
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write("Authorization: " + auth_header + "\n")
+        cmd += ["-H", "@" + header_path]
+        cmd += ["-H", "Content-Type: application/json"]
+        cmd += ["-H", "Accept: application/json"]
+
+        if body is not None:
+            body_fd, body_path = tempfile.mkstemp(
+                prefix="aptl-misp-body-", text=True
+            )
+            os.fchmod(body_fd, 0o600)
+            with os.fdopen(body_fd, "w") as fh:
+                fh.write(json.dumps(body))
+            cmd += ["-d", "@" + body_path]
+
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            log.warning("MISP curl failed: %s", exc.__class__.__name__)
+            return None
+    finally:
+        try:
+            os.unlink(header_path)
+        except OSError:
+            pass
+        if body_path is not None:
+            try:
+                os.unlink(body_path)
+            except OSError:
+                pass
 
     if result.returncode != 0:
         log.warning(

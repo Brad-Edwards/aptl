@@ -71,6 +71,13 @@ class TestLabCommands:
         result = runner.invoke(app, ["lab", "status", "--help"])
         assert result.exit_code == 0
 
+    def test_lab_continuity_audit_exists(self, runner):
+        """aptl lab continuity-audit should be a valid command."""
+        from aptl.cli.main import app
+
+        result = runner.invoke(app, ["lab", "continuity-audit", "--help"])
+        assert result.exit_code == 0
+
 
 class TestConfigCommands:
     """Tests for aptl config subcommands."""
@@ -307,3 +314,502 @@ class TestLabStatusCommand:
 
         assert "not running" in result.stdout.lower()
         assert "docker daemon not running" in result.output
+
+
+def _continuity_result(events):
+    """Helper: wrap an event list in a ContinuityAuditResult for mocks."""
+    from aptl.core.continuity import ContinuityAuditResult
+
+    return ContinuityAuditResult(events=list(events), archive_error=None)
+
+
+class TestLabContinuityAuditCommand:
+    """Tests for the aptl lab continuity-audit CLI command (issue #252)."""
+
+    def _stub_cli_plumbing(self, mocker, project_dir: Path):
+        """Stub the CLI helpers so the command runs without a real lab.
+
+        ``continuity-audit`` lazily imports its dependencies inside the
+        command body (a CLI-startup-cost optimization), so tests must
+        patch the *source* module names — not ``aptl.cli.lab.<name>``,
+        which never has the attributes attached.
+        """
+        from aptl.core.config import AptlConfig
+        from aptl.core.session import ScenarioSession
+
+        mocker.patch(
+            "aptl.cli.continuity.resolve_config_for_cli",
+            return_value=(AptlConfig(), project_dir),
+        )
+        mocker.patch(
+            "aptl.cli.continuity.get_backend",
+            return_value=mocker.MagicMock(),
+        )
+        get_active = mocker.patch.object(
+            ScenarioSession, "get_active", return_value=None,
+        )
+        return get_active
+
+    def test_calls_audit_and_revert_with_default_targets(
+        self, runner, mocker, tmp_path
+    ):
+        from aptl.cli.main import app
+        from aptl.core.continuity import default_targets
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code == 0
+        mock_audit.assert_called_once()
+        # First positional arg is the backend stub, second is the targets
+        # list. Confirm targets default to default_targets().
+        kwargs = mock_audit.call_args.kwargs
+        positional = mock_audit.call_args.args
+        targets_arg = positional[1] if len(positional) > 1 else kwargs["targets"]
+        assert targets_arg == default_targets()
+
+    def test_no_findings_prints_clean_summary(
+        self, runner, mocker, tmp_path
+    ):
+        from aptl.cli.main import app
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code == 0
+        assert "no blanket kali source-IP rules" in result.stdout
+
+    def test_reports_reverted_events(self, runner, mocker, tmp_path):
+        from aptl.cli.main import app
+        from aptl.core.continuity import KaliCarveOutEvent
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        event = KaliCarveOutEvent(
+            timestamp="2026-05-03T12:00:00+00:00",
+            target="aptl-victim",
+            source_ip="172.20.4.30/32",
+            rule_text="-A INPUT -s 172.20.4.30/32 -j DROP",
+            action="REVERTED",
+            error=None,
+        )
+        mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([event]),
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code == 0
+        assert "1 reverted" in result.stdout
+        assert "aptl-victim" in result.stdout
+        assert "REVERTED" in result.stdout
+
+    def test_json_output(self, runner, mocker, tmp_path):
+        import json as json_mod
+        from aptl.cli.main import app
+        from aptl.core.continuity import KaliCarveOutEvent
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        event = KaliCarveOutEvent(
+            timestamp="2026-05-03T12:00:00+00:00",
+            target="aptl-victim",
+            source_ip="172.20.4.30/32",
+            rule_text="-A INPUT -s 172.20.4.30/32 -j DROP",
+            action="REVERTED",
+            error=None,
+        )
+        mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([event]),
+        )
+
+        result = runner.invoke(
+            app,
+            ["lab", "continuity-audit", "--project-dir", str(tmp_path), "--json"],
+        )
+
+        assert result.exit_code == 0
+        parsed = json_mod.loads(result.stdout)
+        assert isinstance(parsed, list) and len(parsed) == 1
+        assert parsed[0]["target"] == "aptl-victim"
+        assert parsed[0]["action"] == "REVERTED"
+
+    def test_target_option_overrides_defaults(
+        self, runner, mocker, tmp_path
+    ):
+        from aptl.cli.main import app
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "lab", "continuity-audit",
+                "--project-dir", str(tmp_path),
+                "--target", "aptl-victim",
+            ],
+        )
+
+        assert result.exit_code == 0
+        positional = mock_audit.call_args.args
+        kwargs = mock_audit.call_args.kwargs
+        targets_arg = positional[1] if len(positional) > 1 else kwargs["targets"]
+        assert targets_arg == ["aptl-victim"]
+
+    def test_fails_hard_when_whitelist_empty(self, runner, mocker, tmp_path):
+        # Codex finding C7 (cycle 2): a silent zero-exit on empty
+        # whitelist let automation believe the carve-out was clean
+        # while it was actually disabled. Treat empty/missing
+        # whitelist as a hard error.
+        from aptl.cli.main import app
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch("aptl.cli.continuity.kali_source_ips", return_value=[])
+        # The audit should not even be reached.
+        mock_audit = mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code != 0
+        assert "no kali IPs found" in result.output
+        mock_audit.assert_not_called()
+
+    def test_rejects_explicit_target_not_in_compose_project(
+        self, runner, mocker, tmp_path
+    ):
+        # Codex security finding S1 (cycle 1): without project-ownership
+        # validation, --target accepts any container name on the daemon.
+        # The CLI must reject targets that backend.container_exists()
+        # rules out, before they reach container_exec.
+        from aptl.cli.main import app
+        from aptl.core.config import AptlConfig
+        from aptl.core.session import ScenarioSession
+
+        mocker.patch(
+            "aptl.cli.continuity.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+        backend = mocker.MagicMock()
+        backend.container_exists.return_value = False
+        mocker.patch("aptl.cli.continuity.get_backend", return_value=backend)
+        mocker.patch.object(ScenarioSession, "get_active", return_value=None)
+        # Make sure the audit isn't reached.
+        mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
+
+        result = runner.invoke(
+            app,
+            [
+                "lab", "continuity-audit",
+                "--project-dir", str(tmp_path),
+                "--target", "foreign-container",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "foreign-container" in result.output
+        mock_audit.assert_not_called()
+
+    def test_default_targets_filtered_to_present_subset(
+        self, runner, mocker, tmp_path,
+    ):
+        # Codex finding C8 (cycle 2): when using defaults (no --target),
+        # a missing default in the active compose profile must NOT
+        # reject the entire command. Instead, filter to the present
+        # subset, warn about the skipped names, and audit the rest.
+        from aptl.cli.main import app
+        from aptl.core.config import AptlConfig
+        from aptl.core.session import ScenarioSession
+
+        mocker.patch(
+            "aptl.cli.continuity.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+
+        # Simulate a profile where only aptl-webapp is up.
+        backend = mocker.MagicMock()
+        backend.container_exists.side_effect = lambda name: name == "aptl-webapp"
+        mocker.patch("aptl.cli.continuity.get_backend", return_value=backend)
+        mocker.patch.object(ScenarioSession, "get_active", return_value=None)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code == 0
+        # Audit was called with only the present default.
+        positional = mock_audit.call_args.args
+        kwargs = mock_audit.call_args.kwargs
+        targets_arg = positional[1] if len(positional) > 1 else kwargs["targets"]
+        assert targets_arg == ["aptl-webapp"]
+        assert "skipping defaults not in active profile" in result.output
+
+    def test_run_id_override_wires_archive(self, runner, mocker, tmp_path):
+        # Without --run-id, the archival path is unreachable today
+        # (ScenarioSession.start() doesn't populate run_id). Explicit
+        # --run-id makes the archive reachable; full session wiring
+        # lands with #263/RTE-001.
+        from aptl.cli.main import app
+        from aptl.core.continuity import KaliCarveOutEvent
+
+        # Pre-create the run directory + manifest so --run-id passes
+        # the existence validation.
+        runs_dir = tmp_path / "runs"
+        run_id = "explicit-run-7f3"
+        run_dir = runs_dir / run_id
+        run_dir.mkdir(parents=True)
+        (run_dir / "manifest.json").write_text("{}")
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([
+                KaliCarveOutEvent(
+                    timestamp="2026-05-03T12:00:00+00:00",
+                    target="aptl-webapp",
+                    source_ip="172.20.4.30/32",
+                    rule_text="-A INPUT -s 172.20.4.30/32 -j DROP",
+                    action="REVERTED",
+                    error=None,
+                ),
+            ]),
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "lab", "continuity-audit",
+                "--project-dir", str(tmp_path),
+                "--run-id", run_id,
+            ],
+        )
+
+        assert result.exit_code == 0
+        kwargs = mock_audit.call_args.kwargs
+        assert kwargs.get("run_id") == run_id
+        assert kwargs.get("run_store") is not None
+
+    def test_run_id_traversal_rejected(self, runner, mocker, tmp_path):
+        # Path-traversal in --run-id would let LocalRunStore.append_jsonl
+        # write outside the run-storage base directory. Reject.
+        from aptl.cli.main import app
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
+
+        result = runner.invoke(
+            app,
+            [
+                "lab", "continuity-audit",
+                "--project-dir", str(tmp_path),
+                "--run-id", "../../escape",
+            ],
+        )
+
+        assert result.exit_code != 0
+        mock_audit.assert_not_called()
+
+    def test_run_id_must_exist_in_store(self, runner, mocker, tmp_path):
+        # A typo in --run-id would otherwise create an orphan archive
+        # directory that ``aptl runs list/show`` cannot discover. Fail
+        # loudly when the referenced run has no manifest.
+        from aptl.cli.main import app
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
+
+        result = runner.invoke(
+            app,
+            [
+                "lab", "continuity-audit",
+                "--project-dir", str(tmp_path),
+                "--run-id", "typo-not-a-real-run",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "does not exist" in result.output
+        mock_audit.assert_not_called()
+
+    def test_corrupt_session_does_not_block_audit(self, runner, mocker, tmp_path):
+        # A corrupt .aptl/session.json must degrade to "no archive",
+        # not block the audit. The firewall repair is more important
+        # than archive discovery.
+        from aptl.cli.main import app
+        from aptl.cli._common import resolve_config_for_cli  # noqa: F401
+        from aptl.core.config import AptlConfig
+        from aptl.core.scenarios import ScenarioStateError
+        from aptl.core.session import ScenarioSession
+
+        mocker.patch(
+            "aptl.cli.continuity.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+        backend = mocker.MagicMock()
+        backend.container_exists.return_value = True
+        mocker.patch("aptl.cli.continuity.get_backend", return_value=backend)
+        mocker.patch.object(
+            ScenarioSession, "get_active",
+            side_effect=ScenarioStateError("corrupt session"),
+        )
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        # Audit ran; no archive was wired.
+        assert result.exit_code == 0
+        mock_audit.assert_called_once()
+        kwargs = mock_audit.call_args.kwargs
+        assert kwargs.get("run_id") is None
+        assert kwargs.get("run_store") is None
+
+    def test_fails_when_no_default_targets_present(
+        self, runner, mocker, tmp_path,
+    ):
+        # If *none* of the defaults are running, there's nothing to
+        # audit and the CLI must fail loudly so automation notices.
+        from aptl.cli.main import app
+        from aptl.core.config import AptlConfig
+        from aptl.core.session import ScenarioSession
+
+        mocker.patch(
+            "aptl.cli.continuity.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+        backend = mocker.MagicMock()
+        backend.container_exists.return_value = False
+        mocker.patch("aptl.cli.continuity.get_backend", return_value=backend)
+        mocker.patch.object(ScenarioSession, "get_active", return_value=None)
+        mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code != 0
+        assert "none of the default targets" in result.output
+        mock_audit.assert_not_called()
+
+    def test_exits_nonzero_on_revert_failed(self, runner, mocker, tmp_path):
+        # Codex finding C5 (cycle 1): a REVERT_FAILED event must surface
+        # as a non-zero exit code so automation sees the signal.
+        from aptl.cli.main import app
+        from aptl.core.continuity import KaliCarveOutEvent
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([
+                KaliCarveOutEvent(
+                    timestamp="2026-05-03T12:00:00+00:00",
+                    target="aptl-webapp",
+                    source_ip="172.20.4.30/32",
+                    rule_text="-A INPUT -s 172.20.4.30/32 -j DROP",
+                    action="REVERT_FAILED",
+                    error="iptables: bad rule",
+                ),
+            ]),
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code != 0
+
+    def test_exits_nonzero_on_audit_failed(self, runner, mocker, tmp_path):
+        # AUDIT_FAILED (backend inspection failure) must also surface as
+        # a non-zero exit. Silent zero-exit on inspection failure was
+        # the precondition for codex finding C3.
+        from aptl.cli.main import app
+        from aptl.core.continuity import KaliCarveOutEvent
+
+        self._stub_cli_plumbing(mocker, tmp_path)
+        mocker.patch(
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mocker.patch(
+            "aptl.cli.continuity.audit_and_revert",
+            return_value=_continuity_result([
+                KaliCarveOutEvent(
+                    timestamp="2026-05-03T12:00:00+00:00",
+                    target="aptl-webapp",
+                    source_ip="",
+                    rule_text="",
+                    action="AUDIT_FAILED",
+                    error="iptables -S on aptl-webapp failed: ...",
+                ),
+            ]),
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code != 0

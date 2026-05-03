@@ -56,6 +56,27 @@ The parser handles:
 - SDL-only parsing with clean rejection of removed legacy `metadata` scenarios
 - Clean error messages for all failure modes
 
+### SCN-001 Reconciliation Guardrail
+
+SCN-001's original vocabulary (`metadata`, `mode`, container requirements,
+attack steps, hints, and expected detections) predates the SDL-only boundary.
+Any future work that reopens those concepts must reconcile them through the
+current SDL surface rather than restoring a second scenario schema.
+
+The authoritative schema remains `aptl.core.sdl.Scenario` plus the normal
+`parse_sdl()` structural and semantic validation path. New scenario-level
+fields such as `mode`, stable IDs, versions, difficulty, or estimates must be
+explicit Pydantic fields with SDL docs and tests; they must not be read from raw
+YAML side channels, inferred from filenames, or reintroduced through a legacy
+`ScenarioDefinition` in `aptl.core.scenarios`.
+
+Backend/runtime concerns stay out of the specification layer. Container
+requirements should flow through `nodes`, `infrastructure`, backend capability
+validation, and runtime planning. Objective checks, Wazuh queries, command
+execution, file checks, and expected detection probes belong in conditions,
+metrics/evaluations, evaluator adapters, or orchestration bindings; they should
+not become a second objective-validation schema embedded in SDL.
+
 ### Backward Compatibility
 
 None by design. This branch establishes an SDL-only boundary:

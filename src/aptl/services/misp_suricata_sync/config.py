@@ -19,6 +19,16 @@ _MIN_INTERVAL_SECONDS = 30
 _SID_BASE_MIN = 1_500_000
 _SID_BASE_MAX = 2_999_999
 
+# Marker substrings that indicate the operator pasted a placeholder from
+# `.env.example` instead of a real key. Rejected at startup so the lab
+# fails loudly rather than running with a known-bogus credential.
+_PLACEHOLDER_MARKERS = (
+    "CHANGE_ME",
+    "CHANGEME",
+    "PLEASEREPLACEME",
+    "REPLACE_ME",
+)
+
 
 def _bool_env(value: str | None, default: bool) -> bool:
     if value is None:
@@ -47,6 +57,13 @@ class ServiceConfig(BaseModel):
     def _validate_api_key(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("MISP_API_KEY must be set")
+        upper = v.strip().upper()
+        for marker in _PLACEHOLDER_MARKERS:
+            if marker in upper:
+                raise ValueError(
+                    "MISP_API_KEY is a placeholder; replace it in .env "
+                    "with a real value (see .env.example for instructions)"
+                )
         return v
 
     @field_validator("sync_interval_seconds")

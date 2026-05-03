@@ -92,6 +92,21 @@ class TestServiceConfig:
         with pytest.raises(ValueError):
             ServiceConfig.from_env()
 
+    def test_rejects_placeholder_api_key(self, monkeypatch):
+        """An unmodified .env.example placeholder must fail loudly at
+        startup rather than silently running with a known-bogus key."""
+        from aptl.services.misp_suricata_sync.config import ServiceConfig
+
+        for placeholder in (
+            "PLEASEREPLACEMEPLEASEREPLACEMEPLEASEREPLACE",
+            "CHANGE_ME_misp_api_key",
+            "changeme",
+            "REPLACE_ME_with_real_key",
+        ):
+            monkeypatch.setenv("MISP_API_KEY", placeholder)
+            with pytest.raises(ValidationError):
+                ServiceConfig.from_env()
+
     def test_rejects_interval_below_minimum(self, monkeypatch):
         from aptl.services.misp_suricata_sync.config import ServiceConfig
 
@@ -185,11 +200,13 @@ class TestTranslator:
         assert "dns.query" in rule
         assert 'content:"evil.example.com"' in rule
         assert "nocase" in rule
-        # ``dotprefix`` anchors the match so "evil.example.com" does not
-        # match "notevil.example.com".
+        # ``dotprefix`` + ``endswith`` together anchor the match so
+        # "evil.example.com" matches itself and subdomains but does NOT
+        # match "notevil.example.com" or "evil.example.com.evil".
         assert "dotprefix" in rule
+        assert "endswith" in rule
 
-    def test_url_with_path_emits_host_and_uri_match(self):
+    def test_http_url_with_path_emits_host_and_uri_match(self):
         result = _make_translator().translate(
             [_attr("url", "http://evil.example.com/payload")]
         )
@@ -198,8 +215,9 @@ class TestTranslator:
         assert 'http.host; content:"evil.example.com"' in rule
         assert 'http.uri; content:"/payload"' in rule
         assert "dotprefix" in rule  # anchored host match
+        assert "endswith" in rule
 
-    def test_url_with_only_host_emits_host_match_only(self):
+    def test_http_url_with_only_host_emits_host_match_only(self):
         """Host-only URL must not generate `content:"/"` (false-positive bait)."""
         result = _make_translator().translate(
             [_attr("url", "http://evil.example.com")]
@@ -209,32 +227,37 @@ class TestTranslator:
         assert "http.uri" not in rule
         assert 'content:"/"' not in rule
 
-    def test_url_with_root_path_skips_uri_match(self):
+    def test_http_url_with_root_path_skips_uri_match(self):
         result = _make_translator().translate(
             [_attr("url", "http://evil.example.com/")]
         )
         rule = result.rules[0].text
         assert "http.uri" not in rule
 
-    def test_url_with_query_preserves_query_in_uri_match(self):
+    def test_http_url_with_query_preserves_query_in_uri_match(self):
         result = _make_translator().translate(
             [_attr("url", "http://evil.example.com/path?id=1&x=2")]
         )
         rule = result.rules[0].text
         assert 'http.uri; content:"/path?id=1&x=2"' in rule
 
-    def test_url_with_credentials_and_port_extracts_host_only(self):
+    def test_https_url_emits_tls_sni_rule_not_http_uri(self):
+        """HTTPS URI bytes are encrypted; the IDS can only see SNI. The
+        translator MUST emit a TLS SNI rule, not a dead http rule."""
         result = _make_translator().translate(
             [_attr("url", "https://user:pass@evil.example.com:8443/payload")]
         )
         rule = result.rules[0].text
-        # urlparse strips userinfo and port from .hostname so the host
-        # match keyword sees only "evil.example.com".
-        host_match = rule.split("http.host", 1)[1].split("sid:", 1)[0]
-        assert 'content:"evil.example.com"' in host_match
-        assert "user" not in host_match
-        assert "8443" not in host_match
-        assert 'http.uri; content:"/payload"' in rule
+        assert rule.startswith("alert tls any any -> any any (")
+        assert "tls.sni" in rule
+        assert 'content:"evil.example.com"' in rule
+        # urlparse strips userinfo and port from .hostname.
+        sni_match = rule.split("tls.sni", 1)[1].split("sid:", 1)[0]
+        assert "user" not in sni_match
+        assert "8443" not in sni_match
+        # Path is not observable on HTTPS — must not appear in the rule.
+        assert "http.uri" not in rule
+        assert "/payload" not in sni_match
 
     def test_url_lowercases_host(self):
         result = _make_translator().translate(
@@ -250,6 +273,19 @@ class TestTranslator:
         rule = result.rules[0].text
         assert 'http.host; content:"evil.example.com"' in rule
         assert 'http.uri; content:"/payload"' in rule
+
+    def test_https_and_http_url_with_same_host_get_distinct_sids(self):
+        """Different schemes for the same host produce different rules with
+        distinct SIDs (no SID collision warning)."""
+        result = _make_translator().translate(
+            [
+                _attr("url", "http://evil.example.com/x"),
+                _attr("url", "https://evil.example.com/x"),
+            ]
+        )
+        assert len(result.rules) == 2
+        sids = {r.sid for r in result.rules}
+        assert len(sids) == 2
 
     def test_url_with_no_host_skipped_with_warning(self, caplog):
         caplog.set_level(logging.WARNING, logger="aptl.misp_suricata_sync")
@@ -433,6 +469,32 @@ class TestTranslator:
     def test_event_id_omitted_when_absent(self):
         result = _make_translator().translate([_attr("ip-dst", "198.51.100.42")])
         assert "metadata:" not in result.rules[0].text
+
+    def test_non_numeric_event_id_omitted_with_warning(self, caplog):
+        """A malformed event_id must not splice into the rule file (would
+        break Suricata reload). Drop with warning."""
+        caplog.set_level(logging.WARNING, logger="aptl.misp_suricata_sync")
+        result = _make_translator().translate(
+            [_attr("ip-dst", "198.51.100.42", event_id="42; sid:1; ;")]
+        )
+        rule = result.rules[0].text
+        assert "metadata:" not in rule
+        assert any(
+            "non-numeric event_id" in r.message.lower() for r in caplog.records
+        )
+
+    def test_sids_stay_within_documented_band(self):
+        """SID_BASE + 20-bit offset ⇒ generated SIDs fall in
+        [SID_BASE, SID_BASE + 0xFFFFF]. Anything wider risks colliding
+        with bundled `suricata.rules` / operator `local.rules`."""
+        attrs = [
+            _attr("ip-dst", f"198.51.100.{i}") for i in range(1, 50)
+        ] + [
+            _attr("domain", f"e{i}.example.com") for i in range(1, 50)
+        ]
+        result = _make_translator(sid_base=2_000_000).translate(attrs)
+        for r in result.rules:
+            assert 2_000_000 <= r.sid <= 2_000_000 + 0xFFFFF, r.sid
 
 
 class TestRenderRulesFile:
@@ -841,36 +903,63 @@ class TestCurlTLSWiring:
         captured: dict = {}
 
         def fake_run(cmd, *args, **kw):
-            captured["cmd"] = cmd
+            captured["cmd"] = list(cmd)
+            # Snapshot the contents of any -H @file / -d @file sidecars
+            # because they get unlinked before the test sees them.
+            for arg in cmd:
+                if isinstance(arg, str) and arg.startswith("@"):
+                    path = arg[1:]
+                    try:
+                        with open(path) as fh:
+                            captured.setdefault("sidecars", {})[path] = fh.read()
+                    except OSError:
+                        pass
             return MagicMock(returncode=0, stdout='{"ok":1}', stderr="")
 
         monkeypatch.setattr(mc.subprocess, "run", fake_run)
         result = mc._curl_json(
             "https://misp/x",
-            auth_header="k",
+            auth_header=kwargs.get("auth_header", "k"),
             insecure=kwargs.get("insecure", False),
             ca_cert_path=kwargs.get("ca_cert_path"),
             method="GET",
         )
-        return captured["cmd"], result
+        return captured, result
 
     def test_insecure_emits_dash_k_and_no_cacert(self, monkeypatch):
-        cmd, _ = self._run(monkeypatch, insecure=True)
+        cap, _ = self._run(monkeypatch, insecure=True)
+        cmd = cap["cmd"]
         assert "-k" in cmd
         assert "--cacert" not in cmd
 
     def test_verify_with_ca_emits_cacert_no_dash_k(self, monkeypatch):
-        cmd, _ = self._run(
+        cap, _ = self._run(
             monkeypatch, insecure=False, ca_cert_path="/etc/aptl/lab-ca.pem"
         )
+        cmd = cap["cmd"]
         assert "-k" not in cmd
         assert "--cacert" in cmd
         assert "/etc/aptl/lab-ca.pem" in cmd
 
     def test_verify_no_ca_uses_system_trust(self, monkeypatch):
-        cmd, _ = self._run(monkeypatch, insecure=False, ca_cert_path=None)
+        cap, _ = self._run(monkeypatch, insecure=False, ca_cert_path=None)
+        cmd = cap["cmd"]
         assert "-k" not in cmd
         assert "--cacert" not in cmd
+
+    def test_api_key_never_appears_in_argv(self, monkeypatch):
+        """The Authorization header — which carries the MISP API key — is
+        a high-value secret. It MUST go to curl via `-H @file`, not on
+        the command line, so it can't be observed via /proc/*/cmdline or
+        ``ps``."""
+        cap, _ = self._run(monkeypatch, auth_header="super-secret-XYZ-123")
+        cmd = cap["cmd"]
+        assert all("super-secret-XYZ-123" not in str(a) for a in cmd), cmd
+        # The header file does carry it; it just isn't on argv.
+        sidecars = cap.get("sidecars", {})
+        assert any(
+            "super-secret-XYZ-123" in v for v in sidecars.values()
+        ), sidecars
 
 
 # ---------------------------------------------------------------------------
@@ -972,8 +1061,11 @@ class TestSyncLoop:
     ):
         """Suricata's rule file references hash list files; the lists must be
         in place before the rule file is replaced or Suricata could read a
-        rule pointing at a stale or missing list."""
+        rule pointing at a stale or missing list. This asserts true
+        cross-writer ordering by routing every write — sidecar AND main
+        — through the same shared call log."""
         from aptl.services.misp_suricata_sync.main import SyncRunner
+        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
 
         cfg = self._cfg(tmp_path)
         attrs = [
@@ -982,28 +1074,17 @@ class TestSyncLoop:
         client = MagicMock()
         client.fetch_tagged_attributes.return_value = attrs
 
-        writer = MagicMock()
-        writer.write_if_changed.return_value = True
-        reloader = MagicMock()
-        reloader.reload_rules.return_value = True
+        write_order: list[str] = []
 
-        order: list[str] = []
-
-        # Capture each path written, in order.
-        from aptl.services.misp_suricata_sync import (
-            main as main_module,
-        )
-        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
-
-        original_writer_init = RuleFileWriter.__init__
-        original_write = RuleFileWriter.write_if_changed
-
+        # Patch RuleFileWriter so EVERY writer instance — both the
+        # sidecar list writers SyncRunner constructs internally and the
+        # primary writer the runner is initialised with — appends to
+        # `write_order`.
         def init_spy(self, target):
             self._target = target
-            order.append(("init", str(target)))
 
         def write_spy(self, content):
-            order.append(("write", str(self._target)))
+            write_order.append(str(self._target))
             return True
 
         mocker.patch.object(RuleFileWriter, "__init__", init_spy)
@@ -1011,24 +1092,26 @@ class TestSyncLoop:
             RuleFileWriter, "write_if_changed", write_spy
         )
 
-        runner = SyncRunner(
-            cfg, client=client, writer=writer, reloader=reloader
-        )
-        # Re-target so we observe the per-list writers, not the injected
-        # MagicMock primary writer.
-        runner.run_once()
+        primary_writer = RuleFileWriter(cfg.rules_out_path)
+        reloader = MagicMock()
+        reloader.reload_rules.return_value = True
 
-        # The list-file write must precede the rule-file write (the
-        # rule-file writer is the injected MagicMock, not RuleFileWriter,
-        # so we observe the list-file write at minimum).
-        write_paths = [p for kind, p in order if kind == "write"]
-        assert any("misp-sha256.list" in p for p in write_paths)
-        # The injected MagicMock writer is called LAST (after the list).
-        # MagicMock's call_args_list ordering vs the spy ordering: the
-        # MagicMock write happens after our spy's writes if SyncRunner
-        # writes lists first.
-        # Confirm that by inspecting writer.write_if_changed.call_count.
-        assert writer.write_if_changed.call_count == 1
+        SyncRunner(
+            cfg,
+            client=client,
+            writer=primary_writer,
+            reloader=reloader,
+        ).run_once()
+
+        # Both the sidecar list and the rule file got written.
+        assert any("misp-sha256.list" in p for p in write_order), write_order
+        assert str(cfg.rules_out_path) in write_order
+        # And — the invariant — the list precedes the rule file.
+        list_idx = next(
+            i for i, p in enumerate(write_order) if "misp-sha256.list" in p
+        )
+        rule_idx = write_order.index(str(cfg.rules_out_path))
+        assert list_idx < rule_idx, write_order
 
     def test_run_loop_exits_when_stop_event_set(self, tmp_path: Path, mocker):
         from aptl.services.misp_suricata_sync.main import run_loop

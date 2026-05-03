@@ -183,7 +183,7 @@ services:
       - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules
       - suricata_logs:/var/log/suricata
       - suricata_command_socket:/var/run/suricata
-      - suricata_misp_rules:/etc/suricata/rules/misp
+      - ./config/suricata/rules/misp:/etc/suricata/rules/misp
     command: ["-c", "/etc/suricata/suricata.yaml", "--pcap"]
     deploy:
       resources:
@@ -302,7 +302,7 @@ services:
       - LOG_LEVEL=INFO
     volumes:
       - suricata_command_socket:/var/run/suricata
-      - suricata_misp_rules:/etc/suricata/rules/misp
+      - ./config/suricata/rules/misp:/etc/suricata/rules/misp
     depends_on:
       misp:
         condition: service_healthy
@@ -1261,7 +1261,6 @@ volumes:
   # Suricata
   suricata_logs:
   suricata_command_socket:
-  suricata_misp_rules:
 
   # MISP
   misp_data:

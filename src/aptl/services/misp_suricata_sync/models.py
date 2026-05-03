@@ -31,3 +31,18 @@ class RenderedRule(BaseModel):
     attribute_type: str
     attribute_value: str
     text: str
+
+
+class TranslationResult(BaseModel):
+    """Output of :class:`IocTranslator.translate`.
+
+    ``rules`` are the inline alert rules. ``hash_lists`` map a Suricata
+    file-hash keyword (``md5`` / ``sha1`` / ``sha256``) to the list of
+    digests for that keyword; each non-empty list becomes a sidecar file
+    referenced by exactly one alert rule in ``rules``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    rules: list[RenderedRule]
+    hash_lists: dict[str, list[str]]

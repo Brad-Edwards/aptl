@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import signal
 import threading
+from pathlib import Path
 
 from aptl.services.misp_suricata_sync.config import ServiceConfig
 from aptl.services.misp_suricata_sync.misp_client import MispClient
@@ -18,6 +19,7 @@ from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
 from aptl.services.misp_suricata_sync.suricata_reloader import SuricataReloader
 from aptl.services.misp_suricata_sync.translator import (
     IocTranslator,
+    render_hash_list_file,
     render_rules_file,
 )
 from aptl.utils.logging import get_logger, setup_logging
@@ -25,6 +27,10 @@ from aptl.utils.logging import get_logger, setup_logging
 log = get_logger("misp_suricata_sync")
 
 _READY_TIMEOUT_SECONDS = 10
+
+
+def _hash_list_path(rules_out_path: Path, hash_type: str) -> Path:
+    return rules_out_path.parent / f"misp-{hash_type}.list"
 
 
 def run_once(
@@ -43,23 +49,38 @@ def run_once(
         )
         return
 
-    translator = IocTranslator(sid_base=cfg.sid_base)
-    rules = translator.translate(attrs)
-    content = render_rules_file(
-        rules,
+    translator = IocTranslator(
+        sid_base=cfg.sid_base,
+        rules_out_dir=str(cfg.rules_out_path.parent),
+    )
+    result = translator.translate(attrs)
+    rules_text = render_rules_file(
+        result.rules,
         misp_url=cfg.misp_url,
         tag_filter=cfg.ioc_tag_filter,
         sid_base=cfg.sid_base,
     )
 
-    changed = writer.write_if_changed(content)
+    changed = writer.write_if_changed(rules_text)
+
+    # Mirror each non-empty hash bucket to its sidecar list file. Each list
+    # uses its own writer instance so the atomic-rename contract still holds
+    # per file.
+    for hash_type, digests in result.hash_lists.items():
+        list_path = _hash_list_path(cfg.rules_out_path, hash_type)
+        list_writer = RuleFileWriter(list_path)
+        if list_writer.write_if_changed(render_hash_list_file(hash_type, digests)):
+            changed = True
+
     if not changed:
         log.debug("No rule changes; skipping reload")
         return
 
     log.info(
-        "Wrote %d rules to %s; triggering Suricata reload",
-        len(rules), cfg.rules_out_path,
+        "Wrote %d rules (+ %d hash-type sidecars) to %s; triggering Suricata reload",
+        len(result.rules),
+        len(result.hash_lists),
+        cfg.rules_out_path,
     )
     reloader.reload_rules()
 

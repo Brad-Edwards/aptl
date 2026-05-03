@@ -136,100 +136,120 @@ def _attr(type_: str, value: str, event_id: str | None = None):
     return MispAttribute(type=type_, value=value, event_id=event_id)
 
 
-class TestTranslator:
-    def test_ip_src_emits_alert_ip_rule(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
+def _make_translator(**overrides):
+    from aptl.services.misp_suricata_sync.translator import IocTranslator
 
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("ip-src", "198.51.100.42")])
-        assert len(rules) == 1
-        rule = rules[0].text
+    kwargs = dict(sid_base=2_000_000, rules_out_dir="/etc/suricata/rules/misp")
+    kwargs.update(overrides)
+    return IocTranslator(**kwargs)
+
+
+class TestTranslator:
+    def test_ip_src_emits_source_side_alert_ip_rule(self):
+        result = _make_translator().translate([_attr("ip-src", "198.51.100.42")])
+        assert len(result.rules) == 1
+        rule = result.rules[0].text
         assert rule.startswith("alert ip 198.51.100.42 any -> any any (")
         assert "sid:" in rule
         assert "rev:1" in rule
 
-    def test_ip_dst_emits_alert_ip_rule(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("ip-dst", "203.0.113.7")])
-        assert rules[0].text.startswith("alert ip 203.0.113.7 any -> any any (")
+    def test_ip_dst_emits_destination_side_alert_ip_rule(self):
+        result = _make_translator().translate([_attr("ip-dst", "203.0.113.7")])
+        rule = result.rules[0].text
+        assert rule.startswith("alert ip any any -> 203.0.113.7 any (")
 
     def test_domain_emits_dns_query_rule(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("domain", "evil.example.com")])
-        rule = rules[0].text
+        result = _make_translator().translate([_attr("domain", "evil.example.com")])
+        rule = result.rules[0].text
         assert rule.startswith("alert dns any any -> any any (")
         assert "dns.query" in rule
         assert 'content:"evil.example.com"' in rule
         assert "nocase" in rule
 
-    def test_url_emits_http_uri_rule(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("url", "http://evil.example.com/payload")])
-        rule = rules[0].text
+    def test_url_with_path_emits_host_and_uri_match(self):
+        result = _make_translator().translate(
+            [_attr("url", "http://evil.example.com/payload")]
+        )
+        rule = result.rules[0].text
         assert rule.startswith("alert http any any -> any any (")
-        assert "http.uri" in rule
-        assert 'content:"/payload"' in rule
+        assert 'http.host; content:"evil.example.com"' in rule
+        assert 'http.uri; content:"/payload"' in rule
 
-    def test_url_with_only_host_falls_back_to_root_path(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
+    def test_url_with_only_host_emits_host_match_only(self):
+        """Host-only URL must not generate `content:"/"` (false-positive bait)."""
+        result = _make_translator().translate(
+            [_attr("url", "http://evil.example.com")]
+        )
+        rule = result.rules[0].text
+        assert 'http.host; content:"evil.example.com"' in rule
+        assert "http.uri" not in rule
+        assert 'content:"/"' not in rule
 
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("url", "http://evil.example.com")])
-        assert 'content:"/"' in rules[0].text
+    def test_url_with_root_path_skips_uri_match(self):
+        result = _make_translator().translate(
+            [_attr("url", "http://evil.example.com/")]
+        )
+        rule = result.rules[0].text
+        assert "http.uri" not in rule
 
-    def test_sha256_emits_filesha256_rule(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
+    def test_url_with_no_host_skipped_with_warning(self, caplog):
+        caplog.set_level(logging.WARNING, logger="aptl.misp_suricata_sync")
+        result = _make_translator().translate([_attr("url", "/just-a-path")])
+        # _split_url returns ("/just-a-path", "") so host is empty after strip
+        # — confirm the rule was skipped.
+        assert all(r.attribute_type != "url" for r in result.rules)
 
+    def test_sha256_collected_into_hash_list(self):
         h = "a" * 64
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("sha256", h)])
-        rule = rules[0].text
-        assert rule.startswith("alert http any any -> any any (")
-        assert "filesha256" in rule
-        assert h in rule
+        result = _make_translator().translate([_attr("sha256", h)])
+        assert result.hash_lists == {"sha256": [h]}
+        assert len(result.rules) == 1
+        rule = result.rules[0].text
+        assert "filesha256:/etc/suricata/rules/misp/misp-sha256.list" in rule
+        assert h not in rule  # the hash itself lives in the sidecar list
 
-    def test_md5_emits_filemd5_rule(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
+    def test_md5_collected_into_hash_list(self):
         h = "b" * 32
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("md5", h)])
-        assert "filemd5" in rules[0].text
+        result = _make_translator().translate([_attr("md5", h)])
+        assert result.hash_lists == {"md5": [h]}
+        rule = result.rules[0].text
+        assert "filemd5:/etc/suricata/rules/misp/misp-md5.list" in rule
 
-    def test_sha1_emits_filesha1_rule(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
+    def test_sha1_collected_into_hash_list(self):
         h = "c" * 40
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("sha1", h)])
-        assert "filesha1" in rules[0].text
+        result = _make_translator().translate([_attr("sha1", h)])
+        assert result.hash_lists == {"sha1": [h]}
+        assert "filesha1:/etc/suricata/rules/misp/misp-sha1.list" in result.rules[0].text
+
+    def test_one_hash_rule_emitted_per_type_regardless_of_count(self):
+        attrs = [
+            _attr("sha256", "a" * 64),
+            _attr("sha256", "b" * 64),
+            _attr("md5", "c" * 32),
+            _attr("md5", "d" * 32),
+            _attr("md5", "e" * 32),
+        ]
+        result = _make_translator().translate(attrs)
+        hash_rules = [r for r in result.rules if r.attribute_type in ("md5", "sha1", "sha256")]
+        assert len(hash_rules) == 2  # one per type, despite 5 IOCs
+        assert sorted(result.hash_lists.keys()) == ["md5", "sha256"]
+        assert len(result.hash_lists["md5"]) == 3
+        assert len(result.hash_lists["sha256"]) == 2
 
     def test_unsupported_type_skipped_with_warning(self, caplog):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
         caplog.set_level(logging.WARNING, logger="aptl.misp_suricata_sync")
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate(
+        result = _make_translator().translate(
             [
                 _attr("regkey", "HKLM\\Software\\Foo"),
                 _attr("ip-dst", "198.51.100.1"),
             ]
         )
-        assert len(rules) == 1
-        assert rules[0].attribute_type == "ip-dst"
+        assert len(result.rules) == 1
+        assert result.rules[0].attribute_type == "ip-dst"
         assert any("regkey" in r.message for r in caplog.records)
 
     def test_action_is_always_alert_never_drop(self):
         """ADR-019 invariant: no drop/reject rules under any input."""
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
-        t = IocTranslator(sid_base=2_000_000)
         attrs = [
             _attr("ip-src", "1.2.3.4"),
             _attr("ip-dst", "5.6.7.8"),
@@ -239,20 +259,16 @@ class TestTranslator:
             _attr("md5", "e" * 32),
             _attr("sha1", "f" * 40),
         ]
-        rules = t.translate(attrs)
-        for r in rules:
+        result = _make_translator().translate(attrs)
+        for r in result.rules:
             assert r.text.startswith("alert "), r.text
             assert "drop " not in r.text
             assert "reject" not in r.text
 
     def test_sid_is_deterministic_across_runs(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
-        t1 = IocTranslator(sid_base=2_000_000)
-        t2 = IocTranslator(sid_base=2_000_000)
         a = [_attr("ip-dst", "198.51.100.42")]
-        sids1 = [r.sid for r in t1.translate(a)]
-        sids2 = [r.sid for r in t2.translate(a)]
+        sids1 = [r.sid for r in _make_translator().translate(a).rules]
+        sids2 = [r.sid for r in _make_translator().translate(a).rules]
         assert sids1 == sids2
 
     def test_sid_collision_drops_second_with_warning(self, caplog, monkeypatch):
@@ -260,79 +276,67 @@ class TestTranslator:
         from aptl.services.misp_suricata_sync import translator as tmod
 
         monkeypatch.setattr(tmod, "_crc32_sid_offset", lambda type_, value: 7)
-        t = tmod.IocTranslator(sid_base=2_000_000)
         caplog.set_level(logging.WARNING, logger="aptl.misp_suricata_sync")
-        rules = t.translate(
+        result = _make_translator().translate(
             [
                 _attr("ip-dst", "198.51.100.1"),
                 _attr("ip-dst", "198.51.100.2"),
             ]
         )
-        assert len(rules) == 1
+        assert len(result.rules) == 1
         assert any("collision" in r.message.lower() for r in caplog.records)
 
     def test_output_is_sorted_for_stable_render(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
-        t = IocTranslator(sid_base=2_000_000)
         attrs_a = [
             _attr("ip-dst", "198.51.100.2"),
             _attr("ip-dst", "198.51.100.1"),
         ]
         attrs_b = list(reversed(attrs_a))
-        text_a = [r.text for r in t.translate(attrs_a)]
-        text_b = [r.text for r in t.translate(attrs_b)]
+        text_a = [r.text for r in _make_translator().translate(attrs_a).rules]
+        text_b = [r.text for r in _make_translator().translate(attrs_b).rules]
         assert text_a == text_b
 
-    def test_escapes_non_alnum_in_content_via_pipe_hex(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
+    def test_hash_list_ordering_is_deterministic(self):
+        attrs_a = [_attr("md5", "a" * 32), _attr("md5", "b" * 32)]
+        attrs_b = list(reversed(attrs_a))
+        out_a = _make_translator().translate(attrs_a).hash_lists
+        out_b = _make_translator().translate(attrs_b).hash_lists
+        assert out_a == out_b
 
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("domain", "ev\"il.example.com")])
-        assert '"' not in rules[0].text.split('content:"', 1)[1].split('"', 1)[0]
-        assert "|22|" in rules[0].text
+    def test_escapes_non_alnum_in_content_via_pipe_hex(self):
+        result = _make_translator().translate([_attr("domain", "ev\"il.example.com")])
+        text = result.rules[0].text
+        assert '"' not in text.split('content:"', 1)[1].split('"', 1)[0]
+        assert "|22|" in text
 
     def test_rejects_quote_or_semicolon_in_value_via_escape(self):
         """Even with hostile attribute values, the rule must remain syntactically clean."""
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate(
-            [
-                _attr("domain", 'a"; sid:1; rev:1; reference:foo,bar; msg:"x'),
-            ]
+        result = _make_translator().translate(
+            [_attr("domain", 'a"; sid:1; rev:1; reference:foo,bar; msg:"x')]
         )
-        rule = rules[0].text
+        rule = result.rules[0].text
         # Exactly one trailing semicolon set; only one sid: directive.
         assert rule.count("sid:") == 1
         assert rule.count("msg:") == 1
 
     def test_event_id_recorded_in_metadata_when_present(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("ip-dst", "198.51.100.42", event_id="42")])
-        assert "metadata:misp_event_id 42" in rules[0].text
+        result = _make_translator().translate(
+            [_attr("ip-dst", "198.51.100.42", event_id="42")]
+        )
+        assert "metadata:misp_event_id 42" in result.rules[0].text
 
     def test_event_id_omitted_when_absent(self):
-        from aptl.services.misp_suricata_sync.translator import IocTranslator
-
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("ip-dst", "198.51.100.42")])
-        assert "metadata:" not in rules[0].text
+        result = _make_translator().translate([_attr("ip-dst", "198.51.100.42")])
+        assert "metadata:" not in result.rules[0].text
 
 
 class TestRenderRulesFile:
     def test_header_records_metadata(self):
-        from aptl.services.misp_suricata_sync.translator import (
-            IocTranslator,
-            render_rules_file,
-        )
+        from aptl.services.misp_suricata_sync.translator import render_rules_file
 
-        t = IocTranslator(sid_base=2_000_000)
-        rules = t.translate([_attr("ip-dst", "198.51.100.42")])
+        result = _make_translator().translate([_attr("ip-dst", "198.51.100.42")])
         text = render_rules_file(
-            rules,
+            result.rules,
             misp_url="https://misp.lab",
             tag_filter="aptl:enforce",
             sid_base=2_000_000,
@@ -341,7 +345,21 @@ class TestRenderRulesFile:
         assert "https://misp.lab" in text
         assert "aptl:enforce" in text
         assert "ioc_count=1" in text
-        assert "alert ip 198.51.100.42" in text
+        assert "alert ip any any -> 198.51.100.42" in text
+
+    def test_header_has_no_timestamp_so_render_is_idempotent(self):
+        """If the header carried a timestamp, write_if_changed would always
+        rewrite the file and trigger spurious Suricata reloads."""
+        from aptl.services.misp_suricata_sync.translator import render_rules_file
+
+        result = _make_translator().translate([_attr("ip-dst", "198.51.100.42")])
+        text = render_rules_file(
+            result.rules,
+            misp_url="https://misp.lab",
+            tag_filter="aptl:enforce",
+            sid_base=2_000_000,
+        )
+        assert "generated_at" not in text
 
     def test_empty_rules_still_renders_header(self):
         from aptl.services.misp_suricata_sync.translator import render_rules_file
@@ -353,6 +371,22 @@ class TestRenderRulesFile:
             sid_base=2_000_000,
         )
         assert "ioc_count=0" in text
+
+
+class TestRenderHashListFile:
+    def test_renders_one_hash_per_line_sorted_and_deduped(self):
+        from aptl.services.misp_suricata_sync.translator import render_hash_list_file
+
+        text = render_hash_list_file(
+            "sha256",
+            ["b" * 64, "a" * 64, "a" * 64],
+        )
+        lines = text.splitlines()
+        # First two lines are the comment header.
+        assert lines[0].startswith("#")
+        assert lines[1].startswith("#")
+        # Body is sorted + deduped.
+        assert lines[2:] == ["a" * 64, "b" * 64]
 
 
 # ---------------------------------------------------------------------------

@@ -51,13 +51,19 @@ under the `soc` compose profile. Architecture and invariants:
    would require a follow-up ADR overriding ADR-019; the translator's
    `test_action_is_always_alert_never_drop` is the regression guard.
 3. **Dedicated rule file.** Generated rules go to
-   `/etc/suricata/rules/misp/misp-iocs.rules`, mounted via a named volume
-   shared with the Suricata container (`suricata_misp_rules`). The
-   operator-authored `local.rules` is never touched. The two files are
-   concatenated by Suricata at runtime via the `rule-files:` list in
-   `config/suricata/suricata.yaml`. Mixing them was rejected: it would
-   conflate hand-written and intel-driven rules in `git blame`, in run
-   archives, and in any operator inspection.
+   `/etc/suricata/rules/misp/misp-iocs.rules`, mounted via a host-side
+   bind mount of `./config/suricata/rules/misp/` shared between the
+   Suricata container and the sync service. The repo ships a seed
+   `misp-iocs.rules` plus empty `misp-{md5,sha1,sha256}.list` files so
+   Suricata can load the configured rule paths cleanly on the very first
+   `aptl lab start`, before the sync service has had a chance to write.
+   The bind mount also avoids the named-volume initialization race where
+   Suricata starts ahead of the sync service and finds the rule path
+   missing. The operator-authored `local.rules` is never touched. The
+   two files are concatenated by Suricata at runtime via the
+   `rule-files:` list in `config/suricata/suricata.yaml`. Mixing them
+   was rejected: it would conflate hand-written and intel-driven rules
+   in `git blame`, in run archives, and in any operator inspection.
 4. **Deterministic SID allocation.** SID is computed as
    `SID_BASE + (zlib.crc32(f"{type}|{value}") & 0x7FFFFFF)`. CRC32 over a
    stable composite key gives a deterministic, content-addressable SID
@@ -71,8 +77,13 @@ under the `soc` compose profile. Architecture and invariants:
 5. **Idempotent file writes.** `RuleFileWriter.write_if_changed` reads
    the existing file (if any), compares to the would-be content, and
    only writes — atomically via `<path>.tmp` + `Path.replace` — on
-   change. The Suricata reload is only triggered on a real change, so
-   the loop is cheap when MISP is quiet.
+   change. The rule-file header carries the MISP URL, tag filter,
+   `sid_base`, and IOC count but **no timestamp** — adding a fresh
+   timestamp every render would always invalidate the equality check
+   and trigger a Suricata reload every interval even when the IOC set
+   is unchanged. The same idempotent writer also produces the
+   per-type hash list sidecars; reload only triggers if any of the rule
+   file or any list file actually changed.
 6. **Live reload via the unix-command socket.** `suricata.yaml` enables
    the unix-command interface at
    `/var/run/suricata/suricata-command.socket`. The sync service mounts
@@ -96,15 +107,27 @@ under the `soc` compose profile. Architecture and invariants:
 
 ### Translator IOC matrix
 
-| MISP type      | Generated rule shape                                            |
-| -------------- | --------------------------------------------------------------- |
-| `ip-src`/`ip-dst` | `alert ip <ioc> any -> any any (...)`                        |
-| `domain`/`hostname` | `alert dns ... dns.query; content:"<escaped>"; nocase`     |
-| `url`          | `alert http ... http.uri; content:"<escaped path>"; nocase`     |
-| `sha256`       | `alert http ... filesha256; content:"<hash>"`                   |
-| `sha1`         | `alert http ... filesha1; content:"<hash>"`                     |
-| `md5`          | `alert http ... filemd5; content:"<hash>"`                      |
-| anything else  | skipped with a warning log                                      |
+| MISP type      | Generated rule shape                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| `ip-src`       | `alert ip <ioc> any -> any any (...)` — matches source IP                                  |
+| `ip-dst`       | `alert ip any any -> <ioc> any (...)` — matches destination IP                             |
+| `domain`/`hostname` | `alert dns ... dns.query; content:"<escaped>"; nocase`                                |
+| `url`          | `alert http ... http.host; content:"<host>"; nocase[; http.uri; content:"<path>"; nocase]` |
+| `sha256`/`sha1`/`md5` | one rule per type, referencing a sidecar list file: `... file.data; filesha256:/etc/suricata/rules/misp/misp-sha256.list; ...` |
+| anything else  | skipped with a warning log                                                                 |
+
+Hash IOCs are aggregated rather than rendered one-rule-per-IOC because
+Suricata's `filemd5` / `filesha1` / `filesha256` keywords take a *file
+of hashes* as their argument, not an inline digest. The translator
+therefore emits one rule per non-empty hash type and writes the digests
+themselves to `misp-<type>.list` files alongside the rule file. This is
+both syntactically correct (the inline-content form Suricata would
+reject) and operationally efficient (one reload regardless of how many
+hashes ship).
+
+URLs match `http.host` for the host component and `http.uri` only when
+the path is non-trivial; host-only URLs do not emit a `content:"/"` URI
+match (which would broadly false-positive against ordinary traffic).
 
 ### Service shape
 

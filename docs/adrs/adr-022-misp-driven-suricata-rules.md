@@ -77,7 +77,7 @@ under the `soc` compose profile. Architecture and invariants:
    defaults to `2_000_000`, well clear of the operator's hand-written
    range (current max `1000091` in `local.rules`) and well clear of ET
    Open's reserved 2.x ranges.
-5. **Idempotent file writes.** `RuleFileWriter.write_if_changed` reads
+5. **Idempotent file writes.** ``rule_writer.write_if_changed`` reads
    the existing file (if any), compares to the would-be content, and
    only writes — atomically via `<path>.tmp` + `Path.replace` — on
    change. The rule-file header carries the MISP URL, tag filter,

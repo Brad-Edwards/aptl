@@ -63,6 +63,10 @@ def _int_env(name: str, value: str | None, default: int) -> int:
     Raises ``ValueError`` with a name-attributed message rather than the
     raw ``invalid literal for int()`` Python emits, so a typo in the
     operator's ``.env`` is unambiguous in service logs.
+
+    Value bounds (positivity, allowed range, etc.) are enforced by the
+    Pydantic field validators on :class:`ServiceConfig` — this helper
+    only handles parse-time concerns.
     """
     if value is None or not value.strip():
         return default

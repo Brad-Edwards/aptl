@@ -1048,11 +1048,11 @@ class TestSyncLoop:
 
         SyncRunner(cfg, client=client, reloader=reloader).run_once()
 
-        # 1 main rule file + 3 hash sidecars (always written every tick).
-        assert write_spy.call_count == 1 + len(
-            __import__("aptl.services.misp_suricata_sync.translator",
-                       fromlist=["HASH_TYPES"]).HASH_TYPES
-        )
+        # 1 main rule file + one sidecar per HASH_TYPES entry (always
+        # written every tick). Use the constant so adding a new hash
+        # type doesn't silently break this assertion.
+        from aptl.services.misp_suricata_sync.translator import HASH_TYPES
+        assert write_spy.call_count == 1 + len(HASH_TYPES)
         reloader.reload_rules.assert_not_called()
 
     def test_triggers_reload_when_writer_reports_change(
@@ -1088,9 +1088,10 @@ class TestSyncLoop:
         reloader.reload_rules.side_effect = [False, True]
 
         # Tick 1: writer reports change. Tick 2: writer reports no change.
-        # 4 calls per tick (3 sidecars + main rule); first tick all True,
-        # second tick all False.
-        n_writes_per_tick = 1 + 3
+        # 1 main rule file + one sidecar per HASH_TYPES entry per tick;
+        # first tick all True, second tick all False.
+        from aptl.services.misp_suricata_sync.translator import HASH_TYPES
+        n_writes_per_tick = 1 + len(HASH_TYPES)
         side_effect = [True] * n_writes_per_tick + [False] * n_writes_per_tick
         mocker.patch.object(
             main_mod, "write_if_changed", side_effect=side_effect

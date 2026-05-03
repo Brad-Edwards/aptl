@@ -317,8 +317,10 @@ def render_rules_file(
     """Render the full rule file (header comment + body).
 
     The header is intentionally timestamp-free so identical IOC sets
-    produce byte-identical output across syncs (idempotency requirement
-    for :class:`RuleFileWriter`).
+    produce byte-identical output across syncs — that's the
+    idempotency contract :func:`aptl.services.misp_suricata_sync.rule_writer.write_if_changed`
+    relies on to skip writes (and therefore Suricata reloads) when
+    nothing has changed.
     """
     header_lines = [
         "# APTL MISP-to-Suricata sync — generated, do not edit by hand.",

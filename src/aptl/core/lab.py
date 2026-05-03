@@ -51,22 +51,10 @@ ALL_KNOWN_PROFILES = [
 ]
 
 
-@dataclass
-class LabResult:
-    """Result of a lab lifecycle operation."""
-
-    success: bool
-    message: str = ""
-    error: str = ""
-
-
-@dataclass
-class LabStatus:
-    """Current status of the lab environment."""
-
-    running: bool
-    containers: list[dict] = field(default_factory=list)
-    error: str = ""
+# LabResult and LabStatus moved to aptl.core.lab_types so deployment
+# backends can reference them without re-entering aptl.core.lab during
+# its own load (issue #266). Re-exported here for backward compatibility.
+from aptl.core.lab_types import LabResult, LabStatus  # noqa: E402, F401
 
 
 def docker_client():
@@ -366,12 +354,30 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     # Both writers own their canonical project-relative target paths and
     # validate containment internally; the orchestrator only passes the
     # trusted project root. See ADR-007 (security guardrail) and #266.
+    #
+    # Distinguishing two failure classes:
+    #   - ValueError from _resolve_within_project: a path-containment
+    #     guardrail breach. Treat as a hard lab-start failure — the
+    #     project layout is rejected and silently continuing would
+    #     defeat the security gate.
+    #   - Anything else (FileNotFoundError, regex no-match, write
+    #     errors): non-fatal. Log a warning, continue.
     try:
         sync_dashboard_config(ctx.project_dir, ctx.env.api_password)
+    except ValueError as exc:
+        log.error("Dashboard config containment violation: %s", exc)
+        return LabResult(
+            success=False, error=f"Dashboard config: {exc}",
+        )
     except Exception as exc:  # noqa: BLE001 - non-fatal sync warning
         log.warning("Failed to sync dashboard config: %s", exc)
     try:
         sync_manager_config(ctx.project_dir, ctx.env.wazuh_cluster_key)
+    except ValueError as exc:
+        log.error("Manager config containment violation: %s", exc)
+        return LabResult(
+            success=False, error=f"Manager config: {exc}",
+        )
     except Exception as exc:  # noqa: BLE001 - non-fatal sync warning
         log.warning("Failed to sync manager config: %s", exc)
     return None

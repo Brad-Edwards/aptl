@@ -702,3 +702,94 @@ class TestOrchestrateLabStart:
             if len(c[0]) > 0 and len(c[0][0]) > 1 and c[0][0][0] == "docker" and c[0][0][1] == "pull"
         ]
         assert len(pull_calls) >= 1
+
+
+class TestSyncCredentialsStep:
+    """Direct tests for `_step_sync_credentials` (issue #266 follow-up).
+
+    Distinguishes ordinary sync failures (FileNotFoundError, regex
+    no-match, write errors) — which stay non-fatal warnings — from
+    path-containment ``ValueError`` raised by ``_resolve_within_project``,
+    which is a security guardrail breach and must fail orchestration.
+    """
+
+    def _ctx(self, mocker, tmp_path):
+        from aptl.core.env import EnvVars
+        from aptl.core.lab import _LabStartContext
+
+        return _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            env=EnvVars(
+                indexer_username="x", indexer_password="x",
+                api_username="x", api_password="api_pw",
+                wazuh_cluster_key="cluster_key",
+            ),
+        )
+
+    def test_dashboard_value_error_fails_lab_start(self, mocker, tmp_path):
+        """A containment ValueError from sync_dashboard_config aborts the step."""
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(mocker, tmp_path)
+        mocker.patch(
+            "aptl.core.lab.sync_dashboard_config",
+            side_effect=ValueError(
+                "Resolved config path /etc/passwd escapes project root /tmp/x"
+            ),
+        )
+        manager_mock = mocker.patch("aptl.core.lab.sync_manager_config")
+
+        result = _step_sync_credentials(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "escapes project root" in (result.error or "")
+        # Manager sync must not run after a guardrail breach.
+        manager_mock.assert_not_called()
+
+    def test_manager_value_error_fails_lab_start(self, mocker, tmp_path):
+        """A containment ValueError from sync_manager_config aborts the step."""
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(mocker, tmp_path)
+        mocker.patch("aptl.core.lab.sync_dashboard_config")
+        mocker.patch(
+            "aptl.core.lab.sync_manager_config",
+            side_effect=ValueError(
+                "Resolved config path /etc/something escapes project root /tmp/x"
+            ),
+        )
+
+        result = _step_sync_credentials(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "escapes project root" in (result.error or "")
+
+    def test_ordinary_sync_failure_is_warned_not_fatal(self, mocker, tmp_path):
+        """Non-containment exceptions (FileNotFoundError, generic) stay non-fatal."""
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(mocker, tmp_path)
+        mocker.patch(
+            "aptl.core.lab.sync_dashboard_config",
+            side_effect=FileNotFoundError("not there"),
+        )
+        mocker.patch("aptl.core.lab.sync_manager_config")
+
+        result = _step_sync_credentials(ctx)
+
+        # None means the step is non-fatal and orchestration continues.
+        assert result is None
+
+    def test_happy_path_returns_none(self, mocker, tmp_path):
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(mocker, tmp_path)
+        mocker.patch("aptl.core.lab.sync_dashboard_config")
+        mocker.patch("aptl.core.lab.sync_manager_config")
+
+        result = _step_sync_credentials(ctx)
+
+        assert result is None

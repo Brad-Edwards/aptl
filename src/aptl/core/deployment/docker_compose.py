@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 from aptl.core.deployment.errors import BackendTimeoutError
-from aptl.core.lab import LabResult, LabStatus
+from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")

@@ -363,27 +363,17 @@ def _step_check_sysreqs(ctx: _LabStartContext) -> LabResult | None:
 def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 5: Syncing configuration credentials...")
     assert ctx.env is not None  # _step_load_env populated this
-    dashboard_config = (
-        ctx.project_dir / "config" / "wazuh_dashboard" / "wazuh.yml"
-    )
-    if dashboard_config.exists():
-        try:
-            sync_dashboard_config(dashboard_config, ctx.env.api_password)
-        except Exception as exc:  # noqa: BLE001 - non-fatal sync warning
-            log.warning("Failed to sync dashboard config: %s", exc)
-    else:
-        log.warning("Dashboard config not found at %s", dashboard_config)
-
-    manager_config = (
-        ctx.project_dir / "config" / "wazuh_cluster" / "wazuh_manager.conf"
-    )
-    if manager_config.exists():
-        try:
-            sync_manager_config(manager_config, ctx.env.wazuh_cluster_key)
-        except Exception as exc:  # noqa: BLE001 - non-fatal sync warning
-            log.warning("Failed to sync manager config: %s", exc)
-    else:
-        log.warning("Manager config not found at %s", manager_config)
+    # Both writers own their canonical project-relative target paths and
+    # validate containment internally; the orchestrator only passes the
+    # trusted project root. See ADR-007 (security guardrail) and #266.
+    try:
+        sync_dashboard_config(ctx.project_dir, ctx.env.api_password)
+    except Exception as exc:  # noqa: BLE001 - non-fatal sync warning
+        log.warning("Failed to sync dashboard config: %s", exc)
+    try:
+        sync_manager_config(ctx.project_dir, ctx.env.wazuh_cluster_key)
+    except Exception as exc:  # noqa: BLE001 - non-fatal sync warning
+        log.warning("Failed to sync manager config: %s", exc)
     return None
 
 

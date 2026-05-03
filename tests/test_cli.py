@@ -338,11 +338,11 @@ class TestLabContinuityAuditCommand:
         from aptl.core.session import ScenarioSession
 
         mocker.patch(
-            "aptl.cli._common.resolve_config_for_cli",
+            "aptl.cli.continuity.resolve_config_for_cli",
             return_value=(AptlConfig(), project_dir),
         )
         mocker.patch(
-            "aptl.core.deployment.get_backend",
+            "aptl.cli.continuity.get_backend",
             return_value=mocker.MagicMock(),
         )
         get_active = mocker.patch.object(
@@ -358,10 +358,10 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([]),
         )
 
@@ -385,10 +385,10 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([]),
         )
 
@@ -405,7 +405,7 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         event = KaliCarveOutEvent(
             timestamp="2026-05-03T12:00:00+00:00",
@@ -416,7 +416,7 @@ class TestLabContinuityAuditCommand:
             error=None,
         )
         mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([event]),
         )
 
@@ -436,7 +436,7 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         event = KaliCarveOutEvent(
             timestamp="2026-05-03T12:00:00+00:00",
@@ -447,7 +447,7 @@ class TestLabContinuityAuditCommand:
             error=None,
         )
         mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([event]),
         )
 
@@ -469,10 +469,10 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([]),
         )
 
@@ -499,10 +499,10 @@ class TestLabContinuityAuditCommand:
         from aptl.cli.main import app
 
         self._stub_cli_plumbing(mocker, tmp_path)
-        mocker.patch("aptl.core.continuity.kali_source_ips", return_value=[])
+        mocker.patch("aptl.cli.continuity.kali_source_ips", return_value=[])
         # The audit should not even be reached.
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([]),
         )
 
@@ -526,15 +526,15 @@ class TestLabContinuityAuditCommand:
         from aptl.core.session import ScenarioSession
 
         mocker.patch(
-            "aptl.cli._common.resolve_config_for_cli",
+            "aptl.cli.continuity.resolve_config_for_cli",
             return_value=(AptlConfig(), tmp_path),
         )
         backend = mocker.MagicMock()
         backend.container_exists.return_value = False
-        mocker.patch("aptl.core.deployment.get_backend", return_value=backend)
+        mocker.patch("aptl.cli.continuity.get_backend", return_value=backend)
         mocker.patch.object(ScenarioSession, "get_active", return_value=None)
         # Make sure the audit isn't reached.
-        mock_audit = mocker.patch("aptl.core.continuity.audit_and_revert")
+        mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
 
         result = runner.invoke(
             app,
@@ -561,20 +561,20 @@ class TestLabContinuityAuditCommand:
         from aptl.core.session import ScenarioSession
 
         mocker.patch(
-            "aptl.cli._common.resolve_config_for_cli",
+            "aptl.cli.continuity.resolve_config_for_cli",
             return_value=(AptlConfig(), tmp_path),
         )
 
         # Simulate a profile where only aptl-webapp is up.
         backend = mocker.MagicMock()
         backend.container_exists.side_effect = lambda name: name == "aptl-webapp"
-        mocker.patch("aptl.core.deployment.get_backend", return_value=backend)
+        mocker.patch("aptl.cli.continuity.get_backend", return_value=backend)
         mocker.patch.object(ScenarioSession, "get_active", return_value=None)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([]),
         )
 
@@ -608,10 +608,10 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([
                 KaliCarveOutEvent(
                     timestamp="2026-05-03T12:00:00+00:00",
@@ -645,9 +645,9 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
-        mock_audit = mocker.patch("aptl.core.continuity.audit_and_revert")
+        mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
 
         result = runner.invoke(
             app,
@@ -669,9 +669,9 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
-        mock_audit = mocker.patch("aptl.core.continuity.audit_and_revert")
+        mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
 
         result = runner.invoke(
             app,
@@ -697,21 +697,21 @@ class TestLabContinuityAuditCommand:
         from aptl.core.session import ScenarioSession
 
         mocker.patch(
-            "aptl.cli._common.resolve_config_for_cli",
+            "aptl.cli.continuity.resolve_config_for_cli",
             return_value=(AptlConfig(), tmp_path),
         )
         backend = mocker.MagicMock()
         backend.container_exists.return_value = True
-        mocker.patch("aptl.core.deployment.get_backend", return_value=backend)
+        mocker.patch("aptl.cli.continuity.get_backend", return_value=backend)
         mocker.patch.object(
             ScenarioSession, "get_active",
             side_effect=ScenarioStateError("corrupt session"),
         )
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([]),
         )
 
@@ -736,14 +736,14 @@ class TestLabContinuityAuditCommand:
         from aptl.core.session import ScenarioSession
 
         mocker.patch(
-            "aptl.cli._common.resolve_config_for_cli",
+            "aptl.cli.continuity.resolve_config_for_cli",
             return_value=(AptlConfig(), tmp_path),
         )
         backend = mocker.MagicMock()
         backend.container_exists.return_value = False
-        mocker.patch("aptl.core.deployment.get_backend", return_value=backend)
+        mocker.patch("aptl.cli.continuity.get_backend", return_value=backend)
         mocker.patch.object(ScenarioSession, "get_active", return_value=None)
-        mock_audit = mocker.patch("aptl.core.continuity.audit_and_revert")
+        mock_audit = mocker.patch("aptl.cli.continuity.audit_and_revert")
 
         result = runner.invoke(
             app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
@@ -761,10 +761,10 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([
                 KaliCarveOutEvent(
                     timestamp="2026-05-03T12:00:00+00:00",
@@ -792,10 +792,10 @@ class TestLabContinuityAuditCommand:
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch(
-            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+            "aptl.cli.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mocker.patch(
-            "aptl.core.continuity.audit_and_revert",
+            "aptl.cli.continuity.audit_and_revert",
             return_value=_continuity_result([
                 KaliCarveOutEvent(
                     timestamp="2026-05-03T12:00:00+00:00",

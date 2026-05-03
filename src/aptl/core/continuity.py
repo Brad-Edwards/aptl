@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Protocol
 
+from aptl.core.scenarios import ScenarioError
 from aptl.utils.logging import get_logger
 
 
@@ -63,13 +64,17 @@ def default_targets() -> list[str]:
 CarveOutAction = Literal["REVERTED", "REVERT_FAILED", "AUDIT_FAILED"]
 
 
-class ContinuityAuditError(Exception):
+class ContinuityAuditError(ScenarioError):
     """Raised when ``audit_target`` cannot inspect a target's iptables.
 
     Distinguishes "backend exec failed / non-zero return" from "found
     nothing on a clean tree". ``audit_and_revert`` catches this and
     emits an ``AUDIT_FAILED`` event for downstream archive evidence
     instead of swallowing the failure.
+
+    Subclasses :class:`aptl.core.scenarios.ScenarioError` so a single
+    ``except ScenarioError`` in higher-level orchestration catches both
+    this and ``ScenarioStateError`` without needing two except arms.
     """
 
 
@@ -621,25 +626,36 @@ def audit_and_revert(
         for finding in findings:
             events.append(revert_finding(backend, finding))
 
-    archive_error: str | None = None
-    if events and run_store is not None and run_id is not None:
-        records = [asdict(event) for event in events]
-        try:
-            run_store.append_jsonl(run_id, "continuity-events.jsonl", records)
-        except Exception as exc:  # noqa: BLE001 - persistence is best-effort
-            # Reversions already happened on the live system; surfacing
-            # the events to the caller is more valuable than masking
-            # them behind an archive-write failure. The CLI must still
-            # print the per-event summary and exit non-zero so the
-            # operator sees the failure. We log loudly here AND
-            # return ``archive_error`` so the CLI can refuse to
-            # report a successful archive.
-            archive_error = f"{type(exc).__name__}: {exc}"
-            log.error(
-                "Continuity events archive write failed (run_id=%s, %d events"
-                " not persisted): %s. Reversions are already applied; the"
-                " caller still receives the event list.",
-                run_id, len(records), archive_error,
-            )
+    archive_error = _persist_events(run_store, run_id, events)
 
     return ContinuityAuditResult(events=events, archive_error=archive_error)
+
+
+def _persist_events(
+    run_store: _RunStoreProto | None,
+    run_id: str | None,
+    events: list[KaliCarveOutEvent],
+) -> str | None:
+    """Append events to ``<run>/continuity-events.jsonl``, return error if any.
+
+    Best-effort persistence: reversions already happened on the live
+    system, so a write failure must not mask the events from the
+    caller. The error string lets callers (CLI, runtime engine)
+    surface the persistence failure as a separate failure class
+    rather than reporting a successful archive.
+    """
+    if not events or run_store is None or run_id is None:
+        return None
+    records = [asdict(event) for event in events]
+    try:
+        run_store.append_jsonl(run_id, "continuity-events.jsonl", records)
+    except Exception as exc:  # noqa: BLE001 - persistence is best-effort
+        archive_error = f"{type(exc).__name__}: {exc}"
+        log.error(
+            "Continuity events archive write failed (run_id=%s, %d events"
+            " not persisted): %s. Reversions are already applied; the"
+            " caller still receives the event list.",
+            run_id, len(records), archive_error,
+        )
+        return archive_error
+    return None

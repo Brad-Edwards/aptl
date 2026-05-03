@@ -14,6 +14,7 @@ from pathlib import Path
 import typer
 
 from aptl.core.config import AptlConfig, find_config, load_config
+from aptl.core.runstore import LocalRunStore
 
 
 _NO_CONFIG_TEMPLATE = "no aptl.json found in {project_dir}"
@@ -45,3 +46,26 @@ def resolve_config_for_cli(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     return config, config_path.parent
+
+
+def resolve_run_store(
+    project_dir: Path,
+    config: AptlConfig | None = None,
+) -> LocalRunStore:
+    """Build a :class:`LocalRunStore` rooted at the project's runs path.
+
+    Single shared helper for every CLI command that needs the run
+    archive (``aptl runs *``, ``aptl lab continuity-audit``). When
+    ``config`` is provided the caller has already loaded it; otherwise
+    we discover it via :func:`find_config` (defaulting to an
+    ``AptlConfig()`` if no aptl.json is present, so help-only paths
+    don't error out).
+    """
+    if config is None:
+        config_path = find_config(project_dir)
+        config = load_config(config_path) if config_path else AptlConfig()
+
+    local_path = Path(config.run_storage.local_path)
+    if not local_path.is_absolute():
+        local_path = project_dir / local_path
+    return LocalRunStore(local_path)

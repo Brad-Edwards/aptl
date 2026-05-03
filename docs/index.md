@@ -38,6 +38,8 @@ aptl lab start
 
 ### Components
 - [Wazuh SIEM](components/wazuh-siem.md)
+- [Wazuh Active Response](components/wazuh-active-response.md)
+- [Default Defensive Posture](components/default-defensive-posture.md) — what ships enabled vs disabled at first boot
 - [Kali Red Team](components/kali-redteam.md)
 - [Victim Containers](components/victim-containers.md)
 - [MCP Integration](components/mcp-integration.md)

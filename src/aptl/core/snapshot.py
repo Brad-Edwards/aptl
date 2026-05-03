@@ -171,10 +171,10 @@ def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
 
     # APTL version from package metadata
     try:
-        from importlib.metadata import version
+        from importlib.metadata import PackageNotFoundError, version
 
         versions.aptl_version = version("aptl")
-    except Exception:
+    except PackageNotFoundError:
         versions.aptl_version = "dev"
 
     return versions

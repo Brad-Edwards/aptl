@@ -2,57 +2,74 @@
 
 🎤 **Accepted to [Black Hat USA Arsenal 2026](https://blackhat.com/us-26/arsenal/schedule/#aptl-advanced-purple-team-labs-52322).** Live demo at the conference.
 
-# APTL — Advanced Purple Team Lab
+# APTL (Advanced Purple Team Lab)
 
-**Agentic purple-team lab where AI agents drive the red and blue sides against a realistic enterprise target stack.**
+**Agentic purple team lab with AI-controlled red and blue team operations**
 
-One `aptl lab start` brings up a self-contained Docker environment: a fictional company's infrastructure (AD, web, DB, file share, DNS, mail), a Kali red-team box, a full SOC stack (Wazuh + Suricata + MISP + TheHive + Cortex + Shuffle), a malware-analysis container, and MCP servers giving AI agents programmatic control over all of it. Scenarios are YAML-defined; every run captures a self-contained telemetry archive for post-hoc analysis.
+> **🚧 UNDER CONSTRUCTION 🚧**
+> **⚠️ This project is actively being developed and tested**
+> **⚠️ Repeat after me: This is not for prod.**
+> **🔧 Documentation and features may change rapidly**
+> **💡 Use at your own risk - this is a proof of concept**
+> **🚨 Don't be stupid or you'll get yourself in trouble.**
 
-**Use cases:** autonomous cyber-operations research, purple-team training, AI threat-actor assessment.
+## What is APTL?
 
-![AI red team owning the lab](assets/images/li_test/cline_red_team_test_20.png)
+A Docker-based purple team lab. One command brings up an isolated network with enterprise target infrastructure, a red team attack platform, a full SOC stack, and AI agent integration -- everything needed to run realistic attack-defend cycles.
 
-*Full screen-cap walkthrough: [AI Red Team Test (PDF)](assets/docs/ai_red_team_test.pdf).*
+**Target Infrastructure** -- a fictional company called TechVault Solutions, deployed as containers:
 
-## Status
+- Samba AD domain controller (`techvault.local` with user accounts, SPNs, groups)
+- PostgreSQL database with seeded customer data and intentional vulnerabilities
+- Vulnerable web application (SQLi, XSS, IDOR, command injection)
+- Samba file server with department shares and planted credentials
+- DNS server (Bind9 for internal resolution and C2 detection)
+- Email server (Postfix + Dovecot for phishing simulations)
+- Rocky Linux victim with SSH, Wazuh agent, Falco eBPF runtime monitoring, sudo misconfigurations
 
-**🚧 Active development. Not for production. Not hardened.** This lab gives AI agents access to real penetration-testing tools and runs intentionally vulnerable services. Container escapes and other security issues are possible — keep it on a host you can rebuild and a network you control. Always monitor red-team agents during scenarios.
+**Red Team** -- Kali Linux container with kali-tools-top10, every command logged to the SIEM. AI agents control it via MCP.
 
-## Quick Start
+**SOC Stack** -- detection, investigation, and response:
 
-```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
-pip install -e .
-aptl lab start
-```
+- Wazuh SIEM (manager + indexer + dashboard) collecting logs from all containers
+- Suricata IDS for network-level detection (C2, lateral movement, exfiltration)
+- MISP threat intelligence platform with IOC feeds, with a sync service that translates MISP indicators tagged `aptl:enforce` into Suricata `alert` rules (per [ADR-019](docs/adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md), Suricata stays IDS-only)
+- TheHive case management with Cortex analyzers for automated enrichment
+- Shuffle SOAR for automated response playbooks
 
-Once it's up:
+**Malware Analysis** -- reverse engineering container (Ubuntu) with radare2, yara, capa, FLOSS for binary analysis during blue team investigations.
 
-| Surface | URL / command |
-|---|---|
-| Wazuh Dashboard | <https://localhost:443> (`admin` / `SecretPassword`) |
-| Victim SSH | `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022` |
-| Kali SSH | `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023` |
-| Reverse engineering SSH | `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027` |
+**AI Agent Layer** -- MCP servers giving AI agents programmatic control across all of the above: red team ops, SIEM queries, threat intel, case management, SOAR playbooks, network IDS, and reverse engineering.
 
-Lifecycle:
+**Scenario Engine** -- YAML-defined attack scenarios with MITRE ATT&CK mapping. Each run captures all telemetry (Wazuh alerts, Suricata events, TheHive cases, MISP correlations, SOAR executions, container logs, MCP traces) into a self-contained archive for post-hoc analysis.
 
-```bash
-aptl lab status   # running containers
-aptl lab stop     # graceful stop
-aptl lab stop -v  # ⚠ destroys all lab data (Wazuh indexes, MISP, TheHive, configs)
-aptl kill         # emergency: kill MCP server processes
-aptl kill -c      # emergency: kill MCP processes AND all lab containers
-```
+**Python CLI** (`aptl`) -- lab lifecycle, scenario execution, and run management.
 
-## Requirements
+**Use cases:** autonomous cyber operations research, purple team training, AI threat actor assessment.
 
-- Docker + Docker Compose
-- Python 3.11+
-- 8 GB RAM, 20 GB disk
-- Linux / macOS / WSL2
-- Open ports: 443, 2022, 2023, 2027, 9200, 55000
+## Demo
+
+**AI Red Team Autonomous Reconnaissance:**
+![AI Red Team Nmap Scan](assets/images/li_test/cline_red_team_test_10.png)
+
+**Complete Attack Success:**
+![AI Red Team Victory](assets/images/li_test/cline_red_team_test_20.png)
+
+*All screen caps from this test: [AI Red Team Test (PDF)](assets/docs/ai_red_team_test.pdf)*
+
+---
+
+ALWAYS monitor AI red-team agents during scenarios.
+
+## Ethics Statement
+
+Defenders and decision-makers need examples of realistic adversarial use cases to guide planning and investments. Attackers are already aware of and experimenting with AI-enabled cyber operations. This lab uses consumer grade, commodity services and basic integrations that do not advance existing capabilities. No enhancements are made to AI agents' latent knowledge and abilities beyond granted Kali access.
+
+No red-team enhancements will be added to this public repository.
+
+An autonomous cyber operations range is currently under-development as a separate project.
+
+**⚠️ WARNING: This lab enables AI agents to run actual penetration testing tools. Container escape or other security issues may occur. Monitor closely.**
 
 ## Architecture
 
@@ -81,54 +98,147 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
                               AI Agents
 ```
 
-Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
+## Quick Start
 
-## AI Agents (MCP)
+```bash
+git clone https://github.com/Brad-Edwards/aptl.git
+cd aptl
 
-Build the MCP servers:
+pip install -e .
+aptl lab start
+```
+
+Manage the lab:
+
+```bash
+aptl lab status   # Show running containers
+aptl lab stop     # Stop the lab
+aptl lab stop -v  # DESTROYS ALL DATA (Wazuh indexes, MISP, TheHive, configs)
+aptl kill         # Emergency: kill all MCP server processes immediately
+aptl kill -c      # Emergency: kill MCP processes AND all lab containers
+```
+
+**Access:**
+
+- Wazuh Dashboard: <https://localhost:443> (admin/SecretPassword)
+- Victim SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022`
+- Kali SSH: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`
+- Reverse Engineering SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`
+
+## Requirements
+
+- Docker + Docker Compose
+- Python 3.11+ (for CLI)
+- 8GB+ RAM, 20GB+ disk
+- Linux/macOS/WSL2
+- Ports available: 443, 2022, 2023, 2027, 9200, 55000
+
+## Web UI
+
+An optional web interface provides a notebook-style workbench for lab management and scenario execution. Phase 1 covers Lab Home with container status and scenario listing.
+
+```bash
+# Install web dependencies
+pip install -e ".[web]"
+
+# Start the API server
+aptl web serve
+
+# In another terminal, start the frontend dev server
+cd web && npm install && npm run dev
+```
+
+**Access:** <http://localhost:5173> (dev) or <http://localhost:3000> (production)
+
+**Docker Compose:**
+```bash
+docker compose --profile web up --build
+```
+
+### Security Considerations
+
+The API container (`aptl-web-api`) requires access to the Docker socket (`/var/run/docker.sock`) to manage lab containers. This grants the container full Docker API access on the host. Mitigations:
+
+- The web UI is designed for **localhost-only** use — do not expose it to untrusted networks.
+- CORS is restricted to `localhost:3000` and `localhost:5173`.
+- No authentication is implemented; this is appropriate for a local lab tool, not internet-facing services.
+- Consider running with `--userns-remap` if your threat model requires reduced container privilege.
+
+## AI Integration (MCP)
+
+Build all MCP servers:
 
 ```bash
 ./mcp/build-all-mcps.sh
 ```
 
-Point your AI client (Claude Code, Cursor, Cline) at the entry points under `./mcp/<server>/build/index.js`. Full setup: [MCP Integration](docs/components/mcp-integration.md).
-
-Smoke-test the wiring once the lab is up:
-
-- Red side: ask the agent *"Use kali_info to show me the lab network"*
-- Blue side: ask the agent *"Use wazuh_query_alerts to show me recent alerts"*
-
-## Optional: Web UI
-
-Localhost-only notebook-style workbench for lab control and scenario runs.
+Or build individually:
 
 ```bash
-pip install -e ".[web]"
-aptl web serve                 # API server
-cd web && npm install && npm run dev   # frontend (separate terminal)
+cd mcp/mcp-red && npm install && npm run build && cd ../..
+cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
 ```
 
-Access at <http://localhost:5173> (dev) or <http://localhost:3000> (prod). The API container needs the host Docker socket; do not expose to untrusted networks.
+Configure your AI client (Claude Code, Cursor, Cline) to connect to the server entry points at `./mcp/<server>/build/index.js`. See [MCP Integration](docs/components/mcp-integration.md) for full setup.
+
+Test red team: Ask your AI agent "Use kali_info to show me the lab network"
+Test blue team: Ask your AI agent "Use wazuh_query_alerts to show me recent alerts"
 
 ## Documentation
 
-**Getting started:** [Installation](docs/getting-started/installation.md) · [Prerequisites](docs/getting-started/prerequisites.md) · [Quick Start Guide](docs/getting-started/quick-start.md)
+**Getting Started:**
+- [Installation](docs/getting-started/installation.md)
+- [Prerequisites](docs/getting-started/prerequisites.md)
+- [Quick Start Guide](docs/getting-started/quick-start.md)
 
-**Architecture:** [Overview](docs/architecture/index.md) · [Networking](docs/architecture/networking.md) · [Enterprise Infrastructure](docs/architecture/enterprise-infrastructure.md)
+**Architecture:**
+- [Overview](docs/architecture/index.md) -- Network topology, container layout, data flow
+- [Networking](docs/architecture/networking.md)
+- [Enterprise Infrastructure](docs/architecture/enterprise-infrastructure.md) -- TechVault design rationale
 
-**Components:** [Wazuh SIEM](docs/components/wazuh-siem.md) · [Kali Red Team](docs/components/kali-redteam.md) · [Victim Containers](docs/components/victim-containers.md) · [Reverse Engineering](docs/components/reverse-engineering-container.md) · [MCP Integration](docs/components/mcp-integration.md) · [Default Defensive Posture](docs/components/default-defensive-posture.md)
+**Components:**
+- [Wazuh SIEM](docs/components/wazuh-siem.md)
+- [Kali Red Team](docs/components/kali-redteam.md)
+- [Victim Containers](docs/components/victim-containers.md)
+- [Reverse Engineering](docs/components/reverse-engineering-container.md)
+- [MCP Integration](docs/components/mcp-integration.md)
 
-**Scenarios & runs:** [SOC Architecture Spec](docs/specs/soc-feature-spec.md)
+**Scenarios & Runs:**
+- [SOC Architecture Spec](docs/specs/soc-feature-spec.md) -- Scenario engine, run archives, collectors
 
-**Reference:** [TechVault Company Profile](docs/reference/techvault-company-profile.md) · [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md) · [Container Template Guide](docs/containers/victim-template-guide.md)
+**Testing:**
+- [Smoke Test Plan](docs/testing/smoke-test-plan.md)
 
-**Ops:** [Troubleshooting](docs/troubleshooting/) · [Known Issues](docs/known-issues/uat-findings-2026-02-23.md) · [Smoke Test Plan](docs/testing/smoke-test-plan.md)
+**Reference:**
+- [TechVault Company Profile](docs/reference/techvault-company-profile.md)
+- [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md)
+- [Container Template Guide](docs/containers/victim-template-guide.md)
 
-## Ethics & Disclaimers
+**Operations:**
+- [Troubleshooting](docs/troubleshooting/)
+- [Known Issues](docs/known-issues/uat-findings-2026-02-23.md)
 
-Defenders and decision-makers need realistic adversarial use cases to guide planning and investments. Attackers are already experimenting with AI-enabled cyber operations. APTL uses commodity services and basic integrations that don't advance existing capabilities; no enhancements are made to AI agents' latent abilities beyond granted Kali access. **No red-team enhancements will be added to this public repository.** An autonomous cyber-operations range is under development as a separate project.
+## Security Warnings
 
-You are responsible for following all applicable laws. The author takes no responsibility for your use of this lab. The repository contains intentional **test credentials** (covered by `.gitguardian.yaml`) for lab functionality — they are dummy values for educational use, not production secrets.
+**⚠️ IMPORTANT DISCLAIMERS:**
+
+- **AI Agents**: This lab gives AI agents access to real penetration testing tools
+- **Container Security**: No guarantees about container isolation or escape prevention
+- **Network Security**: Docker networking may not prevent all forms of network access
+- **Host Security**: Monitor the agent closely if it has cli access on your host
+- **Legal Compliance**: You are responsible for following all applicable laws
+- **Educational Use**: Intended for security research and training only
+
+**The author takes no responsibility for your use of this lab.**
+
+## Test Credentials Notice
+
+This repository contains **intentional test credentials** for lab functionality:
+
+- All credentials are dummy/test values for educational use
+- Covered by GitGuardian whitelist (`.gitguardian.yaml`)
+- **NOT production secrets** - safe for educational environments
+- Environment contains vulnerable configurations by design
 
 ## License
 
@@ -136,4 +246,4 @@ MIT
 
 ---
 
-*10-23 AI hacker shenanigans 🚓*
+10-23 AI hacker shenanigans 🚓

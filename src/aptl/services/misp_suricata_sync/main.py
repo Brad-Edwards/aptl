@@ -12,6 +12,7 @@ import logging
 import signal
 import threading
 from pathlib import Path
+from typing import Callable
 
 from aptl.services.misp_suricata_sync.config import ServiceConfig
 from aptl.services.misp_suricata_sync.misp_client import MispClient
@@ -29,6 +30,13 @@ log = get_logger("misp_suricata_sync")
 
 _READY_TIMEOUT_SECONDS = 10
 
+# (target_path, content) -> True if the file was rewritten, False if it
+# was already current. The default :func:`write_if_changed` is the
+# atomic+idempotent writer in :mod:`rule_writer`; tests inject fakes via
+# the constructor seam to assert ordering / change-detection behavior
+# without touching the filesystem.
+WriteFn = Callable[[Path, str], bool]
+
 
 def _hash_list_path(rules_out_path: Path, hash_type: str) -> Path:
     return rules_out_path.parent / f"misp-{hash_type}.list"
@@ -43,10 +51,12 @@ class SyncRunner:
         *,
         client: MispClient,
         reloader: SuricataReloader,
+        write_fn: WriteFn = write_if_changed,
     ) -> None:
         self._cfg = cfg
         self._client = client
         self._reloader = reloader
+        self._write = write_fn
         self._reload_pending = False
 
     @property
@@ -82,13 +92,13 @@ class SyncRunner:
         any_changed = False
         for hash_type in HASH_TYPES:
             digests = result.hash_lists.get(hash_type, [])
-            if write_if_changed(
+            if self._write(
                 _hash_list_path(self._cfg.rules_out_path, hash_type),
                 render_hash_list_file(hash_type, digests),
             ):
                 any_changed = True
 
-        if write_if_changed(self._cfg.rules_out_path, rules_text):
+        if self._write(self._cfg.rules_out_path, rules_text):
             any_changed = True
 
         if not (any_changed or self._reload_pending):

@@ -1010,9 +1010,8 @@ class TestSyncLoop:
             log_level="INFO",
         )
 
-    def test_skips_write_when_misp_returns_none(self, tmp_path: Path, mocker):
+    def test_skips_write_when_misp_returns_none(self, tmp_path: Path):
         from aptl.services.misp_suricata_sync.main import SyncRunner
-        from aptl.services.misp_suricata_sync import main as main_mod
 
         cfg = self._cfg(tmp_path)
         cfg.rules_out_path.write_text("preserved\n")
@@ -1020,66 +1019,57 @@ class TestSyncLoop:
         client = MagicMock()
         client.fetch_tagged_attributes.return_value = None
         reloader = MagicMock()
+        write_fn = MagicMock(return_value=False)
 
-        write_spy = mocker.patch.object(
-            main_mod, "write_if_changed", return_value=False
-        )
+        SyncRunner(
+            cfg, client=client, reloader=reloader, write_fn=write_fn
+        ).run_once()
 
-        SyncRunner(cfg, client=client, reloader=reloader).run_once()
-
-        write_spy.assert_not_called()
+        write_fn.assert_not_called()
         reloader.reload_rules.assert_not_called()
         assert cfg.rules_out_path.read_text() == "preserved\n"
 
-    def test_skips_reload_when_writer_reports_no_change(
-        self, tmp_path: Path, mocker
-    ):
+    def test_skips_reload_when_writer_reports_no_change(self, tmp_path: Path):
         from aptl.services.misp_suricata_sync.main import SyncRunner
-        from aptl.services.misp_suricata_sync import main as main_mod
+        from aptl.services.misp_suricata_sync.translator import HASH_TYPES
 
         cfg = self._cfg(tmp_path)
         client = MagicMock()
         client.fetch_tagged_attributes.return_value = []
         reloader = MagicMock()
+        write_fn = MagicMock(return_value=False)
 
-        write_spy = mocker.patch.object(
-            main_mod, "write_if_changed", return_value=False
-        )
-
-        SyncRunner(cfg, client=client, reloader=reloader).run_once()
+        SyncRunner(
+            cfg, client=client, reloader=reloader, write_fn=write_fn
+        ).run_once()
 
         # 1 main rule file + one sidecar per HASH_TYPES entry (always
         # written every tick). Use the constant so adding a new hash
         # type doesn't silently break this assertion.
-        from aptl.services.misp_suricata_sync.translator import HASH_TYPES
-        assert write_spy.call_count == 1 + len(HASH_TYPES)
+        assert write_fn.call_count == 1 + len(HASH_TYPES)
         reloader.reload_rules.assert_not_called()
 
-    def test_triggers_reload_when_writer_reports_change(
-        self, tmp_path: Path, mocker
-    ):
+    def test_triggers_reload_when_writer_reports_change(self, tmp_path: Path):
         from aptl.services.misp_suricata_sync.main import SyncRunner
-        from aptl.services.misp_suricata_sync import main as main_mod
 
         cfg = self._cfg(tmp_path)
         client = MagicMock()
         client.fetch_tagged_attributes.return_value = []
         reloader = MagicMock()
         reloader.reload_rules.return_value = True
+        write_fn = MagicMock(return_value=True)
 
-        mocker.patch.object(main_mod, "write_if_changed", return_value=True)
-
-        SyncRunner(cfg, client=client, reloader=reloader).run_once()
+        SyncRunner(
+            cfg, client=client, reloader=reloader, write_fn=write_fn
+        ).run_once()
 
         reloader.reload_rules.assert_called_once()
 
-    def test_reload_retried_on_next_tick_after_failure(
-        self, tmp_path: Path, mocker
-    ):
+    def test_reload_retried_on_next_tick_after_failure(self, tmp_path: Path):
         """If reload fails after a successful write, the next tick must retry
         even though the file is no longer changing."""
         from aptl.services.misp_suricata_sync.main import SyncRunner
-        from aptl.services.misp_suricata_sync import main as main_mod
+        from aptl.services.misp_suricata_sync.translator import HASH_TYPES
 
         cfg = self._cfg(tmp_path)
         client = MagicMock()
@@ -1087,17 +1077,18 @@ class TestSyncLoop:
         reloader = MagicMock()
         reloader.reload_rules.side_effect = [False, True]
 
-        # Tick 1: writer reports change. Tick 2: writer reports no change.
-        # 1 main rule file + one sidecar per HASH_TYPES entry per tick;
-        # first tick all True, second tick all False.
-        from aptl.services.misp_suricata_sync.translator import HASH_TYPES
+        # Tick 1: writer reports change everywhere. Tick 2: writer
+        # reports no change. 1 main rule file + one sidecar per
+        # HASH_TYPES entry per tick.
         n_writes_per_tick = 1 + len(HASH_TYPES)
-        side_effect = [True] * n_writes_per_tick + [False] * n_writes_per_tick
-        mocker.patch.object(
-            main_mod, "write_if_changed", side_effect=side_effect
+        write_fn = MagicMock(
+            side_effect=[True] * n_writes_per_tick
+            + [False] * n_writes_per_tick
         )
 
-        runner = SyncRunner(cfg, client=client, reloader=reloader)
+        runner = SyncRunner(
+            cfg, client=client, reloader=reloader, write_fn=write_fn
+        )
         runner.run_once()
         assert runner.reload_pending is True
         runner.run_once()
@@ -1105,14 +1096,13 @@ class TestSyncLoop:
         assert reloader.reload_rules.call_count == 2
 
     def test_hash_list_files_written_before_main_rule_file(
-        self, tmp_path: Path, mocker
+        self, tmp_path: Path
     ):
         """Suricata's rule file references hash list files; the lists must be
         in place before the rule file is replaced or Suricata could read a
-        rule pointing at a stale or missing list. This asserts true ordering
-        by capturing every write through the same module-level function."""
+        rule pointing at a stale or missing list. The DI'd write_fn lets us
+        capture every write in a single ordered list."""
         from aptl.services.misp_suricata_sync.main import SyncRunner
-        from aptl.services.misp_suricata_sync import main as main_mod
 
         cfg = self._cfg(tmp_path)
         attrs = [
@@ -1123,16 +1113,16 @@ class TestSyncLoop:
 
         write_order: list[str] = []
 
-        def write_spy(target, content):
+        def write_fn(target: Path, content: str) -> bool:
             write_order.append(str(target))
             return True
-
-        mocker.patch.object(main_mod, "write_if_changed", side_effect=write_spy)
 
         reloader = MagicMock()
         reloader.reload_rules.return_value = True
 
-        SyncRunner(cfg, client=client, reloader=reloader).run_once()
+        SyncRunner(
+            cfg, client=client, reloader=reloader, write_fn=write_fn
+        ).run_once()
 
         # Both the sidecar list and the rule file got written.
         assert any("misp-sha256.list" in p for p in write_order), write_order

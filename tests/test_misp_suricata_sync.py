@@ -75,7 +75,9 @@ class TestServiceConfig:
         assert cfg.misp_verify_ssl is False
         assert cfg.ioc_tag_filter == "aptl:enforce"
         assert cfg.sync_interval_seconds == 300
-        assert cfg.sid_base == 2_000_000
+        # Default lives well above ET Open's 2.x million range; see
+        # translator.py's _SID_OFFSET_MASK rationale.
+        assert cfg.sid_base == 99_000_000
         assert cfg.log_level == "INFO"
 
     def test_rejects_missing_api_key(self, monkeypatch):
@@ -119,8 +121,31 @@ class TestServiceConfig:
         from aptl.services.misp_suricata_sync.config import ServiceConfig
 
         monkeypatch.setenv("MISP_API_KEY", "k")
+        # Below the lower bound (would land inside ET Open's 2.x million band).
         monkeypatch.setenv("SID_BASE", "999")
         with pytest.raises(ValidationError):
+            ServiceConfig.from_env()
+
+    def test_rejects_sid_base_that_overflows_documented_band(self, monkeypatch):
+        """SID_BASE + 24-bit offset must stay below 2_000_000_000. A
+        too-large base would push generated SIDs into a region the
+        translator's offset arithmetic was never validated against."""
+        from aptl.services.misp_suricata_sync.config import ServiceConfig
+
+        monkeypatch.setenv("MISP_API_KEY", "k")
+        monkeypatch.setenv("SID_BASE", str(1_999_999_999))
+        with pytest.raises(ValidationError):
+            ServiceConfig.from_env()
+
+    def test_rejects_typo_in_verify_ssl(self, monkeypatch):
+        """A typo like ``MISP_VERIFY_SSL=ture`` previously fell through
+        silently to ``False``, turning a typo into a security regression.
+        The strict parser now raises."""
+        from aptl.services.misp_suricata_sync.config import ServiceConfig
+
+        monkeypatch.setenv("MISP_API_KEY", "k")
+        monkeypatch.setenv("MISP_VERIFY_SSL", "ture")
+        with pytest.raises(ValueError):
             ServiceConfig.from_env()
 
     def test_accepts_custom_overrides(self, monkeypatch):
@@ -132,14 +157,14 @@ class TestServiceConfig:
         monkeypatch.setenv("MISP_CA_CERT_PATH", "/etc/aptl/lab-ca.pem")
         monkeypatch.setenv("IOC_TAG_FILTER", "tlp:white")
         monkeypatch.setenv("SYNC_INTERVAL_SECONDS", "60")
-        monkeypatch.setenv("SID_BASE", "2500000")
+        monkeypatch.setenv("SID_BASE", "150000000")
         cfg = ServiceConfig.from_env()
         assert cfg.misp_url == "https://misp.lab"
         assert cfg.misp_verify_ssl is True
         assert cfg.misp_ca_cert_path == Path("/etc/aptl/lab-ca.pem")
         assert cfg.ioc_tag_filter == "tlp:white"
         assert cfg.sync_interval_seconds == 60
-        assert cfg.sid_base == 2_500_000
+        assert cfg.sid_base == 150_000_000
 
     def test_ca_cert_path_defaults_to_none(self, monkeypatch):
         from aptl.services.misp_suricata_sync.config import ServiceConfig
@@ -174,7 +199,7 @@ def _attr(type_: str, value: str, event_id: str | None = None):
 def _make_translator(**overrides):
     from aptl.services.misp_suricata_sync.translator import IocTranslator
 
-    kwargs = dict(sid_base=2_000_000)
+    kwargs = dict(sid_base=99_000_000)
     kwargs.update(overrides)
     return IocTranslator(**kwargs)
 
@@ -484,17 +509,17 @@ class TestTranslator:
         )
 
     def test_sids_stay_within_documented_band(self):
-        """SID_BASE + 20-bit offset ⇒ generated SIDs fall in
-        [SID_BASE, SID_BASE + 0xFFFFF]. Anything wider risks colliding
-        with bundled `suricata.rules` / operator `local.rules`."""
+        """SID_BASE + 24-bit offset ⇒ generated SIDs fall in
+        [SID_BASE, SID_BASE + 0xFFFFFF]. The default 99_000_000 + ~16M
+        keeps the band entirely outside ET Open's 2.x million range."""
         attrs = [
             _attr("ip-dst", f"198.51.100.{i}") for i in range(1, 50)
         ] + [
             _attr("domain", f"e{i}.example.com") for i in range(1, 50)
         ]
-        result = _make_translator(sid_base=2_000_000).translate(attrs)
+        result = _make_translator(sid_base=99_000_000).translate(attrs)
         for r in result.rules:
-            assert 2_000_000 <= r.sid <= 2_000_000 + 0xFFFFF, r.sid
+            assert 99_000_000 <= r.sid <= 99_000_000 + 0xFFFFFF, r.sid
 
 
 class TestRenderRulesFile:
@@ -506,7 +531,7 @@ class TestRenderRulesFile:
             result.rules,
             misp_url="https://misp.lab",
             tag_filter="aptl:enforce",
-            sid_base=2_000_000,
+            sid_base=99_000_000,
         )
         assert "# APTL MISP-to-Suricata sync" in text
         assert "https://misp.lab" in text
@@ -524,7 +549,7 @@ class TestRenderRulesFile:
             result.rules,
             misp_url="https://misp.lab",
             tag_filter="aptl:enforce",
-            sid_base=2_000_000,
+            sid_base=99_000_000,
         )
         assert "generated_at" not in text
 
@@ -535,7 +560,7 @@ class TestRenderRulesFile:
             [],
             misp_url="https://misp.lab",
             tag_filter="aptl:enforce",
-            sid_base=2_000_000,
+            sid_base=99_000_000,
         )
         assert "ioc_count=0" in text
 
@@ -733,7 +758,7 @@ class TestMispClient:
             sync_interval_seconds=300,
             rules_out_path=Path("/tmp/misp-iocs.rules"),
             suricata_socket_path=Path("/tmp/suricata.sock"),
-            sid_base=2_000_000,
+            sid_base=99_000_000,
             log_level="INFO",
         )
         defaults.update(overrides)
@@ -895,10 +920,15 @@ class TestMispClient:
 
 
 class TestCurlTLSWiring:
-    """Direct tests for the curl-arg construction in _curl_json."""
+    """Direct tests for the secret-safe curl helper.
+
+    Lives in this file because the helper is used by the sync service,
+    but it covers the shared ``aptl.utils.curl_safe.curl_json`` directly
+    so collectors and any future SOC client get the same guarantees.
+    """
 
     def _run(self, monkeypatch, **kwargs):
-        from aptl.services.misp_suricata_sync import misp_client as mc
+        from aptl.utils import curl_safe
 
         captured: dict = {}
 
@@ -916,8 +946,8 @@ class TestCurlTLSWiring:
                         pass
             return MagicMock(returncode=0, stdout='{"ok":1}', stderr="")
 
-        monkeypatch.setattr(mc.subprocess, "run", fake_run)
-        result = mc._curl_json(
+        monkeypatch.setattr(curl_safe.subprocess, "run", fake_run)
+        result = curl_safe.curl_json(
             "https://misp/x",
             auth_header=kwargs.get("auth_header", "k"),
             insecure=kwargs.get("insecure", False),
@@ -980,7 +1010,7 @@ class TestSyncLoop:
             sync_interval_seconds=300,
             rules_out_path=tmp_path / "misp-iocs.rules",
             suricata_socket_path=tmp_path / "suricata.sock",
-            sid_base=2_000_000,
+            sid_base=99_000_000,
             log_level="INFO",
         )
 
@@ -1002,9 +1032,10 @@ class TestSyncLoop:
         assert cfg.rules_out_path.read_text() == "preserved\n"
 
     def test_skips_reload_when_writer_reports_no_change(
-        self, tmp_path: Path
+        self, tmp_path: Path, mocker
     ):
         from aptl.services.misp_suricata_sync.main import SyncRunner
+        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
 
         cfg = self._cfg(tmp_path)
         client = MagicMock()
@@ -1012,6 +1043,14 @@ class TestSyncLoop:
         writer = MagicMock()
         writer.write_if_changed.return_value = False
         reloader = MagicMock()
+
+        # Force the sidecar list writers SyncRunner constructs internally
+        # to also report "no change", so this test exercises the
+        # reload-skip path even after the loop started writing every
+        # hash list every tick (cycle-5 fix #5).
+        mocker.patch.object(
+            RuleFileWriter, "write_if_changed", return_value=False
+        )
 
         SyncRunner(cfg, client=client, writer=writer, reloader=reloader).run_once()
 

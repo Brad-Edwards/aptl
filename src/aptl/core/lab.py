@@ -17,7 +17,12 @@ import yaml
 from aptl.core.certs import ensure_ssl_certs
 from aptl.core.config import AptlConfig, find_config, load_config
 from aptl.core.credentials import sync_dashboard_config, sync_manager_config
-from aptl.core.env import EnvVars, env_vars_from_dict, load_dotenv
+from aptl.core.env import (
+    EnvVars,
+    env_vars_from_dict,
+    find_placeholder_env_values,
+    load_dotenv,
+)
 from aptl.core.services import (
     check_indexer_ready,
     check_manager_api_ready,
@@ -284,6 +289,18 @@ def orchestrate_lab_start(
     except (FileNotFoundError, ValueError) as exc:
         log.error("Failed to load .env: %s", exc)
         return LabResult(success=False, error=f"Failed to load .env: {exc}")
+
+    placeholders = find_placeholder_env_values(raw_env)
+    if placeholders:
+        msg = (
+            "Refusing to start lab: .env values for "
+            f"{', '.join(placeholders)} are still set to .env.example "
+            "placeholders. Replace them with real secrets before "
+            "starting the lab — the SOC stack would otherwise come up "
+            "with admin API keys anyone can read in the repo."
+        )
+        log.error(msg)
+        return LabResult(success=False, error=msg)
 
     # Step 2: Load aptl.json config
     log.info("Step 2: Loading configuration...")

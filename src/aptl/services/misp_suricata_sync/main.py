@@ -18,6 +18,7 @@ from aptl.services.misp_suricata_sync.misp_client import MispClient
 from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
 from aptl.services.misp_suricata_sync.suricata_reloader import SuricataReloader
 from aptl.services.misp_suricata_sync.translator import (
+    HASH_TYPES,
     IocTranslator,
     render_hash_list_file,
     render_rules_file,
@@ -76,9 +77,12 @@ class SyncRunner:
 
         # Order matters: write each per-type hash list BEFORE the rule file
         # that references it, so Suricata never reads a rule pointing at a
-        # stale or missing list.
+        # stale or missing list. Every hash type is rewritten on every
+        # tick — even if MISP has zero IOCs of that type — so the last
+        # IOC of a type being removed does not leave a stale list behind.
         any_changed = False
-        for hash_type, digests in result.hash_lists.items():
+        for hash_type in HASH_TYPES:
+            digests = result.hash_lists.get(hash_type, [])
             list_path = _hash_list_path(self._cfg.rules_out_path, hash_type)
             list_writer = RuleFileWriter(list_path)
             if list_writer.write_if_changed(

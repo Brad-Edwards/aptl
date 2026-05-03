@@ -1,9 +1,9 @@
 """Service entrypoint: poll MISP, render rules, reload Suricata.
 
-The loop is split into a pure :func:`run_once` that processes a single tick
-plus a :func:`run_loop` that schedules ticks against a stop event. Both
-accept already-constructed collaborators so they can be unit-tested without
-real MISP, sockets, or filesystem.
+The loop is split into a stateful :class:`SyncRunner` that processes ticks
+plus a :func:`run_loop` that drives it against a stop event. Both accept
+already-constructed collaborators so they can be unit-tested without real
+MISP, sockets, or filesystem.
 """
 
 from __future__ import annotations
@@ -33,56 +33,80 @@ def _hash_list_path(rules_out_path: Path, hash_type: str) -> Path:
     return rules_out_path.parent / f"misp-{hash_type}.list"
 
 
-def run_once(
-    cfg: ServiceConfig,
-    *,
-    client: MispClient,
-    writer: RuleFileWriter,
-    reloader: SuricataReloader,
-) -> None:
-    """Execute one sync tick. Tolerates MISP and reloader failures."""
-    attrs = client.fetch_tagged_attributes()
-    if attrs is None:
-        log.warning(
-            "MISP fetch failed; preserving existing %s",
-            cfg.rules_out_path,
+class SyncRunner:
+    """One sync tick at a time, with reload-retry state across ticks."""
+
+    def __init__(
+        self,
+        cfg: ServiceConfig,
+        *,
+        client: MispClient,
+        writer: RuleFileWriter,
+        reloader: SuricataReloader,
+    ) -> None:
+        self._cfg = cfg
+        self._client = client
+        self._writer = writer
+        self._reloader = reloader
+        self._reload_pending = False
+
+    @property
+    def reload_pending(self) -> bool:
+        return self._reload_pending
+
+    def run_once(self) -> None:
+        """Execute one sync tick. Tolerates MISP and reloader failures."""
+        attrs = self._client.fetch_tagged_attributes()
+        if attrs is None:
+            log.warning(
+                "MISP fetch failed or returned malformed envelope; preserving "
+                "existing %s",
+                self._cfg.rules_out_path,
+            )
+            return
+
+        translator = IocTranslator(
+            sid_base=self._cfg.sid_base,
+            rules_out_dir=str(self._cfg.rules_out_path.parent),
         )
-        return
+        result = translator.translate(attrs)
+        rules_text = render_rules_file(
+            result.rules,
+            misp_url=self._cfg.misp_url,
+            tag_filter=self._cfg.ioc_tag_filter,
+            sid_base=self._cfg.sid_base,
+        )
 
-    translator = IocTranslator(
-        sid_base=cfg.sid_base,
-        rules_out_dir=str(cfg.rules_out_path.parent),
-    )
-    result = translator.translate(attrs)
-    rules_text = render_rules_file(
-        result.rules,
-        misp_url=cfg.misp_url,
-        tag_filter=cfg.ioc_tag_filter,
-        sid_base=cfg.sid_base,
-    )
+        # Order matters: write each per-type hash list BEFORE the rule file
+        # that references it, so Suricata never reads a rule pointing at a
+        # stale or missing list.
+        any_changed = False
+        for hash_type, digests in result.hash_lists.items():
+            list_path = _hash_list_path(self._cfg.rules_out_path, hash_type)
+            list_writer = RuleFileWriter(list_path)
+            if list_writer.write_if_changed(
+                render_hash_list_file(hash_type, digests)
+            ):
+                any_changed = True
 
-    changed = writer.write_if_changed(rules_text)
+        if self._writer.write_if_changed(rules_text):
+            any_changed = True
 
-    # Mirror each non-empty hash bucket to its sidecar list file. Each list
-    # uses its own writer instance so the atomic-rename contract still holds
-    # per file.
-    for hash_type, digests in result.hash_lists.items():
-        list_path = _hash_list_path(cfg.rules_out_path, hash_type)
-        list_writer = RuleFileWriter(list_path)
-        if list_writer.write_if_changed(render_hash_list_file(hash_type, digests)):
-            changed = True
+        if not (any_changed or self._reload_pending):
+            log.debug("No rule changes; skipping reload")
+            return
 
-    if not changed:
-        log.debug("No rule changes; skipping reload")
-        return
+        if self._reload_pending and not any_changed:
+            log.info("Retrying Suricata reload after prior failure")
 
-    log.info(
-        "Wrote %d rules (+ %d hash-type sidecars) to %s; triggering Suricata reload",
-        len(result.rules),
-        len(result.hash_lists),
-        cfg.rules_out_path,
-    )
-    reloader.reload_rules()
+        log.info(
+            "Wrote %d rules (+ %d hash-type sidecars) to %s; triggering Suricata reload",
+            len(result.rules),
+            len(result.hash_lists),
+            self._cfg.rules_out_path,
+        )
+        ok = self._reloader.reload_rules()
+        self._reload_pending = not ok
 
 
 def run_loop(
@@ -99,9 +123,25 @@ def run_loop(
             break
         log.info("Waiting for MISP to become reachable...")
 
+    runner = SyncRunner(cfg, client=client, writer=writer, reloader=reloader)
     while not stop.is_set():
-        run_once(cfg, client=client, writer=writer, reloader=reloader)
+        runner.run_once()
         stop.wait(cfg.sync_interval_seconds)
+
+
+# Backwards-compatible function entry point used by tests that don't need
+# multi-tick state. Each call constructs a fresh :class:`SyncRunner`, so
+# reload-retry is a no-op in the function form.
+def run_once(
+    cfg: ServiceConfig,
+    *,
+    client: MispClient,
+    writer: RuleFileWriter,
+    reloader: SuricataReloader,
+) -> None:
+    SyncRunner(
+        cfg, client=client, writer=writer, reloader=reloader
+    ).run_once()
 
 
 def main() -> int:

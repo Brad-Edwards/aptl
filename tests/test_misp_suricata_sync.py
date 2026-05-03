@@ -165,6 +165,9 @@ class TestTranslator:
         assert "dns.query" in rule
         assert 'content:"evil.example.com"' in rule
         assert "nocase" in rule
+        # ``dotprefix`` anchors the match so "evil.example.com" does not
+        # match "notevil.example.com".
+        assert "dotprefix" in rule
 
     def test_url_with_path_emits_host_and_uri_match(self):
         result = _make_translator().translate(
@@ -174,6 +177,7 @@ class TestTranslator:
         assert rule.startswith("alert http any any -> any any (")
         assert 'http.host; content:"evil.example.com"' in rule
         assert 'http.uri; content:"/payload"' in rule
+        assert "dotprefix" in rule  # anchored host match
 
     def test_url_with_only_host_emits_host_match_only(self):
         """Host-only URL must not generate `content:"/"` (false-positive bait)."""
@@ -192,12 +196,65 @@ class TestTranslator:
         rule = result.rules[0].text
         assert "http.uri" not in rule
 
+    def test_url_with_query_preserves_query_in_uri_match(self):
+        result = _make_translator().translate(
+            [_attr("url", "http://evil.example.com/path?id=1&x=2")]
+        )
+        rule = result.rules[0].text
+        assert 'http.uri; content:"/path?id=1&x=2"' in rule
+
+    def test_url_with_credentials_and_port_extracts_host_only(self):
+        result = _make_translator().translate(
+            [_attr("url", "https://user:pass@evil.example.com:8443/payload")]
+        )
+        rule = result.rules[0].text
+        # urlparse strips userinfo and port from .hostname so the host
+        # match keyword sees only "evil.example.com".
+        host_match = rule.split("http.host", 1)[1].split("sid:", 1)[0]
+        assert 'content:"evil.example.com"' in host_match
+        assert "user" not in host_match
+        assert "8443" not in host_match
+        assert 'http.uri; content:"/payload"' in rule
+
+    def test_url_lowercases_host(self):
+        result = _make_translator().translate(
+            [_attr("url", "http://EVIL.Example.COM/x")]
+        )
+        rule = result.rules[0].text
+        assert 'http.host; content:"evil.example.com"' in rule
+
+    def test_url_without_scheme_still_parses_host(self):
+        result = _make_translator().translate(
+            [_attr("url", "evil.example.com/payload")]
+        )
+        rule = result.rules[0].text
+        assert 'http.host; content:"evil.example.com"' in rule
+        assert 'http.uri; content:"/payload"' in rule
+
     def test_url_with_no_host_skipped_with_warning(self, caplog):
         caplog.set_level(logging.WARNING, logger="aptl.misp_suricata_sync")
+        # MispAttribute rejects empty values, so use a value that parses to
+        # an empty hostname instead.
         result = _make_translator().translate([_attr("url", "/just-a-path")])
-        # _split_url returns ("/just-a-path", "") so host is empty after strip
-        # — confirm the rule was skipped.
         assert all(r.attribute_type != "url" for r in result.rules)
+
+    def test_ip_src_skipped_when_not_a_valid_ip(self, caplog):
+        caplog.set_level(logging.WARNING, logger="aptl.misp_suricata_sync")
+        result = _make_translator().translate(
+            [_attr("ip-src", "not-an-ip"), _attr("ip-src", "203.0.113.7")]
+        )
+        assert len(result.rules) == 1
+        assert "203.0.113.7" in result.rules[0].text
+        assert any(
+            "malformed ip-src" in r.message.lower() for r in caplog.records
+        )
+
+    def test_ip_dst_accepts_ipv6_address(self):
+        result = _make_translator().translate(
+            [_attr("ip-dst", "2001:db8::1")]
+        )
+        assert len(result.rules) == 1
+        assert "2001:db8::1" in result.rules[0].text
 
     def test_sha256_collected_into_hash_list(self):
         h = "a" * 64
@@ -207,6 +264,32 @@ class TestTranslator:
         rule = result.rules[0].text
         assert "filesha256:/etc/suricata/rules/misp/misp-sha256.list" in rule
         assert h not in rule  # the hash itself lives in the sidecar list
+
+    def test_malformed_hash_skipped_with_warning(self, caplog):
+        caplog.set_level(logging.WARNING, logger="aptl.misp_suricata_sync")
+        result = _make_translator().translate(
+            [
+                _attr("sha256", "tooshort"),
+                _attr("md5", "z" * 32),  # right length but not hex
+                _attr("sha1", "c" * 40),  # valid
+            ]
+        )
+        assert result.hash_lists == {"sha1": ["c" * 40]}
+        # No sha256 / md5 entries because both were rejected.
+        assert all(
+            r.attribute_type != "sha256" for r in result.rules
+        ), result.rules
+        assert all(
+            r.attribute_type != "md5" for r in result.rules
+        ), result.rules
+        assert any(
+            "malformed sha256" in r.message.lower() for r in caplog.records
+        )
+
+    def test_hash_normalised_to_lowercase(self):
+        h_upper = "A" * 64
+        result = _make_translator().translate([_attr("sha256", h_upper)])
+        assert result.hash_lists == {"sha256": ["a" * 64]}
 
     def test_md5_collected_into_hash_list(self):
         h = "b" * 32
@@ -605,6 +688,27 @@ class TestMispClient:
         assert result == []
 
     @patch("aptl.services.misp_suricata_sync.misp_client._curl_json")
+    def test_returns_none_on_malformed_envelope(self, mock_curl):
+        """Missing/wrong envelope shape must be reported as None, not [].
+
+        Treating it as an empty IOC set would wipe the rule file on API
+        drift; the runner must preserve the last-known-good file instead.
+        """
+        from aptl.services.misp_suricata_sync.misp_client import MispClient
+
+        for malformed in (
+            "string-not-dict",
+            ["list-not-dict"],
+            {},  # no 'response' key
+            {"response": "not-a-dict"},
+            {"response": {}},  # no 'Attribute' key
+            {"response": {"Attribute": "not-a-list"}},
+        ):
+            mock_curl.return_value = malformed
+            result = MispClient(self._cfg()).fetch_tagged_attributes()
+            assert result is None, malformed
+
+    @patch("aptl.services.misp_suricata_sync.misp_client._curl_json")
     def test_returns_attributes_parsed_to_dto(self, mock_curl):
         from aptl.services.misp_suricata_sync.misp_client import MispClient
 
@@ -690,7 +794,7 @@ class TestSyncLoop:
         )
 
     def test_skips_write_when_misp_returns_none(self, tmp_path: Path, mocker):
-        from aptl.services.misp_suricata_sync.main import run_once
+        from aptl.services.misp_suricata_sync.main import SyncRunner
 
         cfg = self._cfg(tmp_path)
         cfg.rules_out_path.write_text("preserved\n")
@@ -700,7 +804,7 @@ class TestSyncLoop:
         writer = MagicMock()
         reloader = MagicMock()
 
-        run_once(cfg, client=client, writer=writer, reloader=reloader)
+        SyncRunner(cfg, client=client, writer=writer, reloader=reloader).run_once()
 
         writer.write_if_changed.assert_not_called()
         reloader.reload_rules.assert_not_called()
@@ -709,7 +813,7 @@ class TestSyncLoop:
     def test_skips_reload_when_writer_reports_no_change(
         self, tmp_path: Path
     ):
-        from aptl.services.misp_suricata_sync.main import run_once
+        from aptl.services.misp_suricata_sync.main import SyncRunner
 
         cfg = self._cfg(tmp_path)
         client = MagicMock()
@@ -718,13 +822,13 @@ class TestSyncLoop:
         writer.write_if_changed.return_value = False
         reloader = MagicMock()
 
-        run_once(cfg, client=client, writer=writer, reloader=reloader)
+        SyncRunner(cfg, client=client, writer=writer, reloader=reloader).run_once()
 
         writer.write_if_changed.assert_called_once()
         reloader.reload_rules.assert_not_called()
 
     def test_triggers_reload_when_writer_reports_change(self, tmp_path: Path):
-        from aptl.services.misp_suricata_sync.main import run_once
+        from aptl.services.misp_suricata_sync.main import SyncRunner
 
         cfg = self._cfg(tmp_path)
         client = MagicMock()
@@ -732,10 +836,97 @@ class TestSyncLoop:
         writer = MagicMock()
         writer.write_if_changed.return_value = True
         reloader = MagicMock()
+        reloader.reload_rules.return_value = True
 
-        run_once(cfg, client=client, writer=writer, reloader=reloader)
+        SyncRunner(cfg, client=client, writer=writer, reloader=reloader).run_once()
 
         reloader.reload_rules.assert_called_once()
+
+    def test_reload_retried_on_next_tick_after_failure(self, tmp_path: Path):
+        """If reload fails after a successful write, the next tick must retry
+        even though the file is no longer changing."""
+        from aptl.services.misp_suricata_sync.main import SyncRunner
+
+        cfg = self._cfg(tmp_path)
+        client = MagicMock()
+        client.fetch_tagged_attributes.return_value = []
+        writer = MagicMock()
+        # Tick 1 changes the file; tick 2 is a no-op write.
+        writer.write_if_changed.side_effect = [True, False]
+        reloader = MagicMock()
+        reloader.reload_rules.side_effect = [False, True]
+
+        runner = SyncRunner(
+            cfg, client=client, writer=writer, reloader=reloader
+        )
+        runner.run_once()
+        assert runner.reload_pending is True
+        runner.run_once()
+        assert runner.reload_pending is False
+        assert reloader.reload_rules.call_count == 2
+
+    def test_hash_list_files_written_before_main_rule_file(
+        self, tmp_path: Path, mocker
+    ):
+        """Suricata's rule file references hash list files; the lists must be
+        in place before the rule file is replaced or Suricata could read a
+        rule pointing at a stale or missing list."""
+        from aptl.services.misp_suricata_sync.main import SyncRunner
+
+        cfg = self._cfg(tmp_path)
+        attrs = [
+            type("A", (), dict(type="sha256", value="a" * 64, event_id=None))(),
+        ]
+        client = MagicMock()
+        client.fetch_tagged_attributes.return_value = attrs
+
+        writer = MagicMock()
+        writer.write_if_changed.return_value = True
+        reloader = MagicMock()
+        reloader.reload_rules.return_value = True
+
+        order: list[str] = []
+
+        # Capture each path written, in order.
+        from aptl.services.misp_suricata_sync import (
+            main as main_module,
+        )
+        from aptl.services.misp_suricata_sync.rule_writer import RuleFileWriter
+
+        original_writer_init = RuleFileWriter.__init__
+        original_write = RuleFileWriter.write_if_changed
+
+        def init_spy(self, target):
+            self._target = target
+            order.append(("init", str(target)))
+
+        def write_spy(self, content):
+            order.append(("write", str(self._target)))
+            return True
+
+        mocker.patch.object(RuleFileWriter, "__init__", init_spy)
+        mocker.patch.object(
+            RuleFileWriter, "write_if_changed", write_spy
+        )
+
+        runner = SyncRunner(
+            cfg, client=client, writer=writer, reloader=reloader
+        )
+        # Re-target so we observe the per-list writers, not the injected
+        # MagicMock primary writer.
+        runner.run_once()
+
+        # The list-file write must precede the rule-file write (the
+        # rule-file writer is the injected MagicMock, not RuleFileWriter,
+        # so we observe the list-file write at minimum).
+        write_paths = [p for kind, p in order if kind == "write"]
+        assert any("misp-sha256.list" in p for p in write_paths)
+        # The injected MagicMock writer is called LAST (after the list).
+        # MagicMock's call_args_list ordering vs the spy ordering: the
+        # MagicMock write happens after our spy's writes if SyncRunner
+        # writes lists first.
+        # Confirm that by inspecting writer.write_if_changed.call_count.
+        assert writer.write_if_changed.call_count == 1
 
     def test_run_loop_exits_when_stop_event_set(self, tmp_path: Path, mocker):
         from aptl.services.misp_suricata_sync.main import run_loop

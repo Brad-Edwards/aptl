@@ -110,15 +110,23 @@ class MispClient:
         return self._parse_attributes(data)
 
     @staticmethod
-    def _parse_attributes(data: Any) -> list[MispAttribute]:
+    def _parse_attributes(data: Any) -> list[MispAttribute] | None:
+        """Return parsed attributes, or ``None`` if the envelope is malformed.
+
+        Distinguishing ``None`` (envelope drift / error response) from ``[]``
+        (legitimate empty IOC set) is critical for the MISP-down preservation
+        invariant: ``None`` causes :func:`run_once` to skip the write/reload
+        cycle and keep the existing rule file, while ``[]`` produces a valid
+        zero-rule render.
+        """
         if not isinstance(data, dict):
-            return []
+            return None
         response = data.get("response")
         if not isinstance(response, dict):
-            return []
+            return None
         raw = response.get("Attribute")
         if not isinstance(raw, list):
-            return []
+            return None
 
         attrs: list[MispAttribute] = []
         for item in raw:

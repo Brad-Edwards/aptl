@@ -700,3 +700,37 @@ When mode lands as a real SDL feature, the intended contract is:
 **Until #263 is resolved, the per-run posture is whatever this
 document describes** — the same baseline regardless of any `mode:`
 value present in scenario YAML.
+
+### Orchestrator-side continuity carve-out (RTE-001 / #252)
+
+Issue [#252](https://github.com/Brad-Edwards/aptl/issues/252) ships a second,
+out-of-band continuity mechanism: between purple-team iterations, the
+researcher (or the future scenario runtime engine's orchestration domain)
+audits target `iptables` state and removes blanket source-IP bans against
+kali that would wedge the next iteration. This is the complement to
+ADR-021's in-band `aptl-firewall-drop` whitelist. See
+[ADR-024](../adrs/adr-024-orchestrator-side-purple-continuity-carve-out.md)
+for the full design.
+
+The audit is invoked manually today via `aptl lab continuity-audit`. The
+behavioral contract:
+
+- runs **unconditionally** today — APTL is the purple-team lab and every
+  shipped scenario is purple by design. The audit does not *read* `mode`
+  from filenames, fixtures, agents, or CLI defaults (codex's "no inference"
+  guardrail in the SDL runtime architecture);
+- once SDL adds an authoritative `mode` field (#263) the audit gains a
+  `scenario.mode == PURPLE` gate at the orchestration call site, so `red`
+  and `blue` runs are explicitly skipped (a defender's source-IP ban
+  remains a valid outcome there);
+- logs each reversion as a structured `KaliCarveOutEvent` to a
+  specific run's `continuity-events.jsonl` when invoked with
+  `--run-id <existing-run>` (and always emits a stdout summary). The
+  session-bound archival path is plumbed but inactive until the
+  runtime engine populates `ScenarioSession.run_id` (#263);
+- preserves ADR-021's in-band whitelist as the first defense rather than
+  moving whitelist semantics into the Wazuh manager or bare
+  `firewall-drop`;
+- detects only coarse kali source-IP drops on the `INPUT` chain, not
+  granular payload-, port-, behavior-, or timeout-bounded defensive
+  actions, and not subnet-mask bans (`/24` and other non-`/32`).

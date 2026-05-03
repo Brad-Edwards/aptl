@@ -7,7 +7,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from aptl.core.config import AptlConfig, RunStorageConfig, find_config, load_config
+from aptl.cli._common import resolve_run_store
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.logging import get_logger
 
@@ -18,18 +18,8 @@ console = Console()
 
 
 def _get_store(project_dir: Path) -> LocalRunStore:
-    """Initialize a LocalRunStore from project config."""
-    config_path = find_config(project_dir)
-    if config_path:
-        config = load_config(config_path)
-    else:
-        config = AptlConfig()
-
-    local_path = Path(config.run_storage.local_path)
-    if not local_path.is_absolute():
-        local_path = project_dir / local_path
-
-    return LocalRunStore(local_path)
+    """Initialize a LocalRunStore from project config (thin alias)."""
+    return resolve_run_store(project_dir)
 
 
 @app.command("list")

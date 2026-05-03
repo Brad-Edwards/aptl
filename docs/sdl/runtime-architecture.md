@@ -170,6 +170,61 @@ snapshot than the one it was reconciled against.
 exceptions and invalid lifecycle return payloads are converted into structured
 runtime diagnostics instead of surfacing as unhandled crashes.
 
+## RTE-001 Guardrails
+
+The scenario runtime engine must extend the SDL-native runtime described here.
+It must not resurrect the retired `aptl scenario` imperative lifecycle from
+ADR-009 or add a parallel objective/session state machine.
+
+Objective evaluation belongs to the `evaluation` domain:
+
+- SDL `objectives` remain declarative experiment semantics. Backend-specific
+  probes such as Wazuh alert queries, command-output checks, and file-existence
+  checks live in evaluator adapters or condition/scoring bindings, not in the
+  objective schema itself.
+- Evaluator state is reported through `RuntimeSnapshot.evaluation_results` and
+  `Evaluator.results()`. If CLI/session views need a compatibility projection,
+  they should derive it from evaluator results rather than making
+  `ScenarioSession.completed_objectives` a second source of truth.
+- Probe outcomes should update incrementally with stable resource addresses,
+  structured payloads, and `Diagnostic` records. Backend exceptions, malformed
+  probe results, and transient service failures should become runtime
+  diagnostics and auditable result details, not uncaught manager failures.
+
+Scheduling, pacing, and event progression belong to the `orchestration` domain:
+
+- scripts, stories, workflows, `while`, `on-error`, and step outcomes are the
+  orchestration surface; the evaluator observes and scores them but does not own
+  workflow control flow.
+- objective `depends_on` remains the objective ordering relation. Objective
+  `window` refs constrain observation scope and refresh behavior; they do not
+  create cross-domain executor ordering edges.
+
+Durable run evidence should reuse the existing run archive surfaces:
+
+- structured timeline/intervention records go to the run store as JSON/JSONL;
+- human-readable summaries belong in `manifest.json` or documented archive
+  notes;
+- normal operator logs should use `aptl.utils.logging.get_logger()`.
+
+The purple-team continuity carve-out from issue #252 is an orchestrator-side
+intervention, not an active-response rewrite. The in-band whitelist remains
+ADR-021's `aptl-firewall-drop` contract. The post-iteration audit that
+inspects and removes blanket kali source-IP drops is modeled as an
+orchestration lifecycle action with archive evidence and diagnostics — see
+[ADR-024](../adrs/adr-024-orchestrator-side-purple-continuity-carve-out.md)
+for the implementation contract.
+
+Mode-gating: runtime behavior must not infer purple mode from filenames,
+legacy fixtures, agents present, or CLI defaults. Today the continuity
+carve-out runs unconditionally because every shipped APTL scenario is
+purple by design — it does not read or guess `mode` from any source.
+Once SDL adds an authoritative `mode` field (issue #263), the carve-out
+gains a `scenario.mode == PURPLE` gate at its orchestration call site so
+that `red` and `blue` runs are explicitly skipped. That migration is a
+one-line change at the call site; deferring the schema work to #263 keeps
+this layer ungated-by-design until the formal contract lands.
+
 ## Phase 1 Scope
 
 Phase 1 intentionally stops at:

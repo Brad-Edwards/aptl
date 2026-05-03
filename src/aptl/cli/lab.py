@@ -6,6 +6,7 @@ from typing import Optional
 
 import typer
 
+from aptl.cli.continuity import continuity_audit
 from aptl.core.lab import (
     lab_status,
     orchestrate_lab_start,
@@ -16,6 +17,11 @@ from aptl.utils.logging import get_logger
 log = get_logger("cli.lab")
 
 app = typer.Typer(help="Lab lifecycle management.")
+
+# `continuity-audit` lives in aptl.cli.continuity (issue #252) so this
+# module stays focused on lifecycle commands. Register it under `lab`
+# so the command stays at `aptl lab continuity-audit` (no UX change).
+app.command("continuity-audit")(continuity_audit)
 
 
 @app.command()

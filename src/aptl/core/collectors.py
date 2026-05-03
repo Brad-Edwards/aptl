@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.curl_safe import curl_json as _curl_json
 from aptl.utils.logging import get_logger
 
@@ -36,7 +37,7 @@ def _run_cmd(
         return subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout
         )
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
+    except (subprocess.TimeoutExpired, OSError) as e:
         log.warning("Command failed: %s: %s", " ".join(cmd[:3]), e)
         return None
 
@@ -121,7 +122,7 @@ def collect_suricata_eve(
             ["cat", "/var/log/suricata/eve.json"],
             timeout=30,
         )
-    except (subprocess.TimeoutExpired, OSError) as e:
+    except (BackendTimeoutError, OSError) as e:
         log.warning("Suricata EVE collection failed: %s", e)
         return []
     if result.returncode != 0:
@@ -308,7 +309,7 @@ def collect_container_logs(
             result = backend.container_logs_capture(
                 container, since=start_iso, until=end_iso, timeout=30
             )
-        except (subprocess.TimeoutExpired, OSError) as e:
+        except (BackendTimeoutError, OSError) as e:
             log.warning("Log collection failed for %s: %s", container, e)
             continue
         if result.returncode != 0:

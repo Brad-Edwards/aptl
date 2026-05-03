@@ -27,12 +27,13 @@ def project_dir(tmp_path):
 def fake_backend(mocker):
     """Patch ``aptl.cli.container.get_backend`` to return a MagicMock.
 
-    Pre-populates ``container_list`` with the names the tests pass to
-    ``logs``/``shell`` so the CLI's project-membership guard accepts them
-    by default. Tests that need to exercise the rejection path can
-    override ``container_list.return_value``.
+    Defaults ``container_exists`` to True so the project-membership
+    guard accepts whatever names the tests pass to ``logs``/``shell``.
+    Tests that need to exercise the rejection path override
+    ``container_exists.return_value`` to False.
     """
     backend = MagicMock()
+    backend.container_exists.return_value = True
     backend.container_list.return_value = [
         {"Name": "aptl-victim"},
         {"Name": "aptl-kali"},
@@ -241,7 +242,7 @@ class TestContainerProjectMembershipGuard:
     def test_logs_rejects_non_project_container(
         self, runner, project_dir, fake_backend
     ):
-        fake_backend.container_list.return_value = [{"Name": "aptl-victim"}]
+        fake_backend.container_exists.return_value = False
         result = runner.invoke(
             app,
             [
@@ -259,7 +260,7 @@ class TestContainerProjectMembershipGuard:
     def test_shell_rejects_non_project_container(
         self, runner, project_dir, fake_backend
     ):
-        fake_backend.container_list.return_value = [{"Name": "aptl-victim"}]
+        fake_backend.container_exists.return_value = False
         result = runner.invoke(
             app,
             [

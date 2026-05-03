@@ -347,17 +347,24 @@ has zero graduated indicators on purpose.
   manager container and **silently exits if the file does not exist**.
   Until that file is written, Wazuh's `<integration>` block is wired
   but inert.
-- The seed script
-  ([`scripts/seed-shuffle.sh`](../../scripts/seed-shuffle.sh)) creates
-  the `APTL Alert to Case` workflow inside the running Shuffle
-  instance via Shuffle's REST API, captures the resulting webhook
-  URL, and writes it into the Wazuh manager container at
-  `/var/ossec/etc/shuffle_webhook_url`. The prime master seed
-  ([`scripts/seed-prime.sh:165-169`](../../scripts/seed-prime.sh))
-  invokes it. The seed script is idempotent.
-- **`seed-shuffle.sh` is not run by `aptl lab start`.** Until an
-  operator (or `seed-prime.sh`) runs it, no `APTL Alert to Case`
-  workflow exists in Shuffle and the Wazuh→Shuffle forwarder no-ops.
+- The seed flow runs in two scripts:
+  1. [`scripts/seed-shuffle.sh:265-266`](../../scripts/seed-shuffle.sh)
+     creates the `APTL Alert to Case` workflow inside the running
+     Shuffle instance via Shuffle's REST API and writes its webhook
+     URL to a **host-side staging file** at
+     `/tmp/aptl_shuffle_webhook_url`. **This step alone is not enough
+     — the Wazuh `custom-shuffle` forwarder reads from inside the
+     manager container, not the host.**
+  2. [`scripts/seed-prime.sh:165-169`](../../scripts/seed-prime.sh)
+     reads the host staging file and `docker exec`s the URL into the
+     Wazuh manager container at
+     `/var/ossec/etc/shuffle_webhook_url`. **This step is what
+     activates the Wazuh→Shuffle forwarder.**
+  Both scripts are idempotent.
+- **Neither script is run by `aptl lab start`.** Until an operator
+  runs `seed-prime.sh` (or runs `seed-shuffle.sh` followed by the
+  manual `docker exec` to copy the URL into the manager), the
+  Wazuh→Shuffle forwarder no-ops.
 
 **Why it ships this way**
 
@@ -371,9 +378,10 @@ firing into a missing webhook.
 
 **What blue would do to raise it**
 
-- Run `scripts/seed-shuffle.sh` to provision the prime workflow and
-  webhook gate, or `scripts/seed-prime.sh` for the full prime-scenario
-  seed.
+- Run `scripts/seed-prime.sh` for the full prime-scenario seed
+  (recommended — handles both the Shuffle-side workflow creation and
+  the Wazuh-side webhook-URL copy in one shot). Running
+  `seed-shuffle.sh` alone leaves the Wazuh forwarder still inert.
 - Author additional Shuffle workflows that consume Wazuh alerts,
   query MISP for context, enrich TheHive cases, or trigger automated
   containment outside the Wazuh AR path. Workflow content lives in
@@ -428,9 +436,11 @@ prescriptive template would steer the experiment.
 
 ## Identity controls (Active Directory)
 
-**Tag:** `WEAKNESS BY DESIGN`
+**Tag:** This section mixes both banners. The intentional account-side
+weaknesses are `WEAKNESS BY DESIGN`. The provisioner's account-lockout
+policy is `BASELINE ENABLED` and is documented separately below.
 
-**Default state**
+**Default state — account weaknesses (`WEAKNESS BY DESIGN`)**
 
 The TechVault AD provisioner
 ([`containers/ad/provision-users.sh`](../../containers/ad/provision-users.sh))
@@ -440,6 +450,8 @@ seeds these intentional vulnerabilities:
 |---|---|---|
 | Weak password — `michael.thompson` | trivial seasonal pattern (string in source) | [65](../../containers/ad/provision-users.sh) |
 | Weak password — `jessica.williams` | trivial dictionary pattern (string in source) | [82](../../containers/ad/provision-users.sh) |
+| Default-issued — `contractor.temp` | over-privileged contractor account with default password (string in source) | [122-127](../../containers/ad/provision-users.sh) |
+| Stale account — `former.employee` | unrevoked account with old password (string in source) | [130](../../containers/ad/provision-users.sh) |
 | Over-privilege — `emily.chen` | DevOps account in `Domain Admins` | [62](../../containers/ad/provision-users.sh) |
 | Over-privilege — `svc-backup` | service account in `Domain Admins` | [119](../../containers/ad/provision-users.sh) |
 | Kerberoastable — `svc-sql` | SPN set on `MSSQLSvc/db.techvault.local` | [104-105](../../containers/ad/provision-users.sh) |
@@ -453,6 +465,23 @@ deployment exposes the AD container externally, the in-source
 passwords become a credential-reuse risk against that deployment.
 Operators should rotate them post-provision when the container is not
 strictly local.
+
+**Default state — account-lockout policy (`BASELINE ENABLED`)**
+
+The provisioner enables a baseline AD account-lockout policy
+([`containers/ad/provision-users.sh:135-138`](../../containers/ad/provision-users.sh)):
+
+| Setting | Value |
+|---|---|
+| `account-lockout-threshold` | 10 failed attempts |
+| `account-lockout-duration` | 30 minutes |
+| `reset-account-lockout-after` | 15 minutes |
+
+This is **on at first boot** — brute-force/spray attempts that exceed
+ten failures will trigger AD-side lockout regardless of whether Wazuh
+detection rules or `<active-response>` blocks are enabled. Researchers
+reading run results should expect baseline-rate password spraying to
+trip this lockout, which is independent of the SOC stack.
 
 **Samba configuration baseline**
 
@@ -522,22 +551,32 @@ intentional weaknesses on stdout for transparency
 Four Docker bridges
 ([`docker-compose.yml:1216-1253`](../../docker-compose.yml)):
 
-| Network | Subnet | `internal: true`? | Containers |
+| Network | Subnet | `internal: true`? | Multi-homed containers |
 |---|---|---|---|
 | `aptl-security` | 172.20.0.0/24 | no (egress for image pulls) | Wazuh, SOC tools |
-| `aptl-dmz` | 172.20.1.0/24 | yes (no internet egress) | webapp, mail, DNS |
-| `aptl-internal` | 172.20.2.0/24 | yes | AD, DB, fileshare, app server |
-| `aptl-redteam` | 172.20.4.0/24 | yes | kali |
+| `aptl-dmz` | 172.20.1.0/24 | yes (no internet egress) | webapp, mail, DNS, **Suricata**, **Wazuh manager**, **kali** |
+| `aptl-internal` | 172.20.2.0/24 | yes | AD, DB, fileshare, app server, **Suricata**, **Wazuh manager**, **kali** |
+| `aptl-redteam` | 172.20.4.0/24 | yes | **kali** (its primary attachment) |
 
 `internal: true` blocks internet egress at the Docker bridge level
-(per the inline `SAF-002` comment). Multi-homed containers (e.g.,
-Suricata on dmz/internal/security; Wazuh manager on all three) provide
-the only authorized inter-zone paths.
+(per the inline `SAF-002` comment). Multi-homed containers cross
+zones; the lab's notable multi-home decisions:
+
+- **Suricata** sits on dmz / internal / security so it can passively
+  observe all three subnets via pcap.
+- **Wazuh manager** sits on all three so agents in any subnet can
+  reach `1514/1515`.
+- **Kali** is multi-homed onto dmz (172.20.1.30) and internal
+  (172.20.2.35) in addition to redteam (172.20.4.30). This is
+  **deliberate**: red traffic is not forced through a pivot, so
+  packet captures of an attack reflect direct kali→target flows. It
+  also means the lab's "network segmentation" is more about traffic
+  *labeling* than enforcement: kali can talk to dmz and internal
+  targets without a compromised intermediary.
 
 There are **no iptables/nftables rules in the repo**. Inter-subnet
-isolation is structural — Docker bridges are isolated from each other
-unless a container explicitly bridges them. There is no policy-enforced
-firewall between zones.
+isolation is structural (Docker bridges) plus naming/labeling
+(scenario IPs, MITRE technique mapping). It is not policy-enforced.
 
 **Why it ships this way**
 

@@ -316,6 +316,13 @@ class TestLabStatusCommand:
         assert "docker daemon not running" in result.output
 
 
+def _continuity_result(events):
+    """Helper: wrap an event list in a ContinuityAuditResult for mocks."""
+    from aptl.core.continuity import ContinuityAuditResult
+
+    return ContinuityAuditResult(events=list(events), archive_error=None)
+
+
 class TestLabContinuityAuditCommand:
     """Tests for the aptl lab continuity-audit CLI command (issue #252)."""
 
@@ -354,7 +361,8 @@ class TestLabContinuityAuditCommand:
             "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert", return_value=[],
+            "aptl.core.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
         )
 
         result = runner.invoke(
@@ -379,7 +387,10 @@ class TestLabContinuityAuditCommand:
         mocker.patch(
             "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
-        mocker.patch("aptl.core.continuity.audit_and_revert", return_value=[])
+        mocker.patch(
+            "aptl.core.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
+        )
 
         result = runner.invoke(
             app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
@@ -404,7 +415,10 @@ class TestLabContinuityAuditCommand:
             action="REVERTED",
             error=None,
         )
-        mocker.patch("aptl.core.continuity.audit_and_revert", return_value=[event])
+        mocker.patch(
+            "aptl.core.continuity.audit_and_revert",
+            return_value=_continuity_result([event]),
+        )
 
         result = runner.invoke(
             app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
@@ -432,7 +446,10 @@ class TestLabContinuityAuditCommand:
             action="REVERTED",
             error=None,
         )
-        mocker.patch("aptl.core.continuity.audit_and_revert", return_value=[event])
+        mocker.patch(
+            "aptl.core.continuity.audit_and_revert",
+            return_value=_continuity_result([event]),
+        )
 
         result = runner.invoke(
             app,
@@ -455,7 +472,8 @@ class TestLabContinuityAuditCommand:
             "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert", return_value=[],
+            "aptl.core.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
         )
 
         result = runner.invoke(
@@ -484,7 +502,8 @@ class TestLabContinuityAuditCommand:
         mocker.patch("aptl.core.continuity.kali_source_ips", return_value=[])
         # The audit should not even be reached.
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert", return_value=[],
+            "aptl.core.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
         )
 
         result = runner.invoke(
@@ -555,7 +574,8 @@ class TestLabContinuityAuditCommand:
             "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert", return_value=[],
+            "aptl.core.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
         )
 
         result = runner.invoke(
@@ -592,7 +612,7 @@ class TestLabContinuityAuditCommand:
         )
         mock_audit = mocker.patch(
             "aptl.core.continuity.audit_and_revert",
-            return_value=[
+            return_value=_continuity_result([
                 KaliCarveOutEvent(
                     timestamp="2026-05-03T12:00:00+00:00",
                     target="aptl-webapp",
@@ -601,7 +621,7 @@ class TestLabContinuityAuditCommand:
                     action="REVERTED",
                     error=None,
                 ),
-            ],
+            ]),
         )
 
         result = runner.invoke(
@@ -691,7 +711,8 @@ class TestLabContinuityAuditCommand:
             "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
         )
         mock_audit = mocker.patch(
-            "aptl.core.continuity.audit_and_revert", return_value=[],
+            "aptl.core.continuity.audit_and_revert",
+            return_value=_continuity_result([]),
         )
 
         result = runner.invoke(
@@ -744,7 +765,7 @@ class TestLabContinuityAuditCommand:
         )
         mocker.patch(
             "aptl.core.continuity.audit_and_revert",
-            return_value=[
+            return_value=_continuity_result([
                 KaliCarveOutEvent(
                     timestamp="2026-05-03T12:00:00+00:00",
                     target="aptl-webapp",
@@ -753,7 +774,7 @@ class TestLabContinuityAuditCommand:
                     action="REVERT_FAILED",
                     error="iptables: bad rule",
                 ),
-            ],
+            ]),
         )
 
         result = runner.invoke(
@@ -775,7 +796,7 @@ class TestLabContinuityAuditCommand:
         )
         mocker.patch(
             "aptl.core.continuity.audit_and_revert",
-            return_value=[
+            return_value=_continuity_result([
                 KaliCarveOutEvent(
                     timestamp="2026-05-03T12:00:00+00:00",
                     target="aptl-webapp",
@@ -784,7 +805,7 @@ class TestLabContinuityAuditCommand:
                     action="AUDIT_FAILED",
                     error="iptables -S on aptl-webapp failed: ...",
                 ),
-            ],
+            ]),
         )
 
         result = runner.invoke(

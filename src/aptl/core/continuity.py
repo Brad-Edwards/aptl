@@ -456,6 +456,21 @@ def audit_target(
 
 
 @dataclass(frozen=True)
+class ContinuityAuditResult:
+    """Outcome of one ``audit_and_revert`` invocation.
+
+    Returns the event list plus an optional ``archive_error`` so
+    callers can distinguish "events were persisted" from "events were
+    produced but the archive write failed". A silent log-only archive
+    failure would let operators believe the run was archived when it
+    wasn't, so the failure must surface as a structured field.
+    """
+
+    events: list["KaliCarveOutEvent"]
+    archive_error: str | None = None
+
+
+@dataclass(frozen=True)
 class KaliCarveOutEvent:
     """A single audit/revert action recorded to events.jsonl.
 
@@ -547,7 +562,7 @@ def audit_and_revert(
     kali_ips: set[str],
     run_store: _RunStoreProto | None = None,
     run_id: str | None = None,
-) -> list[KaliCarveOutEvent]:
+) -> ContinuityAuditResult:
     """Audit every target and revert every blanket kali drop found.
 
     Args:
@@ -562,11 +577,15 @@ def audit_and_revert(
         run_id: Run identifier in ``run_store``.
 
     Returns:
-        Ordered list of events produced. Each REVERTED event is one
+        :class:`ContinuityAuditResult` carrying the event list and an
+        optional ``archive_error``. Each REVERTED event is one
         successful reversion; each REVERT_FAILED event is a backend
         failure during reversion; each AUDIT_FAILED event is a backend
-        failure during inspection. Empty when no targets had blanket
-        kali rules — idempotent re-runs are a no-op.
+        failure during inspection. ``archive_error`` is non-None when
+        ``run_store.append_jsonl`` raised — reversions are still
+        applied to the live system but the archive write failed, and
+        the caller must surface that to operators rather than report
+        a successful archive.
 
     Raises:
         ValueError: when ``kali_ips`` is empty. The CLI guards this
@@ -602,6 +621,7 @@ def audit_and_revert(
         for finding in findings:
             events.append(revert_finding(backend, finding))
 
+    archive_error: str | None = None
     if events and run_store is not None and run_id is not None:
         records = [asdict(event) for event in events]
         try:
@@ -609,15 +629,17 @@ def audit_and_revert(
         except Exception as exc:  # noqa: BLE001 - persistence is best-effort
             # Reversions already happened on the live system; surfacing
             # the events to the caller is more valuable than masking
-            # them behind an archive-write failure. The CLI will still
-            # print the per-event summary and exit non-zero on
-            # REVERT_FAILED entries. The archive failure is logged
-            # loudly so it's discoverable, but does not propagate.
+            # them behind an archive-write failure. The CLI must still
+            # print the per-event summary and exit non-zero so the
+            # operator sees the failure. We log loudly here AND
+            # return ``archive_error`` so the CLI can refuse to
+            # report a successful archive.
+            archive_error = f"{type(exc).__name__}: {exc}"
             log.error(
                 "Continuity events archive write failed (run_id=%s, %d events"
                 " not persisted): %s. Reversions are already applied; the"
                 " caller still receives the event list.",
-                run_id, len(records), exc,
+                run_id, len(records), archive_error,
             )
 
-    return events
+    return ContinuityAuditResult(events=events, archive_error=archive_error)

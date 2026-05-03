@@ -698,18 +698,23 @@ class TestAuditAndRevert:
     ) -> None:
         from aptl.core.continuity import audit_and_revert
 
-        events = audit_and_revert(self._audit_backend(), ["victim"], kali_ips=kali_ips)
+        result = audit_and_revert(
+            self._audit_backend(), ["victim"], kali_ips=kali_ips,
+        )
 
-        assert len(events) == 1
-        assert events[0].action == "REVERTED"
-        assert events[0].target == "victim"
+        assert len(result.events) == 1
+        assert result.events[0].action == "REVERTED"
+        assert result.events[0].target == "victim"
+        assert result.archive_error is None
 
     def test_clean_tree_yields_no_events(self, kali_ips: set[str]) -> None:
         from aptl.core.continuity import audit_and_revert
 
         backend = _StubBackend(default_response=_completed(stdout=""))
 
-        assert audit_and_revert(backend, ["victim"], kali_ips=kali_ips) == []
+        result = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
+        assert result.events == []
+        assert result.archive_error is None
 
     def test_idempotent_on_clean_tree(self, kali_ips: set[str]) -> None:
         # Run twice over the same clean backend; second run must also
@@ -721,7 +726,7 @@ class TestAuditAndRevert:
         first = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
         second = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
 
-        assert first == [] and second == []
+        assert first.events == [] and second.events == []
         # Each invocation does exactly one audit call per target; no
         # phantom delete attempts.
         assert all(c.cmd[:2] == ["iptables", "-S"] for c in backend.calls)
@@ -746,7 +751,7 @@ class TestAuditAndRevert:
         run_id = "run-abc-123"
         store.create_run(run_id)
 
-        events = audit_and_revert(
+        result = audit_and_revert(
             self._audit_backend(),
             ["victim"],
             kali_ips=kali_ips,
@@ -754,7 +759,8 @@ class TestAuditAndRevert:
             run_id=run_id,
         )
 
-        assert len(events) == 1
+        assert len(result.events) == 1
+        assert result.archive_error is None
         events_path = tmp_path / run_id / "continuity-events.jsonl"
         assert events_path.exists()
 
@@ -838,10 +844,10 @@ class TestAuditAndRevert:
 
         backend = _StubBackend(raise_for={("victim", "iptables", "-S")})
 
-        events = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
+        result = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
 
-        assert len(events) == 1
-        ev = events[0]
+        assert len(result.events) == 1
+        ev = result.events[0]
         assert ev.action == "AUDIT_FAILED"
         assert ev.target == "victim"
         assert ev.error is not None
@@ -863,11 +869,11 @@ class TestAuditAndRevert:
             raise_for={("victim", "iptables", "-S")},
         )
 
-        events = audit_and_revert(
+        result = audit_and_revert(
             backend, ["victim", "webapp"], kali_ips=kali_ips,
         )
 
-        actions = [e.action for e in events]
+        actions = [e.action for e in result.events]
         assert "AUDIT_FAILED" in actions
         assert "REVERTED" in actions
 
@@ -899,13 +905,17 @@ class TestAuditAndRevert:
         backend = self._audit_backend()
         store = _FailingStore()
 
-        events = audit_and_revert(
+        result = audit_and_revert(
             backend, ["victim"], kali_ips=kali_ips,
             run_store=store, run_id="some-run",
         )
 
-        assert len(events) == 1
-        assert events[0].action == "REVERTED"
+        assert len(result.events) == 1
+        assert result.events[0].action == "REVERTED"
+        # Archive failure is surfaced — caller must not believe the
+        # archive succeeded just because reversions did.
+        assert result.archive_error is not None
+        assert "disk full" in result.archive_error
 
     def test_audit_and_revert_issues_both_S_and_D_calls(
         self, kali_ips: set[str]
@@ -1073,12 +1083,12 @@ class TestContinuityIntegration:
         )
         assert injected.returncode == 0, injected.stderr
 
-        events = audit_and_revert(backend, [_LIVE_TARGET], kali_ips=kali_ips)
+        result = audit_and_revert(backend, [_LIVE_TARGET], kali_ips=kali_ips)
 
-        assert len(events) == 1
-        assert events[0].action == "REVERTED"
-        assert events[0].target == _LIVE_TARGET
-        assert _KALI_LIVE_IP in events[0].source_ip
+        assert len(result.events) == 1
+        assert result.events[0].action == "REVERTED"
+        assert result.events[0].target == _LIVE_TARGET
+        assert _KALI_LIVE_IP in result.events[0].source_ip
 
         # Rule is gone.
         verify = docker_exec(
@@ -1102,9 +1112,11 @@ class TestContinuityIntegration:
         )
         assert injected.returncode == 0, injected.stderr
 
-        events = audit_and_revert(backend, [_LIVE_TARGET], kali_ips=kali_ips)
+        result = audit_and_revert(backend, [_LIVE_TARGET], kali_ips=kali_ips)
 
-        assert events == [], f"expected no reversions, got {events}"
+        assert result.events == [], (
+            f"expected no reversions, got {result.events}"
+        )
 
         # Granular rule still present.
         verify = docker_exec(
@@ -1120,4 +1132,4 @@ class TestContinuityIntegration:
         first = audit_and_revert(backend, [_LIVE_TARGET], kali_ips=kali_ips)
         second = audit_and_revert(backend, [_LIVE_TARGET], kali_ips=kali_ips)
 
-        assert first == [] and second == []
+        assert first.events == [] and second.events == []

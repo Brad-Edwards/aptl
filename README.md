@@ -4,6 +4,8 @@
 
 **Agentic purple team lab with AI-controlled red and blue team operations**
 
+> **🎤 Accepted to [Black Hat USA Arsenal 2026](https://blackhat.com/us-26/arsenal/schedule/#aptl-advanced-purple-team-labs-52322).** Live demo at the conference.
+
 > **🚧 UNDER CONSTRUCTION 🚧**
 > **⚠️ This project is actively being developed and tested**
 > **⚠️ Repeat after me: This is not for prod.**

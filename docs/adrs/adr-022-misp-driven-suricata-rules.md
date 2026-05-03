@@ -148,6 +148,34 @@ under the `soc` compose profile. Architecture and invariants:
     changes; treating it as ``None`` preserves the last-known-good
     file.
 
+15. **MISP API key sourced from .env.** ``MISP_API_KEY`` is required
+    (no hardcoded default) for both the MISP server (as
+    ``ADMIN_KEY``) and the sync service. Both compose entries
+    resolve the same ``${MISP_API_KEY:?...}`` reference, satisfying
+    SEC-005 for the IOC pipeline. The previous hardcoded default was
+    flagged by codex security review of issue #250 and removed in the
+    same PR.
+
+16. **TLS verification posture and the `MISP_CA_CERT_PATH` hook.**
+    ``MispClient`` honors three TLS modes:
+    * ``MISP_VERIFY_SSL=false`` → ``curl -k`` (skip verification).
+    * ``MISP_VERIFY_SSL=true`` + ``MISP_CA_CERT_PATH`` set → ``curl
+      --cacert <path>`` (verify against the supplied CA bundle).
+    * ``MISP_VERIFY_SSL=true`` + no path → curl's system trust store.
+
+    The lab default is the first mode because MISP self-signs its
+    certificate at first boot and there is no shared lab CA today
+    that consumers could pin against. The full fix — extending
+    ``INF-005``'s automated cert generation to issue a lab CA whose
+    chain covers MISP, TheHive, Cortex, and Shuffle, and switching
+    every SOC stack client (this service, the threatintel/casemgmt/
+    soar MCPs, ``aptl.core.collectors``) to verify-on-by-default —
+    is out of scope for this issue and tracked under **SEC-006**
+    (DRAFT) and issue [#258](https://github.com/Brad-Edwards/aptl/issues/258).
+    The ``MISP_CA_CERT_PATH`` hook in this PR is the consumer-side
+    plumbing SEC-006 will fill in; flipping the lab to verify-on
+    once #258 ships is a single env-var change.
+
 ### Translator IOC matrix
 
 | MISP type      | Generated rule shape                                                                       |

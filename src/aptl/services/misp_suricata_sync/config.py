@@ -13,7 +13,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
-_DEFAULT_RULES_PATH = "/etc/suricata/rules/misp/misp-iocs.rules"
+_DEFAULT_RULES_PATH = "/var/lib/suricata/rules/misp/misp-iocs.rules"
 _DEFAULT_SOCKET_PATH = "/var/run/suricata/suricata-command.socket"
 _MIN_INTERVAL_SECONDS = 30
 _SID_BASE_MIN = 1_500_000
@@ -34,6 +34,7 @@ class ServiceConfig(BaseModel):
     misp_url: str
     misp_api_key: str
     misp_verify_ssl: bool
+    misp_ca_cert_path: Path | None
     ioc_tag_filter: str
     sync_interval_seconds: int
     rules_out_path: Path
@@ -79,10 +80,14 @@ class ServiceConfig(BaseModel):
         if api_key is None or not api_key.strip():
             raise ValueError("MISP_API_KEY environment variable is required")
 
+        ca_cert_raw = os.environ.get("MISP_CA_CERT_PATH", "").strip()
+        ca_cert = Path(ca_cert_raw) if ca_cert_raw else None
+
         return cls(
             misp_url=os.environ.get("MISP_URL", "https://misp"),
             misp_api_key=api_key,
             misp_verify_ssl=_bool_env(os.environ.get("MISP_VERIFY_SSL"), False),
+            misp_ca_cert_path=ca_cert,
             ioc_tag_filter=os.environ.get("IOC_TAG_FILTER", "aptl:enforce"),
             sync_interval_seconds=int(
                 os.environ.get("SYNC_INTERVAL_SECONDS", "300")

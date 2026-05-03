@@ -84,16 +84,24 @@ def _split_url(url: str) -> tuple[str, str]:
     return host, path
 
 
-def _hash_list_path(rules_out_dir: str, hash_type: str) -> str:
-    return f"{rules_out_dir.rstrip('/')}/misp-{hash_type}.list"
+def _hash_list_rule_arg(hash_type: str) -> str:
+    """Path embedded in a Suricata file-hash rule directive.
+
+    Relative to Suricata's ``default-rule-path`` per the documented
+    behavior of ``filemd5`` / ``filesha1`` / ``filesha256``. The lab's
+    suricata.yaml mounts the misp directory at
+    ``/var/lib/suricata/rules/misp`` (i.e. under default-rule-path), so
+    a relative path resolves correctly. The on-disk write path is
+    independent and lives in :class:`ServiceConfig.rules_out_path`.
+    """
+    return f"misp/misp-{hash_type}.list"
 
 
 class IocTranslator:
     """Render MISP attributes as Suricata rule strings."""
 
-    def __init__(self, sid_base: int, rules_out_dir: str) -> None:
+    def __init__(self, sid_base: int) -> None:
         self._sid_base = sid_base
-        self._rules_out_dir = rules_out_dir
 
     def translate(self, attrs: Iterable[MispAttribute]) -> TranslationResult:
         # Stable order: sort by (type, value) so output is deterministic
@@ -153,18 +161,18 @@ class IocTranslator:
                 continue
             seen_sids.add(sid)
             keyword = _HASH_KEYWORDS[hash_type]
-            list_path = _hash_list_path(self._rules_out_dir, hash_type)
+            rule_arg = _hash_list_rule_arg(hash_type)
             msg = _escape_content(f"APTL MISP IOC {hash_type} (list)")
             text = (
                 f'alert http any any -> any any '
                 f'(msg:"{msg}"; flow:established; file.data; '
-                f'{keyword}:{list_path}; sid:{sid}; rev:1;)'
+                f'{keyword}:{rule_arg}; sid:{sid}; rev:1;)'
             )
             inline_rules.append(
                 RenderedRule(
                     sid=sid,
                     attribute_type=hash_type,
-                    attribute_value=list_path,
+                    attribute_value=rule_arg,
                     text=text,
                 )
             )

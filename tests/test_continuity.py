@@ -212,6 +212,34 @@ class TestParseIptablesRule:
         # `-m state` is a real match module; rule is granular.
         assert rule.qualifiers, "non-comment -m modules are restrictive"
 
+    def test_p_all_does_not_count_as_qualifier(self) -> None:
+        # ``-p all`` is iptables shorthand for "any protocol" — it
+        # doesn't narrow matching at all, so a blanket kali rule
+        # carrying ``-p all`` is still a wedge. The classifier must
+        # not treat ``-p`` with a non-restrictive value as granular.
+        from aptl.core.continuity import is_blanket_kali_drop, parse_iptables_rule
+
+        rule = parse_iptables_rule(
+            "-A INPUT -s 172.20.4.30 -p all -j DROP"
+        )
+
+        assert rule is not None
+        assert rule.qualifiers == set()
+        kali_ips = {"172.20.4.30"}
+        assert is_blanket_kali_drop(rule, kali_ips) is True
+
+    def test_p_specific_protocol_still_counts_as_qualifier(self) -> None:
+        from aptl.core.continuity import is_blanket_kali_drop, parse_iptables_rule
+
+        rule = parse_iptables_rule(
+            "-A INPUT -s 172.20.4.30 -p tcp -j DROP"
+        )
+
+        assert rule is not None
+        assert rule.qualifiers, "-p tcp is restrictive"
+        kali_ips = {"172.20.4.30"}
+        assert is_blanket_kali_drop(rule, kali_ips) is False
+
     def test_quoted_comment_with_whitespace_parses(self) -> None:
         # Codex finding C6 (cycle 2): a blue actor could install a
         # blanket kali DROP with a quoted multi-word comment. The
@@ -381,6 +409,21 @@ class TestIsBlanketKaliDrop:
             is_blanket_kali_drop(self._rule(source="172.20.4.0/24"), kali_ips)
             is False
         )
+
+    def test_subnet_source_rejected_even_when_kali_ips_contains_cidr(
+        self,
+    ) -> None:
+        # Defense-in-depth: a programmatic caller could pass a CIDR
+        # string in ``kali_ips`` (the whitelist loader filters those,
+        # but library callers might not use it). The classifier must
+        # still refuse to revert subnet bans regardless of what
+        # ``kali_ips`` contains.
+        from aptl.core.continuity import is_blanket_kali_drop
+
+        rule = self._rule(source="172.20.4.0/24")
+        cidr_kali = {"172.20.4.0/24"}
+
+        assert is_blanket_kali_drop(rule, cidr_kali) is False
 
 
 @dataclass
@@ -839,6 +882,30 @@ class TestAuditAndRevert:
 
         with pytest.raises(ValueError, match="empty kali_ips"):
             audit_and_revert(backend, ["aptl-webapp"], kali_ips=set())
+
+    def test_archive_write_failure_does_not_lose_events(
+        self, kali_ips: set[str], tmp_path: Path
+    ) -> None:
+        # Reversions happen before JSONL append. If append fails, the
+        # caller must still receive the event list (otherwise the CLI
+        # has no idea which rules were already reverted on the live
+        # system, which is the worst-case outcome).
+        from aptl.core.continuity import audit_and_revert
+
+        class _FailingStore:
+            def append_jsonl(self, run_id, relative_path, records):
+                raise OSError("disk full")
+
+        backend = self._audit_backend()
+        store = _FailingStore()
+
+        events = audit_and_revert(
+            backend, ["victim"], kali_ips=kali_ips,
+            run_store=store, run_id="some-run",
+        )
+
+        assert len(events) == 1
+        assert events[0].action == "REVERTED"
 
     def test_audit_and_revert_issues_both_S_and_D_calls(
         self, kali_ips: set[str]

@@ -148,6 +148,44 @@ class ParsedRule:
     tokens: list[str] = field(default_factory=list)
 
 
+def _walk_iptables_options(
+    rule_tokens: list[str],
+) -> tuple[str | None, str, set[str]] | None:
+    """Walk ``-s``/``-j``/qualifier flags after the ``-A <chain>`` anchor.
+
+    Returns ``(source, action, qualifiers)`` on a well-formed sequence
+    or ``None`` for any malformed shape (bare value with no flag,
+    flag-with-value missing its value, no ``-j`` clause).
+    """
+    source: str | None = None
+    action: str | None = None
+    qualifiers: set[str] = set()
+
+    i = 0
+    while i < len(rule_tokens):
+        flag = rule_tokens[i]
+        if not flag.startswith("-"):
+            return None
+
+        takes_value = flag in _FLAGS_WITH_VALUE
+        if takes_value and i + 1 >= len(rule_tokens):
+            return None
+        value = rule_tokens[i + 1] if takes_value else None
+        i += 2 if takes_value else 1
+
+        if flag == "-s":
+            source = value
+            continue
+        if flag == "-j":
+            action = value
+            continue
+        qualifiers.add(flag)
+
+    if action is None:
+        return None
+    return source, action, qualifiers
+
+
 def parse_iptables_rule(line: str) -> ParsedRule | None:
     """Parse one ``iptables -S`` line into a :class:`ParsedRule`.
 
@@ -176,42 +214,10 @@ def parse_iptables_rule(line: str) -> ParsedRule | None:
 
     chain = tokens[1]
     rule_tokens = tokens[2:]
-
-    source: str | None = None
-    action: str | None = None
-    qualifiers: set[str] = set()
-
-    i = 0
-    while i < len(rule_tokens):
-        flag = rule_tokens[i]
-        if not flag.startswith("-"):
-            # A bare value with no preceding flag — the line is
-            # malformed (or includes shapes the parser doesn't know).
-            # Refuse rather than guess.
-            return None
-
-        takes_value = flag in _FLAGS_WITH_VALUE
-        value = (
-            rule_tokens[i + 1]
-            if takes_value and i + 1 < len(rule_tokens)
-            else None
-        )
-
-        if flag == "-s":
-            if value is None:
-                return None
-            source = value
-        elif flag == "-j":
-            if value is None:
-                return None
-            action = value
-        else:
-            qualifiers.add(flag)
-
-        i += 2 if takes_value else 1
-
-    if action is None:
+    parsed = _walk_iptables_options(rule_tokens)
+    if parsed is None:
         return None
+    source, action, qualifiers = parsed
 
     return ParsedRule(
         chain=chain,

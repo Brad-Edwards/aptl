@@ -8,7 +8,6 @@ from rich.console import Console
 from rich.table import Table
 
 from aptl.cli._common import resolve_run_store
-from aptl.core.config import RunStorageConfig
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.logging import get_logger
 

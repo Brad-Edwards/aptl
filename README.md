@@ -4,15 +4,11 @@
 
 # APTL — Advanced Purple Team Lab
 
-**Agentic purple-team lab where AI agents drive the red and blue sides against a realistic enterprise target stack.**
+**Purple-team lab where AI agents drive the red and blue sides against an enterprise target stack.**
 
-One `aptl lab start` brings up a self-contained Docker environment: a fictional company's infrastructure (AD, web, DB, file share, DNS, mail), a Kali red-team box, a full SOC stack (Wazuh + Suricata + MISP + TheHive + Cortex + Shuffle), a malware-analysis container, and MCP servers giving AI agents programmatic control over all of it. Scenarios are YAML-defined; every run captures a self-contained telemetry archive for post-hoc analysis.
+One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, DB, file share, DNS, mail), a Kali red-team box, a SOC stack (Wazuh + Suricata + MISP + TheHive + Cortex + Shuffle), a malware-analysis container, and MCP servers giving AI agents programmatic control over all of it. Scenarios are YAML-defined; each run captures a telemetry archive.
 
 **Use cases:** autonomous cyber-operations research, purple-team training, AI threat-actor assessment.
-
-![AI red team owning the lab](assets/images/li_test/cline_red_team_test_20.png)
-
-*Full screen-cap walkthrough: [AI Red Team Test (PDF)](assets/docs/ai_red_team_test.pdf).*
 
 ## Status
 
@@ -100,7 +96,7 @@ Smoke-test the wiring once the lab is up:
 
 ## Optional: Web UI
 
-Localhost-only notebook-style workbench for lab control and scenario runs.
+Localhost-only web UI for lab control and scenario runs.
 
 ```bash
 pip install -e ".[web]"
@@ -126,9 +122,9 @@ Access at <http://localhost:5173> (dev) or <http://localhost:3000> (prod). The A
 
 ## Ethics & Disclaimers
 
-Defenders and decision-makers need realistic adversarial use cases to guide planning and investments. Attackers are already experimenting with AI-enabled cyber operations. APTL uses commodity services and basic integrations that don't advance existing capabilities; no enhancements are made to AI agents' latent abilities beyond granted Kali access. **No red-team enhancements will be added to this public repository.** An autonomous cyber-operations range is under development as a separate project.
+APTL uses commodity services and basic integrations. AI agents get Kali access — no enhancements to their latent capabilities beyond that. **No red-team enhancements will be added to this public repository.** An autonomous cyber-operations range is under development as a separate project.
 
-You are responsible for following all applicable laws. The author takes no responsibility for your use of this lab. The repository contains intentional **test credentials** (covered by `.gitguardian.yaml`) for lab functionality — they are dummy values for educational use, not production secrets.
+You are responsible for following all applicable laws. The author takes no responsibility for your use of this lab. The repository contains intentional **test credentials** (covered by `.gitguardian.yaml`) for lab functionality — dummy values for educational use, not production secrets.
 
 ## License
 

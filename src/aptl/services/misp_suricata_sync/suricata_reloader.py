@@ -47,7 +47,7 @@ class SuricataReloader:
 
                 log.info("Suricata rule reload acknowledged")
                 return True
-        except (FileNotFoundError, ConnectionError, OSError) as exc:
+        except OSError as exc:
             log.warning(
                 "Suricata rule reload skipped: %s",
                 exc.__class__.__name__,

@@ -161,3 +161,136 @@ def status(
         return
 
     _emit_status_text(lab_status(project_dir=project_dir))
+
+
+_DEFAULT_WHITELIST_RELPATH = Path(
+    "config/wazuh_cluster/etc/lists/active-response-whitelist"
+)
+
+
+def _resolve_run_store(project_root: Path, config) -> "LocalRunStore":
+    """Build a LocalRunStore against the project's configured runs path.
+
+    Mirrors :func:`aptl.cli.runs._get_store` without importing it (avoids
+    a CLI-internal circular dependency).
+    """
+    from aptl.core.runstore import LocalRunStore
+
+    local_path = Path(config.run_storage.local_path)
+    if not local_path.is_absolute():
+        local_path = project_root / local_path
+    return LocalRunStore(local_path)
+
+
+@app.command("continuity-audit")
+def continuity_audit(
+    project_dir: Path = typer.Option(
+        Path("."),
+        "--project-dir",
+        "-d",
+        help="Path to the APTL project directory.",
+    ),
+    targets: Optional[list[str]] = typer.Option(
+        None,
+        "--target",
+        "-t",
+        help=(
+            "Container name to audit (repeatable). Defaults to the full"
+            " AR-capable agent set."
+        ),
+    ),
+    whitelist_path: Optional[Path] = typer.Option(
+        None,
+        "--whitelist",
+        help=(
+            "Override path to the kali source-IP whitelist."
+            " Defaults to the in-repo lab whitelist."
+        ),
+    ),
+    output_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit the full event list as JSON instead of a text summary.",
+    ),
+) -> None:
+    """Audit each target's INPUT chain and revert blanket kali source-IP DROPs.
+
+    Detects rules that drop or reject a kali source IP with no other
+    matchers (port, protocol, payload, interface, state, or
+    timeout). Granular rules with any qualifier are preserved. See
+    ADR-024 and ADR-021 for the design.
+
+    Runs unconditionally — APTL is purple-team-only by design. When SDL
+    formalizes a ``mode`` field (issue #263) the audit will gate on
+    ``scenario.mode == PURPLE``.
+    """
+    from aptl.cli._common import resolve_config_for_cli
+    from aptl.core.continuity import (
+        audit_and_revert,
+        default_targets,
+        kali_source_ips,
+    )
+    from aptl.core.deployment import get_backend
+    from aptl.core.session import ScenarioSession
+
+    config, project_root = resolve_config_for_cli(project_dir)
+    backend = get_backend(config, project_root)
+
+    target_list = list(targets) if targets else default_targets()
+
+    wl_path = whitelist_path or (project_root / _DEFAULT_WHITELIST_RELPATH)
+    kali_ips = set(kali_source_ips(whitelist_path=wl_path))
+    if not kali_ips:
+        typer.echo(
+            f"warning: no kali IPs found in {wl_path}; audit will be a no-op.",
+            err=True,
+        )
+
+    # If a scenario session is active with a run_id, archive the audit
+    # events to that run's events.jsonl. Otherwise the audit still runs;
+    # only the persistence layer is skipped (safe for ad-hoc smoke tests).
+    state_dir = project_root / ".aptl"
+    session_mgr = ScenarioSession(state_dir)
+    session = session_mgr.get_active()
+    run_store = None
+    run_id: Optional[str] = None
+    if session is not None and session.run_id:
+        run_store = _resolve_run_store(project_root, config)
+        run_id = session.run_id
+
+    log.info(
+        "Continuity audit: targets=%s run_id=%s", target_list, run_id or "(none)",
+    )
+
+    events = audit_and_revert(
+        backend,
+        target_list,
+        kali_ips=kali_ips,
+        run_store=run_store,
+        run_id=run_id,
+    )
+
+    if output_json:
+        from dataclasses import asdict
+
+        typer.echo(json.dumps([asdict(e) for e in events], indent=2))
+        return
+
+    if not events:
+        typer.echo("Continuity audit: no blanket kali source-IP rules found.")
+        return
+
+    reverted = sum(1 for e in events if e.action == "REVERTED")
+    failed = sum(1 for e in events if e.action == "REVERT_FAILED")
+    typer.echo(
+        f"Continuity audit: {reverted} reverted, {failed} failed across "
+        f"{len(target_list)} targets."
+    )
+    for event in events:
+        prefix = "REVERTED" if event.action == "REVERTED" else "FAILED  "
+        line = f"  [{prefix}] {event.target}: {event.rule_text}"
+        if event.error:
+            line += f"  ({event.error})"
+        typer.echo(line)
+    if run_id:
+        typer.echo(f"  events archived to run {run_id} continuity-events.jsonl")

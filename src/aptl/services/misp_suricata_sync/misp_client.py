@@ -52,7 +52,7 @@ def _curl_json(
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout
         )
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as exc:
+    except (subprocess.TimeoutExpired, OSError) as exc:
         log.warning("MISP curl failed: %s", exc.__class__.__name__)
         return None
 
@@ -65,7 +65,7 @@ def _curl_json(
 
     try:
         return json.loads(result.stdout)
-    except (json.JSONDecodeError, ValueError):
+    except ValueError:
         log.warning("MISP response from %s was not valid JSON", url)
         return None
 

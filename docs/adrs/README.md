@@ -39,4 +39,8 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [015](adr-015-declarative-sdl-objectives.md) | Declarative Experiment Objectives in the SDL | accepted | 2026-03-29 |
 | [016](adr-016-workflows-targetable-subobjects-and-enum-variables.md) | Workflows, Targetable Sub-Objects, and Leaf Enum Variables in the SDL | accepted | 2026-03-29 |
 | [017](adr-017-sdl-runtime-layer.md) | SDL Runtime Layer | proposed | 2026-03-30 |
+| [018](adr-018-control-flow-primitives.md) | Control Flow Primitives in the SDL | accepted | 2026-04-01 |
+| [019](adr-019-suricata-ids-only-prevention-via-wazuh-ar.md) | Suricata stays IDS-only; packet-level prevention via Wazuh active-response | accepted | 2026-05-02 |
+| [020](adr-020-wazuh-agents-in-process-vs-sidecar.md) | Wazuh agents run in-process on target containers; sidecars only for upstream-image carve-outs | accepted | 2026-05-02 |
+| [021](adr-021-active-response-whitelist-via-wrapper.md) | Active-response whitelist enforcement via a standalone iptables AR script | accepted | 2026-05-02 |
 | [022](adr-022-misp-driven-suricata-rules.md) | MISP-driven Suricata rules via a tag-graduated sync service | accepted | 2026-05-03 |

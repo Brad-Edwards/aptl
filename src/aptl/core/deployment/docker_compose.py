@@ -300,19 +300,91 @@ class DockerComposeBackend:
                 warnings.append(msg)
         return warnings
 
-    def host_run(
-        self,
-        args: list[str],
-        *,
-        timeout: int | None = None,
-    ) -> subprocess.CompletedProcess:
-        """Run an arbitrary docker / docker-compose command via `_run`.
+    # Host inventory (CLI-004 / ADR-023) ----------------------------------
 
-        Public wrapper so callers outside the deployment module (snapshot
-        capture, network inspection) get the same env construction —
-        crucially the SSH override's ``DOCKER_HOST=ssh://…`` injection.
-        """
-        return self._run(args, timeout=timeout)
+    def host_versions(self) -> dict[str, str]:
+        result = {"docker": "", "compose": ""}
+        docker_out = self._run([
+            "docker", "version", "--format", "{{.Server.Version}}",
+        ])
+        if docker_out.returncode == 0:
+            result["docker"] = docker_out.stdout.strip()
+        compose_out = self._run(["docker", "compose", "version", "--short"])
+        if compose_out.returncode == 0:
+            result["compose"] = compose_out.stdout.strip()
+        return result
+
+    def host_list_lab_containers(self) -> list[dict]:
+        fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
+        result = self._run([
+            "docker", "ps", "-a", "--filter", "name=aptl-", "--format", fmt,
+        ])
+        if result.returncode != 0 or not result.stdout.strip():
+            return []
+        rows: list[dict] = []
+        for line in result.stdout.splitlines():
+            parts = line.split("\t", 5)
+            if len(parts) < 5:
+                continue
+            labels: dict[str, str] = {}
+            if parts[4]:
+                for pair in parts[4].split(","):
+                    if "=" in pair:
+                        k, v = pair.split("=", 1)
+                        labels[k.strip()] = v.strip()
+            ports_str = parts[5] if len(parts) > 5 else ""
+            ports = [p.strip() for p in ports_str.split(",") if p.strip()]
+            rows.append({
+                "name": parts[0],
+                "image": parts[1],
+                "id": parts[2],
+                "status": parts[3],
+                "labels": labels,
+                "ports": ports,
+            })
+        return rows
+
+    def host_list_lab_networks(self, name_prefix: str) -> list[str]:
+        result = self._run([
+            "docker", "network", "ls",
+            "--filter", f"name={name_prefix}",
+            "--format", "{{.Name}}",
+        ])
+        if result.returncode != 0:
+            return []
+        return [
+            line.strip()
+            for line in result.stdout.splitlines()
+            if line.strip()
+        ]
+
+    def host_inspect_network(self, name: str) -> dict:
+        result = self._run(["docker", "network", "inspect", name])
+        if result.returncode != 0 or not result.stdout.strip():
+            return {}
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            log.debug("host_inspect_network: bad JSON for %s", name)
+            return {}
+        if isinstance(payload, list):
+            payload = payload[0] if payload else {}
+        if not isinstance(payload, dict):
+            return {}
+        subnet = ""
+        gateway = ""
+        ipam_configs = payload.get("IPAM", {}).get("Config", [])
+        if ipam_configs:
+            subnet = ipam_configs[0].get("Subnet", "")
+            gateway = ipam_configs[0].get("Gateway", "")
+        containers_map = payload.get("Containers", {})
+        names = sorted(c.get("Name", "") for c in containers_map.values())
+        return {
+            "name": name,
+            "subnet": subnet,
+            "gateway": gateway,
+            "containers": names,
+        }
 
     # Container interaction (CLI-004, ADR-023) ----------------------------
 
@@ -379,16 +451,26 @@ class DockerComposeBackend:
         self, name: str, *, shell: str | None = None
     ) -> int:
         if shell is not None:
-            cmd = ["docker", "exec", "-it", name, shell]
-            return self._run_streaming(cmd)
-        # Auto-detect: try bash, fall back to sh on 126/127.
-        bash_cmd = ["docker", "exec", "-it", name, "/bin/bash"]
-        rc = self._run_streaming(bash_cmd)
-        if rc in (126, 127):
-            log.info("bash unavailable in %s (exit %d); retrying with sh", name, rc)
-            sh_cmd = ["docker", "exec", "-it", name, "/bin/sh"]
-            return self._run_streaming(sh_cmd)
-        return rc
+            return self._run_streaming(["docker", "exec", "-it", name, shell])
+        # Probe non-interactively for bash before launching the TTY.
+        # Doing the fallback after the interactive shell exits would
+        # misinterpret the user's own 126/127 exit codes (e.g. running a
+        # non-existent command then `exit`) as "bash missing" and open
+        # an unwanted second shell.
+        probe = self._run(["docker", "exec", name, "/bin/bash", "-c", "true"])
+        if probe.returncode == 0:
+            return self._run_streaming(["docker", "exec", "-it", name, "/bin/bash"])
+        if probe.returncode in (126, 127):
+            log.info("bash unavailable in %s; using /bin/sh", name)
+            return self._run_streaming(["docker", "exec", "-it", name, "/bin/sh"])
+        # Probe failed for an unrelated reason (no such container,
+        # daemon error). Surface it as the exit code so the caller can
+        # display the docker error rather than masking it with sh.
+        log.warning(
+            "container_shell probe of %s failed (exit %d): %s",
+            name, probe.returncode, probe.stderr.strip(),
+        )
+        return probe.returncode
 
     def container_exec(
         self,

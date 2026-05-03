@@ -95,11 +95,13 @@ def stop(
 def _resolve_status_backend(project_dir: Path):
     """Resolve a deployment backend for status snapshot capture.
 
-    Returns ``None`` when no ``aptl.json`` is present or it fails to load —
-    in that case ``capture_snapshot`` falls back to a default local
-    Docker Compose backend so status is still useful in a fresh project
-    dir. With a valid config, returns the configured (local or SSH)
-    backend so SSH-remote labs are snapshotted against the right daemon.
+    Returns ``None`` when no ``aptl.json`` is present so status remains
+    useful in a fresh project dir (capture_snapshot falls back to a
+    default local Docker Compose backend). When ``aptl.json`` exists
+    but fails to load, the loader's exception propagates so the caller
+    surfaces the failure instead of producing a misleading default
+    snapshot — for example an SSH-remote lab whose config is broken
+    must NOT silently snapshot the local daemon.
     """
     from aptl.core.config import find_config, load_config
     from aptl.core.deployment import get_backend
@@ -107,17 +109,18 @@ def _resolve_status_backend(project_dir: Path):
     config_path = find_config(project_dir)
     if config_path is None:
         return None
-    try:
-        cfg = load_config(config_path)
-    except (OSError, ValueError):
-        return None
+    cfg = load_config(config_path)
     return get_backend(cfg, project_dir)
 
 
 def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:
     from aptl.core.snapshot import capture_snapshot
 
-    backend = _resolve_status_backend(project_dir)
+    try:
+        backend = _resolve_status_backend(project_dir)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"failed to load aptl.json: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     snapshot = capture_snapshot(config_dir=project_dir, backend=backend)
     data = json.dumps(snapshot.to_dict(), indent=2)
 

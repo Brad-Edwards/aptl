@@ -3,15 +3,26 @@
 Captures the current state of the lab environment including software
 versions, container status, Wazuh rules, network topology, and
 configuration file hashes.
+
+All Docker interaction — both container interaction (``container_exec``,
+``container_inspect``) and host-level inventory (``host_versions``,
+``host_list_lab_containers``, ``host_list_lab_networks``,
+``host_inspect_network``) — flows through the deployment backend per
+ADR-023, so snapshots taken against an SSH-remote deployment inspect
+the remote daemon and behave identically to local Docker Compose.
 """
 
 import hashlib
-import subprocess
 import sys
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aptl.core.deployment import DeploymentBackend
 
 log = get_logger("snapshot")
 
@@ -105,47 +116,52 @@ class RangeSnapshot:
         return asdict(self)
 
 
-def _run_cmd(args: list[str], timeout: int = 15) -> str:
-    """Run a command and return stdout, or empty string on failure."""
+def _backend_exec(
+    backend: "DeploymentBackend",
+    container: str,
+    cmd: list[str],
+    timeout: int = 15,
+) -> str:
+    """Run a one-shot command via the backend; return stripped stdout or empty."""
     try:
-        result = subprocess.run(
-            args, capture_output=True, text=True, timeout=timeout
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
-        log.debug("Command %s failed: %s", args, e)
+        result = backend.container_exec(container, cmd, timeout=timeout)
+    except (BackendTimeoutError, OSError) as e:
+        log.debug("backend.container_exec %s %s failed: %s", container, cmd, e)
+        return ""
+    if result.returncode == 0:
+        return result.stdout.strip()
     return ""
 
 
-def _get_software_versions() -> SoftwareVersions:
+def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
     """Collect software version information."""
     versions = SoftwareVersions()
 
     versions.python_version = sys.version.split()[0]
 
-    docker_out = _run_cmd(["docker", "version", "--format", "{{.Server.Version}}"])
-    if docker_out:
-        versions.docker_version = docker_out
-
-    compose_out = _run_cmd(["docker", "compose", "version", "--short"])
-    if compose_out:
-        versions.compose_version = compose_out
+    daemon_versions = backend.host_versions()
+    versions.docker_version = daemon_versions.get("docker", "")
+    versions.compose_version = daemon_versions.get("compose", "")
 
     # Wazuh manager version from container
-    wm_out = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "/var/ossec/bin/wazuh-control", "info", "-v",
-    ])
+    wm_out = _backend_exec(
+        backend,
+        "aptl-wazuh-manager",
+        ["/var/ossec/bin/wazuh-control", "info", "-v"],
+    )
     if wm_out:
         versions.wazuh_manager_version = wm_out.strip().lstrip("v")
 
     # Wazuh indexer version (extract from opensearch jar filename)
-    wi_out = _run_cmd([
-        "docker", "exec", "aptl-wazuh-indexer",
-        "bash", "-c",
-        "ls /usr/share/wazuh-indexer/lib/opensearch-[0-9]*.jar 2>/dev/null | head -1",
-    ])
+    wi_out = _backend_exec(
+        backend,
+        "aptl-wazuh-indexer",
+        [
+            "bash",
+            "-c",
+            "ls /usr/share/wazuh-indexer/lib/opensearch-[0-9]*.jar 2>/dev/null | head -1",
+        ],
+    )
     if wi_out:
         # Extract version from e.g. "opensearch-2.19.1.jar"
         jar_name = Path(wi_out.strip()).name
@@ -155,191 +171,167 @@ def _get_software_versions() -> SoftwareVersions:
 
     # APTL version from package metadata
     try:
-        from importlib.metadata import version
+        from importlib.metadata import PackageNotFoundError, version
 
         versions.aptl_version = version("aptl")
-    except Exception:
+    except PackageNotFoundError:
         versions.aptl_version = "dev"
 
     return versions
 
 
-def _get_container_snapshots() -> list[ContainerSnapshot]:
-    """Snapshot all aptl- containers with network IPs and port mappings."""
-    import json as _json
-
-    fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
-    out = _run_cmd([
-        "docker", "ps", "-a", "--filter", "name=aptl-", "--format", fmt,
-    ])
-    if not out:
-        return []
-
-    snapshots = []
-    for line in out.splitlines():
-        parts = line.split("\t", 5)
-        if len(parts) < 5:
-            continue
-
-        name = parts[0]
-        image = parts[1]
-        image_id = parts[2]
-        status = parts[3]
-        labels_str = parts[4]
-        ports_str = parts[5] if len(parts) > 5 else ""
-
-        # Parse health from status string
-        health = ""
-        if "(healthy)" in status:
-            health = "healthy"
-        elif "(unhealthy)" in status:
-            health = "unhealthy"
-        elif "(health: starting)" in status:
-            health = "starting"
-
-        # Parse labels
-        labels = {}
-        if labels_str:
-            for pair in labels_str.split(","):
-                if "=" in pair:
-                    k, v = pair.split("=", 1)
-                    labels[k.strip()] = v.strip()
-
-        # Parse port mappings
-        ports = [p.strip() for p in ports_str.split(",") if p.strip()] if ports_str else []
-
-        # Get per-network IPs via docker inspect
-        networks: dict[str, str] = {}
-        inspect_out = _run_cmd([
-            "docker", "inspect", name,
-            "--format", "{{json .NetworkSettings.Networks}}",
-        ])
-        if inspect_out:
-            try:
-                net_data = _json.loads(inspect_out)
-                if isinstance(net_data, dict):
-                    for net_name, net_cfg in net_data.items():
-                        if isinstance(net_cfg, dict):
-                            ip = net_cfg.get("IPAddress", "")
-                            if ip:
-                                networks[net_name] = ip
-            except _json.JSONDecodeError:
-                pass
-
-        snapshots.append(ContainerSnapshot(
-            name=name,
-            image=image,
-            image_id=image_id,
-            status=status,
-            health=health,
-            labels=labels,
-            networks=networks,
-            ports=ports,
-        ))
-
-    return snapshots
+_HEALTH_MARKERS = (
+    ("(healthy)", "healthy"),
+    ("(unhealthy)", "unhealthy"),
+    ("(health: starting)", "starting"),
+)
 
 
-def _get_wazuh_rules_snapshot() -> WazuhRulesSnapshot:
+def _parse_health(status: str) -> str:
+    for marker, label in _HEALTH_MARKERS:
+        if marker in status:
+            return label
+    return ""
+
+
+def _container_networks(
+    backend: "DeploymentBackend", name: str
+) -> dict[str, str]:
+    networks: dict[str, str] = {}
+    info = backend.container_inspect(name)
+    net_data = info.get("NetworkSettings", {}).get("Networks", {})
+    if not isinstance(net_data, dict):
+        return networks
+    for net_name, net_cfg in net_data.items():
+        if isinstance(net_cfg, dict):
+            ip = net_cfg.get("IPAddress", "")
+            if ip:
+                networks[net_name] = ip
+    return networks
+
+
+def _row_to_snapshot(
+    backend: "DeploymentBackend", row: dict
+) -> ContainerSnapshot:
+    name = row.get("name", "")
+    status = row.get("status", "")
+    return ContainerSnapshot(
+        name=name,
+        image=row.get("image", ""),
+        image_id=row.get("id", ""),
+        status=status,
+        health=_parse_health(status),
+        labels=row.get("labels", {}),
+        networks=_container_networks(backend, name),
+        ports=row.get("ports", []),
+    )
+
+
+def _get_container_snapshots(
+    backend: "DeploymentBackend",
+) -> list[ContainerSnapshot]:
+    """Snapshot all aptl- containers with network IPs and port mappings.
+
+    Goes through ``backend.host_list_lab_containers`` (and per-container
+    ``backend.container_inspect``) so SSH-remote labs enumerate the
+    remote daemon. The backend filters by the ``aptl-`` name prefix to
+    catch any containers the user named that way even if they're outside
+    the current compose project — defensive coverage.
+    """
+    rows = backend.host_list_lab_containers()
+    return [_row_to_snapshot(backend, row) for row in rows]
+
+
+def _get_wazuh_rules_snapshot(
+    backend: "DeploymentBackend",
+) -> WazuhRulesSnapshot:
     """Snapshot Wazuh rule/decoder counts."""
     snap = WazuhRulesSnapshot()
+    manager = "aptl-wazuh-manager"
 
     # Count total rules
-    rule_count = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "bash", "-c",
-        "find /var/ossec/ruleset/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-    ])
+    rule_count = _backend_exec(
+        backend,
+        manager,
+        [
+            "bash",
+            "-c",
+            "find /var/ossec/ruleset/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
+        ],
+    )
     if rule_count and rule_count.isdigit():
         snap.total_rules = int(rule_count)
 
     # Count custom rules
-    custom_count = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "bash", "-c",
-        "find /var/ossec/etc/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-    ])
+    custom_count = _backend_exec(
+        backend,
+        manager,
+        [
+            "bash",
+            "-c",
+            "find /var/ossec/etc/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
+        ],
+    )
     if custom_count and custom_count.isdigit():
         snap.custom_rules = int(custom_count)
 
     # List custom rule files
-    custom_files = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "bash", "-c",
-        "ls /var/ossec/etc/rules/*.xml 2>/dev/null",
-    ])
+    custom_files = _backend_exec(
+        backend,
+        manager,
+        [
+            "bash",
+            "-c",
+            "ls /var/ossec/etc/rules/*.xml 2>/dev/null",
+        ],
+    )
     if custom_files:
         snap.custom_rule_files = [
             Path(f).name for f in custom_files.splitlines() if f.strip()
         ]
 
     # Count total decoders
-    decoder_count = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "bash", "-c",
-        "find /var/ossec/ruleset/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-    ])
+    decoder_count = _backend_exec(
+        backend,
+        manager,
+        [
+            "bash",
+            "-c",
+            "find /var/ossec/ruleset/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
+        ],
+    )
     if decoder_count and decoder_count.isdigit():
         snap.total_decoders = int(decoder_count)
 
     # Count custom decoders
-    custom_dec = _run_cmd([
-        "docker", "exec", "aptl-wazuh-manager",
-        "bash", "-c",
-        "find /var/ossec/etc/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-    ])
+    custom_dec = _backend_exec(
+        backend,
+        manager,
+        [
+            "bash",
+            "-c",
+            "find /var/ossec/etc/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
+        ],
+    )
     if custom_dec and custom_dec.isdigit():
         snap.custom_decoders = int(custom_dec)
 
     return snap
 
 
-def _get_network_snapshots() -> list[NetworkSnapshot]:
+def _get_network_snapshots(
+    backend: "DeploymentBackend",
+) -> list[NetworkSnapshot]:
     """Snapshot Docker networks with aptl prefix."""
-    import json as _json
-
-    out = _run_cmd(["docker", "network", "ls", "--filter", "name=aptl", "--format", "{{.Name}}"])
-    if not out:
-        return []
-
-    snapshots = []
-    for net_name in out.splitlines():
-        net_name = net_name.strip()
-        if not net_name:
-            continue
-
-        inspect_out = _run_cmd(["docker", "network", "inspect", net_name])
-        if not inspect_out:
-            snapshots.append(NetworkSnapshot(name=net_name))
-            continue
-
-        try:
-            info = _json.loads(inspect_out)
-            if isinstance(info, list) and info:
-                info = info[0]
-
-            subnet = ""
-            gateway = ""
-            ipam_configs = info.get("IPAM", {}).get("Config", [])
-            if ipam_configs:
-                subnet = ipam_configs[0].get("Subnet", "")
-                gateway = ipam_configs[0].get("Gateway", "")
-
-            containers_map = info.get("Containers", {})
-            container_names = [
-                c.get("Name", "") for c in containers_map.values()
-            ]
-
-            snapshots.append(NetworkSnapshot(
-                name=net_name,
-                subnet=subnet,
-                gateway=gateway,
-                containers=sorted(container_names),
-            ))
-        except (_json.JSONDecodeError, KeyError, IndexError) as e:
-            log.debug("Failed to parse network inspect for %s: %s", net_name, e)
-            snapshots.append(NetworkSnapshot(name=net_name))
-
+    snapshots: list[NetworkSnapshot] = []
+    for net_name in backend.host_list_lab_networks("aptl"):
+        info = backend.host_inspect_network(net_name)
+        snapshots.append(NetworkSnapshot(
+            name=net_name,
+            subnet=info.get("subnet", ""),
+            gateway=info.get("gateway", ""),
+            containers=info.get("containers", []),
+        ))
     return snapshots
 
 
@@ -405,12 +397,24 @@ def _get_ssh_endpoints(containers: list[ContainerSnapshot]) -> list[SSHEndpoint]
     return endpoints
 
 
-def capture_snapshot(config_dir: Path | None = None) -> RangeSnapshot:
+def capture_snapshot(
+    config_dir: Path | None,
+    backend: "DeploymentBackend",
+) -> RangeSnapshot:
     """Capture a complete snapshot of the current lab state.
 
     Args:
-        config_dir: Directory containing config files to hash.
-                    Defaults to current working directory.
+        config_dir: Directory containing config files to hash. ``None``
+                    falls back to the current working directory; pass
+                    the project's resolved directory when calling from a
+                    CLI command.
+        backend: Required deployment backend used for every Docker
+                 interaction. The caller is responsible for resolving
+                 the right backend (local vs SSH-remote) so the snapshot
+                 inspects the daemon the lab actually runs on. There is
+                 deliberately no default; a misconfigured caller must
+                 fail loudly rather than silently snapshot the local
+                 daemon for an SSH-remote lab.
 
     Returns:
         A RangeSnapshot with all collected data.
@@ -419,13 +423,13 @@ def capture_snapshot(config_dir: Path | None = None) -> RangeSnapshot:
 
     log.info("Capturing range snapshot")
 
-    containers = _get_container_snapshots()
+    containers = _get_container_snapshots(backend)
     snapshot = RangeSnapshot(
         timestamp=datetime.now(timezone.utc).isoformat(),
-        software=_get_software_versions(),
+        software=_get_software_versions(backend),
         containers=containers,
-        wazuh_rules=_get_wazuh_rules_snapshot(),
-        networks=_get_network_snapshots(),
+        wazuh_rules=_get_wazuh_rules_snapshot(backend),
+        networks=_get_network_snapshots(backend),
         config_hashes=_hash_config_files(config_dir),
         services=_get_service_endpoints(containers),
         ssh=_get_ssh_endpoints(containers),

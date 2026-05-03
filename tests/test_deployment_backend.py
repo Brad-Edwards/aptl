@@ -17,7 +17,59 @@ from aptl.core.deployment import (
     SSHComposeBackend,
     get_backend,
 )
+from aptl.core.deployment.docker_compose import _select_shell
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab import LabResult, LabStatus
+
+
+class TestSelectShell:
+    """Pure-logic tests for the bash/sh selection table.
+
+    Covers the four interesting branches:
+    - probe rc 0  -> bash (canonical happy path)
+    - probe rc 126/127 -> sh (bash is missing or not-executable)
+    - other rc -> caller surfaces the probe error instead of running a shell
+    """
+
+    @pytest.mark.parametrize(
+        "probe_rc, expected",
+        [
+            (0, ("/bin/bash", True)),
+            (126, ("/bin/sh", True)),
+            (127, ("/bin/sh", True)),
+        ],
+        ids=["bash-available", "126-not-executable", "127-not-found"],
+    )
+    def test_runs_shell(self, probe_rc, expected):
+        assert _select_shell(probe_rc) == expected
+
+    @pytest.mark.parametrize("probe_rc", [1, 2, 125, -1])
+    def test_does_not_run_on_other_returncodes(self, probe_rc):
+        shell, should_run = _select_shell(probe_rc)
+        assert should_run is False
+
+
+class TestRunRaisesBackendTimeoutError:
+    """``_run`` and ``_run_streaming`` translate ``subprocess.TimeoutExpired``
+    into ``BackendTimeoutError`` so callers don't depend on subprocess."""
+
+    def test_run_raises_backend_timeout(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(
+                cmd="docker", timeout=5
+            )
+            with pytest.raises(BackendTimeoutError):
+                backend._run(["docker", "ps"], timeout=5)
+
+    def test_run_streaming_raises_backend_timeout(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(
+                cmd="docker", timeout=5
+            )
+            with pytest.raises(BackendTimeoutError):
+                backend._run_streaming(["docker", "logs", "x"], timeout=5)
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +391,442 @@ class TestDockerComposeBackend:
 
 
 # ---------------------------------------------------------------------------
+# DockerComposeBackend container interaction tests (CLI-004)
+# ---------------------------------------------------------------------------
+
+
+class TestDockerComposeBackendContainerInteraction:
+    """Tests for the 6 container-interaction methods added under CLI-004."""
+
+    def _make_backend(self, tmp_path: Path) -> DockerComposeBackend:
+        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+
+    # container_list -------------------------------------------------------
+
+    def test_container_list_uses_compose_ps_with_all_flag(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.container_list()
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == "docker"
+        assert cmd[1] == "compose"
+        # `-p <project_name>` scopes the listing to the configured
+        # compose project (CLI-004 codex finding).
+        assert cmd[2] == "-p"
+        assert cmd[3] == "test"
+        assert "ps" in cmd
+        assert "-a" in cmd
+        assert "--format" in cmd
+        assert "json" in cmd
+        assert mock_run.call_args[1]["cwd"] == tmp_path
+
+    def test_container_list_omits_all_when_requested(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.container_list(all_containers=False)
+        cmd = mock_run.call_args[0][0]
+        assert "-a" not in cmd
+
+    def test_container_list_parses_ndjson(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        ndjson = (
+            '{"Name":"aptl-victim","State":"running"}\n'
+            '{"Name":"aptl-kali","State":"exited"}'
+        )
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=ndjson, stderr="")
+            containers = backend.container_list()
+        assert len(containers) == 2
+        assert containers[0]["Name"] == "aptl-victim"
+        assert containers[1]["State"] == "exited"
+
+    def test_container_list_parses_json_array(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='[{"Name":"aptl-victim","State":"running"}]',
+                stderr="",
+            )
+            containers = backend.container_list()
+        assert len(containers) == 1
+
+    def test_container_list_empty_when_no_output(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            containers = backend.container_list()
+        assert containers == []
+
+    def test_container_list_empty_on_compose_failure(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="not running"
+            )
+            containers = backend.container_list()
+        assert containers == []
+
+    def test_container_list_empty_on_invalid_json(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="not-json", stderr=""
+            )
+            containers = backend.container_list()
+        assert containers == []
+
+    # container_logs (streaming) -------------------------------------------
+
+    def test_container_logs_streams_without_capture(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            exit_code = backend.container_logs("aptl-victim")
+        assert exit_code == 0
+        cmd = mock_run.call_args[0][0]
+        assert cmd == ["docker", "logs", "aptl-victim"]
+        # Streaming: no capture_output kwarg
+        assert "capture_output" not in mock_run.call_args[1]
+
+    def test_container_logs_with_follow_and_tail(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            backend.container_logs("aptl-victim", follow=True, tail=100)
+        cmd = mock_run.call_args[0][0]
+        assert "-f" in cmd
+        assert "--tail" in cmd
+        tail_idx = cmd.index("--tail")
+        assert cmd[tail_idx + 1] == "100"
+        assert "aptl-victim" in cmd
+
+    def test_container_logs_propagates_exit_code(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=2)
+            exit_code = backend.container_logs("aptl-missing")
+        assert exit_code == 2
+
+    # container_logs_capture -----------------------------------------------
+
+    def test_container_logs_capture_runs_docker_logs(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="line1\nline2\n", stderr="")
+            result = backend.container_logs_capture("aptl-victim")
+        cmd = mock_run.call_args[0][0]
+        assert cmd[:3] == ["docker", "logs", "aptl-victim"]
+        assert mock_run.call_args[1].get("capture_output") is True
+        assert "line1" in result.stdout
+
+    def test_container_logs_capture_passes_since_and_until(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.container_logs_capture(
+                "aptl-suricata",
+                since="2026-05-03T00:00:00Z",
+                until="2026-05-03T01:00:00Z",
+            )
+        cmd = mock_run.call_args[0][0]
+        assert "--since" in cmd
+        since_idx = cmd.index("--since")
+        assert cmd[since_idx + 1] == "2026-05-03T00:00:00Z"
+        assert "--until" in cmd
+        until_idx = cmd.index("--until")
+        assert cmd[until_idx + 1] == "2026-05-03T01:00:00Z"
+
+    # container_shell ------------------------------------------------------
+
+    def test_container_shell_uses_docker_exec_it(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            exit_code = backend.container_shell("aptl-kali", shell="/bin/bash")
+        cmd = mock_run.call_args[0][0]
+        assert cmd == ["docker", "exec", "-it", "aptl-kali", "/bin/bash"]
+        assert exit_code == 0
+        # Streaming: no capture_output
+        assert "capture_output" not in mock_run.call_args[1]
+
+    # The bash-vs-sh auto-detect is now driven by a non-interactive
+    # probe (see TestDockerComposeBackendContainerInteraction.
+    # test_container_shell_probe_*).
+
+    # container_exec -------------------------------------------------------
+
+    def test_container_exec_runs_docker_exec_captured(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="hello", stderr="")
+            result = backend.container_exec(
+                "aptl-victim", ["echo", "hello"]
+            )
+        cmd = mock_run.call_args[0][0]
+        assert cmd == ["docker", "exec", "aptl-victim", "echo", "hello"]
+        assert "-it" not in cmd
+        assert mock_run.call_args[1].get("capture_output") is True
+        assert result.stdout == "hello"
+
+    def test_container_exec_passes_timeout(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.container_exec("aptl-victim", ["true"], timeout=5)
+        assert mock_run.call_args[1]["timeout"] == 5
+
+    # container_inspect ----------------------------------------------------
+
+    def test_container_inspect_parses_first_element(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        payload = json.dumps([
+            {"Id": "abc", "NetworkSettings": {"Networks": {"net": {"IPAddress": "1.2.3.4"}}}},
+        ])
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=payload, stderr="")
+            data = backend.container_inspect("aptl-victim")
+        cmd = mock_run.call_args[0][0]
+        assert cmd == ["docker", "inspect", "aptl-victim"]
+        assert data["Id"] == "abc"
+
+    def test_container_inspect_returns_empty_dict_on_failure(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="No such object"
+            )
+            data = backend.container_inspect("aptl-missing")
+        assert data == {}
+
+    def test_container_inspect_returns_empty_dict_on_invalid_json(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="not-json", stderr="")
+            data = backend.container_inspect("aptl-victim")
+        assert data == {}
+
+    def test_container_inspect_returns_empty_dict_on_empty_array(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
+            data = backend.container_inspect("aptl-victim")
+        assert data == {}
+
+    # container_exists ----------------------------------------------------
+
+    def test_container_exists_true_for_project_container(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        payload = json.dumps([{
+            "Config": {"Labels": {"com.docker.compose.project": "test"}},
+        }])
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=payload, stderr="")
+            assert backend.container_exists("aptl-victim") is True
+
+    def test_container_exists_false_for_other_project(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        payload = json.dumps([{
+            "Config": {"Labels": {"com.docker.compose.project": "other-tenant"}},
+        }])
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=payload, stderr="")
+            assert backend.container_exists("aptl-evil") is False
+
+    def test_container_exists_false_when_no_compose_label(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        payload = json.dumps([{"Config": {"Labels": {"unrelated": "value"}}}])
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=payload, stderr="")
+            assert backend.container_exists("aptl-victim") is False
+
+    def test_container_exists_false_on_inspect_failure(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="No such container"
+            )
+            assert backend.container_exists("aptl-missing") is False
+
+    def test_container_exists_false_when_labels_missing(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        payload = json.dumps([{"Config": {}}])
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=payload, stderr="")
+            assert backend.container_exists("aptl-victim") is False
+
+    # Host inventory ------------------------------------------------------
+
+    def test_host_versions_returns_docker_and_compose(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        def _fake(args, **kw):
+            if "compose" in args:
+                return MagicMock(returncode=0, stdout="2.23.0\n", stderr="")
+            return MagicMock(returncode=0, stdout="24.0.7\n", stderr="")
+        with patch("subprocess.run", side_effect=_fake):
+            versions = backend.host_versions()
+        assert versions == {"docker": "24.0.7", "compose": "2.23.0"}
+
+    def test_host_versions_handles_failure(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
+            versions = backend.host_versions()
+        assert versions == {"docker": "", "compose": ""}
+
+    def test_host_list_lab_containers_parses_tsv(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        line = (
+            "aptl-victim\taptl/victim:latest\tabc\tUp 5m (healthy)\t"
+            "service=victim\t0.0.0.0:2022->22/tcp"
+        )
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=line, stderr="")
+            rows = backend.host_list_lab_containers()
+        cmd = mock_run.call_args[0][0]
+        assert "docker" in cmd and "ps" in cmd and "-a" in cmd
+        assert any("name=aptl-" in arg for arg in cmd)
+        # Scoping by compose project label keeps shared-daemon snapshots
+        # from leaking other tenants' aptl-* containers.
+        assert any(
+            "label=com.docker.compose.project=test" in arg for arg in cmd
+        )
+        # Bounded execution: a stalled daemon must not hang snapshot capture.
+        assert mock_run.call_args[1]["timeout"] == 15
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["name"] == "aptl-victim"
+        assert row["image"] == "aptl/victim:latest"
+        assert row["id"] == "abc"
+        assert row["status"] == "Up 5m (healthy)"
+        assert row["labels"] == {"service": "victim"}
+        assert row["ports"] == ["0.0.0.0:2022->22/tcp"]
+
+    def test_host_list_lab_containers_skips_short_lines(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="too\tfew", stderr="")
+            assert backend.host_list_lab_containers() == []
+
+    def test_host_list_lab_containers_returns_empty_on_error(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="docker missing")
+            assert backend.host_list_lab_containers() == []
+
+    def test_host_list_lab_networks_filters_by_prefix(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="aptl_security\naptl_internal\n", stderr=""
+            )
+            nets = backend.host_list_lab_networks("aptl")
+        assert nets == ["aptl_security", "aptl_internal"]
+        cmd = mock_run.call_args[0][0]
+        assert any("name=aptl" in arg for arg in cmd)
+        # Compose-project scoping prevents shared-daemon network leak.
+        assert any(
+            "label=com.docker.compose.project=test" in arg for arg in cmd
+        )
+        assert mock_run.call_args[1]["timeout"] == 15
+
+    def test_host_list_lab_networks_returns_empty_on_error(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
+            assert backend.host_list_lab_networks("aptl") == []
+
+    def test_host_inspect_network_parses_subnet_and_containers(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        payload = json.dumps([{
+            "IPAM": {"Config": [{"Subnet": "172.20.0.0/16", "Gateway": "172.20.0.1"}]},
+            "Containers": {
+                "abc": {"Name": "aptl-victim"},
+                "def": {"Name": "aptl-kali"},
+            },
+        }])
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=payload, stderr="")
+            info = backend.host_inspect_network("aptl_security")
+        assert info["name"] == "aptl_security"
+        assert info["subnet"] == "172.20.0.0/16"
+        assert info["gateway"] == "172.20.0.1"
+        assert info["containers"] == ["aptl-kali", "aptl-victim"]
+
+    def test_host_inspect_network_empty_on_failure(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="not found")
+            assert backend.host_inspect_network("missing") == {}
+
+    def test_host_inspect_network_empty_on_invalid_json(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="not-json", stderr="")
+            assert backend.host_inspect_network("net") == {}
+
+    def test_container_shell_probe_then_bash_when_available(self, tmp_path):
+        """Auto-fallback probes bash non-interactively first."""
+        backend = self._make_backend(tmp_path)
+        # First call: probe (captured). Second call: streaming bash.
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                MagicMock(returncode=0, stdout="", stderr=""),  # probe ok
+                MagicMock(returncode=0),                          # interactive
+            ]
+            rc = backend.container_shell("aptl-victim")
+        assert rc == 0
+        assert mock_run.call_count == 2
+        probe_cmd = mock_run.call_args_list[0][0][0]
+        assert "/bin/bash" in probe_cmd
+        assert "-c" in probe_cmd
+        assert "true" in probe_cmd
+        # Probe is captured (returns CompletedProcess).
+        assert mock_run.call_args_list[0][1].get("capture_output") is True
+        # Interactive call streams (no capture_output).
+        interactive_cmd = mock_run.call_args_list[1][0][0]
+        assert interactive_cmd[:3] == ["docker", "exec", "-it"]
+        assert interactive_cmd[-1] == "/bin/bash"
+        assert "capture_output" not in mock_run.call_args_list[1][1]
+
+    def test_container_shell_probe_falls_back_to_sh_on_127(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                MagicMock(returncode=127, stdout="", stderr=""),  # probe says no bash
+                MagicMock(returncode=0),                          # interactive sh
+            ]
+            rc = backend.container_shell("aptl-alpine")
+        assert rc == 0
+        sh_cmd = mock_run.call_args_list[1][0][0]
+        assert sh_cmd[-1] == "/bin/sh"
+
+    def test_container_shell_probe_failure_returns_probe_exit(self, tmp_path):
+        """Non-bash-related probe failures (no such container, etc.)
+        propagate the exit code rather than masking with sh."""
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="No such container"
+            )
+            rc = backend.container_shell("aptl-missing")
+        assert rc == 1
+        assert mock_run.call_count == 1  # no fallback to sh
+
+    def test_container_shell_explicit_shell_skips_probe(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            backend.container_shell("aptl-kali", shell="/bin/zsh")
+        # Only one call, the interactive one.
+        assert mock_run.call_count == 1
+        cmd = mock_run.call_args[0][0]
+        assert cmd[-1] == "/bin/zsh"
+
+
+# ---------------------------------------------------------------------------
 # SSHComposeBackend tests
 # ---------------------------------------------------------------------------
 
@@ -458,6 +946,51 @@ class TestSSHComposeBackend:
 
         assert ok is False
         assert "timed out" in err
+
+    # CLI-004: streaming methods inject DOCKER_HOST too --------------------
+
+    def test_container_shell_injects_docker_host(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            backend.container_shell("aptl-kali", shell="/bin/bash")
+        env = mock_run.call_args[1]["env"]
+        assert env["DOCKER_HOST"] == "ssh://admin@lab.example.com"
+
+    def test_container_logs_injects_docker_host(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            backend.container_logs("aptl-victim", follow=True)
+        env = mock_run.call_args[1]["env"]
+        assert env["DOCKER_HOST"] == "ssh://admin@lab.example.com"
+
+    def test_container_logs_streaming_injects_ssh_identity(self, tmp_path):
+        backend = self._make_backend(
+            tmp_path, ssh_key="/home/user/.ssh/lab_key"
+        )
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            backend.container_logs("aptl-victim")
+        env = mock_run.call_args[1]["env"]
+        assert env["DOCKER_SSH_IDENTITY"] == "/home/user/.ssh/lab_key"
+
+    def test_container_exec_uses_ssh_path(self, tmp_path):
+        """container_exec is captured; verify it inherits the _run override."""
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.container_exec("aptl-victim", ["true"])
+        env = mock_run.call_args[1]["env"]
+        assert env["DOCKER_HOST"] == "ssh://admin@lab.example.com"
+
+    def test_container_list_uses_ssh_path(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.container_list()
+        env = mock_run.call_args[1]["env"]
+        assert env["DOCKER_HOST"] == "ssh://admin@lab.example.com"
 
 
 # ---------------------------------------------------------------------------

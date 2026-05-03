@@ -11,9 +11,14 @@ import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.curl_safe import curl_json as _curl_json
 from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aptl.core.deployment import DeploymentBackend
 
 log = get_logger("collectors")
 
@@ -32,7 +37,7 @@ def _run_cmd(
         return subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout
         )
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
+    except (subprocess.TimeoutExpired, OSError) as e:
         log.warning("Command failed: %s: %s", " ".join(cmd[:3]), e)
         return None
 
@@ -105,13 +110,22 @@ def collect_wazuh_alerts(
     return all_hits
 
 
-def collect_suricata_eve(start_iso: str, end_iso: str) -> list[dict]:
+def collect_suricata_eve(
+    start_iso: str,
+    end_iso: str,
+    backend: "DeploymentBackend",
+) -> list[dict]:
     """Read Suricata EVE JSON entries from the suricata container."""
-    result = _run_cmd(
-        ["docker", "exec", "aptl-suricata", "cat", "/var/log/suricata/eve.json"],
-        timeout=30,
-    )
-    if result is None or result.returncode != 0:
+    try:
+        result = backend.container_exec(
+            "aptl-suricata",
+            ["cat", "/var/log/suricata/eve.json"],
+            timeout=30,
+        )
+    except (BackendTimeoutError, OSError) as e:
+        log.warning("Suricata EVE collection failed: %s", e)
+        return []
+    if result.returncode != 0:
         log.info("Suricata container not available, skipping EVE collection")
         return []
 
@@ -285,21 +299,20 @@ def collect_container_logs(
     containers: list[str],
     start_iso: str,
     end_iso: str,
+    backend: "DeploymentBackend",
 ) -> dict[str, str]:
     """Collect docker logs per container for the time window."""
     logs: dict[str, str] = {}
 
     for container in containers:
-        result = _run_cmd(
-            [
-                "docker", "logs",
-                "--since", start_iso,
-                "--until", end_iso,
-                container,
-            ],
-            timeout=30,
-        )
-        if result is None or result.returncode != 0:
+        try:
+            result = backend.container_logs_capture(
+                container, since=start_iso, until=end_iso, timeout=30
+            )
+        except (BackendTimeoutError, OSError) as e:
+            log.warning("Log collection failed for %s: %s", container, e)
+            continue
+        if result.returncode != 0:
             log.warning("Could not collect logs from container %s", container)
             continue
 

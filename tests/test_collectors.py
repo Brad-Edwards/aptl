@@ -120,9 +120,9 @@ class TestCollectTraces:
 class TestCollectContainerLogs:
     """Tests for container log collection."""
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_collects_logs(self, mock_run):
-        mock_run.return_value = MagicMock(
+    def test_collects_logs(self):
+        backend = MagicMock()
+        backend.container_logs_capture.return_value = MagicMock(
             returncode=0,
             stdout="log line 1\nlog line 2\n",
             stderr="",
@@ -132,24 +132,34 @@ class TestCollectContainerLogs:
             ["aptl-victim"],
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            backend,
         )
         assert "aptl-victim" in logs
         assert "log line 1" in logs["aptl-victim"]
+        backend.container_logs_capture.assert_called_once_with(
+            "aptl-victim",
+            since="2025-01-01T00:00:00+00:00",
+            until="2025-01-01T23:59:59+00:00",
+            timeout=30,
+        )
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_skips_failed_container(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+    def test_skips_failed_container(self):
+        backend = MagicMock()
+        backend.container_logs_capture.return_value = MagicMock(
+            returncode=1, stdout="", stderr="error"
+        )
 
         logs = collect_container_logs(
             ["aptl-missing"],
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            backend,
         )
         assert logs == {}
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_combines_stdout_stderr(self, mock_run):
-        mock_run.return_value = MagicMock(
+    def test_combines_stdout_stderr(self):
+        backend = MagicMock()
+        backend.container_logs_capture.return_value = MagicMock(
             returncode=0,
             stdout="stdout line",
             stderr="stderr line",
@@ -159,18 +169,22 @@ class TestCollectContainerLogs:
             ["aptl-victim"],
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            backend,
         )
         assert "stdout line" in logs["aptl-victim"]
         assert "stderr line" in logs["aptl-victim"]
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_skips_empty_output(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    def test_skips_empty_output(self):
+        backend = MagicMock()
+        backend.container_logs_capture.return_value = MagicMock(
+            returncode=0, stdout="", stderr=""
+        )
 
         logs = collect_container_logs(
             ["aptl-victim"],
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            backend,
         )
         assert logs == {}
 
@@ -211,30 +225,34 @@ class TestCollectWazuhAlerts:
 class TestCollectSuricataEve:
     """Tests for Suricata EVE collection."""
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_returns_empty_when_container_missing(self, mock_run):
-        mock_run.return_value = None
+    def test_returns_empty_when_container_missing(self):
+        backend = MagicMock()
+        backend.container_exec.return_value = MagicMock(
+            returncode=1, stdout="", stderr="No such container"
+        )
 
         result = collect_suricata_eve(
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
+            backend,
         )
         assert result == []
 
-    @patch("aptl.core.collectors._run_cmd")
-    def test_filters_by_time(self, mock_run):
+    def test_filters_by_time(self):
         entries = [
             json.dumps({"timestamp": "2025-01-01T10:00:00+00:00", "event_type": "dns"}),
             json.dumps({"timestamp": "2025-01-01T12:00:00+00:00", "event_type": "alert"}),
             json.dumps({"timestamp": "2025-01-01T14:00:00+00:00", "event_type": "flow"}),
         ]
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout="\n".join(entries)
+        backend = MagicMock()
+        backend.container_exec.return_value = MagicMock(
+            returncode=0, stdout="\n".join(entries), stderr=""
         )
 
         result = collect_suricata_eve(
             "2025-01-01T11:00:00+00:00",
             "2025-01-01T13:00:00+00:00",
+            backend,
         )
         assert len(result) == 1
         assert result[0]["event_type"] == "alert"

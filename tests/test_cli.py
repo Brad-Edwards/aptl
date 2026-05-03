@@ -473,24 +473,29 @@ class TestLabContinuityAuditCommand:
         targets_arg = positional[1] if len(positional) > 1 else kwargs["targets"]
         assert targets_arg == ["aptl-victim"]
 
-    def test_warns_when_whitelist_empty(self, runner, mocker, tmp_path):
+    def test_fails_hard_when_whitelist_empty(self, runner, mocker, tmp_path):
+        # Codex finding C7 (cycle 2): a silent zero-exit on empty
+        # whitelist let automation believe the carve-out was clean
+        # while it was actually disabled. Treat empty/missing
+        # whitelist as a hard error.
         from aptl.cli.main import app
 
         self._stub_cli_plumbing(mocker, tmp_path)
         mocker.patch("aptl.core.continuity.kali_source_ips", return_value=[])
-        mocker.patch("aptl.core.continuity.audit_and_revert", return_value=[])
+        # The audit should not even be reached.
+        mock_audit = mocker.patch(
+            "aptl.core.continuity.audit_and_revert", return_value=[],
+        )
 
         result = runner.invoke(
             app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
         )
 
-        assert result.exit_code == 0
-        # Stderr is captured via result.stderr in CliRunner when
-        # mix_stderr=False; the runner mixes by default so the warning
-        # ends up in result.output.
+        assert result.exit_code != 0
         assert "no kali IPs found" in result.output
+        mock_audit.assert_not_called()
 
-    def test_rejects_target_not_in_compose_project(
+    def test_rejects_explicit_target_not_in_compose_project(
         self, runner, mocker, tmp_path
     ):
         # Codex security finding S1 (cycle 1): without project-ownership
@@ -523,6 +528,73 @@ class TestLabContinuityAuditCommand:
 
         assert result.exit_code != 0
         assert "foreign-container" in result.output
+        mock_audit.assert_not_called()
+
+    def test_default_targets_filtered_to_present_subset(
+        self, runner, mocker, tmp_path,
+    ):
+        # Codex finding C8 (cycle 2): when using defaults (no --target),
+        # a missing default in the active compose profile must NOT
+        # reject the entire command. Instead, filter to the present
+        # subset, warn about the skipped names, and audit the rest.
+        from aptl.cli.main import app
+        from aptl.core.config import AptlConfig
+        from aptl.core.session import ScenarioSession
+
+        mocker.patch(
+            "aptl.cli._common.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+
+        # Simulate a profile where only aptl-webapp is up.
+        backend = mocker.MagicMock()
+        backend.container_exists.side_effect = lambda name: name == "aptl-webapp"
+        mocker.patch("aptl.core.deployment.get_backend", return_value=backend)
+        mocker.patch.object(ScenarioSession, "get_active", return_value=None)
+        mocker.patch(
+            "aptl.core.continuity.kali_source_ips", return_value=["172.20.4.30"],
+        )
+        mock_audit = mocker.patch(
+            "aptl.core.continuity.audit_and_revert", return_value=[],
+        )
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code == 0
+        # Audit was called with only the present default.
+        positional = mock_audit.call_args.args
+        kwargs = mock_audit.call_args.kwargs
+        targets_arg = positional[1] if len(positional) > 1 else kwargs["targets"]
+        assert targets_arg == ["aptl-webapp"]
+        assert "skipping defaults not in active profile" in result.output
+
+    def test_fails_when_no_default_targets_present(
+        self, runner, mocker, tmp_path,
+    ):
+        # If *none* of the defaults are running, there's nothing to
+        # audit and the CLI must fail loudly so automation notices.
+        from aptl.cli.main import app
+        from aptl.core.config import AptlConfig
+        from aptl.core.session import ScenarioSession
+
+        mocker.patch(
+            "aptl.cli._common.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+        backend = mocker.MagicMock()
+        backend.container_exists.return_value = False
+        mocker.patch("aptl.core.deployment.get_backend", return_value=backend)
+        mocker.patch.object(ScenarioSession, "get_active", return_value=None)
+        mock_audit = mocker.patch("aptl.core.continuity.audit_and_revert")
+
+        result = runner.invoke(
+            app, ["lab", "continuity-audit", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code != 0
+        assert "none of the default targets" in result.output
         mock_audit.assert_not_called()
 
     def test_exits_nonzero_on_revert_failed(self, runner, mocker, tmp_path):

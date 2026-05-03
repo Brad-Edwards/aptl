@@ -179,6 +179,24 @@ class TestParseIptablesRule:
         # `-m state` is a real match module; rule is granular.
         assert rule.qualifiers, "non-comment -m modules are restrictive"
 
+    def test_quoted_comment_with_whitespace_parses(self) -> None:
+        # Codex finding C6 (cycle 2): a blue actor could install a
+        # blanket kali DROP with a quoted multi-word comment. The
+        # plain ``str.split`` parser broke on the quoted whitespace,
+        # rejected the rule as malformed, and the audit silently
+        # preserved the wedge. ``shlex.split`` handles the quoting.
+        from aptl.core.continuity import is_blanket_kali_drop, parse_iptables_rule
+
+        rule = parse_iptables_rule(
+            '-A INPUT -s 172.20.4.30 -m comment --comment "manual mistake" -j DROP'
+        )
+
+        assert rule is not None
+        assert rule.qualifiers == set()
+        assert rule.action == "DROP"
+        kali_ips = {"172.20.4.30"}
+        assert is_blanket_kali_drop(rule, kali_ips) is True
+
     def test_policy_line_is_not_a_rule(self) -> None:
         from aptl.core.continuity import parse_iptables_rule
 
@@ -341,21 +359,36 @@ class _StubExecCall:
     timeout: int | None
 
 
+def _stub_key(name: str, cmd: list[str]) -> tuple[str, str, str]:
+    """Compose a routing key that distinguishes audit (`-S`) from delete (`-D`).
+
+    Codex finding C9 (cycle 2): keying on (name, cmd[0]) only meant
+    `iptables -S` and `iptables -D` shared the same canned response,
+    so orchestration tests couldn't pin per-phase behavior.
+    """
+    head = cmd[0] if cmd else ""
+    sub = cmd[1] if len(cmd) > 1 else ""
+    return (name, head, sub)
+
+
 class _StubBackend:
     """Minimal backend stub that captures calls and serves canned output.
 
     Mirrors the slice of ``DeploymentBackend`` that
     :mod:`aptl.core.continuity` actually uses (``container_exec`` only).
     Each ``container_exec`` call appends to ``calls`` and returns one
-    queued ``CompletedProcess``-shaped object.
+    queued ``CompletedProcess``-shaped object. Routing uses
+    ``_stub_key`` so audit (`-S`) and delete (`-D`) can be exercised
+    independently.
     """
 
     def __init__(
         self,
-        responses: dict[tuple[str, str], "subprocess.CompletedProcess[str]"]
-        | None = None,
+        responses: dict[
+            tuple[str, str, str], "subprocess.CompletedProcess[str]"
+        ] | None = None,
         default_response: "subprocess.CompletedProcess[str] | None" = None,
-        raise_for: set[tuple[str, str]] | None = None,
+        raise_for: set[tuple[str, str, str]] | None = None,
     ) -> None:
         self.calls: list[_StubExecCall] = []
         self._responses = responses or {}
@@ -370,8 +403,7 @@ class _StubBackend:
         timeout: int | None = None,
     ) -> "subprocess.CompletedProcess[str]":
         self.calls.append(_StubExecCall(name=name, cmd=list(cmd), timeout=timeout))
-        head = cmd[0] if cmd else ""
-        key = (name, head)
+        key = _stub_key(name, cmd)
         if key in self._raise_for:
             raise RuntimeError(f"stubbed exec failure for {key}")
         if key in self._responses:
@@ -469,7 +501,7 @@ class TestAuditTarget:
         # the CLI) need the failure signal to surface.
         from aptl.core.continuity import ContinuityAuditError, audit_target
 
-        backend = _StubBackend(raise_for={("nonexistent", "iptables")})
+        backend = _StubBackend(raise_for={("nonexistent", "iptables", "-S")})
 
         with pytest.raises(ContinuityAuditError) as exc_info:
             audit_target(backend, "nonexistent", kali_ips)
@@ -556,7 +588,10 @@ class TestRevertFinding:
     def test_returns_failed_event_when_exec_raises(self) -> None:
         from aptl.core.continuity import revert_finding
 
-        backend = _StubBackend(raise_for={("victim", "iptables")})
+        # ``revert_finding`` issues an ``iptables -D ...`` call. The
+        # stub raises only on the delete phase so the audit-side test
+        # surface stays unaffected.
+        backend = _StubBackend(raise_for={("victim", "iptables", "-D")})
 
         event = revert_finding(backend, _finding())
 
@@ -576,7 +611,7 @@ class TestAuditAndRevert:
         # and whose `iptables -D ...` succeeds. Routes per cmd[1] so a
         # single backend serves both phases.
         responses = {
-            ("victim", "iptables"): _completed(
+            ("victim", "iptables", "-S"): _completed(
                 stdout="-A INPUT -s 172.20.4.30/32 -j DROP\n"
             ),
         }
@@ -700,7 +735,7 @@ class TestAuditAndRevert:
         # Second invocation reverts another rule (different target +
         # rule text so the JSONL is identifiable).
         second_audit_backend = _StubBackend(responses={
-            ("webapp", "iptables"): _completed(
+            ("webapp", "iptables", "-S"): _completed(
                 stdout="-A INPUT -s 172.20.1.30 -j DROP\n",
             ),
         })
@@ -725,7 +760,7 @@ class TestAuditAndRevert:
         # an AUDIT_FAILED event and continues to the next target.
         from aptl.core.continuity import audit_and_revert
 
-        backend = _StubBackend(raise_for={("victim", "iptables")})
+        backend = _StubBackend(raise_for={("victim", "iptables", "-S")})
 
         events = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
 
@@ -745,11 +780,11 @@ class TestAuditAndRevert:
 
         backend = _StubBackend(
             responses={
-                ("webapp", "iptables"): _completed(
+                ("webapp", "iptables", "-S"): _completed(
                     stdout="-A INPUT -s 172.20.4.30 -j DROP\n",
                 ),
             },
-            raise_for={("victim", "iptables")},
+            raise_for={("victim", "iptables", "-S")},
         )
 
         events = audit_and_revert(
@@ -759,6 +794,34 @@ class TestAuditAndRevert:
         actions = [e.action for e in events]
         assert "AUDIT_FAILED" in actions
         assert "REVERTED" in actions
+
+    def test_audit_and_revert_issues_both_S_and_D_calls(
+        self, kali_ips: set[str]
+    ) -> None:
+        # Codex finding C9 (cycle 2): the previous stub keyed by
+        # (name, cmd[0]) collapsed audit (`-S`) and delete (`-D`) into
+        # the same canned response, so orchestration tests couldn't
+        # actually pin the per-phase argv. With phase-distinct keying,
+        # this test asserts that audit_and_revert really issues both
+        # the inspection and the deletion.
+        from aptl.core.continuity import audit_and_revert
+
+        backend = _StubBackend(
+            responses={
+                ("webapp", "iptables", "-S"): _completed(
+                    stdout="-A INPUT -s 172.20.4.30 -j DROP\n",
+                ),
+            },
+            # Default response for any other call (i.e. the -D) is
+            # success/empty.
+            default_response=_completed(),
+        )
+
+        audit_and_revert(backend, ["webapp"], kali_ips=kali_ips)
+
+        phases = {(c.cmd[0], c.cmd[1]) for c in backend.calls}
+        assert ("iptables", "-S") in phases
+        assert ("iptables", "-D") in phases
 
 
 class TestDefaultTargets:

@@ -216,22 +216,50 @@ def _format_continuity_event_line(event) -> tuple[str, str]:
     return "AUDIT-FAIL ", "iptables inspection failed"
 
 
-def _validate_continuity_targets(backend, targets: list[str]) -> None:
-    """Reject targets that don't belong to this compose project.
+def _validate_continuity_targets(
+    backend, targets: list[str], *, explicit: bool,
+) -> list[str]:
+    """Resolve which targets the audit should actually inspect.
 
-    Codex security finding S1 (cycle 1): without this gate, ``--target``
-    could redirect ``container_exec`` at any container on a shared
-    daemon. ``backend.container_exists`` performs the compose-project
-    label check.
+    When the user passes ``--target`` explicitly, every name must
+    belong to this compose project; an unknown name is a hard error
+    (security finding S1, cycle 1). When the user takes the defaults,
+    a missing default in the active profile is *not* a hard error —
+    it just means that profile isn't running this lab session, and
+    auditing the remaining defaults is still useful (codex finding C8,
+    cycle 2). In that case we filter to the present subset and warn.
+
+    Returns the list to audit (possibly narrowed). Raises ``typer.Exit``
+    only on the explicit-targets-with-unknown-name path, with exit
+    code 2.
     """
-    unknown = [t for t in targets if not backend.container_exists(t)]
-    if not unknown:
-        return
+    present = [t for t in targets if backend.container_exists(t)]
+    missing = [t for t in targets if t not in present]
+
+    if not missing:
+        return present
+
+    if explicit:
+        typer.echo(
+            f"error: not part of this lab project: {', '.join(missing)}",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    if not present:
+        typer.echo(
+            "error: none of the default targets are present in the active"
+            f" compose profile (looked for {', '.join(targets)}).",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
     typer.echo(
-        f"error: not part of this lab project: {', '.join(unknown)}",
+        "Continuity audit: skipping defaults not in active profile: "
+        f"{', '.join(missing)}",
         err=True,
     )
-    raise typer.Exit(code=2)
+    return present
 
 
 def _resolve_continuity_run_archive(
@@ -302,16 +330,26 @@ def continuity_audit(
     config, project_root = resolve_config_for_cli(project_dir)
     backend = get_backend(config, project_root)
 
-    target_list = list(targets) if targets else default_targets()
-    _validate_continuity_targets(backend, target_list)
+    explicit_targets = bool(targets)
+    requested = list(targets) if targets else default_targets()
+    target_list = _validate_continuity_targets(
+        backend, requested, explicit=explicit_targets,
+    )
 
     wl_path = whitelist_path or (project_root / _DEFAULT_WHITELIST_RELPATH)
     kali_ips = set(kali_source_ips(whitelist_path=wl_path))
     if not kali_ips:
+        # Empty whitelist means the audit would protect zero source IPs —
+        # the carve-out is effectively disabled. A silent zero-exit lets
+        # automation believe the run is clean while it's actually
+        # uninstrumented. Fail loudly. Codex finding C7 (cycle 2).
         typer.echo(
-            f"warning: no kali IPs found in {wl_path}; audit will be a no-op.",
+            f"error: no kali IPs found in {wl_path}; whitelist appears to"
+            " be empty or missing. Refusing to run an audit that would"
+            " protect no source IPs.",
             err=True,
         )
+        raise typer.Exit(code=2)
 
     run_store, run_id = _resolve_continuity_run_archive(project_root, config)
     log.info(

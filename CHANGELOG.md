@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pyproject.toml` — adds `aptl-misp-suricata-sync` console script entry pointing at `aptl.services.misp_suricata_sync.main:main`.
 - `README.md` — adds one-line mention of the MISP→Suricata sync under the SOC Stack section, with a pointer to ADR-019 explaining the alert-only constraint.
 
+- `MISP_API_KEY` is now a required env var (no hardcoded default) for both the MISP server and every downstream consumer in this PR. `.env.example` ships a placeholder; the server's `ADMIN_KEY` and the sync service's `MISP_API_KEY` resolve to the same `${MISP_API_KEY:?...}` reference so they stay aligned. Implements SEC-005 for the SOC IOC pipeline.
+- `MISP_CA_CERT_PATH` is wired through `aptl-misp-suricata-sync`'s config and curl wrapper as the verify-ON hook for SOC stack consumers. Lab default is `MISP_VERIFY_SSL=false` because MISP self-signs and there is no shared lab CA today; flipping the env var with a CA bundle enables real verification. Full lab-managed CA / verify-on-by-default work is tracked in **SEC-006** (DRAFT) and [#258](https://github.com/Brad-Edwards/Brad-Edwards/aptl/issues/258).
+
 ### Notes
 
 - Default lab posture is the service running with zero IOCs tagged `aptl:enforce` — blue's job per iteration is to populate intel and graduate it. Submitting an IOC via the `aptl-threatintel` MCP with the `aptl:enforce` tag, then waiting one sync interval (default 300s), produces a rule in `misp-iocs.rules` and a Suricata reload.

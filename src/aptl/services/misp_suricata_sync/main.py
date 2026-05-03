@@ -65,10 +65,7 @@ class SyncRunner:
             )
             return
 
-        translator = IocTranslator(
-            sid_base=self._cfg.sid_base,
-            rules_out_dir=str(self._cfg.rules_out_path.parent),
-        )
+        translator = IocTranslator(sid_base=self._cfg.sid_base)
         result = translator.translate(attrs)
         rules_text = render_rules_file(
             result.rules,

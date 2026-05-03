@@ -29,6 +29,7 @@ def _curl_json(
     auth_header: str,
     body: dict | None = None,
     insecure: bool,
+    ca_cert_path: str | None = None,
     method: str = "POST",
     timeout: int = _HTTP_TIMEOUT_SECONDS,
 ) -> Any | None:
@@ -38,10 +39,19 @@ def _curl_json(
     plumbing the MISP integration needs. The curl process never sees the
     parsed body, only its JSON form on stdin via ``-d``; the API key never
     appears on the command line.
+
+    TLS posture (in priority order):
+      - ``insecure=True`` → ``curl -k`` (skip verification entirely).
+      - ``insecure=False`` and ``ca_cert_path`` set → ``curl --cacert <path>``
+        (verify against the supplied CA bundle — this is the path SEC-006
+        will exercise once the lab CA ships per #258).
+      - ``insecure=False`` and no path → use curl's system trust store.
     """
     cmd = ["curl", "-sf", "-X", method, url]
     if insecure:
         cmd.insert(1, "-k")
+    elif ca_cert_path:
+        cmd += ["--cacert", ca_cert_path]
     cmd += ["-H", "Authorization: " + auth_header]
     cmd += ["-H", "Content-Type: application/json"]
     cmd += ["-H", "Accept: application/json"]
@@ -76,6 +86,10 @@ class MispClient:
     def __init__(self, cfg: ServiceConfig) -> None:
         self._cfg = cfg
 
+    def _ca_cert_str(self) -> str | None:
+        path = self._cfg.misp_ca_cert_path
+        return str(path) if path is not None else None
+
     def wait_for_ready(self, timeout: float) -> bool:
         deadline = time.monotonic() + timeout
         while True:
@@ -84,6 +98,7 @@ class MispClient:
                 auth_header=self._cfg.misp_api_key,
                 body=None,
                 insecure=not self._cfg.misp_verify_ssl,
+                ca_cert_path=self._ca_cert_str(),
                 method="GET",
             )
             if isinstance(data, dict) and data.get("version"):
@@ -103,6 +118,7 @@ class MispClient:
             auth_header=self._cfg.misp_api_key,
             body=body,
             insecure=not self._cfg.misp_verify_ssl,
+            ca_cert_path=self._ca_cert_str(),
             method="POST",
         )
         if data is None:

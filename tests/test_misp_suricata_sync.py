@@ -114,15 +114,35 @@ class TestServiceConfig:
         monkeypatch.setenv("MISP_API_KEY", "k")
         monkeypatch.setenv("MISP_URL", "https://misp.lab")
         monkeypatch.setenv("MISP_VERIFY_SSL", "true")
+        monkeypatch.setenv("MISP_CA_CERT_PATH", "/etc/aptl/lab-ca.pem")
         monkeypatch.setenv("IOC_TAG_FILTER", "tlp:white")
         monkeypatch.setenv("SYNC_INTERVAL_SECONDS", "60")
         monkeypatch.setenv("SID_BASE", "2500000")
         cfg = ServiceConfig.from_env()
         assert cfg.misp_url == "https://misp.lab"
         assert cfg.misp_verify_ssl is True
+        assert cfg.misp_ca_cert_path == Path("/etc/aptl/lab-ca.pem")
         assert cfg.ioc_tag_filter == "tlp:white"
         assert cfg.sync_interval_seconds == 60
         assert cfg.sid_base == 2_500_000
+
+    def test_ca_cert_path_defaults_to_none(self, monkeypatch):
+        from aptl.services.misp_suricata_sync.config import ServiceConfig
+
+        monkeypatch.setenv("MISP_API_KEY", "k")
+        monkeypatch.delenv("MISP_CA_CERT_PATH", raising=False)
+        cfg = ServiceConfig.from_env()
+        assert cfg.misp_ca_cert_path is None
+
+    def test_ca_cert_path_blank_treated_as_none(self, monkeypatch):
+        """The compose default is the empty string when not overridden — the
+        loader must treat that as 'no CA configured' and not as Path('')."""
+        from aptl.services.misp_suricata_sync.config import ServiceConfig
+
+        monkeypatch.setenv("MISP_API_KEY", "k")
+        monkeypatch.setenv("MISP_CA_CERT_PATH", "   ")
+        cfg = ServiceConfig.from_env()
+        assert cfg.misp_ca_cert_path is None
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +159,7 @@ def _attr(type_: str, value: str, event_id: str | None = None):
 def _make_translator(**overrides):
     from aptl.services.misp_suricata_sync.translator import IocTranslator
 
-    kwargs = dict(sid_base=2_000_000, rules_out_dir="/etc/suricata/rules/misp")
+    kwargs = dict(sid_base=2_000_000)
     kwargs.update(overrides)
     return IocTranslator(**kwargs)
 
@@ -262,7 +282,9 @@ class TestTranslator:
         assert result.hash_lists == {"sha256": [h]}
         assert len(result.rules) == 1
         rule = result.rules[0].text
-        assert "filesha256:/etc/suricata/rules/misp/misp-sha256.list" in rule
+        # Path is relative to Suricata's default-rule-path so the
+        # documented filemd5/filesha1/filesha256 lookup works.
+        assert "filesha256:misp/misp-sha256.list" in rule
         assert h not in rule  # the hash itself lives in the sidecar list
 
     def test_malformed_hash_skipped_with_warning(self, caplog):
@@ -296,13 +318,13 @@ class TestTranslator:
         result = _make_translator().translate([_attr("md5", h)])
         assert result.hash_lists == {"md5": [h]}
         rule = result.rules[0].text
-        assert "filemd5:/etc/suricata/rules/misp/misp-md5.list" in rule
+        assert "filemd5:misp/misp-md5.list" in rule
 
     def test_sha1_collected_into_hash_list(self):
         h = "c" * 40
         result = _make_translator().translate([_attr("sha1", h)])
         assert result.hash_lists == {"sha1": [h]}
-        assert "filesha1:/etc/suricata/rules/misp/misp-sha1.list" in result.rules[0].text
+        assert "filesha1:misp/misp-sha1.list" in result.rules[0].text
 
     def test_one_hash_rule_emitted_per_type_regardless_of_count(self):
         attrs = [
@@ -644,6 +666,7 @@ class TestMispClient:
             misp_url="https://misp",
             misp_api_key="test-key",
             misp_verify_ssl=False,
+            misp_ca_cert_path=None,
             ioc_tag_filter="aptl:enforce",
             sync_interval_seconds=300,
             rules_out_path=Path("/tmp/misp-iocs.rules"),
@@ -771,6 +794,84 @@ class TestMispClient:
         for record in caplog.records:
             assert "super-secret-key-XYZ" not in record.getMessage()
 
+    @patch("aptl.services.misp_suricata_sync.misp_client._curl_json")
+    def test_passes_insecure_when_verify_ssl_false(self, mock_curl):
+        from aptl.services.misp_suricata_sync.misp_client import MispClient
+
+        mock_curl.return_value = {"response": {"Attribute": []}}
+        MispClient(self._cfg(misp_verify_ssl=False)).fetch_tagged_attributes()
+        kwargs = mock_curl.call_args.kwargs
+        assert kwargs["insecure"] is True
+        assert kwargs["ca_cert_path"] is None
+
+    @patch("aptl.services.misp_suricata_sync.misp_client._curl_json")
+    def test_passes_ca_cert_when_verify_ssl_true_with_path(self, mock_curl):
+        from aptl.services.misp_suricata_sync.misp_client import MispClient
+
+        mock_curl.return_value = {"response": {"Attribute": []}}
+        MispClient(
+            self._cfg(
+                misp_verify_ssl=True,
+                misp_ca_cert_path=Path("/etc/aptl/lab-ca.pem"),
+            )
+        ).fetch_tagged_attributes()
+        kwargs = mock_curl.call_args.kwargs
+        assert kwargs["insecure"] is False
+        assert kwargs["ca_cert_path"] == "/etc/aptl/lab-ca.pem"
+
+    @patch("aptl.services.misp_suricata_sync.misp_client._curl_json")
+    def test_uses_system_trust_when_verify_ssl_true_no_path(self, mock_curl):
+        from aptl.services.misp_suricata_sync.misp_client import MispClient
+
+        mock_curl.return_value = {"response": {"Attribute": []}}
+        MispClient(
+            self._cfg(misp_verify_ssl=True, misp_ca_cert_path=None)
+        ).fetch_tagged_attributes()
+        kwargs = mock_curl.call_args.kwargs
+        assert kwargs["insecure"] is False
+        assert kwargs["ca_cert_path"] is None
+
+
+class TestCurlTLSWiring:
+    """Direct tests for the curl-arg construction in _curl_json."""
+
+    def _run(self, monkeypatch, **kwargs):
+        from aptl.services.misp_suricata_sync import misp_client as mc
+
+        captured: dict = {}
+
+        def fake_run(cmd, *args, **kw):
+            captured["cmd"] = cmd
+            return MagicMock(returncode=0, stdout='{"ok":1}', stderr="")
+
+        monkeypatch.setattr(mc.subprocess, "run", fake_run)
+        result = mc._curl_json(
+            "https://misp/x",
+            auth_header="k",
+            insecure=kwargs.get("insecure", False),
+            ca_cert_path=kwargs.get("ca_cert_path"),
+            method="GET",
+        )
+        return captured["cmd"], result
+
+    def test_insecure_emits_dash_k_and_no_cacert(self, monkeypatch):
+        cmd, _ = self._run(monkeypatch, insecure=True)
+        assert "-k" in cmd
+        assert "--cacert" not in cmd
+
+    def test_verify_with_ca_emits_cacert_no_dash_k(self, monkeypatch):
+        cmd, _ = self._run(
+            monkeypatch, insecure=False, ca_cert_path="/etc/aptl/lab-ca.pem"
+        )
+        assert "-k" not in cmd
+        assert "--cacert" in cmd
+        assert "/etc/aptl/lab-ca.pem" in cmd
+
+    def test_verify_no_ca_uses_system_trust(self, monkeypatch):
+        cmd, _ = self._run(monkeypatch, insecure=False, ca_cert_path=None)
+        assert "-k" not in cmd
+        assert "--cacert" not in cmd
+
 
 # ---------------------------------------------------------------------------
 # Sync loop
@@ -785,6 +886,7 @@ class TestSyncLoop:
             misp_url="https://misp",
             misp_api_key="k",
             misp_verify_ssl=False,
+            misp_ca_cert_path=None,
             ioc_tag_filter="aptl:enforce",
             sync_interval_seconds=300,
             rules_out_path=tmp_path / "misp-iocs.rules",

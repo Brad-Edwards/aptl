@@ -439,7 +439,7 @@ class TestCaptureSnapshot:
 
         (tmp_path / "aptl.json").write_text("{}")
 
-        snap = capture_snapshot(config_dir=tmp_path)
+        snap = capture_snapshot(config_dir=tmp_path, backend=MagicMock())
 
         assert snap.timestamp  # non-empty
         assert snap.software.python_version == "3.11.5"
@@ -464,7 +464,7 @@ class TestCaptureSnapshot:
         mock_wazuh.return_value = WazuhRulesSnapshot()
         mock_networks.return_value = []
 
-        snap = capture_snapshot(config_dir=tmp_path)
+        snap = capture_snapshot(config_dir=tmp_path, backend=MagicMock())
         serialized = json.dumps(snap.to_dict())
         loaded = json.loads(serialized)
         assert "timestamp" in loaded

@@ -8,10 +8,10 @@ cloud VM without changing scenario definitions or MCP configs.
 
 import os
 import re
-import subprocess
 from pathlib import Path
 
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.ssh_compose")
@@ -86,28 +86,22 @@ class SSHComposeBackend(DockerComposeBackend):
     def docker_host(self) -> str:
         return self._docker_host
 
-    def _run(
+    def _subprocess_kwargs(
         self,
-        cmd: list[str],
         *,
-        timeout: int | None = None,
-    ) -> subprocess.CompletedProcess:
-        """Run a command with DOCKER_HOST pointing to the remote daemon.
+        streaming: bool,
+        timeout: int | None,
+    ) -> dict:
+        """Inject ``DOCKER_HOST`` (and optional ``DOCKER_SSH_IDENTITY``)
+        on top of the base backend's kwargs.
 
-        Overrides the parent _run to inject the SSH-based DOCKER_HOST
-        environment variable, causing all Docker CLI commands to execute
-        against the remote host.
-
-        Args:
-            cmd: Command as a list of strings.
-            timeout: Optional timeout in seconds.
-
-        Returns:
-            CompletedProcess result.
+        Both captured and streaming runs go through the same env
+        construction here; ``_run`` and ``_run_streaming`` are inherited
+        from the base class (which calls ``self._subprocess_kwargs``).
         """
+        kwargs = super()._subprocess_kwargs(streaming=streaming, timeout=timeout)
         env = os.environ.copy()
         env["DOCKER_HOST"] = self._docker_host
-
         if self._ssh_key:
             # SSH_AUTH_SOCK won't help with a specific key file;
             # configure via ssh config or GIT_SSH_COMMAND-style env.
@@ -115,56 +109,8 @@ class SSHComposeBackend(DockerComposeBackend):
             # so users should add a Host entry.  We also set
             # DOCKER_SSH_IDENTITY for Docker's built-in SSH support.
             env["DOCKER_SSH_IDENTITY"] = self._ssh_key
-
-        kwargs: dict = {
-            "capture_output": True,
-            "text": True,
-            "env": env,
-            # Use remote_dir as cwd context for compose file discovery.
-            # Docker Compose with DOCKER_HOST=ssh:// sends the project
-            # context; the local cwd determines which compose file is read.
-            "cwd": self._project_dir,
-        }
-        if timeout is not None:
-            kwargs["timeout"] = timeout
-
-        log.debug(
-            "Running via DOCKER_HOST=%s: %s",
-            self._docker_host,
-            " ".join(cmd),
-        )
-        return subprocess.run(cmd, **kwargs)
-
-    def _run_streaming(
-        self,
-        cmd: list[str],
-        *,
-        timeout: int | None = None,
-    ) -> int:
-        """Streaming variant of ``_run`` with the same env injection.
-
-        Inherits parent stdin/stdout/stderr (no capture) so the user can
-        interact with a remote shell or watch logs live; sets
-        ``DOCKER_HOST`` and optionally ``DOCKER_SSH_IDENTITY`` exactly as
-        the captured ``_run`` override does.
-        """
-        env = os.environ.copy()
-        env["DOCKER_HOST"] = self._docker_host
-        if self._ssh_key:
-            env["DOCKER_SSH_IDENTITY"] = self._ssh_key
-        kwargs: dict = {
-            "cwd": self._project_dir,
-            "env": env,
-            "check": False,
-        }
-        if timeout is not None:
-            kwargs["timeout"] = timeout
-        log.debug(
-            "Streaming via DOCKER_HOST=%s: %s",
-            self._docker_host,
-            " ".join(cmd),
-        )
-        return subprocess.run(cmd, **kwargs).returncode
+        kwargs["env"] = env
+        return kwargs
 
     def validate_connection(self) -> tuple[bool, str]:
         """Test SSH connectivity to the remote Docker daemon.
@@ -186,7 +132,7 @@ class SSHComposeBackend(DockerComposeBackend):
                 )
                 return True, ""
             return False, result.stderr.strip()
-        except subprocess.TimeoutExpired:
+        except BackendTimeoutError:
             return False, f"SSH connection to {self._docker_host} timed out"
-        except (FileNotFoundError, OSError) as exc:
+        except OSError as exc:
             return False, f"Failed to connect to {self._docker_host}: {exc}"

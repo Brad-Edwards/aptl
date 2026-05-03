@@ -12,7 +12,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from aptl.core.config import AptlConfig, find_config, load_config
+from aptl.cli._common import resolve_config_for_cli
+from aptl.core.config import AptlConfig
 from aptl.utils.logging import get_logger
 
 log = get_logger("cli.config")
@@ -27,31 +28,6 @@ _PROJECT_DIR_OPTION = typer.Option(
     "-d",
     help="Path to the APTL project directory.",
 )
-
-
-def _resolve_config(project_dir: Path) -> AptlConfig:
-    """Locate and load aptl.json under ``project_dir``.
-
-    Raises ``typer.Exit(1)`` with a stderr message on any failure
-    (missing file, invalid JSON, Pydantic validation error).
-    """
-    config_path = find_config(project_dir)
-    if config_path is None:
-        typer.echo(
-            f"no aptl.json found in {project_dir}",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-    try:
-        return load_config(config_path)
-    except FileNotFoundError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
-    except ValueError as exc:
-        # Pydantic ValidationError is a ValueError subclass, so this
-        # catches both invalid JSON and field-level validation failures.
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
 
 
 def _format_value(value: object) -> str:
@@ -78,25 +54,25 @@ def show(
     CLI, validates it, and renders the resulting Pydantic model — defaults
     included.
     """
-    config = _resolve_config(project_dir)
+    config, _ = resolve_config_for_cli(project_dir)
 
+    payload = config.model_dump(mode="json")
     if json_output:
-        typer.echo(_json.dumps(config.model_dump(mode="json"), indent=2))
+        typer.echo(_json.dumps(payload, indent=2))
         return
 
-    sections = [
-        ("lab", config.lab),
-        ("containers", config.containers),
-        ("deployment", config.deployment),
-        ("run_storage", config.run_storage),
-    ]
-    for label, model in sections:
+    # Render each top-level field as its own table. ``model_dump`` keeps
+    # the same field order as the Pydantic model declaration, so the
+    # output ordering is stable across runs.
+    for label, fields in payload.items():
         table = Table(title=label, show_header=True, header_style="bold cyan")
         table.add_column("Field")
         table.add_column("Value")
-        for field_name in type(model).model_fields:
-            value = getattr(model, field_name)
-            table.add_row(field_name, _format_value(value))
+        if isinstance(fields, dict):
+            for field_name, value in fields.items():
+                table.add_row(field_name, _format_value(value))
+        else:
+            table.add_row(label, _format_value(fields))
         console.print(table)
 
 
@@ -109,19 +85,5 @@ def validate(
     Loads ``aptl.json`` through the same path used by deployment
     operations and reports any JSON, type, or constraint errors.
     """
-    config_path = find_config(project_dir)
-    if config_path is None:
-        typer.echo(
-            f"no aptl.json found in {project_dir}",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-    try:
-        load_config(config_path)
-    except FileNotFoundError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
-    typer.echo(f"{config_path}: OK")
+    _, project_root = resolve_config_for_cli(project_dir)
+    typer.echo(f"{project_root / 'aptl.json'}: OK")

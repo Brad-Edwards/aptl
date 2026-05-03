@@ -92,39 +92,19 @@ def stop(
         raise typer.Exit(code=1)
 
 
-def _resolve_status_backend(project_dir: Path):
-    """Resolve a deployment backend for status snapshot capture.
-
-    Returns ``None`` when no ``aptl.json`` is present so status remains
-    useful in a fresh project dir (capture_snapshot falls back to a
-    default local Docker Compose backend). When ``aptl.json`` exists
-    but fails to load, the loader's exception propagates so the caller
-    surfaces the failure instead of producing a misleading default
-    snapshot — for example an SSH-remote lab whose config is broken
-    must NOT silently snapshot the local daemon.
-    """
-    from aptl.core.config import find_config, load_config
-    from aptl.core.deployment import get_backend
-
-    config_path = find_config(project_dir)
-    if config_path is None:
-        return None
-    cfg = load_config(config_path)
-    # Use config_path.parent as the backend project_dir so compose
-    # commands run in the directory that owns aptl.json, even if
-    # find_config ever grows upward-walking discovery.
-    return get_backend(cfg, config_path.parent)
-
-
 def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:
+    from aptl.cli._common import resolve_config_for_cli
+    from aptl.core.deployment import get_backend
     from aptl.core.snapshot import capture_snapshot
 
-    try:
-        backend = _resolve_status_backend(project_dir)
-    except (OSError, ValueError) as exc:
-        typer.echo(f"failed to load aptl.json: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
-    snapshot = capture_snapshot(config_dir=project_dir, backend=backend)
+    # `capture_snapshot` requires an explicit backend (no silent default).
+    # Resolve from the project's `aptl.json`; fail loudly if it's missing
+    # or invalid, so a misconfigured SSH lab doesn't get snapshotted
+    # against the local daemon.
+    config, project_root = resolve_config_for_cli(project_dir)
+    backend = get_backend(config, project_root)
+
+    snapshot = capture_snapshot(config_dir=project_root, backend=backend)
     data = json.dumps(snapshot.to_dict(), indent=2)
 
     if output_file:

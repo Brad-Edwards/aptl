@@ -57,11 +57,14 @@ meant to eliminate.
 
 ## Decision
 
-Extend the existing `DeploymentBackend` Protocol with **ten** new methods —
-six for container interaction (CLI surface) and four for host inventory
-(snapshot capture). Both `DockerComposeBackend` and `SSHComposeBackend`
-implement them; the SSH backend reuses its existing env-injection pattern
-(and gains a parallel `_run_streaming` override for the non-captured cases).
+Extend the existing `DeploymentBackend` Protocol with **eleven** new
+methods — seven for container interaction (CLI surface) and four for
+host inventory (snapshot capture). Both `DockerComposeBackend` and
+`SSHComposeBackend` implement them. The SSH backend overrides only one
+helper — `_subprocess_kwargs` — which threads `DOCKER_HOST=ssh://…` into
+both captured (`_run`) and streaming (`_run_streaming`) execution paths
+through a single env-construction site, instead of duplicating the
+override across both methods.
 
 ```python
 class DeploymentBackend(Protocol):
@@ -90,6 +93,7 @@ class DeploymentBackend(Protocol):
     ) -> subprocess.CompletedProcess: ...
 
     def container_inspect(self, name: str) -> dict: ...
+    def container_exists(self, name: str) -> bool: ...
 
     # Host inventory (typed; no generic argv passthrough)
     def host_versions(self) -> dict[str, str]: ...

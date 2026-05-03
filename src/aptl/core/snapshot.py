@@ -4,21 +4,21 @@ Captures the current state of the lab environment including software
 versions, container status, Wazuh rules, network topology, and
 configuration file hashes.
 
-Container interaction (exec, inspect) is routed through the deployment
-backend (CLI-004 / ADR-023) so that snapshots taken against an SSH-remote
-deployment behave identically to local Docker Compose. Host-level
-operations that talk to the daemon directly — ``docker version``,
-``docker compose version``, ``docker ps`` (project-wide enumeration),
-``docker network ls/inspect`` — remain raw subprocess calls.
+All Docker interaction — both container interaction (``container_exec``,
+``container_inspect``) and host-level inventory (``host_versions``,
+``host_list_lab_containers``, ``host_list_lab_networks``,
+``host_inspect_network``) — flows through the deployment backend per
+ADR-023, so snapshots taken against an SSH-remote deployment inspect
+the remote daemon and behave identically to local Docker Compose.
 """
 
 import hashlib
-import subprocess
 import sys
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -125,7 +125,7 @@ def _backend_exec(
     """Run a one-shot command via the backend; return stripped stdout or empty."""
     try:
         result = backend.container_exec(container, cmd, timeout=timeout)
-    except (subprocess.TimeoutExpired, OSError) as e:
+    except (BackendTimeoutError, OSError) as e:
         log.debug("backend.container_exec %s %s failed: %s", container, cmd, e)
         return ""
     if result.returncode == 0:
@@ -398,18 +398,23 @@ def _get_ssh_endpoints(containers: list[ContainerSnapshot]) -> list[SSHEndpoint]
 
 
 def capture_snapshot(
-    config_dir: Path | None = None,
-    backend: "DeploymentBackend | None" = None,
+    config_dir: Path | None,
+    backend: "DeploymentBackend",
 ) -> RangeSnapshot:
     """Capture a complete snapshot of the current lab state.
 
     Args:
-        config_dir: Directory containing config files to hash.
-                    Defaults to current working directory.
-        backend: Deployment backend used for container interaction
-                 (``container_exec`` and ``container_inspect``). When
-                 omitted (e.g. legacy callers), a local Docker Compose
-                 backend is created against ``config_dir``.
+        config_dir: Directory containing config files to hash. ``None``
+                    falls back to the current working directory; pass
+                    the project's resolved directory when calling from a
+                    CLI command.
+        backend: Required deployment backend used for every Docker
+                 interaction. The caller is responsible for resolving
+                 the right backend (local vs SSH-remote) so the snapshot
+                 inspects the daemon the lab actually runs on. There is
+                 deliberately no default; a misconfigured caller must
+                 fail loudly rather than silently snapshot the local
+                 daemon for an SSH-remote lab.
 
     Returns:
         A RangeSnapshot with all collected data.
@@ -417,13 +422,6 @@ def capture_snapshot(
     from datetime import datetime, timezone
 
     log.info("Capturing range snapshot")
-
-    if backend is None:
-        from aptl.core.deployment import DockerComposeBackend
-
-        backend = DockerComposeBackend(
-            project_dir=config_dir if config_dir is not None else Path(".")
-        )
 
     containers = _get_container_snapshots(backend)
     snapshot = RangeSnapshot(

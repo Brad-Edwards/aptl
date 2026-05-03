@@ -9,6 +9,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab import LabResult, LabStatus
 from aptl.utils.logging import get_logger
 
@@ -63,6 +64,20 @@ def _parse_lab_row(line: str) -> dict | None:
     }
 
 
+def _select_shell(probe_returncode: int) -> tuple[str, bool]:
+    """Decide which shell ``container_shell`` should launch.
+
+    Pure logic so the decision table is unit-testable without mocking
+    subprocess. Returns ``(shell_path, should_run)``: when ``should_run``
+    is False, the caller should surface the probe error instead.
+    """
+    if probe_returncode == 0:
+        return "/bin/bash", True
+    if probe_returncode in (126, 127):
+        return "/bin/sh", True
+    return "", False
+
+
 class DockerComposeBackend:
     """Docker Compose deployment backend.
 
@@ -112,6 +127,30 @@ class DockerComposeBackend:
 
         return cmd
 
+    def _subprocess_kwargs(
+        self,
+        *,
+        streaming: bool,
+        timeout: int | None,
+    ) -> dict:
+        """Build the ``subprocess.run`` kwargs for this backend.
+
+        Centralises ``cwd`` and any environment construction so
+        captured (``_run``) and streaming (``_run_streaming``) modes
+        share one codepath. The SSH backend overrides this once to
+        inject ``DOCKER_HOST`` instead of duplicating the env block in
+        both ``_run`` and ``_run_streaming``.
+        """
+        kwargs: dict = {"cwd": self._project_dir}
+        if streaming:
+            kwargs["check"] = False
+        else:
+            kwargs["capture_output"] = True
+            kwargs["text"] = True
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return kwargs
+
     def _run(
         self,
         cmd: list[str],
@@ -121,23 +160,18 @@ class DockerComposeBackend:
         """Run a subprocess command in the project directory.
 
         Captures stdout/stderr; suitable for commands whose output the
-        caller wants to parse or log.
-
-        Args:
-            cmd: Command as a list of strings.
-            timeout: Optional timeout in seconds.
-
-        Returns:
-            CompletedProcess result.
+        caller wants to parse or log. Translates
+        ``subprocess.TimeoutExpired`` into ``BackendTimeoutError`` so
+        callers don't depend on ``subprocess`` as an implementation
+        detail.
         """
-        kwargs: dict = {
-            "capture_output": True,
-            "text": True,
-            "cwd": self._project_dir,
-        }
-        if timeout is not None:
-            kwargs["timeout"] = timeout
-        return subprocess.run(cmd, **kwargs)
+        kwargs = self._subprocess_kwargs(streaming=False, timeout=timeout)
+        try:
+            return subprocess.run(cmd, **kwargs)
+        except subprocess.TimeoutExpired as exc:
+            raise BackendTimeoutError(
+                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
+            ) from exc
 
     def _run_streaming(
         self,
@@ -150,21 +184,14 @@ class DockerComposeBackend:
         Used for interactive sessions (``container_shell``) and live log
         streams (``container_logs``). The parent terminal is connected
         directly to the child process — no capturing.
-
-        Args:
-            cmd: Command as a list of strings.
-            timeout: Optional timeout in seconds.
-
-        Returns:
-            Exit code of the child process.
         """
-        kwargs: dict = {
-            "cwd": self._project_dir,
-            "check": False,
-        }
-        if timeout is not None:
-            kwargs["timeout"] = timeout
-        return subprocess.run(cmd, **kwargs).returncode
+        kwargs = self._subprocess_kwargs(streaming=True, timeout=timeout)
+        try:
+            return subprocess.run(cmd, **kwargs).returncode
+        except subprocess.TimeoutExpired as exc:
+            raise BackendTimeoutError(
+                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
+            ) from exc
 
     def start(self, profiles: list[str], *, build: bool = True) -> LabResult:
         """Start lab services via docker compose up.
@@ -285,11 +312,11 @@ class DockerComposeBackend:
                 log.warning(
                     "docker compose kill stderr: %s", result.stderr.strip()
                 )
-        except subprocess.TimeoutExpired:
+        except BackendTimeoutError:
             log.warning(
                 "docker compose kill timed out after %ds", _DOCKER_TIMEOUT
             )
-        except (FileNotFoundError, OSError) as exc:
+        except OSError as exc:
             msg = f"docker compose kill failed: {exc}"
             log.error(msg)
             return False, msg
@@ -304,11 +331,11 @@ class DockerComposeBackend:
                 log.warning(
                     "docker compose down stderr: %s", result.stderr.strip()
                 )
-        except subprocess.TimeoutExpired:
+        except BackendTimeoutError:
             log.warning(
                 "docker compose down timed out after %ds", _DOCKER_TIMEOUT
             )
-        except (FileNotFoundError, OSError) as exc:
+        except OSError as exc:
             log.warning("docker compose down failed: %s", exc)
 
         if not kill_ok:
@@ -503,25 +530,19 @@ class DockerComposeBackend:
     ) -> int:
         if shell is not None:
             return self._run_streaming(["docker", "exec", "-it", name, shell])
-        # Probe non-interactively for bash before launching the TTY.
-        # Doing the fallback after the interactive shell exits would
-        # misinterpret the user's own 126/127 exit codes (e.g. running a
-        # non-existent command then `exit`) as "bash missing" and open
-        # an unwanted second shell.
+        # Probe non-interactively for bash before launching the TTY,
+        # then run exactly one interactive shell. See ADR-023.
         probe = self._run(["docker", "exec", name, "/bin/bash", "-c", "true"])
-        if probe.returncode == 0:
-            return self._run_streaming(["docker", "exec", "-it", name, "/bin/bash"])
-        if probe.returncode in (126, 127):
+        chosen, should_run = _select_shell(probe.returncode)
+        if not should_run:
+            log.warning(
+                "container_shell probe of %s failed (exit %d): %s",
+                name, probe.returncode, probe.stderr.strip(),
+            )
+            return probe.returncode
+        if chosen == "/bin/sh":
             log.info("bash unavailable in %s; using /bin/sh", name)
-            return self._run_streaming(["docker", "exec", "-it", name, "/bin/sh"])
-        # Probe failed for an unrelated reason (no such container,
-        # daemon error). Surface it as the exit code so the caller can
-        # display the docker error rather than masking it with sh.
-        log.warning(
-            "container_shell probe of %s failed (exit %d): %s",
-            name, probe.returncode, probe.stderr.strip(),
-        )
-        return probe.returncode
+        return self._run_streaming(["docker", "exec", "-it", name, chosen])
 
     def container_exec(
         self,
@@ -532,6 +553,18 @@ class DockerComposeBackend:
     ) -> subprocess.CompletedProcess:
         argv = ["docker", "exec", name, *cmd]
         return self._run(argv, timeout=timeout)
+
+    def container_exists(self, name: str) -> bool:
+        info = self.container_inspect(name)
+        if not info:
+            return False
+        labels = info.get("Config", {}).get("Labels") or {}
+        if not isinstance(labels, dict):
+            return False
+        # Containers managed by this compose project carry the standard
+        # com.docker.compose.project label. On a shared daemon this
+        # rejects names that exist but belong to a different project.
+        return labels.get("com.docker.compose.project") == self._project_name
 
     def container_inspect(self, name: str) -> dict:
         result = self._run(

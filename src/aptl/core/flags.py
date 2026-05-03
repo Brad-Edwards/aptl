@@ -6,10 +6,10 @@ provides token-based signature verification for automated scoring.
 
 import hashlib
 import re
-import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -73,7 +73,7 @@ def _docker_exec_read(
         result = backend.container_exec(
             container, ["cat", path], timeout=10
         )
-    except (subprocess.TimeoutExpired, OSError) as e:
+    except (BackendTimeoutError, OSError) as e:
         log.debug("Failed to read %s:%s: %s", container, path, e)
         return None
     if result.returncode == 0:

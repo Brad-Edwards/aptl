@@ -13,7 +13,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from aptl.core.config import find_config, load_config
+from aptl.cli._common import resolve_config_for_cli
 from aptl.core.deployment import DeploymentBackend, get_backend
 from aptl.utils.logging import get_logger
 
@@ -32,23 +32,13 @@ _PROJECT_DIR_OPTION = typer.Option(
 
 
 def _resolve_backend(project_dir: Path) -> DeploymentBackend:
-    """Locate ``aptl.json``, load it, and build the configured backend.
+    """Resolve the deployment backend for this project.
 
     Uses ``config_path.parent`` as the backend's project_dir so docker
-    compose runs in the directory that actually owns ``aptl.json`` —
-    important if ``find_config`` ever grows upward-walking discovery.
-    Raises ``typer.Exit(1)`` with a stderr message on any failure.
+    compose runs in the directory that actually owns ``aptl.json``.
     """
-    config_path = find_config(project_dir)
-    if config_path is None:
-        typer.echo(f"no aptl.json found in {project_dir}", err=True)
-        raise typer.Exit(code=1)
-    try:
-        config = load_config(config_path)
-    except (OSError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
-    return get_backend(config, config_path.parent)
+    config, project_root = resolve_config_for_cli(project_dir)
+    return get_backend(config, project_root)
 
 
 def _ensure_project_container(backend: DeploymentBackend, name: str) -> None:
@@ -57,13 +47,11 @@ def _ensure_project_container(backend: DeploymentBackend, name: str) -> None:
     Defense-in-depth against typos and against shared-daemon scenarios
     where the docker host has containers from other projects: ``aptl
     container shell`` / ``logs`` should never `exec`/`logs` into a
-    non-APTL container even if the user types its name.
+    non-APTL container even if the user types its name. Uses the
+    backend's typed ``container_exists`` check (one ``docker inspect``
+    against this project) instead of enumerating every container.
     """
-    project_names = {
-        c.get("Name") for c in backend.container_list(all_containers=True)
-    }
-    project_names.discard(None)
-    if name not in project_names:
+    if not backend.container_exists(name):
         typer.echo(
             f"container {name!r} is not part of this lab's compose project. "
             f"Run `aptl container list` to see valid names.",

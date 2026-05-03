@@ -16,6 +16,7 @@ Follows the same Protocol pattern as RunStorageBackend in runstore.py.
 import subprocess
 from typing import Protocol
 
+from aptl.core.deployment.errors import BackendTimeoutError  # noqa: F401  (re-export)
 from aptl.core.lab import LabResult, LabStatus
 
 
@@ -191,6 +192,17 @@ class DeploymentBackend(Protocol):
             The first element of the ``docker inspect`` JSON array, or
             an empty dict on any failure (missing container, parse
             error, etc.).
+        """
+        ...
+
+    def container_exists(self, name: str) -> bool:
+        """Return True if the container belongs to this project.
+
+        Cheap membership check that avoids enumerating every container
+        on the daemon. Used by CLI commands (``logs``/``shell``) before
+        executing into a user-supplied container name. Implementation
+        detail: backends typically use ``docker inspect <name>`` plus a
+        compose-project label check.
         """
         ...
 

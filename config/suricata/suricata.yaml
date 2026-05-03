@@ -97,6 +97,13 @@ default-rule-path: /var/lib/suricata/rules
 rule-files:
   - suricata.rules
   - /etc/suricata/rules/local.rules
+  - /etc/suricata/rules/misp/misp-iocs.rules
 
 classification-file: /etc/suricata/classification.config
 reference-config-file: /etc/suricata/reference.config
+
+# Unix-command socket used by the misp-suricata-sync service to trigger
+# rule reloads after writing /etc/suricata/rules/misp/misp-iocs.rules.
+unix-command:
+  enabled: yes
+  filename: /var/run/suricata/suricata-command.socket

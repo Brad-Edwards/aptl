@@ -6,6 +6,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `aptl-misp-suricata-sync` service — first long-running Python daemon in the lab. Polls MISP's `POST /attributes/restSearch` filtered by the configured tag (default `aptl:enforce`), translates each IOC into a Suricata `alert` rule (`ip-src`/`ip-dst`, `domain`/`hostname`, `url`, `sha256`/`sha1`/`md5`), and triggers Suricata rule reload via its unix-command socket. Rules go to a dedicated `/etc/suricata/rules/misp/misp-iocs.rules` separate from operator-authored `local.rules`. Issue [#250](https://github.com/Brad-Edwards/aptl/issues/250); architectural rationale in [ADR-022](docs/adrs/adr-022-misp-driven-suricata-rules.md).
+- `src/aptl/services/misp_suricata_sync/` — service implementation under a new `aptl.services` namespace (sets the layout precedent for future Python daemons): `config.py` (Pydantic v2 env-driven `ServiceConfig`), `models.py` (`MispAttribute`/`RenderedRule` DTOs), `misp_client.py` (curl-subprocess client with bare-API-key `Authorization` header — never logged), `translator.py` (pure rendering: hard-codes `alert` action per ADR-019, deterministic `SID_BASE + crc32(type|value)` allocation, `|XX|`-hex content escaping), `rule_writer.py` (atomic `<path>.tmp`+`replace`, idempotent), `suricata_reloader.py` (~30-line unix-command JSON client; no `suricatasc` dependency), `main.py` (SIGTERM-aware loop).
+- `containers/misp-suricata-sync/Dockerfile` — `python:3.11-slim` + curl + the aptl wheel, installed via `pip install .`. Runs as `nobody`.
+- `tests/test_misp_suricata_sync.py` — 52 unit tests covering every submodule. Includes the ADR-019 regression guard `test_action_is_always_alert_never_drop` and the rule-injection guard `test_rejects_quote_or_semicolon_in_value_via_escape`.
+- `docs/adrs/adr-022-misp-driven-suricata-rules.md` — design decisions: tag-graduated enforcement, alert-only per ADR-019, dedicated rule file, deterministic SIDs, MISP-down preserves last-known-good, unix-command socket for live reload.
+
+### Changed
+
+- `config/suricata/suricata.yaml` — adds `unix-command:` socket at `/var/run/suricata/suricata-command.socket` (used by the sync service for live rule reload) and includes `/etc/suricata/rules/misp/misp-iocs.rules` in the `rule-files:` list. The operator-authored `local.rules` is unchanged.
+- `docker-compose.yml` — new `misp-suricata-sync` service on the `soc` profile (`172.20.0.51` on `aptl-security`, depends on `misp` health + `suricata` started, 128m memory limit). Suricata service gains two named volume mounts (`suricata_command_socket`, `suricata_misp_rules`) shared with the new service. Both volumes added to top-level `volumes:`.
+- `pyproject.toml` — adds `aptl-misp-suricata-sync` console script entry pointing at `aptl.services.misp_suricata_sync.main:main`.
+- `README.md` — adds one-line mention of the MISP→Suricata sync under the SOC Stack section, with a pointer to ADR-019 explaining the alert-only constraint.
+
+### Notes
+
+- Default lab posture is the service running with zero IOCs tagged `aptl:enforce` — blue's job per iteration is to populate intel and graduate it. Submitting an IOC via the `aptl-threatintel` MCP with the `aptl:enforce` tag, then waiting one sync interval (default 300s), produces a rule in `misp-iocs.rules` and a Suricata reload.
+- This issue's "blocking" framing in #250 is updated by ADR-019: in the lab's current IDS-only posture, MISP-driven rules are detection, not prevention. Real packet-level enforcement remains the Wazuh AR path (#248/#249).
+
 ## [6.6.0] - 2026-05-02
 
 ### Added

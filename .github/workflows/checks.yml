@@ -1,0 +1,171 @@
+name: Checks
+
+# Single quality + security gate. There is intentionally no auto-deploy
+# workflow — APTL is local-first and there is currently nowhere to deploy
+# to. All checks below run in parallel; SonarCloud waits for the test
+# jobs to finish so it can ingest their coverage.
+#
+# Required repo secrets:
+#   SONAR_TOKEN — SonarCloud authentication
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pre-commit:
+    name: Pre-commit hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install pre-commit
+      # Skip the local test hooks here — the dedicated python-tests /
+      # mcp-tests / web-tests jobs below already run them with the right
+      # toolchain (deps installed, node available, etc). The test hooks
+      # exist for local pre-commit safety, not CI redundancy.
+      - run: pre-commit run --all-files --show-diff-on-failure
+        env:
+          SKIP: pytest,vitest-mcp-common,vitest-web
+
+  python-tests:
+    name: Python tests + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,web]"
+      - run: |
+          coverage run -m pytest tests/ -q -k "not integration"
+          coverage xml -o coverage.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: coverage.xml
+          retention-days: 7
+
+  mcp-tests:
+    name: MCP TypeScript tests + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: |
+          cd mcp/aptl-mcp-common
+          npm install
+          npx vitest run --coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-coverage
+          path: mcp/aptl-mcp-common/coverage/
+          retention-days: 7
+
+  web-tests:
+    name: Web frontend tests + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: |
+          cd web
+          npm install
+          npx svelte-kit sync
+          npx vitest run --coverage
+          sed -i 's|^SF:|SF:web/|' coverage/lcov.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: web/coverage/
+          retention-days: 7
+
+  dependency-audit:
+    name: Dependency vulnerability scan (advisory)
+    runs-on: ubuntu-latest
+    # Advisory only — the lab has known-vulnerable training targets and a
+    # large transitive Node tree. Findings are surfaced in the job log so
+    # they can be triaged out of band, not gated in CI.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: pip-audit (Python dependencies)
+        run: |
+          pip install pip-audit
+          pip-audit --strict --progress-spinner=off || true
+      - name: npm audit (JS/TS workspaces)
+        run: |
+          set +e
+          for dir in web mcp/aptl-mcp-common mcp/mcp-casemgmt mcp/mcp-indexer mcp/mcp-network mcp/mcp-red mcp/mcp-reverse mcp/mcp-soar mcp/mcp-threatintel mcp/mcp-wazuh; do
+            [ -f "$dir/package.json" ] || continue
+            echo ""
+            echo "=== $dir ==="
+            (cd "$dir" && npm install --no-audit --no-fund --silent >/dev/null 2>&1 && npm audit --audit-level=high)
+          done
+          true
+
+  sonarcloud:
+    name: SonarCloud quality gate (advisory)
+    needs: [python-tests, mcp-tests, web-tests]
+    runs-on: ubuntu-latest
+    # Advisory — the scan still uploads results to SonarCloud and the
+    # dashboard reflects current state; removing -Dsonar.qualitygate.wait
+    # means the action does not fail the workflow when the gate is RED.
+    # The lab is research code; coverage targets that make sense for
+    # production apps would block infra-only commits (Dockerfiles, compose,
+    # workflows, scripts). Re-enable strict gating by adding the wait flag
+    # back and re-listing this job as a required status check on the
+    # branch protection rule once the project's coverage debt is sized.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Generate svelte-kit tsconfig (sonar reads web/tsconfig.json which extends it)
+        run: |
+          cd web
+          npm install --no-audit --no-fund --silent
+          npx svelte-kit sync
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-coverage
+          path: .
+      - uses: actions/download-artifact@v4
+        with:
+          name: mcp-coverage
+          path: mcp/aptl-mcp-common/coverage/
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-coverage
+          path: web/coverage/
+      - uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

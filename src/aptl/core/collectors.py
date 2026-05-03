@@ -7,13 +7,26 @@ when a service is unavailable and never raise.
 """
 
 import json
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.utils.curl_safe import curl_json as _curl_json
 from aptl.utils.logging import get_logger
 
+if TYPE_CHECKING:
+    from aptl.core.deployment import DeploymentBackend
+
 log = get_logger("collectors")
+
+# 120s timeout for SOC-tool collection calls — these scrape large
+# windows of historical data (Wazuh scroll, MISP rest-search, TheHive
+# query) and the default 30s is too aggressive. Pass this constant
+# explicitly at every call site so the choice is visible.
+_COLLECTOR_HTTP_TIMEOUT = 120
 
 
 def _run_cmd(
@@ -24,38 +37,8 @@ def _run_cmd(
         return subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout
         )
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
+    except (subprocess.TimeoutExpired, OSError) as e:
         log.warning("Command failed: %s: %s", " ".join(cmd[:3]), e)
-        return None
-
-
-def _curl_json(
-    url: str,
-    *,
-    auth: tuple[str, str] | None = None,
-    auth_header: str | None = None,
-    body: dict | None = None,
-    insecure: bool = False,
-    timeout: int = 20,
-) -> dict | list | None:
-    """Make an HTTP request via curl and return parsed JSON, or None."""
-    cmd = ["curl", "-sf", url]
-    if insecure:
-        cmd.insert(1, "-k")
-    if auth:
-        cmd += ["-u", f"{auth[0]}:{auth[1]}"]
-    if auth_header:
-        cmd += ["-H", f"Authorization: {auth_header}"]
-    cmd += ["-H", "Content-Type: application/json"]
-    if body is not None:
-        cmd += ["-d", json.dumps(body)]
-
-    result = _run_cmd(cmd, timeout=timeout)
-    if result is None or result.returncode != 0:
-        return None
-    try:
-        return json.loads(result.stdout)
-    except (json.JSONDecodeError, ValueError):
         return None
 
 
@@ -88,7 +71,13 @@ def collect_wazuh_alerts(
     try:
         # Initial search with scroll
         url = f"{indexer_url}/wazuh-alerts-4.x-*/_search?scroll=2m"
-        data = _curl_json(url, auth=auth, body=query, insecure=True)
+        data = _curl_json(
+            url,
+            auth=auth,
+            body=query,
+            insecure=True,
+            timeout=_COLLECTOR_HTTP_TIMEOUT,
+        )
         if data is None:
             log.warning("Failed to query Wazuh Indexer for alerts")
             return []
@@ -102,7 +91,11 @@ def collect_wazuh_alerts(
             scroll_body = {"scroll": "2m", "scroll_id": scroll_id}
             scroll_url = f"{indexer_url}/_search/scroll"
             data = _curl_json(
-                scroll_url, auth=auth, body=scroll_body, insecure=True
+                scroll_url,
+                auth=auth,
+                body=scroll_body,
+                insecure=True,
+                timeout=_COLLECTOR_HTTP_TIMEOUT,
             )
             if data is None:
                 break
@@ -117,13 +110,22 @@ def collect_wazuh_alerts(
     return all_hits
 
 
-def collect_suricata_eve(start_iso: str, end_iso: str) -> list[dict]:
+def collect_suricata_eve(
+    start_iso: str,
+    end_iso: str,
+    backend: "DeploymentBackend",
+) -> list[dict]:
     """Read Suricata EVE JSON entries from the suricata container."""
-    result = _run_cmd(
-        ["docker", "exec", "aptl-suricata", "cat", "/var/log/suricata/eve.json"],
-        timeout=30,
-    )
-    if result is None or result.returncode != 0:
+    try:
+        result = backend.container_exec(
+            "aptl-suricata",
+            ["cat", "/var/log/suricata/eve.json"],
+            timeout=30,
+        )
+    except (BackendTimeoutError, OSError) as e:
+        log.warning("Suricata EVE collection failed: %s", e)
+        return []
+    if result.returncode != 0:
         log.info("Suricata container not available, skipping EVE collection")
         return []
 
@@ -182,6 +184,7 @@ def collect_thehive_cases(
         f"{url}/api/v1/query",
         auth_header=f"Bearer {api_key}",
         body=query_body,
+        timeout=_COLLECTOR_HTTP_TIMEOUT,
     )
 
     if data is None:
@@ -221,6 +224,7 @@ def collect_misp_events(
         auth_header=api_key,
         body=query_body,
         insecure=True,
+        timeout=_COLLECTOR_HTTP_TIMEOUT,
     )
 
     if data is None:
@@ -264,6 +268,7 @@ def collect_shuffle_executions(
     data = _curl_json(
         f"{url}/api/v1/workflows/executions",
         auth_header=f"Bearer {api_key}",
+        timeout=_COLLECTOR_HTTP_TIMEOUT,
     )
 
     if data is None:
@@ -294,21 +299,20 @@ def collect_container_logs(
     containers: list[str],
     start_iso: str,
     end_iso: str,
+    backend: "DeploymentBackend",
 ) -> dict[str, str]:
     """Collect docker logs per container for the time window."""
     logs: dict[str, str] = {}
 
     for container in containers:
-        result = _run_cmd(
-            [
-                "docker", "logs",
-                "--since", start_iso,
-                "--until", end_iso,
-                container,
-            ],
-            timeout=30,
-        )
-        if result is None or result.returncode != 0:
+        try:
+            result = backend.container_logs_capture(
+                container, since=start_iso, until=end_iso, timeout=30
+            )
+        except (BackendTimeoutError, OSError) as e:
+            log.warning("Log collection failed for %s: %s", container, e)
+            continue
+        if result.returncode != 0:
             log.warning("Could not collect logs from container %s", container)
             continue
 
@@ -324,47 +328,46 @@ def collect_container_logs(
     return logs
 
 
-def collect_mcp_traces(
-    trace_dir: Path,
-    start_iso: str,
-    end_iso: str,
+def collect_traces(
+    trace_id: str,
+    tempo_url: str | None = None,
 ) -> list[dict]:
-    """Merge all MCP trace JSONL files from the trace directory.
+    """Fetch all spans for a trace from Grafana Tempo.
 
-    Reads ``*.jsonl`` files, filters by timestamp within the window,
-    and returns a chronologically sorted merged list.
+    Queries the Tempo HTTP API by trace ID and returns the spans
+    in OTLP JSON format.
+
+    Args:
+        trace_id: The hex trace ID to query.
+        tempo_url: Base URL for Tempo. Defaults to ``TEMPO_URL`` env
+            var or ``http://localhost:3200``.
+
+    Returns:
+        List of span dicts, or empty list on error.
     """
-    if not trace_dir.exists():
-        log.info("Trace directory %s does not exist, skipping", trace_dir)
+    if not trace_id:
+        log.info("No trace_id provided, skipping trace collection")
         return []
 
-    start_dt = datetime.fromisoformat(start_iso)
-    end_dt = datetime.fromisoformat(end_iso)
-    all_traces: list[dict] = []
+    url = tempo_url or os.getenv("TEMPO_URL", "http://localhost:3200")
+    api_url = f"{url}/api/traces/{trace_id}"
 
-    for jsonl_file in trace_dir.glob("*.jsonl"):
-        for line in jsonl_file.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+    result = _curl_json(api_url, timeout=30)
+    if result is None:
+        log.warning("Failed to fetch traces from Tempo at %s", api_url)
+        return []
 
-            ts = entry.get("timestamp", "")
-            if ts:
-                try:
-                    entry_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                    if start_dt <= entry_dt <= end_dt:
-                        all_traces.append(entry)
-                except ValueError:
-                    all_traces.append(entry)
-            else:
-                all_traces.append(entry)
+    # Tempo returns { batches: [ { resource: {...}, scopeSpans: [...] } ] }
+    # or { resourceSpans: [...] } depending on version. Normalize to span list.
+    spans: list[dict] = []
+    if isinstance(result, dict):
+        # Tempo v2 format: batches -> scopeSpans -> spans
+        for batch in result.get("batches", result.get("resourceSpans", [])):
+            resource = batch.get("resource", {})
+            for scope_span in batch.get("scopeSpans", []):
+                for span in scope_span.get("spans", []):
+                    enriched = {**span, "resource": resource}
+                    spans.append(enriched)
 
-    # Sort chronologically
-    all_traces.sort(key=lambda x: x.get("timestamp", ""))
-
-    log.info("Collected %d MCP trace entries", len(all_traces))
-    return all_traces
+    log.info("Collected %d spans from Tempo for trace %s", len(spans), trace_id[:16])
+    return spans

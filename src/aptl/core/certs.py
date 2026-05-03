@@ -43,8 +43,9 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
         and the path to the certs directory.
     """
     certs_dir = project_dir / _CERTS_SUBDIR
+    root_ca = certs_dir / "root-ca.pem"
 
-    if certs_dir.exists():
+    if certs_dir.exists() and root_ca.exists():
         log.info("SSL certificates already exist at %s", certs_dir)
         return CertResult(
             success=True,

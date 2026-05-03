@@ -97,6 +97,21 @@ default-rule-path: /var/lib/suricata/rules
 rule-files:
   - suricata.rules
   - /etc/suricata/rules/local.rules
+  # MISP-driven IOC rules are written by aptl-misp-suricata-sync.
+  # Path is relative to default-rule-path so that any filemd5/filesha1/
+  # filesha256 directives in the file resolve their hash-list sidecars
+  # (also under default-rule-path/misp/) the way Suricata documents.
+  - misp/misp-iocs.rules
 
 classification-file: /etc/suricata/classification.config
 reference-config-file: /etc/suricata/reference.config
+
+default-run-dir: /var/run/suricata
+
+# Unix-command socket used by the misp-suricata-sync service to trigger
+# rule reloads after writing the MISP-driven rule file. Filename is
+# relative to default-run-dir per Suricata's documented behavior so
+# Suricata creates the socket exactly where the sync container mounts.
+unix-command:
+  enabled: yes
+  filename: suricata-command.socket

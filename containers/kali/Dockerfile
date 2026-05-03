@@ -63,6 +63,22 @@ RUN apt-get update && \
 RUN sudo -u kali ssh-keygen -t rsa -b 2048 -f /home/kali/.ssh/id_rsa -N "" && \
     chown -R kali:kali /home/kali/.ssh/
 
+# Pre-install Wazuh agent at build time so the container does not need internet
+# at runtime (SAF-002: internal: true on attack networks).
+# Runtime install script detects pre-installed package and skips download.
+RUN apt-get update && \
+    apt-get install -y curl gnupg lsb-release && \
+    curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | \
+      gpg --no-default-keyring --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import && \
+    chmod 644 /usr/share/keyrings/wazuh.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" \
+      > /etc/apt/sources.list.d/wazuh.list && \
+    apt-get update && \
+    apt-get install -y wazuh-agent=4.12.0-1 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    killall wazuh-execd wazuh-agentd wazuh-syscheckd wazuh-logcollector wazuh-modulesd 2>/dev/null || true && \
+    rm -f /var/ossec/var/run/*.pid
+
 # Copy installation scripts to proper location
 RUN mkdir -p /opt/kali-redteam/scripts
 COPY install-scripts/ /opt/kali-redteam/scripts/

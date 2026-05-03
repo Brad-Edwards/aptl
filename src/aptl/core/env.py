@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from aptl.utils.logging import get_logger
+from aptl.utils.placeholders import contains_placeholder
 
 log = get_logger("env")
 
@@ -105,6 +106,32 @@ def validate_required_env(
         if var not in env or not env[var]:
             missing.append(var)
     return missing
+
+
+# Variables that, if present in .env, must not be the example placeholder.
+# These are values that consumers (MISP server, MCPs, sync service) accept
+# without their own placeholder check, so a fall-through here can land an
+# operator in a lab where MISP itself runs with the documented placeholder
+# as its admin API key.
+_NO_PLACEHOLDER_VARS = (
+    "MISP_API_KEY",
+    "THEHIVE_SECRET",
+    "SHUFFLE_API_KEY",
+)
+
+
+def find_placeholder_env_values(env: dict[str, str]) -> list[str]:
+    """Return the names of any sensitive vars whose value is a placeholder.
+
+    Returns an empty list when every sensitive var in ``env`` carries a
+    real-looking value or is absent. Caller decides whether to fail
+    closed; this function never raises. Marker definitions live in
+    :mod:`aptl.utils.placeholders` so every layer rejects the same set.
+    """
+    return [
+        var for var in _NO_PLACEHOLDER_VARS
+        if contains_placeholder(env.get(var))
+    ]
 
 
 def env_vars_from_dict(env: dict[str, str]) -> EnvVars:

@@ -53,6 +53,39 @@ class TestComposeConsistency:
         dupes = [n for n in names if names.count(n) > 1]
         assert not dupes, f"Duplicate container_name values: {set(dupes)}"
 
+    def test_static_ipv4_addresses_are_unique_per_network(self, compose_config):
+        """Static container IPs must not collide within the same Docker network."""
+        services = compose_config.get("services", {})
+        seen: dict[tuple[str, str], str] = {}
+        dupes: list[tuple[str, str, str, str]] = []
+
+        for service_name, svc in services.items():
+            networks = svc.get("networks", {})
+            if not isinstance(networks, dict):
+                continue
+
+            for network_name, network_cfg in networks.items():
+                if not isinstance(network_cfg, dict):
+                    continue
+
+                ip = network_cfg.get("ipv4_address")
+                if not ip:
+                    continue
+
+                key = (network_name, ip)
+                if key in seen:
+                    dupes.append((network_name, ip, seen[key], service_name))
+                else:
+                    seen[key] = service_name
+
+        assert not dupes, (
+            "Duplicate static ipv4_address assignments:\n"
+            + "\n".join(
+                f"  {network}: {ip} used by {first} and {second}"
+                for network, ip, first, second in dupes
+            )
+        )
+
 
 class TestCodeReferencesMatchCompose:
     """Ensure docker exec references in code match actual container_name values."""
@@ -102,6 +135,36 @@ class TestProfileConsistency:
         missing = config_profiles - compose_profiles
         assert not missing, (
             f"Profiles in aptl.json but not in docker-compose.yml: {missing}"
+        )
+
+
+class TestNetworkEgressControls:
+    """Validate SAF-002: attack networks must block internet egress."""
+
+    ATTACK_NETWORKS = ["aptl-dmz", "aptl-internal", "aptl-redteam"]
+
+    def test_attack_networks_are_internal(self, compose_config):
+        """Networks carrying attack traffic must use internal: true."""
+        networks = compose_config.get("networks", {})
+        not_internal = []
+        for name in self.ATTACK_NETWORKS:
+            net = networks.get(name, {})
+            if not net.get("internal", False):
+                not_internal.append(name)
+        assert not not_internal, (
+            f"SAF-002 violation: attack networks missing internal: true: "
+            f"{not_internal}. Containers on these networks can reach the "
+            f"internet, risking autonomous agent attacks on external targets."
+        )
+
+    def test_security_network_allows_egress(self, compose_config):
+        """Security/management network must NOT be internal (SOC tools need internet)."""
+        networks = compose_config.get("networks", {})
+        security = networks.get("aptl-security", {})
+        assert not security.get("internal", False), (
+            "aptl-security must not be internal: true. "
+            "SOC tools (MISP, Wazuh, Shuffle) require internet for "
+            "threat feeds and rule updates."
         )
 
 

@@ -44,18 +44,45 @@
         "size": 100,
         "sort": [{ "@timestamp": { "order": "desc" } }]
       },
-      "description": "Run raw Elasticsearch DSL queries against the Wazuh Indexer. Supports any valid ES query DSL. Override the index pattern via params.index. Examples: {\"body\": {\"query\": {\"bool\": {\"must\": [{\"match\": {\"rule.id\": \"302010\"}}]}}, \"size\": 5}} or {\"params\": {\"index\": \"wazuh-archives-4.x-*\"}, \"body\": {\"query\": {\"match\": {\"data.srcip\": \"172.20.1.30\"}}}}"
+      "description": "Run raw Elasticsearch DSL queries against the Wazuh Indexer. Supports any valid ES query DSL. Override the index pattern via params.index. Examples: {\"body\": {\"query\": {\"bool\": {\"must\": [{\"match\": {\"rule.id\": \"302010\"}}]}}, \"size\": 5}}"
     },
     "create_rule": {
-      "url": "https://localhost:55000/rules/files/local_rules.xml",
+      "url": "https://localhost:55000/rules/files/zzz_purple_loop.xml",
       "method": "PUT",
       "auth": {
-        "type": "basic",
+        "type": "wazuh-jwt",
         "username": "${API_USERNAME}",
-        "password": "${API_PASSWORD}"
+        "password": "${API_PASSWORD}",
+        "auth_url": "https://localhost:55000/security/user/authenticate"
       },
       "verify_ssl": false,
-      "description": "Create or update custom Wazuh detection rules by writing to local_rules.xml via the Manager API. The body should contain the rule XML content. Example: {\"body\": {\"content\": \"<group name=\\\"custom,\\\">\\n  <rule id=\\\"100001\\\" level=\\\"10\\\">\\n    <description>Custom detection rule</description>\\n  </rule>\\n</group>\"}}"
+      "params": { "overwrite": "true" },
+      "description": "Create or update custom Wazuh detection rules by writing to aptl_purple_loop.xml via the Manager API (overwrite=true). This file is included AFTER webapp_rules.xml so child rules can reference 302xxx via <if_sid>. Body should be raw XML rule content."
+    },
+    "restart_manager": {
+      "url": "https://localhost:55000/manager/restart",
+      "method": "PUT",
+      "auth": {
+        "type": "wazuh-jwt",
+        "username": "${API_USERNAME}",
+        "password": "${API_PASSWORD}",
+        "auth_url": "https://localhost:55000/security/user/authenticate"
+      },
+      "verify_ssl": false,
+      "description": "Restart the Wazuh Manager so freshly-uploaded rules take effect. Returns once the restart command is accepted; the manager will be temporarily unavailable for ~30-90s as daemons cycle. No body required."
+    },
+    "get_rule_file": {
+      "url": "https://localhost:55000/rules/files/{filename}",
+      "method": "GET",
+      "auth": {
+        "type": "wazuh-jwt",
+        "username": "${API_USERNAME}",
+        "password": "${API_PASSWORD}",
+        "auth_url": "https://localhost:55000/security/user/authenticate"
+      },
+      "verify_ssl": false,
+      "response_type": "text",
+      "description": "Fetch the raw XML content of a Wazuh rule file. Example: {\"params\": {\"filename\": \"local_rules.xml\"}}"
     }
   }
 }

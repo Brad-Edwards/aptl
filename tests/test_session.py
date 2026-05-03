@@ -17,27 +17,8 @@ import pytest
 
 
 def _make_scenario_def(scenario_id: str = "test-scenario"):
-    """Create a minimal ScenarioDefinition for testing."""
-    from aptl.core.scenarios import ScenarioDefinition
-
-    return ScenarioDefinition(
-        metadata={
-            "id": scenario_id,
-            "name": "Test Scenario",
-            "description": "A test scenario",
-            "difficulty": "beginner",
-            "estimated_minutes": 10,
-        },
-        mode="red",
-        containers={"required": ["kali"]},
-        objectives={
-            "red": [
-                {"id": "obj-a", "description": "Do A", "type": "manual", "points": 50},
-                {"id": "obj-b", "description": "Do B", "type": "manual", "points": 50},
-            ],
-            "blue": [],
-        },
-    )
+    """Return a scenario ID for testing session lifecycle behavior."""
+    return scenario_id
 
 
 # ---------------------------------------------------------------------------
@@ -74,10 +55,11 @@ class TestActiveSession:
             scenario_id="test",
             state=SessionState.ACTIVE,
             started_at="2026-02-16T14:30:00+00:00",
-            events_file="events/test.jsonl",
         )
         assert session.hints_used == {}
         assert session.completed_objectives == []
+        assert session.trace_id == ""
+        assert session.span_id == ""
 
     def test_creation_with_all_fields(self):
         """ActiveSession should accept all fields."""
@@ -87,12 +69,15 @@ class TestActiveSession:
             scenario_id="test",
             state=SessionState.ACTIVE,
             started_at="2026-02-16T14:30:00+00:00",
-            events_file="events/test.jsonl",
+            trace_id="a" * 32,
+            span_id="b" * 16,
             hints_used={"obj-a": 2},
             completed_objectives=["obj-a"],
         )
         assert session.hints_used == {"obj-a": 2}
         assert session.completed_objectives == ["obj-a"]
+        assert session.trace_id == "a" * 32
+        assert session.span_id == "b" * 16
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +101,8 @@ class TestSessionSerialization:
             scenario_id="test-scenario",
             state=SessionState.ACTIVE,
             started_at="2026-02-16T14:30:00+00:00",
-            events_file="events/test.jsonl",
+            trace_id="a" * 32,
+            span_id="b" * 16,
             hints_used={"obj-a": 1},
             completed_objectives=["obj-b"],
         )
@@ -126,7 +112,8 @@ class TestSessionSerialization:
         assert restored.scenario_id == original.scenario_id
         assert restored.state == original.state
         assert restored.started_at == original.started_at
-        assert restored.events_file == original.events_file
+        assert restored.trace_id == original.trace_id
+        assert restored.span_id == original.span_id
         assert restored.hints_used == original.hints_used
         assert restored.completed_objectives == original.completed_objectives
 
@@ -138,7 +125,6 @@ class TestSessionSerialization:
             scenario_id="test",
             state=SessionState.ACTIVE,
             started_at="2026-02-16T14:30:00+00:00",
-            events_file="test.jsonl",
         )
         data = _serialize_session(session)
         assert data["state"] == "active"
@@ -160,19 +146,19 @@ class TestSessionSerialization:
                 "scenario_id": "test",
                 "state": "unknown_state",
                 "started_at": "2026-02-16T14:30:00+00:00",
-                "events_file": "test.jsonl",
             })
 
     def test_deserialize_defaults_optional_fields(self):
-        """Deserialization should default hints_used and completed_objectives."""
+        """Deserialization should default trace_id, span_id, hints_used and completed_objectives."""
         from aptl.core.session import _deserialize_session
 
         session = _deserialize_session({
             "scenario_id": "test",
             "state": "active",
             "started_at": "2026-02-16T14:30:00+00:00",
-            "events_file": "test.jsonl",
         })
+        assert session.trace_id == ""
+        assert session.span_id == ""
         assert session.hints_used == {}
         assert session.completed_objectives == []
 
@@ -191,9 +177,8 @@ class TestScenarioSessionStart:
 
         mgr = ScenarioSession(aptl_state_dir)
         scenario = _make_scenario_def()
-        events_file = aptl_state_dir / "events" / "test.jsonl"
 
-        session = mgr.start(scenario, events_file)
+        session = mgr.start(scenario)
 
         assert mgr.session_path.exists()
         assert session.scenario_id == "test-scenario"
@@ -204,7 +189,7 @@ class TestScenarioSessionStart:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         data = json.loads(mgr.session_path.read_text())
         assert data["scenario_id"] == "test-scenario"
@@ -216,7 +201,7 @@ class TestScenarioSessionStart:
 
         state_dir = tmp_path / "new_aptl_dir"
         mgr = ScenarioSession(state_dir)
-        mgr.start(_make_scenario_def(), state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         assert state_dir.exists()
         assert mgr.session_path.exists()
@@ -227,33 +212,30 @@ class TestScenarioSessionStart:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def("first"), aptl_state_dir / "e1.jsonl")
+        mgr.start(_make_scenario_def("first"))
 
         with pytest.raises(ScenarioStateError, match="already active"):
-            mgr.start(_make_scenario_def("second"), aptl_state_dir / "e2.jsonl")
+            mgr.start(_make_scenario_def("second"))
 
     def test_start_sets_utc_timestamp(self, aptl_state_dir):
         """Session started_at should be a UTC ISO 8601 timestamp."""
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        session = mgr.start(
-            _make_scenario_def(),
-            aptl_state_dir / "events" / "test.jsonl",
-        )
+        session = mgr.start(_make_scenario_def())
         assert "T" in session.started_at
         assert "+" in session.started_at or "Z" in session.started_at
 
-    def test_start_stores_relative_events_path(self, aptl_state_dir):
-        """Events file path should be stored relative to state dir."""
+    def test_start_generates_trace_context(self, aptl_state_dir):
+        """Starting a session should generate valid trace_id and span_id."""
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        events_file = aptl_state_dir / "events" / "test.jsonl"
-        session = mgr.start(_make_scenario_def(), events_file)
-
-        # Should be relative, not absolute
-        assert not session.events_file.startswith("/")
+        session = mgr.start(_make_scenario_def())
+        assert len(session.trace_id) == 32
+        assert len(session.span_id) == 16
+        int(session.trace_id, 16)  # should not raise
+        int(session.span_id, 16)   # should not raise
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +258,7 @@ class TestScenarioSessionGetActive:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         session = mgr.get_active()
         assert session is not None
@@ -287,7 +269,7 @@ class TestScenarioSessionGetActive:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
         assert mgr.is_active() is True
 
     def test_is_active_false_when_no_session(self, aptl_state_dir):
@@ -302,7 +284,7 @@ class TestScenarioSessionGetActive:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
         mgr.finish()
         assert mgr.is_active() is False
 
@@ -330,7 +312,7 @@ class TestScenarioSessionGetActive:
         from aptl.core.session import ScenarioSession
 
         mgr1 = ScenarioSession(aptl_state_dir)
-        mgr1.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr1.start(_make_scenario_def())
 
         mgr2 = ScenarioSession(aptl_state_dir)
         session = mgr2.get_active()
@@ -351,7 +333,7 @@ class TestScenarioSessionRecordHint:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         mgr.record_hint("obj-a", 1)
 
@@ -363,7 +345,7 @@ class TestScenarioSessionRecordHint:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         mgr.record_hint("obj-a", 1)
         mgr.record_hint("obj-a", 2)
@@ -376,7 +358,7 @@ class TestScenarioSessionRecordHint:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         mgr.record_hint("obj-a", 2)
         mgr.record_hint("obj-a", 1)
@@ -398,7 +380,7 @@ class TestScenarioSessionRecordHint:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         mgr.record_hint("obj-a", 1)
         mgr.record_hint("obj-b", 2)
@@ -420,7 +402,7 @@ class TestScenarioSessionRecordObjective:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         mgr.record_objective_complete("obj-a")
 
@@ -432,7 +414,7 @@ class TestScenarioSessionRecordObjective:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         mgr.record_objective_complete("obj-a")
         mgr.record_objective_complete("obj-a")
@@ -445,7 +427,7 @@ class TestScenarioSessionRecordObjective:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         mgr.record_objective_complete("obj-a")
         mgr.record_objective_complete("obj-b")
@@ -476,7 +458,7 @@ class TestScenarioSessionFinish:
         from aptl.core.session import ScenarioSession, SessionState
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
 
         finished = mgr.finish()
         assert finished.state == SessionState.COMPLETED
@@ -486,7 +468,7 @@ class TestScenarioSessionFinish:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
         mgr.finish()
 
         data = json.loads(mgr.session_path.read_text())
@@ -506,7 +488,7 @@ class TestScenarioSessionFinish:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
         mgr.record_hint("obj-a", 1)
         mgr.record_objective_complete("obj-b")
 
@@ -528,7 +510,7 @@ class TestScenarioSessionClear:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def(), aptl_state_dir / "events" / "test.jsonl")
+        mgr.start(_make_scenario_def())
         assert mgr.session_path.exists()
 
         mgr.clear()
@@ -546,11 +528,11 @@ class TestScenarioSessionClear:
         from aptl.core.session import ScenarioSession
 
         mgr = ScenarioSession(aptl_state_dir)
-        mgr.start(_make_scenario_def("first"), aptl_state_dir / "e1.jsonl")
+        mgr.start(_make_scenario_def("first"))
         mgr.finish()
         mgr.clear()
 
-        session = mgr.start(_make_scenario_def("second"), aptl_state_dir / "e2.jsonl")
+        session = mgr.start(_make_scenario_def("second"))
         assert session.scenario_id == "second"
 
 

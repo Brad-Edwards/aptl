@@ -7,6 +7,10 @@ notes/
 # Scenario runtime state
 .aptl/
 
+# Claude Code harness — local-only bookkeeping (wakeup-loop locks, etc.)
+.claude/*.lock
+.claude/scheduled_tasks.lock
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -25,6 +29,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!web/src/lib/
+!web/tests/lib/
 lib64/
 parts/
 sdist/
@@ -247,6 +253,9 @@ bower_components
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
 
+# SvelteKit generated
+.svelte-kit/
+
 # Dependency directories
 node_modules/
 jspm_packages/
@@ -393,7 +402,19 @@ config/wazuh_indexer_ssl_certs/*
 
 .cursor/mcp.json
 .mcp.json
+.mcp.json.bak
+
+# Purple-loop archive directories (per-run state moved aside before fresh runs)
+.aptl_archive_*
+
+# Playwright MCP session cache
+.playwright-mcp/
+
+# Local deck render assets (slide PNGs are not part of the source artifact)
+deck-loop-*.png
 
 notes/
+
+research/
 
 data/

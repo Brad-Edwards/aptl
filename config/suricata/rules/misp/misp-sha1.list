@@ -1,0 +1,2 @@
+# APTL MISP-to-Suricata sync — sha1 hash list, generated.
+# One hash per line; loaded by Suricata via the corresponding file-hash rule in misp-iocs.rules.

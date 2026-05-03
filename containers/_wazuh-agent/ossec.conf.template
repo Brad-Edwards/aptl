@@ -1,0 +1,27 @@
+<ossec_config>
+  <client>
+    <server>
+      <address>__WAZUH_MANAGER__</address>
+      <port>1514</port>
+      <protocol>tcp</protocol>
+    </server>
+    <config-profile>__AGENT_NAME__</config-profile>
+    <notify_time>10</notify_time>
+    <time-reconnect>60</time-reconnect>
+    <auto_restart>yes</auto_restart>
+    <crypto_method>aes</crypto_method>
+  </client>
+
+  <client_buffer>
+    <disabled>no</disabled>
+    <queue_size>5000</queue_size>
+    <events_per_second>500</events_per_second>
+  </client_buffer>
+
+  <!-- log shipping: rendered at start by entrypoint -->
+  __LOCALFILE_BLOCKS__
+
+  <logging>
+    <log_format>plain</log_format>
+  </logging>
+</ossec_config>

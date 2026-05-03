@@ -1,5 +1,7 @@
 # Scenario & Observability Core — Architecture Spec
 
+> Historical note: this document describes the pre-SDL scenario runtime that was removed in the SDL-only branch. It is retained for context until a new SDL-native runtime lands.
+
 ## 1. Overview
 
 ### 1.1 Purpose
@@ -77,8 +79,8 @@ aptl scenario start |  ScenarioSession |  -> .aptl/session.json
                             |
          +------------------+------------------+
          |                  |                  |
-    Kali MCP           Wazuh SIEM        Container logs
-    (traces.jsonl)     (alerts)          (docker logs)
+    MCP Servers        Wazuh SIEM        Container logs
+    (OTel spans)       (alerts)          (docker logs)
          |                  |                  |
          +------------------+------------------+
                             |
@@ -97,7 +99,8 @@ runs/<uuid>/
   flags.json                # Captured CTF flags from containers
   scenario/
     definition.yaml         # Copy of the scenario YAML used
-    events.jsonl            # Copy of the session event log
+  traces/
+    spans.json              # All OTel spans (scenario + MCP tool calls) from Tempo
   wazuh/
     alerts.jsonl            # All Wazuh alerts from run time window
   suricata/
@@ -108,8 +111,6 @@ runs/<uuid>/
     shuffle-executions.json # Shuffle workflow executions
   containers/
     <name>.log              # Per-container docker logs (stdout+stderr)
-  agents/
-    traces.jsonl            # Merged MCP tool call traces (all servers)
 ```
 
 ---
@@ -230,8 +231,8 @@ interface ToolTrace {
 }
 ```
 
-Traces are written to `<APTL_TRACE_DIR>/<serverName>.jsonl` and merged at run
-assembly time.
+MCP tool calls are instrumented as OpenTelemetry spans and exported to the OTel
+Collector via OTLP HTTP. At run assembly, spans are fetched from Tempo by trace ID.
 
 ### 5.3 CTF Flags
 
@@ -314,7 +315,8 @@ class RunManifest(TypedDict):
 
 | Variable | Used By | Purpose |
 |----------|---------|---------|
-| `APTL_TRACE_DIR` | MCP servers | Directory for trace JSONL output |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | MCP servers, CLI | OTLP endpoint for OTel Collector |
+| `TEMPO_URL` | CLI (collectors) | Grafana Tempo HTTP API for trace queries |
 | `THEHIVE_API_KEY` | collectors.py | TheHive authentication |
 | `MISP_API_KEY` | collectors.py | MISP authentication |
 | `SHUFFLE_API_KEY` | collectors.py | Shuffle authentication |

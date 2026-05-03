@@ -182,6 +182,11 @@ services:
       - ./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml
       - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules
       - suricata_logs:/var/log/suricata
+      - suricata_command_socket:/var/run/suricata
+      # Bind under default-rule-path so misp-iocs.rules and its
+      # filemd5/filesha1/filesha256 hash-list sidecars resolve via
+      # Suricata's documented relative-path lookup.
+      - ./config/suricata/rules/misp:/var/lib/suricata/rules/misp
     command: ["-c", "/etc/suricata/suricata.yaml", "--pcap"]
     deploy:
       resources:
@@ -215,7 +220,11 @@ services:
       - MYSQL_PASSWORD=misp_db_password
       - ADMIN_EMAIL=admin@admin.test
       - ADMIN_PASSWORD=admin
-      - ADMIN_KEY=JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw
+      # Same value as misp-suricata-sync's MISP_API_KEY so server and
+      # client stay aligned; sourced from .env per SEC-005. The previous
+      # hardcoded default was removed in #250 after a codex security
+      # review flagged it.
+      - ADMIN_KEY=${MISP_API_KEY:?MISP_API_KEY must be set in .env (copy .env.example to .env)}
       - BASE_URL=https://localhost
       - REDIS_HOST=misp-redis
     volumes:
@@ -278,6 +287,49 @@ services:
           memory: 128m
     networks:
       aptl-security:
+
+  # MISP -> Suricata IOC sync (intel-driven detection per ADR-019)
+  misp-suricata-sync:
+    profiles: ["soc"]
+    build:
+      context: .
+      dockerfile: containers/misp-suricata-sync/Dockerfile
+    container_name: aptl-misp-suricata-sync
+    hostname: misp-suricata-sync
+    restart: unless-stopped
+    environment:
+      - MISP_URL=https://misp
+      # Required, no default — set in .env (see .env.example). Both this
+      # service and the MISP server (ADMIN_KEY) read the same value so
+      # they stay aligned. Per SEC-005, secrets live only in .env.
+      - MISP_API_KEY=${MISP_API_KEY:?MISP_API_KEY must be set in .env (copy .env.example to .env)}
+      # MISP self-signs its certificate at first boot and there is no
+      # shared lab CA today, so verification defaults to off. Once issue
+      # #258 (SEC-006: lab-managed CA) ships, flip this to true and
+      # point MISP_CA_CERT_PATH at the lab CA bundle.
+      - MISP_VERIFY_SSL=${MISP_VERIFY_SSL:-false}
+      - MISP_CA_CERT_PATH=${MISP_CA_CERT_PATH:-}
+      - IOC_TAG_FILTER=aptl:enforce
+      - SYNC_INTERVAL_SECONDS=300
+      - RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules
+      - SURICATA_SOCKET_PATH=/var/run/suricata/suricata-command.socket
+      - SID_BASE=99000000
+      - LOG_LEVEL=INFO
+    volumes:
+      - suricata_command_socket:/var/run/suricata
+      - ./config/suricata/rules/misp:/var/lib/suricata/rules/misp
+    depends_on:
+      misp:
+        condition: service_healthy
+      suricata:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.19
 
   # TheHive - Case Management
   thehive:
@@ -348,7 +400,7 @@ services:
 
   thehive-es:
     profiles: ["soc"]
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.24
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.28
     container_name: aptl-thehive-es
     restart: unless-stopped
     environment:
@@ -509,8 +561,8 @@ services:
   webapp:
     profiles: ["enterprise"]
     build:
-      context: ./containers/webapp
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: containers/webapp/Dockerfile
     container_name: aptl-webapp
     hostname: webapp
     restart: unless-stopped
@@ -524,19 +576,36 @@ services:
       - DB_PASSWORD=techvault_db_pass
       - FLASK_ENV=production
       - SIEM_IP=172.20.2.30
+      # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-webapp.
+      # gunicorn writes errors to stderr (captured by docker), so only
+      # access.log is a real file the agent can tail. The previous
+      # sidecar's LOG_PATHS listed error.log / app.log too but they
+      # never existed and the agent logged "Could not open file" on
+      # every restart — pruned here.
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-webapp-agent
+      - LOG_PATHS=/var/log/gunicorn/access.log
+      - LOG_FORMAT=syslog
+    volumes:
+      - webapp_logs:/var/log/gunicorn
+    cap_add:
+      - NET_ADMIN  # required so the in-process agent's `firewall-drop` AR can iptables on this container's namespace
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 30s
     deploy:
       resources:
         limits:
-          memory: 256m
+          memory: 512m
     depends_on:
       db:
         condition: service_healthy
+    # No `depends_on: wazuh.manager` — the in-process bootstrap waits
+    # 180s for the manager port and then continues regardless, so the
+    # target can boot independently of the SOC profile.
     networks:
       aptl-dmz:
         ipv4_address: 172.20.1.20
@@ -587,26 +656,40 @@ services:
   dns:
     profiles: ["dns"]
     build:
-      context: ./containers/dns
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: containers/dns/Dockerfile
     container_name: aptl-dns
     hostname: ns1.techvault.local
     restart: unless-stopped
     ports:
       - "5353:53/tcp"
       - "5353:53/udp"
+    environment:
+      # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-dns.
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-dns-agent
+      - LOG_PATHS=/var/log/named/query.log,/var/log/named/default.log
+      - LOG_FORMAT=syslog
     volumes:
       - dns_logs:/var/log/named
+    cap_add:
+      - NET_ADMIN  # required so the in-process agent's `firewall-drop` AR can iptables on this container's namespace
     healthcheck:
       test: ["CMD-SHELL", "dig @localhost techvault.local SOA +short || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
     deploy:
       resources:
         limits:
-          memory: 128m
+          memory: 512m
+    # No `depends_on: wazuh.manager` — the in-process bootstrap waits
+    # 180s for the manager port and then continues regardless, so the
+    # target can boot independently of the SOC profile. Targets and
+    # the manager live in different compose profiles; a hard dependency
+    # would make `aptl lab start --profile enterprise` fail when SOC
+    # is not selected.
     networks:
       aptl-dmz:
         ipv4_address: 172.20.1.22
@@ -623,8 +706,8 @@ services:
   ad:
     profiles: ["enterprise"]
     build:
-      context: ./containers/ad
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: containers/ad/Dockerfile
     container_name: aptl-ad
     hostname: dc.techvault.local
     restart: unless-stopped
@@ -634,11 +717,21 @@ services:
       - SAMBA_ADMIN_PASSWORD=Admin123!
       - DNS_FORWARDER=172.20.1.22
       - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
+      # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-ad.
+      # log.nmbd is intentionally absent: Samba in AD-DC mode does not
+      # run nmbd and never writes log.nmbd. The previous sidecar config
+      # included it and the agent emitted "Could not open file" on every
+      # restart.
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-ad-agent
+      - LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd
+      - LOG_FORMAT=syslog
     volumes:
       - ad_data:/var/lib/samba
       - ad_logs:/var/log/samba
     cap_add:
       - SYS_ADMIN
+      - NET_ADMIN  # required so the in-process agent's `firewall-drop` AR can iptables on this container's namespace
     healthcheck:
       test: ["CMD-SHELL", "samba-tool domain info 127.0.0.1 || exit 1"]
       interval: 30s
@@ -649,6 +742,12 @@ services:
       resources:
         limits:
           memory: 512m
+    # No `depends_on: wazuh.manager` — the in-process bootstrap waits
+    # 180s for the manager port and then continues regardless, so the
+    # target can boot independently of the SOC profile. Targets and
+    # the manager live in different compose profiles; a hard dependency
+    # would make `aptl lab start --profile enterprise` fail when SOC
+    # is not selected.
     networks:
       aptl-internal:
         ipv4_address: 172.20.2.10
@@ -693,29 +792,120 @@ services:
   fileshare:
     profiles: ["fileshare"]
     build:
-      context: ./containers/fileshare
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: containers/fileshare/Dockerfile
     container_name: aptl-fileshare
     hostname: files.techvault.local
     restart: unless-stopped
     environment:
       - SIEM_IP=172.20.0.10
+      # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-fileshare.
+      # samba's `log file = /var/log/samba/log.%m` writes per-client logs
+      # whose names are dynamic. Wazuh's localfile location supports
+      # `<location>` wildcards, so a single glob path catches every
+      # client's logs. log.samba-bgqd is the smbd housekeeping process
+      # log, always present even when no clients are connected. The
+      # previous sidecar tailed only log.smbd / log.winbindd / log.nmbd
+      # which never existed under the `%m` config and produced
+      # "Could not open file" noise.
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-fileshare-agent
+      - LOG_PATHS=/var/log/samba/log.samba-bgqd,/var/log/samba/log.*
+      - LOG_FORMAT=syslog
     volumes:
       - fileshare_data:/srv/shares
       - fileshare_logs:/var/log/samba
+    cap_add:
+      - NET_ADMIN  # required so the in-process agent's `firewall-drop` AR can iptables on this container's namespace
     healthcheck:
       test: ["CMD-SHELL", "smbclient -L localhost -N || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    # No `depends_on: wazuh.manager` — the in-process bootstrap waits
+    # 180s for the manager port and then continues regardless, so the
+    # target can boot independently of the SOC profile. Targets and
+    # the manager live in different compose profiles; a hard dependency
+    # would make `aptl lab start --profile enterprise` fail when SOC
+    # is not selected.
+    networks:
+      aptl-internal:
+        ipv4_address: 172.20.2.12
+
+  # ==========================================================================
+  # WAZUH AGENT SIDECARS
+  #
+  # One sidecar per service container that does not host an in-process Wazuh
+  # agent. Each mounts the target's existing log volume read-only and ships
+  # log lines through to the manager. These exist so a fresh `aptl lab start`
+  # produces SIEM visibility into samba, BIND9, the webapp, postgres, and
+  # Suricata without modifying upstream container images.
+  # ==========================================================================
+
+  # wazuh-sidecar-{fileshare,ad,dns,webapp} were removed in #248 — those
+  # four targets now run wazuh-agent in-process via supervisord. The two
+  # remaining sidecars below cover the carve-outs documented in ADR-020:
+  # `db` (postgres:16-alpine has no first-party Wazuh package; deferred)
+  # and `suricata` (deployment governed by ADR-019).
+
+  wazuh-sidecar-db:
+    profiles: ["soc"]
+    image: aptl-wazuh-sidecar:local
+    build:
+      context: .
+      dockerfile: containers/wazuh-sidecar/Dockerfile
+    container_name: aptl-wazuh-sidecar-db
+    hostname: wazuh-sidecar-db
+    restart: unless-stopped
+    environment:
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-db-agent
+      - LOG_PATHS=/logs/pg_log/postgresql.log
+      - LOG_FORMAT=syslog
+    volumes:
+      - db_data:/logs:ro
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
     deploy:
       resources:
         limits:
           memory: 256m
     networks:
-      aptl-internal:
-        ipv4_address: 172.20.2.12
+      aptl-security:
+        ipv4_address: 172.20.0.35
+
+  wazuh-sidecar-suricata:
+    profiles: ["soc"]
+    image: aptl-wazuh-sidecar:local
+    build:
+      context: .
+      dockerfile: containers/wazuh-sidecar/Dockerfile
+    container_name: aptl-wazuh-sidecar-suricata
+    hostname: wazuh-sidecar-suricata
+    restart: unless-stopped
+    environment:
+      - WAZUH_MANAGER=wazuh.manager
+      - AGENT_NAME=aptl-suricata-agent
+      - LOG_PATHS=/logs/eve.json
+      - LOG_FORMAT=json
+    volumes:
+      - suricata_logs:/logs:ro
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.36
 
   # Victim Container - Linux Application Server
   victim:
@@ -903,6 +1093,122 @@ services:
         limits:
           memory: 512m
 
+  # ==========================================================================
+  # WEB UI (web profile)
+  # ==========================================================================
+
+  aptl-web-api:
+    profiles: ["web"]
+    container_name: aptl-web-api
+    build:
+      context: .
+      dockerfile: web/Dockerfile.api
+    restart: unless-stopped
+    ports:
+      - "8400:8400"
+    environment:
+      - APTL_PROJECT_DIR=/project
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/project:ro
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.40
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  aptl-web-ui:
+    profiles: ["web"]
+    container_name: aptl-web-ui
+    build:
+      context: web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - ORIGIN=http://localhost:3000
+    depends_on:
+      - aptl-web-api
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.41
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  # ==========================================================================
+  # OBSERVABILITY STACK (OpenTelemetry)
+  # ==========================================================================
+
+  aptl-otel-collector:
+    profiles: ["otel"]
+    container_name: aptl-otel-collector
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    restart: unless-stopped
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./config/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.53
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  aptl-tempo:
+    profiles: ["otel"]
+    container_name: aptl-tempo
+    image: grafana/tempo:2.7.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "3200:3200"
+    volumes:
+      - ./config/otel/tempo-config.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.51
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  aptl-grafana-otel:
+    profiles: ["otel"]
+    container_name: aptl-grafana-otel
+    image: grafana/grafana:11.6.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3100:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./config/otel/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/tempo.yaml:ro
+      - grafana_otel_data:/var/lib/grafana
+    networks:
+      aptl-security:
+        ipv4_address: 172.20.0.52
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
 # ==========================================================================
 # NETWORKS
 # ==========================================================================
@@ -917,28 +1223,34 @@ networks:
           gateway: 172.20.0.1
 
   # DMZ - Public-facing services (web, mail, DNS)
+  # SAF-002: internal: true blocks internet egress from containers
   aptl-dmz:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.1.0/24
-          gateway: 172.20.1.1
+          gateway: 172.20.1.1  # bridge interface IP; no external routing (internal network)
 
   # Internal - AD, database, file server, app server
+  # SAF-002: internal: true blocks internet egress from containers
   aptl-internal:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.2.0/24
-          gateway: 172.20.2.1
+          gateway: 172.20.2.1  # bridge interface IP; no external routing (internal network)
 
   # Red team - Kali attack platform
+  # SAF-002: internal: true blocks internet egress from containers
   aptl-redteam:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.20.4.0/24
-          gateway: 172.20.4.1
+          gateway: 172.20.4.1  # bridge interface IP; no external routing (internal network)
 
 # ==========================================================================
 # VOLUMES
@@ -963,6 +1275,7 @@ volumes:
 
   # Suricata
   suricata_logs:
+  suricata_command_socket:
 
   # MISP
   misp_data:
@@ -989,6 +1302,7 @@ volumes:
   fileshare_data:
   fileshare_logs:
   dns_logs:
+  webapp_logs:
 
   # Mail server
   mailserver_data:
@@ -1001,3 +1315,7 @@ volumes:
   kali_operations:
   kali_logs:
   reverse_logs:
+
+  # OpenTelemetry
+  tempo_data:
+  grafana_otel_data:

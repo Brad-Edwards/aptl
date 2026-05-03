@@ -33,12 +33,13 @@ export interface LabConfig {
   api?: {
     baseUrl: string;
     auth: {
-      type: 'basic' | 'bearer' | 'apikey' | 'custom';
+      type: 'basic' | 'bearer' | 'apikey' | 'custom' | 'wazuh-jwt';
       username?: string;
       password?: string;
       token?: string;
       apiKey?: string;
       header?: string;
+      auth_url?: string;
     };
     timeout?: number;
     verify_ssl?: boolean;
@@ -49,12 +50,13 @@ export interface LabConfig {
       url: string;
       method: 'GET' | 'POST' | 'PUT' | 'DELETE';
       auth?: {
-        type: 'basic' | 'bearer' | 'apikey' | 'custom';
+        type: 'basic' | 'bearer' | 'apikey' | 'custom' | 'wazuh-jwt';
         username?: string;
         password?: string;
         token?: string;
         apiKey?: string;
         header?: string;
+        auth_url?: string;
       };
       params?: Record<string, any>;
       body?: any;

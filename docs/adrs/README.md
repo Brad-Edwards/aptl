@@ -44,3 +44,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [020](adr-020-wazuh-agents-in-process-vs-sidecar.md) | Wazuh agents run in-process on target containers; sidecars only for upstream-image carve-outs | accepted | 2026-05-02 |
 | [021](adr-021-active-response-whitelist-via-wrapper.md) | Active-response whitelist enforcement via a standalone iptables AR script | accepted | 2026-05-02 |
 | [022](adr-022-misp-driven-suricata-rules.md) | MISP-driven Suricata rules via a tag-graduated sync service | accepted | 2026-05-03 |
+| [023](adr-023-container-interaction-in-deployment-backend.md) | Container interaction (list/logs/shell/exec/inspect) on the DeploymentBackend Protocol | accepted | 2026-05-03 |

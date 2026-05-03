@@ -108,3 +108,7 @@ The public functions `start_lab()`, `stop_lab()`, `lab_status()`, and `kill_lab_
 
 - The SSH backend has not been tested against all Docker versions. The `DOCKER_HOST=ssh://` feature was introduced in Docker 18.09 and has edge cases around context handling and compose file paths.
 - Future backends (Kubernetes) may need a richer Protocol interface — e.g., namespace management, resource quotas, or pod scheduling constraints that don't map cleanly to the current `profiles` concept.
+
+## Subsequent Changes
+
+- 2026-05-03: [ADR-023](adr-023-container-interaction-in-deployment-backend.md) extends the Protocol with container-interaction methods (`container_list`, `container_logs`, `container_logs_capture`, `container_shell`, `container_exec`, `container_inspect`), superseding the "Container interaction (exec, logs) is not yet abstracted" caveat in the Consequences section above.

@@ -265,21 +265,6 @@ def _validate_continuity_targets(
 _SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
-def _validate_run_id_shape(run_id: str) -> None:
-    """Reject ``run_id`` values that are unsafe to use as a path segment.
-
-    Without this gate, a value like ``../../escape`` would resolve
-    ``LocalRunStore.append_jsonl`` outside the run-storage base
-    directory, writing JSONL to an attacker-chosen path.
-    """
-    if not _SAFE_RUN_ID.match(run_id):
-        typer.echo(
-            f"error: --run-id must match {_SAFE_RUN_ID.pattern!r}; got {run_id!r}",
-            err=True,
-        )
-        raise typer.Exit(code=2)
-
-
 def _resolve_continuity_run_archive(
     project_root: Path, config, *, override: str | None = None,
 ) -> tuple[object | None, str | None]:
@@ -294,6 +279,11 @@ def _resolve_continuity_run_archive(
       2. The active scenario session's ``run_id`` (when populated). A
          corrupt ``.aptl/session.json`` is non-fatal here — the audit
          should still repair iptables even if archive discovery fails.
+         The session-derived id passes through the same shape +
+         existence validation as the explicit override; if it fails,
+         the audit degrades to "no archive" with a warning rather than
+         failing loudly (the firewall repair is more important than
+         archive discovery).
       3. ``(None, None)`` — audit runs but events are not persisted.
 
     Step 2 is currently never populated by ``ScenarioSession.start()``
@@ -305,18 +295,8 @@ def _resolve_continuity_run_archive(
     from aptl.core.session import ScenarioSession
 
     if override:
-        _validate_run_id_shape(override)
         store = _resolve_run_store(project_root, config)
-        run_dir = store.get_run_path(override)
-        manifest = run_dir / "manifest.json"
-        if not manifest.exists():
-            typer.echo(
-                f"error: --run-id {override!r} does not exist in the run"
-                f" store ({run_dir} has no manifest.json). Create the"
-                " run first or omit --run-id.",
-                err=True,
-            )
-            raise typer.Exit(code=2)
+        _validate_run_id_for_archive(store, override, source="--run-id")
         return store, override
 
     state_dir = project_root / ".aptl"
@@ -331,7 +311,61 @@ def _resolve_continuity_run_archive(
         return None, None
     if session is None or not session.run_id:
         return None, None
-    return _resolve_run_store(project_root, config), session.run_id
+
+    store = _resolve_run_store(project_root, config)
+    try:
+        _validate_run_id_for_archive(
+            store, session.run_id, source="session.run_id", strict=False,
+        )
+    except _RunIdValidationError as exc:
+        log.warning(
+            "Continuity audit: session.run_id=%r is not usable for archive"
+            " (%s); events will not be archived.",
+            session.run_id, exc,
+        )
+        return None, None
+    return store, session.run_id
+
+
+class _RunIdValidationError(Exception):
+    """Internal: raised by ``_validate_run_id_for_archive`` when ``strict=False``."""
+
+
+def _validate_run_id_for_archive(
+    store, run_id: str, *, source: str, strict: bool = True,
+) -> None:
+    """Common validation for explicit and session-derived run ids.
+
+    Checks both the run-id shape (rejects path-traversal) and that the
+    run exists in the store (manifest.json present). When ``strict``
+    is True, validation failures raise ``typer.Exit(2)`` with a CLI
+    error message. When ``strict`` is False, failures raise
+    ``_RunIdValidationError`` so the caller can degrade gracefully.
+    """
+    if not _SAFE_RUN_ID.match(run_id):
+        msg = (
+            f"{source}={run_id!r} must match {_SAFE_RUN_ID.pattern!r}"
+        )
+        if strict:
+            typer.echo(f"error: {msg}", err=True)
+            raise typer.Exit(code=2)
+        raise _RunIdValidationError(msg)
+
+    run_dir = store.get_run_path(run_id)
+    manifest = run_dir / "manifest.json"
+    if not manifest.exists():
+        msg = (
+            f"{source}={run_id!r} does not exist in the run store"
+            f" ({run_dir} has no manifest.json)"
+        )
+        if strict:
+            typer.echo(
+                f"error: {msg}. Create the run first or omit"
+                f" {source.split('=')[0]}.",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        raise _RunIdValidationError(msg)
 
 
 @app.command("continuity-audit")

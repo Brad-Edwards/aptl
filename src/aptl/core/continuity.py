@@ -124,6 +124,13 @@ _NON_RESTRICTIVE_FLAGS = frozenset({"--reject-with", "--comment"})
 # `-m string`, `-m mac`, …) is a real matcher and stays a qualifier.
 _NON_RESTRICTIVE_MATCH_MODULES = frozenset({"comment"})
 
+# Protocol values for `-p` that don't narrow packet matching. iptables
+# treats ``-p all`` as "any protocol" — equivalent to no ``-p`` at all —
+# so a blanket kali rule with ``-p all`` is still a wedge despite carrying
+# a `-p` flag. ``-p 0`` is the numeric equivalent. Treat both as
+# non-restrictive: the audit must revert them.
+_NON_RESTRICTIVE_PROTOCOLS = frozenset({"all", "0"})
+
 
 def kali_source_ips(*, whitelist_path: Path) -> list[str]:
     """Read kali source IPs from the active-response whitelist file.
@@ -239,6 +246,8 @@ def _classify_flag(flag: str, value: str | None) -> str:
         return "ignore"
     if flag == "-m" and value in _NON_RESTRICTIVE_MATCH_MODULES:
         return "ignore"
+    if flag == "-p" and value in _NON_RESTRICTIVE_PROTOCOLS:
+        return "ignore"
     return "qualifier"
 
 
@@ -350,14 +359,15 @@ def is_blanket_kali_drop(rule: ParsedRule, kali_ips: set[str]) -> bool:
     2. Action is ``DROP`` or ``REJECT`` — the audit only undoes blocks,
        never permits, transitions, or LOG-only matchers.
     3. Source IP is in ``kali_ips`` — non-kali bans are the defender's
-       choice and out of scope.
+       choice and out of scope. The rule's source must be a single host
+       (bare IPv4 or ``/32``); subnet bans (``/24`` etc.) are
+       deliberately excluded as a different decision class. Defense
+       in depth: callers passing CIDR strings in ``kali_ips`` cannot
+       coax this classifier into reverting subnet bans because the
+       rule's source is checked for ``/32``-or-bare independently.
     4. ``qualifiers`` is empty — any port/protocol/payload/interface/
        connection-state matcher means the rule is granular (and
        therefore valid blue tradecraft).
-
-    Subnet bans (``/24`` etc.) are deliberately excluded — they're a
-    different decision class and out of scope here. Single-host
-    ``/32`` is treated as equivalent to a bare IPv4.
     """
     if rule.chain != "INPUT":
         return False
@@ -365,10 +375,11 @@ def is_blanket_kali_drop(rule: ParsedRule, kali_ips: set[str]) -> bool:
         return False
     if rule.source is None:
         return False
-    normalized = _normalize_source(rule.source)
-    if normalized != rule.source and not rule.source.endswith("/32"):
-        # Subnet mask other than /32; not in scope.
+    if "/" in rule.source and not rule.source.endswith("/32"):
+        # Non-/32 subnet mask — out of scope regardless of what
+        # ``kali_ips`` happens to contain. ADR-024 is explicit on this.
         return False
+    normalized = _normalize_source(rule.source)
     if normalized not in kali_ips:
         return False
     return not rule.qualifiers
@@ -593,6 +604,20 @@ def audit_and_revert(
 
     if events and run_store is not None and run_id is not None:
         records = [asdict(event) for event in events]
-        run_store.append_jsonl(run_id, "continuity-events.jsonl", records)
+        try:
+            run_store.append_jsonl(run_id, "continuity-events.jsonl", records)
+        except Exception as exc:  # noqa: BLE001 - persistence is best-effort
+            # Reversions already happened on the live system; surfacing
+            # the events to the caller is more valuable than masking
+            # them behind an archive-write failure. The CLI will still
+            # print the per-event summary and exit non-zero on
+            # REVERT_FAILED entries. The archive failure is logged
+            # loudly so it's discoverable, but does not propagate.
+            log.error(
+                "Continuity events archive write failed (run_id=%s, %d events"
+                " not persisted): %s. Reversions are already applied; the"
+                " caller still receives the event list.",
+                run_id, len(records), exc,
+            )
 
     return events

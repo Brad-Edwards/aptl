@@ -10,10 +10,6 @@ One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, D
 
 **Use cases:** autonomous cyber-operations research, purple-team training, AI threat-actor assessment.
 
-![AI red team owning the lab](assets/images/li_test/cline_red_team_test_20.png)
-
-*Full screen-cap walkthrough: [AI Red Team Test (PDF)](assets/docs/ai_red_team_test.pdf).*
-
 ## Status
 
 **🚧 Active development. Not for production. Not hardened.** This lab gives AI agents access to real penetration-testing tools and runs intentionally vulnerable services. Container escapes and other security issues are possible — keep it on a host you can rebuild and a network you control. Always monitor red-team agents during scenarios.

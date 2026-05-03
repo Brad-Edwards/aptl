@@ -148,7 +148,9 @@ def kali_source_ips(*, whitelist_path: Path) -> list[str]:
         return []
 
     ips: list[str] = []
-    for raw_line in whitelist_path.read_text().splitlines():
+    for line_no, raw_line in enumerate(
+        whitelist_path.read_text().splitlines(), start=1,
+    ):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
@@ -163,10 +165,15 @@ def kali_source_ips(*, whitelist_path: Path) -> list[str]:
         try:
             ipaddress.IPv4Address(candidate)
         except ValueError:
+            # Log the location only — never the line content. The
+            # whitelist file is repo-owned but Sonar's log-injection
+            # rule (S5145) treats any non-constant logged value as
+            # tainted, and the position is sufficient for an operator
+            # to find the bad line.
             log.warning(
-                "Skipping non-IPv4 whitelist entry %r in %s; only bare"
+                "Skipping non-IPv4 whitelist entry at %s:%d; only bare"
                 " IPv4 (optionally with /32) is allowed.",
-                line, whitelist_path,
+                whitelist_path, line_no,
             )
             continue
         ips.append(candidate)

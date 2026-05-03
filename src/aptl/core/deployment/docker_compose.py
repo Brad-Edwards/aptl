@@ -20,6 +20,44 @@ log = get_logger("deployment.docker_compose")
 _DOCKER_TIMEOUT = 30
 
 
+def _parse_labels(labels_str: str) -> dict[str, str]:
+    """Parse a comma-separated `k=v,k=v` labels string from `docker ps`."""
+    if not labels_str:
+        return {}
+    out: dict[str, str] = {}
+    for pair in labels_str.split(","):
+        if "=" in pair:
+            k, v = pair.split("=", 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def _parse_ports(ports_str: str) -> list[str]:
+    """Parse a comma-separated ports string from `docker ps`."""
+    if not ports_str:
+        return []
+    return [p.strip() for p in ports_str.split(",") if p.strip()]
+
+
+def _parse_lab_row(line: str) -> dict | None:
+    """Parse a single TSV row from `docker ps --format ...` into a dict.
+
+    Returns ``None`` for short / malformed lines so callers can filter
+    them out cleanly.
+    """
+    parts = line.split("\t", 5)
+    if len(parts) < 5:
+        return None
+    return {
+        "name": parts[0],
+        "image": parts[1],
+        "id": parts[2],
+        "status": parts[3],
+        "labels": _parse_labels(parts[4]),
+        "ports": _parse_ports(parts[5] if len(parts) > 5 else ""),
+    }
+
+
 class DockerComposeBackend:
     """Docker Compose deployment backend.
 
@@ -321,28 +359,11 @@ class DockerComposeBackend:
         ])
         if result.returncode != 0 or not result.stdout.strip():
             return []
-        rows: list[dict] = []
-        for line in result.stdout.splitlines():
-            parts = line.split("\t", 5)
-            if len(parts) < 5:
-                continue
-            labels: dict[str, str] = {}
-            if parts[4]:
-                for pair in parts[4].split(","):
-                    if "=" in pair:
-                        k, v = pair.split("=", 1)
-                        labels[k.strip()] = v.strip()
-            ports_str = parts[5] if len(parts) > 5 else ""
-            ports = [p.strip() for p in ports_str.split(",") if p.strip()]
-            rows.append({
-                "name": parts[0],
-                "image": parts[1],
-                "id": parts[2],
-                "status": parts[3],
-                "labels": labels,
-                "ports": ports,
-            })
-        return rows
+        return [
+            row
+            for row in (_parse_lab_row(line) for line in result.stdout.splitlines())
+            if row is not None
+        ]
 
     def host_list_lab_networks(self, name_prefix: str) -> list[str]:
         result = self._run([

@@ -1,5 +1,12 @@
 fail_fast: true
 
+# Suricata bind-mounts `config/suricata/rules/*.rules` into the
+# container, which writes them back as `systemd-network` (the remapped
+# UID 998). Pre-commit then can't open them on the host. They're
+# lab-managed runtime artifacts, not curated source — skip across all
+# hooks (top-level exclude applies to every hook below unless overridden).
+exclude: ^config/suricata/rules/.*\.rules$
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

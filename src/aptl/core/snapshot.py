@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
+from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
     from aptl.core.deployment import DeploymentBackend
@@ -112,8 +113,14 @@ class RangeSnapshot:
     ssh: list[SSHEndpoint] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        """Convert to a JSON-serializable dictionary."""
-        return asdict(self)
+        """Convert to a JSON-serializable dictionary.
+
+        Sensitive fields (service credentials, API tokens, etc.) are
+        redacted at this boundary so every caller — `aptl lab status
+        --json`, `--output`, future archive writers — gets the same safe
+        shape. See ADR-012 § Security Guardrail.
+        """
+        return redact(asdict(self))
 
 
 def _backend_exec(

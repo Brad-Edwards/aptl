@@ -19,6 +19,8 @@ import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
+import { redact } from './redaction.js';
+
 let provider: NodeTracerProvider | null = null;
 
 // ---------------------------------------------------------------------------
@@ -194,14 +196,15 @@ export async function traceToolCall<T>(
         'gen_ai.operation.name': 'execute_tool',
         'gen_ai.tool.name': toolName,
         'gen_ai.agent.name': serverName,
-        'aptl.tool.arguments': truncateAttr(args),
+        // Redact before truncating so the marker is never split mid-token.
+        'aptl.tool.arguments': truncateAttr(redact(args)),
       },
     },
     parentContext,
     async (span) => {
       try {
         const result = await handler();
-        span.setAttribute('aptl.tool.response', truncateAttr(result));
+        span.setAttribute('aptl.tool.response', truncateAttr(redact(result)));
         span.setStatus({ code: SpanStatusCode.OK });
         return result;
       } catch (err) {

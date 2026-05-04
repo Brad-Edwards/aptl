@@ -255,16 +255,22 @@ describe('telemetry', () => {
 
   describe('initTracing / shutdownTracing', () => {
     it('initializes and shuts down without error', async () => {
-      const { initTracing, shutdownTracing } = await import('../src/telemetry.js');
+      const { initTracing, getTracer, shutdownTracing } = await import(
+        '../src/telemetry.js'
+      );
 
-      // Should not throw
-      initTracing('test-service');
-      await shutdownTracing();
+      expect(() => initTracing('test-service')).not.toThrow();
+      // After init, getTracer must return a usable Tracer.
+      const tracer = getTracer('test-service');
+      expect(tracer).toBeDefined();
+      expect(typeof tracer.startSpan).toBe('function');
+
+      await expect(shutdownTracing()).resolves.toBeUndefined();
     });
 
     it('shutdown without init is safe', async () => {
       const { shutdownTracing } = await import('../src/telemetry.js');
-      await shutdownTracing(); // should not throw
+      await expect(shutdownTracing()).resolves.toBeUndefined();
     });
   });
 });

@@ -72,7 +72,7 @@ _SENSITIVE_KEY_PATTERN = (
     r"api[_-]?key|apikey|jwt|bearer|session(?:_id)?)"
 )
 _AUTHORIZATION_RE = re.compile(
-    r"(authorization\s*[:=]\s*)(?:([A-Za-z][A-Za-z0-9_-]*)\s+)?(\S+)",
+    r"(authorization\s*[:=]\s*)(?:([A-Za-z][\w-]*)\s+)?(\S+)",
     re.IGNORECASE,
 )
 _SENSITIVE_KV_RE = re.compile(
@@ -105,7 +105,7 @@ def _redact_string(value: str) -> str:
     if stripped and stripped[0] in "{[":
         try:
             parsed = json.loads(value)
-        except (ValueError, json.JSONDecodeError):
+        except ValueError:  # JSONDecodeError is a ValueError subclass
             parsed = None
         if isinstance(parsed, (dict, list)):
             return json.dumps(redact(parsed), separators=(",", ":"))

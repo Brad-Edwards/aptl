@@ -9,13 +9,12 @@
  * trace_id as scenario lifecycle spans from the Python CLI.
  */
 
-import { readFileSync, existsSync, statSync } from 'fs';
-import { join, resolve } from 'path';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { context, trace, Tracer, Context, SpanStatusCode, SpanKind } from '@opentelemetry/api';
 import { Resource } from '@opentelemetry/resources';
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { NodeTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
@@ -135,7 +134,7 @@ export function loadParentContext(): Context | undefined {
     const spanContext = {
       traceId: data.trace_id,
       spanId: data.span_id,
-      traceFlags: parseInt(data.trace_flags, 16),
+      traceFlags: Number.parseInt(data.trace_flags, 16),
       isRemote: true,
     };
 

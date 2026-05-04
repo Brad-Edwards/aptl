@@ -67,12 +67,12 @@ const SENSITIVE_KEY_PATTERN =
 // optional-scheme branch and the value-only branch are mutually exclusive
 // (avoids a double-redaction artifact on the same input).
 const AUTHORIZATION_PATTERN =
-  /(authorization\s*[:=]\s*)(?:([A-Za-z][A-Za-z0-9_-]*)\s+)?(\S+)/gi;
+  /(authorization\s*[:=]\s*)(?:([A-Za-z][\w-]*)\s+)?(\S+)/gi;
 // `key=value` or `key: value` for any sensitive token. Stops at common
 // delimiters so URL query strings and shell key/value pairs mask only
 // the value, not the surrounding context.
 const SENSITIVE_KV_PATTERN = new RegExp(
-  `(\\b${SENSITIVE_KEY_PATTERN}\\b\\s*[=:]\\s*)['"]?[^'"&\\s,;|]+['"]?`,
+  String.raw`(\b${SENSITIVE_KEY_PATTERN}\b\s*[=:]\s*)['"]?[^'"&\s,;|]+['"]?`,
   'gi',
 );
 // Bare `Bearer <token>` (no Authorization: prefix).
@@ -81,7 +81,7 @@ const BARE_BEARER_PATTERN = /(\bbearer\s+)\S+/gi;
 // space-separated value (the `key=value` form is already covered by
 // SENSITIVE_KV_PATTERN).
 const CLI_FLAG_PATTERN = new RegExp(
-  `(--${SENSITIVE_KEY_PATTERN}\\s+)\\S+`,
+  String.raw`(--${SENSITIVE_KEY_PATTERN}\s+)\S+`,
   'gi',
 );
 // Recognizes `--<sensitive>` as a standalone token (used by array-pair
@@ -105,7 +105,7 @@ function redactString(value: string): string {
   // `content[].text` envelope (which wraps the real result in a JSON
   // string) need to be parsed, recursively redacted, and re-serialized.
   const trimmed = value.trim();
-  if (trimmed.length > 0 && (trimmed[0] === '{' || trimmed[0] === '[')) {
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
       const parsed = JSON.parse(value);
       if (parsed !== null && typeof parsed === 'object') {
@@ -118,10 +118,10 @@ function redactString(value: string): string {
   // Authorization first (its match overlaps with both sensitive-kv and bare
   // Bearer; running it before the others keeps a single `[REDACTED]` token
   // in the output).
-  let out = value.replace(AUTHORIZATION_PATTERN, redactAuthorizationHeader);
-  out = out.replace(SENSITIVE_KV_PATTERN, `$1${REDACTED}`);
-  out = out.replace(BARE_BEARER_PATTERN, `$1${REDACTED}`);
-  out = out.replace(CLI_FLAG_PATTERN, `$1${REDACTED}`);
+  let out = value.replaceAll(AUTHORIZATION_PATTERN, redactAuthorizationHeader);
+  out = out.replaceAll(SENSITIVE_KV_PATTERN, `$1${REDACTED}`);
+  out = out.replaceAll(BARE_BEARER_PATTERN, `$1${REDACTED}`);
+  out = out.replaceAll(CLI_FLAG_PATTERN, `$1${REDACTED}`);
   return out;
 }
 

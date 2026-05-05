@@ -208,7 +208,12 @@ class TestConfigLoading:
         """The repo's checked-in aptl.json must remain compatible with
         the schema (ADR-025: checked-in top-level sections must have
         both a Pydantic field and a runtime owner)."""
-        from aptl.core.config import load_config
+        from aptl.core.config import AptlConfig, load_config
 
         repo_root = Path(__file__).resolve().parent.parent
-        load_config(repo_root / "aptl.json")
+        config = load_config(repo_root / "aptl.json")
+        assert isinstance(config, AptlConfig)
+        # The lab profile in the checked-in config must remain the
+        # default name; if it ever changes, ADR-025's "checked-in
+        # config is the canonical example" contract is at risk.
+        assert config.lab.name == "aptl"

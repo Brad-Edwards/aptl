@@ -220,11 +220,15 @@ describe('redact - string content traversal', () => {
   });
 
   it('redacts curl command with Authorization header', () => {
+    // Anchor on the labelled replacement form so a regression that
+    // silently dropped the "Bearer" scheme (or the 'abc' value via an
+    // unrelated code path) wouldn't be missed.
     const out = redact({
       command: "curl -H 'Authorization: Bearer abc' https://example.com",
     }) as { command: string };
-    expect(out.command).not.toContain('abc');
-    expect(out.command).toContain('[REDACTED]');
+    expect(out.command).toBe(
+      "curl -H 'Authorization: Bearer [REDACTED]' https://example.com",
+    );
   });
 
   it('redacts URL query string with sensitive params', () => {
@@ -250,8 +254,7 @@ describe('redact - string content traversal', () => {
     const out = redact({
       command: "curl -H 'Cookie: session=xyz' https://x",
     }) as { command: string };
-    expect(out.command).not.toContain('session=xyz');
-    expect(out.command).toContain('[REDACTED]');
+    expect(out.command).toBe("curl -H 'Cookie: [REDACTED]' https://x");
   });
 
   it('redacts multi-segment Cookie header', () => {
@@ -290,13 +293,12 @@ describe('redact - string content traversal', () => {
   });
 
   it('redacts URL userinfo password', () => {
+    // Anchor on the exact replacement form so a regression that mangled
+    // the userinfo structure would be caught.
     const out = redact({
       url: 'https://alice:hunter2@host.example.com/path',
     }) as { url: string };
-    expect(out.url).not.toContain('hunter2');
-    expect(out.url).toContain('alice');
-    expect(out.url).toContain('host.example.com/path');
-    expect(out.url).toContain('[REDACTED]');
+    expect(out.url).toBe('https://alice:[REDACTED]@host.example.com/path');
   });
 
   it('redacts PEM private key block', () => {

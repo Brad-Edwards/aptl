@@ -85,9 +85,12 @@ const KEY_LB = String.raw`(?<![a-zA-Z0-9])`;
 const KEY_RB = String.raw`(?![a-zA-Z0-9])`;
 // `key=value` or `key: value` for any sensitive token. Stops at common
 // delimiters so URL query strings and shell key/value pairs mask only
-// the value, not the surrounding context.
+// the value, not the surrounding context. Capture leading and trailing
+// quotes as separate groups so the replacement preserves them
+// (otherwise wrapping `'<value>'` / `"<value>"` loses the closing
+// quote, corrupting downstream diagnostic structure).
 const SENSITIVE_KV_PATTERN = new RegExp(
-  String.raw`(${KEY_LB}${SENSITIVE_KEY_PATTERN}${KEY_RB}\s*[=:]\s*)['"]?[^'"&\s,;|]+['"]?`,
+  String.raw`(${KEY_LB}${SENSITIVE_KEY_PATTERN}${KEY_RB}\s*[=:]\s*['"]?)([^'"&\s,;|]+)(['"]?)`,
   'gi',
 );
 // Bare `Bearer <token>` (no Authorization: prefix).
@@ -104,9 +107,12 @@ const CLI_FLAG_PATTERN = new RegExp(
 );
 // Cookie / Set-Cookie header: redact the entire body so multi-segment
 // cookies like `Cookie: lang=en; connect.sid=SECRET` are masked in one
-// pass instead of leaving later segments intact.
+// pass instead of leaving later segments intact. Capture the leading
+// and trailing quotes (when present) as separate groups so the
+// replacement can put them back — otherwise a wrapping `'...'` loses
+// its closing quote.
 const COOKIE_HEADER_PATTERN =
-  /(set-cookie\s*[:=]\s*|cookie\s*[:=]\s*)['"]?[^'"\r\n]+['"]?/gi;
+  /((?:set-cookie|cookie)\s*[:=]\s*['"]?)([^'"\r\n]+)(['"]?)/gi;
 // URL userinfo: `scheme://user:password@host/path`. Preserve user (often
 // useful for diagnostics) and mask the password segment.
 const URL_USERINFO_PATTERN = /(:\/\/[^/:@\s]+:)[^@\s]+(@)/gi;
@@ -156,8 +162,8 @@ function redactString(value: string): string {
   out = out.replaceAll(AUTHORIZATION_PATTERN, redactAuthorizationHeader);
   // Cookie before SENSITIVE_KV so the full header body is masked in one
   // pass (otherwise SENSITIVE_KV stops at `;` and leaves later segments).
-  out = out.replaceAll(COOKIE_HEADER_PATTERN, `$1${REDACTED}`);
-  out = out.replaceAll(SENSITIVE_KV_PATTERN, `$1${REDACTED}`);
+  out = out.replaceAll(COOKIE_HEADER_PATTERN, `$1${REDACTED}$3`);
+  out = out.replaceAll(SENSITIVE_KV_PATTERN, `$1${REDACTED}$3`);
   out = out.replaceAll(BARE_BEARER_PATTERN, `$1${REDACTED}`);
   out = out.replaceAll(CLI_FLAG_PATTERN, `$1${REDACTED}`);
   out = out.replaceAll(URL_USERINFO_PATTERN, `$1${REDACTED}$2`);

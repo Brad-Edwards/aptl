@@ -205,11 +205,16 @@ class TestStringContentTraversal:
         assert out["command"] == expected
 
     def test_curl_command_with_authorization_header(self):
+        # Anchor on the labelled replacement form so a regression that
+        # silently dropped the "Bearer" scheme (or the 'abc' value via an
+        # unrelated code path) wouldn't be missed.
         out = redact(
             {"command": "curl -H 'Authorization: Bearer abc' https://example.com"}
         )
-        assert "abc" not in out["command"]
-        assert REDACTED in out["command"]
+        assert (
+            out["command"]
+            == "curl -H 'Authorization: Bearer [REDACTED]' https://example.com"
+        )
 
     def test_url_query_string_with_sensitive_params(self):
         out = redact({"url": "https://api.example.com?api_key=secret123&user=alice"})
@@ -231,8 +236,7 @@ class TestStringContentTraversal:
 
     def test_redacts_cookie_header(self):
         out = redact({"command": "curl -H 'Cookie: session=xyz' https://x"})
-        assert "session=xyz" not in out["command"]
-        assert "[REDACTED]" in out["command"]
+        assert out["command"] == "curl -H 'Cookie: [REDACTED]' https://x"
 
     def test_redacts_multi_segment_cookie_header(self):
         # `;`-delimited cookie segments must all be masked, not just the
@@ -268,12 +272,10 @@ class TestStringContentTraversal:
         assert REDACTED in out["command"]
 
     def test_redacts_url_userinfo_password(self):
+        # Anchor on the exact replacement form so a regression that
+        # mangled the userinfo structure would be caught.
         out = redact({"url": "https://alice:hunter2@host.example.com/path"})
-        # password masked, user kept for diagnostics, host preserved
-        assert "hunter2" not in out["url"]
-        assert "alice" in out["url"]
-        assert "host.example.com/path" in out["url"]
-        assert "[REDACTED]" in out["url"]
+        assert out["url"] == "https://alice:[REDACTED]@host.example.com/path"
 
     def test_redacts_pem_private_key_block(self):
         pem = (

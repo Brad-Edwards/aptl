@@ -195,6 +195,43 @@ describe('telemetry', () => {
       expect(respAttr).toContain('"status":"ok"');
     });
 
+    it('redacts secret-shaped error message and exception event', async () => {
+      const { traceToolCall } = await import('../src/telemetry.js');
+
+      await expect(
+        traceToolCall(
+          'kali_run_command',
+          'aptl-red',
+          {},
+          async () => {
+            throw new Error(
+              "command failed: curl --password=SECRET_ERROR_VALUE https://x",
+            );
+          },
+        ),
+      ).rejects.toThrow();
+
+      const spans = exporter.getFinishedSpans();
+      expect(spans).toHaveLength(1);
+      // Span status message must be sanitized.
+      const statusMessage = spans[0].status.message ?? '';
+      expect(statusMessage).not.toContain('SECRET_ERROR_VALUE');
+      expect(statusMessage).toContain('[REDACTED]');
+      // Exception event still present, with sanitized attributes.
+      const evt = spans[0].events.find((e) => e.name === 'exception');
+      expect(evt).toBeDefined();
+      const evtAttrs = evt?.attributes ?? {};
+      expect(String(evtAttrs['exception.message'])).not.toContain(
+        'SECRET_ERROR_VALUE',
+      );
+      expect(String(evtAttrs['exception.message'])).toContain('[REDACTED]');
+      // Stack trace, if present, also sanitized.
+      const stack = evtAttrs['exception.stacktrace'];
+      if (stack !== undefined) {
+        expect(String(stack)).not.toContain('SECRET_ERROR_VALUE');
+      }
+    });
+
     it('reaches into MCP content[].text envelope to redact wrapped JSON', async () => {
       const { traceToolCall } = await import('../src/telemetry.js');
 

@@ -61,15 +61,22 @@ function isSensitiveKey(name: string): boolean {
 // conservative: they preserve the labelling token (`Bearer`, `password=`)
 // so log readers know what was redacted, but mask the secret payload.
 const SENSITIVE_KEY_PATTERN =
-  '(?:pass(?:word|wd|phrase)?|secret|token|credential|api[_-]?key|apikey|jwt|bearer|session(?:_id)?)';
+  '(?:pass(?:word|wd|phrase)?|secret|token|credential|api[_-]?key|apikey|jwt|bearer|session(?:_id)?|cookie)';
+// `\S+` would greedily consume trailing quotes/punctuation around the
+// secret value (e.g. eat the closing `'` of a curl `-H 'Authorization: ...'`
+// header, corrupting downstream diagnostic structure). Stop at quotes
+// and whitespace instead.
+const VALUE_PATTERN = String.raw`[^\s'"]+`;
 // Authorization header: keep optional scheme (`Basic`, `Bearer`) labelled
 // for log-readability, mask the token. Single combined pattern so the
 // optional-scheme branch and the value-only branch are mutually exclusive
 // (avoids a double-redaction artifact on the same input).
 // `i` flag handles both cases — listing `A-Z` alongside `a-z` is
 // redundant under case-insensitive matching (Sonar S5869).
-const AUTHORIZATION_PATTERN =
-  /(authorization\s*[:=]\s*)(?:([a-z][\w-]*)\s+)?(\S+)/gi;
+const AUTHORIZATION_PATTERN = new RegExp(
+  String.raw`(authorization\s*[:=]\s*)(?:([a-z][\w-]*)\s+)?${VALUE_PATTERN}`,
+  'gi',
+);
 // `key=value` or `key: value` for any sensitive token. Stops at common
 // delimiters so URL query strings and shell key/value pairs mask only
 // the value, not the surrounding context.
@@ -78,14 +85,25 @@ const SENSITIVE_KV_PATTERN = new RegExp(
   'gi',
 );
 // Bare `Bearer <token>` (no Authorization: prefix).
-const BARE_BEARER_PATTERN = /(\bbearer\s+)\S+/gi;
+const BARE_BEARER_PATTERN = new RegExp(
+  String.raw`(\bbearer\s+)${VALUE_PATTERN}`,
+  'gi',
+);
 // `--password value` / `--token value` — long CLI flag with a separate
 // space-separated value (the `key=value` form is already covered by
 // SENSITIVE_KV_PATTERN).
 const CLI_FLAG_PATTERN = new RegExp(
-  String.raw`(--${SENSITIVE_KEY_PATTERN}\s+)\S+`,
+  String.raw`(--${SENSITIVE_KEY_PATTERN}\s+)${VALUE_PATTERN}`,
   'gi',
 );
+// URL userinfo: `scheme://user:password@host/path`. Preserve user (often
+// useful for diagnostics) and mask the password segment.
+const URL_USERINFO_PATTERN = /(:\/\/[^/:@\s]+:)[^@\s]+(@)/gi;
+// PEM key/cert blocks (`-----BEGIN PRIVATE KEY----- … -----END PRIVATE KEY-----`).
+// Multi-line with `[\s\S]` since `.` does not match newline by default;
+// non-greedy so adjacent blocks are masked separately.
+const PEM_BLOCK_PATTERN =
+  /(-----BEGIN[^-]*-----)[\s\S]*?(-----END[^-]*-----)/g;
 // Recognizes `--<sensitive>` as a standalone token (used by array-pair
 // detection so adjacent positional values get redacted).
 const CLI_FLAG_TOKEN_PATTERN = new RegExp(
@@ -97,7 +115,6 @@ function redactAuthorizationHeader(
   _match: string,
   prefix: string,
   scheme: string | undefined,
-  _value: string,
 ): string {
   return scheme ? `${prefix}${scheme} ${REDACTED}` : `${prefix}${REDACTED}`;
 }
@@ -117,13 +134,18 @@ function redactString(value: string): string {
       // Fall through to inline-pattern scanning.
     }
   }
-  // Authorization first (its match overlaps with both sensitive-kv and bare
+  // PEM blocks first so the surrounding markers stay verbatim (the
+  // inner key bytes contain `=`/`/` characters that other patterns
+  // would otherwise see as `key=value`).
+  let out = value.replaceAll(PEM_BLOCK_PATTERN, `$1${REDACTED}$2`);
+  // Authorization next (its match overlaps with both sensitive-kv and bare
   // Bearer; running it before the others keeps a single `[REDACTED]` token
   // in the output).
-  let out = value.replaceAll(AUTHORIZATION_PATTERN, redactAuthorizationHeader);
+  out = out.replaceAll(AUTHORIZATION_PATTERN, redactAuthorizationHeader);
   out = out.replaceAll(SENSITIVE_KV_PATTERN, `$1${REDACTED}`);
   out = out.replaceAll(BARE_BEARER_PATTERN, `$1${REDACTED}`);
   out = out.replaceAll(CLI_FLAG_PATTERN, `$1${REDACTED}`);
+  out = out.replaceAll(URL_USERINFO_PATTERN, `$1${REDACTED}$2`);
   return out;
 }
 

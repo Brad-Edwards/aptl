@@ -207,12 +207,27 @@ export async function traceToolCall<T>(
         span.setStatus({ code: SpanStatusCode.OK });
         return result;
       } catch (err) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: err instanceof Error ? err.message : String(err),
-        });
+        const rawMessage = err instanceof Error ? err.message : String(err);
+        // Error messages and stack traces from MCP tools regularly carry
+        // the offending command line / response body / token verbatim.
+        // Redact via the same boundary helper before they land in span
+        // status, recordException event, or exported attributes.
+        const safeMessage = String(redact(rawMessage));
+        span.setStatus({ code: SpanStatusCode.ERROR, message: safeMessage });
         if (err instanceof Error) {
-          span.recordException(err);
+          // Build the OTel `exception` event manually rather than calling
+          // `span.recordException(err)` so the auto-populated
+          // `exception.message` / `exception.stacktrace` attributes go
+          // through the same redactor.
+          const safeStack = err.stack ? String(redact(err.stack)) : undefined;
+          const eventAttrs: Record<string, string> = {
+            'exception.type': err.name || 'Error',
+            'exception.message': safeMessage,
+          };
+          if (safeStack !== undefined) {
+            eventAttrs['exception.stacktrace'] = safeStack;
+          }
+          span.addEvent('exception', eventAttrs);
         }
         throw err;
       } finally {

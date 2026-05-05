@@ -216,6 +216,61 @@ class TestStringContentTraversal:
         assert "secret123" not in out["url"]
         assert "user=alice" in out["url"]
 
+    def test_preserves_closing_quote_around_authorization_header(self):
+        # `\S+` would consume the trailing `'`; the bounded value pattern
+        # must stop at quote characters so the closing `'` stays in the
+        # output and downstream diagnostic structure is preserved.
+        out = redact(
+            {"command": "curl -H 'Authorization: Bearer abc.def' https://x"}
+        )
+        assert "abc.def" not in out["command"]
+        # Authorization scheme labelled, value masked, surrounding quotes intact.
+        assert "Bearer [REDACTED]" in out["command"]
+        assert "'Authorization: Bearer [REDACTED]'" in out["command"]
+        assert out["command"].endswith("https://x")
+
+    def test_redacts_cookie_header(self):
+        out = redact({"command": "curl -H 'Cookie: session=xyz' https://x"})
+        assert "session=xyz" not in out["command"]
+        assert "[REDACTED]" in out["command"]
+
+    def test_redacts_url_userinfo_password(self):
+        out = redact({"url": "https://alice:hunter2@host.example.com/path"})
+        # password masked, user kept for diagnostics, host preserved
+        assert "hunter2" not in out["url"]
+        assert "alice" in out["url"]
+        assert "host.example.com/path" in out["url"]
+        assert "[REDACTED]" in out["url"]
+
+    def test_redacts_pem_private_key_block(self):
+        pem = (
+            "before\n"
+            "-----BEGIN PRIVATE KEY-----\n"
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ\n"
+            "secretkeymaterial...\n"
+            "-----END PRIVATE KEY-----\n"
+            "after"
+        )
+        out = redact({"blob": pem})
+        assert "MIIEvQIBADANBg" not in out["blob"]
+        assert "secretkeymaterial" not in out["blob"]
+        # Markers preserved so the reader knows what was masked.
+        assert "-----BEGIN PRIVATE KEY-----" in out["blob"]
+        assert "-----END PRIVATE KEY-----" in out["blob"]
+        assert "before" in out["blob"]
+        assert "after" in out["blob"]
+
+    def test_redacts_pem_rsa_private_key_block(self):
+        pem = (
+            "-----BEGIN RSA PRIVATE KEY-----\n"
+            "secretmaterial\n"
+            "-----END RSA PRIVATE KEY-----"
+        )
+        out = redact({"blob": pem})
+        assert "secretmaterial" not in out["blob"]
+        assert "-----BEGIN RSA PRIVATE KEY-----" in out["blob"]
+        assert "-----END RSA PRIVATE KEY-----" in out["blob"]
+
 
 class TestArrayPairCliFlags:
     def test_pair_form_cli_flag_redacts_following_value(self):

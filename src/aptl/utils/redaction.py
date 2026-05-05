@@ -69,23 +69,37 @@ def _is_sensitive_key(name: str) -> bool:
 # from either language match shape.
 _SENSITIVE_KEY_PATTERN = (
     r"(?:pass(?:word|wd|phrase)?|secret|token|credential|"
-    r"api[_-]?key|apikey|jwt|bearer|session(?:_id)?)"
+    r"api[_-]?key|apikey|jwt|bearer|session(?:_id)?|cookie)"
 )
+# `\S+` would greedily consume trailing quotes/punctuation around the
+# secret value (e.g. eat the closing `'` of a curl `-H 'Authorization: ...'`
+# header, corrupting downstream diagnostic structure). Stop at quotes
+# and whitespace instead.
+_VALUE_PATTERN = r"[^\s'\"]+"
 _AUTHORIZATION_RE = re.compile(
     # `re.IGNORECASE` handles both cases — listing `A-Z` alongside `a-z`
     # is redundant under case-insensitive matching (Sonar S5869).
-    r"(authorization\s*[:=]\s*)(?:([a-z][\w-]*)\s+)?(\S+)",
+    rf"(authorization\s*[:=]\s*)(?:([a-z][\w-]*)\s+)?{_VALUE_PATTERN}",
     re.IGNORECASE,
 )
 _SENSITIVE_KV_RE = re.compile(
     rf"(\b{_SENSITIVE_KEY_PATTERN}\b\s*[=:]\s*)['\"]?[^'\"&\s,;|]+['\"]?",
     re.IGNORECASE,
 )
-_BARE_BEARER_RE = re.compile(r"(\bbearer\s+)\S+", re.IGNORECASE)
+_BARE_BEARER_RE = re.compile(rf"(\bbearer\s+){_VALUE_PATTERN}", re.IGNORECASE)
 # `--password value` / `--token value` style (long CLI flags).
 _CLI_FLAG_RE = re.compile(
-    rf"(--{_SENSITIVE_KEY_PATTERN}\s+)\S+",
+    rf"(--{_SENSITIVE_KEY_PATTERN}\s+){_VALUE_PATTERN}",
     re.IGNORECASE,
+)
+# URL userinfo: `scheme://user:password@host/path`. Preserve user (often
+# useful for diagnostics) and mask the password segment.
+_URL_USERINFO_RE = re.compile(r"(://[^/:@\s]+:)[^@\s]+(@)")
+# PEM key/cert blocks. `re.DOTALL` lets `.` span newlines; non-greedy so
+# adjacent blocks are masked separately.
+_PEM_BLOCK_RE = re.compile(
+    r"(-----BEGIN[^-]*-----).*?(-----END[^-]*-----)",
+    re.DOTALL,
 )
 # Recognizes `--<sensitive>` as a standalone token (used by array-pair
 # detection so adjacent positional values get redacted).
@@ -93,7 +107,7 @@ _CLI_FLAG_TOKEN_RE = re.compile(rf"^--{_SENSITIVE_KEY_PATTERN}$", re.IGNORECASE)
 
 
 def _redact_authorization(match: "re.Match[str]") -> str:
-    prefix, scheme, _value = match.group(1), match.group(2), match.group(3)
+    prefix, scheme = match.group(1), match.group(2)
     if scheme:
         return f"{prefix}{scheme} {REDACTED}"
     return f"{prefix}{REDACTED}"
@@ -111,10 +125,15 @@ def _redact_string(value: str) -> str:
             parsed = None
         if isinstance(parsed, (dict, list)):
             return json.dumps(redact(parsed), separators=(",", ":"))
-    out = _AUTHORIZATION_RE.sub(_redact_authorization, value)
+    # PEM blocks first so the markers stay verbatim (the inner key bytes
+    # contain `=`/`/` characters that other patterns would otherwise see
+    # as `key=value`).
+    out = _PEM_BLOCK_RE.sub(rf"\1{REDACTED}\2", value)
+    out = _AUTHORIZATION_RE.sub(_redact_authorization, out)
     out = _SENSITIVE_KV_RE.sub(rf"\1{REDACTED}", out)
     out = _BARE_BEARER_RE.sub(rf"\1{REDACTED}", out)
     out = _CLI_FLAG_RE.sub(rf"\1{REDACTED}", out)
+    out = _URL_USERINFO_RE.sub(rf"\1{REDACTED}\2", out)
     return out
 
 

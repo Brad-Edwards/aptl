@@ -234,6 +234,65 @@ describe('redact - string content traversal', () => {
     expect(out.url).not.toContain('secret123');
     expect(out.url).toContain('user=alice');
   });
+
+  it('preserves the trailing quote around Authorization header value', () => {
+    const out = redact({
+      command: "curl -H 'Authorization: Bearer abc.def' https://x",
+    }) as { command: string };
+    expect(out.command).not.toContain('abc.def');
+    // Authorization scheme labelled, value masked, surrounding quotes intact.
+    expect(out.command).toContain('Bearer [REDACTED]');
+    expect(out.command).toContain("'Authorization: Bearer [REDACTED]'");
+    expect(out.command.endsWith('https://x')).toBe(true);
+  });
+
+  it('redacts Cookie header', () => {
+    const out = redact({
+      command: "curl -H 'Cookie: session=xyz' https://x",
+    }) as { command: string };
+    expect(out.command).not.toContain('session=xyz');
+    expect(out.command).toContain('[REDACTED]');
+  });
+
+  it('redacts URL userinfo password', () => {
+    const out = redact({
+      url: 'https://alice:hunter2@host.example.com/path',
+    }) as { url: string };
+    expect(out.url).not.toContain('hunter2');
+    expect(out.url).toContain('alice');
+    expect(out.url).toContain('host.example.com/path');
+    expect(out.url).toContain('[REDACTED]');
+  });
+
+  it('redacts PEM private key block', () => {
+    const pem = [
+      'before',
+      '-----BEGIN PRIVATE KEY-----',
+      'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ',
+      'secretkeymaterial...',
+      '-----END PRIVATE KEY-----',
+      'after',
+    ].join('\n');
+    const out = redact({ blob: pem }) as { blob: string };
+    expect(out.blob).not.toContain('MIIEvQIBADANBg');
+    expect(out.blob).not.toContain('secretkeymaterial');
+    expect(out.blob).toContain('-----BEGIN PRIVATE KEY-----');
+    expect(out.blob).toContain('-----END PRIVATE KEY-----');
+    expect(out.blob).toContain('before');
+    expect(out.blob).toContain('after');
+  });
+
+  it('redacts PEM RSA private key block', () => {
+    const pem = [
+      '-----BEGIN RSA PRIVATE KEY-----',
+      'secretmaterial',
+      '-----END RSA PRIVATE KEY-----',
+    ].join('\n');
+    const out = redact({ blob: pem }) as { blob: string };
+    expect(out.blob).not.toContain('secretmaterial');
+    expect(out.blob).toContain('-----BEGIN RSA PRIVATE KEY-----');
+    expect(out.blob).toContain('-----END RSA PRIVATE KEY-----');
+  });
 });
 
 describe('redact - array pair-form CLI flags', () => {

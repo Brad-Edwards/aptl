@@ -1,18 +1,20 @@
 fail_fast: true
 
-# Suricata bind-mounts `config/suricata/rules/*.rules` into the
-# container, which writes them back as `systemd-network` (the remapped
-# UID 998). Pre-commit then can't open them on the host. They're
-# lab-managed runtime artifacts, not curated source — skip across all
-# hooks (top-level exclude applies to every hook below unless overridden).
-exclude: ^config/suricata/rules/.*\.rules$
-
+# `local.rules` is operator-authored source and `misp-iocs.rules` is a
+# tracked seed; both belong under normal validation. The Suricata
+# container, however, bind-mounts them and writes back as the remapped
+# `systemd-network` UID 998, which only blocks the two pre-commit hooks
+# that need `rb+` (read-write binary) access on the host. Those two
+# hooks carry a per-hook `exclude:` so other hooks (yaml/json checks,
+# private-key detection, etc.) still inspect the rule sources.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^config/suricata/rules/.*\.rules$
       - id: end-of-file-fixer
+        exclude: ^config/suricata/rules/.*\.rules$
       - id: check-yaml
         args: [--unsafe]
       - id: check-json
@@ -20,7 +22,18 @@ repos:
         args: [--maxkb=500]
       - id: check-merge-conflict
       - id: detect-private-key
-        exclude: ^tests/
+        # `tests/` historically holds private-key-shaped fixtures.
+        # `mcp/aptl-mcp-common/{src,tests}/redaction.{ts,test.ts}` and
+        # `src/aptl/utils/redaction.py` (+ its test) intentionally embed
+        # PEM block markers — they implement and verify masking of those
+        # markers, not real key material.
+        exclude: |
+          (?x)^(
+            tests/.*|
+            mcp/aptl-mcp-common/src/redaction\.ts|
+            mcp/aptl-mcp-common/tests/redaction\.test\.ts|
+            src/aptl/utils/redaction\.py
+          )$
 
   # Test suites — mirror the three CI test jobs in .github/workflows/checks.yml.
   # Each hook is gated by a `files:` regex so a commit that doesn't touch a

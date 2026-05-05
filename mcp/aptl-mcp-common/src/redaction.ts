@@ -66,8 +66,10 @@ const SENSITIVE_KEY_PATTERN =
 // for log-readability, mask the token. Single combined pattern so the
 // optional-scheme branch and the value-only branch are mutually exclusive
 // (avoids a double-redaction artifact on the same input).
+// `i` flag handles both cases — listing `A-Z` alongside `a-z` is
+// redundant under case-insensitive matching (Sonar S5869).
 const AUTHORIZATION_PATTERN =
-  /(authorization\s*[:=]\s*)(?:([A-Za-z][\w-]*)\s+)?(\S+)/gi;
+  /(authorization\s*[:=]\s*)(?:([a-z][\w-]*)\s+)?(\S+)/gi;
 // `key=value` or `key: value` for any sensitive token. Stops at common
 // delimiters so URL query strings and shell key/value pairs mask only
 // the value, not the surrounding context.

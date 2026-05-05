@@ -72,7 +72,9 @@ _SENSITIVE_KEY_PATTERN = (
     r"api[_-]?key|apikey|jwt|bearer|session(?:_id)?)"
 )
 _AUTHORIZATION_RE = re.compile(
-    r"(authorization\s*[:=]\s*)(?:([A-Za-z][\w-]*)\s+)?(\S+)",
+    # `re.IGNORECASE` handles both cases — listing `A-Z` alongside `a-z`
+    # is redundant under case-insensitive matching (Sonar S5869).
+    r"(authorization\s*[:=]\s*)(?:([a-z][\w-]*)\s+)?(\S+)",
     re.IGNORECASE,
 )
 _SENSITIVE_KV_RE = re.compile(

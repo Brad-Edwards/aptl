@@ -74,6 +74,32 @@ MCP tool spans follow the [OpenTelemetry GenAI SIG](https://github.com/open-tele
 attribute conventions: `gen_ai.operation.name`, `gen_ai.tool.name`,
 `gen_ai.agent.name`.
 
+### Security Guardrail: No Secrets in Telemetry or Run Artifacts
+
+Telemetry and run archives are analysis artifacts, not credential stores. Values
+written to OTel span attributes, `snapshot.json`, CLI JSON output, or exported
+run archives must be redacted before serialization. File permissions such as
+`0600` are defense in depth, not a substitute for redaction, because run
+artifacts are routinely viewed, exported, copied, and attached to issue reports.
+
+Use one shared redaction policy per language boundary rather than ad hoc
+call-site filtering:
+
+- Python snapshot/archive serialization should sanitize at the `RangeSnapshot`
+  DTO boundary, so every caller of `to_dict()` receives the same safe shape.
+- TypeScript MCP telemetry should sanitize inside the common telemetry wrapper
+  before setting span attributes, so individual tool handlers do not own
+  tracing-specific redaction.
+- Redaction must recurse through dict/object and list/array values, preserve
+  non-secret diagnostic structure, and replace secret values with a stable
+  marker such as `[REDACTED]`.
+- Treat key names containing credential material (`password`, `pass`, `secret`,
+  `token`, `api_key`, `apikey`, `authorization`, `cookie`, `jwt`, `key`,
+  `credential`) as sensitive, and keep path-like public references such as
+  SSH key paths distinct from private key material.
+- Tests must assert both the safe output shape and absence of representative
+  known lab defaults/API tokens in JSON and span attributes.
+
 ## Consequences
 
 ### Positive

@@ -16,6 +16,7 @@ export { expandTilde } from './utils.js';
 // Export MCP server creation and types
 export { createMCPServer } from './server.js';
 export { initTracing, shutdownTracing, getTracer, traceToolCall } from './telemetry.js';
+export { redact, REDACTED } from './redaction.js';
 export type { LabConfig } from './config.js';
 export { loadLabConfig, substituteEnvVars, parseDotEnv } from './config.js';
 export type { ToolContext } from './tools/handlers.js';

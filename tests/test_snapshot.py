@@ -21,6 +21,7 @@ from aptl.core.snapshot import (
     _get_wazuh_rules_snapshot,
     _get_network_snapshots,
 )
+from aptl.utils.redaction import REDACTED
 
 
 def _backend_with_exec(exec_responses: dict[tuple, MagicMock]) -> MagicMock:
@@ -137,6 +138,64 @@ class TestDataclasses:
         assert d["wazuh_rules"]["total_rules"] == 100
         assert d["networks"][0]["subnet"] == "172.20.0.0/16"
         assert d["config_hashes"]["aptl.json"] == "abc123def456"
+
+    def test_range_snapshot_to_dict_redacts_service_credentials(self):
+        # Synthetic placeholder — real lab defaults are not embedded in
+        # this test fixture.
+        synthetic_creds = "PLACEHOLDER_USER/PLACEHOLDER_PASSWORD"
+        snap = RangeSnapshot(
+            services=[
+                ServiceEndpoint(
+                    name="Wazuh Dashboard",
+                    url="https://localhost:443",
+                    host="localhost",
+                    port=443,
+                    protocol="https",
+                    credentials=synthetic_creds,
+                ),
+            ],
+        )
+        out = snap.to_dict()
+        # Diagnostic structure preserved...
+        assert out["services"][0]["name"] == "Wazuh Dashboard"
+        assert out["services"][0]["port"] == 443
+        # ...credentials are not.
+        assert out["services"][0]["credentials"] == REDACTED
+
+    def test_range_snapshot_to_dict_preserves_ssh_key_path(self):
+        snap = RangeSnapshot(
+            ssh=[
+                SSHEndpoint(
+                    name="Victim",
+                    host="localhost",
+                    port=2022,
+                    user="labadmin",
+                    key_path="~/.ssh/aptl_lab_key",
+                    command="ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022",
+                ),
+            ],
+        )
+        out = snap.to_dict()
+        assert out["ssh"][0]["key_path"] == "~/.ssh/aptl_lab_key"
+
+    def test_range_snapshot_to_dict_redacts_credential_value_class(self):
+        # Stand in for the real `_get_service_endpoints` map using
+        # synthetic placeholders (real lab defaults are not embedded in
+        # this fixture). The redactor must scrub every credential-shaped
+        # value out of the JSON-serialized snapshot before it lands in
+        # `aptl lab status --json` or any future archive writer.
+        synthetic = (
+            "PLACEHOLDER_USER_A/PLACEHOLDER_PASSWORD_A",
+            "PLACEHOLDER_USER_B/PLACEHOLDER_PASSWORD_B!",
+        )
+        snap = RangeSnapshot(
+            services=[ServiceEndpoint(credentials=v) for v in synthetic],
+        )
+        serialized = json.dumps(snap.to_dict())
+        for token in synthetic:
+            assert token not in serialized, (
+                f"credential placeholder {token!r} leaked into snapshot JSON"
+            )
 
     def test_range_snapshot_json_roundtrip(self):
         snap = RangeSnapshot(

@@ -82,14 +82,32 @@ _AUTHORIZATION_RE = re.compile(
     rf"(authorization\s*[:=]\s*)(?:([a-z][\w-]*)\s+)?{_VALUE_PATTERN}",
     re.IGNORECASE,
 )
+# `\b` word-boundaries break on compound names because `_` is a word
+# character — `access_token=...` matches neither `\btoken\b` nor
+# `\baccess_token\b`. Use alphanumeric-only boundaries so `_`, `-`, and
+# punctuation all count as separators.
+_KEY_LB = r"(?<![a-zA-Z0-9])"  # left boundary
+_KEY_RB = r"(?![a-zA-Z0-9])"  # right boundary
 _SENSITIVE_KV_RE = re.compile(
-    rf"(\b{_SENSITIVE_KEY_PATTERN}\b\s*[=:]\s*)['\"]?[^'\"&\s,;|]+['\"]?",
+    rf"({_KEY_LB}{_SENSITIVE_KEY_PATTERN}{_KEY_RB}\s*[=:]\s*)['\"]?[^'\"&\s,;|]+['\"]?",
     re.IGNORECASE,
 )
-_BARE_BEARER_RE = re.compile(rf"(\bbearer\s+){_VALUE_PATTERN}", re.IGNORECASE)
-# `--password value` / `--token value` style (long CLI flags).
+_BARE_BEARER_RE = re.compile(
+    rf"({_KEY_LB}bearer\s+){_VALUE_PATTERN}", re.IGNORECASE
+)
+# `--password value` / `--client-secret value` / `--access-token value`
+# style (long CLI flags). The `[\w-]*` prefixes allow compound flag
+# names like `--client-secret`; regex backtracking finds the embedded
+# sensitive token.
 _CLI_FLAG_RE = re.compile(
-    rf"(--{_SENSITIVE_KEY_PATTERN}\s+){_VALUE_PATTERN}",
+    rf"(--[\w-]*{_SENSITIVE_KEY_PATTERN}{_KEY_RB}\s+){_VALUE_PATTERN}",
+    re.IGNORECASE,
+)
+# Cookie / Set-Cookie header: redact the entire body so multi-segment
+# cookies like `Cookie: lang=en; connect.sid=SECRET` are masked in one
+# pass instead of leaving later segments intact.
+_COOKIE_HEADER_RE = re.compile(
+    r"(set-cookie\s*[:=]\s*|cookie\s*[:=]\s*)['\"]?[^'\"\r\n]+['\"]?",
     re.IGNORECASE,
 )
 # URL userinfo: `scheme://user:password@host/path`. Preserve user (often
@@ -101,9 +119,13 @@ _PEM_BLOCK_RE = re.compile(
     r"(-----BEGIN[^-]*-----).*?(-----END[^-]*-----)",
     re.DOTALL,
 )
-# Recognizes `--<sensitive>` as a standalone token (used by array-pair
-# detection so adjacent positional values get redacted).
-_CLI_FLAG_TOKEN_RE = re.compile(rf"^--{_SENSITIVE_KEY_PATTERN}$", re.IGNORECASE)
+# Recognizes `--<sensitive>` (or compound `--client-secret`,
+# `--access-token`) as a standalone token used by array-pair detection
+# so adjacent positional values get redacted.
+_CLI_FLAG_TOKEN_RE = re.compile(
+    rf"^--[\w-]*{_SENSITIVE_KEY_PATTERN}{_KEY_RB}$",
+    re.IGNORECASE,
+)
 
 
 def _redact_authorization(match: "re.Match[str]") -> str:
@@ -130,6 +152,9 @@ def _redact_string(value: str) -> str:
     # as `key=value`).
     out = _PEM_BLOCK_RE.sub(rf"\1{REDACTED}\2", value)
     out = _AUTHORIZATION_RE.sub(_redact_authorization, out)
+    # Cookie before SENSITIVE_KV so the full header body is masked in one
+    # pass (otherwise SENSITIVE_KV stops at `;` and leaves later segments).
+    out = _COOKIE_HEADER_RE.sub(rf"\1{REDACTED}", out)
     out = _SENSITIVE_KV_RE.sub(rf"\1{REDACTED}", out)
     out = _BARE_BEARER_RE.sub(rf"\1{REDACTED}", out)
     out = _CLI_FLAG_RE.sub(rf"\1{REDACTED}", out)

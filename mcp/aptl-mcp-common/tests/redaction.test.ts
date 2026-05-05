@@ -254,6 +254,41 @@ describe('redact - string content traversal', () => {
     expect(out.command).toContain('[REDACTED]');
   });
 
+  it('redacts multi-segment Cookie header', () => {
+    // `;`-delimited cookie segments must all be masked, not just the
+    // first one — a Cookie header is one credential blob.
+    const out = redact({
+      command:
+        "curl -H 'Cookie: lang=en; connect.sid=SECRET_VALUE' https://x",
+    }) as { command: string };
+    expect(out.command).not.toContain('lang=en');
+    expect(out.command).not.toContain('SECRET_VALUE');
+    expect(out.command).toContain('Cookie: [REDACTED]');
+  });
+
+  it('redacts Set-Cookie response header', () => {
+    const out = redact({
+      text: 'Set-Cookie: sessionId=abc.def; Path=/; HttpOnly',
+    }) as { text: string };
+    expect(out.text).not.toContain('sessionId=abc.def');
+    expect(out.text).toContain('Set-Cookie: [REDACTED]');
+  });
+
+  it.each([
+    ['access_token=SECRET_AT', 'SECRET_AT'],
+    ['refresh_token=SECRET_RT', 'SECRET_RT'],
+    ['client_secret=SECRET_CS', 'SECRET_CS'],
+    ['db_password=SECRET_DB', 'SECRET_DB'],
+    ['--client-secret SECRET_CLI', 'SECRET_CLI'],
+    ['--access-token SECRET_AT2', 'SECRET_AT2'],
+  ])('redacts compound credential name in %s', (input, leakToken) => {
+    // `_` and `-` must not block matching — `\b<key>\b` boundaries
+    // would fail because `_` is a word character.
+    const out = redact({ command: input }) as { command: string };
+    expect(out.command).not.toContain(leakToken);
+    expect(out.command).toContain(REDACTED);
+  });
+
   it('redacts URL userinfo password', () => {
     const out = redact({
       url: 'https://alice:hunter2@host.example.com/path',

@@ -234,6 +234,39 @@ class TestStringContentTraversal:
         assert "session=xyz" not in out["command"]
         assert "[REDACTED]" in out["command"]
 
+    def test_redacts_multi_segment_cookie_header(self):
+        # `;`-delimited cookie segments must all be masked, not just the
+        # first one — a Cookie header is one credential blob.
+        out = redact(
+            {"command": "curl -H 'Cookie: lang=en; connect.sid=SECRET_VALUE' https://x"}
+        )
+        assert "lang=en" not in out["command"]
+        assert "SECRET_VALUE" not in out["command"]
+        assert "Cookie: [REDACTED]" in out["command"]
+
+    def test_redacts_set_cookie_response_header(self):
+        out = redact({"text": "Set-Cookie: sessionId=abc.def; Path=/; HttpOnly"})
+        assert "sessionId=abc.def" not in out["text"]
+        assert "Set-Cookie: [REDACTED]" in out["text"]
+
+    @pytest.mark.parametrize(
+        "input_str,leak_token",
+        [
+            ("access_token=SECRET_AT", "SECRET_AT"),
+            ("refresh_token=SECRET_RT", "SECRET_RT"),
+            ("client_secret=SECRET_CS", "SECRET_CS"),
+            ("db_password=SECRET_DB", "SECRET_DB"),
+            ("--client-secret SECRET_CLI", "SECRET_CLI"),
+            ("--access-token SECRET_AT2", "SECRET_AT2"),
+        ],
+    )
+    def test_redacts_compound_credential_names(self, input_str, leak_token):
+        # `_` and `-` must not block matching — `\b<key>\b` boundaries
+        # would fail because `_` is a word character.
+        out = redact({"command": input_str})
+        assert leak_token not in out["command"]
+        assert REDACTED in out["command"]
+
     def test_redacts_url_userinfo_password(self):
         out = redact({"url": "https://alice:hunter2@host.example.com/path"})
         # password masked, user kept for diagnostics, host preserved

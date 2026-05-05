@@ -77,25 +77,36 @@ const AUTHORIZATION_PATTERN = new RegExp(
   String.raw`(authorization\s*[:=]\s*)(?:([a-z][\w-]*)\s+)?${VALUE_PATTERN}`,
   'gi',
 );
+// `\b` word-boundaries break on compound names because `_` is a word
+// character — `access_token=...` matches neither `\btoken\b` nor
+// `\baccess_token\b`. Use alphanumeric-only boundaries so `_`, `-`, and
+// punctuation all count as separators.
+const KEY_LB = String.raw`(?<![a-zA-Z0-9])`;
+const KEY_RB = String.raw`(?![a-zA-Z0-9])`;
 // `key=value` or `key: value` for any sensitive token. Stops at common
 // delimiters so URL query strings and shell key/value pairs mask only
 // the value, not the surrounding context.
 const SENSITIVE_KV_PATTERN = new RegExp(
-  String.raw`(\b${SENSITIVE_KEY_PATTERN}\b\s*[=:]\s*)['"]?[^'"&\s,;|]+['"]?`,
+  String.raw`(${KEY_LB}${SENSITIVE_KEY_PATTERN}${KEY_RB}\s*[=:]\s*)['"]?[^'"&\s,;|]+['"]?`,
   'gi',
 );
 // Bare `Bearer <token>` (no Authorization: prefix).
 const BARE_BEARER_PATTERN = new RegExp(
-  String.raw`(\bbearer\s+)${VALUE_PATTERN}`,
+  String.raw`(${KEY_LB}bearer\s+)${VALUE_PATTERN}`,
   'gi',
 );
-// `--password value` / `--token value` — long CLI flag with a separate
-// space-separated value (the `key=value` form is already covered by
-// SENSITIVE_KV_PATTERN).
+// `--password value` / `--client-secret value` / `--access-token value`
+// style (long CLI flags). The `[\w-]*` prefix allows compound flag
+// names; regex backtracking finds the embedded sensitive token.
 const CLI_FLAG_PATTERN = new RegExp(
-  String.raw`(--${SENSITIVE_KEY_PATTERN}\s+)${VALUE_PATTERN}`,
+  String.raw`(--[\w-]*${SENSITIVE_KEY_PATTERN}${KEY_RB}\s+)${VALUE_PATTERN}`,
   'gi',
 );
+// Cookie / Set-Cookie header: redact the entire body so multi-segment
+// cookies like `Cookie: lang=en; connect.sid=SECRET` are masked in one
+// pass instead of leaving later segments intact.
+const COOKIE_HEADER_PATTERN =
+  /(set-cookie\s*[:=]\s*|cookie\s*[:=]\s*)['"]?[^'"\r\n]+['"]?/gi;
 // URL userinfo: `scheme://user:password@host/path`. Preserve user (often
 // useful for diagnostics) and mask the password segment.
 const URL_USERINFO_PATTERN = /(:\/\/[^/:@\s]+:)[^@\s]+(@)/gi;
@@ -104,10 +115,11 @@ const URL_USERINFO_PATTERN = /(:\/\/[^/:@\s]+:)[^@\s]+(@)/gi;
 // non-greedy so adjacent blocks are masked separately.
 const PEM_BLOCK_PATTERN =
   /(-----BEGIN[^-]*-----)[\s\S]*?(-----END[^-]*-----)/g;
-// Recognizes `--<sensitive>` as a standalone token (used by array-pair
-// detection so adjacent positional values get redacted).
+// Recognizes `--<sensitive>` (or compound `--client-secret`,
+// `--access-token`) as a standalone token used by array-pair detection
+// so adjacent positional values get redacted.
 const CLI_FLAG_TOKEN_PATTERN = new RegExp(
-  `^--${SENSITIVE_KEY_PATTERN}$`,
+  String.raw`^--[\w-]*${SENSITIVE_KEY_PATTERN}${KEY_RB}$`,
   'i',
 );
 
@@ -142,6 +154,9 @@ function redactString(value: string): string {
   // Bearer; running it before the others keeps a single `[REDACTED]` token
   // in the output).
   out = out.replaceAll(AUTHORIZATION_PATTERN, redactAuthorizationHeader);
+  // Cookie before SENSITIVE_KV so the full header body is masked in one
+  // pass (otherwise SENSITIVE_KV stops at `;` and leaves later segments).
+  out = out.replaceAll(COOKIE_HEADER_PATTERN, `$1${REDACTED}`);
   out = out.replaceAll(SENSITIVE_KV_PATTERN, `$1${REDACTED}`);
   out = out.replaceAll(BARE_BEARER_PATTERN, `$1${REDACTED}`);
   out = out.replaceAll(CLI_FLAG_PATTERN, `$1${REDACTED}`);

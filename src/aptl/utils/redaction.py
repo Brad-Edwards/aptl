@@ -88,8 +88,12 @@ _AUTHORIZATION_RE = re.compile(
 # punctuation all count as separators.
 _KEY_LB = r"(?<![a-zA-Z0-9])"  # left boundary
 _KEY_RB = r"(?![a-zA-Z0-9])"  # right boundary
+# Capture leading and trailing quotes as separate groups so the
+# replacement preserves them (otherwise wrapping `'<value>'` /
+# `"<value>"` loses the closing quote, corrupting downstream
+# diagnostic structure).
 _SENSITIVE_KV_RE = re.compile(
-    rf"({_KEY_LB}{_SENSITIVE_KEY_PATTERN}{_KEY_RB}\s*[=:]\s*)['\"]?[^'\"&\s,;|]+['\"]?",
+    rf"({_KEY_LB}{_SENSITIVE_KEY_PATTERN}{_KEY_RB}\s*[=:]\s*['\"]?)([^'\"&\s,;|]+)(['\"]?)",
     re.IGNORECASE,
 )
 _BARE_BEARER_RE = re.compile(
@@ -105,9 +109,12 @@ _CLI_FLAG_RE = re.compile(
 )
 # Cookie / Set-Cookie header: redact the entire body so multi-segment
 # cookies like `Cookie: lang=en; connect.sid=SECRET` are masked in one
-# pass instead of leaving later segments intact.
+# pass instead of leaving later segments intact. Capture the leading and
+# trailing quotes (when present) as separate groups so the replacement
+# can put them back — otherwise a wrapping `'...'` loses its closing
+# quote.
 _COOKIE_HEADER_RE = re.compile(
-    r"(set-cookie\s*[:=]\s*|cookie\s*[:=]\s*)['\"]?[^'\"\r\n]+['\"]?",
+    r"((?:set-cookie|cookie)\s*[:=]\s*['\"]?)([^'\"\r\n]+)(['\"]?)",
     re.IGNORECASE,
 )
 # URL userinfo: `scheme://user:password@host/path`. Preserve user (often
@@ -154,8 +161,8 @@ def _redact_string(value: str) -> str:
     out = _AUTHORIZATION_RE.sub(_redact_authorization, out)
     # Cookie before SENSITIVE_KV so the full header body is masked in one
     # pass (otherwise SENSITIVE_KV stops at `;` and leaves later segments).
-    out = _COOKIE_HEADER_RE.sub(rf"\1{REDACTED}", out)
-    out = _SENSITIVE_KV_RE.sub(rf"\1{REDACTED}", out)
+    out = _COOKIE_HEADER_RE.sub(rf"\1{REDACTED}\3", out)
+    out = _SENSITIVE_KV_RE.sub(rf"\1{REDACTED}\3", out)
     out = _BARE_BEARER_RE.sub(rf"\1{REDACTED}", out)
     out = _CLI_FLAG_RE.sub(rf"\1{REDACTED}", out)
     out = _URL_USERINFO_RE.sub(rf"\1{REDACTED}\2", out)

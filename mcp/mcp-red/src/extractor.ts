@@ -145,38 +145,34 @@ function tokenize(command: string): Token[] {
   let inSingle = false;
   let inDouble = false;
   let escaped = false;
-  for (let i = 0; i < command.length; i++) {
-    const ch = command[i];
+  const finish = () => {
+    if (current.length > 0) {
+      tokens.push({ text: current, quoted });
+      current = '';
+      quoted = false;
+    }
+  };
+  for (const ch of command) {
     if (escaped) {
       current += ch;
       escaped = false;
-      continue;
-    }
-    if (ch === '\\') {
+    } else if (ch === '\\') {
       escaped = true;
-      continue;
-    }
-    if (!inDouble && ch === "'") {
+    } else if (!inDouble && ch === "'") {
       inSingle = !inSingle;
       quoted = true;
-      continue;
-    }
-    if (!inSingle && ch === '"') {
+    } else if (!inSingle && ch === '"') {
       inDouble = !inDouble;
       quoted = true;
-      continue;
+    } else if (inSingle || inDouble) {
+      current += ch;
+    } else if (/\s/.test(ch)) {
+      finish();
+    } else {
+      current += ch;
     }
-    if (!inSingle && !inDouble && /\s/.test(ch)) {
-      if (current.length > 0) {
-        tokens.push({ text: current, quoted });
-        current = '';
-        quoted = false;
-      }
-      continue;
-    }
-    current += ch;
   }
-  if (current.length > 0) tokens.push({ text: current, quoted });
+  finish();
   return tokens;
 }
 
@@ -213,7 +209,7 @@ function tryParseIpv6(token: string): string | null {
   if (full) return full[0];
   IPV6_COMPRESSED_RE.lastIndex = 0;
   const compressed = IPV6_COMPRESSED_RE.exec(token);
-  if (compressed && compressed[0].includes(':')) return compressed[0];
+  if (compressed?.[0].includes(':')) return compressed[0];
   return null;
 }
 
@@ -461,7 +457,7 @@ function assignUrlFromMatch(
   const hostportRaw = m[2];
   const path = m[3] ?? '';
   const atIdx = hostportRaw.lastIndexOf('@');
-  const hostport = atIdx !== -1 ? hostportRaw.slice(atIdx + 1) : hostportRaw;
+  const hostport = atIdx >= 0 ? hostportRaw.slice(atIdx + 1) : hostportRaw;
   result.url = `${scheme}://${hostport}${path}`;
   result.protocol = scheme.toLowerCase();
   const host = splitUrlAuthority(hostport, dst);
@@ -469,7 +465,7 @@ function assignUrlFromMatch(
   const v4 = tryParseIpv4(unbracketed);
   if (v4) {
     dst.ip = v4.ip;
-  } else if (tryParseIpv6(unbracketed) !== null) {
+  } else if (tryParseIpv6(unbracketed)) {
     dst.ip = unbracketed;
   } else {
     dst.hostname = host;

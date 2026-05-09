@@ -157,12 +157,10 @@ function outcomeFromNestedOutput(out: unknown): CommandOutcome | null {
   const signal = typeof outObj.signal === 'string' ? outObj.signal : undefined;
   const code = typeof outObj.code === 'number' ? outObj.code : undefined;
   if (signal) {
-    return { success: false, ...(code !== undefined ? { exit_code: code } : {}), signal };
+    return { success: false, ...(code === undefined ? {} : { exit_code: code }), signal };
   }
-  if (code !== undefined) {
-    return { success: code === 0, exit_code: code };
-  }
-  return null;
+  if (code === undefined) return null;
+  return { success: code === 0, exit_code: code };
 }
 
 export function deriveCommandOutcome(

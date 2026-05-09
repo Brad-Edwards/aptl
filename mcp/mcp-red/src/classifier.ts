@@ -553,6 +553,13 @@ export function leadingExecutable(command: string): string {
  * Redirection forms (`2>&1`, `<&3`, `&>file`) are intentionally NOT
  * treated as separators. Callers slice the input at each yielded index.
  */
+function isAmpersandSeparator(command: string, i: number): { is: boolean; advance: number } {
+  const prev = command[i - 1];
+  const next = command[i + 1];
+  if (prev === '>' || prev === '<' || next === '>') return { is: false, advance: 0 };
+  return { is: true, advance: next === '&' ? 2 : 1 };
+}
+
 function* topLevelSeparators(command: string): Generator<{ at: number; advance: number }> {
   let inSingle = false;
   let inDouble = false;
@@ -581,10 +588,8 @@ function* topLevelSeparators(command: string): Generator<{ at: number; advance: 
       continue;
     }
     if (ch === '&') {
-      const prev = command[i - 1];
-      const next = command[i + 1];
-      if (prev === '>' || prev === '<' || next === '>') continue;
-      yield { at: i, advance: next === '&' ? 2 : 1 };
+      const result = isAmpersandSeparator(command, i);
+      if (result.is) yield { at: i, advance: result.advance };
     }
   }
 }
@@ -612,8 +617,7 @@ function tokenize(segment: string): string[] {
   let inSingle = false;
   let inDouble = false;
   let escaped = false;
-  for (let i = 0; i < segment.length; i++) {
-    const ch = segment[i];
+  for (const ch of segment) {
     if (escaped) {
       current += ch;
       escaped = false;

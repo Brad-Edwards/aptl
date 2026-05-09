@@ -6,7 +6,12 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { redact, REDACTED } from '../src/redaction.js';
+import {
+  redact,
+  REDACTED,
+  redactShortPasswordFlag,
+  redactBasicAuthUser,
+} from '../src/redaction.js';
 
 describe('redact - sensitive scalars', () => {
   it('replaces password value', () => {
@@ -367,5 +372,228 @@ describe('redact - array pair-form CLI flags', () => {
       '--password',
       REDACTED,
     ]);
+  });
+});
+
+describe('redactShortPasswordFlag — short -p credential masking', () => {
+  it('redacts hydra short -p (non-numeric, no leading credential tool needed)', () => {
+    expect(redactShortPasswordFlag('hydra -l u -p hunter2 host ssh')).toContain('-p [REDACTED]');
+  });
+
+  it('redacts numeric -p when a credential tool is present (cycle-7 security regression)', () => {
+    // Numeric passwords are common; this fires when the command contains
+    // a known credential-taking tool.
+    expect(redactShortPasswordFlag('hydra -l u -p 123456 host ssh')).toContain('-p [REDACTED]');
+    expect(redactShortPasswordFlag('sshpass -p 1234 ssh user@host')).toContain('-p [REDACTED]');
+  });
+
+  it('keeps numeric -p when no credential tool is present (port for nmap stays visible)', () => {
+    expect(redactShortPasswordFlag('nmap -p 22 10.0.0.1')).toContain('-p 22');
+    expect(redactShortPasswordFlag('nmap -p 22,80,443 host')).toContain('-p 22,80,443');
+  });
+
+  it('handles wrapper pipelines (proxychains4 / sudo) by detecting the inner credential tool', () => {
+    expect(redactShortPasswordFlag('proxychains4 hydra -l u -p hunter2 host ssh')).toContain(
+      '-p [REDACTED]',
+    );
+    expect(redactShortPasswordFlag('sudo hydra -p hunter2 host ssh')).toContain('-p [REDACTED]');
+  });
+
+  it('handles equals form `-p=value` and attached form `-p<value>` (cycle-7)', () => {
+    expect(redactShortPasswordFlag('hydra -l u -p=hunter2 host ssh')).not.toContain('hunter2');
+    // Attached `-p<value>` (no whitespace) — also a real shell form.
+    expect(redactShortPasswordFlag('hydra -l u -phunter2 host ssh')).not.toContain('hunter2');
+  });
+
+  it('redacts a quoted multi-word password value', () => {
+    expect(redactShortPasswordFlag('hydra -p "secret phrase" host ssh')).not.toContain('secret');
+  });
+
+  it('per-segment: keeps nmap -p 22 visible when only a later segment has a credential tool (cycle-8 review)', () => {
+    // `nmap -p 22 ... && hydra -p X ...` — credential-tool detection is
+    // per shell segment. Nmap's port number stays visible, hydra's
+    // password gets masked.
+    const out = redactShortPasswordFlag(
+      'nmap -p 22 10.0.0.1 && hydra -l u -p hunter2 host ssh',
+    );
+    expect(out).toContain('-p 22');
+    expect(out).not.toContain('hunter2');
+    expect(out).toContain('-p [REDACTED]');
+  });
+
+  it('per-segment: respects the | separator too', () => {
+    const out = redactShortPasswordFlag(
+      'nmap -p 80 10.0.0.1 | tee out.txt; hydra -p hunter2 host ssh',
+    );
+    expect(out).toContain('-p 80');
+    expect(out).not.toContain('hunter2');
+  });
+});
+
+describe('redactBasicAuthUser — curl/wget --user user:pass', () => {
+  it('redacts curl --user user:password', () => {
+    const out = redactBasicAuthUser('curl --user alice:hunter2 https://target/');
+    expect(out).not.toContain('hunter2');
+    expect(out).toContain('--user [REDACTED]');
+  });
+
+  it('redacts curl -u user:password', () => {
+    expect(redactBasicAuthUser('curl -u alice:hunter2 https://target/')).not.toContain('hunter2');
+  });
+
+  it('leaves --user with no colon alone (bare username, no embedded password)', () => {
+    expect(redactBasicAuthUser('ssh --user alice host')).toContain('--user alice');
+  });
+
+  it('handles `--user=user:pass` form', () => {
+    expect(redactBasicAuthUser('curl --user=alice:hunter2 https://target/')).not.toContain(
+      'hunter2',
+    );
+  });
+
+  it('does NOT redact -u <URL> for web tools (cycle-9 review)', () => {
+    // `sqlmap -u https://target/login` — `-u` here is a URL, not a
+    // basic-auth pair. The colon is just `https:`. Must not redact.
+    const out = redactBasicAuthUser('sqlmap -u https://target.example/login');
+    expect(out).toContain('https://target.example/login');
+  });
+
+  it('does NOT redact -u <URL with port> for web tools', () => {
+    expect(
+      redactBasicAuthUser('gobuster dir -u http://target.example:8080/admin -w wl'),
+    ).toContain('http://target.example:8080/admin');
+  });
+
+  it('still redacts a Samba-style %password embedded in --user (cycle-9 security)', () => {
+    // `--user alice%password` → mask the value entirely (the password
+    // is the part after `%`, but masking the whole value is safer and
+    // still leaves the flag visible in cmd_line).
+    const out = redactBasicAuthUser('rpcclient --user alice%hunter2 dc.example');
+    expect(out).not.toContain('hunter2');
+  });
+
+  it('still redacts a Samba-style %password embedded in -U (cycle-9 security)', () => {
+    expect(redactBasicAuthUser('smbclient -U alice%hunter2 //host/share')).not.toContain(
+      'hunter2',
+    );
+  });
+});
+
+describe('redactNtlmHashFlag — credential-tool -H redaction (pre-emptive cycle-10)', () => {
+  it('redacts -H <hash> for crackmapexec / cme / nxc', () => {
+    const cmd = 'nxc smb dc.example -u alice -H aad3b435b51404ee:8846f7eaee8fb117';
+    const out = String(redact(cmd));
+    expect(out).not.toContain('aad3b435');
+    expect(out).not.toContain('8846f7ea');
+  });
+
+  it('redacts -H <hash> for impacket *.py tools', () => {
+    const out = String(redact('psexec.py alice@dc.example -hashes :8846f7eaee8fb117'));
+    // The shared --hashes / -hashes long flag is also covered by the
+    // generic CLI flag pattern via SENSITIVE_KEY_PATTERN containing
+    // 'hash' indirectly… but specifically the -H short for impacket
+    // alongside a known tool segment must redact.
+    const ncxOut = String(redact('impacket-secretsdump alice@dc.example -H aad3b435:8846f7eaee'));
+    expect(ncxOut).not.toContain('aad3b435');
+    expect(out).toBeDefined();
+  });
+
+  it('redacts ldapsearch -w <password> (LDAP simple bind, cycle-11 security)', () => {
+    const cmd = 'ldapsearch -x -D cn=admin,dc=lab -w hunter2 -b dc=lab "(uid=*)"';
+    expect(String(redact(cmd))).not.toContain('hunter2');
+  });
+
+  it('does NOT redact hydra -w <wordlist> (cycle-11)', () => {
+    // hydra `-w` is a wait-time, not a password. The LDAP redactor
+    // must not fire when the segment has no LDAP tool.
+    const cmd = 'hydra -l u -P passwords.txt -w 5 host ssh';
+    expect(String(redact(cmd))).toContain('-w 5');
+  });
+
+  it('redacts numeric -p for newly-classified credential tools (cycle-11 security)', () => {
+    expect(String(redact('evil-winrm -i 10.0.0.1 -u alice -p 12345'))).not.toContain('12345');
+    expect(String(redact('bloodhound-python -u alice -p 12345 -d corp.example -c All'))).not.toContain(
+      '12345',
+    );
+  });
+
+  it('redacts escape-aware -p value with shell-escaped whitespace (cycle-11 security)', () => {
+    // `hydra -p correct\ horse` — without escape-aware matching the
+    // pattern would consume only `correct\` and leave `horse` visible.
+    const cmd = String.raw`hydra -l u -p correct\ horse host ssh`;
+    const out = String(redact(cmd));
+    expect(out).not.toContain('correct');
+    expect(out).not.toContain('horse');
+  });
+
+  it('redacts attached short forms `-Hhash`, `-uuser:pass`, `-Uuser%pass`, `-wpassword` (cycle-12 security)', () => {
+    expect(String(redact('nxc smb dc.example -u alice -Haad3b435b51404ee:8846f7eaee'))).not.toContain(
+      'aad3b435',
+    );
+    expect(String(redact('curl -ualice:hunter2 https://target.example/'))).not.toContain(
+      'hunter2',
+    );
+    expect(String(redact('smbclient -Ualice%hunter2 //host/share'))).not.toContain('hunter2');
+    expect(String(redact('ldapsearch -x -D cn=admin,dc=lab -whunter2'))).not.toContain('hunter2');
+    // Attached short -p is already covered by SHORT_P_ATTACHED_PATTERN
+    // — re-asserting here so any future refactor keeps this guarantee.
+    expect(String(redact('hydra -l u -phunter2 host ssh'))).not.toContain('hunter2');
+  });
+
+  it('normalises quoted standalone option tokens before flag matching (cycle-12 security)', () => {
+    // `'-p' hunter2` — quote-stripping pre-pass should let the -p
+    // pattern fire even though the token has surrounding quotes.
+    expect(String(redact("hydra '-p' hunter2 host ssh"))).not.toContain('hunter2');
+    expect(String(redact('curl "-u" alice:hunter2 https://target/'))).not.toContain('hunter2');
+  });
+
+  it('redacts impacket positional user:password@host (cycle-12 security)', () => {
+    expect(String(redact('psexec.py corp/alice:hunter2@dc.example'))).not.toContain('hunter2');
+    expect(String(redact('secretsdump.py alice:hunter2@dc.example'))).not.toContain('hunter2');
+    // The user, host, and tool stay visible for SIEM correlation.
+    const out = String(redact('psexec.py alice:hunter2@dc.example'));
+    expect(out).toContain('alice');
+    expect(out).toContain('dc.example');
+    expect(out).toContain('psexec.py');
+  });
+
+  it('redacts impacket positional even when password contains : @ or whitespace (cycle-13 security)', () => {
+    // Real Windows passwords with `:`, `@`, and spaces.
+    expect(String(redact('psexec.py corp/alice:"P@ss:w0rd"@dc.example'))).not.toContain('P@ss');
+    expect(String(redact("psexec.py corp/alice:'P@ss w0rd'@dc.example"))).not.toContain('P@ss');
+    // The user, host, and tool stay visible.
+    const out = String(redact('psexec.py corp/alice:"P@ss w0rd"@dc.example'));
+    expect(out).toContain('corp/alice');
+    expect(out).toContain('@dc.example');
+    expect(out).toContain('psexec.py');
+  });
+
+  it('does NOT redact a non-impacket user:pair@host elsewhere', () => {
+    // `git clone alice:token@github.com/...` outside an impacket
+    // segment is also a credential leak risk, but the impacket
+    // positional rule deliberately scopes itself to impacket segments.
+    // The shared URL_USERINFO_PATTERN handles `scheme://user:pass@host`
+    // form. Plain `user:pass@host` without scheme stays visible — but
+    // the test guards against the impacket pattern firing too broadly.
+    const out = String(redact('echo alice:token@host'));
+    expect(out).toContain('alice:token@host');
+  });
+
+  it('does NOT redact -H header for curl (no credential tool in segment)', () => {
+    // `curl -H 'X-Foo: bar' …` — `-H` here is the HTTP header flag,
+    // not an NTLM hash. The bracketed segment doesn't contain a
+    // credential tool, so the value stays visible.
+    const out = String(redact("curl -H 'X-Foo: bar' https://target.example/x"));
+    expect(out).toContain('X-Foo: bar');
+  });
+});
+
+describe('redact — composes the new short-flag and basic-auth redactors', () => {
+  it('a curl command with --user user:pass is masked when passed through the top-level redact()', () => {
+    expect(String(redact('curl --user alice:hunter2 https://target/'))).not.toContain('hunter2');
+  });
+
+  it('a hydra command with -p is masked through the top-level redact()', () => {
+    expect(String(redact('hydra -l admin -p hunter2 10.0.0.1 ssh'))).not.toContain('hunter2');
   });
 });

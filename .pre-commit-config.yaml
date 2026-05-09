@@ -59,6 +59,20 @@ repos:
         pass_filenames: false
         files: ^mcp/aptl-mcp-common/
 
+      - id: vitest-mcp-red
+        name: MCP TypeScript tests (mcp-red vitest)
+        # mcp-red consumes aptl-mcp-common via a `file:` dependency. npm
+        # copies the build artifact at install time, so any common change
+        # must propagate to mcp-red's node_modules before vitest runs.
+        # `npm install` (no package arg) re-resolves dependencies from
+        # this package.json, which honours the local `file:` entry — using
+        # `npm install <pkg>` would treat it as a registry package spec
+        # and could mutate the manifest/lockfile.
+        entry: bash -c 'cd mcp/aptl-mcp-common && { [ -d node_modules ] || npm install --silent; } && npm run build --silent && cd ../mcp-red && rm -rf node_modules/aptl-mcp-common && npm install --no-audit --no-fund --silent && npx vitest run'
+        language: system
+        pass_filenames: false
+        files: ^mcp/(aptl-mcp-common|mcp-red)/
+
       - id: vitest-web
         name: Web frontend tests (vitest)
         entry: bash -c 'cd web && { [ -d node_modules ] || npm install --silent; } && npx svelte-kit sync && npx vitest run'

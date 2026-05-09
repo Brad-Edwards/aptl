@@ -33,7 +33,7 @@ jobs:
       # exist for local pre-commit safety, not CI redundancy.
       - run: pre-commit run --all-files --show-diff-on-failure
         env:
-          SKIP: pytest,vitest-mcp-common,vitest-web
+          SKIP: pytest,vitest-mcp-common,vitest-mcp-red,vitest-web
 
   python-tests:
     name: Python tests + coverage
@@ -67,14 +67,64 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - run: |
+      - name: aptl-mcp-common — install, build, test
+        # `npm run build` runs explicitly before mcp-red copies the build
+        # output. The `prepare` script also builds, but ordering across
+        # `npm install` and `npx vitest run --coverage` is not load-bearing
+        # — the explicit build keeps the contract obvious and the mcp-red
+        # step below dependable.
+        # The `sed` rewrites LCOV `SF:src/...` paths to repo-root-relative
+        # `SF:mcp/aptl-mcp-common/src/...` so SonarCloud can match coverage
+        # against the actual project tree (Sonar resolves SF: paths against
+        # `sonar.sources`, which is anchored at the repo root).
+        run: |
           cd mcp/aptl-mcp-common
           npm install
+          npm run build
           npx vitest run --coverage
+          sed -i 's|^SF:|SF:mcp/aptl-mcp-common/|' coverage/lcov.info
+      - name: mcp-red — install (rebuilds against fresh common), test, and coverage
+        # mcp-red consumes aptl-mcp-common via `file:`. npm install in
+        # mcp-red copies the *current* build artifact, so the explicit
+        # `npm run build` above must have produced fresh `build/` first.
+        # `sed` rewrites LCOV paths so SonarCloud matches coverage against
+        # `mcp/mcp-red/src/...` (see aptl-mcp-common step for the same
+        # reasoning).
+        run: |
+          cd mcp/mcp-red
+          rm -rf node_modules/aptl-mcp-common
+          npm install --no-audit --no-fund
+          npx vitest run --coverage
+          sed -i 's|^SF:|SF:mcp/mcp-red/|' coverage/lcov.info
+      - name: dependent MCPs — rebuild against fresh common (build-only verification)
+        # Plan rules require every aptl-mcp-common consumer to rebuild
+        # and pass tests when common changes. None of these dependents
+        # currently ship vitest suites, but a build pass catches type-
+        # level breakage from common API drift. When any of these
+        # packages add tests, extend the matrix below to also run
+        # `npx vitest run`.
+        run: |
+          for pkg in mcp-wazuh mcp-soar mcp-network mcp-indexer mcp-reverse mcp-threatintel mcp-casemgmt; do
+            echo "=== $pkg ==="
+            cd "mcp/$pkg"
+            rm -rf node_modules/aptl-mcp-common
+            npm install --no-audit --no-fund
+            if [ -f tsconfig.build.json ]; then
+              npx tsc -p tsconfig.build.json
+            else
+              npx tsc
+            fi
+            cd -
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: mcp-coverage
           path: mcp/aptl-mcp-common/coverage/
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-red-coverage
+          path: mcp/mcp-red/coverage/
           retention-days: 7
 
   web-tests:
@@ -349,6 +399,10 @@ jobs:
         with:
           name: mcp-coverage
           path: mcp/aptl-mcp-common/coverage/
+      - uses: actions/download-artifact@v4
+        with:
+          name: mcp-red-coverage
+          path: mcp/mcp-red/coverage/
       - uses: actions/download-artifact@v4
         with:
           name: web-coverage

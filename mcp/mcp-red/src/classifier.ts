@@ -563,29 +563,37 @@ function isAmpersandSeparator(command: string, i: number): { is: boolean; advanc
   return { is: true, advance: next === '&' ? 2 : 1 };
 }
 
+interface SeparatorScanState {
+  inSingle: boolean;
+  inDouble: boolean;
+  escaped: boolean;
+}
+
+function advanceSeparatorState(state: SeparatorScanState, ch: string): boolean {
+  if (state.escaped) {
+    state.escaped = false;
+    return true;
+  }
+  if (ch === '\\') {
+    state.escaped = true;
+    return true;
+  }
+  if (!state.inDouble && ch === "'") {
+    state.inSingle = !state.inSingle;
+    return true;
+  }
+  if (!state.inSingle && ch === '"') {
+    state.inDouble = !state.inDouble;
+    return true;
+  }
+  return state.inSingle || state.inDouble;
+}
+
 function* topLevelSeparators(command: string): Generator<{ at: number; advance: number }> {
-  let inSingle = false;
-  let inDouble = false;
-  let escaped = false;
+  const state: SeparatorScanState = { inSingle: false, inDouble: false, escaped: false };
   for (let i = 0; i < command.length; i++) {
     const ch = command[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\') {
-      escaped = true;
-      continue;
-    }
-    if (!inDouble && ch === "'") {
-      inSingle = !inSingle;
-      continue;
-    }
-    if (!inSingle && ch === '"') {
-      inDouble = !inDouble;
-      continue;
-    }
-    if (inSingle || inDouble) continue;
+    if (advanceSeparatorState(state, ch)) continue;
     if (ch === '|' || ch === ';') {
       yield { at: i, advance: 1 };
       continue;

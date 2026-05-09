@@ -572,7 +572,12 @@ function redactString(value: string): string {
 //   - squot:   `user:'VALUE'@host`          — single-quoted.
 // Use the LAST unescaped `@` (not the first) as the host separator so
 // passwords containing `@` are masked correctly.
-const IMPACKET_POSITIONAL_PATTERN = /([\w\\/.-]+):(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|((?:\\.|\S)+?))@([\w.-]+)(?=\s|$|[;|&])/g;
+// Split into per-value-form patterns to keep each regex under Sonar's
+// regex-complexity threshold (S5843). The combined form was ~28; each
+// split form is ~15-18.
+const IMPACKET_POSITIONAL_DQUOTE = /([\w\\/.-]+):"((?:[^"\\]|\\.)*)"@([\w.-]+)(?=\s|$|[;|&])/g;
+const IMPACKET_POSITIONAL_SQUOTE = /([\w\\/.-]+):'((?:[^'\\]|\\.)*)'@([\w.-]+)(?=\s|$|[;|&])/g;
+const IMPACKET_POSITIONAL_BARE = /([\w\\/.-]+):((?:\\.|\S)+?)@([\w.-]+)(?=\s|$|[;|&])/g;
 
 const IMPACKET_TOOL_REGEXES: readonly RegExp[] = [
   /(^|[\s|;&])(?:[\w./-]+\/)?(impacket-[\w-]+)(?:\s|$)/i,
@@ -585,28 +590,25 @@ function segmentHasImpacketTool(segment: string): boolean {
 
 export function redactImpacketPositionalAuth(command: string): string {
   const segments = splitTopLevelSegments(command);
-  return command.replace(
-    IMPACKET_POSITIONAL_PATTERN,
-    (
-      match,
-      user: string,
-      _passDQ: string | undefined,
-      _passSQ: string | undefined,
-      _passBare: string | undefined,
-      host: string,
-      offset: number,
-    ) => {
-      let inImpacket = false;
-      for (const s of segments) {
-        if (offset >= s.start && offset < s.end) {
-          inImpacket = segmentHasImpacketTool(command.slice(s.start, s.end));
-          break;
-        }
+  const inImpacketSegment = (offset: number): boolean => {
+    for (const s of segments) {
+      if (offset >= s.start && offset < s.end) {
+        return segmentHasImpacketTool(command.slice(s.start, s.end));
       }
-      if (!inImpacket) return match;
-      return `${user}:${REDACTED}@${host}`;
-    },
-  );
+    }
+    return false;
+  };
+  const replace = (
+    match: string,
+    user: string,
+    _pass: string,
+    host: string,
+    offset: number,
+  ): string => (inImpacketSegment(offset) ? `${user}:${REDACTED}@${host}` : match);
+  let out = command.replace(IMPACKET_POSITIONAL_DQUOTE, replace);
+  out = out.replace(IMPACKET_POSITIONAL_SQUOTE, replace);
+  out = out.replace(IMPACKET_POSITIONAL_BARE, replace);
+  return out;
 }
 
 function redactArray(items: unknown[]): unknown[] {

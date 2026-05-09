@@ -191,57 +191,84 @@ const LDAP_PASSWORD_TOOLS: ReadonlySet<string> = new Set([
 // independent shell segments. Per-flag credential-tool detection scans
 // the segment containing the flag, so `nmap -p 22 ... && hydra -p X`
 // keeps nmap's port visible while masking hydra's password.
+interface SegmentScanState {
+  inSingle: boolean;
+  inDouble: boolean;
+  escaped: boolean;
+}
+
+/**
+ * Update quote/escape state for one character. Returns true if the
+ * caller should skip emitting a separator at this position (because we
+ * are inside a quoted run, in an escape, or just toggled a quote).
+ */
+function advanceQuoteState(state: SegmentScanState, ch: string): boolean {
+  if (state.escaped) {
+    state.escaped = false;
+    return true;
+  }
+  if (ch === '\\') {
+    state.escaped = true;
+    return true;
+  }
+  if (!state.inDouble && ch === "'") {
+    state.inSingle = !state.inSingle;
+    return true;
+  }
+  if (!state.inSingle && ch === '"') {
+    state.inDouble = !state.inDouble;
+    return true;
+  }
+  return state.inSingle || state.inDouble;
+}
+
+function ampersandStep(command: string, i: number): number {
+  const prev = command[i - 1];
+  const next = command[i + 1];
+  if (prev === '>' || prev === '<' || next === '>') return 0; // not a separator
+  return next === '&' ? 2 : 1;
+}
+
 function splitTopLevelSegments(command: string): { start: number; end: number }[] {
   const segments: { start: number; end: number }[] = [];
   let start = 0;
-  let inSingle = false;
-  let inDouble = false;
-  let escaped = false;
+  const state: SegmentScanState = { inSingle: false, inDouble: false, escaped: false };
   for (let i = 0; i < command.length; i++) {
     const ch = command[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\') {
-      escaped = true;
-      continue;
-    }
-    if (!inDouble && ch === "'") {
-      inSingle = !inSingle;
-      continue;
-    }
-    if (!inSingle && ch === '"') {
-      inDouble = !inDouble;
-      continue;
-    }
-    if (inSingle || inDouble) continue;
+    if (advanceQuoteState(state, ch)) continue;
     if (ch === '|' || ch === ';') {
       segments.push({ start, end: i });
       start = i + 1;
       continue;
     }
     if (ch === '&') {
-      const prev = command[i - 1];
-      const next = command[i + 1];
-      if (prev === '>' || prev === '<' || next === '>') continue;
-      segments.push({ start, end: i });
-      // For `&&`, advance past the second `&` too.
-      start = next === '&' ? i + 2 : i + 1;
+      const advance = ampersandStep(command, i);
+      if (advance > 0) {
+        segments.push({ start, end: i });
+        start = i + advance;
+      }
     }
   }
   segments.push({ start, end: command.length });
   return segments;
 }
 
-// Regex literals for the per-segment tool detection. Kept in sync with
-// the Set above by grouping the same tools alphabetically; a unit test
-// pins both sources to the same list. Sonar S6325 prefers literal
-// regexes over `new RegExp(string)` constructions.
-const CREDENTIAL_TOOL_RE = /(^|[\s|;&])(?:[\w./-]+\/)?(bloodhound-python|bloodhound\.py|cme|crackmapexec|crowbar|evil-winrm|getnpusers\.py|getuserspns\.py|hydra|impacket-psexec|impacket-secretsdump|impacket-smbexec|impacket-wmiexec|kerbrute|mariadb|medusa|mysql|mysqladmin|ntlmrelayx\.py|nxc|patator|psexec\.py|redis-cli|secretsdump\.py|smbexec\.py|sshpass|wfuzz|wmiexec\.py)(?:\s|$)/i;
+// Per-segment tool detection. Originally a single big alternation
+// regex; Sonar S5843 flagged the long tool list as over the
+// regex-complexity threshold (~34). Split into smaller batches; a
+// segment matches if ANY batch hits. Each batch stays well under the
+// 20 limit and `.some()` short-circuits once a batch matches.
+const CREDENTIAL_TOOL_REGEXES: readonly RegExp[] = [
+  /(^|[\s|;&])(?:[\w./-]+\/)?(hydra|medusa|patator|crowbar|sshpass|wfuzz|kerbrute)(?:\s|$)/i,
+  /(^|[\s|;&])(?:[\w./-]+\/)?(crackmapexec|cme|nxc|evil-winrm)(?:\s|$)/i,
+  /(^|[\s|;&])(?:[\w./-]+\/)?(bloodhound-python|bloodhound\.py)(?:\s|$)/i,
+  /(^|[\s|;&])(?:[\w./-]+\/)?(mysql|mariadb|mysqladmin|redis-cli)(?:\s|$)/i,
+  /(^|[\s|;&])(?:[\w./-]+\/)?(impacket-psexec|impacket-smbexec|impacket-wmiexec|impacket-secretsdump)(?:\s|$)/i,
+  /(^|[\s|;&])(?:[\w./-]+\/)?(psexec\.py|smbexec\.py|wmiexec\.py|secretsdump\.py|getuserspns\.py|getnpusers\.py|ntlmrelayx\.py)(?:\s|$)/i,
+];
 
 function segmentHasCredentialTool(segment: string): boolean {
-  return CREDENTIAL_TOOL_RE.test(segment);
+  return CREDENTIAL_TOOL_REGEXES.some((re) => re.test(segment));
 }
 
 // Quote- and form-aware short `-p` matcher. Originally a single regex
@@ -547,9 +574,13 @@ function redactString(value: string): string {
 // passwords containing `@` are masked correctly.
 const IMPACKET_POSITIONAL_PATTERN = /([\w\\/.-]+):(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|((?:\\.|\S)+?))@([\w.-]+)(?=\s|$|[;|&])/g;
 
-const IMPACKET_TOOL_RE = /(^|[\s|;&])(?:[\w./-]+\/)?(impacket-[\w-]+|psexec\.py|smbexec\.py|wmiexec\.py|dcomexec\.py|atexec\.py|secretsdump\.py|getuserspns\.py|getnpusers\.py|ntlmrelayx\.py)(?:\s|$)/i;
+const IMPACKET_TOOL_REGEXES: readonly RegExp[] = [
+  /(^|[\s|;&])(?:[\w./-]+\/)?(impacket-[\w-]+)(?:\s|$)/i,
+  /(^|[\s|;&])(?:[\w./-]+\/)?(psexec\.py|smbexec\.py|wmiexec\.py|dcomexec\.py|atexec\.py)(?:\s|$)/i,
+  /(^|[\s|;&])(?:[\w./-]+\/)?(secretsdump\.py|getuserspns\.py|getnpusers\.py|ntlmrelayx\.py)(?:\s|$)/i,
+];
 function segmentHasImpacketTool(segment: string): boolean {
-  return IMPACKET_TOOL_RE.test(segment);
+  return IMPACKET_TOOL_REGEXES.some((re) => re.test(segment));
 }
 
 export function redactImpacketPositionalAuth(command: string): string {

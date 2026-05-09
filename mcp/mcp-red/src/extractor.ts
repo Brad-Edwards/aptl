@@ -703,7 +703,7 @@ export function extractMetadata(
   command: string,
   classification: ActivityClassification,
 ): ExtractedFields {
-  if (!command || !command.trim()) return {};
+  if (!command?.trim()) return {};
   // Extract from the SAME unwrapped surface the classifier classified.
   // `extractionSurface` strips compound-command tails, sudo / env /
   // transparent-wrapper preamble, and `bash -c '<inner>'` quoting so

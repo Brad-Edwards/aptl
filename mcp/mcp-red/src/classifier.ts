@@ -504,38 +504,41 @@ function basename(token: string): string {
   return slash === -1 ? token : token.slice(slash + 1);
 }
 
+/**
+ * Resolve one step of the leading-executable scan.
+ * Returns either a final executable name (string), or the next index
+ * to continue scanning from (number).
+ */
+function resolveLeadingExecStep(tokens: string[], i: number): string | number {
+  const t = tokens[i];
+  if (t === 'sudo') return skipSudoOptions(tokens, i + 1);
+  if (ENV_ASSIGN_RE.test(t)) return i + 1;
+  const exec = basename(t);
+  if (exec === 'sshpass') return skipSshpassOptions(tokens, i + 1);
+  if (SHELL_WRAPPERS.has(exec)) return resolveShellWrapper(tokens, i, exec);
+  if (TRANSPARENT_WRAPPERS.has(exec)) {
+    const flagsTakingArg = WRAPPER_FLAGS_TAKING_ARG[exec] ?? new Set<string>();
+    return skipTransparentWrapperOptions(tokens, i + 1, flagsTakingArg);
+  }
+  return exec;
+}
+
+function resolveShellWrapper(tokens: string[], i: number, fallback: string): string {
+  const cIdx = findShellCToken(tokens, i + 1);
+  if (cIdx !== -1 && cIdx + 1 < tokens.length) {
+    const innerExec = leadingExecutable(tokens[cIdx + 1]);
+    if (innerExec) return innerExec;
+  }
+  return fallback;
+}
+
 export function leadingExecutable(command: string): string {
   const tokens = tokenize(leadingSubCommand(command));
   let i = 0;
   while (i < tokens.length) {
-    const t = tokens[i];
-    if (t === 'sudo') {
-      i = skipSudoOptions(tokens, i + 1);
-      continue;
-    }
-    if (ENV_ASSIGN_RE.test(t)) {
-      i += 1;
-      continue;
-    }
-    const exec = basename(t);
-    if (exec === 'sshpass') {
-      i = skipSshpassOptions(tokens, i + 1);
-      continue;
-    }
-    if (SHELL_WRAPPERS.has(exec)) {
-      const cIdx = findShellCToken(tokens, i + 1);
-      if (cIdx !== -1 && cIdx + 1 < tokens.length) {
-        const innerExec = leadingExecutable(tokens[cIdx + 1]);
-        if (innerExec) return innerExec;
-      }
-      return exec;
-    }
-    if (TRANSPARENT_WRAPPERS.has(exec)) {
-      const flagsTakingArg = WRAPPER_FLAGS_TAKING_ARG[exec] ?? new Set<string>();
-      i = skipTransparentWrapperOptions(tokens, i + 1, flagsTakingArg);
-      continue;
-    }
-    return exec;
+    const step = resolveLeadingExecStep(tokens, i);
+    if (typeof step === 'string') return step;
+    i = step;
   }
   return '';
 }
@@ -611,31 +614,48 @@ export function leadingSubCommand(command: string): string {
   return command;
 }
 
+interface TokenizeStringState {
+  inSingle: boolean;
+  inDouble: boolean;
+  escaped: boolean;
+}
+
+/**
+ * Single-step tokenizer state machine. Returns:
+ *   `'append'`     — append current char to current token
+ *   `'consumed'`   — quote/escape state changed, skip char
+ *   `'whitespace'` — outside quotes, finish current token
+ */
+function tokenizeStep(state: TokenizeStringState, ch: string): 'append' | 'consumed' | 'whitespace' {
+  if (state.escaped) {
+    state.escaped = false;
+    return 'append';
+  }
+  if (ch === '\\') {
+    state.escaped = true;
+    return 'consumed';
+  }
+  if (!state.inDouble && ch === "'") {
+    state.inSingle = !state.inSingle;
+    return 'consumed';
+  }
+  if (!state.inSingle && ch === '"') {
+    state.inDouble = !state.inDouble;
+    return 'consumed';
+  }
+  if (state.inSingle || state.inDouble) return 'append';
+  if (/\s/.test(ch)) return 'whitespace';
+  return 'append';
+}
+
 function tokenize(segment: string): string[] {
   const tokens: string[] = [];
   let current = '';
-  let inSingle = false;
-  let inDouble = false;
-  let escaped = false;
+  const state: TokenizeStringState = { inSingle: false, inDouble: false, escaped: false };
   for (const ch of segment) {
-    if (escaped) {
-      current += ch;
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\') {
-      escaped = true;
-      continue;
-    }
-    if (!inDouble && ch === "'") {
-      inSingle = !inSingle;
-      continue;
-    }
-    if (!inSingle && ch === '"') {
-      inDouble = !inDouble;
-      continue;
-    }
-    if (!inSingle && !inDouble && /\s/.test(ch)) {
+    const action = tokenizeStep(state, ch);
+    if (action === 'consumed') continue;
+    if (action === 'whitespace') {
       if (current.length > 0) {
         tokens.push(current);
         current = '';
@@ -662,7 +682,7 @@ function buildResult(
     category_uid,
     category_name: OCSF_CATEGORY_NAMES[category_uid],
     type_uid: template.class_uid * 100 + template.activity_id,
-    ...(tool !== undefined ? { tool } : {}),
+    ...(tool === undefined ? {} : { tool }),
   };
 }
 

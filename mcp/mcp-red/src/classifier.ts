@@ -424,10 +424,10 @@ const SSHPASS_ARG_FLAGS = ['-p', '-f', '-d', '-P'];
  * bounded.
  */
 function isShellCCluster(token: string): boolean {
-  if (token.length < 2 || token[0] !== '-') return false;
+  if (token.length < 2 || !token.startsWith('-')) return false;
   let sawC = false;
   for (let i = 1; i < token.length; i++) {
-    const ch = token.charCodeAt(i);
+    const ch = token.codePointAt(i) ?? 0;
     const isUpper = ch >= 65 && ch <= 90;
     const isLower = ch >= 97 && ch <= 122;
     if (!isUpper && !isLower) return false;

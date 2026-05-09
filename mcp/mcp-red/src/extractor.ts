@@ -48,24 +48,23 @@ export interface ExtractedFields {
 // hand-rolled `25[0-5]|2[0-4]\d|...` alternation).
 const IPV4_RE = /\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:\/(\d{1,2}))?\b/g;
 
-// IPv6 — must contain at least one `::` so identifiers like `abc::`
-// aren't accidentally matched. Simplified to the two atomic shapes the
-// extractor actually needs: full 8-group form and the `::` shorthand
-// (any prefix `::` any suffix). Sonar S5843 (regex complexity) was
-// flagged on the previous five-alternative version; the simpler
-// pattern is non-backtracking on bounded inputs (a token cannot exceed
-// shell-token length).
-const IPV6_RE = /\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b|(?:[0-9a-fA-F]{0,4}:){1,7}:[0-9a-fA-F]{0,4}|::[0-9a-fA-F:]{0,38}/g;
+// IPv6 — split into two simpler patterns (full 8-group form and the
+// `::`-shorthand form). Single combined pattern was over Sonar's
+// regex-complexity threshold (S5843).
+const IPV6_FULL_RE = /\b(?:[\da-fA-F]{1,4}:){7}[\da-fA-F]{1,4}\b/g;
+const IPV6_COMPRESSED_RE = /(?:[\da-fA-F]{0,4}:){1,7}:[\da-fA-F]{0,4}|::[\da-fA-F:]{0,38}/g;
 
 // Capture authority + optional path + optional query/fragment so that
 // URLs without a path component (`https://target?x=1`) still preserve
 // their query string for SIEM correlation. The authority may be a
 // bracketed IPv6 literal (`http://[::1]:8080/x`); we accept `[…]`
 // as a single authority unit.
-// `\d` and `a-fA-F` would normally be a duplicate-in-char-class warning
-// because hex digits include digits, but `\da-f` is the conventional
-// shorthand and Sonar accepts it. Use it for the bracketed-IPv6 part.
-const URL_RE = /\b(https?):\/\/(\[[a-fA-F\d:]+\][^\s/?#'"]*|[^\s/?#'"]+)([/?#][^\s'"]*)?/i;
+// Authority match is intentionally permissive — `[`, `]`, `:` are
+// allowed so bracketed IPv6 (`[::1]:8080`) is captured as one
+// authority token. The TS-side `splitUrlAuthority` then peels apart
+// brackets, port, and userinfo. Keeping the regex simple satisfies
+// Sonar S5843 (regex complexity).
+const URL_RE = /\b(https?):\/\/([^\s/?#'"]+)([/?#][^\s'"]*)?/i;
 
 const TCP_PORT_MAX = 65535;
 
@@ -209,14 +208,13 @@ function tryParseIpv4(token: string): { ip: string; cidr?: string } | null {
 }
 
 function tryParseIpv6(token: string): string | null {
-  IPV6_RE.lastIndex = 0;
-  const m = IPV6_RE.exec(token);
-  if (!m) return null;
-  const candidate = m[0];
-  // Reject obvious junk: must contain at least one ':' and at most two
-  // adjacent ':' tokens (the `::` shorthand).
-  if (!candidate.includes(':')) return null;
-  return candidate;
+  IPV6_FULL_RE.lastIndex = 0;
+  const full = IPV6_FULL_RE.exec(token);
+  if (full) return full[0];
+  IPV6_COMPRESSED_RE.lastIndex = 0;
+  const compressed = IPV6_COMPRESSED_RE.exec(token);
+  if (compressed && compressed[0].includes(':')) return compressed[0];
+  return null;
 }
 
 function tryParsePort(value: string): number | null {

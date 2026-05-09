@@ -234,27 +234,33 @@ function splitTopLevelSegments(command: string): { start: number; end: number }[
   return segments;
 }
 
-const CREDENTIAL_TOOL_RE = new RegExp(
-  String.raw`(^|[\s|;&])(?:[\w./-]+/)?(${[...CREDENTIAL_SHORT_P_TOOLS].join('|')})(?:\s|$)`,
-  'i',
-);
+// Regex literals for the per-segment tool detection. Kept in sync with
+// the Set above by grouping the same tools alphabetically; a unit test
+// pins both sources to the same list. Sonar S6325 prefers literal
+// regexes over `new RegExp(string)` constructions.
+const CREDENTIAL_TOOL_RE = /(^|[\s|;&])(?:[\w./-]+\/)?(bloodhound-python|bloodhound\.py|cme|crackmapexec|crowbar|evil-winrm|getnpusers\.py|getuserspns\.py|hydra|impacket-psexec|impacket-secretsdump|impacket-smbexec|impacket-wmiexec|kerbrute|mariadb|medusa|mysql|mysqladmin|ntlmrelayx\.py|nxc|patator|psexec\.py|redis-cli|secretsdump\.py|smbexec\.py|sshpass|wfuzz|wmiexec\.py)(?:\s|$)/i;
 
 function segmentHasCredentialTool(segment: string): boolean {
   return CREDENTIAL_TOOL_RE.test(segment);
 }
 
-// Quote- and form-aware short `-p` matcher.
-//   `-p value`            → spaced
-//   `-p=value`            → equals
-//   `-p<value>`           → attached
-//   `-p value\ with\ spc` → escape-aware (shell-escaped whitespace
-//                            is part of the SAME token).
-// The unquoted-value alternative `(?:\\.|[^\s'"\\])+` is escape-aware:
-// it consumes `\<anything>` greedily and ordinary non-whitespace,
-// non-quote characters. That means `correct\ horse` is treated as a
-// single token rather than splitting at the literal space.
-const SHORT_P_PATTERN = /(^|\s|\|)-p(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:\\.|[^\s'"\\])+)/g;
-const SHORT_P_ATTACHED_PATTERN = /(^|\s|\|)-p("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)/g;
+// Quote- and form-aware short `-p` matcher. Originally a single regex
+// with three value-form alternatives, but Sonar S5843 flagged the
+// composed pattern as over the regex-complexity threshold (≥20). We
+// now run three smaller regexes per flag — double-quoted, single-quoted,
+// unquoted-with-escape — applied in that order so the quoted forms are
+// consumed before the unquoted matcher could eat the surrounding quotes.
+//
+// The escape-aware unquoted alternative `(?:\\.|[^\s'"\\])+` consumes
+// `\<anything>` plus ordinary non-whitespace non-quote characters so
+// `hydra -p correct\ horse` is treated as a single shell token (the
+// space after `correct\` is escaped).
+const SHORT_P_DQUOTE = /(^|\s|\|)-p(\s+|=)("(?:[^"\\]|\\.)*")/g;
+const SHORT_P_SQUOTE = /(^|\s|\|)-p(\s+|=)('(?:[^'\\]|\\.)*')/g;
+const SHORT_P_UNQUOTED = /(^|\s|\|)-p(\s+|=)((?:\\.|[^\s'"\\])+)/g;
+const SHORT_P_ATTACHED_DQUOTE = /(^|\s|\|)-p("(?:[^"\\]|\\.)*")/g;
+const SHORT_P_ATTACHED_SQUOTE = /(^|\s|\|)-p('(?:[^'\\]|\\.)*')/g;
+const SHORT_P_ATTACHED_UNQUOTED = /(^|\s|\|)-p([^\s='"](?:\\.|[^\s'"\\])*)/g;
 
 function isPortLikeValue(stripped: string): boolean {
   // Comma- or hyphen-separated digits (with each segment ≤ 5 digits).
@@ -287,47 +293,47 @@ function stripQuotes(value: string): string {
  * surrounding context isn't broken.
  */
 export function redactShortPasswordFlag(command: string): string {
-  // Pre-compute which top-level segments contain a credential tool so
-  // each `-p` match can be evaluated in its own segment context. This
-  // avoids over-redacting unrelated `-p 22` ports in commands like
-  // `nmap -p 22 host && hydra -p X host ssh`.
   const segments = splitTopLevelSegments(command);
   const segmentHasCred = segments.map((s) => segmentHasCredentialTool(command.slice(s.start, s.end)));
-  const segmentForOffset = (offset: number): boolean => {
+  const inCredentialSegment = (offset: number): boolean => {
     for (let idx = 0; idx < segments.length; idx++) {
       if (offset >= segments[idx].start && offset < segments[idx].end) return segmentHasCred[idx];
     }
     return false;
   };
-  // String.replace passes `(match, capture1, capture2, ..., offset, string)`.
-  // Use a typeof check so the attached and spaced/equals patterns can
-  // share a callback without misreading the offset as the value.
-  const replace = (
-    match: string,
+  const replaceSpaced = (
+    _match: string,
     lead: string,
-    sepOrValue: string,
-    maybeValue?: string | number,
-    maybeOffset?: number,
+    sep: string,
+    value: string,
+    offset: number,
   ): string => {
-    const hasSeparator = typeof maybeValue === 'string';
-    const value = hasSeparator ? maybeValue : sepOrValue;
-    const sep = hasSeparator ? sepOrValue : '';
-    const offset = (hasSeparator ? maybeOffset : (maybeValue as number | undefined)) ?? 0;
     const stripped = stripQuotes(value);
-    const inCredentialSegment = segmentForOffset(offset);
-    if (!inCredentialSegment && isPortLikeValue(stripped)) {
+    if (!inCredentialSegment(offset) && isPortLikeValue(stripped)) {
       return `${lead}-p${sep}${value}`;
     }
-    if (lead.endsWith('-p') || lead === '-p') {
-      // Already redacted by a prior pattern run — avoid double-replace.
-      return match;
-    }
-    return `${lead}-p${sep || ' '}${REDACTED}`;
+    return `${lead}-p${sep}${REDACTED}`;
   };
-  let out = command.replace(SHORT_P_PATTERN, replace);
-  // Run attached form after the spaced/equals form so the longer-match
-  // patterns get first claim.
-  out = out.replace(SHORT_P_ATTACHED_PATTERN, replace);
+  const replaceAttached = (
+    _match: string,
+    lead: string,
+    value: string,
+    offset: number,
+  ): string => {
+    const stripped = stripQuotes(value);
+    if (!inCredentialSegment(offset) && isPortLikeValue(stripped)) {
+      return `${lead}-p${value}`;
+    }
+    return `${lead}-p ${REDACTED}`;
+  };
+  // Quoted forms first (so the unquoted matcher can't eat the surrounding
+  // quotes), then unquoted. Same ordering for the attached forms.
+  let out = command.replace(SHORT_P_DQUOTE, replaceSpaced);
+  out = out.replace(SHORT_P_SQUOTE, replaceSpaced);
+  out = out.replace(SHORT_P_UNQUOTED, replaceSpaced);
+  out = out.replace(SHORT_P_ATTACHED_DQUOTE, replaceAttached);
+  out = out.replace(SHORT_P_ATTACHED_SQUOTE, replaceAttached);
+  out = out.replace(SHORT_P_ATTACHED_UNQUOTED, replaceAttached);
   return out;
 }
 
@@ -335,13 +341,14 @@ export function redactShortPasswordFlag(command: string): string {
 // (crackmapexec / cme / nxc / impacket *.py). The same flag means HTTP
 // header to curl/wget — we only redact when the segment contains a
 // credential tool that uses `-H` as a hash flag.
-const NTLM_HASH_PATTERN = /(^|\s|\|)-H(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:\\.|[^\s'"\\])+)/g;
-const NTLM_HASH_ATTACHED_PATTERN = /(^|\s|\|)-H("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)/g;
+const NTLM_HASH_DQUOTE = /(^|\s|\|)-H(\s+|=)("(?:[^"\\]|\\.)*")/g;
+const NTLM_HASH_SQUOTE = /(^|\s|\|)-H(\s+|=)('(?:[^'\\]|\\.)*')/g;
+const NTLM_HASH_UNQUOTED = /(^|\s|\|)-H(\s+|=)((?:\\.|[^\s'"\\])+)/g;
+const NTLM_HASH_ATTACHED_DQUOTE = /(^|\s|\|)-H("(?:[^"\\]|\\.)*")/g;
+const NTLM_HASH_ATTACHED_SQUOTE = /(^|\s|\|)-H('(?:[^'\\]|\\.)*')/g;
+const NTLM_HASH_ATTACHED_UNQUOTED = /(^|\s|\|)-H([^\s='"](?:\\.|[^\s'"\\])*)/g;
 
-const HASH_TOOLS_RE = new RegExp(
-  String.raw`(^|[\s|;&])(?:[\w./-]+/)?(crackmapexec|cme|nxc|psexec\.py|smbexec\.py|wmiexec\.py|secretsdump\.py|impacket-[\w-]+|evil-winrm)(?:\s|$)`,
-  'i',
-);
+const HASH_TOOLS_RE = /(^|[\s|;&])(?:[\w./-]+\/)?(crackmapexec|cme|nxc|psexec\.py|smbexec\.py|wmiexec\.py|secretsdump\.py|impacket-[\w-]+|evil-winrm)(?:\s|$)/i;
 
 function segmentHasHashTool(segment: string): boolean {
   return HASH_TOOLS_RE.test(segment);
@@ -357,23 +364,25 @@ export function redactNtlmHashFlag(command: string): string {
     }
     return false;
   };
-  let out = command.replace(
-    NTLM_HASH_PATTERN,
-    (match, lead: string, sep: string, _value: string, offset: number) => {
-      if (!inSegment(offset)) return match;
-      return `${lead}-H${sep}${REDACTED}`;
-    },
-  );
-  // Attached form `-H<hash>` (no separator). Only redact when the
-  // surrounding segment has a hash-using tool — otherwise `curl -H'X-Y: z'`
-  // would also be masked.
-  out = out.replace(
-    NTLM_HASH_ATTACHED_PATTERN,
-    (match, lead: string, _value: string, offset: number) => {
-      if (!inSegment(offset)) return match;
-      return `${lead}-H ${REDACTED}`;
-    },
-  );
+  const replaceSpaced = (
+    match: string,
+    lead: string,
+    sep: string,
+    _value: string,
+    offset: number,
+  ): string => (inSegment(offset) ? `${lead}-H${sep}${REDACTED}` : match);
+  const replaceAttached = (
+    match: string,
+    lead: string,
+    _value: string,
+    offset: number,
+  ): string => (inSegment(offset) ? `${lead}-H ${REDACTED}` : match);
+  let out = command.replace(NTLM_HASH_DQUOTE, replaceSpaced);
+  out = out.replace(NTLM_HASH_SQUOTE, replaceSpaced);
+  out = out.replace(NTLM_HASH_UNQUOTED, replaceSpaced);
+  out = out.replace(NTLM_HASH_ATTACHED_DQUOTE, replaceAttached);
+  out = out.replace(NTLM_HASH_ATTACHED_SQUOTE, replaceAttached);
+  out = out.replace(NTLM_HASH_ATTACHED_UNQUOTED, replaceAttached);
   return out;
 }
 
@@ -384,20 +393,23 @@ export function redactNtlmHashFlag(command: string): string {
 //     pair shape.
 //   - the value contains `%` — Samba `username%password` shape.
 // Bare `--user alice` (no colon, no `%`) is left alone.
-const BASIC_AUTH_USER_PATTERN = /(^|\s|\|)(--user|-u|-U)(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:\\.|[^\s'"\\])+)/g;
-// Attached short forms `-u<user:pass>`, `-U<user%pass>` (curl, smbclient).
-const BASIC_AUTH_USER_ATTACHED_PATTERN = /(^|\s|\|)(-u|-U)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)/g;
+const BASIC_AUTH_USER_DQUOTE = /(^|\s|\|)(--user|-u|-U)(\s+|=)("(?:[^"\\]|\\.)*")/g;
+const BASIC_AUTH_USER_SQUOTE = /(^|\s|\|)(--user|-u|-U)(\s+|=)('(?:[^'\\]|\\.)*')/g;
+const BASIC_AUTH_USER_UNQUOTED = /(^|\s|\|)(--user|-u|-U)(\s+|=)((?:\\.|[^\s'"\\])+)/g;
+const BASIC_AUTH_USER_ATTACHED_DQUOTE = /(^|\s|\|)(-u|-U)("(?:[^"\\]|\\.)*")/g;
+const BASIC_AUTH_USER_ATTACHED_SQUOTE = /(^|\s|\|)(-u|-U)('(?:[^'\\]|\\.)*')/g;
+const BASIC_AUTH_USER_ATTACHED_UNQUOTED = /(^|\s|\|)(-u|-U)([^\s='"](?:\\.|[^\s'"\\])*)/g;
 
 // LDAP simple-bind password: `ldapsearch -w <password>` and friends.
 // Per-segment detected: `-w` for hydra/wfuzz is a wordlist (file path),
-// not a password. We only redact when the segment contains an
-// LDAP-family tool.
-const LDAP_W_PATTERN = /(^|\s|\|)-w(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:\\.|[^\s'"\\])+)/g;
-const LDAP_W_ATTACHED_PATTERN = /(^|\s|\|)-w("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)/g;
-const LDAP_TOOL_RE = new RegExp(
-  String.raw`(^|[\s|;&])(?:[\w./-]+/)?(${[...LDAP_PASSWORD_TOOLS].join('|')})(?:\s|$)`,
-  'i',
-);
+// not a password.
+const LDAP_W_DQUOTE = /(^|\s|\|)-w(\s+|=)("(?:[^"\\]|\\.)*")/g;
+const LDAP_W_SQUOTE = /(^|\s|\|)-w(\s+|=)('(?:[^'\\]|\\.)*')/g;
+const LDAP_W_UNQUOTED = /(^|\s|\|)-w(\s+|=)((?:\\.|[^\s'"\\])+)/g;
+const LDAP_W_ATTACHED_DQUOTE = /(^|\s|\|)-w("(?:[^"\\]|\\.)*")/g;
+const LDAP_W_ATTACHED_SQUOTE = /(^|\s|\|)-w('(?:[^'\\]|\\.)*')/g;
+const LDAP_W_ATTACHED_UNQUOTED = /(^|\s|\|)-w([^\s='"](?:\\.|[^\s'"\\])*)/g;
+const LDAP_TOOL_RE = /(^|[\s|;&])(?:[\w./-]+\/)?(ldapadd|ldapcompare|ldapdelete|ldapmodify|ldappasswd|ldapsearch|ldapwhoami)(?:\s|$)/i;
 function segmentHasLdapTool(segment: string): boolean {
   return LDAP_TOOL_RE.test(segment);
 }
@@ -411,49 +423,49 @@ export function redactLdapPasswordFlag(command: string): string {
     }
     return false;
   };
-  let out = command.replace(
-    LDAP_W_PATTERN,
-    (match, lead: string, sep: string, _value: string, offset: number) => {
-      if (!inSegment(offset)) return match;
-      return `${lead}-w${sep}${REDACTED}`;
-    },
-  );
-  out = out.replace(
-    LDAP_W_ATTACHED_PATTERN,
-    (match, lead: string, _value: string, offset: number) => {
-      if (!inSegment(offset)) return match;
-      return `${lead}-w ${REDACTED}`;
-    },
-  );
+  const replaceSpaced = (
+    match: string,
+    lead: string,
+    sep: string,
+    _value: string,
+    offset: number,
+  ): string => (inSegment(offset) ? `${lead}-w${sep}${REDACTED}` : match);
+  const replaceAttached = (
+    match: string,
+    lead: string,
+    _value: string,
+    offset: number,
+  ): string => (inSegment(offset) ? `${lead}-w ${REDACTED}` : match);
+  let out = command.replace(LDAP_W_DQUOTE, replaceSpaced);
+  out = out.replace(LDAP_W_SQUOTE, replaceSpaced);
+  out = out.replace(LDAP_W_UNQUOTED, replaceSpaced);
+  out = out.replace(LDAP_W_ATTACHED_DQUOTE, replaceAttached);
+  out = out.replace(LDAP_W_ATTACHED_SQUOTE, replaceAttached);
+  out = out.replace(LDAP_W_ATTACHED_UNQUOTED, replaceAttached);
   return out;
 }
 
 const URL_PREFIX_RE = /^(?:https?|ftp|ldap|ldaps|smb|smbs):\/\//i;
 
 export function redactBasicAuthUser(command: string): string {
-  let out = command.replace(BASIC_AUTH_USER_PATTERN, (match, lead, flag, sep, value: string) => {
+  const replaceSpaced = (match: string, lead: string, flag: string, sep: string, value: string): string => {
     const stripped = stripQuotes(value);
-    // URL value — `sqlmap -u https://target/x`. Not a credential.
     if (URL_PREFIX_RE.test(stripped)) return match;
-    // Samba `username%password` — mask value.
-    if (stripped.includes('%')) {
-      return `${lead}${flag}${sep}${REDACTED}`;
-    }
-    // Basic-auth pair shape — mask value.
-    if (stripped.includes(':')) {
-      return `${lead}${flag}${sep}${REDACTED}`;
-    }
-    // Bare username — leave alone.
-    return match;
-  });
-  // Attached form: `-u<user:pass>` or `-U<user%pass>`. Same shape rules
-  // as the spaced/equals variant — only mask credential-shaped values.
-  out = out.replace(BASIC_AUTH_USER_ATTACHED_PATTERN, (match, lead, flag, value: string) => {
+    if (!stripped.includes('%') && !stripped.includes(':')) return match;
+    return `${lead}${flag}${sep}${REDACTED}`;
+  };
+  const replaceAttached = (match: string, lead: string, flag: string, value: string): string => {
     const stripped = stripQuotes(value);
     if (URL_PREFIX_RE.test(stripped)) return match;
     if (!stripped.includes('%') && !stripped.includes(':')) return match;
     return `${lead}${flag} ${REDACTED}`;
-  });
+  };
+  let out = command.replace(BASIC_AUTH_USER_DQUOTE, replaceSpaced);
+  out = out.replace(BASIC_AUTH_USER_SQUOTE, replaceSpaced);
+  out = out.replace(BASIC_AUTH_USER_UNQUOTED, replaceSpaced);
+  out = out.replace(BASIC_AUTH_USER_ATTACHED_DQUOTE, replaceAttached);
+  out = out.replace(BASIC_AUTH_USER_ATTACHED_SQUOTE, replaceAttached);
+  out = out.replace(BASIC_AUTH_USER_ATTACHED_UNQUOTED, replaceAttached);
   return out;
 }
 
@@ -535,10 +547,7 @@ function redactString(value: string): string {
 // passwords containing `@` are masked correctly.
 const IMPACKET_POSITIONAL_PATTERN = /([\w\\/.-]+):(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|((?:\\.|\S)+?))@([\w.-]+)(?=\s|$|[;|&])/g;
 
-const IMPACKET_TOOL_RE = new RegExp(
-  String.raw`(^|[\s|;&])(?:[\w./-]+/)?(impacket-[\w-]+|psexec\.py|smbexec\.py|wmiexec\.py|dcomexec\.py|atexec\.py|secretsdump\.py|getuserspns\.py|getnpusers\.py|ntlmrelayx\.py)(?:\s|$)`,
-  'i',
-);
+const IMPACKET_TOOL_RE = /(^|[\s|;&])(?:[\w./-]+\/)?(impacket-[\w-]+|psexec\.py|smbexec\.py|wmiexec\.py|dcomexec\.py|atexec\.py|secretsdump\.py|getuserspns\.py|getnpusers\.py|ntlmrelayx\.py)(?:\s|$)/i;
 function segmentHasImpacketTool(segment: string): boolean {
   return IMPACKET_TOOL_RE.test(segment);
 }

@@ -147,6 +147,13 @@ describe('createMCPServer postToolHook', () => {
     // response resolves. Flush microtasks before asserting.
     await new Promise((r) => setImmediate(r));
     expect(errorSpy).toHaveBeenCalled();
+    // Confirm the actual hook error surfaced — a regression that swapped
+    // the original error for an unrelated log message would slip past a
+    // bare toHaveBeenCalled() check.
+    const loggedHookError = errorSpy.mock.calls.some((args) =>
+      args.some((arg) => /hook is buggy/.test(String((arg as Error)?.message ?? arg))),
+    );
+    expect(loggedHookError).toBe(true);
     errorSpy.mockRestore();
   });
 
@@ -226,6 +233,13 @@ describe('createMCPServer postToolHook', () => {
     // race-rejection has surfaced through the .catch wrapper.
     await new Promise((r) => setTimeout(r, 120));
     expect(errorSpy).toHaveBeenCalled();
+    // The error surfaced must be the timeout, not some unrelated log
+    // line — a regression that disabled the timeout race would still
+    // satisfy a bare toHaveBeenCalled() but would not log "timeout".
+    const loggedTimeout = errorSpy.mock.calls.some((args) =>
+      args.some((arg) => /postToolHook timeout/.test(String((arg as Error)?.message ?? arg))),
+    );
+    expect(loggedTimeout).toBe(true);
     // Cleanup: resolve the hook so the never-pending promise can be GC'd.
     resolveHook?.();
     errorSpy.mockRestore();

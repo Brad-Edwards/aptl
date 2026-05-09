@@ -413,137 +413,127 @@ const SUDO_FLAGS_TAKING_ARG = new Set([
   '--other-user',
 ]);
 
+const ENV_ASSIGN_RE = /^[A-Za-z_]\w*=/;
+const SHELL_C_CLUSTER_RE = /^-[A-Za-z]*c[A-Za-z]*$/;
+const SSHPASS_ARG_FLAGS = ['-p', '-f', '-d', '-P'];
+
+/**
+ * Skip past sudo's options until the real command. Returns the index
+ * of the first token that is NOT part of sudo's option string.
+ */
+function skipSudoOptions(tokens: string[], start: number): number {
+  let i = start;
+  while (i < tokens.length) {
+    const opt = tokens[i];
+    if (opt === '--') return i + 1;
+    if (!opt.startsWith('-')) return i;
+    if (opt.includes('=')) {
+      i += 1;
+      continue;
+    }
+    if (SUDO_FLAGS_TAKING_ARG.has(opt)) {
+      i += 2;
+      continue;
+    }
+    i += 1;
+  }
+  return i;
+}
+
+/**
+ * Skip past sshpass's credential options. Returns the next-token index.
+ */
+function skipSshpassOptions(tokens: string[], start: number): number {
+  let i = start;
+  while (i < tokens.length) {
+    const opt = tokens[i];
+    if (opt === '--') return i + 1;
+    if (!opt.startsWith('-')) return i;
+    const isArgFlag = SSHPASS_ARG_FLAGS.some((f) => opt === f || opt.startsWith(f));
+    if (isArgFlag) {
+      i += opt.length === 2 ? 2 : 1;
+      continue;
+    }
+    i += 1;
+  }
+  return i;
+}
+
+/**
+ * Skip past a transparent wrapper's leading flags. Returns the
+ * next-token index after the wrapper's options.
+ */
+function skipTransparentWrapperOptions(
+  tokens: string[],
+  start: number,
+  flagsTakingArg: ReadonlySet<string>,
+): number {
+  let i = start;
+  while (i < tokens.length) {
+    const opt = tokens[i];
+    if (opt === '--') return i + 1;
+    if (!opt.startsWith('-')) return i;
+    if (opt.includes('=')) {
+      i += 1;
+      continue;
+    }
+    const nextTok = tokens[i + 1];
+    if (flagsTakingArg.has(opt) && nextTok !== undefined && !nextTok.startsWith('-')) {
+      i += 2;
+      continue;
+    }
+    i += 1;
+  }
+  return i;
+}
+
+/**
+ * Find the index of the first token that introduces shell `-c command`
+ * (standalone `-c` or any option cluster containing `c`). Returns -1
+ * if no such token exists in `tokens[start..]`.
+ */
+function findShellCToken(tokens: string[], start: number): number {
+  for (let j = start; j < tokens.length; j++) {
+    const t = tokens[j];
+    if (t === '-c' || SHELL_C_CLUSTER_RE.test(t)) return j;
+  }
+  return -1;
+}
+
+function basename(token: string): string {
+  const slash = token.lastIndexOf('/');
+  return slash === -1 ? token : token.slice(slash + 1);
+}
+
 export function leadingExecutable(command: string): string {
-  const head = leadingSubCommand(command);
-  const tokens = tokenize(head);
+  const tokens = tokenize(leadingSubCommand(command));
   let i = 0;
   while (i < tokens.length) {
     const t = tokens[i];
     if (t === 'sudo') {
-      i += 1;
-      // After sudo, skip its options (anything starting with `-`) until
-      // we hit the real command. Honor the `--` end-of-options separator.
-      while (i < tokens.length) {
-        const opt = tokens[i];
-        if (opt === '--') {
-          i += 1;
-          break;
-        }
-        if (!opt.startsWith('-')) break;
-        // Long flag with embedded `=value` (e.g. `--preserve-env=PATH`)
-        // never consumes the next token.
-        if (opt.includes('=')) {
-          i += 1;
-          continue;
-        }
-        // Long-form `--xxx` with separate value: skip the next token only
-        // if the option is in the known set or a generic long flag.
-        if (SUDO_FLAGS_TAKING_ARG.has(opt)) {
-          i += 2;
-          continue;
-        }
-        i += 1;
-      }
+      i = skipSudoOptions(tokens, i + 1);
       continue;
     }
-    // Drop a leading env assignment `KEY=value` (no spaces around `=`).
-    // The value can contain `/`, `:`, etc. — we identify env-vars by the
-    // shape of the prefix, not by the value. These appear both at the
-    // very start of a command (`PATH=/foo nmap …`) and after `sudo` plus
-    // its options (`sudo FOO=bar nmap …`); strip them in either case.
-    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(t)) {
+    if (ENV_ASSIGN_RE.test(t)) {
       i += 1;
       continue;
     }
-    // basename without using `path.basename` to keep this module dep-free.
-    const slash = t.lastIndexOf('/');
-    const exec = slash === -1 ? t : t.slice(slash + 1);
-    // Transparent wrapper (`proxychains4 hydra …`, `time nmap …`,
-    // `env -i hydra …`, `nice -n 5 nmap …`): skip the wrapper plus any
-    // leading short-flag arguments (and arguments-of-flags for the
-    // common `nice -n N` / `taskset -c N` shape) and continue resolving.
-    // sshpass `-p <pass> ssh user@target` — like sudo, sshpass takes
-    // its own credential options and then invokes the real ssh/plink
-    // command. Resolve through to the inner ssh tool so the event
-    // classifies as ssh_login_attempt with proper user/host
-    // extraction. The redactor masks `sshpass -p <value>` separately.
+    const exec = basename(t);
     if (exec === 'sshpass') {
-      i += 1;
-      while (i < tokens.length) {
-        const opt = tokens[i];
-        if (opt === '--') {
-          i += 1;
-          break;
-        }
-        if (!opt.startsWith('-')) break;
-        // sshpass flags that take an argument: -p (password), -f (file),
-        // -d (fd), -P (prompt). All consume the next token.
-        if (
-          opt === '-p' ||
-          opt === '-f' ||
-          opt === '-d' ||
-          opt === '-P' ||
-          opt.startsWith('-p') ||
-          opt.startsWith('-f') ||
-          opt.startsWith('-d') ||
-          opt.startsWith('-P')
-        ) {
-          // Attached form (`-phunter2`) consumes nothing extra; spaced
-          // form consumes the next token.
-          if (opt.length === 2) i += 2;
-          else i += 1;
-          continue;
-        }
-        i += 1;
-      }
+      i = skipSshpassOptions(tokens, i + 1);
       continue;
     }
-    // Shell wrapper `bash -c '…'` — recurse into the quoted inner
-    // command. The inner string is what we actually want to classify.
-    // Also handles option clusters like `-lc` / `-ic` / `-cl` (POSIX
-    // shells support combining short options) — `bash -lc 'nmap …'`
-    // is a common login-shell form.
     if (SHELL_WRAPPERS.has(exec)) {
-      let cIdx = -1;
-      for (let j = i + 1; j < tokens.length; j++) {
-        const t = tokens[j];
-        // Standalone `-c` OR an option cluster containing `c`.
-        if (t === '-c' || /^-[A-Za-z]*c[A-Za-z]*$/.test(t)) {
-          cIdx = j;
-          break;
-        }
-      }
+      const cIdx = findShellCToken(tokens, i + 1);
       if (cIdx !== -1 && cIdx + 1 < tokens.length) {
-        const inner = tokens[cIdx + 1];
-        const innerExec = leadingExecutable(inner);
+        const innerExec = leadingExecutable(tokens[cIdx + 1]);
         if (innerExec) return innerExec;
       }
       return exec;
     }
     if (TRANSPARENT_WRAPPERS.has(exec)) {
       const flagsTakingArg = WRAPPER_FLAGS_TAKING_ARG[exec] ?? new Set<string>();
-      i += 1;
-      while (i < tokens.length) {
-        const opt = tokens[i];
-        if (opt === '--') {
-          i += 1;
-          break;
-        }
-        if (!opt.startsWith('-')) break;
-        // Long-form `--name=value` consumes no extra token.
-        if (opt.includes('=')) {
-          i += 1;
-          continue;
-        }
-        // Per-wrapper rule for which short flags consume the next
-        // token. Other flags are standalone (`env -i`, `-0`).
-        const nextTok = tokens[i + 1];
-        if (flagsTakingArg.has(opt) && nextTok !== undefined && !nextTok.startsWith('-')) {
-          i += 2;
-          continue;
-        }
-        i += 1;
-      }
+      i = skipTransparentWrapperOptions(tokens, i + 1, flagsTakingArg);
       continue;
     }
     return exec;
@@ -558,90 +548,62 @@ export function leadingExecutable(command: string): string {
  * compound command like `cd /tmp && nmap -p 22 host` doesn't drop the
  * nmap event.
  */
+/**
+ * Yield (separator-index, advance-by) tuples for top-level shell
+ * separators (`|`, `;`, `&`, `&&`), respecting quote and escape state.
+ * Redirection forms (`2>&1`, `<&3`, `&>file`) are intentionally NOT
+ * treated as separators. Callers slice the input at each yielded index.
+ */
+function* topLevelSeparators(command: string): Generator<{ at: number; advance: number }> {
+  let inSingle = false;
+  let inDouble = false;
+  let escaped = false;
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (!inDouble && ch === "'") {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (!inSingle && ch === '"') {
+      inDouble = !inDouble;
+      continue;
+    }
+    if (inSingle || inDouble) continue;
+    if (ch === '|' || ch === ';') {
+      yield { at: i, advance: 1 };
+      continue;
+    }
+    if (ch === '&') {
+      const prev = command[i - 1];
+      const next = command[i + 1];
+      if (prev === '>' || prev === '<' || next === '>') continue;
+      yield { at: i, advance: next === '&' ? 2 : 1 };
+    }
+  }
+}
+
 export function topLevelSegments(command: string): string[] {
   const segments: string[] = [];
   let start = 0;
-  let inSingle = false;
-  let inDouble = false;
-  let escaped = false;
-  for (let i = 0; i < command.length; i++) {
-    const ch = command[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\') {
-      escaped = true;
-      continue;
-    }
-    if (!inDouble && ch === "'") {
-      inSingle = !inSingle;
-      continue;
-    }
-    if (!inSingle && ch === '"') {
-      inDouble = !inDouble;
-      continue;
-    }
-    if (inSingle || inDouble) continue;
-    if (ch === '|' || ch === ';') {
-      segments.push(command.slice(start, i));
-      start = i + 1;
-      continue;
-    }
-    if (ch === '&') {
-      const prev = command[i - 1];
-      const next = command[i + 1];
-      if (prev === '>' || prev === '<' || next === '>') continue;
-      segments.push(command.slice(start, i));
-      start = next === '&' ? i + 2 : i + 1;
-      continue;
-    }
+  for (const sep of topLevelSeparators(command)) {
+    segments.push(command.slice(start, sep.at));
+    start = sep.at + sep.advance;
   }
   segments.push(command.slice(start));
-  return segments
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  return segments.map((s) => s.trim()).filter((s) => s.length > 0);
 }
 
 export function leadingSubCommand(command: string): string {
-  let inSingle = false;
-  let inDouble = false;
-  let escaped = false;
-  for (let i = 0; i < command.length; i++) {
-    const ch = command[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\') {
-      escaped = true;
-      continue;
-    }
-    if (!inDouble && ch === "'") {
-      inSingle = !inSingle;
-      continue;
-    }
-    if (!inSingle && ch === '"') {
-      inDouble = !inDouble;
-      continue;
-    }
-    if (inSingle || inDouble) continue;
-    // `|` and `;` are unconditional top-level separators.
-    if (ch === '|' || ch === ';') {
-      return command.slice(0, i);
-    }
-    // `&` is a separator UNLESS it's part of a redirection target
-    // (`2>&1`, `<&3`, `&>file`). Specifically, if the preceding
-    // non-whitespace character is `>` or `<`, or the next char is `>`,
-    // the `&` is part of redirection syntax — keep scanning.
-    if (ch === '&') {
-      const prev = command[i - 1];
-      const next = command[i + 1];
-      if (prev === '>' || prev === '<' || next === '>') continue;
-      // `&&` — split before the first `&`.
-      // single `&` (backgrounding + next command) — also split.
-      return command.slice(0, i);
-    }
+  for (const sep of topLevelSeparators(command)) {
+    return command.slice(0, sep.at);
   }
   return command;
 }
@@ -725,113 +687,53 @@ export function classifyCommand(command: string): ActivityClassification {
  * sees the same tokens the classifier classified. Everything else is
  * returned verbatim (already its own leading sub-command).
  */
+interface SurfaceStep {
+  i: number;
+  scanning: boolean;
+  finalSurface?: string;
+}
+
+function applySurfaceWrapper(
+  tokens: string[],
+  i: number,
+  head: string,
+): SurfaceStep | null {
+  const t = tokens[i];
+  if (t === 'sudo') {
+    return { i: skipSudoOptions(tokens, i + 1), scanning: true };
+  }
+  if (ENV_ASSIGN_RE.test(t)) {
+    return { i: i + 1, scanning: true };
+  }
+  const exec = basename(t);
+  if (SHELL_WRAPPERS.has(exec)) {
+    const cIdx = findShellCToken(tokens, i + 1);
+    if (cIdx !== -1 && cIdx + 1 < tokens.length) {
+      return { i, scanning: false, finalSurface: extractionSurface(tokens[cIdx + 1]) };
+    }
+    return { i, scanning: false, finalSurface: head };
+  }
+  if (exec === 'sshpass') {
+    return { i: skipSshpassOptions(tokens, i + 1), scanning: true };
+  }
+  if (TRANSPARENT_WRAPPERS.has(exec)) {
+    const flagsTakingArg = WRAPPER_FLAGS_TAKING_ARG[exec] ?? new Set<string>();
+    return { i: skipTransparentWrapperOptions(tokens, i + 1, flagsTakingArg), scanning: true };
+  }
+  return null;
+}
+
 export function extractionSurface(command: string): string {
   const head = leadingSubCommand(command);
   const tokens = tokenize(head);
   let i = 0;
-  let scanning = true;
-  while (scanning && i < tokens.length) {
-    scanning = false;
-    const t = tokens[i];
-    if (t === 'sudo') {
-      i += 1;
-      while (i < tokens.length) {
-        const opt = tokens[i];
-        if (opt === '--') {
-          i += 1;
-          break;
-        }
-        if (!opt.startsWith('-')) break;
-        if (opt.includes('=')) {
-          i += 1;
-          continue;
-        }
-        if (SUDO_FLAGS_TAKING_ARG.has(opt)) {
-          i += 2;
-          continue;
-        }
-        i += 1;
-      }
-      scanning = true;
-      continue;
-    }
-    if (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) {
-      i += 1;
-      scanning = true;
-      continue;
-    }
-    if (i >= tokens.length) break;
-    const exec = tokens[i].includes('/')
-      ? tokens[i].slice(tokens[i].lastIndexOf('/') + 1)
-      : tokens[i];
-    if (SHELL_WRAPPERS.has(exec)) {
-      let cIdx = -1;
-      for (let j = i + 1; j < tokens.length; j++) {
-        const t = tokens[j];
-        if (t === '-c' || /^-[A-Za-z]*c[A-Za-z]*$/.test(t)) {
-          cIdx = j;
-          break;
-        }
-      }
-      if (cIdx !== -1 && cIdx + 1 < tokens.length) {
-        return extractionSurface(tokens[cIdx + 1]);
-      }
-      return head;
-    }
-    if (exec === 'sshpass') {
-      // Skip sshpass and its credential options; the inner ssh command
-      // is what extractor should see.
-      i += 1;
-      while (i < tokens.length) {
-        const opt = tokens[i];
-        if (opt === '--') {
-          i += 1;
-          break;
-        }
-        if (!opt.startsWith('-')) break;
-        if (
-          opt === '-p' ||
-          opt === '-f' ||
-          opt === '-d' ||
-          opt === '-P' ||
-          opt.startsWith('-p') ||
-          opt.startsWith('-f') ||
-          opt.startsWith('-d') ||
-          opt.startsWith('-P')
-        ) {
-          if (opt.length === 2) i += 2;
-          else i += 1;
-          continue;
-        }
-        i += 1;
-      }
-      scanning = true;
-      continue;
-    }
-    if (TRANSPARENT_WRAPPERS.has(exec)) {
-      const flagsTakingArg = WRAPPER_FLAGS_TAKING_ARG[exec] ?? new Set<string>();
-      i += 1;
-      while (i < tokens.length) {
-        const opt = tokens[i];
-        if (opt === '--') {
-          i += 1;
-          break;
-        }
-        if (!opt.startsWith('-')) break;
-        if (opt.includes('=')) {
-          i += 1;
-          continue;
-        }
-        const nextTok = tokens[i + 1];
-        if (flagsTakingArg.has(opt) && nextTok !== undefined && !nextTok.startsWith('-')) {
-          i += 2;
-          continue;
-        }
-        i += 1;
-      }
-      scanning = true;
-      continue;
-    }
+  while (i < tokens.length) {
+    const step = applySurfaceWrapper(tokens, i, head);
+    if (step === null) break;
+    if (step.finalSurface !== undefined) return step.finalSurface;
+    if (!step.scanning) break;
+    if (step.i === i) break; // safety against infinite loop
+    i = step.i;
   }
   if (i === 0) return head;
   return tokens.slice(i).join(' ');

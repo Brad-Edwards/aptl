@@ -250,21 +250,12 @@ function segmentHasCredentialTool(segment: string): boolean {
 //   `-p<value>`           → attached
 //   `-p value\ with\ spc` → escape-aware (shell-escaped whitespace
 //                            is part of the SAME token).
-// Captures the value (with surrounding quotes when present).
-//
 // The unquoted-value alternative `(?:\\.|[^\s'"\\])+` is escape-aware:
 // it consumes `\<anything>` greedily and ordinary non-whitespace,
 // non-quote characters. That means `correct\ horse` is treated as a
 // single token rather than splitting at the literal space.
-const UNQUOTED_VALUE = String.raw`(?:\\.|[^\s'"\\])+`;
-const SHORT_P_PATTERN = new RegExp(
-  String.raw`(^|\s|\|)-p(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|${UNQUOTED_VALUE})`,
-  'g',
-);
-const SHORT_P_ATTACHED_PATTERN = new RegExp(
-  String.raw`(^|\s|\|)-p("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)`,
-  'g',
-);
+const SHORT_P_PATTERN = /(^|\s|\|)-p(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:\\.|[^\s'"\\])+)/g;
+const SHORT_P_ATTACHED_PATTERN = /(^|\s|\|)-p("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)/g;
 
 function isPortLikeValue(stripped: string): boolean {
   // Comma- or hyphen-separated digits (with each segment ≤ 5 digits).
@@ -345,14 +336,8 @@ export function redactShortPasswordFlag(command: string): string {
 // (crackmapexec / cme / nxc / impacket *.py). The same flag means HTTP
 // header to curl/wget — we only redact when the segment contains a
 // credential tool that uses `-H` as a hash flag.
-const NTLM_HASH_PATTERN = new RegExp(
-  String.raw`(^|\s|\|)-H(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|${UNQUOTED_VALUE})`,
-  'g',
-);
-const NTLM_HASH_ATTACHED_PATTERN = new RegExp(
-  String.raw`(^|\s|\|)-H("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)`,
-  'g',
-);
+const NTLM_HASH_PATTERN = /(^|\s|\|)-H(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:\\.|[^\s'"\\])+)/g;
+const NTLM_HASH_ATTACHED_PATTERN = /(^|\s|\|)-H("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)/g;
 
 const HASH_TOOLS_RE = new RegExp(
   String.raw`(^|[\s|;&])(?:[\w./-]+/)?(crackmapexec|cme|nxc|psexec\.py|smbexec\.py|wmiexec\.py|secretsdump\.py|impacket-[\w-]+|evil-winrm)(?:\s|$)`,
@@ -400,28 +385,16 @@ export function redactNtlmHashFlag(command: string): string {
 //     pair shape.
 //   - the value contains `%` — Samba `username%password` shape.
 // Bare `--user alice` (no colon, no `%`) is left alone.
-const BASIC_AUTH_USER_PATTERN = new RegExp(
-  String.raw`(^|\s|\|)(--user|-u|-U)(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|${UNQUOTED_VALUE})`,
-  'g',
-);
+const BASIC_AUTH_USER_PATTERN = /(^|\s|\|)(--user|-u|-U)(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:\\.|[^\s'"\\])+)/g;
 // Attached short forms `-u<user:pass>`, `-U<user%pass>` (curl, smbclient).
-const BASIC_AUTH_USER_ATTACHED_PATTERN = new RegExp(
-  String.raw`(^|\s|\|)(-u|-U)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)`,
-  'g',
-);
+const BASIC_AUTH_USER_ATTACHED_PATTERN = /(^|\s|\|)(-u|-U)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)/g;
 
 // LDAP simple-bind password: `ldapsearch -w <password>` and friends.
 // Per-segment detected: `-w` for hydra/wfuzz is a wordlist (file path),
 // not a password. We only redact when the segment contains an
 // LDAP-family tool.
-const LDAP_W_PATTERN = new RegExp(
-  String.raw`(^|\s|\|)-w(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|${UNQUOTED_VALUE})`,
-  'g',
-);
-const LDAP_W_ATTACHED_PATTERN = new RegExp(
-  String.raw`(^|\s|\|)-w("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)`,
-  'g',
-);
+const LDAP_W_PATTERN = /(^|\s|\|)-w(\s+|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:\\.|[^\s'"\\])+)/g;
+const LDAP_W_ATTACHED_PATTERN = /(^|\s|\|)-w("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s=](?:\\.|[^\s'"\\])*)/g;
 const LDAP_TOOL_RE = new RegExp(
   String.raw`(^|[\s|;&])(?:[\w./-]+/)?(${[...LDAP_PASSWORD_TOOLS].join('|')})(?:\s|$)`,
   'i',
@@ -493,42 +466,50 @@ function redactAuthorizationHeader(
   return scheme ? `${prefix}${scheme} ${REDACTED}` : `${prefix}${REDACTED}`;
 }
 
-function redactString(value: string): string {
-  // Try JSON.parse first — payloads like `'{"password":"x"}'` and the MCP
-  // `content[].text` envelope (which wraps the real result in a JSON
-  // string) need to be parsed, recursively redacted, and re-serialized.
+// Patterns applied sequentially via a static replace-table so the
+// caller's cyclomatic / cognitive complexity stays bounded. Each entry
+// is `[pattern, replacement]` where replacement is either a string or
+// a replace callback.
+type ReplaceEntry = [RegExp, string | ((...args: unknown[]) => string)];
+const STATIC_REDACTION_TABLE: ReplaceEntry[] = [
+  // Quote-stripped standalone option tokens — `'-p'` → `-p`.
+  [/(['"])(-[A-Za-z][\w-]*)\1/g, '$2'],
+  // PEM blocks first so the surrounding markers stay verbatim.
+  [PEM_BLOCK_PATTERN, `$1${REDACTED}$2`],
+  // Authorization next so it wins over the more general patterns.
+  [AUTHORIZATION_PATTERN, redactAuthorizationHeader as (...args: unknown[]) => string],
+  [COOKIE_HEADER_PATTERN, `$1${REDACTED}$3`],
+  [SENSITIVE_KV_PATTERN, `$1${REDACTED}$3`],
+  [BARE_BEARER_PATTERN, `$1${REDACTED}`],
+  [CLI_FLAG_PATTERN, `$1${REDACTED}`],
+  [URL_USERINFO_PATTERN, `$1${REDACTED}$2`],
+];
+
+function tryRedactJsonString(value: string): string | null {
   const trimmed = value.trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(value);
-      if (parsed !== null && typeof parsed === 'object') {
-        return JSON.stringify(redact(parsed));
-      }
-    } catch {
-      // Fall through to inline-pattern scanning.
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (parsed !== null && typeof parsed === 'object') {
+      return JSON.stringify(redact(parsed));
     }
+  } catch {
+    // Fall through to inline-pattern scanning.
   }
-  // Normalise quoted standalone option tokens — `'-p' hunter2`,
-  // `"-H"=hash`. The shell strips these quotes at runtime, but the raw
-  // string carries them, which would otherwise dodge our flag patterns.
-  let out = value.replaceAll(/(['"])(-[A-Za-z][\w-]*)\1/g, '$2');
-  // PEM blocks first so the surrounding markers stay verbatim (the
-  // inner key bytes contain `=`/`/` characters that other patterns
-  // would otherwise see as `key=value`).
-  out = out.replaceAll(PEM_BLOCK_PATTERN, `$1${REDACTED}$2`);
-  // Authorization next (its match overlaps with both sensitive-kv and bare
-  // Bearer; running it before the others keeps a single `[REDACTED]` token
-  // in the output).
-  out = out.replaceAll(AUTHORIZATION_PATTERN, redactAuthorizationHeader);
-  // Cookie before SENSITIVE_KV so the full header body is masked in one
-  // pass (otherwise SENSITIVE_KV stops at `;` and leaves later segments).
-  out = out.replaceAll(COOKIE_HEADER_PATTERN, `$1${REDACTED}$3`);
-  out = out.replaceAll(SENSITIVE_KV_PATTERN, `$1${REDACTED}$3`);
-  out = out.replaceAll(BARE_BEARER_PATTERN, `$1${REDACTED}`);
-  out = out.replaceAll(CLI_FLAG_PATTERN, `$1${REDACTED}`);
-  out = out.replaceAll(URL_USERINFO_PATTERN, `$1${REDACTED}$2`);
-  // Tool-context-aware short flags (hydra/sshpass/medusa `-p`, curl
-  // `--user user:password`). These run last so the simpler kv/flag
+  return null;
+}
+
+function redactString(value: string): string {
+  const jsonRedacted = tryRedactJsonString(value);
+  if (jsonRedacted !== null) return jsonRedacted;
+  let out = value;
+  for (const [pattern, replacement] of STATIC_REDACTION_TABLE) {
+    out = out.replaceAll(
+      pattern,
+      replacement as Parameters<typeof out.replaceAll>[1],
+    );
+  }
+  // Tool-context-aware short flags run last so the simpler kv/flag
   // patterns above have first claim on overlapping shapes.
   out = redactShortPasswordFlag(out);
   out = redactNtlmHashFlag(out);
@@ -553,12 +534,7 @@ function redactString(value: string): string {
 //   - squot:   `user:'VALUE'@host`          — single-quoted.
 // Use the LAST unescaped `@` (not the first) as the host separator so
 // passwords containing `@` are masked correctly.
-const IMPACKET_POSITIONAL_PATTERN = new RegExp(
-  String.raw`([A-Za-z0-9._\\/-]+):` +
-    String.raw`(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|((?:\\.|[^\s])+?))` +
-    String.raw`@([A-Za-z0-9._-]+)(?=\s|$|[;|&])`,
-  'g',
-);
+const IMPACKET_POSITIONAL_PATTERN = /([\w\\/.-]+):(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|((?:\\.|\S)+?))@([\w.-]+)(?=\s|$|[;|&])/g;
 
 const IMPACKET_TOOL_RE = new RegExp(
   String.raw`(^|[\s|;&])(?:[\w./-]+/)?(impacket-[\w-]+|psexec\.py|smbexec\.py|wmiexec\.py|dcomexec\.py|atexec\.py|secretsdump\.py|getuserspns\.py|getnpusers\.py|ntlmrelayx\.py)(?:\s|$)`,

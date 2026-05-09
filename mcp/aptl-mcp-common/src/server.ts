@@ -70,7 +70,7 @@ async function runHookWithTimeout(
   timeoutMs: number,
 ): Promise<void> {
   const ret = hook(info);
-  if (!ret || typeof (ret as Promise<void>).then !== 'function') return;
+  if (!ret || typeof ret.then !== 'function') return;
   if (timeoutMs <= 0) {
     await ret;
     return;
@@ -155,7 +155,7 @@ export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOp
       context = {
         httpClient,
         labConfig,
-      } as APIToolContext;
+      };
     } else {
       // SSH tool context
       if (!sshManager) {
@@ -164,10 +164,10 @@ export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOp
       context = {
         sshManager,
         labConfig,
-      } as ToolContext;
+      };
     }
 
-    const safeArgs: Record<string, unknown> = (args ?? {}) as Record<string, unknown>;
+    const safeArgs: Record<string, unknown> = args ?? {};
     const t0 = Date.now();
     try {
       // Context is narrowed to the correct type above based on tool name

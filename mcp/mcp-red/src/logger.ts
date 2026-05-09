@@ -22,7 +22,7 @@ import {
   type ActivityClassification,
   type SeverityIdValue,
 } from './classifier.js';
-import { extractMetadata, type OcsfEndpoint } from './extractor.js';
+import { extractMetadata, type ExtractedFields, type OcsfEndpoint } from './extractor.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -136,40 +136,48 @@ export interface CommandOutcome {
  *   - top-level `success: false` → failure
  *   - default (unknown) → success (best-effort: never invent failures)
  */
+function parseEnvelope(toolResult: unknown): Record<string, unknown> | null {
+  const content = (toolResult as { content?: { text?: string }[] } | undefined)?.content;
+  const text = content?.[0]?.text;
+  if (typeof text !== 'string') return null;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed === 'object' && parsed !== null) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function outcomeFromNestedOutput(out: unknown): CommandOutcome | null {
+  if (typeof out !== 'object' || out === null) return null;
+  const outObj = out as Record<string, unknown>;
+  const signal = typeof outObj.signal === 'string' ? outObj.signal : undefined;
+  const code = typeof outObj.code === 'number' ? outObj.code : undefined;
+  if (signal) {
+    return { success: false, ...(code !== undefined ? { exit_code: code } : {}), signal };
+  }
+  if (code !== undefined) {
+    return { success: code === 0, exit_code: code };
+  }
+  return null;
+}
+
 export function deriveCommandOutcome(
   toolResult: unknown,
   error: Error | undefined,
 ): CommandOutcome {
   if (error) return { success: false };
   try {
-    const content = (toolResult as { content?: { text?: string }[] } | undefined)?.content;
-    const text = content?.[0]?.text;
-    // Unknown envelope shape — cannot honestly claim success.
-    if (typeof text !== 'string') return { success: null };
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      return { success: null };
-    }
-    if (typeof parsed !== 'object' || parsed === null) return { success: null };
-    const obj = parsed as Record<string, unknown>;
+    const obj = parseEnvelope(toolResult);
+    if (obj === null) return { success: null };
     if (typeof obj.exit_code === 'number') {
       return { success: obj.exit_code === 0, exit_code: obj.exit_code };
     }
-    const out = obj.output;
-    if (typeof out === 'object' && out !== null) {
-      const outObj = out as Record<string, unknown>;
-      const signal = typeof outObj.signal === 'string' ? outObj.signal : undefined;
-      const code = typeof outObj.code === 'number' ? outObj.code : undefined;
-      if (signal) {
-        return { success: false, ...(code !== undefined ? { exit_code: code } : {}), signal };
-      }
-      if (code !== undefined) {
-        return { success: code === 0, exit_code: code };
-      }
-    }
-    // Top-level transport flag is the last fallback; otherwise unknown.
+    const nested = outcomeFromNestedOutput(obj.output);
+    if (nested) return nested;
     if (typeof obj.success === 'boolean') return { success: obj.success };
     return { success: null };
   } catch {
@@ -211,97 +219,115 @@ export function logRedTeamCommand(
 ): OcsfRedTeamRecord | null {
   try {
     if (typeof command !== 'string' || !command.trim()) return null;
-
     const classification = classifyCommand(command);
     const extracted = extractMetadata(command, classification);
-
-    const baseSeverity: SeverityIdValue = classification.default_severity_id;
-    const failed = context.success === false;
-    const effectiveSeverity: SeverityIdValue =
-      failed && baseSeverity < SeverityId.MEDIUM ? SeverityId.MEDIUM : baseSeverity;
-
-    const record: OcsfRedTeamRecord = {
-      // OCSF `timestamp_t` is milliseconds since the Unix epoch.
-      time: Date.now(),
-      severity_id: effectiveSeverity,
-      category_uid: classification.category_uid,
-      category_name: classification.category_name,
-      class_uid: classification.class_uid,
-      class_name: classification.class_name,
-      activity_id: classification.activity_id,
-      type_uid: classification.type_uid,
-      metadata: { product: { name: PRODUCT_NAME, vendor_name: PRODUCT_VENDOR } },
-      process: { cmd_line: redactCommand(command, classification) },
-      aptl: {
-        activity_type: classification.activity_type,
-        ...(classification.tool ? { tool: classification.tool } : {}),
-        tool_name: context.tool_name,
-        agent_name: context.agent_name,
-        ...(context.session_id ? { session_id: context.session_id } : {}),
-        ...(typeof context.exit_code === 'number' ? { exit_code: context.exit_code } : {}),
-        ...(context.signal ? { signal: context.signal } : {}),
-      },
-    };
-
-    if (classification.technique_uid || classification.tactic) {
-      const entry: OcsfAttackEntry = {};
-      if (classification.technique_uid) entry.technique = { uid: classification.technique_uid };
-      if (classification.tactic) entry.tactic = { name: classification.tactic };
-      record.attacks = [entry];
-    }
-
-    if (extracted.dst_endpoint) record.dst_endpoint = extracted.dst_endpoint;
-    if (extracted.src_endpoint) record.src_endpoint = extracted.src_endpoint;
-    if (extracted.target_user) record.actor = { user: { name: extracted.target_user } };
-    if (extracted.url) {
-      // Shared `redact()` masks `?token=…`, cookies, userinfo, etc. The
-      // structured URL field MUST go through the redactor — `cmd_line`
-      // redaction alone is not enough since this field is its own
-      // exfiltration surface (see issue #162 cycle-2 security finding).
-      const safeUrl = redact(extracted.url);
-      record.http_request = { url: typeof safeUrl === 'string' ? safeUrl : extracted.url };
-    }
-    if (extracted.protocol) record.connection_info = { protocol_name: extracted.protocol };
-    if (extracted.file?.path) record.file = { path: extracted.file.path };
-    // OCSF normalized outcome — `status_id` / `status` are the canonical
-    // fields. `status_code` is reserved for source-specific values such as
-    // the numeric exit code or signal name. When the caller passes
-    // `outcome_unknown: true` (e.g. raw-mode session commands whose
-    // exit_code is not authoritative), emit the explicit Unknown
-    // (status_id 0) rather than omitting the fields.
-    if (typeof context.success === 'boolean') {
-      record.status_id = context.success ? 1 : 2;
-      record.status = context.success ? 'Success' : 'Failure';
-    } else if (context.outcome_unknown === true) {
-      record.status_id = 0;
-      record.status = 'Unknown';
-    }
-    if (typeof context.exit_code === 'number') {
-      record.status_code = String(context.exit_code);
-    } else if (context.signal) {
-      record.status_code = context.signal;
-    }
-    if (typeof context.duration_ms === 'number') record.duration = context.duration_ms;
-
-    // Sink invocation: a sync sink runs to completion before we return.
-    // An async sink returns a promise; we attach a `.catch()` so a
-    // rejection becomes a stderr diagnostic instead of an unhandled
-    // rejection. The postToolHook in `index.ts` can opt into awaiting
-    // by using `logRedTeamCommandAsync`.
-    try {
-      const ret = sink(record) as void | Promise<void>;
-      if (ret && typeof (ret as Promise<void>).then === 'function') {
-        (ret as Promise<void>).catch((err: unknown) => {
-          console.error('[OCSF] sink error:', err);
-        });
-      }
-    } catch (err) {
-      console.error('[OCSF] sink error:', err);
-    }
+    const record = buildOcsfRecord(command, classification, extracted, context);
+    invokeSink(sink, record);
     return record;
   } catch (err) {
     console.error('[OCSF] logRedTeamCommand error:', err);
     return null;
+  }
+}
+
+function effectiveSeverity(
+  classification: ActivityClassification,
+  context: RedTeamCommandContext,
+): SeverityIdValue {
+  const base = classification.default_severity_id;
+  const failed = context.success === false;
+  return failed && base < SeverityId.MEDIUM ? SeverityId.MEDIUM : base;
+}
+
+function buildAptlEnvelope(
+  classification: ActivityClassification,
+  context: RedTeamCommandContext,
+): NonNullable<OcsfRedTeamRecord['aptl']> {
+  return {
+    activity_type: classification.activity_type,
+    ...(classification.tool ? { tool: classification.tool } : {}),
+    tool_name: context.tool_name,
+    agent_name: context.agent_name,
+    ...(context.session_id ? { session_id: context.session_id } : {}),
+    ...(typeof context.exit_code === 'number' ? { exit_code: context.exit_code } : {}),
+    ...(context.signal ? { signal: context.signal } : {}),
+  };
+}
+
+function attachAttackEntry(
+  record: OcsfRedTeamRecord,
+  classification: ActivityClassification,
+): void {
+  if (!classification.technique_uid && !classification.tactic) return;
+  const entry: OcsfAttackEntry = {};
+  if (classification.technique_uid) entry.technique = { uid: classification.technique_uid };
+  if (classification.tactic) entry.tactic = { name: classification.tactic };
+  record.attacks = [entry];
+}
+
+function attachExtractedFields(record: OcsfRedTeamRecord, extracted: ExtractedFields): void {
+  if (extracted.dst_endpoint) record.dst_endpoint = extracted.dst_endpoint;
+  if (extracted.src_endpoint) record.src_endpoint = extracted.src_endpoint;
+  if (extracted.target_user) record.actor = { user: { name: extracted.target_user } };
+  if (extracted.url) {
+    const safeUrl = redact(extracted.url);
+    record.http_request = { url: typeof safeUrl === 'string' ? safeUrl : extracted.url };
+  }
+  if (extracted.protocol) record.connection_info = { protocol_name: extracted.protocol };
+  if (extracted.file?.path) record.file = { path: extracted.file.path };
+}
+
+function attachStatusFields(record: OcsfRedTeamRecord, context: RedTeamCommandContext): void {
+  if (typeof context.success === 'boolean') {
+    record.status_id = context.success ? 1 : 2;
+    record.status = context.success ? 'Success' : 'Failure';
+  } else if (context.outcome_unknown === true) {
+    record.status_id = 0;
+    record.status = 'Unknown';
+  }
+  if (typeof context.exit_code === 'number') {
+    record.status_code = String(context.exit_code);
+  } else if (context.signal) {
+    record.status_code = context.signal;
+  }
+  if (typeof context.duration_ms === 'number') record.duration = context.duration_ms;
+}
+
+function buildOcsfRecord(
+  command: string,
+  classification: ActivityClassification,
+  extracted: ExtractedFields,
+  context: RedTeamCommandContext,
+): OcsfRedTeamRecord {
+  const record: OcsfRedTeamRecord = {
+    time: Date.now(),
+    severity_id: effectiveSeverity(classification, context),
+    category_uid: classification.category_uid,
+    category_name: classification.category_name,
+    class_uid: classification.class_uid,
+    class_name: classification.class_name,
+    activity_id: classification.activity_id,
+    type_uid: classification.type_uid,
+    metadata: { product: { name: PRODUCT_NAME, vendor_name: PRODUCT_VENDOR } },
+    process: { cmd_line: redactCommand(command, classification) },
+    aptl: buildAptlEnvelope(classification, context),
+  };
+  attachAttackEntry(record, classification);
+  attachExtractedFields(record, extracted);
+  attachStatusFields(record, context);
+  return record;
+}
+
+function invokeSink(sink: SiemSink, record: OcsfRedTeamRecord): void {
+  try {
+    const ret = sink(record);
+    if (ret && typeof ret.then === 'function') {
+      ret.catch((err: unknown) => {
+        console.error('[OCSF] sink error:', err);
+      });
+    }
+  } catch (err) {
+    console.error('[OCSF] sink error:', err);
   }
 }
 

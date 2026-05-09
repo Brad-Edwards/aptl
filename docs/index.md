@@ -41,6 +41,7 @@ aptl lab start
 - [Wazuh Active Response](components/wazuh-active-response.md)
 - [Default Defensive Posture](components/default-defensive-posture.md) — what ships enabled vs disabled at first boot
 - [Kali Red Team](components/kali-redteam.md)
+- [Red Team Activity Taxonomy](red-team-taxonomy.md) — OCSF activity classes the Kali MCP server emits
 - [Victim Containers](components/victim-containers.md)
 - [MCP Integration](components/mcp-integration.md)
 - [Reverse Engineering](components/reverse-engineering-container.md)

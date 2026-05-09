@@ -107,9 +107,15 @@ class DeploymentConfig(BaseModel):
 
 
 class AptlConfig(BaseModel):
-    """Top-level APTL configuration."""
+    """Top-level APTL configuration.
 
-    model_config = ConfigDict(extra="ignore")
+    `extra="forbid"` matches every nested model and enforces ADR-025:
+    `aptl.json` is a strict first-party schema at every level, so
+    unknown top-level keys (typos, dead sections) are validation
+    errors rather than silent drift.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     lab: LabSettings = LabSettings(name="aptl")
     containers: ContainerSettings = ContainerSettings()

@@ -106,6 +106,23 @@ class TestConfigValidate:
         )
         assert result.exit_code != 0
 
+    def test_validate_fails_on_unknown_top_level_key(self, runner, tmp_path):
+        """Unknown top-level keys must fail validation per ADR-025
+        (regression for issue #190 — `edr_agents` / `agent_configs`
+        used to be silently accepted)."""
+        _write_config(
+            tmp_path,
+            {
+                "lab": {"name": "test"},
+                "edr_agents": {"victim": ["wazuh"]},
+            },
+        )
+        result = runner.invoke(
+            app, ["config", "validate", "--project-dir", str(tmp_path)]
+        )
+        assert result.exit_code != 0
+        assert "edr_agents" in result.stderr.lower()
+
 
 # ---------------------------------------------------------------------------
 # config show (CLI-007)

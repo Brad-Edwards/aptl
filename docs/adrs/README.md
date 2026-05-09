@@ -45,3 +45,5 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [021](adr-021-active-response-whitelist-via-wrapper.md) | Active-response whitelist enforcement via a standalone iptables AR script | accepted | 2026-05-02 |
 | [022](adr-022-misp-driven-suricata-rules.md) | MISP-driven Suricata rules via a tag-graduated sync service | accepted | 2026-05-03 |
 | [023](adr-023-container-interaction-in-deployment-backend.md) | Container interaction (list/logs/shell/exec/inspect) on the DeploymentBackend Protocol | accepted | 2026-05-03 |
+| [024](adr-024-orchestrator-side-purple-continuity-carve-out.md) | Orchestrator-side purple-team continuity carve-out | accepted | 2026-05-03 |
+| [025](adr-025-strict-first-party-config-schema.md) | Strict first-party config schema | accepted | 2026-05-05 |

@@ -112,15 +112,28 @@ class TestAptlConfig:
         assert config.containers.wazuh is True
         assert config.containers.reverse is False
 
-    def test_extra_fields_are_ignored(self):
-        """Unknown top-level keys should be silently ignored."""
+    def test_extra_fields_are_rejected(self):
+        """Unknown top-level keys are validation errors per ADR-025."""
         from aptl.core.config import AptlConfig
 
-        config = AptlConfig(
-            lab={"name": "test"},
-            unknown_section={"foo": "bar"},
-        )
-        assert config.lab.name == "test"
+        with pytest.raises(ValidationError, match="unknown_section"):
+            AptlConfig(
+                lab={"name": "test"},
+                unknown_section={"foo": "bar"},
+            )
+
+    @pytest.mark.parametrize("dead_key", ["edr_agents", "agent_configs"])
+    def test_dead_top_level_keys_are_rejected(self, dead_key):
+        """The legacy `edr_agents` and `agent_configs` blocks have no
+        runtime consumer; they must fail validation rather than be
+        silently accepted (regression for issue #190)."""
+        from aptl.core.config import AptlConfig
+
+        with pytest.raises(ValidationError, match=dead_key):
+            AptlConfig(
+                lab={"name": "test"},
+                **{dead_key: {"victim": ["wazuh"]}},
+            )
 
 
 class TestConfigLoading:
@@ -173,3 +186,34 @@ class TestConfigLoading:
 
         result = find_config(tmp_config_dir)
         assert result is None
+
+    def test_load_rejects_unknown_top_level_key(self, tmp_config_dir):
+        """load_config() must surface unknown top-level keys as a
+        ValidationError, not silently accept them (issue #190)."""
+        from aptl.core.config import load_config
+
+        path = tmp_config_dir / "aptl.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "lab": {"name": "test"},
+                    "edr_agents": {"victim": ["wazuh"]},
+                }
+            )
+        )
+        with pytest.raises(ValidationError, match="edr_agents"):
+            load_config(path)
+
+    def test_checked_in_aptl_json_loads_cleanly(self):
+        """The repo's checked-in aptl.json must remain compatible with
+        the schema (ADR-025: checked-in top-level sections must have
+        both a Pydantic field and a runtime owner)."""
+        from aptl.core.config import AptlConfig, load_config
+
+        repo_root = Path(__file__).resolve().parent.parent
+        config = load_config(repo_root / "aptl.json")
+        assert isinstance(config, AptlConfig)
+        # The lab profile in the checked-in config must remain the
+        # default name; if it ever changes, ADR-025's "checked-in
+        # config is the canonical example" contract is at risk.
+        assert config.lab.name == "aptl"

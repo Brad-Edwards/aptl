@@ -47,3 +47,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [023](adr-023-container-interaction-in-deployment-backend.md) | Container interaction (list/logs/shell/exec/inspect) on the DeploymentBackend Protocol | accepted | 2026-05-03 |
 | [024](adr-024-orchestrator-side-purple-continuity-carve-out.md) | Orchestrator-side purple-team continuity carve-out | accepted | 2026-05-03 |
 | [025](adr-025-strict-first-party-config-schema.md) | Strict first-party config schema | accepted | 2026-05-05 |
+| [026](adr-026-advisory-ci-vulnerability-scanning.md) | Advisory CI Vulnerability Scanning | accepted | 2026-05-09 |

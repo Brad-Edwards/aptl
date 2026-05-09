@@ -94,12 +94,14 @@ export interface ActivityClassification {
 // Tool table
 // ---------------------------------------------------------------------------
 
+type ClassificationTemplate = Omit<
+  ActivityClassification,
+  'tool' | 'type_uid' | 'category_uid' | 'category_name'
+>;
+
 interface ToolEntry {
   tools: readonly string[];
-  template: Omit<
-    ActivityClassification,
-    'tool' | 'type_uid' | 'category_uid' | 'category_name'
-  >;
+  template: ClassificationTemplate;
 }
 
 // First match wins. Order matters only when a tool would otherwise be
@@ -319,10 +321,7 @@ const TOOL_TABLE: readonly ToolEntry[] = [
   },
 ];
 
-const GENERIC_FALLBACK: Omit<
-  ActivityClassification,
-  'tool' | 'type_uid' | 'category_uid' | 'category_name'
-> = {
+const GENERIC_FALLBACK: ClassificationTemplate = {
   activity_type: 'process_execution',
   class_uid: OCSF.PROCESS_ACTIVITY,
   class_name: OCSF_CLASS_NAMES[OCSF.PROCESS_ACTIVITY],
@@ -602,9 +601,8 @@ export function topLevelSegments(command: string): string[] {
 }
 
 export function leadingSubCommand(command: string): string {
-  for (const sep of topLevelSeparators(command)) {
-    return command.slice(0, sep.at);
-  }
+  const first = topLevelSeparators(command).next();
+  if (!first.done) return command.slice(0, first.value.at);
   return command;
 }
 
@@ -651,7 +649,7 @@ function tokenize(segment: string): string[] {
 // ---------------------------------------------------------------------------
 
 function buildResult(
-  template: Omit<ActivityClassification, 'tool' | 'type_uid' | 'category_uid' | 'category_name'>,
+  template: ClassificationTemplate,
   tool?: string,
 ): ActivityClassification {
   const category_uid = OCSF_CATEGORY_UIDS[template.class_uid];

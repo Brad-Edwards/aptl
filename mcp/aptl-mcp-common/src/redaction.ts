@@ -228,7 +228,6 @@ function splitTopLevelSegments(command: string): { start: number; end: number }[
       segments.push({ start, end: i });
       // For `&&`, advance past the second `&` too.
       start = next === '&' ? i + 2 : i + 1;
-      continue;
     }
   }
   segments.push({ start, end: command.length });
@@ -311,9 +310,9 @@ export function redactShortPasswordFlag(command: string): string {
     maybeOffset?: number,
   ): string => {
     const hasSeparator = typeof maybeValue === 'string';
-    const value = hasSeparator ? (maybeValue as string) : sepOrValue;
+    const value = hasSeparator ? maybeValue : sepOrValue;
     const sep = hasSeparator ? sepOrValue : '';
-    const offset = (hasSeparator ? maybeOffset : (maybeValue as number)) ?? 0;
+    const offset = (hasSeparator ? maybeOffset : (maybeValue as number | undefined)) ?? 0;
     const stripped = stripQuotes(value);
     const inCredentialSegment = segmentForOffset(offset);
     if (!inCredentialSegment && isPortLikeValue(stripped)) {

@@ -62,7 +62,10 @@ const IPV6_RE = /\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b|(?:[0-9a-fA-F]{0,4
 // their query string for SIEM correlation. The authority may be a
 // bracketed IPv6 literal (`http://[::1]:8080/x`); we accept `[…]`
 // as a single authority unit.
-const URL_RE = /\b(https?):\/\/(\[[\da-fA-F:]+\][^\s/?#'"]*|[^\s/?#'"]+)([/?#][^\s'"]*)?/i;
+// `\d` and `a-fA-F` would normally be a duplicate-in-char-class warning
+// because hex digits include digits, but `\da-f` is the conventional
+// shorthand and Sonar accepts it. Use it for the bracketed-IPv6 part.
+const URL_RE = /\b(https?):\/\/(\[[a-fA-F\d:]+\][^\s/?#'"]*|[^\s/?#'"]+)([/?#][^\s'"]*)?/i;
 
 const TCP_PORT_MAX = 65535;
 
@@ -257,7 +260,7 @@ function parsePortPart(part: string): PortPart | null {
 
 function expandPortSpec(spec: string): ExpandedPortSpec | null {
   const parts = spec.split(',').map(parsePortPart);
-  if (parts.some((p) => p === null)) return null;
+  if (parts.includes(null)) return null;
   const validParts = parts as PortPart[];
   const totalCount = validParts.reduce((acc, p) => acc + p.count, 0);
   if (totalCount === 0) return null;
@@ -621,32 +624,33 @@ function handleOutputFile(ctx: FlagCtx): void {
   ctx.consumedNext.add(ctx.i + 1);
 }
 
-function handleNmapOutputForm(ctx: FlagCtx): void {
-  if (ctx.classification.activity_type !== 'port_scan') return;
+function setFileIfTool(
+  ctx: FlagCtx,
+  predicate: (cls: ActivityClassification) => boolean,
+  preserveExisting = false,
+): void {
+  if (!predicate(ctx.classification)) return;
   if (ctx.next.startsWith('-')) return;
-  ctx.result.file = { path: ctx.next };
+  if (!preserveExisting || !ctx.result.file) {
+    ctx.result.file = { path: ctx.next };
+  }
   ctx.consumedNext.add(ctx.i + 1);
+}
+
+function handleNmapOutputForm(ctx: FlagCtx): void {
+  setFileIfTool(ctx, (c) => c.activity_type === 'port_scan');
 }
 
 function handleWordlist(ctx: FlagCtx): void {
-  if (!WORDLIST_FAMILIES.has(ctx.classification.activity_type)) return;
-  if (ctx.next.startsWith('-')) return;
-  ctx.result.file = { path: ctx.next };
-  ctx.consumedNext.add(ctx.i + 1);
+  setFileIfTool(ctx, (c) => WORDLIST_FAMILIES.has(c.activity_type));
 }
 
 function handleHydraUserList(ctx: FlagCtx): void {
-  if (ctx.classification.activity_type !== 'credential_brute_force') return;
-  if (ctx.next.startsWith('-')) return;
-  if (!ctx.result.file) ctx.result.file = { path: ctx.next };
-  ctx.consumedNext.add(ctx.i + 1);
+  setFileIfTool(ctx, (c) => c.activity_type === 'credential_brute_force', true);
 }
 
 function handleNmapInputList(ctx: FlagCtx): void {
-  if (ctx.classification.activity_type !== 'port_scan') return;
-  if (ctx.next.startsWith('-')) return;
-  ctx.result.file = { path: ctx.next };
-  ctx.consumedNext.add(ctx.i + 1);
+  setFileIfTool(ctx, (c) => c.activity_type === 'port_scan');
 }
 
 const FLAG_HANDLERS: Record<string, (ctx: FlagCtx) => void> = {

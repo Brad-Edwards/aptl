@@ -129,6 +129,193 @@ jobs:
           done
           true
 
+  trivy-fs:
+    name: Trivy filesystem scan (advisory)
+    runs-on: ubuntu-latest
+    # Advisory — surfaces vulnerable Python/Node deps and embedded secrets
+    # found on disk. Output is a SARIF artifact; `security-events: write`
+    # is intentionally not requested (artifact-only per ADR-026).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret
+          format: sarif
+          output: trivy-fs.sarif
+          exit-code: '0'
+          severity: CRITICAL,HIGH,MEDIUM
+          limit-severities-for-sarif: 'true'
+      - name: Upload SARIF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-sarif
+          path: trivy-fs.sarif
+          retention-days: 7
+
+  trivy-iac:
+    name: Trivy IaC / config scan (advisory)
+    runs-on: ubuntu-latest
+    # Advisory — surfaces Dockerfile, compose, and config misconfigs
+    # (USER root, missing healthchecks, etc.). Distinct from `trivy-fs`
+    # and `trivy-image` by design (ADR-026 § Boundaries).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-iac.sarif
+          exit-code: '0'
+          severity: CRITICAL,HIGH,MEDIUM
+          limit-severities-for-sarif: 'true'
+      - name: Upload SARIF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-iac-sarif
+          path: trivy-iac.sarif
+          retention-days: 7
+
+  trivy-image:
+    name: Trivy image scan (advisory) — ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    # Advisory image scan per locally-built Dockerfile. Matrix is bounded
+    # to images defined in `web/` and `containers/`; upstream-image-only
+    # services (wazuh/, misp/, etc.) are out of scope. ADR-026 calls out
+    # the cost of one-image-per-job — buildx GHA layer cache (scoped per
+    # matrix entry) keeps repeat-runs cheap.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ad
+            dockerfile: containers/ad/Dockerfile
+            context: .
+          - name: base-rocky
+            dockerfile: containers/base/Dockerfile.rocky
+            context: ./containers
+          - name: base-ubuntu
+            dockerfile: containers/base/Dockerfile.ubuntu
+            context: ./containers
+          - name: dns
+            dockerfile: containers/dns/Dockerfile
+            context: .
+          - name: fileshare
+            dockerfile: containers/fileshare/Dockerfile
+            context: .
+          - name: kali
+            dockerfile: containers/kali/Dockerfile
+            context: ./containers/kali
+          - name: misp-suricata-sync
+            dockerfile: containers/misp-suricata-sync/Dockerfile
+            context: .
+          - name: reverse
+            dockerfile: containers/reverse/Dockerfile
+            context: ./containers
+          - name: victim
+            dockerfile: containers/victim/Dockerfile
+            context: ./containers
+          - name: wazuh-sidecar
+            dockerfile: containers/wazuh-sidecar/Dockerfile
+            context: .
+          - name: webapp
+            dockerfile: containers/webapp/Dockerfile
+            context: .
+          - name: workstation
+            dockerfile: containers/workstation/Dockerfile
+            context: ./containers
+          - name: web
+            dockerfile: web/Dockerfile
+            context: web
+          - name: web-api
+            dockerfile: web/Dockerfile.api
+            context: .
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          tags: aptl-scan/${{ matrix.name }}:ci
+          load: true
+          push: false
+          cache-from: type=gha,scope=trivy-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=trivy-${{ matrix.name }}
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: aptl-scan/${{ matrix.name }}:ci
+          vuln-type: os,library
+          format: sarif
+          output: trivy-image-${{ matrix.name }}.sarif
+          exit-code: '0'
+          severity: CRITICAL,HIGH,MEDIUM
+          limit-severities-for-sarif: 'true'
+      - name: Upload SARIF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-${{ matrix.name }}-sarif
+          path: trivy-image-${{ matrix.name }}.sarif
+          retention-days: 7
+
+  osv-scanner:
+    name: OSV-scanner (uv.lock advisory)
+    runs-on: ubuntu-latest
+    # Advisory — covers the project-root `uv.lock` Python dependency
+    # graph. Complements the existing `dependency-audit` job (pip-audit /
+    # npm audit); ADR-026 § Risks notes OSV is not wired as a wholesale
+    # replacement for the ecosystem audits.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install osv-scanner (checksum-verified)
+        # Pin to a specific release and verify the binary against the
+        # publisher's SHA256SUMS manifest before exec'ing it. Without
+        # verification a tampered release artifact would gain code
+        # execution in the runner under the workflow's GITHUB_TOKEN.
+        run: |
+          set -euo pipefail
+          version=v2.3.8
+          asset=osv-scanner_linux_amd64
+          base="https://github.com/google/osv-scanner/releases/download/${version}"
+          tmpdir="$(mktemp -d)"
+          cd "$tmpdir"
+          curl -sSL -o "${asset}" "${base}/${asset}"
+          curl -sSL -o osv-scanner_SHA256SUMS "${base}/osv-scanner_SHA256SUMS"
+          grep " ${asset}\$" osv-scanner_SHA256SUMS | sha256sum -c -
+          sudo install -m 0755 "${asset}" /usr/local/bin/osv-scanner
+      - name: Scan uv.lock
+        # OSV-scanner v2 exits 0 (no vulns), 1 (vulns found), or other
+        # codes for tool/CLI errors. We swallow exit 1 so advisory
+        # findings don't fail the step, but propagate other codes so a
+        # broken invocation can't silently produce no SARIF artifact.
+        run: |
+          set +e
+          osv-scanner scan -L uv.lock --format sarif --output-file osv-scanner.sarif
+          ec=$?
+          if [ "$ec" -eq 0 ] || [ "$ec" -eq 1 ]; then
+            exit 0
+          fi
+          echo "osv-scanner failed with exit code $ec" >&2
+          exit "$ec"
+      - name: Upload SARIF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: osv-scanner-sarif
+          path: osv-scanner.sarif
+          retention-days: 7
+
   sonarcloud:
     name: SonarCloud quality gate (advisory)
     needs: [python-tests, mcp-tests, web-tests]

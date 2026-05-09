@@ -413,8 +413,28 @@ const SUDO_FLAGS_TAKING_ARG = new Set([
 ]);
 
 const ENV_ASSIGN_RE = /^[A-Za-z_]\w*=/;
-const SHELL_C_CLUSTER_RE = /^-[A-Za-z]*c[A-Za-z]*$/;
 const SSHPASS_ARG_FLAGS = ['-p', '-f', '-d', '-P'];
+
+/**
+ * Match a shell option-cluster token like `-c`, `-vc`, `-cv`, `-vcx` —
+ * a leading `-` followed only by ASCII letters where at least one
+ * letter is `c`. Implemented as a non-regex character scan (no
+ * backtracking) so it sidesteps Sonar's S5852 ReDoS heuristic; input
+ * is a single shell-token already split by `tokenize`, so length is
+ * bounded.
+ */
+function isShellCCluster(token: string): boolean {
+  if (token.length < 2 || token[0] !== '-') return false;
+  let sawC = false;
+  for (let i = 1; i < token.length; i++) {
+    const ch = token.charCodeAt(i);
+    const isUpper = ch >= 65 && ch <= 90;
+    const isLower = ch >= 97 && ch <= 122;
+    if (!isUpper && !isLower) return false;
+    if (ch === 99 || ch === 67) sawC = true;
+  }
+  return sawC;
+}
 
 /**
  * Skip past sudo's options until the real command. Returns the index
@@ -494,7 +514,7 @@ function skipTransparentWrapperOptions(
 function findShellCToken(tokens: string[], start: number): number {
   for (let j = start; j < tokens.length; j++) {
     const t = tokens[j];
-    if (t === '-c' || SHELL_C_CLUSTER_RE.test(t)) return j;
+    if (t === '-c' || isShellCCluster(t)) return j;
   }
   return -1;
 }

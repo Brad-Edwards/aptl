@@ -564,20 +564,35 @@ function redactString(value: string): string {
 // when the segment contains an impacket-family tool token.
 //
 // Real Windows / domain passwords commonly contain `:`, `@`, and
-// whitespace, so a strict `[^\s:@]+` for the password segment misses
-// real attacks. Match three forms:
-//   - bare:    `user:VALUE@host`            — VALUE is everything from
-//              the FIRST `:` to the LAST `@` before whitespace.
+// whitespace. Match three forms:
+//   - bare:    `user:VALUE@host`            — VALUE is non-`@`,
+//              non-whitespace chars (with backslash-escapes); aligns
+//              with impacket's own `parse_target`, which uses `[^@]*`
+//              for the password and therefore can't accept literal
+//              `@` in unquoted form either. Users with `@` or
+//              whitespace in passwords MUST quote.
 //   - dquot:   `user:"VALUE"@host`          — quoted value (any char).
 //   - squot:   `user:'VALUE'@host`          — single-quoted.
-// Use the LAST unescaped `@` (not the first) as the host separator so
-// passwords containing `@` are masked correctly.
 // Split into per-value-form patterns to keep each regex under Sonar's
 // regex-complexity threshold (S5843). The combined form was ~28; each
 // split form is ~15-18.
-const IMPACKET_POSITIONAL_DQUOTE = /([\w\\/.-]+):"((?:[^"\\]|\\.)*)"@([\w.-]+)(?=\s|$|[;|&])/g;
-const IMPACKET_POSITIONAL_SQUOTE = /([\w\\/.-]+):'((?:[^'\\]|\\.)*)'@([\w.-]+)(?=\s|$|[;|&])/g;
-const IMPACKET_POSITIONAL_BARE = /([\w\\/.-]+):((?:\\.|\S)+?)@([\w.-]+)(?=\s|$|[;|&])/g;
+//
+// DQUOTE / SQUOTE use the unrolled-loop quoted-string form
+// (`[^Q\\]*(?:\\.[^Q\\]*)*`) instead of the alternation form
+// (`(?:[^Q\\]|\\.)*`). Both match the same language, but the unrolled
+// form has no inner alternation so the regex engine cannot pick
+// between two alternatives that could match the same character —
+// eliminating the ReDoS risk at the engine level (Sonar S5852).
+//
+// BARE uses exclusive alternatives `\\.|[^\\@\s]` instead of `\\.|\S`.
+// `\S` overlaps with `\\.` (both can match the leading backslash of an
+// escape), creating ambiguous backtracking; `[^\\@\s]` excludes the
+// backslash so the alternatives are mutually exclusive. `@` is also
+// excluded so the pattern stops at the host separator without needing
+// laziness, which removes another backtracking source.
+const IMPACKET_POSITIONAL_DQUOTE = /([\w\\/.-]+):"([^"\\]*(?:\\.[^"\\]*)*)"@([\w.-]+)(?=\s|$|[;|&])/g;
+const IMPACKET_POSITIONAL_SQUOTE = /([\w\\/.-]+):'([^'\\]*(?:\\.[^'\\]*)*)'@([\w.-]+)(?=\s|$|[;|&])/g;
+const IMPACKET_POSITIONAL_BARE = /([\w\\/.-]+):((?:\\.|[^\\@\s])+)@([\w.-]+)(?=\s|$|[;|&])/g;
 
 const IMPACKET_TOOL_REGEXES: readonly RegExp[] = [
   /(^|[\s|;&])(?:[\w./-]+\/)?(impacket-[\w-]+)(?:\s|$)/i,

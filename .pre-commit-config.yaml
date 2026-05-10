@@ -49,10 +49,16 @@ repos:
         # Hard, repo-wide gate on per-function cyclomatic complexity —
         # config in pyproject [tool.ruff.lint.mccabe] (max-complexity).
         # Only C901 is enabled (see [tool.ruff.lint] select): this is a
-        # complexity guard, not a style linter. Prefer the repo's .venv;
-        # fall back to a ruff already on PATH (mirrors the pytest hook).
-        entry: bash -c 'if [ -x .venv/bin/ruff ]; then exec .venv/bin/ruff check src/; else exec ruff check src/; fi'
-        language: system
+        # complexity guard, not a style linter. `language: python` with
+        # `additional_dependencies` so the hook is self-contained — it
+        # installs its own ruff and does NOT need the project's .venv (the
+        # CI pre-commit job only `pip install pre-commit`s, no project
+        # deps). `pass_filenames: false`: always lints all of src/, not
+        # just the changed files.
+        entry: ruff
+        args: [check, src/]
+        language: python
+        additional_dependencies: ["ruff>=0.15.0"]
         pass_filenames: false
         files: ^(src/.*\.py|pyproject\.toml)$
 

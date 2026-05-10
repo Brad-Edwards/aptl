@@ -38,10 +38,29 @@ dev = [
     "coverage>=7.0.0",
     "httpx>=0.27.0",
     "hypothesis>=6.0.0",
+    "ruff>=0.15.0",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
+
+[tool.ruff]
+# Lint only the Python control-plane source. Tests, generated files, and
+# the (TypeScript) MCP / web trees are out of scope for this check.
+src = ["src"]
+
+[tool.ruff.lint]
+# Intentionally narrow: this is a *complexity* gate, not a style linter —
+# `C901` (McCabe cyclomatic complexity) is the only rule enabled, so the
+# check fails a god-method without churning the codebase on style. Widen
+# the rule set deliberately if/when the team wants more from ruff.
+select = ["C901"]
+
+[tool.ruff.lint.mccabe]
+# A function over this many independent paths is the "god method" this
+# gate exists to stop. Matches SonarCloud's default cognitive-complexity
+# threshold (15); ratchet down over time as the backlog shrinks.
+max-complexity = 15
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

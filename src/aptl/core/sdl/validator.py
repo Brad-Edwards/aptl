@@ -323,7 +323,7 @@ class SemanticValidator:
                         f"Node '{name}' references undefined vulnerability '{vuln_name}'"
                     )
 
-    def _verify_infrastructure(self) -> None:
+    def _verify_infrastructure(self) -> None:  # noqa: C901  # complexity backlog — split; see ADR-010
         for name, infra in self._s.infrastructure.items():
             if name not in self._s.nodes:
                 self._err(
@@ -497,7 +497,7 @@ class SemanticValidator:
                     ref_label="target",
                 )
 
-    def _verify_agents(self) -> None:
+    def _verify_agents(self) -> None:  # noqa: C901  # complexity backlog — split; see ADR-010
         flat_entity_names = self._all_entity_names()
         service_names = {
             service.name
@@ -580,7 +580,7 @@ class SemanticValidator:
                             f"'{acct_name}' not in accounts section"
                         )
 
-    def _verify_objectives(self) -> None:
+    def _verify_objectives(self) -> None:  # noqa: C901  # complexity backlog — split; see ADR-010
         actor_entities = self._all_entity_names()
 
         for name, objective in self._s.objectives.items():
@@ -809,7 +809,7 @@ class SemanticValidator:
                     f"'{outcome_ref}' in predicate"
                 )
 
-    def _verify_workflows(self) -> None:
+    def _verify_workflows(self) -> None:  # noqa: C901  # complexity backlog — split; see ADR-010
         for workflow_name, workflow in self._s.workflows.items():
             if "." in workflow_name:
                 self._err(

@@ -379,7 +379,7 @@ def _resolve_workflow_step_refs(
     return _dedupe(valid_refs), _dedupe(workflow_addresses), diagnostics
 
 
-def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
+def compile_runtime_model(scenario: Scenario) -> RuntimeModel:  # noqa: C901  # complexity backlog — split; see ADR-010
     """Compile an SDL scenario into bound runtime objects."""
 
     diagnostics: list[Diagnostic] = []

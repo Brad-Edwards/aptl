@@ -54,3 +54,48 @@ Integrate SonarCloud via GitHub Actions for continuous code quality analysis acr
 
 - SonarCloud free tier limits may be reached as the codebase grows (currently well within limits for open-source projects)
 - Coverage thresholds are not yet enforced as quality gates — currently informational only
+
+## Update (2026-05-10): SonarCloud gate stays advisory; a hard in-repo complexity gate is added
+
+The SonarCloud analysis now lives in `.github/workflows/checks.yml` (the
+former `sonarcloud.yml` was folded in), and the quality-gate job is run
+**advisory** (`continue-on-error`, no `-Dsonar.qualitygate.wait`): the
+"Sonar way" gate's *Coverage on New Code ≥ 80%* condition would otherwise
+block infra-only commits (Dockerfiles, compose, workflows, scripts) that add
+no covered code. The scan still runs on every PR/push and the dashboard
+reflects current state; SonarCloud's PR analysis is also new-code-scoped, so
+it only surfaces issues on the lines a PR changes — pre-existing complexity
+debt in a lightly-touched file is invisible to it.
+
+To keep god-methods / non-modular code out of the tree without the coverage
+trap and without the new-code-only blind spot, a dedicated, **hard**,
+repo-wide per-function complexity gate runs in pre-commit and CI: `ruff
+check src/` with **only `C901` enabled** (`[tool.ruff.lint] select =
+["C901"]`) and `[tool.ruff.lint.mccabe] max-complexity = 15` — matching
+SonarCloud's default cognitive-complexity threshold (cyclomatic complexity is
+a fine proxy for "this method does too much"). This is the only `ruff` rule
+turned on; it is a complexity guard, not a style linter — widen the rule set
+deliberately if/when the team wants more from `ruff`.
+
+### Complexity backlog (carved out with `# noqa: C901`)
+
+These functions exceed the threshold today and are exempted **at the site**
+(`# noqa: C901` on the `def` line) until split. They are the standing
+refactor backlog — do not add to it; peel them off one PR at a time and
+ratchet `max-complexity` down as the list shrinks:
+
+| Function | File | CC |
+| --- | --- | --- |
+| `compile_runtime_model` | `src/aptl/core/runtime/compiler.py` | 45 |
+| `_verify_objectives` | `src/aptl/core/sdl/validator.py` | 43 |
+| `_verify_workflows` | `src/aptl/core/sdl/validator.py` | 37 |
+| `_validate_manifest` | `src/aptl/core/runtime/planner.py` | 31 |
+| `_verify_infrastructure` | `src/aptl/core/sdl/validator.py` | 31 |
+| `_verify_agents` | `src/aptl/core/sdl/validator.py` | 25 |
+| `_collect_resources` | `src/aptl/core/runtime/planner.py` | 18 |
+| `_expand_shorthands` | `src/aptl/core/sdl/parser.py` | 17 |
+
+(SonarCloud separately flags a different set under its *cognitive* metric —
+e.g. deeply-nested functions in `snapshot.py` / `collectors.py` / `env.py` /
+`detection.py` / `cli/runs.py`; the two checks are complementary and both
+worth driving to zero.)

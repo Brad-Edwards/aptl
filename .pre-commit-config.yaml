@@ -35,13 +35,33 @@ repos:
             src/aptl/utils/redaction\.py
           )$
 
-  # Test suites — mirror the three CI test jobs in .github/workflows/checks.yml.
-  # Each hook is gated by a `files:` regex so a commit that doesn't touch a
-  # given language's surface skips that suite. `pre-commit run --all-files`
-  # (and CI) still runs everything because every repo file matches at least
-  # one regex collectively.
+  # Local hooks: a Python complexity gate, then the three test suites
+  # (which mirror the CI test jobs in .github/workflows/checks.yml). Each
+  # hook is gated by a `files:` regex so a commit that doesn't touch a
+  # given surface skips that hook; `pre-commit run --all-files` (and CI)
+  # still runs everything because every repo file matches at least one
+  # regex collectively. The complexity hook runs first so a god-method
+  # fails fast, before the slower test suites (fail_fast: true).
   - repo: local
     hooks:
+      - id: ruff-complexity
+        name: Python complexity gate (ruff C901)
+        # Hard, repo-wide gate on per-function cyclomatic complexity —
+        # config in pyproject [tool.ruff.lint.mccabe] (max-complexity).
+        # Only C901 is enabled (see [tool.ruff.lint] select): this is a
+        # complexity guard, not a style linter. `language: python` with
+        # `additional_dependencies` so the hook is self-contained — it
+        # installs its own ruff and does NOT need the project's .venv (the
+        # CI pre-commit job only `pip install pre-commit`s, no project
+        # deps). `pass_filenames: false`: always lints all of src/, not
+        # just the changed files.
+        entry: ruff
+        args: [check, src/]
+        language: python
+        additional_dependencies: ["ruff>=0.15.0"]
+        pass_filenames: false
+        files: ^(src/.*\.py|pyproject\.toml)$
+
       - id: pytest
         name: Python tests (pytest)
         # Prefer the repo's .venv (so contributors don't need to activate it

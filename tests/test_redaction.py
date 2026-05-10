@@ -325,3 +325,389 @@ class TestArrayPairCliFlags:
         # `--port 22` is not sensitive; value preserved.
         out = redact(["--port", "22", "--password", "x"])
         assert out == ["--port", "22", "--password", REDACTED]
+
+
+class TestCommandFlagRedaction:
+    """Command-line credential forms mirrored from redaction.ts (#281).
+
+    Synthetic credential stand-ins only — no real lab secrets in the
+    source tree (same convention as the rest of this module).
+    """
+
+    # ---- short -p password flag (hydra family) ----
+
+    def test_short_p_password_non_numeric(self):
+        out = redact("hydra -l u -p hunter2 host ssh")
+        assert "hunter2" not in out
+        assert "-p [REDACTED]" in out
+
+    def test_short_p_numeric_redacted_when_credential_tool_present(self):
+        # A numeric -p next to a credential tool is a password, not a port.
+        assert "123456" not in redact("hydra -l u -p 123456 host ssh")
+        assert "1234" not in redact("sshpass -p 1234 ssh user@host")
+
+    def test_short_p_numeric_kept_for_nmap(self):
+        assert "-p 22" in redact("nmap -p 22 10.0.0.1")
+        assert "-p 22,80,443" in redact("nmap -p 22,80,443 host")
+        assert "-p 1-1024" in redact("nmap -p 1-1024 target")
+
+    def test_short_p_through_wrapper_pipelines(self):
+        assert "hunter2" not in redact("proxychains4 hydra -l u -p hunter2 host ssh")
+        assert "hunter2" not in redact("sudo hydra -p hunter2 host ssh")
+
+    def test_short_p_equals_and_attached_forms(self):
+        assert "hunter2" not in redact("hydra -l u -p=hunter2 host ssh")
+        assert "hunter2" not in redact("hydra -l u -phunter2 host ssh")
+
+    def test_short_p_quoted_multiword_value(self):
+        assert "secret" not in redact('hydra -p "secret phrase" host ssh')
+
+    def test_short_p_escape_aware_value(self):
+        out = redact("hydra -l u -p correct\\ horse host ssh")
+        assert "correct" not in out
+        assert "horse" not in out
+
+    def test_short_p_per_segment_keeps_port_in_other_segment(self):
+        out = redact("nmap -p 22 10.0.0.1 && hydra -l u -p hunter2 10.0.0.1 ssh")
+        assert "-p 22" in out
+        assert "hunter2" not in out
+        assert "-p [REDACTED]" in out
+
+    def test_short_p_per_segment_respects_pipe(self):
+        out = redact("nmap -p 80 host | grep open ; hydra -p hunter2 h ssh")
+        assert "-p 80" in out
+        assert "hunter2" not in out
+
+    def test_short_p_numeric_redacted_for_evil_winrm_and_bloodhound(self):
+        assert "12345" not in redact("evil-winrm -i 10.0.0.1 -u alice -p 12345")
+        assert "12345" not in redact(
+            "bloodhound-python -u alice -p 12345 -d corp.example -c All"
+        )
+
+    # ---- --user / -u / -U Basic-auth & Samba ----
+
+    def test_basic_auth_user_colon_password(self):
+        out = redact("curl --user alice:hunter2 https://target/")
+        assert "hunter2" not in out
+        assert "--user [REDACTED]" in out
+
+    def test_basic_auth_short_u(self):
+        assert "hunter2" not in redact("curl -u alice:hunter2 https://target/")
+
+    def test_basic_auth_equals_form(self):
+        assert "hunter2" not in redact("curl --user=alice:hunter2 https://target/")
+
+    def test_basic_auth_bare_username_left_alone(self):
+        assert "--user alice" in redact("ssh --user alice host")
+
+    def test_basic_auth_url_target_not_redacted(self):
+        out = redact("sqlmap -u https://target.example/login --batch")
+        assert "https://target.example/login" in out
+
+    def test_basic_auth_url_with_port_not_redacted(self):
+        out = redact("gobuster dir -u https://target.example:8443/admin -w words.txt")
+        assert "https://target.example:8443/admin" in out
+
+    def test_samba_percent_password_in_capital_u(self):
+        assert "hunter2" not in redact("smbclient -U alice%hunter2 //host/share")
+
+    def test_basic_auth_attached_forms(self):
+        assert "hunter2" not in redact("curl -ualice:hunter2 https://target.example/")
+        assert "hunter2" not in redact("smbclient -Ualice%hunter2 //host/share")
+
+    # ---- -H NTLM hash flag (crackmapexec / nxc / impacket) ----
+
+    def test_ntlm_hash_redacted_for_crackmapexec(self):
+        out = redact(
+            "crackmapexec smb dc.example -u alice "
+            "-H aad3b435b51404eeaad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c"
+        )
+        assert "aad3b435" not in out
+        assert "8846f7ea" not in out
+
+    def test_ntlm_hash_redacted_for_nxc_attached(self):
+        out = redact("nxc smb dc.example -u alice -Haad3b435b51404ee:8846f7eaee")
+        assert "aad3b435" not in out
+        assert "8846f7ea" not in out
+
+    def test_curl_dash_h_header_not_treated_as_hash(self):
+        out = redact("curl -H 'X-Foo: bar' https://target/")
+        assert "X-Foo: bar" in out
+
+    # ---- -w LDAP simple-bind password ----
+
+    def test_ldap_w_password_redacted(self):
+        out = redact("ldapsearch -x -D cn=admin,dc=lab -w hunter2 -b dc=lab")
+        assert "hunter2" not in out
+
+    def test_ldap_w_password_attached_form(self):
+        assert "hunter2" not in redact("ldapsearch -x -D cn=admin,dc=lab -whunter2")
+
+    def test_dash_w_wordlist_not_treated_as_ldap_password(self):
+        # hydra is not an LDAP tool, so its -w (wait time / wordlist) stays.
+        out = redact("hydra -l u -p x -w 5 host ssh")
+        assert "-w 5" in out
+        assert "-p [REDACTED]" in out
+
+    # ---- quoted standalone option-token normalization ----
+
+    def test_quoted_option_token_normalized_before_flag_matching(self):
+        assert "hunter2" not in redact("hydra '-p' hunter2 host ssh")
+        assert "hunter2" not in redact('curl "-u" alice:hunter2 https://target/')
+
+    # ---- impacket positional user:password@host ----
+
+    def test_impacket_positional_redacted(self):
+        out = redact("psexec.py corp/alice:hunter2@dc.example")
+        assert "hunter2" not in out
+        assert "alice" in out
+        assert "dc.example" in out
+        assert "psexec.py" in out
+
+    def test_impacket_positional_redacted_secretsdump(self):
+        assert "hunter2" not in redact("secretsdump.py alice:hunter2@dc.example")
+
+    def test_impacket_positional_quoted_password_with_specials(self):
+        out_dq = redact('psexec.py corp/alice:"P@ss:w0rd"@dc.example')
+        assert "P@ss" not in out_dq
+        assert "corp/alice" in out_dq
+        assert "@dc.example" in out_dq
+        out_sq = redact("psexec.py corp/alice:'P@ss w0rd'@dc.example")
+        assert "P@ss" not in out_sq
+
+    def test_non_impacket_user_pair_at_host_left_alone(self):
+        out = redact("rsync user:pw@host /local/path")
+        assert "user:pw@host" in out
+
+    # ---- composes through top-level redact() on nested structures ----
+
+    def test_command_in_dict_value_is_redacted(self):
+        out = redact({"command": "hydra -l admin -p hunter2 10.0.0.1 ssh", "rc": 0})
+        assert "hunter2" not in out["command"]
+        assert out["rc"] == 0
+
+    def test_command_in_list_is_redacted(self):
+        out = redact(["curl --user alice:hunter2 https://target/", "ok"])
+        assert "hunter2" not in out[0]
+
+    # ---- idempotency: running redact twice == once ----
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "hydra -l u -p hunter2 host ssh",
+            "nmap -p 22 10.0.0.1 && hydra -p hunter2 h ssh",
+            "crackmapexec smb dc -u alice -H aad3b435:8846f7ea",
+            "psexec.py corp/alice:hunter2@dc.example",
+            "curl --user alice:hunter2 https://target/",
+            "ldapsearch -x -D cn=admin,dc=lab -w hunter2",
+            "nmap -p 22,80,443 host",
+        ],
+    )
+    def test_redact_is_idempotent_on_commands(self, command):
+        once = redact(command)
+        twice = redact(once)
+        assert once == twice
+
+    def test_port_only_string_unchanged(self):
+        # A bare port spec with no tool context is left intact.
+        assert redact("-p 22") == "-p 22"
+        assert redact({"args": ["-p", "443"]}) == {"args": ["-p", "443"]}
+
+
+class TestCommandFlagRedactionOffsetSafety:
+    """Regression tests pinning the per-segment offset-recompute fix
+    (codex review cycle 1, finding 2). The earlier implementation
+    computed segment offsets once and ran six sequential ``.sub()``
+    calls on a mutating string; once a quoted credential of length ≠
+    [REDACTED] was replaced, later offsets shifted into the wrong
+    segment and could over-redact a port spec, a wordlist value, or a
+    non-credential userinfo pair."""
+
+    def test_long_quoted_hydra_password_does_not_mask_later_nmap_port(self):
+        # The quoted password is much longer than [REDACTED] so the
+        # post-DQUOTE-sub offsets shift left by ~25 chars; without the
+        # per-pass segment recompute, the later `-p 22` falls back into
+        # the hydra segment and gets masked.
+        cmd = (
+            'hydra -p "ABCDEFGHIJKLMNOPQRSTUVWXYZ" foo && nmap -p 22 10.0.0.1'
+        )
+        out = redact(cmd)
+        assert "ABCDEFGHIJKLMNOPQRSTUVWXYZ" not in out
+        assert "-p [REDACTED]" in out
+        assert "-p 22" in out  # nmap's port survived
+
+    def test_long_quoted_ldap_password_does_not_mask_later_hydra_w(self):
+        # ldapsearch -w <long-pwd> ... && hydra -w 5 ... — `-w 5` is a
+        # wait/wordlist for hydra (not an LDAP password); offset drift
+        # would mis-classify it as still being in the ldap segment.
+        cmd = (
+            'ldapsearch -x -D cn=admin,dc=lab -w "ABCDEFGHIJKLMNOPQRSTUVWXYZ" '
+            "&& hydra -l u -p x -w 5 host ssh"
+        )
+        out = redact(cmd)
+        assert "ABCDEFGHIJKLMNOPQRSTUVWXYZ" not in out
+        assert "-w 5" in out  # hydra wait stays visible
+
+    def test_long_quoted_impacket_password_does_not_mask_later_userinfo(self):
+        cmd = (
+            'psexec.py corp/alice:"ABCDEFGHIJKLMNOPQRSTUVWXYZ"@dc.example '
+            "&& echo unrelated:token@host"
+        )
+        out = redact(cmd)
+        assert "ABCDEFGHIJKLMNOPQRSTUVWXYZ" not in out
+        assert "unrelated:token@host" in out
+
+
+class TestRedactStringScalarBoundary:
+    """``redact("...")`` returns a redacted string. Used by the
+    runstore boundary's JSON ``default`` hook so non-JSON values
+    can't smuggle secrets past the redactor (ADR-029)."""
+
+    def test_redact_of_inline_secret_string(self):
+        assert redact("Authorization: Bearer abc.def") == "Authorization: Bearer [REDACTED]"
+        assert redact("password: hunter2") == "password: [REDACTED]"
+
+    def test_redact_of_non_secret_string(self):
+        assert redact("hello world") == "hello world"
+
+
+class TestQuoteStripScopedToCredentialSegments:
+    """Codex review cycle 2 finding 1: the quoted-option strip used to
+    run globally and corrupted non-option text (``echo '-p' hunter2``
+    became ``echo -p hunter2`` and then the trailing word was masked as
+    if it were a password). The strip is now scoped to segments that
+    name a credential-bearing tool."""
+
+    def test_echo_quoted_option_data_is_preserved(self):
+        # `echo` is not a credential tool; the quoted `-p` is data, not
+        # an argv flag, and the trailing word is just text. Both should
+        # survive untouched.
+        out = redact("echo '-p' hunter2 file.txt")
+        assert out == "echo '-p' hunter2 file.txt"
+
+    def test_grep_quoted_option_data_is_preserved(self):
+        out = redact("grep '-u' alice:other file.log")
+        # grep is not a credential tool — `-u` here is data, not an auth flag.
+        assert out == "grep '-u' alice:other file.log"
+
+    def test_hydra_quoted_option_still_unquotes_and_redacts(self):
+        # Parity with the cycle-12 security fix: hydra IS a credential
+        # tool, so its segment unquotes and the per-flag matcher fires.
+        out = redact("hydra '-p' hunter2 host ssh")
+        assert "hunter2" not in out
+
+    def test_curl_quoted_short_u_still_unquotes_and_redacts(self):
+        out = redact('curl "-u" alice:hunter2 https://target/')
+        assert "hunter2" not in out
+
+    def test_mixed_segments_only_unquote_credential_one(self):
+        # Two segments separated by `;`: echo (data) | hydra (credential).
+        out = redact("echo '-p' notapwd ; hydra '-p' realpwd host ssh")
+        assert "'-p' notapwd" in out  # echo segment preserved
+        assert "realpwd" not in out  # hydra segment redacted
+
+
+class TestBasicAuthShortFlagToolScope:
+    """Codex review cycle 2 finding 2: the short ``-u``/``-U`` redactor
+    used to fire on any value containing ``:`` or ``%``, regardless of
+    the tool. ``date -u +%Y:%m`` (where ``-u`` is the UTC flag and
+    ``+%Y:%m`` is just an unrelated value) was misread as Basic auth.
+    Short ``-u``/``-U`` are now scoped to tool families that actually
+    use those flags for auth; long ``--user`` stays content-based."""
+
+    def test_date_short_u_format_string_preserved(self):
+        out = redact("date -u +%Y:%m:%d")
+        assert "+%Y:%m:%d" in out
+
+    def test_grep_short_u_with_colon_value_preserved(self):
+        # `grep -u something:other file` — grep doesn't use -u for auth.
+        out = redact("grep -u alice:other file.log")
+        assert "alice:other" in out
+
+    def test_curl_short_u_credential_still_redacted(self):
+        # curl is in the basic-auth-short tools list — content-based
+        # check still applies and the credential is masked.
+        assert "hunter2" not in redact("curl -u alice:hunter2 https://target/")
+
+    def test_long_user_stays_content_based_even_for_unknown_tool(self):
+        # Long `--user` is overwhelmingly auth-bearing across tools, so
+        # the tool-scope gate does NOT apply to it. A `--user user:pass`
+        # on an unfamiliar tool is still masked.
+        out = redact("custom-tool --user alice:hunter2 some-target")
+        assert "hunter2" not in out
+
+
+class TestSegmentSplitterSeparatorAtomicity:
+    """Codex review cycle 3 finding 1: the splitter used to revisit the
+    second ``&`` of ``&&``, which the new segment-reconstructor in
+    ``_unquote_options_in_credential_segments`` would emit as a stray
+    extra ``&`` in the output. The splitter now consumes multi-character
+    separators atomically."""
+
+    def test_double_amp_separator_is_preserved_through_quote_unquote(self):
+        # `hydra '-p' hunter2 host ssh && echo ok` exercises the
+        # reconstruction path: the first segment (hydra) unquotes,
+        # the second (echo) does not. The `&&` separator must arrive
+        # in the output exactly once, not as `&&&`.
+        out = redact("hydra '-p' hunter2 host ssh && echo ok")
+        assert "&&&" not in out
+        assert "&&" in out
+        assert "hunter2" not in out  # still redacted
+        assert "echo ok" in out
+
+    def test_double_pipe_separator_is_preserved(self):
+        out = redact("hydra '-p' hunter2 host ssh || echo failed")
+        assert out.count("||") == 1
+        assert "hunter2" not in out
+
+
+class TestArgvShortFlagRedaction:
+    """Codex review cycle 3 finding 2: structured argv arrays bypassed
+    the new short-flag redactors (which only ran on scalar command
+    strings). ``redact()`` now detects an argv whose leading token
+    names a credential-family tool and applies the same short-flag
+    rules per-element."""
+
+    def test_argv_hydra_short_p(self):
+        out = redact(["hydra", "-p", "hunter2", "host", "ssh"])
+        assert out == ["hydra", "-p", REDACTED, "host", "ssh"]
+
+    def test_argv_curl_short_u_credential(self):
+        out = redact(["curl", "-u", "alice:hunter2", "https://target/"])
+        assert out == ["curl", "-u", REDACTED, "https://target/"]
+
+    def test_argv_curl_short_u_bare_username_preserved(self):
+        # Bare username (no `:`/`%`) stays — content-based gate still applies.
+        out = redact(["curl", "-u", "alice", "https://target/"])
+        assert out == ["curl", "-u", "alice", "https://target/"]
+
+    def test_argv_ldapsearch_short_w(self):
+        out = redact(["ldapsearch", "-x", "-D", "cn=admin,dc=lab", "-w", "hunter2"])
+        assert "hunter2" not in out
+        assert out[-2] == "-w"
+        assert out[-1] == REDACTED
+
+    def test_argv_nxc_short_h_hash(self):
+        out = redact(["nxc", "smb", "dc.example", "-u", "alice", "-H", "AAD3:8846"])
+        # `-u alice` bare → preserved.
+        assert "alice" in out
+        # `-H AAD3:8846` → redacted.
+        assert "AAD3:8846" not in out
+        h_idx = out.index("-H")
+        assert out[h_idx + 1] == REDACTED
+
+    def test_argv_nmap_short_p_port_preserved(self):
+        # nmap is not a credential tool; -p 22 is a port spec.
+        out = redact(["nmap", "-p", "22", "10.0.0.1"])
+        assert out == ["nmap", "-p", "22", "10.0.0.1"]
+
+    def test_argv_long_flag_pair_still_works(self):
+        # The pre-existing pair-form for long sensitive flags still works.
+        out = redact(["whatever", "--password", "hunter2"])
+        assert out == ["whatever", "--password", REDACTED]
+
+    def test_argv_inside_dict_value_is_redacted(self):
+        out = redact({"args": ["hydra", "-p", "hunter2", "host", "ssh"], "rc": 0})
+        assert out["args"] == ["hydra", "-p", REDACTED, "host", "ssh"]
+        assert out["rc"] == 0

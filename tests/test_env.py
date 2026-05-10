@@ -321,7 +321,10 @@ class TestFindPlaceholderEnvValues:
     def test_real_wazuh_secrets_pass(self):
         from aptl.core.env import find_placeholder_env_values
 
-        env = {"API_PASSWORD": "s3cret-pw", "WAZUH_CLUSTER_KEY": "deadbeef" * 4}
+        env = {
+            "API_PASSWORD": "operator-set-api-password",
+            "WAZUH_CLUSTER_KEY": "operator-set-cluster-key",
+        }
         assert find_placeholder_env_values(env) == []
 
     def test_absent_or_empty_wazuh_cluster_key_allowed(self):

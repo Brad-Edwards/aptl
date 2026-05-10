@@ -700,20 +700,19 @@ class TestCheckedInTemplates:
         # `<certificate>/etc/ssl/filebeat.pem</certificate>`.
         assert "<key>/etc/ssl/filebeat.key</key>" in conf
 
-    def test_manager_template_has_no_credential_shaped_key_outside_cluster(self):
+    def test_manager_template_has_no_credential_shaped_key(self):
+        """No ``<key>`` element in the checked-in template — inside or
+        outside ``<cluster>`` — may hold a raw 32-hex-char value. Those
+        are the shape of a real Wazuh cluster key (or the fallout of an
+        old in-place mutation being committed), and a secret scanner will
+        flag them; the template carries only placeholders / paths."""
         conf = (_REPO_ROOT / _MANAGER_SOURCE_RELPATH).read_text()
-        # Strip the <cluster>...</cluster> block(s) (where a hex key is the
-        # legitimate placeholder cluster key) and assert no remaining <key>
-        # element looks like a raw 32-hex-char secret.
-        outside_cluster = re.sub(
-            r"<cluster>.*?</cluster>", "", conf, flags=re.DOTALL
-        )
-        stray = [
+        hex_keys = [
             m.group(1)
-            for m in re.finditer(r"<key>([^<]*)</key>", outside_cluster)
+            for m in re.finditer(r"<key>([^<]*)</key>", conf)
             if self._HEX32.match(m.group(1).strip())
         ]
-        assert not stray, (
-            "non-cluster <key> element(s) hold a credential-shaped value "
-            f"(template was likely dirtied by an old startup run): {stray}"
+        assert not hex_keys, (
+            "<key> element(s) hold a credential-shaped 32-hex value "
+            f"(template was likely dirtied by an old startup run): {hex_keys}"
         )

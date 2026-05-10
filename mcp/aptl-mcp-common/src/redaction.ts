@@ -776,33 +776,46 @@ function argvCredentialModes(leading: string): ArgvCredentialModes {
   };
 }
 
+// Mode → set of short flags it owns → does the value need a content
+// gate? Keeping this as data instead of an if/else chain keeps
+// `argvShortFlagSkipIndices` under the cognitive-complexity ceiling.
+interface ArgvShortFlagRule {
+  mode: keyof ArgvCredentialModes;
+  flags: ReadonlySet<string>;
+  contentGated: boolean;
+}
+const ARGV_SHORT_FLAG_RULES: readonly ArgvShortFlagRule[] = [
+  { mode: 'cred', flags: new Set(['-p']), contentGated: false },
+  { mode: 'hash', flags: new Set(['-H']), contentGated: false },
+  { mode: 'ldap', flags: new Set(['-w']), contentGated: false },
+  // Basic-auth `-u`/`-U` keeps the same content gate as the string-mode
+  // redactor: bare usernames stay visible, only credential pairs mask.
+  { mode: 'basic', flags: new Set(['-u', '-U']), contentGated: true },
+];
+
+function isArgvShortFlagTarget(
+  flag: string,
+  value: string,
+  modes: ArgvCredentialModes,
+): boolean {
+  for (const { mode, flags, contentGated } of ARGV_SHORT_FLAG_RULES) {
+    if (!modes[mode] || !flags.has(flag)) continue;
+    return contentGated ? basicAuthValueIsCredential(value) : true;
+  }
+  return false;
+}
+
 function argvShortFlagSkipIndices(
   items: ReadonlyArray<unknown>,
   modes: ArgvCredentialModes,
 ): Set<number> {
   const skip = new Set<number>();
   if (!modes.cred && !modes.hash && !modes.ldap && !modes.basic) return skip;
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const targetIdx = i + 1;
-    if (
-      typeof item !== 'string' ||
-      targetIdx >= items.length ||
-      typeof items[targetIdx] !== 'string'
-    ) {
-      continue;
-    }
-    if (modes.cred && item === '-p') {
-      skip.add(targetIdx);
-    } else if (modes.hash && item === '-H') {
-      skip.add(targetIdx);
-    } else if (modes.ldap && item === '-w') {
-      skip.add(targetIdx);
-    } else if (modes.basic && (item === '-u' || item === '-U')) {
-      if (basicAuthValueIsCredential(items[targetIdx] as string)) {
-        skip.add(targetIdx);
-      }
-    }
+  for (let i = 0; i + 1 < items.length; i++) {
+    const flag = items[i];
+    const value = items[i + 1];
+    if (typeof flag !== 'string' || typeof value !== 'string') continue;
+    if (isArgvShortFlagTarget(flag, value, modes)) skip.add(i + 1);
   }
   return skip;
 }
@@ -814,7 +827,8 @@ function redactArray(items: unknown[]): unknown[] {
   // `args = ["hydra", "-p", "hunter2", ...]` payload bypasses the
   // short-flag redactors that only run on scalar command strings
   // (ADR-029 / codex review cycle 3, finding 2).
-  const leading = typeof items[0] === 'string' ? (items[0] as string) : '';
+  const first = items[0];
+  const leading = typeof first === 'string' ? first : '';
   const modes = argvCredentialModes(leading);
   const shortFlagSkip = argvShortFlagSkipIndices(items, modes);
   const out: unknown[] = [];

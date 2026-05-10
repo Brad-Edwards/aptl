@@ -373,21 +373,21 @@ _SHORT_P_SQUOTE = re.compile(rf"(^|\s|\|)-p(\s+|=)({_SQ_VALUE})")
 _SHORT_P_UNQUOTED = re.compile(rf"(^|\s|\|)-p(\s+|=)({_BARE_VALUE})")
 _SHORT_P_ATTACHED_DQUOTE = re.compile(rf"(^|\s|\|)-p({_DQ_VALUE})")
 _SHORT_P_ATTACHED_SQUOTE = re.compile(rf"(^|\s|\|)-p({_SQ_VALUE})")
-_SHORT_P_ATTACHED_UNQUOTED = re.compile(rf"(^|\s|\|)-p([^\s='\"](?:\\.|[^\s'\"\\])*)")
+_SHORT_P_ATTACHED_UNQUOTED = re.compile(r"(^|\s|\|)-p([^\s='\"](?:\\.|[^\s'\"\\])*)")
 
 _NTLM_HASH_DQUOTE = re.compile(rf"(^|\s|\|)-H(\s+|=)({_DQ_VALUE})")
 _NTLM_HASH_SQUOTE = re.compile(rf"(^|\s|\|)-H(\s+|=)({_SQ_VALUE})")
 _NTLM_HASH_UNQUOTED = re.compile(rf"(^|\s|\|)-H(\s+|=)({_BARE_VALUE})")
 _NTLM_HASH_ATTACHED_DQUOTE = re.compile(rf"(^|\s|\|)-H({_DQ_VALUE})")
 _NTLM_HASH_ATTACHED_SQUOTE = re.compile(rf"(^|\s|\|)-H({_SQ_VALUE})")
-_NTLM_HASH_ATTACHED_UNQUOTED = re.compile(rf"(^|\s|\|)-H([^\s='\"](?:\\.|[^\s'\"\\])*)")
+_NTLM_HASH_ATTACHED_UNQUOTED = re.compile(r"(^|\s|\|)-H([^\s='\"](?:\\.|[^\s'\"\\])*)")
 
 _LDAP_W_DQUOTE = re.compile(rf"(^|\s|\|)-w(\s+|=)({_DQ_VALUE})")
 _LDAP_W_SQUOTE = re.compile(rf"(^|\s|\|)-w(\s+|=)({_SQ_VALUE})")
 _LDAP_W_UNQUOTED = re.compile(rf"(^|\s|\|)-w(\s+|=)({_BARE_VALUE})")
 _LDAP_W_ATTACHED_DQUOTE = re.compile(rf"(^|\s|\|)-w({_DQ_VALUE})")
 _LDAP_W_ATTACHED_SQUOTE = re.compile(rf"(^|\s|\|)-w({_SQ_VALUE})")
-_LDAP_W_ATTACHED_UNQUOTED = re.compile(rf"(^|\s|\|)-w([^\s='\"](?:\\.|[^\s'\"\\])*)")
+_LDAP_W_ATTACHED_UNQUOTED = re.compile(r"(^|\s|\|)-w([^\s='\"](?:\\.|[^\s'\"\\])*)")
 
 _BASIC_AUTH_USER_DQUOTE = re.compile(rf"(^|\s|\|)(--user|-u|-U)(\s+|=)({_DQ_VALUE})")
 _BASIC_AUTH_USER_SQUOTE = re.compile(rf"(^|\s|\|)(--user|-u|-U)(\s+|=)({_SQ_VALUE})")
@@ -395,7 +395,7 @@ _BASIC_AUTH_USER_UNQUOTED = re.compile(rf"(^|\s|\|)(--user|-u|-U)(\s+|=)({_BARE_
 _BASIC_AUTH_USER_ATTACHED_DQUOTE = re.compile(rf"(^|\s|\|)(-u|-U)({_DQ_VALUE})")
 _BASIC_AUTH_USER_ATTACHED_SQUOTE = re.compile(rf"(^|\s|\|)(-u|-U)({_SQ_VALUE})")
 _BASIC_AUTH_USER_ATTACHED_UNQUOTED = re.compile(
-    rf"(^|\s|\|)(-u|-U)([^\s='\"](?:\\.|[^\s'\"\\])*)"
+    r"(^|\s|\|)(-u|-U)([^\s='\"](?:\\.|[^\s'\"\\])*)"
 )
 
 # Impacket positional `user:password@host` / `domain/user:password@host`.
@@ -745,39 +745,51 @@ def _argv_credential_modes(leading: str) -> dict[str, bool]:
     }
 
 
+# Mode → (set of short flags it owns) → does the value need a content gate?
+# Keeping this as data instead of an if/elif chain keeps
+# ``_argv_short_flag_skip_indices`` under the cognitive-complexity ceiling.
+_ARGV_SHORT_FLAG_RULES: tuple[tuple[str, frozenset[str], bool], ...] = (
+    ("cred", frozenset({"-p"}), False),
+    ("hash", frozenset({"-H"}), False),
+    ("ldap", frozenset({"-w"}), False),
+    # Basic-auth `-u`/`-U` keeps the same content gate as the string-mode
+    # redactor: bare usernames stay visible, only credential pairs mask.
+    ("basic", frozenset({"-u", "-U"}), True),
+)
+
+
+def _is_argv_short_flag_target(
+    flag: str, value: str, modes: dict[str, bool]
+) -> bool:
+    """Decide whether ``value`` (the element following ``flag``) should be
+    redacted as a short-flag credential value, per ``modes``."""
+    for mode, flags, content_gated in _ARGV_SHORT_FLAG_RULES:
+        if not modes[mode] or flag not in flags:
+            continue
+        if content_gated:
+            return _basic_auth_value_is_credential(value)
+        return True
+    return False
+
+
 def _argv_short_flag_skip_indices(items: list, modes: dict[str, bool]) -> set[int]:
     """Indices in ``items`` whose value should be redacted as a short-flag
     credential, given the modes derived from the argv leading token.
 
-    Mirrors the per-segment string-mode short-flag rules: ``-p`` for
-    credential tools (numeric values are also masked when the tool is
-    credential-bearing — numeric passwords are common), ``-H`` for hash
-    tools, ``-w`` for LDAP tools, ``-u``/``-U`` for basic-auth tools
-    (with the same content gate as the string-mode redactor: bare
-    usernames stay visible).
+    Mirrors the per-segment string-mode short-flag rules — ``-p`` for
+    credential tools, ``-H`` for hash tools, ``-w`` for LDAP tools,
+    ``-u``/``-U`` for basic-auth tools (with the bare-username carve-out).
     """
     skip: set[int] = set()
     if not any(modes.values()):
         return skip
-    n = len(items)
-    for i in range(n):
-        item = items[i]
-        target_idx = i + 1
-        if (
-            not isinstance(item, str)
-            or target_idx >= n
-            or not isinstance(items[target_idx], str)
-        ):
+    for i in range(len(items) - 1):
+        flag = items[i]
+        value = items[i + 1]
+        if not isinstance(flag, str) or not isinstance(value, str):
             continue
-        if modes["cred"] and item == "-p":
-            skip.add(target_idx)
-        elif modes["hash"] and item == "-H":
-            skip.add(target_idx)
-        elif modes["ldap"] and item == "-w":
-            skip.add(target_idx)
-        elif modes["basic"] and item in ("-u", "-U"):
-            if _basic_auth_value_is_credential(items[target_idx]):
-                skip.add(target_idx)
+        if _is_argv_short_flag_target(flag, value, modes):
+            skip.add(i + 1)
     return skip
 
 

@@ -3,6 +3,14 @@
 Provides a protocol for storing per-run experiment data and a local
 filesystem implementation. Each run is identified by a UUID and
 stored in a self-contained directory with all collected artifacts.
+
+This module is the Python persistence serialization boundary for run
+archives (ADR-029): structured writes (``write_json`` / ``write_jsonl``
+/ ``append_jsonl``) run the shared :func:`aptl.utils.redaction.redact`
+helper so control-plane/operator secrets are masked before bytes hit
+disk. ``write_file`` (opaque bytes) and ``copy_file`` (arbitrary files)
+cannot be structurally redacted and are pass-through by design —
+callers must not route control-plane secrets through them.
 """
 
 import json
@@ -11,8 +19,22 @@ from pathlib import Path
 from typing import Any, Protocol, TypedDict
 
 from aptl.utils.logging import get_logger
+from aptl.utils.redaction import redact
 
 log = get_logger("runstore")
+
+
+def _safe_default(obj: Any) -> str:
+    """``json.dumps`` ``default`` hook that stringifies AND redacts.
+
+    Plain ``default=str`` would let any non-JSON-serializable value
+    (an exception, a custom object, a ``Path`` whose ``__str__``
+    contains an unexpected token) reach disk after :func:`redact`
+    has already returned the structure — bypassing the redaction
+    contract. Routing the produced string back through ``redact``
+    closes that escape hatch (ADR-029).
+    """
+    return redact(str(obj))
 
 
 class RunManifest(TypedDict):
@@ -83,13 +105,22 @@ class LocalRunStore:
         log.debug("Wrote %d bytes to %s", len(data), target)
 
     def write_json(self, run_id: str, relative_path: str, obj: Any) -> None:
-        data = json.dumps(obj, indent=2, default=str).encode("utf-8")
+        # Redact at the persistence boundary (ADR-029) so individual
+        # callers do not own the policy and run-archive contents are
+        # control-plane-secret-safe by construction. ``default`` runs
+        # through redaction too — see :func:`_safe_default`.
+        safe = redact(obj)
+        data = json.dumps(safe, indent=2, default=_safe_default).encode("utf-8")
         self.write_file(run_id, relative_path, data)
 
     def write_jsonl(
         self, run_id: str, relative_path: str, records: list[dict]
     ) -> None:
-        lines = [json.dumps(r, separators=(",", ":"), default=str) for r in records]
+        # Redact each record at the persistence boundary (ADR-029).
+        lines = [
+            json.dumps(redact(r), separators=(",", ":"), default=_safe_default)
+            for r in records
+        ]
         data = ("\n".join(lines) + "\n").encode("utf-8") if lines else b""
         self.write_file(run_id, relative_path, data)
 
@@ -107,7 +138,11 @@ class LocalRunStore:
             return
         target = self._base_dir / run_id / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
-        lines = [json.dumps(r, separators=(",", ":"), default=str) for r in records]
+        # Redact each record at the persistence boundary (ADR-029).
+        lines = [
+            json.dumps(redact(r), separators=(",", ":"), default=_safe_default)
+            for r in records
+        ]
         chunk = ("\n".join(lines) + "\n").encode("utf-8")
         with open(target, "ab") as fh:
             fh.write(chunk)

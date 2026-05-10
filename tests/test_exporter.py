@@ -173,3 +173,43 @@ class TestExportS3:
 
         archive = output_dir / "test-run.tar.gz"
         assert archive.exists()
+
+
+class TestExportRedactionChain:
+    """Exporter is packaging-only (ADR-029): it must not be the first
+    place secrets are sanitized. These tests pin the chain — secrets
+    written through the runstore arrive in the exported archive already
+    redacted, with no raw secret left for the exporter to leak."""
+
+    def test_export_archive_contains_redacted_json(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        store.create_run("rx")
+        store.write_json("rx", "manifest.json", {"run_id": "rx", "scenario_name": "s"})
+        # A control-plane-shaped secret routed through the runstore
+        # must arrive on disk redacted.
+        store.write_json(
+            "rx",
+            "soc/wazuh.json",
+            {"api_key": "SECRET_AK", "host": "wazuh.indexer.lab"},
+        )
+        store.write_jsonl(
+            "rx",
+            "soc/events.jsonl",
+            [{"trace_id": "tx", "log": "boot ok; Authorization: Bearer XYZ.TOKEN"}],
+        )
+        archive = export_local(store, "rx", tmp_path / "export")
+        with tarfile.open(archive, "r:gz") as tar:
+            wazuh_member = tar.getmember("rx/soc/wazuh.json")
+            extracted = tar.extractfile(wazuh_member)
+            assert extracted is not None
+            wazuh_text = extracted.read().decode("utf-8")
+            events_member = tar.getmember("rx/soc/events.jsonl")
+            extracted_e = tar.extractfile(events_member)
+            assert extracted_e is not None
+            events_text = extracted_e.read().decode("utf-8")
+        wazuh_data = json.loads(wazuh_text)
+        assert wazuh_data == {"api_key": "[REDACTED]", "host": "wazuh.indexer.lab"}
+        assert "SECRET_AK" not in wazuh_text
+        # Inline-secret form inside a string value is masked too.
+        assert "XYZ.TOKEN" not in events_text
+        assert "Bearer [REDACTED]" in events_text

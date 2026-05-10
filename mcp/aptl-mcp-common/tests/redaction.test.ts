@@ -597,3 +597,162 @@ describe('redact — composes the new short-flag and basic-auth redactors', () =
     expect(String(redact('hydra -l admin -p hunter2 10.0.0.1 ssh'))).not.toContain('hunter2');
   });
 });
+
+describe('per-segment offset safety (codex review cycle 1, finding 2)', () => {
+  it('long quoted hydra password does not push later nmap port into the wrong segment', () => {
+    // The earlier impl computed segment offsets once and ran six
+    // sequential .replace() passes on a mutating string; the long
+    // quoted password contracted the string by enough that the later
+    // `-p 22` ended up at an offset that mapped (using the stale
+    // original segments) into the hydra segment, masking the port.
+    const cmd = 'hydra -p "ABCDEFGHIJKLMNOPQRSTUVWXYZ" foo && nmap -p 22 10.0.0.1';
+    const out = String(redact(cmd));
+    expect(out).not.toContain('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    expect(out).toContain('-p [REDACTED]');
+    expect(out).toContain('-p 22');
+  });
+
+  it('long quoted ldap password does not mask later hydra -w wait/wordlist', () => {
+    const cmd =
+      'ldapsearch -x -D cn=admin,dc=lab -w "ABCDEFGHIJKLMNOPQRSTUVWXYZ"' +
+      ' && hydra -l u -p x -w 5 host ssh';
+    const out = String(redact(cmd));
+    expect(out).not.toContain('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    expect(out).toContain('-w 5');
+  });
+
+  it('long quoted impacket password does not mask later non-impacket userinfo', () => {
+    const cmd =
+      'psexec.py corp/alice:"ABCDEFGHIJKLMNOPQRSTUVWXYZ"@dc.example' +
+      ' && echo unrelated:token@host';
+    const out = String(redact(cmd));
+    expect(out).not.toContain('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    expect(out).toContain('unrelated:token@host');
+  });
+});
+
+describe('quote-strip scoped to credential segments (cycle-2 finding 1)', () => {
+  it('echo quoted option data is preserved', () => {
+    expect(redact("echo '-p' hunter2 file.txt")).toBe("echo '-p' hunter2 file.txt");
+  });
+
+  it('grep quoted option data is preserved', () => {
+    expect(redact("grep '-u' alice:other file.log")).toBe(
+      "grep '-u' alice:other file.log",
+    );
+  });
+
+  it('hydra quoted option still unquotes and redacts (parity with cycle-12)', () => {
+    const out = String(redact("hydra '-p' hunter2 host ssh"));
+    expect(out).not.toContain('hunter2');
+  });
+
+  it('curl quoted short -u still unquotes and redacts', () => {
+    const out = String(redact('curl "-u" alice:hunter2 https://target/'));
+    expect(out).not.toContain('hunter2');
+  });
+
+  it('mixed segments only unquote the credential one', () => {
+    const out = String(redact("echo '-p' notapwd ; hydra '-p' realpwd host ssh"));
+    expect(out).toContain("'-p' notapwd");
+    expect(out).not.toContain('realpwd');
+  });
+});
+
+describe('basic-auth short -u/-U scoped to credential tools (cycle-2 finding 2)', () => {
+  it('date -u format string is preserved', () => {
+    const out = String(redact('date -u +%Y:%m:%d'));
+    expect(out).toContain('+%Y:%m:%d');
+  });
+
+  it('grep -u with colon value is preserved', () => {
+    const out = String(redact('grep -u alice:other file.log'));
+    expect(out).toContain('alice:other');
+  });
+
+  it('curl short -u credential is still redacted', () => {
+    expect(String(redact('curl -u alice:hunter2 https://target/'))).not.toContain('hunter2');
+  });
+
+  it('long --user stays content-based for unknown tools', () => {
+    const out = String(redact('custom-tool --user alice:hunter2 some-target'));
+    expect(out).not.toContain('hunter2');
+  });
+});
+
+describe('segment splitter separator atomicity (cycle-3 finding 1)', () => {
+  it('preserves `&&` exactly through the quote-unquote round-trip', () => {
+    const out = String(redact("hydra '-p' hunter2 host ssh && echo ok"));
+    expect(out).not.toContain('&&&');
+    expect(out).toContain('&&');
+    expect(out).not.toContain('hunter2');
+    expect(out).toContain('echo ok');
+  });
+
+  it('preserves `||` exactly through the quote-unquote round-trip', () => {
+    const out = String(redact("hydra '-p' hunter2 host ssh || echo failed"));
+    const occurrences = (out.match(/\|\|/g) ?? []).length;
+    expect(occurrences).toBe(1);
+    expect(out).not.toContain('hunter2');
+  });
+});
+
+describe('argv array short-flag redaction (cycle-3 finding 2)', () => {
+  it('redacts hydra -p value in an argv', () => {
+    expect(redact(['hydra', '-p', 'hunter2', 'host', 'ssh'])).toEqual([
+      'hydra',
+      '-p',
+      REDACTED,
+      'host',
+      'ssh',
+    ]);
+  });
+
+  it('redacts curl -u user:pass credential in an argv', () => {
+    expect(redact(['curl', '-u', 'alice:hunter2', 'https://target/'])).toEqual([
+      'curl',
+      '-u',
+      REDACTED,
+      'https://target/',
+    ]);
+  });
+
+  it('keeps a bare -u username in an argv (content-based gate)', () => {
+    expect(redact(['curl', '-u', 'alice', 'https://target/'])).toEqual([
+      'curl',
+      '-u',
+      'alice',
+      'https://target/',
+    ]);
+  });
+
+  it('redacts ldapsearch -w password in an argv', () => {
+    const out = redact(['ldapsearch', '-x', '-D', 'cn=admin,dc=lab', '-w', 'hunter2']);
+    expect(JSON.stringify(out)).not.toContain('hunter2');
+    expect(Array.isArray(out)).toBe(true);
+    if (Array.isArray(out)) {
+      expect(out[out.length - 2]).toBe('-w');
+      expect(out[out.length - 1]).toBe(REDACTED);
+    }
+  });
+
+  it('redacts nxc -H hash in an argv', () => {
+    const out = redact(['nxc', 'smb', 'dc.example', '-u', 'alice', '-H', 'AAD3:8846']);
+    expect(JSON.stringify(out)).not.toContain('AAD3:8846');
+    expect(JSON.stringify(out)).toContain('alice');
+  });
+
+  it('keeps nmap -p 22 (port spec) in an argv', () => {
+    expect(redact(['nmap', '-p', '22', '10.0.0.1'])).toEqual([
+      'nmap',
+      '-p',
+      '22',
+      '10.0.0.1',
+    ]);
+  });
+
+  it('argv inside a dict is redacted recursively', () => {
+    const out = redact({ args: ['hydra', '-p', 'hunter2', 'host', 'ssh'], rc: 0 });
+    expect(out).toEqual({ args: ['hydra', '-p', REDACTED, 'host', 'ssh'], rc: 0 });
+  });
+});

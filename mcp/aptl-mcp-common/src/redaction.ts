@@ -230,15 +230,27 @@ function ampersandStep(command: string, i: number): number {
 }
 
 function splitTopLevelSegments(command: string): { start: number; end: number }[] {
+  // Multi-character separators (`&&`, `||`) are consumed atomically —
+  // the loop skips past the second character so the splitter never
+  // emits a zero-width range. The earlier `for` loop revisited the
+  // second `&`, which the new segment-reconstructor in
+  // `unquoteOptionsInCredentialSegments` would emit as a stray `&`
+  // between segments.
   const segments: { start: number; end: number }[] = [];
   let start = 0;
   const state: SegmentScanState = { inSingle: false, inDouble: false, escaped: false };
-  for (let i = 0; i < command.length; i++) {
+  let i = 0;
+  const n = command.length;
+  while (i < n) {
     const ch = command[i];
-    if (advanceQuoteState(state, ch)) continue;
+    if (advanceQuoteState(state, ch)) {
+      i++;
+      continue;
+    }
     if (ch === '|' || ch === ';') {
       segments.push({ start, end: i });
       start = i + 1;
+      i++;
       continue;
     }
     if (ch === '&') {
@@ -246,8 +258,11 @@ function splitTopLevelSegments(command: string): { start: number; end: number }[
       if (advance > 0) {
         segments.push({ start, end: i });
         start = i + advance;
+        i += advance;
+        continue;
       }
     }
+    i++;
   }
   segments.push({ start, end: command.length });
   return segments;
@@ -269,6 +284,72 @@ const CREDENTIAL_TOOL_REGEXES: readonly RegExp[] = [
 
 function segmentHasCredentialTool(segment: string): boolean {
   return CREDENTIAL_TOOL_REGEXES.some((re) => re.test(segment));
+}
+
+// Tools where the short flags `-u` / `-U` carry a username (often paired
+// with an embedded password — Basic-auth `user:pass` for HTTP clients,
+// Samba `user%pass` for the SMB family). The short forms are scoped to
+// this list so a generic `date -u +%Y:%m` (where `-u` is the UTC flag
+// and `+%Y:%m` is just an unrelated value) is not mis-classified as
+// Basic auth. The long `--user` form stays content-based — that
+// spelling is overwhelmingly auth-bearing.
+const BASIC_AUTH_SHORT_TOOL_REGEXES: readonly RegExp[] = [
+  /(^|[\s|;&])(?:[\w./-]+\/)?(curl|wget|smbclient|smbget|hydra|medusa|kerbrute)(?:\s|$)/i,
+  /(^|[\s|;&])(?:[\w./-]+\/)?(crackmapexec|cme|nxc|evil-winrm)(?:\s|$)/i,
+  /(^|[\s|;&])(?:[\w./-]+\/)?(mysql|mysqladmin|mariadb|redis-cli|psql|ldapsearch|bloodhound-python|bloodhound\.py)(?:\s|$)/i,
+  /(^|[\s|;&])(?:[\w./-]+\/)?(impacket-[\w-]+|psexec\.py|smbexec\.py|wmiexec\.py|secretsdump\.py|getuserspns\.py|getnpusers\.py|ntlmrelayx\.py)(?:\s|$)/i,
+];
+
+function segmentHasBasicAuthShortTool(segment: string): boolean {
+  return BASIC_AUTH_SHORT_TOOL_REGEXES.some((re) => re.test(segment));
+}
+
+// True when the segment names ANY credential-bearing tool family —
+// used by the segment-scoped quote-strip below so an option-shaped
+// token like `'-p'` is only normalized to bare `-p` when the segment
+// is plausibly running a credential-using tool. References to
+// per-family tool detectors below are hoisted via function
+// declarations; the regex tables they use are initialized at module
+// load before any consumer can call this.
+function segmentHasAnyCredentialTool(segment: string): boolean {
+  return (
+    segmentHasCredentialTool(segment) ||
+    segmentHasHashTool(segment) ||
+    segmentHasLdapTool(segment) ||
+    segmentHasImpacketTool(segment) ||
+    segmentHasBasicAuthShortTool(segment)
+  );
+}
+
+const QUOTED_OPTION_TOKEN_RE = /(['"])(-[A-Za-z][\w-]*)\1/g;
+
+/**
+ * Strip surrounding quotes from `'-X'` / `"-X"` option tokens — but
+ * only inside segments that name a credential-bearing tool. The
+ * earlier implementation ran this pre-pass globally, which mutated
+ * arbitrary data (`echo '-p' hunter2` became `echo -p hunter2`, then
+ * `redactShortPasswordFlag` redacted the trailing word as if it were
+ * a password). Scoping the strip to credential-bearing segments
+ * keeps the original `hydra '-p' hunter2` parity (hydra's segment
+ * unquotes, the per-flag matcher fires) while leaving non-credential
+ * text intact.
+ */
+export function unquoteOptionsInCredentialSegments(command: string): string {
+  if (!command.includes("'") && !command.includes('"')) return command;
+  const segments = splitTopLevelSegments(command);
+  const parts: string[] = [];
+  let lastEnd = 0;
+  for (const { start, end } of segments) {
+    if (start > lastEnd) parts.push(command.slice(lastEnd, start));
+    let seg = command.slice(start, end);
+    if (segmentHasAnyCredentialTool(seg)) {
+      seg = seg.replace(QUOTED_OPTION_TOKEN_RE, '$2');
+    }
+    parts.push(seg);
+    lastEnd = end;
+  }
+  if (lastEnd < command.length) parts.push(command.slice(lastEnd));
+  return parts.join('');
 }
 
 // Quote- and form-aware short `-p` matcher. Originally a single regex
@@ -305,6 +386,56 @@ function stripQuotes(value: string): string {
 }
 
 /**
+ * Build an offset-to-bool predicate from the *current* command string.
+ *
+ * The earlier implementation computed segments once on the input and
+ * reused those offsets across six sequential `.replace()` passes that
+ * mutated the string between calls — once a quoted credential of a
+ * length other than `[REDACTED]` was replaced, later offsets shifted
+ * and could mis-classify matches into the wrong segment (e.g. a long
+ * hydra password before `&& nmap -p 22` would shift the port match
+ * leftwards into the hydra segment and mask `22`). Recompute per pass
+ * via `segmentAwareReplace` instead.
+ */
+function buildSegmentPredicate(
+  command: string,
+  hasTool: (segment: string) => boolean,
+): (offset: number) => boolean {
+  const segments = splitTopLevelSegments(command);
+  const flags = segments.map((s) => hasTool(command.slice(s.start, s.end)));
+  return (offset: number): boolean => {
+    for (let idx = 0; idx < segments.length; idx++) {
+      if (offset >= segments[idx].start && offset < segments[idx].end) return flags[idx];
+    }
+    return false;
+  };
+}
+
+/**
+ * Run a sequence of segment-aware regex replacements safely.
+ *
+ * Each pass recomputes the segment predicate against the *current*
+ * string before invoking `.replace()` — `.replace()`'s own match
+ * offsets are consistent within a single call, so this is sufficient
+ * to keep classification stable across replacements.
+ *
+ * `replacerFactory(inSeg)` returns the actual `String.replace` callback;
+ * the factory closes over the freshly-computed predicate for that pass.
+ */
+function segmentAwareReplace(
+  command: string,
+  hasTool: (segment: string) => boolean,
+  passes: ReadonlyArray<[RegExp, (inSeg: (offset: number) => boolean) => (...args: unknown[]) => string]>,
+): string {
+  let out = command;
+  for (const [pattern, factory] of passes) {
+    const inSeg = buildSegmentPredicate(out, hasTool);
+    out = out.replace(pattern, factory(inSeg) as Parameters<typeof out.replace>[1]);
+  }
+  return out;
+}
+
+/**
  * Mask short `-p <value>` credential flags inline in `command`.
  *
  * Behaviour:
@@ -320,48 +451,37 @@ function stripQuotes(value: string): string {
  * surrounding context isn't broken.
  */
 export function redactShortPasswordFlag(command: string): string {
-  const segments = splitTopLevelSegments(command);
-  const segmentHasCred = segments.map((s) => segmentHasCredentialTool(command.slice(s.start, s.end)));
-  const inCredentialSegment = (offset: number): boolean => {
-    for (let idx = 0; idx < segments.length; idx++) {
-      if (offset >= segments[idx].start && offset < segments[idx].end) return segmentHasCred[idx];
-    }
-    return false;
-  };
-  const replaceSpaced = (
-    _match: string,
-    lead: string,
-    sep: string,
-    value: string,
-    offset: number,
-  ): string => {
-    const stripped = stripQuotes(value);
-    if (!inCredentialSegment(offset) && isPortLikeValue(stripped)) {
-      return `${lead}-p${sep}${value}`;
-    }
-    return `${lead}-p${sep}${REDACTED}`;
-  };
-  const replaceAttached = (
-    _match: string,
-    lead: string,
-    value: string,
-    offset: number,
-  ): string => {
-    const stripped = stripQuotes(value);
-    if (!inCredentialSegment(offset) && isPortLikeValue(stripped)) {
-      return `${lead}-p${value}`;
-    }
-    return `${lead}-p ${REDACTED}`;
-  };
-  // Quoted forms first (so the unquoted matcher can't eat the surrounding
-  // quotes), then unquoted. Same ordering for the attached forms.
-  let out = command.replace(SHORT_P_DQUOTE, replaceSpaced);
-  out = out.replace(SHORT_P_SQUOTE, replaceSpaced);
-  out = out.replace(SHORT_P_UNQUOTED, replaceSpaced);
-  out = out.replace(SHORT_P_ATTACHED_DQUOTE, replaceAttached);
-  out = out.replace(SHORT_P_ATTACHED_SQUOTE, replaceAttached);
-  out = out.replace(SHORT_P_ATTACHED_UNQUOTED, replaceAttached);
-  return out;
+  const makeReplaceSpaced = (inCred: (offset: number) => boolean) =>
+    (...args: unknown[]): string => {
+      const lead = args[1] as string;
+      const sep = args[2] as string;
+      const value = args[3] as string;
+      const offset = args[4] as number;
+      const stripped = stripQuotes(value);
+      if (!inCred(offset) && isPortLikeValue(stripped)) {
+        return `${lead}-p${sep}${value}`;
+      }
+      return `${lead}-p${sep}${REDACTED}`;
+    };
+  const makeReplaceAttached = (inCred: (offset: number) => boolean) =>
+    (...args: unknown[]): string => {
+      const lead = args[1] as string;
+      const value = args[2] as string;
+      const offset = args[3] as number;
+      const stripped = stripQuotes(value);
+      if (!inCred(offset) && isPortLikeValue(stripped)) {
+        return `${lead}-p${value}`;
+      }
+      return `${lead}-p ${REDACTED}`;
+    };
+  return segmentAwareReplace(command, segmentHasCredentialTool, [
+    [SHORT_P_DQUOTE, makeReplaceSpaced],
+    [SHORT_P_SQUOTE, makeReplaceSpaced],
+    [SHORT_P_UNQUOTED, makeReplaceSpaced],
+    [SHORT_P_ATTACHED_DQUOTE, makeReplaceAttached],
+    [SHORT_P_ATTACHED_SQUOTE, makeReplaceAttached],
+    [SHORT_P_ATTACHED_UNQUOTED, makeReplaceAttached],
+  ]);
 }
 
 // `-H <hash>` / `-H=hash` / `-H<hash>` for credential-using tools
@@ -382,35 +502,29 @@ function segmentHasHashTool(segment: string): boolean {
 }
 
 export function redactNtlmHashFlag(command: string): string {
-  const segments = splitTopLevelSegments(command);
-  const inSegment = (offset: number): boolean => {
-    for (const s of segments) {
-      if (offset >= s.start && offset < s.end) {
-        return segmentHasHashTool(command.slice(s.start, s.end));
-      }
-    }
-    return false;
-  };
-  const replaceSpaced = (
-    match: string,
-    lead: string,
-    sep: string,
-    _value: string,
-    offset: number,
-  ): string => (inSegment(offset) ? `${lead}-H${sep}${REDACTED}` : match);
-  const replaceAttached = (
-    match: string,
-    lead: string,
-    _value: string,
-    offset: number,
-  ): string => (inSegment(offset) ? `${lead}-H ${REDACTED}` : match);
-  let out = command.replace(NTLM_HASH_DQUOTE, replaceSpaced);
-  out = out.replace(NTLM_HASH_SQUOTE, replaceSpaced);
-  out = out.replace(NTLM_HASH_UNQUOTED, replaceSpaced);
-  out = out.replace(NTLM_HASH_ATTACHED_DQUOTE, replaceAttached);
-  out = out.replace(NTLM_HASH_ATTACHED_SQUOTE, replaceAttached);
-  out = out.replace(NTLM_HASH_ATTACHED_UNQUOTED, replaceAttached);
-  return out;
+  const makeReplaceSpaced = (inSeg: (offset: number) => boolean) =>
+    (...args: unknown[]): string => {
+      const match = args[0] as string;
+      const lead = args[1] as string;
+      const sep = args[2] as string;
+      const offset = args[4] as number;
+      return inSeg(offset) ? `${lead}-H${sep}${REDACTED}` : match;
+    };
+  const makeReplaceAttached = (inSeg: (offset: number) => boolean) =>
+    (...args: unknown[]): string => {
+      const match = args[0] as string;
+      const lead = args[1] as string;
+      const offset = args[3] as number;
+      return inSeg(offset) ? `${lead}-H ${REDACTED}` : match;
+    };
+  return segmentAwareReplace(command, segmentHasHashTool, [
+    [NTLM_HASH_DQUOTE, makeReplaceSpaced],
+    [NTLM_HASH_SQUOTE, makeReplaceSpaced],
+    [NTLM_HASH_UNQUOTED, makeReplaceSpaced],
+    [NTLM_HASH_ATTACHED_DQUOTE, makeReplaceAttached],
+    [NTLM_HASH_ATTACHED_SQUOTE, makeReplaceAttached],
+    [NTLM_HASH_ATTACHED_UNQUOTED, makeReplaceAttached],
+  ]);
 }
 
 // `--user`, `-u`, `-U` for tools where the value can be a credential.
@@ -441,59 +555,77 @@ function segmentHasLdapTool(segment: string): boolean {
   return LDAP_TOOL_RE.test(segment);
 }
 export function redactLdapPasswordFlag(command: string): string {
-  const segments = splitTopLevelSegments(command);
-  const inSegment = (offset: number): boolean => {
-    for (const s of segments) {
-      if (offset >= s.start && offset < s.end) {
-        return segmentHasLdapTool(command.slice(s.start, s.end));
-      }
-    }
-    return false;
-  };
-  const replaceSpaced = (
-    match: string,
-    lead: string,
-    sep: string,
-    _value: string,
-    offset: number,
-  ): string => (inSegment(offset) ? `${lead}-w${sep}${REDACTED}` : match);
-  const replaceAttached = (
-    match: string,
-    lead: string,
-    _value: string,
-    offset: number,
-  ): string => (inSegment(offset) ? `${lead}-w ${REDACTED}` : match);
-  let out = command.replace(LDAP_W_DQUOTE, replaceSpaced);
-  out = out.replace(LDAP_W_SQUOTE, replaceSpaced);
-  out = out.replace(LDAP_W_UNQUOTED, replaceSpaced);
-  out = out.replace(LDAP_W_ATTACHED_DQUOTE, replaceAttached);
-  out = out.replace(LDAP_W_ATTACHED_SQUOTE, replaceAttached);
-  out = out.replace(LDAP_W_ATTACHED_UNQUOTED, replaceAttached);
-  return out;
+  const makeReplaceSpaced = (inSeg: (offset: number) => boolean) =>
+    (...args: unknown[]): string => {
+      const match = args[0] as string;
+      const lead = args[1] as string;
+      const sep = args[2] as string;
+      const offset = args[4] as number;
+      return inSeg(offset) ? `${lead}-w${sep}${REDACTED}` : match;
+    };
+  const makeReplaceAttached = (inSeg: (offset: number) => boolean) =>
+    (...args: unknown[]): string => {
+      const match = args[0] as string;
+      const lead = args[1] as string;
+      const offset = args[3] as number;
+      return inSeg(offset) ? `${lead}-w ${REDACTED}` : match;
+    };
+  return segmentAwareReplace(command, segmentHasLdapTool, [
+    [LDAP_W_DQUOTE, makeReplaceSpaced],
+    [LDAP_W_SQUOTE, makeReplaceSpaced],
+    [LDAP_W_UNQUOTED, makeReplaceSpaced],
+    [LDAP_W_ATTACHED_DQUOTE, makeReplaceAttached],
+    [LDAP_W_ATTACHED_SQUOTE, makeReplaceAttached],
+    [LDAP_W_ATTACHED_UNQUOTED, makeReplaceAttached],
+  ]);
 }
 
 const URL_PREFIX_RE = /^(?:https?|ftp|ldap|ldaps|smb|smbs):\/\//i;
 
+function basicAuthValueIsCredential(value: string): boolean {
+  const stripped = stripQuotes(value);
+  if (URL_PREFIX_RE.test(stripped)) return false;
+  return stripped.includes('%') || stripped.includes(':');
+}
+
 export function redactBasicAuthUser(command: string): string {
-  const replaceSpaced = (match: string, lead: string, flag: string, sep: string, value: string): string => {
-    const stripped = stripQuotes(value);
-    if (URL_PREFIX_RE.test(stripped)) return match;
-    if (!stripped.includes('%') && !stripped.includes(':')) return match;
-    return `${lead}${flag}${sep}${REDACTED}`;
-  };
-  const replaceAttached = (match: string, lead: string, flag: string, value: string): string => {
-    const stripped = stripQuotes(value);
-    if (URL_PREFIX_RE.test(stripped)) return match;
-    if (!stripped.includes('%') && !stripped.includes(':')) return match;
-    return `${lead}${flag} ${REDACTED}`;
-  };
-  let out = command.replace(BASIC_AUTH_USER_DQUOTE, replaceSpaced);
-  out = out.replace(BASIC_AUTH_USER_SQUOTE, replaceSpaced);
-  out = out.replace(BASIC_AUTH_USER_UNQUOTED, replaceSpaced);
-  out = out.replace(BASIC_AUTH_USER_ATTACHED_DQUOTE, replaceAttached);
-  out = out.replace(BASIC_AUTH_USER_ATTACHED_SQUOTE, replaceAttached);
-  out = out.replace(BASIC_AUTH_USER_ATTACHED_UNQUOTED, replaceAttached);
-  return out;
+  // Long `--user` is content-only — overwhelmingly auth-bearing across
+  // tools. Short `-u`/`-U` are tool-scoped to avoid `date -u +%Y:%m`,
+  // `grep -u alice:other file`, etc., where those flags don't carry
+  // auth values.
+  const makeReplaceSpaced = (inShortSeg: (offset: number) => boolean) =>
+    (...args: unknown[]): string => {
+      const match = args[0] as string;
+      const lead = args[1] as string;
+      const flag = args[2] as string;
+      const sep = args[3] as string;
+      const value = args[4] as string;
+      const offset = args[5] as number;
+      if (!basicAuthValueIsCredential(value)) return match;
+      if ((flag === '-u' || flag === '-U') && !inShortSeg(offset)) return match;
+      return `${lead}${flag}${sep}${REDACTED}`;
+    };
+  const makeReplaceAttached = (inShortSeg: (offset: number) => boolean) =>
+    (...args: unknown[]): string => {
+      const match = args[0] as string;
+      const lead = args[1] as string;
+      const flag = args[2] as string;
+      const value = args[3] as string;
+      const offset = args[4] as number;
+      if (!basicAuthValueIsCredential(value)) return match;
+      // Attached forms only fire on `-u`/`-U` by construction, so the
+      // tool-segment gate always applies.
+      if (!inShortSeg(offset)) return match;
+      return `${lead}${flag} ${REDACTED}`;
+    };
+  return segmentAwareReplace(command, segmentHasBasicAuthShortTool, [
+    [BASIC_AUTH_USER_DQUOTE, makeReplaceSpaced],
+    [BASIC_AUTH_USER_SQUOTE, makeReplaceSpaced],
+    [BASIC_AUTH_USER_UNQUOTED, makeReplaceSpaced],
+    [BASIC_AUTH_USER_ATTACHED_DQUOTE, makeReplaceAttached],
+    [BASIC_AUTH_USER_ATTACHED_SQUOTE, makeReplaceAttached],
+    [BASIC_AUTH_USER_ATTACHED_UNQUOTED, makeReplaceAttached],
+  ]);
 }
 
 function redactAuthorizationHeader(
@@ -509,9 +641,12 @@ function redactAuthorizationHeader(
 // is `[pattern, replacement]` where replacement is either a string or
 // a replace callback.
 type ReplaceEntry = [RegExp, string | ((...args: unknown[]) => string)];
+// The quote-strip pre-pass that USED to live here was a global rewrite
+// and corrupted non-option text (e.g. `echo '-p' hunter2` → `echo -p
+// hunter2`, which then triggered `redactShortPasswordFlag`); it now
+// lives inside `redactString` behind a segment-scoped tool gate. See
+// `unquoteOptionsInCredentialSegments`.
 const STATIC_REDACTION_TABLE: ReplaceEntry[] = [
-  // Quote-stripped standalone option tokens — `'-p'` → `-p`.
-  [/(['"])(-[A-Za-z][\w-]*)\1/g, '$2'],
   // PEM blocks first so the surrounding markers stay verbatim.
   [PEM_BLOCK_PATTERN, `$1${REDACTED}$2`],
   // Authorization next so it wins over the more general patterns.
@@ -548,7 +683,12 @@ function redactString(value: string): string {
     );
   }
   // Tool-context-aware short flags run last so the simpler kv/flag
-  // patterns above have first claim on overlapping shapes.
+  // patterns above have first claim on overlapping shapes. The
+  // segment-scoped quote-strip (replaces the old global one) unquotes
+  // `'-X'`/`"-X"` option tokens *only* within credential-bearing
+  // segments so `hydra '-p' hunter2` triggers the per-flag matcher
+  // while `echo '-p' hunter2` is preserved verbatim.
+  out = unquoteOptionsInCredentialSegments(out);
   out = redactShortPasswordFlag(out);
   out = redactNtlmHashFlag(out);
   out = redactLdapPasswordFlag(out);
@@ -604,35 +744,103 @@ function segmentHasImpacketTool(segment: string): boolean {
 }
 
 export function redactImpacketPositionalAuth(command: string): string {
-  const segments = splitTopLevelSegments(command);
-  const inImpacketSegment = (offset: number): boolean => {
-    for (const s of segments) {
-      if (offset >= s.start && offset < s.end) {
-        return segmentHasImpacketTool(command.slice(s.start, s.end));
-      }
-    }
-    return false;
+  const makeReplace = (inSeg: (offset: number) => boolean) =>
+    (...args: unknown[]): string => {
+      const match = args[0] as string;
+      const user = args[1] as string;
+      const host = args[3] as string;
+      const offset = args[4] as number;
+      return inSeg(offset) ? `${user}:${REDACTED}@${host}` : match;
+    };
+  return segmentAwareReplace(command, segmentHasImpacketTool, [
+    [IMPACKET_POSITIONAL_DQUOTE, makeReplace],
+    [IMPACKET_POSITIONAL_SQUOTE, makeReplace],
+    [IMPACKET_POSITIONAL_BARE, makeReplace],
+  ]);
+}
+
+interface ArgvCredentialModes {
+  cred: boolean;
+  hash: boolean;
+  ldap: boolean;
+  basic: boolean;
+}
+
+function argvCredentialModes(leading: string): ArgvCredentialModes {
+  if (!leading) return { cred: false, hash: false, ldap: false, basic: false };
+  return {
+    cred: segmentHasCredentialTool(leading),
+    hash: segmentHasHashTool(leading),
+    ldap: segmentHasLdapTool(leading),
+    basic: segmentHasBasicAuthShortTool(leading),
   };
-  const replace = (
-    match: string,
-    user: string,
-    _pass: string,
-    host: string,
-    offset: number,
-  ): string => (inImpacketSegment(offset) ? `${user}:${REDACTED}@${host}` : match);
-  let out = command.replace(IMPACKET_POSITIONAL_DQUOTE, replace);
-  out = out.replace(IMPACKET_POSITIONAL_SQUOTE, replace);
-  out = out.replace(IMPACKET_POSITIONAL_BARE, replace);
-  return out;
+}
+
+// Mode → set of short flags it owns → does the value need a content
+// gate? Keeping this as data instead of an if/else chain keeps
+// `argvShortFlagSkipIndices` under the cognitive-complexity ceiling.
+interface ArgvShortFlagRule {
+  mode: keyof ArgvCredentialModes;
+  flags: ReadonlySet<string>;
+  contentGated: boolean;
+}
+const ARGV_SHORT_FLAG_RULES: readonly ArgvShortFlagRule[] = [
+  { mode: 'cred', flags: new Set(['-p']), contentGated: false },
+  { mode: 'hash', flags: new Set(['-H']), contentGated: false },
+  { mode: 'ldap', flags: new Set(['-w']), contentGated: false },
+  // Basic-auth `-u`/`-U` keeps the same content gate as the string-mode
+  // redactor: bare usernames stay visible, only credential pairs mask.
+  { mode: 'basic', flags: new Set(['-u', '-U']), contentGated: true },
+];
+
+function isArgvShortFlagTarget(
+  flag: string,
+  value: string,
+  modes: ArgvCredentialModes,
+): boolean {
+  for (const { mode, flags, contentGated } of ARGV_SHORT_FLAG_RULES) {
+    if (!modes[mode] || !flags.has(flag)) continue;
+    return contentGated ? basicAuthValueIsCredential(value) : true;
+  }
+  return false;
+}
+
+function argvShortFlagSkipIndices(
+  items: ReadonlyArray<unknown>,
+  modes: ArgvCredentialModes,
+): Set<number> {
+  const skip = new Set<number>();
+  if (!modes.cred && !modes.hash && !modes.ldap && !modes.basic) return skip;
+  for (let i = 0; i + 1 < items.length; i++) {
+    const flag = items[i];
+    const value = items[i + 1];
+    if (typeof flag !== 'string' || typeof value !== 'string') continue;
+    if (isArgvShortFlagTarget(flag, value, modes)) skip.add(i + 1);
+  }
+  return skip;
 }
 
 function redactArray(items: unknown[]): unknown[] {
+  // Argv-shape detection: when the leading token is a credential-family
+  // tool, mark indices whose values should be redacted as short-flag
+  // credentials (-p/-H/-w/-u/-U). Without this, a structured
+  // `args = ["hydra", "-p", "hunter2", ...]` payload bypasses the
+  // short-flag redactors that only run on scalar command strings
+  // (ADR-029 / codex review cycle 3, finding 2).
+  const first = items[0];
+  const leading = typeof first === 'string' ? first : '';
+  const modes = argvCredentialModes(leading);
+  const shortFlagSkip = argvShortFlagSkipIndices(items, modes);
   const out: unknown[] = [];
   let skipNext = false;
   for (let i = 0; i < items.length; i++) {
     if (skipNext) {
       out.push(REDACTED);
       skipNext = false;
+      continue;
+    }
+    if (shortFlagSkip.has(i)) {
+      out.push(REDACTED);
       continue;
     }
     out.push(redact(items[i]));

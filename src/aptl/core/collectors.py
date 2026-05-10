@@ -4,6 +4,13 @@ Each collector gathers data from one source (Wazuh, Suricata, TheHive,
 MISP, Shuffle, Docker containers, MCP traces) and returns structured
 results. All collectors are fault-tolerant: they return empty results
 when a service is unavailable and never raise.
+
+Per ADR-029 (control-plane secret handling): collector return values
+are sanitized at the persistence boundary (``LocalRunStore``), not
+here. Collector log lines therefore report counts/status only — never
+payload secrets — and ``_run_cmd`` truncates the logged command to
+``cmd[:3]`` so flag values (e.g. tokens passed positionally) never
+reach service logs.
 """
 
 import json

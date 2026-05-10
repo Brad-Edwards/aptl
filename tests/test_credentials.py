@@ -605,23 +605,27 @@ class TestPathContainment:
         # The checked-in template is byte-for-byte untouched.
         assert template.read_bytes() == template_before
 
-    def test_failed_replace_leaves_no_temp_file(self, tmp_path, mocker):
+    def test_failed_replace_leaves_no_temp_file(self, tmp_path):
         """If the atomic rename fails after the temp file is written, the
-        secret-bearing temp file must not be left behind."""
+        secret-bearing temp file must not be left behind. Triggered for
+        real: a directory sitting at the rendered-output path makes
+        ``os.replace(<temp file>, <dir>)`` raise — no need to mock the
+        rename out."""
         from aptl.core.credentials import sync_dashboard_config
 
         _layout_dashboard(tmp_path, '      password: "old"\n')
-        mocker.patch(
-            "aptl.core.credentials.os.replace",
-            side_effect=OSError("simulated rename failure"),
-        )
+        rendered = _rendered_dashboard(tmp_path)
+        # Put a directory where the rendered file should go.
+        rendered.mkdir(parents=True)
 
-        with pytest.raises(OSError, match="simulated rename failure"):
+        with pytest.raises(OSError):
             sync_dashboard_config(tmp_path, "secret")
 
-        rendered_dir = _rendered_dashboard(tmp_path).parent
-        assert rendered_dir.is_dir()
+        rendered_dir = rendered.parent
+        # The temp file from the failed render was cleaned up...
         assert not [p for p in rendered_dir.iterdir() if p.name.endswith(".tmp")]
+        # ...and the directory squatting at the output path is untouched.
+        assert rendered.is_dir()
 
     @pytest.mark.skipif(sys.platform == "win32", reason="requires POSIX symlinks")
     def test_pre_planted_temp_symlink_does_not_leak_or_capture_target(self, tmp_path):

@@ -180,17 +180,27 @@ class TestLocalRunStoreRedaction:
 
     def test_write_file_and_copy_file_are_byte_passthrough(self, tmp_path):
         # write_file/copy_file move opaque bytes and arbitrary files; they
-        # do not (and cannot) structurally redact. This pins that boundary
-        # so a future refactor doesn't silently change it — and is why
-        # ADR-029 says callers must not route control-plane secrets here.
+        # do not (and cannot) structurally redact. ADR-029 says callers
+        # must not route control-plane secrets here. The contract is "no
+        # transformation" — a regression that quietly wired redact()
+        # through these paths is exactly what this test pins, so use
+        # credential-shaped content that WOULD become `[REDACTED]` if
+        # such a regression slipped in. Innocuous bytes round-trip
+        # either way and don't pin the contract.
         store = LocalRunStore(tmp_path / "runs")
         store.create_run("r1")
-        store.write_file("r1", "blob.bin", b"opaque-bytes-not-json")
-        assert (tmp_path / "runs" / "r1" / "blob.bin").read_bytes() == b"opaque-bytes-not-json"
+        store.write_file("r1", "blob.bin", b"password=hunter2&token=abc.def")
+        assert (
+            (tmp_path / "runs" / "r1" / "blob.bin").read_bytes()
+            == b"password=hunter2&token=abc.def"
+        )
         source = tmp_path / "evidence.txt"
-        source.write_text("captured-target-evidence\n")
+        source.write_text("evidence: api_key=SECRET_AK\nAuthorization: Bearer xyz\n")
         store.copy_file("r1", "ev/evidence.txt", source)
-        assert (tmp_path / "runs" / "r1" / "ev" / "evidence.txt").read_text() == "captured-target-evidence\n"
+        assert (
+            (tmp_path / "runs" / "r1" / "ev" / "evidence.txt").read_text()
+            == "evidence: api_key=SECRET_AK\nAuthorization: Bearer xyz\n"
+        )
 
 
 class TestLocalRunStoreRedactionDefaultHook:

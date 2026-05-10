@@ -69,11 +69,11 @@ class TestSyncDashboardConfig:
             '      run_as: false\n',
         )
 
-        out = sync_dashboard_config(tmp_path, "MyS3cretPa$$word")
+        out = sync_dashboard_config(tmp_path, "a-real-dashboard-pw")
 
         assert out == _rendered_dashboard(tmp_path).resolve()
         content = _rendered_dashboard(tmp_path).read_text()
-        assert 'password: "MyS3cretPa$$word"' in content
+        assert 'password: "a-real-dashboard-pw"' in content
         assert 'placeholder' not in content
 
     def test_source_template_unmodified(self, tmp_path):
@@ -337,11 +337,11 @@ class TestSyncManagerConfig:
             '</ossec_config>\n',
         )
 
-        sync_manager_config(tmp_path, "real_secret_key_123")
+        sync_manager_config(tmp_path, "a-real-cluster-key-value")
 
         content = _rendered_manager(tmp_path).read_text()
         assert '<key>/etc/filebeat/certs/filebeat-key.pem</key>' in content
-        assert '<key>real_secret_key_123</key>' in content
+        assert '<key>a-real-cluster-key-value</key>' in content
         assert 'placeholder_cluster_key' not in content
         assert '<name>wazuh</name>' in content
         assert '<port>1516</port>' in content

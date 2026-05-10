@@ -350,33 +350,64 @@ def _step_check_sysreqs(ctx: _LabStartContext) -> LabResult | None:
 
 
 def _run_credential_sync(label: str, fn, *args) -> LabResult | None:
-    """Run one credential sync with the standard failure-class split.
+    """Render one credentialized config file; any failure aborts lab start.
 
-    Two outcomes the orchestrator cares about:
-
-    - ``PathContainmentError``: a security guardrail breach. Returns a
-      failure ``LabResult`` so the orchestrator aborts lab start.
-    - Anything else: non-fatal. Logs a warning and returns ``None`` so
-      the orchestrator continues to the next step.
+    The rendered file is a mandatory Docker Compose bind-mount source
+    (ADR-028) — if it is not produced fresh this run, the lab would come
+    up with stale or absent credential config — so a render failure is
+    always fatal. ``PathContainmentError`` is surfaced as a security
+    guardrail breach; anything else (missing template, disk error,
+    permission error, …) is surfaced as a generic render failure. Either
+    way the orchestrator stops with a failed ``LabResult``; ``None``
+    means the render succeeded and orchestration continues.
     """
     try:
         fn(*args)
     except PathContainmentError as exc:
         log.error("%s containment violation: %s", label, exc)
         return LabResult(success=False, error=f"{label}: {exc}")
-    except Exception as exc:  # noqa: BLE001 - non-fatal sync warning
-        log.warning("Failed to sync %s: %s", label.lower(), exc)
+    except Exception as exc:  # noqa: BLE001 - converted to a fatal LabResult
+        log.error("Failed to render %s: %s", label.lower(), exc)
+        return LabResult(
+            success=False, error=f"Failed to render {label.lower()}: {exc}"
+        )
     return None
 
 
 def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
-    log.info("Step 5: Syncing configuration credentials...")
+    log.info("Step 5: Rendering credentialized service config...")
     assert ctx.env is not None  # _step_load_env populated this
-    # Both writers own their canonical project-relative target paths and
-    # validate containment internally; the orchestrator only passes the
-    # trusted project root. See ADR-007 (security guardrail) and #266.
-    # PathContainmentError aborts; any other exception is a non-fatal
-    # warning per ``_run_credential_sync``.
+    # The rendered files (.aptl/config/...) are Docker bind-mount sources
+    # resolved on the *daemon's* filesystem. With the SSH-remote backend
+    # the daemon is on another host, so rendering locally would leave the
+    # remote bind mounts pointing at nothing (or at a stale copy) — and
+    # `_check_bind_mounts` only inspects the local tree, so preflight
+    # would pass and compose would then fail. Rather than silently ship a
+    # broken (or placeholder-credentialled) remote lab, refuse: the
+    # render must run on the deployment host (e.g. `aptl lab start` over
+    # SSH on that host). Routing generated-artifact materialization
+    # through the deployment backend is the proper fix and is tracked
+    # separately. See ADR-028 § Non-Goals.
+    from aptl.core.deployment import SSHComposeBackend
+    if isinstance(ctx.backend, SSHComposeBackend):
+        return LabResult(
+            success=False,
+            error=(
+                "Credentialized service config is rendered to .aptl/config/ "
+                "on the host running `aptl lab start`, but the configured "
+                "deployment backend targets a remote Docker daemon, so the "
+                "remote bind mounts would not see it. Run `aptl lab start` on "
+                "the deployment host instead, or switch deployment.provider "
+                "to the local Docker Compose backend."
+            ),
+        )
+    # Both writers own their canonical project-relative source-template
+    # and rendered-output paths and validate containment internally; the
+    # orchestrator only passes the trusted project root. See ADR-028
+    # (runtime-rendered service config) and ADR-007 (security guardrail).
+    # Any render failure — containment breach or otherwise — aborts lab
+    # start because the rendered files are mandatory Compose mount
+    # sources; on success they are guaranteed freshly written this run.
     result = _run_credential_sync(
         "Dashboard config",
         sync_dashboard_config,

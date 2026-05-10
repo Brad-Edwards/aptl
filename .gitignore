@@ -4,7 +4,9 @@
 # Notes directory
 notes/
 
-# Scenario runtime state
+# Project runtime state: scenario session/trace state, red-team capture,
+# and the credentialized service config rendered from the config/ templates
+# at `aptl lab start` (ADR-028).
 .aptl/
 
 # Claude Code harness — local-only bookkeeping (wakeup-loop locks, etc.)

@@ -642,18 +642,25 @@ class TestOrchestrateLabStart:
         assert result.success is False
         mocks["capture_snapshot"].assert_not_called()
 
-    def test_continues_when_credential_sync_fails(self, mocker, tmp_path):
-        """Should warn and continue when credential sync raises (C6)."""
+    def test_aborts_when_credential_render_fails(self, mocker, tmp_path):
+        """A credential-render failure aborts lab start (ADR-028).
+
+        The rendered ``.aptl/config/...`` files are mandatory Docker
+        Compose bind-mount sources, so a failed render must stop startup
+        rather than let the lab come up with stale/absent credential
+        config from a previous run.
+        """
         from aptl.core.lab import orchestrate_lab_start
 
         mocks = self._patch_all_steps(mocker, tmp_path)
-        mocks["dashboard_creds"].side_effect = RuntimeError("sync failed")
+        mocks["dashboard_creds"].side_effect = RuntimeError("render failed")
 
         result = orchestrate_lab_start(tmp_path)
 
-        # Should still succeed overall -- credential sync is non-critical
-        assert result.success is True
-        mocks["start"].assert_called_once()
+        assert result.success is False
+        assert "render" in (result.error or "").lower()
+        # Containers must not start after a failed render.
+        mocks["start"].assert_not_called()
 
     def test_handles_empty_profiles(self, mocker, tmp_path):
         """Should work when all containers are disabled (C6)."""
@@ -769,28 +776,34 @@ class TestSyncCredentialsStep:
         assert result.success is False
         assert "escapes project root" in (result.error or "")
 
-    def test_ordinary_sync_failure_is_warned_not_fatal(self, mocker, tmp_path):
-        """Non-containment exceptions (FileNotFoundError, generic) stay non-fatal."""
+    def test_missing_template_aborts_lab_start(self, mocker, tmp_path):
+        """A FileNotFoundError (missing source template) aborts lab start.
+
+        The rendered file is a mandatory Compose mount source (ADR-028):
+        if it can't be produced, the lab must not come up with a stale
+        copy from a previous run.
+        """
         from aptl.core.lab import _step_sync_credentials
 
         ctx = self._ctx(mocker, tmp_path)
         mocker.patch(
             "aptl.core.lab.sync_dashboard_config",
-            side_effect=FileNotFoundError("not there"),
+            side_effect=FileNotFoundError("config template not found"),
         )
-        mocker.patch("aptl.core.lab.sync_manager_config")
+        manager_mock = mocker.patch("aptl.core.lab.sync_manager_config")
 
         result = _step_sync_credentials(ctx)
 
-        # None means the step is non-fatal and orchestration continues.
-        assert result is None
+        assert result is not None
+        assert result.success is False
+        assert "render" in (result.error or "").lower()
+        # The breach message must not be misclassified as a containment one.
+        assert "escapes project root" not in (result.error or "")
+        manager_mock.assert_not_called()
 
-    def test_bare_value_error_is_warned_not_fatal(self, mocker, tmp_path):
-        """ValueError that is *not* PathContainmentError is non-fatal.
-
-        Future regex/parsing/validation errors raised from the credential
-        writers must not be misclassified as security guardrail breaches.
-        """
+    def test_bare_value_error_aborts_lab_start(self, mocker, tmp_path):
+        """A ValueError that is *not* PathContainmentError still aborts, but
+        is reported as a generic render failure, not a containment breach."""
         from aptl.core.lab import _step_sync_credentials
 
         ctx = self._ctx(mocker, tmp_path)
@@ -802,8 +815,47 @@ class TestSyncCredentialsStep:
 
         result = _step_sync_credentials(ctx)
 
-        # Bare ValueError → non-fatal warning, lab start continues.
-        assert result is None
+        assert result is not None
+        assert result.success is False
+        assert "escapes project root" not in (result.error or "")
+
+    def test_disk_error_aborts_lab_start(self, mocker, tmp_path):
+        """An OSError from the renderer (e.g. a directory sitting at the
+        rendered-output path) aborts lab start."""
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(mocker, tmp_path)
+        mocker.patch("aptl.core.lab.sync_dashboard_config")
+        mocker.patch(
+            "aptl.core.lab.sync_manager_config",
+            side_effect=OSError("Is a directory"),
+        )
+
+        result = _step_sync_credentials(ctx)
+
+        assert result is not None
+        assert result.success is False
+
+    def test_ssh_remote_backend_aborts_render(self, mocker, tmp_path):
+        """Rendering credentialized config when the deployment backend
+        targets a remote Docker daemon would leave the remote bind mounts
+        pointing at nothing — refuse rather than ship a broken lab."""
+        from aptl.core.deployment import SSHComposeBackend
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(mocker, tmp_path)
+        ctx.backend = SSHComposeBackend(tmp_path, host="lab.example.com", user="deploy")
+        dashboard_mock = mocker.patch("aptl.core.lab.sync_dashboard_config")
+        manager_mock = mocker.patch("aptl.core.lab.sync_manager_config")
+
+        result = _step_sync_credentials(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "deployment host" in (result.error or "")
+        # Neither writer should have run.
+        dashboard_mock.assert_not_called()
+        manager_mock.assert_not_called()
 
     def test_happy_path_returns_none(self, mocker, tmp_path):
         from aptl.core.lab import _step_sync_credentials
@@ -815,3 +867,33 @@ class TestSyncCredentialsStep:
         result = _step_sync_credentials(ctx)
 
         assert result is None
+
+    def test_renders_to_aptl_config_and_leaves_source_untouched(self, mocker, tmp_path):
+        """End-to-end (real credential writers): the step renders the
+        credentialized copies under ``.aptl/config/`` and never mutates the
+        checked-in ``config/`` templates (ADR-028 / issue #200)."""
+        from aptl.core.lab import _step_sync_credentials
+
+        dashboard_src = tmp_path / "config" / "wazuh_dashboard" / "wazuh.yml"
+        dashboard_src.parent.mkdir(parents=True)
+        dashboard_src.write_text('      password: "TEMPLATE_PW"\n')
+        manager_src = tmp_path / "config" / "wazuh_cluster" / "wazuh_manager.conf"
+        manager_src.parent.mkdir(parents=True)
+        manager_src.write_text("<cluster>\n  <key>TEMPLATE_KEY</key>\n</cluster>\n")
+
+        dashboard_before = dashboard_src.read_bytes()
+        manager_before = manager_src.read_bytes()
+
+        ctx = self._ctx(mocker, tmp_path)  # env has api_password="api_pw", cluster_key="cluster_key"
+
+        result = _step_sync_credentials(ctx)
+
+        assert result is None
+        # Source templates byte-for-byte unchanged.
+        assert dashboard_src.read_bytes() == dashboard_before
+        assert manager_src.read_bytes() == manager_before
+        # Rendered copies exist under .aptl/config/ with the real secrets.
+        rendered_dashboard = tmp_path / ".aptl" / "config" / "wazuh_dashboard" / "wazuh.yml"
+        rendered_manager = tmp_path / ".aptl" / "config" / "wazuh_cluster" / "wazuh_manager.conf"
+        assert 'password: "api_pw"' in rendered_dashboard.read_text()
+        assert "<key>cluster_key</key>" in rendered_manager.read_text()

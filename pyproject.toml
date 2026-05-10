@@ -62,6 +62,20 @@ select = ["C901"]
 # threshold (15); ratchet down over time as the backlog shrinks.
 max-complexity = 15
 
+[tool.ruff.lint.per-file-ignores]
+# Known-large modules with a backlog of over-threshold functions — see
+# ADR-010 § Complexity backlog for the specific functions and their
+# scores. C901 is suppressed for these *whole files* until they're
+# broken up (rather than carving out each `def` with `# noqa`, which
+# would touch the files and make SonarCloud's PR analysis re-surface
+# their pre-existing complexity debt as "new"). New code should not go
+# into these files; everything else under `src/` is gated. Delete a file
+# from this list as soon as `ruff check src/<file>` passes without it.
+"src/aptl/core/runtime/compiler.py" = ["C901"]
+"src/aptl/core/runtime/planner.py" = ["C901"]
+"src/aptl/core/sdl/parser.py" = ["C901"]
+"src/aptl/core/sdl/validator.py" = ["C901"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

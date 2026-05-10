@@ -60,7 +60,7 @@ ALL_KNOWN_PROFILES = [
 
 def docker_client():
     """Get a Docker client. Separated for easy mocking."""
-    import docker  # noqa: PLC0415  # delayed import (kept local so docker is mockable)
+    import docker  # noqa: delayed import for mocking
     return docker.from_env()
 
 

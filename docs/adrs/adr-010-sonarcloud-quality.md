@@ -77,12 +77,19 @@ a fine proxy for "this method does too much"). This is the only `ruff` rule
 turned on; it is a complexity guard, not a style linter — widen the rule set
 deliberately if/when the team wants more from `ruff`.
 
-### Complexity backlog (carved out with `# noqa: C901`)
+### Complexity backlog (per-file-ignored until refactored)
 
-These functions exceed the threshold today and are exempted **at the site**
-(`# noqa: C901` on the `def` line) until split. They are the standing
-refactor backlog — do not add to it; peel them off one PR at a time and
-ratchet `max-complexity` down as the list shrinks:
+Four large modules carry over-threshold functions today. `C901` is suppressed
+for those **whole files** via `[tool.ruff.lint.per-file-ignores]` in
+`pyproject.toml` — not carved out per-`def` with `# noqa: C901`, because that
+would *modify* the files and SonarCloud's PR analysis then re-surfaces their
+pre-existing complexity debt as "new code" (a one-token edit to a flagged
+`def` line drags the whole file's issue set into the PR and the
+new-maintainability-rating gate). New code should not go into these files;
+everything else under `src/` is gated. Remove a file from the per-file-ignore
+list as soon as `ruff check src/<file>` passes for it without the exemption.
+
+The specific functions to fix (CC = ruff's McCabe cyclomatic complexity):
 
 | Function | File | CC |
 | --- | --- | --- |
@@ -95,7 +102,14 @@ ratchet `max-complexity` down as the list shrinks:
 | `_collect_resources` | `src/aptl/core/runtime/planner.py` | 18 |
 | `_expand_shorthands` | `src/aptl/core/sdl/parser.py` | 17 |
 
-(SonarCloud separately flags a different set under its *cognitive* metric —
-e.g. deeply-nested functions in `snapshot.py` / `collectors.py` / `env.py` /
-`detection.py` / `cli/runs.py`; the two checks are complementary and both
-worth driving to zero.)
+(SonarCloud's *cognitive*-complexity rule flags a wider, partly different set —
+many more functions in `validator.py` plus deeply-nested ones in `snapshot.py`
+/ `collectors.py` / `env.py` / `detection.py` / `cli/runs.py`, and a CC-66
+function in `lab.py` on the older `main` analysis; the two metrics are
+complementary and both worth driving to zero.)
+
+Known wart: `src/aptl/core/lab.py:63` has a malformed `# noqa: delayed import
+for mocking` (it predates this gate) — `ruff check` prints a one-line warning
+for it but still passes. Left as-is here because fixing it touches `lab.py`,
+which would drag `lab.py`'s pre-existing SonarCloud issues into this
+config-only PR; fix it to `# noqa: PLC0415` the next time `lab.py` is edited.

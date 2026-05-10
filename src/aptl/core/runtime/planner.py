@@ -37,7 +37,7 @@ def _planned_resource(address: str, domain: RuntimeDomain, resource_type: str, r
     )
 
 
-def _collect_resources(model: RuntimeModel) -> dict[str, PlannedResource]:  # noqa: C901  # complexity backlog — split; see ADR-010
+def _collect_resources(model: RuntimeModel) -> dict[str, PlannedResource]:
     resources: dict[str, PlannedResource] = {}
 
     for address, resource in model.networks.items():
@@ -560,7 +560,7 @@ def _account_features(account_spec: dict[str, object]) -> set[str]:
     return features
 
 
-def _validate_manifest(model: RuntimeModel, manifest: BackendManifest) -> list[Diagnostic]:  # noqa: C901  # complexity backlog — split; see ADR-010
+def _validate_manifest(model: RuntimeModel, manifest: BackendManifest) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     provisioner = manifest.provisioner
 

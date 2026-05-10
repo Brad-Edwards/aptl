@@ -134,8 +134,12 @@ docker compose up -d [service_name]
 ```bash
 docker compose down
 docker system prune -f
-docker compose up --build -d
+aptl lab start
 ```
+
+`aptl lab start` re-renders the credentialized Wazuh config under `.aptl/config/`
+and brings up the profiles from `aptl.json` — a bare `docker compose up` would
+skip the credential render and the profile selection.
 
 ## Platform Issues
 

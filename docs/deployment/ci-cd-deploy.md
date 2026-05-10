@@ -9,7 +9,10 @@ The `deploy.yml` workflow:
 1. Connects to a remote host via SSH (optionally through Tailscale)
 2. Syncs the project files with `rsync`
 3. Installs the Python CLI
-4. Starts the lab with `docker compose up`
+4. Starts the lab with `aptl lab start` (not a raw `docker compose up` —
+   `aptl lab start` renders the credentialized Wazuh config into the
+   gitignored `.aptl/config/` tree, which is excluded from the rsync, so the
+   remote must do its own render; see [ADR-028](../adrs/adr-028-runtime-rendered-service-config.md))
 5. Verifies containers are running
 
 Deployment targets are configured as **GitHub Environments** — each contributor can set up their own target without modifying any committed files.
@@ -102,9 +105,9 @@ The workflow syncs the full project via rsync, excluding:
 - `runs/` (experiment data)
 - `research/` (local research files)
 - `.env` (secrets — seeded from `.env.example` on first deploy)
-- `.aptl/` (runtime state)
+- `.aptl/` (runtime state, including the credentialized service config rendered on the remote by `aptl lab start`)
 
-The lab is started with profiles matching `aptl.json` in the repo, plus the `otel` profile for observability.
+The lab is started with `aptl lab start`, which renders the credentialized Wazuh config under `.aptl/config/` on the remote before bringing up profiles matching `aptl.json` in the repo, plus the `otel` profile for observability.
 
 ## Multiple Environments
 

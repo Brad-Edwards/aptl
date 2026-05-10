@@ -61,10 +61,17 @@ docker compose -f generate-indexer-certs.yml run --rm generator
 #### 3. Deploy
 
 ```bash
-docker compose --profile wazuh --profile victim --profile kali up --build -d
+aptl lab start
 ```
 
-**Note:** Profile flags are required for manual docker compose commands.
+**Use `aptl lab start` for the deploy itself.** Beyond the steps above it also
+renders the credentialized Wazuh config from the checked-in templates into the
+gitignored `.aptl/config/` tree (ADR-028) — there is no standalone manual
+command for that render, so a hand-run `docker compose --profile wazuh ... up`
+on a fresh checkout fails at the `.aptl/config/...` bind mounts. Once a lab has
+been started, a raw `docker compose --profile wazuh --profile victim --profile
+kali up -d` (profile flags are required for manual compose commands) reuses the
+already-rendered config.
 
 Wait 5-10 minutes for Wazuh indexer initialization.
 

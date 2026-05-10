@@ -302,3 +302,45 @@ class TestFindPlaceholderEnvValues:
         }
         flagged = find_placeholder_env_values(env)
         assert sorted(flagged) == ["MISP_API_KEY", "SHUFFLE_API_KEY"]
+
+    @pytest.mark.parametrize(
+        "var, placeholder",
+        [
+            ("API_PASSWORD", "CHANGE_ME_api_password"),
+            ("WAZUH_CLUSTER_KEY", "CHANGE_ME_cluster_key"),
+        ],
+    )
+    def test_flags_rendered_wazuh_secrets(self, var, placeholder):
+        """`API_PASSWORD` and `WAZUH_CLUSTER_KEY` are rendered verbatim
+        into generated Wazuh config (ADR-028), so a `.env.example`
+        placeholder for either must be rejected before lab start."""
+        from aptl.core.env import find_placeholder_env_values
+
+        assert find_placeholder_env_values({var: placeholder}) == [var]
+
+    def test_real_wazuh_secrets_pass(self):
+        from aptl.core.env import find_placeholder_env_values
+
+        env = {"API_PASSWORD": "s3cret-pw", "WAZUH_CLUSTER_KEY": "deadbeef" * 4}
+        assert find_placeholder_env_values(env) == []
+
+    def test_absent_or_empty_wazuh_cluster_key_allowed(self):
+        """`WAZUH_CLUSTER_KEY` is optional (clustering ships disabled), so
+        an absent or empty value is not a placeholder and must not be
+        flagged — only an actual `.env.example` marker fails."""
+        from aptl.core.env import find_placeholder_env_values
+
+        assert find_placeholder_env_values({}) == []
+        assert find_placeholder_env_values({"WAZUH_CLUSTER_KEY": ""}) == []
+
+    def test_checked_in_env_example_is_all_placeholders(self):
+        """Sanity: a fresh `.env` copied verbatim from `.env.example`
+        fails the guard on every var we render or hand to a consumer."""
+        from pathlib import Path
+
+        from aptl.core.env import find_placeholder_env_values, load_dotenv
+
+        repo_root = Path(__file__).resolve().parents[1]
+        env = load_dotenv(repo_root / ".env.example")
+        flagged = set(find_placeholder_env_values(env))
+        assert {"API_PASSWORD", "WAZUH_CLUSTER_KEY", "MISP_API_KEY"} <= flagged

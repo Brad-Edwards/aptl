@@ -442,6 +442,9 @@ class TestOrchestrateLabStart:
         # Mock credentials sync
         mocks["dashboard_creds"] = mocker.patch("aptl.core.lab.sync_dashboard_config")
         mocks["manager_creds"] = mocker.patch("aptl.core.lab.sync_manager_config")
+        mocks["suricata_misp_rules"] = mocker.patch(
+            "aptl.core.lab.sync_suricata_misp_rule_baselines"
+        )
 
         # Mock certs
         from aptl.core.certs import CertResult
@@ -610,6 +613,8 @@ class TestOrchestrateLabStart:
         call_args = mocks["manager_creds"].call_args
         assert call_args[0][1] == "clusterkey"
 
+        mocks["suricata_misp_rules"].assert_called_once_with(tmp_path)
+
     def test_stops_on_cert_generation_failure(self, mocker, tmp_path):
         """Should fail if certificate generation fails."""
         from aptl.core.lab import orchestrate_lab_start
@@ -660,6 +665,20 @@ class TestOrchestrateLabStart:
         assert result.success is False
         assert "render" in (result.error or "").lower()
         # Containers must not start after a failed render.
+        mocks["start"].assert_not_called()
+
+    def test_aborts_when_suricata_misp_rule_seed_fails(self, mocker, tmp_path):
+        """MISP rule baselines are mandatory bind-mount sources under .aptl/."""
+        from aptl.core.lab import orchestrate_lab_start
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        mocks["suricata_misp_rules"].side_effect = RuntimeError("seed failed")
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is False
+        assert "suricata misp" in (result.error or "").lower()
+        mocks["certs"].assert_not_called()
         mocks["start"].assert_not_called()
 
     def test_handles_empty_profiles(self, mocker, tmp_path):
@@ -897,3 +916,50 @@ class TestSyncCredentialsStep:
         rendered_manager = tmp_path / ".aptl" / "config" / "wazuh_cluster" / "wazuh_manager.conf"
         assert 'password: "api_pw"' in rendered_dashboard.read_text()
         assert "<key>cluster_key</key>" in rendered_manager.read_text()
+
+
+class TestSyncSuricataMispRuleBaselinesStep:
+    """Direct tests for ADR-028 Suricata MISP rule baseline seeding."""
+
+    def _ctx(self, tmp_path):
+        from aptl.core.lab import _LabStartContext
+
+        return _LabStartContext(project_dir=tmp_path, skip_seed=False)
+
+    def test_seeds_to_aptl_tree_and_leaves_source_untouched(self, tmp_path):
+        from aptl.core.lab import _step_sync_suricata_misp_rule_baselines
+
+        source_dir = tmp_path / "config" / "suricata" / "rules" / "misp"
+        source_dir.mkdir(parents=True)
+        baselines = {
+            "misp-iocs.rules": "# baseline rules\n",
+            "misp-md5.list": "# md5 baseline\n",
+            "misp-sha1.list": "# sha1 baseline\n",
+            "misp-sha256.list": "# sha256 baseline\n",
+        }
+        for name, content in baselines.items():
+            (source_dir / name).write_text(content)
+        before = {path.name: path.read_bytes() for path in source_dir.iterdir()}
+
+        result = _step_sync_suricata_misp_rule_baselines(self._ctx(tmp_path))
+
+        assert result is None
+        assert {path.name: path.read_bytes() for path in source_dir.iterdir()} == before
+        generated_dir = tmp_path / ".aptl" / "suricata" / "rules" / "misp"
+        for name, content in baselines.items():
+            assert (generated_dir / name).read_text() == content
+
+    def test_seed_error_aborts_lab_start_step(self, mocker, tmp_path):
+        from aptl.core.lab import _step_sync_suricata_misp_rule_baselines
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.sync_suricata_misp_rule_baselines",
+            side_effect=FileNotFoundError("missing baseline"),
+        )
+
+        result = _step_sync_suricata_misp_rule_baselines(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "suricata misp" in (result.error or "").lower()

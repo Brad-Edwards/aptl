@@ -40,14 +40,15 @@ Relevant incumbents already exist:
 ## Decision
 
 Checked-in files under `config/` are source-owned baselines or templates.
-Startup must not mutate them in place to inject runtime credentials.
+Startup must not mutate them in place to inject runtime credentials or other
+generated runtime state.
 
-Credentialized service configuration must be rendered to a dedicated generated
-output location, preferably under the ignored project state tree (`.aptl/`), or
-from an explicit template asset into that output location. Containers that need
-the credentialized file should consume the generated artifact via the existing
-Docker Compose ownership path, with read-only mounts where the service supports
-them.
+Credentialized service configuration and generated runtime artifacts must be
+rendered or seeded to a dedicated generated output location, preferably under
+the ignored project state tree (`.aptl/`), or from an explicit template asset
+into that output location. Containers that need the generated file should
+consume the generated artifact via the existing Docker Compose ownership path,
+with read-only mounts where the service supports them.
 
 Rendering APIs must keep the existing boundary shape: accept the project root
 and canonical project-relative inputs, construct known paths internally, resolve
@@ -94,6 +95,30 @@ manual / CI deployment docs route through `aptl lab start`. The other ~18
 `config/wazuh_cluster/*` mounts (rules, decoders, certs, helper scripts) are not
 credentialized and stay on `config/`.
 
+### Concrete realization (issue #287)
+
+The MISP-driven Suricata rule writer is non-credentialed, but it still produces
+runtime state. Its checked-in files under `config/suricata/rules/misp/` are
+source-owned baselines only:
+
+| Checked-in baseline (source, never written) | Generated output (ignored) | Compose mount |
+| --- | --- | --- |
+| `config/suricata/rules/misp/misp-iocs.rules` | `.aptl/suricata/rules/misp/misp-iocs.rules` | `suricata` / `misp-suricata-sync` → `/var/lib/suricata/rules/misp/misp-iocs.rules` |
+| `config/suricata/rules/misp/misp-md5.list` | `.aptl/suricata/rules/misp/misp-md5.list` | `suricata` / `misp-suricata-sync` → `/var/lib/suricata/rules/misp/misp-md5.list` |
+| `config/suricata/rules/misp/misp-sha1.list` | `.aptl/suricata/rules/misp/misp-sha1.list` | `suricata` / `misp-suricata-sync` → `/var/lib/suricata/rules/misp/misp-sha1.list` |
+| `config/suricata/rules/misp/misp-sha256.list` | `.aptl/suricata/rules/misp/misp-sha256.list` | `suricata` / `misp-suricata-sync` → `/var/lib/suricata/rules/misp/misp-sha256.list` |
+
+`aptl lab start` seeds those baselines into `.aptl/suricata/rules/misp/` before
+bind-mount validation and container startup. Suricata mounts the generated
+directory read-write because its image entrypoint chowns the rules tree before
+starting; `misp-suricata-sync` mounts the same generated directory read-write
+and continues to write `RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules`.
+The writable target is generated state under `.aptl/`, not checked-in `config/`.
+The in-container path remains under Suricata's `default-rule-path`, so
+`misp/misp-iocs.rules` and the hash-list sidecars keep resolving through
+Suricata's normal relative-path lookup while a lab start no longer dirties
+checked-in `config/`.
+
 ## Guardrails
 
 - Reuse `load_dotenv`, `env_vars_from_dict`, `EnvVars`, and
@@ -105,7 +130,9 @@ credentialized and stay on `config/`.
   `_step_*` functions returning `LabResult | None`.
 - Preserve `PathContainmentError` semantics for security-boundary failures:
   containment breaches fail startup; ordinary render misses can remain warnings
-  only when the current service contract intentionally tolerates them.
+  only when the current service contract intentionally tolerates them. Generated
+  bind-mount sources required for container startup must fail startup if they
+  cannot be rendered or seeded.
 - Route Docker Compose behavior through `DeploymentBackend`; do not shell out
   from a new helper when an existing backend method owns that concern.
 - Keep generated config out of snapshots and run archives unless it is redacted
@@ -145,8 +172,8 @@ the source `config/` ownership model again.
   `EnvVars`.
 - Do not change Wazuh credential semantics beyond where the credentialized
   files are rendered and mounted.
-- Do not solve unrelated generated artifacts, such as MISP-derived Suricata
-  rules, unless they block issue #200's source-config immutability contract.
+- Do not redesign unrelated generated-artifact semantics while moving them out
+  of checked-in `config/`.
 - Do not archive or display generated secret-bearing config as a debugging aid.
 
 ## Anti-Patterns

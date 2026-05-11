@@ -1,4 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('aptl-mcp-common', async () => {
+  const actual = await vi.importActual<typeof import('../../aptl-mcp-common/src/redaction.js')>(
+    '../../aptl-mcp-common/src/redaction.js',
+  );
+  return { redact: actual.redact };
+});
+
 import {
   deriveCommandSuccess,
   logRedTeamCommand,

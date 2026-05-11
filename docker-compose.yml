@@ -189,10 +189,13 @@ services:
       - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules
       - suricata_logs:/var/log/suricata
       - suricata_command_socket:/var/run/suricata
-      # Bind under default-rule-path so misp-iocs.rules and its
-      # filemd5/filesha1/filesha256 hash-list sidecars resolve via
-      # Suricata's documented relative-path lookup.
-      - ./config/suricata/rules/misp:/var/lib/suricata/rules/misp
+      # Generated copy seeded by `aptl lab start` from the checked-in
+      # baselines under config/suricata/rules/misp (ADR-028); mounted under
+      # default-rule-path so misp-iocs.rules and hash-list sidecars resolve
+      # via Suricata's documented relative-path lookup. The Suricata image
+      # entrypoint chowns its rules tree at startup, so this generated mount
+      # must be writable even though the sync service owns rule content.
+      - ./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw
     command: ["-c", "/etc/suricata/suricata.yaml", "--pcap"]
     deploy:
       resources:
@@ -323,7 +326,7 @@ services:
       - LOG_LEVEL=INFO
     volumes:
       - suricata_command_socket:/var/run/suricata
-      - ./config/suricata/rules/misp:/var/lib/suricata/rules/misp
+      - ./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw
     depends_on:
       misp:
         condition: service_healthy

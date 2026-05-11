@@ -20,6 +20,7 @@ from aptl.core.credentials import (
     PathContainmentError,
     sync_dashboard_config,
     sync_manager_config,
+    sync_suricata_misp_rule_baselines,
 )
 from aptl.core.env import (
     EnvVars,
@@ -424,6 +425,30 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
+def _step_sync_suricata_misp_rule_baselines(
+    ctx: _LabStartContext,
+) -> LabResult | None:
+    log.info("Step 5b: Seeding Suricata MISP rule baselines...")
+    from aptl.core.deployment import SSHComposeBackend
+    if isinstance(ctx.backend, SSHComposeBackend):
+        return LabResult(
+            success=False,
+            error=(
+                "Suricata MISP rule baselines are rendered to .aptl/suricata/ "
+                "on the host running `aptl lab start`, but the configured "
+                "deployment backend targets a remote Docker daemon, so the "
+                "remote bind mounts would not see them. Run `aptl lab start` "
+                "on the deployment host instead, or switch deployment.provider "
+                "to the local Docker Compose backend."
+            ),
+        )
+    return _run_credential_sync(
+        "Suricata MISP rule baselines",
+        sync_suricata_misp_rule_baselines,
+        ctx.project_dir,
+    )
+
+
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 6: Generating SSL certificates...")
     cert_result = ensure_ssl_certs(ctx.project_dir)
@@ -646,6 +671,7 @@ _LAB_START_STEPS = (
     _step_ensure_ssh_keys,
     _step_check_sysreqs,
     _step_sync_credentials,
+    _step_sync_suricata_misp_rule_baselines,
     _step_generate_certs,
     _step_check_bind_mounts,
     _step_pull_images,

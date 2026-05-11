@@ -86,7 +86,9 @@ blue graduates IOCs).
   (sid 1000010), XSS (sid 1000020), Kerberoasting (sid 1000040).
 - `misp/misp-iocs.rules` ships **empty** (header `ioc_count=0`).
   Hash-list sidecars `misp-md5.list`, `misp-sha1.list`,
-  `misp-sha256.list` ship empty too.
+  `misp-sha256.list` ship empty too. These checked-in files are baseline
+  seeds; `aptl lab start` copies them to `.aptl/suricata/rules/misp/`, and the
+  sync service writes generated runtime state there.
 
 **Why it ships this way**
 
@@ -116,8 +118,9 @@ contract*, not a misconfiguration.
 | IDS-only invocation | [`docker-compose.yml:190`](../../docker-compose.yml) |
 | Rule file load order | [`config/suricata/suricata.yaml:97-104`](../../config/suricata/suricata.yaml) |
 | Local alert rules | [`config/suricata/rules/local.rules`](../../config/suricata/rules/local.rules) |
-| MISP-driven rule output | [`config/suricata/rules/misp/misp-iocs.rules`](../../config/suricata/rules/misp/misp-iocs.rules) |
-| Hash-list sidecars | [`config/suricata/rules/misp/`](../../config/suricata/rules/misp/) |
+| MISP baseline seeds | [`config/suricata/rules/misp/`](../../config/suricata/rules/misp/) |
+| MISP generated rule output | `.aptl/suricata/rules/misp/misp-iocs.rules` |
+| Hash-list sidecars | `.aptl/suricata/rules/misp/` |
 
 ---
 
@@ -326,7 +329,8 @@ has zero graduated indicators on purpose.
 |---|---|
 | Sync service config | [`src/aptl/services/misp_suricata_sync/config.py`](../../src/aptl/services/misp_suricata_sync/config.py) |
 | Sync service main loop | [`src/aptl/services/misp_suricata_sync/main.py`](../../src/aptl/services/misp_suricata_sync/main.py) |
-| Generated rule output | [`config/suricata/rules/misp/misp-iocs.rules`](../../config/suricata/rules/misp/misp-iocs.rules) |
+| Baseline rule seed | [`config/suricata/rules/misp/misp-iocs.rules`](../../config/suricata/rules/misp/misp-iocs.rules) |
+| Generated rule output | `.aptl/suricata/rules/misp/misp-iocs.rules` |
 | ADR | [ADR-022](../adrs/adr-022-misp-driven-suricata-rules.md) |
 
 ---

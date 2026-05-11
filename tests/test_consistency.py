@@ -86,6 +86,31 @@ class TestComposeConsistency:
             )
         )
 
+    def test_misp_suricata_rules_mount_generated_state(self, compose_config):
+        """Runtime-written MISP rule artifacts must not mount checked-in config."""
+        services = compose_config["services"]
+
+        suricata_volumes = services["suricata"]["volumes"]
+        sync_volumes = services["misp-suricata-sync"]["volumes"]
+
+        assert (
+            "./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw"
+            in suricata_volumes
+        )
+        assert (
+            "./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw"
+            in sync_volumes
+        )
+        assert not any(
+            volume.startswith("./config/suricata/rules/misp:")
+            for volume in suricata_volumes + sync_volumes
+        )
+
+        assert (
+            "RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules"
+            in services["misp-suricata-sync"]["environment"]
+        )
+
 
 class TestCodeReferencesMatchCompose:
     """Ensure docker exec references in code match actual container_name values."""

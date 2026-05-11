@@ -8,10 +8,12 @@ import typer
 
 from aptl.cli.continuity import continuity_audit
 from aptl.core.lab import (
+    LabResult,
     lab_status,
     orchestrate_lab_start,
     stop_lab,
 )
+from aptl.core.lab_types import StartupOutcome
 from aptl.utils.logging import get_logger
 
 log = get_logger("cli.lab")
@@ -22,6 +24,58 @@ app = typer.Typer(help="Lab lifecycle management.")
 # module stays focused on lifecycle commands. Register it under `lab`
 # so the command stays at `aptl lab continuity-audit` (no UX change).
 app.command("continuity-audit")(continuity_audit)
+
+
+# Headline phrasing per outcome — kept beside the renderer so the CLI's
+# user-visible classification stays in one place (ADR-030 anti-pattern:
+# never reclassify based on English text). Values are the same stable
+# wire strings as the StartupOutcome enum so an operator (or a parser)
+# can grep for them.
+_OUTCOME_HEADLINES: dict[StartupOutcome, str] = {
+    StartupOutcome.READY: "Lab is ready.",
+    StartupOutcome.DEGRADED_USABLE: (
+        "Lab is degraded_usable — telemetry/cosmetic warnings, scenarios "
+        "should still run."
+    ),
+    StartupOutcome.DEGRADED_UNUSABLE: (
+        "Lab is degraded_unusable — some capabilities or SSH targets "
+        "are not reachable."
+    ),
+    StartupOutcome.FAILED: "Lab start failed.",
+}
+
+
+def _render_start_result(result: LabResult) -> None:
+    """Print a structured summary of a lab-start result.
+
+    Always emits the outcome value (stable wire string from
+    ``StartupOutcome``) so automation can parse a single line instead of
+    scraping the diagnostic list. Diagnostics are grouped by impact so
+    an operator can scan for ``readiness`` / ``capability`` rows when
+    triaging a partial-readiness lab.
+    """
+    typer.echo(_OUTCOME_HEADLINES[result.outcome])
+    if result.outcome is StartupOutcome.FAILED and result.error:
+        typer.echo(f"  error: {result.error}")
+    if not result.diagnostics:
+        return
+    typer.echo(f"  diagnostics ({len(result.diagnostics)}):")
+    # Group by impact so a scanning operator sees all readiness rows
+    # together, then capability, telemetry, cosmetic. Iteration order
+    # below follows the severity hierarchy from worst to least-worst.
+    impacts_in_order = ["readiness", "capability", "telemetry", "cosmetic"]
+    grouped: dict[str, list] = {}
+    for diag in result.diagnostics:
+        grouped.setdefault(diag.impact.value, []).append(diag)
+    for impact in impacts_in_order:
+        for diag in grouped.get(impact, []):
+            label = f"{diag.step}/{diag.component}" if diag.component else diag.step
+            typer.echo(
+                f"    [{diag.impact.value}|{diag.severity.value}] "
+                f"{label} — {diag.message}"
+            )
+            if diag.operator_action:
+                typer.echo(f"      action: {diag.operator_action}")
 
 
 @app.command()
@@ -43,10 +97,8 @@ def start(
 
     result = orchestrate_lab_start(project_dir, skip_seed=skip_seed)
 
-    if result.success:
-        typer.echo("Lab started successfully.")
-    else:
-        typer.echo(f"Lab start failed: {result.error}")
+    _render_start_result(result)
+    if not result.success:
         raise typer.Exit(code=1)
 
 

@@ -76,6 +76,49 @@ describe('API client', () => {
 		expect(mockFetch).toHaveBeenCalledWith('/api/lab/stop', { method: 'POST' });
 	});
 
+	it('startLab carries ADR-030 outcome + diagnostics through fetch', async () => {
+		// API now returns the structured partial-readiness fields per ADR-030.
+		// Older callers see only success/message/error; new callers can read
+		// the outcome string ("ready" | "degraded_usable" | …) and the per-
+		// step diagnostic rows. The interface marks both as optional so the
+		// fetch boundary keeps round-tripping whatever the server sent.
+		const data = {
+			success: true,
+			message: 'Lab started with outcome=degraded_unusable',
+			error: null,
+			outcome: 'degraded_unusable',
+			diagnostics: [
+				{
+					step: 'test_ssh',
+					component: 'ssh:kali',
+					impact: 'readiness',
+					severity: 'warning',
+					message: 'SSH to kali not ready after 60s',
+					operator_action: 'Check kali container sshd'
+				},
+				{
+					step: 'wait_for_services',
+					component: 'wazuh_indexer',
+					impact: 'telemetry',
+					severity: 'warning',
+					message: 'Indexer did not become ready within 300s',
+					operator_action: ''
+				}
+			]
+		};
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(data)
+		});
+
+		const result = await startLab();
+		expect(result).toEqual(data);
+		expect(result.outcome).toBe('degraded_unusable');
+		expect(result.diagnostics?.length).toBe(2);
+		expect(result.diagnostics?.[0].impact).toBe('readiness');
+		expect(result.diagnostics?.[0].component).toBe('ssh:kali');
+	});
+
 	it('getScenarios fetches /api/scenarios', async () => {
 		const data = [{ id: 'test', name: 'Test' }];
 		mockFetch.mockResolvedValueOnce({

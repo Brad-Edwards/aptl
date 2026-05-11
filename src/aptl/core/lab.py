@@ -28,9 +28,16 @@ from aptl.core.env import (
     find_placeholder_env_values,
     load_dotenv,
 )
-# Re-export LabResult and LabStatus from the leaf module (#266). The
-# leaf has no back-edges, so this is a normal top-level import.
-from aptl.core.lab_types import LabResult, LabStatus  # noqa: F401
+# Re-export the lifecycle DTO types from the leaf module (#266 + ADR-030).
+# The leaf has no back-edges, so this is a normal top-level import.
+from aptl.core.lab_types import (  # noqa: F401
+    DiagnosticImpact,
+    DiagnosticSeverity,
+    LabResult,
+    LabStatus,
+    StartupDiagnostic,
+    StartupOutcome,
+)
 from aptl.core.services import (
     check_indexer_ready,
     check_manager_api_ready,
@@ -41,6 +48,7 @@ from aptl.core.snapshot import capture_snapshot
 from aptl.core.ssh import ensure_ssh_keys
 from aptl.core.sysreqs import check_max_map_count
 from aptl.utils.logging import get_logger
+from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
@@ -271,6 +279,10 @@ class _LabStartContext:
     any outputs subsequent steps depend on. Keeps step signatures
     uniform (``ctx -> LabResult | None``) so the orchestrator stays a
     flat list of dispatches.
+
+    ``diagnostics`` collects structured partial-readiness notes (ADR-030)
+    emitted by individual steps. The orchestrator turns the final list
+    into a :class:`StartupOutcome` via :func:`derive_startup_outcome`.
     """
 
     project_dir: Path
@@ -280,6 +292,106 @@ class _LabStartContext:
     config: "AptlConfig | None" = None
     backend: "DeploymentBackend | None" = None
     ssh_key_path: Path | None = None
+    diagnostics: list[StartupDiagnostic] = field(default_factory=list)
+
+
+# Log format string for structured diagnostics. Kept module-level so
+# ``_emit_diagnostic``'s three log branches (error / warning / info) share
+# a single literal — extracting silences Sonar ``python:S1192`` and keeps
+# any future format tweak in one place.
+_DIAGNOSTIC_LOG_FORMAT = "[%s|%s] %s"
+
+
+# Severities that contribute to a "degraded" outcome. ``info`` is
+# intentionally excluded — it is a structured note, not a degradation.
+_DEGRADING_SEVERITIES = frozenset(
+    {DiagnosticSeverity.WARNING, DiagnosticSeverity.ERROR}
+)
+
+# Impacts that drag the outcome to DEGRADED_UNUSABLE rather than
+# DEGRADED_USABLE. Lab is partially up but the named capability/SSH
+# reach is missing for the operator's intended use.
+_UNUSABLE_IMPACTS = frozenset(
+    {DiagnosticImpact.CAPABILITY, DiagnosticImpact.READINESS}
+)
+
+
+def derive_startup_outcome(
+    diagnostics: list[StartupDiagnostic],
+    fatal: bool,
+) -> StartupOutcome:
+    """Map a diagnostics list (plus a fatal short-circuit flag) to an outcome.
+
+    Rule (ADR-030):
+
+    - ``fatal=True`` always wins → ``FAILED`` (a hard stop must be
+      distinguishable from any degraded state).
+    - Any degrading-severity diagnostic with ``impact`` in
+      ``{capability, readiness}`` → ``DEGRADED_UNUSABLE``.
+    - Any degrading-severity diagnostic with ``impact`` in
+      ``{cosmetic, telemetry}`` → ``DEGRADED_USABLE``.
+    - Otherwise → ``READY``.
+
+    Pure function; safe to call from tests directly.
+    """
+    if fatal:
+        return StartupOutcome.FAILED
+    has_unusable = False
+    has_degrading = False
+    for diag in diagnostics:
+        if diag.severity not in _DEGRADING_SEVERITIES:
+            continue
+        has_degrading = True
+        if diag.impact in _UNUSABLE_IMPACTS:
+            has_unusable = True
+            break  # already the worst non-fatal bucket
+    if has_unusable:
+        return StartupOutcome.DEGRADED_UNUSABLE
+    if has_degrading:
+        return StartupOutcome.DEGRADED_USABLE
+    return StartupOutcome.READY
+
+
+def _emit_diagnostic(
+    ctx: _LabStartContext,
+    *,
+    step: str,
+    impact: DiagnosticImpact,
+    severity: DiagnosticSeverity,
+    message: str,
+    component: str = "",
+    operator_action: str = "",
+) -> None:
+    """Append a structured diagnostic to the context and log it.
+
+    Centralizes the ADR-030 redaction-shape rule. Callers pass narrow
+    labels; this helper additionally runs ``aptl.utils.redaction.redact()``
+    over the free-form fields (``message``, ``component``,
+    ``operator_action``) so a future caller that accidentally interpolates
+    an exception payload, env value, or subprocess stderr cannot leak it
+    through the single choke point that feeds CLI, API, and web. The
+    structured ``step`` identifier is an internal literal and is not
+    redacted (redaction there would defeat attribution).
+    """
+    safe_message = redact(message)
+    safe_component = redact(component)
+    safe_operator_action = redact(operator_action)
+    diag = StartupDiagnostic(
+        step=step,
+        impact=impact,
+        severity=severity,
+        message=safe_message,
+        component=safe_component,
+        operator_action=safe_operator_action,
+    )
+    ctx.diagnostics.append(diag)
+    label = f"{step}/{safe_component}" if safe_component else step
+    if severity is DiagnosticSeverity.ERROR:
+        log.error(_DIAGNOSTIC_LOG_FORMAT, impact.value, label, safe_message)
+    elif severity is DiagnosticSeverity.WARNING:
+        log.warning(_DIAGNOSTIC_LOG_FORMAT, impact.value, label, safe_message)
+    else:
+        log.info(_DIAGNOSTIC_LOG_FORMAT, impact.value, label, safe_message)
 
 
 def _step_load_env(ctx: _LabStartContext) -> LabResult | None:
@@ -482,8 +594,26 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
         f"wazuh/wazuh-indexer:{WAZUH_IMAGE_VERSION}",
         f"wazuh/wazuh-dashboard:{WAZUH_IMAGE_VERSION}",
     ]
-    for warning in ctx.backend.pull_images(images):
+    warnings = list(ctx.backend.pull_images(images))
+    for warning in warnings:
+        # Backend already includes stderr in the log line; existing
+        # log-redaction boundary owns scrubbing it.
         log.warning(warning)
+    if warnings:
+        # Pre-pull is a latency optimization — Compose pulls on demand
+        # when containers start. Surface as a cosmetic info diagnostic
+        # so automation sees the count without scraping the log.
+        _emit_diagnostic(
+            ctx,
+            step="pull_images",
+            impact=DiagnosticImpact.COSMETIC,
+            severity=DiagnosticSeverity.INFO,
+            message=(
+                f"Pre-pull failed for {len(warnings)} image(s); compose "
+                "will pull on demand"
+            ),
+            operator_action="No action required; first lab use may be slower",
+        )
     return None
 
 
@@ -530,7 +660,23 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
         service_name="Wazuh Indexer",
     )
     if not indexer_result.ready:
-        log.warning("Indexer may still be initializing")
+        # Indexer is the SIEM store — without it, detections never land.
+        # Lab is up but telemetry is degraded.
+        _emit_diagnostic(
+            ctx,
+            step="wait_for_services",
+            component="wazuh_indexer",
+            impact=DiagnosticImpact.TELEMETRY,
+            severity=DiagnosticSeverity.WARNING,
+            message=(
+                "Wazuh Indexer did not become ready within "
+                f"{int(indexer_result.elapsed_seconds)}s"
+            ),
+            operator_action=(
+                "Check indexer container logs; SIEM ingest will not work "
+                "until indexer is healthy"
+            ),
+        )
 
     manager_result = wait_for_service(
         check_fn=partial(
@@ -542,7 +688,21 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
         service_name="Wazuh Manager API",
     )
     if not manager_result.ready:
-        log.warning("Manager API may still be initializing")
+        _emit_diagnostic(
+            ctx,
+            step="wait_for_services",
+            component="wazuh_manager",
+            impact=DiagnosticImpact.TELEMETRY,
+            severity=DiagnosticSeverity.WARNING,
+            message=(
+                "Wazuh Manager API did not become ready within "
+                f"{int(manager_result.elapsed_seconds)}s"
+            ),
+            operator_action=(
+                "Check manager container logs; agents will not report "
+                "until manager API is healthy"
+            ),
+        )
     return None
 
 
@@ -572,17 +732,50 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
         )
         if ssh_wait.ready:
             log.info("SSH to %s is ready", name)
-        else:
-            log.warning(
-                "SSH to %s not ready after %ds",
-                name, int(ssh_wait.elapsed_seconds),
-            )
+            continue
+        # SSH to a target is the control plane scenarios drive — without
+        # it, that target is effectively unreachable for red/blue work.
+        _emit_diagnostic(
+            ctx,
+            step="test_ssh",
+            component=f"ssh:{name}",
+            impact=DiagnosticImpact.READINESS,
+            severity=DiagnosticSeverity.WARNING,
+            message=(
+                f"SSH to {name} not ready after "
+                f"{int(ssh_wait.elapsed_seconds)}s"
+            ),
+            operator_action=(
+                f"Check the {name} container's sshd; scenarios cannot "
+                "drive this target until SSH is reachable"
+            ),
+        )
     return None
 
 
 def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 11: Capturing range snapshot...")
-    snapshot = capture_snapshot(config_dir=ctx.project_dir, backend=ctx.backend)
+    try:
+        snapshot = capture_snapshot(
+            config_dir=ctx.project_dir, backend=ctx.backend
+        )
+    except Exception as exc:  # noqa: BLE001 — converted to structured diagnostic
+        # Snapshot is the run-archive inventory; its loss is observability
+        # debt, not a hard failure (ADR-030). Keep the raw exception in
+        # the log only (existing redaction owns it); diagnostic is narrow.
+        log.warning("Range snapshot capture failed: %s", exc)
+        _emit_diagnostic(
+            ctx,
+            step="capture_snapshot",
+            impact=DiagnosticImpact.TELEMETRY,
+            severity=DiagnosticSeverity.WARNING,
+            message="Range snapshot capture failed; run inventory will be incomplete",
+            operator_action=(
+                "Inspect lab logs; re-run `aptl lab status -j` to capture "
+                "inventory manually once the deployment backend is reachable"
+            ),
+        )
+        return None
     log.info(
         "Range: %d containers, %d networks, %d services, %d SSH endpoints",
         len(snapshot.containers),
@@ -598,6 +791,16 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
     mcp_script = ctx.project_dir / "mcp" / "build-all-mcps.sh"
     if not mcp_script.exists():
         log.warning("MCP build script not found at %s", mcp_script)
+        _emit_diagnostic(
+            ctx,
+            step="build_mcps",
+            impact=DiagnosticImpact.CAPABILITY,
+            severity=DiagnosticSeverity.WARNING,
+            message="MCP build script not found; MCP servers will not be available",
+            operator_action=(
+                "Verify mcp/build-all-mcps.sh exists in the project tree"
+            ),
+        )
         return None
     try:
         mcp_result = subprocess.run(
@@ -607,11 +810,33 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
             cwd=ctx.project_dir,
         )
         if mcp_result.returncode != 0:
+            # Raw stderr stays in the log (existing redaction owns it);
+            # the structured diagnostic carries only a narrow summary.
             log.warning("MCP build had errors: %s", mcp_result.stderr)
+            _emit_diagnostic(
+                ctx,
+                step="build_mcps",
+                impact=DiagnosticImpact.CAPABILITY,
+                severity=DiagnosticSeverity.WARNING,
+                message="MCP build returned non-zero exit; see lab logs",
+                operator_action=(
+                    "Inspect mcp/build-all-mcps.sh output in the lab log"
+                ),
+            )
         else:
             log.info("MCP servers built successfully")
     except (FileNotFoundError, OSError) as exc:
         log.warning("Failed to build MCP servers: %s", exc)
+        _emit_diagnostic(
+            ctx,
+            step="build_mcps",
+            impact=DiagnosticImpact.CAPABILITY,
+            severity=DiagnosticSeverity.WARNING,
+            message="MCP build could not run; see lab logs",
+            operator_action=(
+                "Inspect mcp/build-all-mcps.sh permissions and tooling"
+            ),
+        )
     return None
 
 
@@ -621,12 +846,33 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
         return None
     log.info("Step 13: Seeding SOC tools...")
     assert ctx.config is not None
-    seed_script = ctx.project_dir / "scripts" / "seed-prime.sh"
-    if not seed_script.exists():
-        log.debug("SOC seed script not found at %s", seed_script)
-        return None
+    # Order the SOC-enabled check first so a missing script with SOC
+    # disabled stays a silent no-op (no degradation), while a missing
+    # script with SOC *enabled* surfaces as a capability warning —
+    # otherwise the lab would come up with empty SOC tools and the
+    # outcome would still be `ready` (codex review #202 cycle 1).
     if not ctx.config.containers.soc:
         log.debug("SOC profile not enabled, skipping seed")
+        return None
+    seed_script = ctx.project_dir / "scripts" / "seed-prime.sh"
+    if not seed_script.exists():
+        log.warning(
+            "SOC profile enabled but seed script not found at %s", seed_script
+        )
+        _emit_diagnostic(
+            ctx,
+            step="seed_soc",
+            impact=DiagnosticImpact.CAPABILITY,
+            severity=DiagnosticSeverity.WARNING,
+            message=(
+                "SOC profile enabled but seed-prime.sh not found; "
+                "SOC tools will start empty"
+            ),
+            operator_action=(
+                "Restore scripts/seed-prime.sh and re-run it once SOC "
+                "containers are healthy"
+            ),
+        )
         return None
     try:
         seed_result = subprocess.run(
@@ -638,12 +884,44 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
         )
         if seed_result.returncode != 0:
             log.warning("SOC seeding had errors: %s", seed_result.stderr)
+            _emit_diagnostic(
+                ctx,
+                step="seed_soc",
+                impact=DiagnosticImpact.CAPABILITY,
+                severity=DiagnosticSeverity.WARNING,
+                message="SOC seeding returned non-zero exit; see lab logs",
+                operator_action=(
+                    "Re-run scripts/seed-prime.sh manually once SOC "
+                    "containers are healthy"
+                ),
+            )
         else:
             log.info("SOC tools seeded successfully")
     except subprocess.TimeoutExpired:
         log.warning("SOC seeding timed out (non-fatal)")
+        _emit_diagnostic(
+            ctx,
+            step="seed_soc",
+            impact=DiagnosticImpact.CAPABILITY,
+            severity=DiagnosticSeverity.WARNING,
+            message="SOC seeding timed out; SOC tools will start empty",
+            operator_action=(
+                "Re-run scripts/seed-prime.sh manually once SOC "
+                "containers are healthy"
+            ),
+        )
     except (FileNotFoundError, OSError) as exc:
         log.warning("Failed to seed SOC tools: %s", exc)
+        _emit_diagnostic(
+            ctx,
+            step="seed_soc",
+            impact=DiagnosticImpact.CAPABILITY,
+            severity=DiagnosticSeverity.WARNING,
+            message="SOC seeding could not run; see lab logs",
+            operator_action=(
+                "Inspect scripts/seed-prime.sh permissions and tooling"
+            ),
+        )
     return None
 
 
@@ -657,8 +935,24 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 14: Syncing MCP client config with seeded API keys...")
     try:
         _sync_mcp_config_keys(ctx.project_dir)
-    except Exception as exc:  # pragma: no cover - non-fatal
+    except Exception as exc:  # noqa: BLE001 — converted to structured diagnostic
+        # Exception text may include API key names — keep it in the log
+        # only (existing redaction). Diagnostic stays narrow.
         log.warning("MCP config sync skipped: %s", exc)
+        _emit_diagnostic(
+            ctx,
+            step="mcp_config_sync",
+            impact=DiagnosticImpact.CAPABILITY,
+            severity=DiagnosticSeverity.WARNING,
+            message=(
+                "MCP client config not refreshed; MCP servers may not "
+                "authenticate without manual key wiring"
+            ),
+            operator_action=(
+                "Inspect .mcp.json env blocks against .env after a "
+                "fresh lab start"
+            ),
+        )
     return None
 
 
@@ -710,10 +1004,30 @@ def orchestrate_lab_start(
     for step in _LAB_START_STEPS:
         result = step(ctx)
         if result is not None:
-            return result
+            # Fatal short-circuit. Carry any partial-readiness diagnostics
+            # the earlier steps recorded so operators can see what state
+            # the lab reached before the failure (ADR-030).
+            return LabResult(
+                success=False,
+                message=result.message,
+                error=result.error,
+                outcome=StartupOutcome.FAILED,
+                diagnostics=list(ctx.diagnostics),
+            )
 
-    log.info("APTL lab started successfully!")
-    return LabResult(success=True, message="Lab started successfully")
+    outcome = derive_startup_outcome(ctx.diagnostics, fatal=False)
+    if outcome is StartupOutcome.READY:
+        log.info("APTL lab started successfully!")
+        message = "Lab started successfully"
+    else:
+        log.info("APTL lab started with outcome=%s", outcome.value)
+        message = f"Lab started with outcome={outcome.value}"
+    return LabResult(
+        success=True,
+        message=message,
+        outcome=outcome,
+        diagnostics=list(ctx.diagnostics),
+    )
 
 
 def _sync_mcp_config_keys(project_dir: Path) -> None:

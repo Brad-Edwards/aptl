@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Annotated, AsyncGenerator
 
 from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
@@ -12,6 +12,7 @@ from aptl.api.schemas import (
     ContainerInfo,
     LabActionResponse,
     LabStatusResponse,
+    StartupDiagnosticModel,
 )
 from aptl.core.lab import (
     LabResult,
@@ -42,7 +43,7 @@ def _build_status_response(project_dir: Path) -> LabStatusResponse:
 
 @router.get("/lab/status")
 async def lab_status(
-    project_dir: Path = Depends(get_project_dir),
+    project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> LabStatusResponse:
     """Get current lab status including container information."""
     log.info("GET /lab/status")
@@ -53,7 +54,7 @@ async def lab_status(
 
 @router.post("/lab/start")
 async def lab_start(
-    project_dir: Path = Depends(get_project_dir),
+    project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> LabActionResponse:
     """Start the lab environment.
 
@@ -67,21 +68,39 @@ async def lab_start(
         )
     except asyncio.TimeoutError:
         log.exception("Lab start timed out after 1800s")
+        # ``asyncio.wait_for`` only times out the awaiting coroutine; the
+        # ``asyncio.to_thread`` worker keeps running and the orchestration
+        # may still finish (degraded/ready) or fail later. We therefore
+        # cannot honestly claim a terminal ``outcome="failed"`` — the
+        # lab state is unknown at this instant. Leave ``outcome`` unset
+        # (``None``); ``success=False`` and the error string remain the
+        # authoritative signals on this path. A future "abortable lab
+        # start" change (out of scope here) is what would let us return
+        # a structured outcome on timeout (codex review #202 cycle 4).
         return LabActionResponse(
             success=False,
             error="Lab start timed out after 1800s",
         )
-    log.info("POST /lab/start -> success=%s", result.success)
+    log.info(
+        "POST /lab/start -> success=%s outcome=%s diagnostics=%d",
+        result.success,
+        result.outcome.value,
+        len(result.diagnostics),
+    )
     return LabActionResponse(
         success=result.success,
         message=result.message,
         error=result.error or None,
+        outcome=result.outcome.value,
+        diagnostics=[
+            StartupDiagnosticModel.from_dataclass(d) for d in result.diagnostics
+        ],
     )
 
 
 @router.post("/lab/stop")
 async def lab_stop(
-    project_dir: Path = Depends(get_project_dir),
+    project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> LabActionResponse:
     """Stop the lab environment."""
     log.info("POST /lab/stop")
@@ -160,7 +179,7 @@ async def _lab_event_generator(
 
 @router.get("/lab/events")
 async def lab_events(
-    project_dir: Path = Depends(get_project_dir),
+    project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> EventSourceResponse:
     """SSE stream of lab status changes.
 

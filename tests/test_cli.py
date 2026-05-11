@@ -134,14 +134,22 @@ class TestLabStartCommand:
         mock_orchestrate.assert_called_once()
 
     def test_start_handles_failure_gracefully(self, runner, mocker):
-        """start command should exit 1 and show error on failure."""
+        """start command should exit 1 and show error on failure.
+
+        Under ADR-030, a fatal orchestrator result carries
+        ``outcome=FAILED`` alongside ``success=False`` (the orchestrator
+        wraps short-circuits this way); the mock matches that contract.
+        """
         from aptl.cli.main import app
         from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartupOutcome
 
         mocker.patch(
             "aptl.cli.lab.orchestrate_lab_start",
             return_value=LabResult(
-                success=False, error="vm.max_map_count too low"
+                success=False,
+                error="vm.max_map_count too low",
+                outcome=StartupOutcome.FAILED,
             ),
         )
 
@@ -164,6 +172,130 @@ class TestLabStartCommand:
 
         assert result.exit_code == 0
         mock_orchestrate.assert_called_once_with(tmp_path, skip_seed=False)
+
+    def test_start_ready_outcome_prints_ready(self, runner, mocker):
+        """A clean start prints the ready outcome (ADR-030)."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartupOutcome
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=True,
+                message="Lab started successfully",
+                outcome=StartupOutcome.READY,
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 0
+        assert "ready" in result.stdout.lower()
+
+    def test_start_degraded_usable_lists_diagnostics(self, runner, mocker):
+        """A telemetry warning produces degraded_usable + a one-line entry."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupDiagnostic,
+            StartupOutcome,
+        )
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=True,
+                message="Lab started with outcome=degraded_usable",
+                outcome=StartupOutcome.DEGRADED_USABLE,
+                diagnostics=[
+                    StartupDiagnostic(
+                        step="wait_for_services",
+                        component="wazuh_indexer",
+                        impact=DiagnosticImpact.TELEMETRY,
+                        severity=DiagnosticSeverity.WARNING,
+                        message="Wazuh Indexer did not become ready within 300s",
+                    ),
+                ],
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 0
+        assert "degraded_usable" in result.stdout
+        assert "wazuh_indexer" in result.stdout
+        assert "telemetry" in result.stdout
+        # Non-fatal: should still print partial readiness lead-in.
+        assert "warning" in result.stdout.lower()
+
+    def test_start_degraded_unusable_groups_by_impact(self, runner, mocker):
+        """Multiple diagnostics surface per impact bucket."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupDiagnostic,
+            StartupOutcome,
+        )
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=True,
+                message="Lab started with outcome=degraded_unusable",
+                outcome=StartupOutcome.DEGRADED_UNUSABLE,
+                diagnostics=[
+                    StartupDiagnostic(
+                        step="test_ssh",
+                        component="ssh:kali",
+                        impact=DiagnosticImpact.READINESS,
+                        severity=DiagnosticSeverity.WARNING,
+                        message="SSH to kali not ready after 60s",
+                    ),
+                    StartupDiagnostic(
+                        step="build_mcps",
+                        impact=DiagnosticImpact.CAPABILITY,
+                        severity=DiagnosticSeverity.WARNING,
+                        message="MCP build returned non-zero exit; see lab logs",
+                    ),
+                ],
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        # Non-fatal exit, but operator must see what's degraded.
+        assert result.exit_code == 0
+        assert "degraded_unusable" in result.stdout
+        assert "ssh:kali" in result.stdout
+        assert "build_mcps" in result.stdout
+        # Both impact labels should appear.
+        assert "readiness" in result.stdout
+        assert "capability" in result.stdout
+
+    def test_start_failed_outcome_exits_nonzero(self, runner, mocker):
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartupOutcome
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=False,
+                error="vm.max_map_count too low",
+                outcome=StartupOutcome.FAILED,
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 1
+        assert "vm.max_map_count" in result.stdout
+        assert "failed" in result.stdout.lower()
 
 
 class TestLabStopCommand:

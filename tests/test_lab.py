@@ -531,58 +531,45 @@ class TestStartupOutcomeDerivation:
         )
         assert outcome is StartupOutcome.READY
 
-    def test_cosmetic_warning_yields_degraded_usable(self):
+    @pytest.mark.parametrize(
+        "impact_name,severity_name,expected_name",
+        [
+            ("COSMETIC", "WARNING", "DEGRADED_USABLE"),
+            ("TELEMETRY", "WARNING", "DEGRADED_USABLE"),
+            ("CAPABILITY", "WARNING", "DEGRADED_UNUSABLE"),
+            ("READINESS", "WARNING", "DEGRADED_UNUSABLE"),
+            # ERROR severity is a stronger non-info; same outcome bucket
+            # as WARNING — the difference shows up in CLI/UI rendering,
+            # not in the outcome bucket.
+            ("CAPABILITY", "ERROR", "DEGRADED_UNUSABLE"),
+        ],
+        ids=[
+            "cosmetic_warning->degraded_usable",
+            "telemetry_warning->degraded_usable",
+            "capability_warning->degraded_unusable",
+            "readiness_warning->degraded_unusable",
+            "capability_error->degraded_unusable",
+        ],
+    )
+    def test_single_diagnostic_yields_expected_outcome(
+        self, impact_name, severity_name, expected_name
+    ):
+        """The mapping table from (impact, severity) to outcome.
+
+        Parameterized so the table is the source of truth — adding a new
+        bucket means adding one row, not copy-pasting a test method."""
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
         from aptl.core.lab import derive_startup_outcome
 
-        outcome = derive_startup_outcome(
-            diagnostics=[self._diag(DiagnosticImpact.COSMETIC, DiagnosticSeverity.WARNING)],
-            fatal=False,
-        )
-        assert outcome is StartupOutcome.DEGRADED_USABLE
-
-    def test_telemetry_warning_yields_degraded_usable(self):
-        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
-        from aptl.core.lab import derive_startup_outcome
+        impact = DiagnosticImpact[impact_name]
+        severity = DiagnosticSeverity[severity_name]
+        expected = StartupOutcome[expected_name]
 
         outcome = derive_startup_outcome(
-            diagnostics=[self._diag(DiagnosticImpact.TELEMETRY, DiagnosticSeverity.WARNING)],
+            diagnostics=[self._diag(impact, severity)],
             fatal=False,
         )
-        assert outcome is StartupOutcome.DEGRADED_USABLE
-
-    def test_capability_warning_yields_degraded_unusable(self):
-        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
-        from aptl.core.lab import derive_startup_outcome
-
-        outcome = derive_startup_outcome(
-            diagnostics=[self._diag(DiagnosticImpact.CAPABILITY, DiagnosticSeverity.WARNING)],
-            fatal=False,
-        )
-        assert outcome is StartupOutcome.DEGRADED_UNUSABLE
-
-    def test_readiness_warning_yields_degraded_unusable(self):
-        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
-        from aptl.core.lab import derive_startup_outcome
-
-        outcome = derive_startup_outcome(
-            diagnostics=[self._diag(DiagnosticImpact.READINESS, DiagnosticSeverity.WARNING)],
-            fatal=False,
-        )
-        assert outcome is StartupOutcome.DEGRADED_UNUSABLE
-
-    def test_capability_error_yields_degraded_unusable(self):
-        """Severity error is a stronger non-info; same bucket as warning
-        for outcome purposes (the difference shows up in CLI/UI rendering,
-        not in the outcome bucket)."""
-        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
-        from aptl.core.lab import derive_startup_outcome
-
-        outcome = derive_startup_outcome(
-            diagnostics=[self._diag(DiagnosticImpact.CAPABILITY, DiagnosticSeverity.ERROR)],
-            fatal=False,
-        )
-        assert outcome is StartupOutcome.DEGRADED_UNUSABLE
+        assert outcome is expected
 
     def test_mixed_telemetry_and_capability_yields_degraded_unusable(self):
         """The most severe bucket wins."""

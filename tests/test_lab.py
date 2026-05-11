@@ -344,6 +344,281 @@ class TestCheckBindMounts:
         assert "parse" in errors[0].lower() or "Failed" in errors[0]
 
 
+class TestStartupClassificationTypes:
+    """Tests for the StartupOutcome / DiagnosticImpact / StartupDiagnostic types.
+
+    The taxonomy is added in ``aptl.core.lab_types`` per ADR-030. These
+    tests pin the enum values and the dataclass shape so other layers
+    (CLI, API, web TS mirror) can rely on stable strings.
+    """
+
+    def test_startup_outcome_members(self):
+        from aptl.core.lab_types import StartupOutcome
+
+        assert StartupOutcome.READY.value == "ready"
+        assert StartupOutcome.DEGRADED_USABLE.value == "degraded_usable"
+        assert StartupOutcome.DEGRADED_UNUSABLE.value == "degraded_unusable"
+        assert StartupOutcome.FAILED.value == "failed"
+
+    def test_diagnostic_impact_members(self):
+        from aptl.core.lab_types import DiagnosticImpact
+
+        assert DiagnosticImpact.COSMETIC.value == "cosmetic"
+        assert DiagnosticImpact.TELEMETRY.value == "telemetry"
+        assert DiagnosticImpact.CAPABILITY.value == "capability"
+        assert DiagnosticImpact.READINESS.value == "readiness"
+
+    def test_diagnostic_severity_members(self):
+        from aptl.core.lab_types import DiagnosticSeverity
+
+        assert DiagnosticSeverity.INFO.value == "info"
+        assert DiagnosticSeverity.WARNING.value == "warning"
+        assert DiagnosticSeverity.ERROR.value == "error"
+
+    def test_startup_diagnostic_fields(self):
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupDiagnostic,
+        )
+
+        diag = StartupDiagnostic(
+            step="wait_for_services",
+            component="wazuh_indexer",
+            impact=DiagnosticImpact.TELEMETRY,
+            severity=DiagnosticSeverity.WARNING,
+            message="Indexer did not become ready within 300s",
+        )
+        assert diag.step == "wait_for_services"
+        assert diag.component == "wazuh_indexer"
+        assert diag.impact is DiagnosticImpact.TELEMETRY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        assert diag.message == "Indexer did not become ready within 300s"
+        assert diag.operator_action == ""
+
+    def test_startup_diagnostic_component_optional(self):
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupDiagnostic,
+        )
+
+        diag = StartupDiagnostic(
+            step="pull_images",
+            impact=DiagnosticImpact.COSMETIC,
+            severity=DiagnosticSeverity.INFO,
+            message="Image pre-pull skipped",
+        )
+        # component defaults to empty string (no special-case in CLI/API)
+        assert diag.component == ""
+
+    def test_lab_result_has_outcome_and_diagnostics_with_defaults(self):
+        """LabResult must default to READY + empty diagnostics so existing
+        callers keep working without touching every constructor."""
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        r = LabResult(success=True, message="ok")
+        assert r.outcome is StartupOutcome.READY
+        assert r.diagnostics == []
+
+    def test_lab_result_success_false_without_outcome_normalizes_to_failed(self):
+        """A caller constructing LabResult(success=False) without setting
+        outcome must not surface as `outcome=ready` — the DTO normalizes
+        to FAILED so the wire shape stays consistent across the
+        Docker Compose backend, the orchestrator step bodies, and any
+        future caller that forgets to set outcome explicitly.
+
+        Codex review (cycle 2) called this the architectural choke point."""
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        r = LabResult(success=False, error="compose down failed")
+        assert r.outcome is StartupOutcome.FAILED
+        assert r.success is False
+
+    def test_lab_result_outcome_failed_forces_success_false(self):
+        """If the two fields disagree, outcome wins — a FAILED outcome
+        is the unambiguous signal, never silently 'successful'."""
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        r = LabResult(success=True, outcome=StartupOutcome.FAILED, error="x")
+        assert r.success is False
+
+    def test_lab_result_degraded_outcomes_keep_success_true(self):
+        """A `degraded_*` outcome means the lab is up — back-compat callers
+        reading only `success` keep working."""
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        for outcome in (
+            StartupOutcome.DEGRADED_USABLE,
+            StartupOutcome.DEGRADED_UNUSABLE,
+        ):
+            r = LabResult(success=True, outcome=outcome)
+            assert r.success is True
+            assert r.outcome is outcome
+
+    def test_lab_result_explicit_failed_with_success_false_is_unchanged(self):
+        """The orchestrator already wraps short-circuits with both fields
+        set consistently; normalization must be a no-op in that case."""
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        r = LabResult(
+            success=False, error="x", outcome=StartupOutcome.FAILED
+        )
+        assert r.success is False
+        assert r.outcome is StartupOutcome.FAILED
+
+    def test_lab_result_success_false_with_degraded_usable_is_corrected(self):
+        """Contradictory combination — outcome wins. The lab is up
+        (DEGRADED_USABLE), so success must be True regardless of what
+        the caller passed (codex review #202 cycle 3)."""
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        r = LabResult(success=False, outcome=StartupOutcome.DEGRADED_USABLE)
+        assert r.success is True
+        assert r.outcome is StartupOutcome.DEGRADED_USABLE
+
+    def test_lab_result_success_false_with_degraded_unusable_is_corrected(self):
+        """Same as the degraded_usable case — outcome is authoritative."""
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        r = LabResult(success=False, outcome=StartupOutcome.DEGRADED_UNUSABLE)
+        assert r.success is True
+        assert r.outcome is StartupOutcome.DEGRADED_UNUSABLE
+
+
+class TestStartupOutcomeDerivation:
+    """Tests for the rule that maps a diagnostics list (plus a fatal-step
+    short-circuit) into a StartupOutcome.
+
+    Mapping rule (ADR-030):
+      - If a fatal step short-circuited orchestration -> FAILED.
+      - Else any non-info diagnostic with impact in {capability, readiness}
+        -> DEGRADED_UNUSABLE.
+      - Else any non-info diagnostic with impact in {cosmetic, telemetry}
+        -> DEGRADED_USABLE.
+      - Else READY.
+
+    ``LabResult.success`` is True iff outcome is not FAILED.
+    """
+
+    def _diag(self, impact, severity, step="wait_for_services"):
+        from aptl.core.lab_types import StartupDiagnostic
+
+        return StartupDiagnostic(
+            step=step,
+            impact=impact,
+            severity=severity,
+            message="test diagnostic",
+        )
+
+    def test_empty_diagnostics_no_fatal_yields_ready(self):
+        from aptl.core.lab_types import StartupOutcome
+        from aptl.core.lab import derive_startup_outcome
+
+        outcome = derive_startup_outcome(diagnostics=[], fatal=False)
+        assert outcome is StartupOutcome.READY
+
+    def test_only_info_diagnostics_yields_ready(self):
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab import derive_startup_outcome
+
+        outcome = derive_startup_outcome(
+            diagnostics=[
+                self._diag(DiagnosticImpact.COSMETIC, DiagnosticSeverity.INFO),
+                self._diag(DiagnosticImpact.TELEMETRY, DiagnosticSeverity.INFO),
+            ],
+            fatal=False,
+        )
+        assert outcome is StartupOutcome.READY
+
+    def test_cosmetic_warning_yields_degraded_usable(self):
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab import derive_startup_outcome
+
+        outcome = derive_startup_outcome(
+            diagnostics=[self._diag(DiagnosticImpact.COSMETIC, DiagnosticSeverity.WARNING)],
+            fatal=False,
+        )
+        assert outcome is StartupOutcome.DEGRADED_USABLE
+
+    def test_telemetry_warning_yields_degraded_usable(self):
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab import derive_startup_outcome
+
+        outcome = derive_startup_outcome(
+            diagnostics=[self._diag(DiagnosticImpact.TELEMETRY, DiagnosticSeverity.WARNING)],
+            fatal=False,
+        )
+        assert outcome is StartupOutcome.DEGRADED_USABLE
+
+    def test_capability_warning_yields_degraded_unusable(self):
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab import derive_startup_outcome
+
+        outcome = derive_startup_outcome(
+            diagnostics=[self._diag(DiagnosticImpact.CAPABILITY, DiagnosticSeverity.WARNING)],
+            fatal=False,
+        )
+        assert outcome is StartupOutcome.DEGRADED_UNUSABLE
+
+    def test_readiness_warning_yields_degraded_unusable(self):
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab import derive_startup_outcome
+
+        outcome = derive_startup_outcome(
+            diagnostics=[self._diag(DiagnosticImpact.READINESS, DiagnosticSeverity.WARNING)],
+            fatal=False,
+        )
+        assert outcome is StartupOutcome.DEGRADED_UNUSABLE
+
+    def test_capability_error_yields_degraded_unusable(self):
+        """Severity error is a stronger non-info; same bucket as warning
+        for outcome purposes (the difference shows up in CLI/UI rendering,
+        not in the outcome bucket)."""
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab import derive_startup_outcome
+
+        outcome = derive_startup_outcome(
+            diagnostics=[self._diag(DiagnosticImpact.CAPABILITY, DiagnosticSeverity.ERROR)],
+            fatal=False,
+        )
+        assert outcome is StartupOutcome.DEGRADED_UNUSABLE
+
+    def test_mixed_telemetry_and_capability_yields_degraded_unusable(self):
+        """The most severe bucket wins."""
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab import derive_startup_outcome
+
+        outcome = derive_startup_outcome(
+            diagnostics=[
+                self._diag(DiagnosticImpact.TELEMETRY, DiagnosticSeverity.WARNING),
+                self._diag(DiagnosticImpact.CAPABILITY, DiagnosticSeverity.WARNING),
+            ],
+            fatal=False,
+        )
+        assert outcome is StartupOutcome.DEGRADED_UNUSABLE
+
+    def test_fatal_true_always_yields_failed(self):
+        """A fatal short-circuit overrides any diagnostics — failure
+        must be distinguishable from degraded_unusable per ADR-030."""
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab import derive_startup_outcome
+
+        outcome = derive_startup_outcome(
+            diagnostics=[
+                self._diag(DiagnosticImpact.CAPABILITY, DiagnosticSeverity.WARNING),
+            ],
+            fatal=True,
+        )
+        assert outcome is StartupOutcome.FAILED
+
+    def test_fatal_true_with_no_diagnostics_yields_failed(self):
+        from aptl.core.lab_types import StartupOutcome
+        from aptl.core.lab import derive_startup_outcome
+
+        assert derive_startup_outcome(diagnostics=[], fatal=True) is StartupOutcome.FAILED
+
+
 class TestOrchestrateLabStart:
     """Tests for the full lab start orchestration."""
 
@@ -963,3 +1238,592 @@ class TestSyncSuricataMispRuleBaselinesStep:
         assert result is not None
         assert result.success is False
         assert "suricata misp" in (result.error or "").lower()
+
+
+class TestStartupClassificationWiring:
+    """Per-step assertions that each non-critical failure path produces
+    the expected structured diagnostic (ADR-030).
+
+    These tests drive individual ``_step_*`` functions against a
+    ``_LabStartContext`` with the right pre-conditions, then read the
+    diagnostics that were appended. They are deliberately step-scoped
+    so the assertions stay narrow and the mocks stay small.
+    """
+
+    def _make_env_vars(self):
+        from aptl.core.env import EnvVars
+
+        return EnvVars(
+            indexer_username="admin",
+            indexer_password="secret",
+            api_username="wazuh-wui",
+            api_password="apisecret",
+            dashboard_username="kibanaserver",
+            dashboard_password="kibanapass",
+            wazuh_cluster_key="clusterkey",
+        )
+
+    def _make_config(self, *, victim=True, kali=True, reverse=True, wazuh=True):
+        from aptl.core.config import AptlConfig
+
+        return AptlConfig(
+            lab={"name": "test-lab"},
+            containers={
+                "wazuh": wazuh,
+                "victim": victim,
+                "kali": kali,
+                "reverse": reverse,
+            },
+        )
+
+    def _ctx(self, tmp_path, *, config=None):
+        from aptl.core.lab import _LabStartContext
+
+        return _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            env=self._make_env_vars(),
+            config=config or self._make_config(),
+            ssh_key_path=Path("/tmp/aptl_lab_key"),
+        )
+
+    # -- redaction at the diagnostic boundary --------------------------
+
+    def test_emit_diagnostic_redacts_credential_shaped_message(self, tmp_path):
+        """_emit_diagnostic is the choke point for everything that crosses
+        the CLI/API/web boundary — callers must not be able to leak a
+        credential-shaped payload through it even by accident.
+
+        Codex review (cycle 2) flagged the bare-message path as the
+        regression-prone seam; the helper now applies the same
+        ``aptl.utils.redaction.redact()`` boundary used by snapshot/run
+        archives (ADR-029)."""
+        from aptl.core.lab import _emit_diagnostic
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(tmp_path)
+        _emit_diagnostic(
+            ctx,
+            step="future_step_that_forgot",
+            impact=DiagnosticImpact.CAPABILITY,
+            severity=DiagnosticSeverity.WARNING,
+            message="API_KEY=hunter2 leaked into a future caller's text",
+            operator_action="Bearer abcd1234deadbeef token in operator note",
+        )
+
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert "hunter2" not in diag.message
+        assert "[REDACTED]" in diag.message
+        assert "abcd1234deadbeef" not in diag.operator_action
+        # Narrow internal identifiers like the step name must remain
+        # intact so the diagnostic stays attributable.
+        assert diag.step == "future_step_that_forgot"
+
+    # -- pull_images (cosmetic) ----------------------------------------
+
+    def test_pull_images_clean_emits_no_diagnostic(self, tmp_path):
+        from aptl.core.lab import _step_pull_images
+
+        ctx = self._ctx(tmp_path)
+        backend = MagicMock()
+        backend.pull_images.return_value = []
+        ctx.backend = backend
+
+        _step_pull_images(ctx)
+
+        assert ctx.diagnostics == []
+
+    def test_pull_images_warnings_emit_cosmetic_info(self, tmp_path):
+        from aptl.core.lab import _step_pull_images
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(tmp_path)
+        backend = MagicMock()
+        backend.pull_images.return_value = [
+            "Failed to pull wazuh/wazuh-manager:4.12.0: connection reset",
+            "Failed to pull wazuh/wazuh-dashboard:4.12.0: rate limit",
+        ]
+        ctx.backend = backend
+
+        _step_pull_images(ctx)
+
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.step == "pull_images"
+        assert diag.impact is DiagnosticImpact.COSMETIC
+        assert diag.severity is DiagnosticSeverity.INFO
+        # ADR-030 guardrail: do not embed raw subprocess stderr in the
+        # structured message. The diagnostic carries a narrow summary.
+        assert "connection reset" not in diag.message
+        assert "rate limit" not in diag.message
+        assert "2" in diag.message  # number of failed images
+
+    # -- wait_for_services (telemetry) ---------------------------------
+
+    def test_wait_for_services_indexer_timeout_emits_telemetry_warning(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_wait_for_services
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        # Indexer not ready, Manager ready
+        mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            side_effect=[
+                ServiceResult(ready=False, elapsed_seconds=300.0, error="timed out"),
+                ServiceResult(ready=True, elapsed_seconds=12.0),
+            ],
+        )
+
+        _step_wait_for_services(ctx)
+
+        indexer_diags = [d for d in ctx.diagnostics if d.component == "wazuh_indexer"]
+        assert len(indexer_diags) == 1
+        assert indexer_diags[0].impact is DiagnosticImpact.TELEMETRY
+        assert indexer_diags[0].severity is DiagnosticSeverity.WARNING
+        assert indexer_diags[0].step == "wait_for_services"
+        manager_diags = [d for d in ctx.diagnostics if d.component == "wazuh_manager"]
+        assert manager_diags == []
+
+    def test_wait_for_services_manager_timeout_emits_telemetry_warning(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_wait_for_services
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            side_effect=[
+                ServiceResult(ready=True, elapsed_seconds=12.0),
+                ServiceResult(ready=False, elapsed_seconds=120.0, error="timed out"),
+            ],
+        )
+
+        _step_wait_for_services(ctx)
+
+        manager_diags = [d for d in ctx.diagnostics if d.component == "wazuh_manager"]
+        assert len(manager_diags) == 1
+        assert manager_diags[0].impact is DiagnosticImpact.TELEMETRY
+        assert manager_diags[0].severity is DiagnosticSeverity.WARNING
+
+    def test_wait_for_services_clean_emits_no_diagnostic(self, tmp_path, mocker):
+        from aptl.core.lab import _step_wait_for_services
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            return_value=ServiceResult(ready=True, elapsed_seconds=10.0),
+        )
+
+        _step_wait_for_services(ctx)
+
+        assert ctx.diagnostics == []
+
+    def test_wait_for_services_skipped_when_wazuh_disabled(self, tmp_path, mocker):
+        from aptl.core.lab import _step_wait_for_services
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path, config=self._make_config(wazuh=False))
+        wait_mock = mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            return_value=ServiceResult(ready=False, elapsed_seconds=300.0, error="timed out"),
+        )
+
+        _step_wait_for_services(ctx)
+
+        # Wazuh probes never ran -> no diagnostics.
+        assert ctx.diagnostics == []
+        wait_mock.assert_not_called()
+
+    # -- test_ssh (readiness) ------------------------------------------
+
+    def test_test_ssh_per_target_timeout_emits_readiness_warning(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_test_ssh
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        # victim ready, kali timeout, reverse ready
+        mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            side_effect=[
+                ServiceResult(ready=True, elapsed_seconds=2.0),
+                ServiceResult(ready=False, elapsed_seconds=60.0, error="timed out"),
+                ServiceResult(ready=True, elapsed_seconds=3.0),
+            ],
+        )
+
+        _step_test_ssh(ctx)
+
+        readiness_diags = [
+            d for d in ctx.diagnostics if d.impact is DiagnosticImpact.READINESS
+        ]
+        assert len(readiness_diags) == 1
+        diag = readiness_diags[0]
+        assert diag.step == "test_ssh"
+        assert diag.component == "ssh:kali"
+        assert diag.severity is DiagnosticSeverity.WARNING
+
+    def test_test_ssh_all_ready_emits_no_diagnostic(self, tmp_path, mocker):
+        from aptl.core.lab import _step_test_ssh
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            return_value=ServiceResult(ready=True, elapsed_seconds=2.0),
+        )
+
+        _step_test_ssh(ctx)
+
+        assert ctx.diagnostics == []
+
+    # -- build_mcps (capability) ---------------------------------------
+
+    def test_build_mcps_missing_script_emits_capability_warning(self, tmp_path):
+        from aptl.core.lab import _step_build_mcps
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(tmp_path)
+        # No mcp/build-all-mcps.sh script in tmp_path
+        _step_build_mcps(ctx)
+
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.step == "build_mcps"
+        assert diag.impact is DiagnosticImpact.CAPABILITY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        assert "script" in diag.message.lower()
+
+    def test_build_mcps_nonzero_exit_emits_capability_warning(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_build_mcps
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(tmp_path)
+        # Create the script so we get past the existence check
+        mcp_dir = tmp_path / "mcp"
+        mcp_dir.mkdir()
+        (mcp_dir / "build-all-mcps.sh").write_text("#!/bin/bash\nexit 1\n")
+        (mcp_dir / "build-all-mcps.sh").chmod(0o755)
+
+        mocker.patch(
+            "aptl.core.lab.subprocess.run",
+            return_value=MagicMock(
+                returncode=1,
+                stdout="",
+                stderr="npm error: TOKEN=abcdef-leak-shaped-text",
+            ),
+        )
+
+        _step_build_mcps(ctx)
+
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.impact is DiagnosticImpact.CAPABILITY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        # ADR-030 / ADR-029: stderr must not appear in the structured
+        # diagnostic message.
+        assert "abcdef-leak-shaped-text" not in diag.message
+        assert "TOKEN=" not in diag.message
+
+    def test_build_mcps_clean_emits_no_diagnostic(self, tmp_path, mocker):
+        from aptl.core.lab import _step_build_mcps
+
+        ctx = self._ctx(tmp_path)
+        mcp_dir = tmp_path / "mcp"
+        mcp_dir.mkdir()
+        (mcp_dir / "build-all-mcps.sh").write_text("#!/bin/bash\necho done\n")
+        (mcp_dir / "build-all-mcps.sh").chmod(0o755)
+
+        mocker.patch(
+            "aptl.core.lab.subprocess.run",
+            return_value=MagicMock(returncode=0, stdout="", stderr=""),
+        )
+
+        _step_build_mcps(ctx)
+
+        assert ctx.diagnostics == []
+
+    # -- capture_snapshot (telemetry) ----------------------------------
+
+    def test_capture_snapshot_clean_emits_no_diagnostic(self, tmp_path, mocker):
+        from aptl.core.lab import _step_capture_snapshot
+        from aptl.core.snapshot import RangeSnapshot
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend = MagicMock()
+        mocker.patch(
+            "aptl.core.lab.capture_snapshot", return_value=RangeSnapshot()
+        )
+
+        _step_capture_snapshot(ctx)
+
+        assert ctx.diagnostics == []
+
+    def test_capture_snapshot_failure_emits_telemetry_warning(
+        self, tmp_path, mocker
+    ):
+        """Snapshot is the run-archive inventory — its loss is observability
+        debt, not a hard failure. ADR-030 lists snapshot capture among the
+        late startup checks that must surface as structured diagnostics."""
+        from aptl.core.lab import _step_capture_snapshot
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend = MagicMock()
+        mocker.patch(
+            "aptl.core.lab.capture_snapshot",
+            side_effect=RuntimeError("docker daemon unreachable"),
+        )
+
+        # Must not raise — degradation, not failure.
+        _step_capture_snapshot(ctx)
+
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.step == "capture_snapshot"
+        assert diag.impact is DiagnosticImpact.TELEMETRY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        # Exception text must not leak into the structured message
+        # (ADR-029 / ADR-030).
+        assert "docker daemon unreachable" not in diag.message
+
+    # -- seed_soc (capability) -----------------------------------------
+
+    def test_seed_soc_nonzero_exit_emits_capability_warning(self, tmp_path, mocker):
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _step_seed_soc
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(
+            tmp_path,
+            config=AptlConfig(
+                lab={"name": "test-lab"},
+                containers={"wazuh": True, "victim": True, "kali": True, "soc": True},
+            ),
+        )
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+        seed_script = scripts_dir / "seed-prime.sh"
+        seed_script.write_text("#!/bin/bash\nexit 1\n")
+        seed_script.chmod(0o755)
+
+        mocker.patch(
+            "aptl.core.lab.subprocess.run",
+            return_value=MagicMock(
+                returncode=1,
+                stdout="",
+                stderr="MISP_API_KEY=should-not-appear-in-diag",
+            ),
+        )
+
+        _step_seed_soc(ctx)
+
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.step == "seed_soc"
+        assert diag.impact is DiagnosticImpact.CAPABILITY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        assert "should-not-appear-in-diag" not in diag.message
+
+    def test_seed_soc_timeout_emits_capability_warning(self, tmp_path, mocker):
+        import subprocess
+
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _step_seed_soc
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(
+            tmp_path,
+            config=AptlConfig(
+                lab={"name": "test-lab"},
+                containers={"wazuh": True, "victim": True, "kali": True, "soc": True},
+            ),
+        )
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+        seed_script = scripts_dir / "seed-prime.sh"
+        seed_script.write_text("#!/bin/bash\nsleep 30\n")
+        seed_script.chmod(0o755)
+
+        mocker.patch(
+            "aptl.core.lab.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd=str(seed_script), timeout=1),
+        )
+
+        _step_seed_soc(ctx)
+
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.step == "seed_soc"
+        assert diag.impact is DiagnosticImpact.CAPABILITY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        assert "timed out" in diag.message.lower() or "timeout" in diag.message.lower()
+
+    def test_seed_soc_skipped_emits_no_diagnostic(self, tmp_path):
+        """--skip-seed is an operator choice, not a degradation."""
+        from aptl.core.lab import _step_seed_soc
+
+        ctx = self._ctx(tmp_path)
+        ctx.skip_seed = True
+
+        _step_seed_soc(ctx)
+
+        assert ctx.diagnostics == []
+
+    def test_seed_soc_missing_script_with_soc_enabled_emits_capability_warning(
+        self, tmp_path
+    ):
+        """SOC enabled but seed-prime.sh missing: lab will come up with empty
+        SOC tools. Codex review (cycle 1) flagged the silent-skip path."""
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _step_seed_soc
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(
+            tmp_path,
+            config=AptlConfig(
+                lab={"name": "test-lab"},
+                containers={"wazuh": True, "victim": True, "kali": True, "soc": True},
+            ),
+        )
+        # No scripts/seed-prime.sh in tmp_path
+        _step_seed_soc(ctx)
+
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.step == "seed_soc"
+        assert diag.impact is DiagnosticImpact.CAPABILITY
+        assert diag.severity is DiagnosticSeverity.WARNING
+
+    def test_seed_soc_missing_script_with_soc_disabled_emits_no_diagnostic(
+        self, tmp_path
+    ):
+        """SOC disabled and no seed script: still a no-op, no degradation."""
+        from aptl.core.lab import _step_seed_soc
+
+        ctx = self._ctx(tmp_path, config=self._make_config())  # soc not set -> False
+        # No scripts/seed-prime.sh in tmp_path
+        _step_seed_soc(ctx)
+
+        assert ctx.diagnostics == []
+
+    # -- mcp_config_sync (capability) ----------------------------------
+
+    def test_mcp_config_sync_exception_emits_capability_warning(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_sync_mcp_config
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab._sync_mcp_config_keys",
+            side_effect=RuntimeError("THEHIVE_API_KEY mismatch"),
+        )
+
+        _step_sync_mcp_config(ctx)
+
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.step == "mcp_config_sync"
+        assert diag.impact is DiagnosticImpact.CAPABILITY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        # Exception text contains a sensitive-looking key name —
+        # diagnostic message must not echo the raw exception payload.
+        assert "THEHIVE_API_KEY" not in diag.message
+
+    def test_mcp_config_sync_clean_emits_no_diagnostic(self, tmp_path, mocker):
+        from aptl.core.lab import _step_sync_mcp_config
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch("aptl.core.lab._sync_mcp_config_keys", return_value=None)
+
+        _step_sync_mcp_config(ctx)
+
+        assert ctx.diagnostics == []
+
+
+class TestOrchestrateLabStartOutcome:
+    """End-to-end checks that ``orchestrate_lab_start`` returns a
+    ``LabResult`` whose ``outcome`` and ``diagnostics`` fields reflect
+    what happened during the run (ADR-030).
+    """
+
+    def _patch_happy(self, mocker, tmp_path):
+        # Reuse the same patcher TestOrchestrateLabStart uses, by
+        # constructing one and borrowing its method.
+        return TestOrchestrateLabStart()._patch_all_steps(mocker, tmp_path)
+
+    def test_happy_path_yields_ready_and_empty_diagnostics(self, mocker, tmp_path):
+        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab_types import StartupOutcome
+
+        self._patch_happy(mocker, tmp_path)
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is True
+        assert result.outcome is StartupOutcome.READY
+        assert result.diagnostics == []
+
+    def test_ssh_probe_timeout_yields_degraded_unusable(self, mocker, tmp_path):
+        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab_types import DiagnosticImpact, StartupOutcome
+        from aptl.core.services import ServiceResult
+
+        mocks = self._patch_happy(mocker, tmp_path)
+        # Make every wait_for_service call time out — covers indexer,
+        # manager, and every SSH probe.
+        mocks["wait_indexer"].return_value = ServiceResult(
+            ready=False, elapsed_seconds=60.0, error="timed out"
+        )
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is True  # back-compat: non-fatal warnings
+        assert result.outcome is StartupOutcome.DEGRADED_UNUSABLE
+        # At least one readiness diagnostic and one telemetry diagnostic.
+        impacts = {d.impact for d in result.diagnostics}
+        assert DiagnosticImpact.READINESS in impacts
+        assert DiagnosticImpact.TELEMETRY in impacts
+
+    def test_mcp_build_failure_yields_degraded_unusable(self, mocker, tmp_path):
+        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab_types import DiagnosticImpact, StartupOutcome
+
+        mocks = self._patch_happy(mocker, tmp_path)
+        mocks["mcp_subprocess"].return_value = MagicMock(
+            returncode=1, stdout="", stderr="npm error"
+        )
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is True
+        assert result.outcome is StartupOutcome.DEGRADED_UNUSABLE
+        cap = [d for d in result.diagnostics if d.impact is DiagnosticImpact.CAPABILITY]
+        assert any(d.step == "build_mcps" for d in cap)
+
+    def test_fatal_step_yields_failed_outcome(self, mocker, tmp_path):
+        from aptl.core.lab import LabResult, orchestrate_lab_start
+        from aptl.core.lab_types import StartupOutcome
+
+        mocks = self._patch_happy(mocker, tmp_path)
+        mocks["start"].return_value = LabResult(
+            success=False, error="compose up failed"
+        )
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is False
+        assert result.outcome is StartupOutcome.FAILED

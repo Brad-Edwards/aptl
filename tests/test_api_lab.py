@@ -120,6 +120,68 @@ class TestLabStart:
         assert "Missing .env" in data["error"]
 
     @patch("aptl.api.routers.lab.orchestrate_lab_start")
+    def test_start_exposes_outcome_and_diagnostics(self, mock_start, api_client):
+        """API projects ADR-030's outcome + diagnostics onto LabActionResponse."""
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupDiagnostic,
+            StartupOutcome,
+        )
+
+        mock_start.return_value = LabResult(
+            success=True,
+            message="Lab started with outcome=degraded_usable",
+            outcome=StartupOutcome.DEGRADED_USABLE,
+            diagnostics=[
+                StartupDiagnostic(
+                    step="wait_for_services",
+                    component="wazuh_indexer",
+                    impact=DiagnosticImpact.TELEMETRY,
+                    severity=DiagnosticSeverity.WARNING,
+                    message="Indexer did not become ready within 300s",
+                    operator_action="Check indexer container logs",
+                ),
+            ],
+        )
+
+        response = api_client.post("/api/lab/start")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["outcome"] == "degraded_usable"
+        assert len(data["diagnostics"]) == 1
+        diag = data["diagnostics"][0]
+        assert diag["step"] == "wait_for_services"
+        assert diag["component"] == "wazuh_indexer"
+        assert diag["impact"] == "telemetry"
+        assert diag["severity"] == "warning"
+        assert diag["message"] == "Indexer did not become ready within 300s"
+        assert diag["operator_action"] == "Check indexer container logs"
+
+    @patch("aptl.api.routers.lab.orchestrate_lab_start")
+    def test_start_clean_run_has_ready_outcome_and_empty_diagnostics(
+        self, mock_start, api_client
+    ):
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartupOutcome
+
+        mock_start.return_value = LabResult(
+            success=True,
+            message="Lab started successfully",
+            outcome=StartupOutcome.READY,
+        )
+
+        response = api_client.post("/api/lab/start")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["outcome"] == "ready"
+        assert data["diagnostics"] == []
+
+    @patch("aptl.api.routers.lab.orchestrate_lab_start")
     def test_start_timeout(self, mock_start, api_client):
         """Lab start returns error when orchestration exceeds timeout."""
         from aptl.core.lab import LabResult
@@ -148,6 +210,56 @@ class TestLabStart:
         data = response.json()
         assert data["success"] is False
         assert "timed out" in data["error"]
+        # The orchestrator runs in a background thread that
+        # ``asyncio.wait_for`` cannot cancel — at the moment of timeout the
+        # lab state is genuinely unknown (it may still complete). We
+        # therefore do NOT claim a terminal ``outcome="failed"`` here;
+        # ``success=False`` + the error string remain the authoritative
+        # signals (codex review #202 cycle 4).
+        assert data["outcome"] is None
+        assert data["diagnostics"] == []
+
+
+class TestStartupClassificationSchemaClosed:
+    """The ADR-030 wire strings are closed sets; the pydantic schema
+    refuses values outside those sets."""
+
+    def test_diagnostic_model_rejects_unknown_impact(self):
+        import pytest as _pytest
+        from pydantic import ValidationError
+
+        from aptl.api.schemas import StartupDiagnosticModel
+
+        with _pytest.raises(ValidationError):
+            StartupDiagnosticModel(
+                step="wait_for_services",
+                impact="bogus_impact",
+                severity="warning",
+                message="x",
+            )
+
+    def test_diagnostic_model_rejects_unknown_severity(self):
+        import pytest as _pytest
+        from pydantic import ValidationError
+
+        from aptl.api.schemas import StartupDiagnosticModel
+
+        with _pytest.raises(ValidationError):
+            StartupDiagnosticModel(
+                step="wait_for_services",
+                impact="telemetry",
+                severity="catastrophic",
+                message="x",
+            )
+
+    def test_lab_action_response_rejects_unknown_outcome(self):
+        import pytest as _pytest
+        from pydantic import ValidationError
+
+        from aptl.api.schemas import LabActionResponse
+
+        with _pytest.raises(ValidationError):
+            LabActionResponse(success=True, outcome="not_a_real_outcome")
 
 
 class TestLabStop:

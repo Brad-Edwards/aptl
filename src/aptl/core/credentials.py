@@ -36,15 +36,23 @@ _KEY_PATTERN = re.compile(r"<key>[^<]*</key>")
 # Canonical project-relative source templates (checked in, never written).
 _DASHBOARD_SOURCE_RELPATH = Path("config/wazuh_dashboard/wazuh.yml")
 _MANAGER_SOURCE_RELPATH = Path("config/wazuh_cluster/wazuh_manager.conf")
+_SURICATA_MISP_RULES_SOURCE_RELPATH = Path("config/suricata/rules/misp")
 
 # Canonical project-relative rendered outputs (under the ignored .aptl/
 # state tree). docker-compose.yml mounts exactly these paths; keep the
 # two in sync.
 RENDERED_DASHBOARD_RELPATH = Path(".aptl/config/wazuh_dashboard/wazuh.yml")
 RENDERED_MANAGER_RELPATH = Path(".aptl/config/wazuh_cluster/wazuh_manager.conf")
+RENDERED_SURICATA_MISP_RULES_RELPATH = Path(".aptl/suricata/rules/misp")
 
 # Root of the rendered-config tree.
 _RENDERED_CONFIG_ROOT = Path(".aptl/config")
+_SURICATA_MISP_RULE_FILES = (
+    "misp-iocs.rules",
+    "misp-md5.list",
+    "misp-sha1.list",
+    "misp-sha256.list",
+)
 
 # Host-side permissions. The directory is owner-only (``0o700``) — that
 # is the real access control for local users, since nobody but the owner
@@ -59,6 +67,8 @@ _RENDERED_CONFIG_ROOT = Path(".aptl/config")
 # reason.)
 _DIR_MODE = 0o700
 _FILE_MODE = 0o644
+_GENERATED_RULE_DIR_MODE = 0o755
+_GENERATED_RULE_FILE_MODE = 0o644
 
 
 class PathContainmentError(ValueError):
@@ -243,6 +253,31 @@ def _atomic_write_secure(target: Path, content: str) -> None:
         tmp.unlink(missing_ok=True)
         raise
     _enforce_mode(target, _FILE_MODE, "file")
+
+
+def _atomic_write_generated_bytes(target: Path, content: bytes) -> None:
+    """Atomically write non-secret generated artifact bytes."""
+    parent = target.parent
+    fd, tmp_name = tempfile.mkstemp(
+        dir=parent, prefix=f".{target.name}.", suffix=".tmp"
+    )
+    tmp = Path(tmp_name)
+    if not tmp.resolve().is_relative_to(parent.resolve()):  # pragma: no cover
+        os.close(fd)
+        tmp.unlink(missing_ok=True)
+        raise PathContainmentError(
+            f"Temp render path {tmp} escapes its output directory {parent}"
+        )
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(content)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, target)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    _enforce_mode(target, _GENERATED_RULE_FILE_MODE, "file")
 
 
 def _render_secure(
@@ -434,3 +469,46 @@ def sync_manager_config(project_dir: Path, cluster_key: str) -> Path:
         RENDERED_MANAGER_RELPATH,
         _manager_transform(cluster_key),
     )
+
+
+def sync_suricata_misp_rule_baselines(project_dir: Path) -> Path:
+    """Seed MISP Suricata rule baselines into the ignored ``.aptl/`` tree.
+
+    The checked-in files under ``config/suricata/rules/misp/`` are source-owned
+    baselines. The running sync service writes generated IOC rules and hash
+    sidecars to ``.aptl/suricata/rules/misp/``, which Docker Compose mounts at
+    Suricata's existing ``/var/lib/suricata/rules/misp`` path.
+
+    Returns:
+        The generated rules directory.
+
+    Raises:
+        PathContainmentError: if source or generated paths escape the project
+            root or the generated output path is symlinked.
+        FileNotFoundError: if any required baseline seed file is missing.
+        NotADirectoryError: if the source baseline path is not a directory.
+    """
+    source_dir = _resolve_within_project(
+        project_dir, _SURICATA_MISP_RULES_SOURCE_RELPATH
+    )
+    if not source_dir.is_dir():
+        raise NotADirectoryError(f"Suricata MISP rule baseline dir not found: {source_dir}")
+
+    output_dir = _canonical_generated_path(
+        project_dir, RENDERED_SURICATA_MISP_RULES_RELPATH
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _enforce_mode(output_dir, _GENERATED_RULE_DIR_MODE, "directory")
+    _canonical_generated_path(project_dir, RENDERED_SURICATA_MISP_RULES_RELPATH)
+
+    for filename in _SURICATA_MISP_RULE_FILES:
+        source_file = source_dir / filename
+        if not source_file.is_file():
+            raise FileNotFoundError(f"Suricata MISP rule baseline not found: {source_file}")
+        output_file = _canonical_generated_path(
+            project_dir, RENDERED_SURICATA_MISP_RULES_RELPATH / filename
+        )
+        _atomic_write_generated_bytes(output_file, source_file.read_bytes())
+
+    log.info("Seeded Suricata MISP rule baselines to %s", output_dir)
+    return output_dir

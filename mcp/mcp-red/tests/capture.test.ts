@@ -1,7 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+vi.mock('aptl-mcp-common', async () => {
+  const actual = await vi.importActual<typeof import('../../aptl-mcp-common/src/redaction.js')>(
+    '../../aptl-mcp-common/src/redaction.js',
+  );
+  return { redact: actual.redact };
+});
+
 import {
   appendCaptureRecord,
   buildCaptureRecord,

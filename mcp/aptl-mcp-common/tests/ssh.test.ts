@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+vi.mock('ssh2', () => ({
+  Client: vi.fn(),
+}));
+
 import { PersistentSession, SSHConnectionManager, SSHError } from '../src/ssh.js';
 import { ShellType } from '../src/shells.js';
 import { EventEmitter } from 'events';
@@ -233,6 +238,8 @@ describe('Shell Type Support', () => {
     expect(info.sessionId).toBe('ps-test');
     expect(info.target).toBe('windows-host');
     expect(info.username).toBe('Administrator');
+
+    powershellSession.close();
   });
 });
 
@@ -266,6 +273,7 @@ describe('Session Cleanup and Timeout Handling', () => {
   });
 
   afterEach(() => {
+    session.close();
     vi.useRealTimers();
   });
 

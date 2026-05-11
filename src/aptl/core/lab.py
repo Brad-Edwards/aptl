@@ -295,6 +295,13 @@ class _LabStartContext:
     diagnostics: list[StartupDiagnostic] = field(default_factory=list)
 
 
+# Log format string for structured diagnostics. Kept module-level so
+# ``_emit_diagnostic``'s three log branches (error / warning / info) share
+# a single literal — extracting silences Sonar ``python:S1192`` and keeps
+# any future format tweak in one place.
+_DIAGNOSTIC_LOG_FORMAT = "[%s|%s] %s"
+
+
 # Severities that contribute to a "degraded" outcome. ``info`` is
 # intentionally excluded — it is a structured note, not a degradation.
 _DEGRADING_SEVERITIES = frozenset(
@@ -380,11 +387,11 @@ def _emit_diagnostic(
     ctx.diagnostics.append(diag)
     label = f"{step}/{safe_component}" if safe_component else step
     if severity is DiagnosticSeverity.ERROR:
-        log.error("[%s|%s] %s", impact.value, label, safe_message)
+        log.error(_DIAGNOSTIC_LOG_FORMAT, impact.value, label, safe_message)
     elif severity is DiagnosticSeverity.WARNING:
-        log.warning("[%s|%s] %s", impact.value, label, safe_message)
+        log.warning(_DIAGNOSTIC_LOG_FORMAT, impact.value, label, safe_message)
     else:
-        log.info("[%s|%s] %s", impact.value, label, safe_message)
+        log.info(_DIAGNOSTIC_LOG_FORMAT, impact.value, label, safe_message)
 
 
 def _step_load_env(ctx: _LabStartContext) -> LabResult | None:

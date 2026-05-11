@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Annotated, AsyncGenerator
 
 from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
@@ -43,7 +43,7 @@ def _build_status_response(project_dir: Path) -> LabStatusResponse:
 
 @router.get("/lab/status")
 async def lab_status(
-    project_dir: Path = Depends(get_project_dir),
+    project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> LabStatusResponse:
     """Get current lab status including container information."""
     log.info("GET /lab/status")
@@ -54,7 +54,7 @@ async def lab_status(
 
 @router.post("/lab/start")
 async def lab_start(
-    project_dir: Path = Depends(get_project_dir),
+    project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> LabActionResponse:
     """Start the lab environment.
 
@@ -100,7 +100,7 @@ async def lab_start(
 
 @router.post("/lab/stop")
 async def lab_stop(
-    project_dir: Path = Depends(get_project_dir),
+    project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> LabActionResponse:
     """Stop the lab environment."""
     log.info("POST /lab/stop")
@@ -179,7 +179,7 @@ async def _lab_event_generator(
 
 @router.get("/lab/events")
 async def lab_events(
-    project_dir: Path = Depends(get_project_dir),
+    project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> EventSourceResponse:
     """SSE stream of lab status changes.
 

@@ -1005,6 +1005,9 @@ class TestSyncCredentialsStep:
         from aptl.core.env import EnvVars
         from aptl.core.lab import _LabStartContext
 
+        # `backend` is required by the issue #214 runtime contract on
+        # `_step_sync_credentials`; supply a stub so the contract is
+        # satisfied without affecting the local-render path under test.
         return _LabStartContext(
             project_dir=tmp_path,
             skip_seed=False,
@@ -1013,6 +1016,7 @@ class TestSyncCredentialsStep:
                 api_username="x", api_password="api_pw",
                 wazuh_cluster_key="cluster_key",
             ),
+            backend=MagicMock(),
         )
 
     def test_dashboard_containment_breach_fails_lab_start(self, mocker, tmp_path):
@@ -1186,7 +1190,14 @@ class TestSyncSuricataMispRuleBaselinesStep:
     def _ctx(self, tmp_path):
         from aptl.core.lab import _LabStartContext
 
-        return _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        # `backend` is required by the issue #214 runtime contract on
+        # `_step_sync_suricata_misp_rule_baselines`; supply a stub so
+        # the local-render path under test is reachable.
+        return _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            backend=MagicMock(),
+        )
 
     def test_seeds_to_aptl_tree_and_leaves_source_untouched(self, tmp_path):
         from aptl.core.lab import _step_sync_suricata_misp_rule_baselines
@@ -1594,9 +1605,19 @@ class TestStartupClassificationWiring:
 
         ctx = self._ctx(
             tmp_path,
+            # Full prime profile set so issue #214's required-profiles
+            # contract on `_seed_prime_soc` is satisfied; this test
+            # exercises the subprocess-failure path, not the gating.
             config=AptlConfig(
                 lab={"name": "test-lab"},
-                containers={"wazuh": True, "victim": True, "kali": True, "soc": True},
+                containers={
+                    "wazuh": True,
+                    "enterprise": True,
+                    "victim": True,
+                    "kali": True,
+                    "fileshare": True,
+                    "soc": True,
+                },
             ),
         )
         scripts_dir = tmp_path / "scripts"
@@ -1634,7 +1655,14 @@ class TestStartupClassificationWiring:
             tmp_path,
             config=AptlConfig(
                 lab={"name": "test-lab"},
-                containers={"wazuh": True, "victim": True, "kali": True, "soc": True},
+                containers={
+                    "wazuh": True,
+                    "enterprise": True,
+                    "victim": True,
+                    "kali": True,
+                    "fileshare": True,
+                    "soc": True,
+                },
             ),
         )
         scripts_dir = tmp_path / "scripts"
@@ -1681,7 +1709,14 @@ class TestStartupClassificationWiring:
             tmp_path,
             config=AptlConfig(
                 lab={"name": "test-lab"},
-                containers={"wazuh": True, "victim": True, "kali": True, "soc": True},
+                containers={
+                    "wazuh": True,
+                    "enterprise": True,
+                    "victim": True,
+                    "kali": True,
+                    "fileshare": True,
+                    "soc": True,
+                },
             ),
         )
         # No scripts/seed-prime.sh in tmp_path
@@ -1814,3 +1849,446 @@ class TestOrchestrateLabStartOutcome:
 
         assert result.success is False
         assert result.outcome is StartupOutcome.FAILED
+
+
+class TestLabOrchestrationContracts:
+    """Runtime `icontract` preconditions on `_LabStartContext` consumers
+    and `start_lab`. These replace the old `assert ctx.<field> is not None`
+    guards (which were no-ops under `python -O`) per ADR-031 / issue #214.
+
+    Each test calls the step (or `start_lab`) directly with the relevant
+    field unset and confirms an `icontract.ViolationError` is raised at
+    the decorator boundary — proof that the contract is in fact runtime,
+    not an `assert`.
+    """
+
+    def _ctx(self, tmp_path: Path):
+        from aptl.core.lab import _LabStartContext
+
+        return _LabStartContext(project_dir=tmp_path, skip_seed=False)
+
+    def _full_env(self):
+        from aptl.core.env import EnvVars
+
+        return EnvVars(
+            indexer_username="u",
+            indexer_password="p",
+            api_username="u",
+            api_password="p",
+            wazuh_cluster_key="ck",
+        )
+
+    def _full_config(self, **container_overrides):
+        from aptl.core.config import AptlConfig
+
+        defaults = {"wazuh": True, "victim": True, "kali": True}
+        defaults.update(container_overrides)
+        return AptlConfig(
+            lab={"name": "test-lab"}, containers=defaults
+        )
+
+    # -- env_is_loaded ------------------------------------------------
+
+    def test_sync_credentials_without_env_raises_violation(self, tmp_path):
+        import icontract
+
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(tmp_path)  # env stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_sync_credentials(ctx)
+
+    def test_wait_for_services_without_env_raises_violation(self, tmp_path):
+        import icontract
+
+        from aptl.core.lab import _step_wait_for_services
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config()
+        # env intentionally None
+        with pytest.raises(icontract.ViolationError):
+            _step_wait_for_services(ctx)
+
+    # -- config_is_loaded --------------------------------------------
+
+    def test_start_containers_without_config_raises_violation(self, tmp_path):
+        import icontract
+
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.backend = MagicMock()
+        # config stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_start_containers(ctx)
+
+    def test_wait_for_services_without_config_raises_violation(self, tmp_path):
+        import icontract
+
+        from aptl.core.lab import _step_wait_for_services
+
+        ctx = self._ctx(tmp_path)
+        ctx.env = self._full_env()
+        # config stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_wait_for_services(ctx)
+
+    def test_test_ssh_without_config_raises_violation(self, tmp_path):
+        import icontract
+
+        from aptl.core.lab import _step_test_ssh
+
+        ctx = self._ctx(tmp_path)
+        ctx.ssh_key_path = Path("/tmp/aptl_lab_key")
+        # config stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_test_ssh(ctx)
+
+    def test_seed_soc_without_config_raises_violation(self, tmp_path):
+        import icontract
+
+        from aptl.core.lab import _step_seed_soc
+
+        ctx = self._ctx(tmp_path)
+        # config stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_seed_soc(ctx)
+
+    # -- backend_is_initialized --------------------------------------
+
+    def test_pull_images_without_backend_raises_violation(self, tmp_path):
+        import icontract
+
+        from aptl.core.lab import _step_pull_images
+
+        ctx = self._ctx(tmp_path)
+        # backend stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_pull_images(ctx)
+
+    def test_start_containers_without_backend_raises_violation(self, tmp_path):
+        import icontract
+
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config()
+        # backend stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_start_containers(ctx)
+
+    # -- ssh_key_is_ready --------------------------------------------
+
+    def test_test_ssh_without_ssh_key_raises_violation(self, tmp_path):
+        import icontract
+
+        from aptl.core.lab import _step_test_ssh
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config()
+        # ssh_key_path stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_test_ssh(ctx)
+
+    # -- backend_is_initialized on additional consumers (codex finding #2)
+
+    def test_sync_credentials_without_backend_raises_violation(self, tmp_path):
+        """Reading `ctx.backend` for the SSHComposeBackend check falls
+        through as local when backend is None, which would render
+        credentials to the wrong host. Issue #214 / codex cycle 1."""
+        import icontract
+
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(tmp_path)
+        ctx.env = self._full_env()
+        # backend stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_sync_credentials(ctx)
+
+    def test_sync_suricata_baselines_without_backend_raises_violation(self, tmp_path):
+        """Same SSHComposeBackend fall-through as `_step_sync_credentials`."""
+        import icontract
+
+        from aptl.core.lab import _step_sync_suricata_misp_rule_baselines
+
+        ctx = self._ctx(tmp_path)
+        # backend stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_sync_suricata_misp_rule_baselines(ctx)
+
+    def test_capture_snapshot_without_backend_raises_violation(self, tmp_path):
+        """`capture_snapshot(backend=None)` is meaningless; refuse rather
+        than let the snapshot step blow up later."""
+        import icontract
+
+        from aptl.core.lab import _step_capture_snapshot
+
+        ctx = self._ctx(tmp_path)
+        # backend stays None
+        with pytest.raises(icontract.ViolationError):
+            _step_capture_snapshot(ctx)
+
+    # -- contracts survive `python -O` (codex finding #1) --------------
+
+    def test_contracts_are_unconditionally_enabled(self):
+        """`icontract.require` defaults `enabled` to `__debug__`; under
+        `python -O` the decorator is silently disabled and the
+        precondition vanishes — defeating the whole `assert` →
+        `icontract` migration. Issue #214 / codex cycle 1 flagged this
+        as a `class` defect; the `_runtime_require` wrapper must pin
+        `enabled=True` so every production guard fires regardless of
+        the interpreter flag.
+
+        We assert this property two ways: (1) introspect the wrapper's
+        product so a future refactor that flips `enabled` to False is
+        caught at the boundary; (2) structurally exercise the wrapper
+        on a throwaway always-false predicate and confirm it really
+        does raise `ViolationError`, so a future refactor that keeps
+        the `enabled=True` literal but otherwise short-circuits the
+        decorator (e.g. swapping in a different decorator class) is
+        also caught."""
+        import icontract
+
+        from aptl.core.lab import _runtime_require
+
+        # (1) Introspection: the assembled decorator must report enabled.
+        decorator = _runtime_require(lambda x: True, description="probe")
+        assert decorator.enabled is True
+
+        # (2) Structural: an always-false predicate must actually raise.
+        @_runtime_require(lambda value: False, description="always_false")
+        def _probe(value):
+            return value
+
+        with pytest.raises(icontract.ViolationError):
+            _probe("anything")
+
+    # -- start_lab requires a populated config -----------------------
+
+    def test_start_lab_with_none_config_raises_violation(self):
+        import icontract
+
+        from aptl.core.lab import start_lab
+
+        with pytest.raises(icontract.ViolationError):
+            start_lab(None)  # type: ignore[arg-type]
+
+    # -- contract descriptions must not embed secret-bearing repr ----
+
+    def test_violation_message_does_not_expose_envvars_repr(self, tmp_path):
+        """Contract failure for env_is_loaded must not surface a `repr(EnvVars)`
+        substring. ADR-031: descriptions are narrow labels."""
+        import icontract
+
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(tmp_path)  # env stays None
+        try:
+            _step_sync_credentials(ctx)
+            assert False, "expected ViolationError"
+        except icontract.ViolationError as exc:
+            text = str(exc)
+            # The label must be a narrow, attributable string the CLI can
+            # grep for; raw `EnvVars(...)` repr must not appear.
+            assert "EnvVars(" not in text
+            assert "api_password" not in text
+            assert "INDEXER_PASSWORD" not in text
+
+    def test_violation_with_secret_bearing_ctx_stays_narrow(self, tmp_path):
+        """Tougher property (codex cycle 2 finding #1): when a contract
+        fires AFTER `_step_load_env` has populated `ctx.env` with real
+        secrets, the violation message must STILL be a narrow label —
+        not just the env-is-None case. icontract's default renderer
+        would otherwise interpolate `ctx`'s repr (including
+        `wazuh_cluster_key`, which the existing string redactor does
+        not mask). `_runtime_require`'s `error=` callback pins the
+        message to the description string."""
+        import icontract
+
+        from aptl.core.env import EnvVars
+        from aptl.core.lab import _LabStartContext, _step_test_ssh
+
+        # Populate env with secret-shaped values; leave ssh_key_path
+        # None so the `ssh_key_is_ready` contract fires.
+        ctx = _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            env=EnvVars(
+                indexer_username="admin",
+                indexer_password="indexer-secret-do-not-leak",
+                api_username="wazuh-wui",
+                api_password="api-secret-do-not-leak",
+                wazuh_cluster_key="cluster-key-do-not-leak",
+            ),
+            config=self._full_config(),
+            backend=MagicMock(),
+            # ssh_key_path stays None — triggers the contract.
+        )
+
+        try:
+            _step_test_ssh(ctx)
+            assert False, "expected ViolationError"
+        except icontract.ViolationError as exc:
+            text = str(exc)
+            # Narrow description survives.
+            assert "ssh_key_is_ready" in text
+            # None of the secret-shaped env values leak.
+            assert "indexer-secret-do-not-leak" not in text
+            assert "api-secret-do-not-leak" not in text
+            assert "cluster-key-do-not-leak" not in text
+            # Nor does any context repr framing.
+            assert "_LabStartContext(" not in text
+            assert "EnvVars(" not in text
+            assert "ctx was" not in text
+
+
+class TestOrchestrateLabStartContractMapping:
+    """The orchestrator translates an `icontract.ViolationError` raised
+    inside a step into a fatal `LabResult` with a redacted narrow message
+    (ADR-031 § Decision). Operators must never see raw violation text
+    from a secret-bearing object's `repr()`.
+    """
+
+    def test_contract_violation_inside_step_yields_failed_labresult(
+        self, mocker, tmp_path
+    ):
+        import icontract
+
+        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab_types import StartupOutcome
+
+        # `_LAB_START_STEPS` is a tuple of function references captured at
+        # import time, so patching the module-attribute `_step_load_env`
+        # would not change what the orchestrator runs. Substitute the
+        # tuple itself with a single fake step that raises the violation.
+        def fake_step(ctx):
+            raise icontract.ViolationError(
+                "env_is_loaded(ctx.env): the contract is violated. "
+                "ctx was _LabStartContext(env=EnvVars(api_password='hunter2'))"
+            )
+
+        fake_step.__name__ = "_step_load_env"
+        mocker.patch("aptl.core.lab._LAB_START_STEPS", (fake_step,))
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is False
+        assert result.outcome is StartupOutcome.FAILED
+        # Narrow template; carries the step name for attribution but
+        # never the raw violation text or any context repr().
+        assert "_step_load_env" in (result.error or "")
+        assert "contract" in (result.error or "").lower()
+        # Raw violation prose / secret-shaped substrings must not leak.
+        assert "ctx.env" not in (result.error or "")
+        assert "EnvVars(" not in (result.error or "")
+        assert "hunter2" not in (result.error or "")
+
+
+class TestStopLabCleanupIsContractFree:
+    """ADR-031 non-goal: `stop_lab` and other cleanup paths must keep
+    working when config/env is missing. They are intentionally not
+    decorated with `icontract.require`.
+    """
+
+    def test_stop_lab_with_missing_config_succeeds(self, mocker, tmp_path):
+        from aptl.core.lab import LabResult, stop_lab
+
+        backend = MagicMock()
+        backend.stop.return_value = LabResult(
+            success=True, message="stopped"
+        )
+
+        result = stop_lab(project_dir=tmp_path, backend=backend)
+
+        assert result.success is True
+        # Fell back to ALL_KNOWN_PROFILES since no aptl.json exists.
+        backend.stop.assert_called_once()
+        called_profiles = backend.stop.call_args[0][0]
+        assert "wazuh" in called_profiles
+
+
+class TestSeedSocPrimeProfileDiagnostic:
+    """Soft check against the reusable `required_profiles_enabled`
+    predicate at the SOC seed boundary. ADR-005 supports selective SOC
+    labs, so a missing prime profile must NOT fatally refuse lab
+    startup — it surfaces as a CAPABILITY diagnostic and the step
+    returns None. The reusable predicate remains available as a hard
+    contract for a future explicit prime-scenario entrypoint."""
+
+    def _ctx(self, tmp_path: Path, *, soc: bool, **extra):
+        from aptl.core.config import AptlConfig
+        from aptl.core.env import EnvVars
+        from aptl.core.lab import _LabStartContext
+
+        containers = {"wazuh": True, "victim": True, "kali": True, "soc": soc}
+        containers.update(extra)
+        return _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            env=EnvVars(
+                indexer_username="u",
+                indexer_password="p",
+                api_username="u",
+                api_password="p",
+            ),
+            config=AptlConfig(
+                lab={"name": "t"}, containers=containers
+            ),
+        )
+
+    def test_partial_prime_set_emits_capability_diagnostic(self, tmp_path):
+        """SOC enabled but enterprise/fileshare missing → CAPABILITY
+        warning naming the missing profiles, step returns None.
+        Selective SOC labs (ADR-005) must remain valid."""
+        from aptl.core.lab import _step_seed_soc
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(tmp_path, soc=True, enterprise=False, fileshare=False)
+        result = _step_seed_soc(ctx)
+
+        assert result is None  # non-fatal
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.step == "seed_soc"
+        assert diag.impact is DiagnosticImpact.CAPABILITY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        assert "enterprise" in diag.message
+        assert "fileshare" in diag.message
+        # Operator action must guide them to enable the profiles.
+        assert "aptl.json" in diag.operator_action
+
+    def test_full_prime_set_runs_no_prime_diagnostic(self, tmp_path):
+        """SOC enabled and every prime profile enabled → predicate is
+        satisfied, no prime-related diagnostic. (A separate diagnostic
+        for the missing seed script may still fire — that is the
+        existing seed-script-missing path, not the prime check.)"""
+        from aptl.core.lab import _step_seed_soc
+
+        ctx = self._ctx(
+            tmp_path,
+            soc=True,
+            enterprise=True,
+            fileshare=True,
+        )
+        result = _step_seed_soc(ctx)
+        assert result is None
+        # The only diagnostic possible here is the missing-seed-script
+        # one (tmp_path has no scripts/seed-prime.sh); the prime-profile
+        # diagnostic must not have fired.
+        prime_diags = [
+            d for d in ctx.diagnostics
+            if "prime profile" in d.message.lower()
+        ]
+        assert prime_diags == []
+
+    def test_soc_disabled_skips_predicate(self, tmp_path):
+        """When SOC is disabled the seed step is a no-op; the prime-
+        profile predicate must not fire (ADR-031: profile checks are
+        operation-scoped, not global)."""
+        from aptl.core.lab import _step_seed_soc
+
+        ctx = self._ctx(tmp_path, soc=False, enterprise=False, fileshare=False)
+        result = _step_seed_soc(ctx)
+        assert result is None
+        assert ctx.diagnostics == []

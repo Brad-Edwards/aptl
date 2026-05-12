@@ -12,10 +12,18 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+import icontract
 import yaml
 
 from aptl.core.certs import ensure_ssl_certs
 from aptl.core.config import AptlConfig, find_config, load_config
+from aptl.core.contracts import (
+    backend_is_initialized,
+    config_is_loaded,
+    env_is_loaded,
+    required_profiles_enabled,
+    ssh_key_is_ready,
+)
 from aptl.core.credentials import (
     PathContainmentError,
     sync_dashboard_config,
@@ -54,6 +62,47 @@ if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
+
+
+def _runtime_require(condition, description):
+    """`icontract.require` that survives `python -O` AND keeps violation
+    messages secret-safe.
+
+    Two production-readiness properties combined into one wrapper:
+
+    1. `icontract.require` defaults `enabled` to `__debug__`, so under
+       an optimized interpreter the decorator becomes a no-op and the
+       precondition is silently dropped — the exact failure mode the
+       `assert` → `icontract` migration in issue #214 was meant to
+       close. `enabled=True` pins the guard on unconditionally.
+
+    2. icontract's default `ViolationError` renderer interpolates the
+       `repr()` of every bound condition argument. For these contracts
+       the bound argument is `_LabStartContext` (or `AptlConfig`), and
+       after `_step_load_env` runs the context's `raw_env`/`EnvVars`
+       fields hold secrets such as `WAZUH_CLUSTER_KEY` that the existing
+       string redactor in `aptl.utils.redaction` does not mask. A
+       direct caller (test, future integration code, accidental
+       `log.error(exc)`) would surface that repr in plain text — ADR-031
+       § Guardrails explicitly forbids that. We force a fixed-template
+       message via the `error=` callback so the contract is secret-safe
+       at the *source*, not just at the orchestrator edge.
+    """
+    # icontract introspects the error callable's signature and tries to
+    # resolve every named parameter against the condition's bound
+    # kwargs. A no-arg factory sidesteps that check entirely: icontract
+    # detects `parameters` is empty, skips kwarg resolution, and calls
+    # `error()` directly.
+    def _narrow_violation():
+        return icontract.ViolationError(description)
+
+    return icontract.require(
+        condition,
+        description=description,
+        enabled=True,
+        error=_narrow_violation,
+    )
+
 
 WAZUH_IMAGE_VERSION = "4.12.0"
 
@@ -120,6 +169,10 @@ def build_compose_command(
     return cmd
 
 
+@_runtime_require(
+    lambda config: config_is_loaded(config),
+    description="config_is_loaded(config)",
+)
 def start_lab(
     config: AptlConfig,
     project_dir: Optional[Path] = None,
@@ -487,9 +540,17 @@ def _run_credential_sync(label: str, fn, *args) -> LabResult | None:
     return None
 
 
+@_runtime_require(
+    lambda ctx: env_is_loaded(ctx.env),
+    description="env_is_loaded(ctx.env)",
+)
+@_runtime_require(
+    lambda ctx: backend_is_initialized(ctx.backend),
+    description="backend_is_initialized(ctx.backend)",
+)
 def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 5: Rendering credentialized service config...")
-    assert ctx.env is not None  # _step_load_env populated this
+    assert ctx.env is not None  # contract above is the runtime guard; assert is a typing hint
     # The rendered files (.aptl/config/...) are Docker bind-mount sources
     # resolved on the *daemon's* filesystem. With the SSH-remote backend
     # the daemon is on another host, so rendering locally would leave the
@@ -537,6 +598,10 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
+@_runtime_require(
+    lambda ctx: backend_is_initialized(ctx.backend),
+    description="backend_is_initialized(ctx.backend)",
+)
 def _step_sync_suricata_misp_rule_baselines(
     ctx: _LabStartContext,
 ) -> LabResult | None:
@@ -586,9 +651,13 @@ def _step_check_bind_mounts(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
+@_runtime_require(
+    lambda ctx: backend_is_initialized(ctx.backend),
+    description="backend_is_initialized(ctx.backend)",
+)
 def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 7: Pre-pulling container images...")
-    assert ctx.backend is not None
+    assert ctx.backend is not None  # contract above is the runtime guard
     images = [
         f"wazuh/wazuh-manager:{WAZUH_IMAGE_VERSION}",
         f"wazuh/wazuh-indexer:{WAZUH_IMAGE_VERSION}",
@@ -617,9 +686,17 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+@_runtime_require(
+    lambda ctx: config_is_loaded(ctx.config),
+    description="config_is_loaded(ctx.config)",
+)
+@_runtime_require(
+    lambda ctx: backend_is_initialized(ctx.backend),
+    description="backend_is_initialized(ctx.backend)",
+)
 def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 8: Starting containers...")
-    assert ctx.config is not None and ctx.backend is not None
+    assert ctx.config is not None and ctx.backend is not None  # runtime guards above
     start_result = start_lab(
         ctx.config, project_dir=ctx.project_dir, backend=ctx.backend
     )
@@ -642,9 +719,17 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
+@_runtime_require(
+    lambda ctx: config_is_loaded(ctx.config),
+    description="config_is_loaded(ctx.config)",
+)
+@_runtime_require(
+    lambda ctx: env_is_loaded(ctx.env),
+    description="env_is_loaded(ctx.env)",
+)
 def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 9: Waiting for services...")
-    assert ctx.config is not None and ctx.env is not None
+    assert ctx.config is not None and ctx.env is not None  # runtime guards above
     if not ctx.config.containers.wazuh:
         return None
 
@@ -706,9 +791,17 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+@_runtime_require(
+    lambda ctx: config_is_loaded(ctx.config),
+    description="config_is_loaded(ctx.config)",
+)
+@_runtime_require(
+    lambda ctx: ssh_key_is_ready(ctx.ssh_key_path),
+    description="ssh_key_is_ready(ctx.ssh_key_path)",
+)
 def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 10: Testing SSH connectivity...")
-    assert ctx.config is not None and ctx.ssh_key_path is not None
+    assert ctx.config is not None and ctx.ssh_key_path is not None  # runtime guards above
     ssh_tests: list[tuple[str, int, str]] = []
     if ctx.config.containers.victim:
         ssh_tests.append(("victim", 2022, "labadmin"))
@@ -753,6 +846,10 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+@_runtime_require(
+    lambda ctx: backend_is_initialized(ctx.backend),
+    description="backend_is_initialized(ctx.backend)",
+)
 def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 11: Capturing range snapshot...")
     try:
@@ -840,12 +937,32 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+# Issue #214: the prime scenario seed (`scripts/seed-prime.sh`) provisions
+# TheHive cases, MISP feeds, and Shuffle workflows that span the full
+# prime profile set. ADR-005 supports selective SOC labs (e.g. SOC + Wazuh
+# without fileshare), so a missing prime profile must NOT fatally refuse
+# lab startup — it just means the prime seed cannot meaningfully run, and
+# the lab should come up with SOC empty plus a CAPABILITY diagnostic.
+# Kept module-level so the reusable `required_profiles_enabled` predicate
+# from `aptl.core.contracts` has a stable constant to read, and so a
+# future operation (e.g. an explicit `aptl scenario prime start`
+# entrypoint) can wire the same set into a hard `_runtime_require` at
+# *that* boundary without redefining it.
+_PRIME_REQUIRED_PROFILES = frozenset(
+    {"wazuh", "enterprise", "victim", "kali", "fileshare", "soc"}
+)
+
+
+@_runtime_require(
+    lambda ctx: config_is_loaded(ctx.config),
+    description="config_is_loaded(ctx.config)",
+)
 def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
     if ctx.skip_seed:
         log.info("Step 13: Skipping SOC seeding (--skip-seed)")
         return None
     log.info("Step 13: Seeding SOC tools...")
-    assert ctx.config is not None
+    assert ctx.config is not None  # runtime guard above
     # Order the SOC-enabled check first so a missing script with SOC
     # disabled stays a silent no-op (no degradation), while a missing
     # script with SOC *enabled* surfaces as a capability warning —
@@ -853,6 +970,34 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
     # outcome would still be `ready` (codex review #202 cycle 1).
     if not ctx.config.containers.soc:
         log.debug("SOC profile not enabled, skipping seed")
+        return None
+    # SOC requested but prime profiles partially missing → soft
+    # CAPABILITY warning, not a fatal contract breach. ADR-005 allows
+    # selective SOC labs; making this fatal would regress smoke-test
+    # configs and any operator running a slim SOC subset for triage.
+    # The reusable `required_profiles_enabled` predicate is still the
+    # right callable for a *prime-scenario-explicit* entrypoint when
+    # one exists; here we surface the gap and continue.
+    if not required_profiles_enabled(ctx.config, _PRIME_REQUIRED_PROFILES):
+        missing = sorted(
+            _PRIME_REQUIRED_PROFILES
+            - set(ctx.config.containers.enabled_profiles())
+        )
+        _emit_diagnostic(
+            ctx,
+            step="seed_soc",
+            impact=DiagnosticImpact.CAPABILITY,
+            severity=DiagnosticSeverity.WARNING,
+            message=(
+                "Prime SOC seed needs the full prime profile set; "
+                f"missing: {', '.join(missing)}. SOC tools will start empty."
+            ),
+            operator_action=(
+                "Enable the missing prime profiles in aptl.json and "
+                "re-run `aptl lab start`, or run `scripts/seed-prime.sh` "
+                "manually once the prime stack is up."
+            ),
+        )
         return None
     seed_script = ctx.project_dir / "scripts" / "seed-prime.sh"
     if not seed_script.exists():
@@ -1002,7 +1147,27 @@ def orchestrate_lab_start(
     ctx = _LabStartContext(project_dir=project_dir, skip_seed=skip_seed)
 
     for step in _LAB_START_STEPS:
-        result = step(ctx)
+        try:
+            result = step(ctx)
+        except icontract.ViolationError:
+            # ADR-031 § Decision: a contract breach inside a step is a
+            # fatal state bug. The raw `icontract.ViolationError` string
+            # is unsafe to log even after `redact()` — icontract renders
+            # bound arguments via `repr()`, which for `_LabStartContext`
+            # expands `raw_env` and `EnvVars` (containing e.g.
+            # `wazuh_cluster_key`, which `redact()` does not mask).
+            # We therefore log only the step name and emit a narrow
+            # fatal `LabResult` at the CLI/API edge.
+            log.error("Contract violation in step %s", step.__name__)
+            return LabResult(
+                success=False,
+                error=(
+                    f"Lab orchestration contract violated at "
+                    f"step '{step.__name__}'"
+                ),
+                outcome=StartupOutcome.FAILED,
+                diagnostics=list(ctx.diagnostics),
+            )
         if result is not None:
             # Fatal short-circuit. Carry any partial-readiness diagnostics
             # the earlier steps recorded so operators can see what state

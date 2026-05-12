@@ -133,35 +133,82 @@ describe('Buffer Management Logic', () => {
       'overflow-test', 'host', 'user', 'background', mockClient, 22
     );
 
-    // Simulate the private method behavior by accessing outputBuffer
-    const outputBuffer = (session as any).outputBuffer;
-
-    // Fill buffer beyond limit
+    // Drive the real handleShellOutput code path — NOT an inline replica.
+    // BUFFER_LIMITS.MAX_SIZE=10000, TRIM_TO=5000 (ssh.ts). Push 12000
+    // entries through handleShellOutput; the first trim happens after the
+    // 10001st push (length becomes 5000), then 1999 more pushes bring the
+    // final length to 6999, with the last 5000 newest entries being
+    // `line 7000` through `line 11999` minus the discarded earlier entries.
+    // Actually the trim resets to 5000 then continues; final length is
+    // 5000 + (12000 - 10001) = 6999. Let me derive the kept window:
+    //   - After push #10001: length=10001 > 10000 → slice(-5000) → length=5000
+    //     keeps last 5000 of indices 5001..10000, i.e. `line 5001`..`line 10000`.
+    //   - After push #12000 (1999 more pushes): length=6999, keeps
+    //     `line 5001`..`line 10000` PLUS `line 10001`..`line 11999`,
+    //     total 6999 entries ending with `line 11999`.
+    // The contract this test pins: handleShellOutput's overflow detection
+    // actually fires AND drops the oldest entries.
     for (let i = 0; i < 12000; i++) {
-      outputBuffer.push(`line ${i}`);
-    }
-
-    // Trigger the overflow logic manually
-    if (outputBuffer.length > 10000) {
-      (session as any).outputBuffer = outputBuffer.slice(-5000);
+      (session as any).handleShellOutput(`line ${i}`);
     }
 
     const buffer = session.getBufferedOutput();
-    expect(buffer.length).toBe(5000);
-    // Should keep lines 7000-11999 (newest)
-    expect(buffer[0]).toBe('line 7000');
+    expect(buffer.length).toBeLessThanOrEqual(10000);
+    expect(buffer.length).toBeGreaterThanOrEqual(5000);
+    // Earliest entry that survived the most recent trim. After the trim at
+    // push #10001 (length 10001→5000), the oldest survivor is `line 5001`.
+    // No further trim happens because pushes #10002..#12000 (1999 more)
+    // only bring length to 6999, still under MAX_SIZE.
+    expect(buffer[0]).toBe('line 5001');
     expect(buffer[buffer.length - 1]).toBe('line 11999');
+    // The earliest entries are gone — proof that overflow trimming ran.
+    expect(buffer).not.toContain('line 0');
+    expect(buffer).not.toContain('line 5000');
   });
 });
 
 describe('Connection Key Generation Logic', () => {
-  it('should generate unique connection keys', () => {
+  it('getConnection creates separate cache entries for distinct (user, host, port) tuples', async () => {
+    // Pre-existing test slot was vacuous (asserted an empty manager).
+    // Replaced with a real distinct-key test: stub createConnection to
+    // count calls, then verify each unique tuple produces a separate cache
+    // entry and a separate createConnection invocation. The companion
+    // dedup test below ('getConnection deduplicates concurrent callers
+    // for the same connection key') covers the equal-tuple half — the two
+    // together pin both halves of the uniqueness contract.
     const manager = new SSHConnectionManager();
+    const clients: Array<{ key: string; client: Client }> = [];
+    (manager as any).createConnection = vi.fn(async (host: string, user: string, _key: string, port: number) => {
+      const client = { tag: `${user}@${host}:${port}` } as unknown as Client;
+      clients.push({ key: `${user}@${host}:${port}`, client });
+      return client;
+    });
 
-    // This tests our internal key generation logic
-    // We can't directly test it but we can verify behavior differences
-    const sessions = manager.listSessions();
-    expect(sessions).toEqual([]); // Manager starts empty
+    // Each tuple varies one dimension: host, port, user.
+    const c1 = await (manager as any).getConnection('h1', 'u', '/k', 22);
+    const c2 = await (manager as any).getConnection('h2', 'u', '/k', 22); // different host
+    const c3 = await (manager as any).getConnection('h1', 'u', '/k', 23); // different port
+    const c4 = await (manager as any).getConnection('h1', 'u2', '/k', 22); // different user
+    // Same tuple as c1 — must reuse, not create.
+    const c5 = await (manager as any).getConnection('h1', 'u', '/k', 22);
+
+    // Four distinct clients, fifth reuses the first.
+    expect(c1).not.toBe(c2);
+    expect(c1).not.toBe(c3);
+    expect(c1).not.toBe(c4);
+    expect(c2).not.toBe(c3);
+    expect(c2).not.toBe(c4);
+    expect(c3).not.toBe(c4);
+    expect(c5).toBe(c1);
+
+    // Exactly 4 createConnection invocations for 4 distinct tuples.
+    expect(clients.length).toBe(4);
+    // Cache holds one entry per distinct tuple.
+    expect((manager as any).connections.size).toBe(4);
+    expect((manager as any).connections.has('u@h1:22')).toBe(true);
+    expect((manager as any).connections.has('u@h2:22')).toBe(true);
+    expect((manager as any).connections.has('u@h1:23')).toBe(true);
+    expect((manager as any).connections.has('u2@h1:22')).toBe(true);
   });
 });
 
@@ -358,23 +405,31 @@ describe('Session Cleanup and Timeout Handling', () => {
 });
 
 describe('Contract guards (preconditions)', () => {
-  it('executeCommand on uninitialized session throws SSHError and does not write to shell', async () => {
-    const writeSpy = vi.fn();
+  it('executeCommand on uninitialized session throws SSHError before any shell access', async () => {
     const mockClient = { shell: vi.fn() } as any;
     const session = new PersistentSession(
       'pre-uninit', 'host', 'user', 'interactive', mockClient, 22
     );
 
+    // Two assertions: instance type + message substring. If the precondition
+    // failed to fire, `this.shell` is still null and executeCommand would
+    // throw a TypeError on `this.shell.write(...)` — that would fail the
+    // `toBeInstanceOf(SSHError)` check, so this DOES verify "no shell
+    // access" indirectly without needing a separate write-spy.
     await expect(session.executeCommand('ls', 1000)).rejects.toBeInstanceOf(SSHError);
     await expect(session.executeCommand('ls', 1000)).rejects.toThrow('Session not initialized or inactive');
-    expect(writeSpy).not.toHaveBeenCalled();
   });
 
-  it('executeCommand after close throws SSHError', async () => {
+  it('executeCommand after close throws SSHError without writing to the shell', async () => {
     vi.useFakeTimers();
     try {
+      // Spy-backed write so we can verify the precondition fires before the
+      // executeCommand body ever reaches `this.shell.write(...)` — the
+      // shell EXISTS here (init ran) but isActive is false, so a missing
+      // precondition would otherwise let a write through.
+      const writeSpy = vi.fn();
       const mockStream = Object.assign(new EventEmitter(), {
-        write: vi.fn(),
+        write: writeSpy,
         end: vi.fn(),
         stderr: new EventEmitter(),
       });
@@ -386,10 +441,22 @@ describe('Contract guards (preconditions)', () => {
       await vi.advanceTimersByTimeAsync(1000);
       await initPromise;
 
+      // Init may have written a keep-alive heartbeat; baseline the call count
+      // BEFORE close() so the post-close assertion measures only the
+      // executeCommand path. (Actually startKeepAlive only writes on
+      // interval ticks; advancing 1s shouldn't trigger any. Reset anyway
+      // to be robust against future changes to keep-alive timing.)
+      writeSpy.mockClear();
+
       session.close();
 
       await expect(session.executeCommand('ls', 1000)).rejects.toBeInstanceOf(SSHError);
       await expect(session.executeCommand('ls', 1000)).rejects.toThrow('Session not initialized or inactive');
+      // Precondition fired before any shell.write. close() itself does NOT
+      // write to the shell (shell.end is via stream.end, not stream.write),
+      // so the only way writeSpy would be called is if the precondition
+      // leaked and executeCommand entered processNextCommand.
+      expect(writeSpy).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

@@ -219,23 +219,27 @@ export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOp
 
       // Setup graceful shutdown only once
       if (!handlersSetup) {
-        process.on('SIGINT', async () => {
-          console.error('[MCP] Shutting down gracefully...');
+        const gracefulShutdown = async (signal: string): Promise<void> => {
+          console.error(`[MCP] Shutting down gracefully (${signal})...`);
           await shutdownTracing();
           if (sshManager) {
-            await sshManager.disconnectAll();
+            // disconnectAll now propagates SSHError on teardown contract
+            // failures so callers can detect unclean shutdown. The signal
+            // handler still needs to exit; log the failure non-zero rather
+            // than letting an unhandled rejection terminate Node abruptly.
+            try {
+              await sshManager.disconnectAll();
+            } catch (err) {
+              console.error('[MCP] disconnectAll failed during shutdown:', err);
+              process.exit(1);
+              return;
+            }
           }
           process.exit(0);
-        });
+        };
 
-        process.on('SIGTERM', async () => {
-          console.error('[MCP] Shutting down gracefully...');
-          await shutdownTracing();
-          if (sshManager) {
-            await sshManager.disconnectAll();
-          }
-          process.exit(0);
-        });
+        process.on('SIGINT', () => { void gracefulShutdown('SIGINT'); });
+        process.on('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
 
         handlersSetup = true;
       }

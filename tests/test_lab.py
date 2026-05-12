@@ -2040,14 +2040,29 @@ class TestLabOrchestrationContracts:
         `enabled=True` so every production guard fires regardless of
         the interpreter flag.
 
-        We assert this property by introspecting the wrapper's product
-        directly (faster and more reliable than spawning `python -O`)
-        and then sanity-check a representative decorated step really
-        does raise under a manually-disabled `__debug__` proxy."""
+        We assert this property two ways: (1) introspect the wrapper's
+        product so a future refactor that flips `enabled` to False is
+        caught at the boundary; (2) structurally exercise the wrapper
+        on a throwaway always-false predicate and confirm it really
+        does raise `ViolationError`, so a future refactor that keeps
+        the `enabled=True` literal but otherwise short-circuits the
+        decorator (e.g. swapping in a different decorator class) is
+        also caught."""
+        import icontract
+
         from aptl.core.lab import _runtime_require
 
+        # (1) Introspection: the assembled decorator must report enabled.
         decorator = _runtime_require(lambda x: True, description="probe")
         assert decorator.enabled is True
+
+        # (2) Structural: an always-false predicate must actually raise.
+        @_runtime_require(lambda value: False, description="always_false")
+        def _probe(value):
+            return value
+
+        with pytest.raises(icontract.ViolationError):
+            _probe("anything")
 
     # -- start_lab requires a populated config -----------------------
 

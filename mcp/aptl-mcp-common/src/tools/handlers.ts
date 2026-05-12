@@ -395,24 +395,12 @@ const baseHandlers: Record<string, ToolHandler> = {
     const { session_id, lines, clear = false } = args as GetSessionOutputArgs;
 
     try {
-      // Add validation to ensure session exists and is active
-      const session = sshManager.getSession(session_id);
-      if (!session) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                success: false,
-                session_id,
-                error: `Session '${session_id}' not found`
-              }, null, 2),
-            },
-          ],
-        };
-      }
-
-      const output = session.getBufferedOutput(lines, clear);
+      // Route through the manager so the centralized session-not-found
+      // precondition (and any future manager-level guards) cannot be
+      // bypassed. The handler's catch block converts the thrown SSHError
+      // into the standard error envelope, matching session_command and
+      // close_session.
+      const output = sshManager.getSessionOutput(session_id, lines, clear);
 
       return {
         content: [

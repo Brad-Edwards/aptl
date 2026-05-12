@@ -4,6 +4,24 @@ import { readFile } from 'fs/promises';
 import { EventEmitter } from 'events';
 import { ShellFormatter, ShellType, createShellFormatter } from './shells.js';
 
+// Contract helpers. Internal to this module; intentionally not exported.
+// `require_` guards caller-facing preconditions and preserves the existing
+// throw messages so external substring matchers (tests, MCP envelopes) still
+// hit the same text. `ensure` guards callee-side postconditions; the
+// `[contract]` prefix is a debugging-aid signal, never a separate error type.
+// Both throw the existing `SSHError` per ADR-004 §"Update (2026-05-12)".
+function require_(condition: boolean, message: string): asserts condition {
+  if (!condition) {
+    throw new SSHError(message);
+  }
+}
+
+function ensure(condition: boolean, message: string): asserts condition {
+  if (!condition) {
+    throw new SSHError(`[contract] ${message}`);
+  }
+}
+
 // Constants for timeouts and limits
 const TIMEOUTS = {
   DEFAULT_COMMAND: 30000,
@@ -86,6 +104,16 @@ export class PersistentSession extends EventEmitter {
   private isInitialized = false;
   private outputData = '';
   private shellFormatter: ShellFormatter;
+  // Durable cleanup-success latch shared by both emit sites (close() and
+  // stream.on('close')). cleanupVerified flips to true exactly once, when
+  // doCleanup + assertCleanupInvariants both complete without throwing.
+  // closedEmitted enforces once-only emission so a late async stream-close
+  // following a successful close() cannot double-fire. Together they replace
+  // the fragile explicitClose flag from cycle 2 — explicitClose only covers
+  // the synchronous window of close()'s stack, but ssh2's shell.end() can
+  // emit 'close' arbitrarily later. (Codex pre-push cycle 3, ADR-004.)
+  private cleanupVerified = false;
+  private closedEmitted = false;
 
   private sessionTimeoutMs: number;
 
@@ -133,9 +161,25 @@ export class PersistentSession extends EventEmitter {
     if (this.isInitialized) return;
 
     return new Promise((resolve, reject) => {
+      // Track whether the init promise has been settled. A shell close or
+      // error event during the 1s startup window must reject initialize()
+      // rather than letting the outer setTimeout resolve a dead session.
+      // (Codex pre-push cycle 3 finding-4.)
+      let initSettled = false;
+      const settleResolve = (): void => {
+        if (initSettled) return;
+        initSettled = true;
+        resolve();
+      };
+      const settleReject = (err: Error): void => {
+        if (initSettled) return;
+        initSettled = true;
+        reject(err);
+      };
+
       this.client.shell((err, stream) => {
         if (err) {
-          reject(new SSHError(`Failed to create shell: ${err.message}`, err));
+          settleReject(new SSHError(`Failed to create shell: ${err.message}`, err));
           return;
         }
 
@@ -153,28 +197,50 @@ export class PersistentSession extends EventEmitter {
 
         stream.on('close', () => {
           this.sessionInfo.isActive = false;
-          this.emit('closed');
+          if (!initSettled) {
+            // Shell died before initialize() resolved — reject so the
+            // caller does not receive a session that's already gone.
+            this.cleanup();
+            settleReject(new SSHError('Shell closed during initialization'));
+            return;
+          }
           this.cleanup();
+          this.emitClosedIfVerified();
         });
 
         stream.on('error', (error: Error) => {
+          if (!initSettled) {
+            // Errors during init reject initialize() rather than emit an
+            // 'error' event before the manager has had a chance to listen.
+            settleReject(new SSHError(`Shell error during initialization: ${error.message}`, error));
+            return;
+          }
           this.emit('error', new SSHError(`Shell error: ${error.message}`, error));
         });
 
         this.startKeepAlive();
         this.resetSessionTimeout();
 
-        setTimeout(() => {
-          resolve();
-        }, 1000); // Shell startup delay
+        setTimeout(settleResolve, 1000); // Shell startup delay
       });
     });
   }
 
+  // Once-only, contract-gated 'closed' emission. Refuses to emit if cleanup
+  // hasn't been verified, so manager listeners cannot record success on a
+  // session whose postcondition failed. (Codex pre-push cycle 3 finding-2.)
+  private emitClosedIfVerified(): void {
+    if (this.closedEmitted) return;
+    if (!this.cleanupVerified) return;
+    this.closedEmitted = true;
+    this.emit('closed');
+  }
+
   async executeCommand(command: string, timeout: number = TIMEOUTS.DEFAULT_COMMAND, raw?: boolean): Promise<CommandResult> {
-    if (!this.isInitialized || !this.shell || !this.sessionInfo.isActive) {
-      throw new SSHError('Session not initialized or inactive');
-    }
+    require_(
+      this.isInitialized && this.shell !== null && this.sessionInfo.isActive,
+      'Session not initialized or inactive'
+    );
 
     // Background sessions should return immediately after queuing
     if (this.sessionInfo.type === 'background') {
@@ -383,18 +449,60 @@ export class PersistentSession extends EventEmitter {
 
     this.sessionTimeout = setTimeout(() => {
       this.emit('timeout');
-      this.close();
+      // Timer-callback path: close() asserts postconditions and would throw on
+      // a contract violation. An uncaught throw from a setTimeout callback
+      // crashes Node, so log loud here instead of propagating.
+      try {
+        this.close();
+      } catch (err) {
+        console.error('[SSH] session timeout close failed:', err);
+      }
     }, this.sessionTimeoutMs);
   }
 
   close(): void {
-    this.cleanup();
+    this.doCleanup();
     if (this.shell) {
       this.shell.end();
     }
+    // Run the postcondition before flipping cleanupVerified so a violation
+    // cannot mark the session as cleanly torn down. If assertion throws,
+    // cleanupVerified stays false; emitClosedIfVerified refuses to fire;
+    // the manager catches the throw and routes failure through its reject
+    // path. (Codex pre-push cycle 3 finding-2 + finding-3.)
+    this.assertCleanupInvariants();
+    this.cleanupVerified = true;
+    this.emitClosedIfVerified();
   }
 
+  // Internal event-handler entry. Called from `stream.on('close')`; must not
+  // propagate a contract violation because the EventEmitter would surface it
+  // as an uncaught error and crash the Node process. A violation here LOGS
+  // and leaves cleanupVerified=false so emitClosedIfVerified will not fire
+  // for this path — the manager learns about the broken session via the
+  // 'error' event we emit below (if a listener is attached), NOT 'closed'.
   private cleanup(): void {
+    this.doCleanup();
+    try {
+      this.assertCleanupInvariants();
+      this.cleanupVerified = true;
+    } catch (err) {
+      console.error('[SSH] cleanup invariant violation:', err);
+      // Guard the 'error' emit with listenerCount: Node's EventEmitter throws
+      // `Unhandled 'error' event` if 'error' is emitted with no listener,
+      // which would defeat the whole point of this defensive catch. In
+      // production the manager attaches an 'error' listener in createSession,
+      // so the signal reaches its owner.
+      if (this.listenerCount('error') > 0) {
+        this.emit('error', err instanceof Error ? err : new SSHError(String(err)));
+      }
+    }
+  }
+
+  // Shared work — verbatim extraction of the prior cleanup() body. Stays a
+  // pure state-mutation routine; the postcondition check lives in its own
+  // method so callers can choose throw-vs-log per context.
+  private doCleanup(): void {
     if (this.keepAliveInterval) {
       clearInterval(this.keepAliveInterval);
       this.keepAliveInterval = null;
@@ -421,11 +529,31 @@ export class PersistentSession extends EventEmitter {
       request.reject(new SSHError('Session closed while command was queued'));
     }
   }
+
+  private assertCleanupInvariants(): void {
+    ensure(this.sessionInfo.isActive === false, 'session still active after cleanup');
+    ensure(this.keepAliveInterval === null, 'keepAliveInterval not cleared');
+    ensure(this.sessionTimeout === null, 'sessionTimeout not cleared');
+    ensure(this.commandTimeout === null, 'commandTimeout not cleared');
+    ensure(this.currentCommand === null, 'currentCommand not cleared');
+    ensure(this.commandQueue.length === 0, 'commandQueue not drained');
+  }
 }
 
 export class SSHConnectionManager {
   private connections: Map<string, ConnectionInfo> = new Map();
   private sessions: Map<string, PersistentSession> = new Map();
+  // In-flight createSession calls keyed by session id. Tracking the actual
+  // promise (not just the id) lets disconnectAll quiesce by awaiting them
+  // before sweeping; otherwise a reserved-but-incomplete create could
+  // repopulate the sessions map after teardown returned successfully.
+  // (Codex pre-push cycle 3 finding-1.)
+  private pendingSessions: Map<string, Promise<PersistentSession>> = new Map();
+  // Joined in-flight connection creations keyed by `${user}@${host}:${port}`.
+  // Concurrent callers requesting the same connection share one underlying
+  // SSH client rather than racing to `connections.set`, which would orphan
+  // every loser of the race.
+  private pendingConnections: Map<string, Promise<Client>> = new Map();
 
   /**
    * Execute a command on a target host via SSH
@@ -505,13 +633,27 @@ export class SSHConnectionManager {
       this.connections.delete(connectionKey);
     }
 
-    // Create new connection
-    console.error(`[SSH-CLIENT] Creating new connection for: ${connectionKey}`);
-    const client = await this.createConnection(host, username, privateKeyPath, port);
-    this.connections.set(connectionKey, { client, connected: true });
-    console.error(`[SSH-CLIENT] Connection cache now has ${this.connections.size} connections`);
+    // Join an in-flight creation rather than racing to `connections.set`.
+    const pending = this.pendingConnections.get(connectionKey);
+    if (pending) {
+      console.error(`[SSH-CLIENT] Joining in-flight connection for: ${connectionKey}`);
+      return pending;
+    }
 
-    return client;
+    console.error(`[SSH-CLIENT] Creating new connection for: ${connectionKey}`);
+    const creating = this.createConnection(host, username, privateKeyPath, port)
+      .then(client => {
+        this.connections.set(connectionKey, { client, connected: true });
+        this.pendingConnections.delete(connectionKey);
+        console.error(`[SSH-CLIENT] Connection cache now has ${this.connections.size} connections`);
+        return client;
+      })
+      .catch(err => {
+        this.pendingConnections.delete(connectionKey);
+        throw err;
+      });
+    this.pendingConnections.set(connectionKey, creating);
+    return creating;
   }
 
   /**
@@ -585,31 +727,46 @@ export class SSHConnectionManager {
     timeoutMs: number = TIMEOUTS.DEFAULT_SESSION,
     shellType: ShellType = 'bash'
   ): Promise<PersistentSession> {
-    if (this.sessions.has(sessionId)) {
-      throw new SSHError(`Session with ID '${sessionId}' already exists`);
+    // Reserve the id SYNCHRONOUSLY (before any await) so a concurrent
+    // createSession with the same id cannot pass the precondition and
+    // overwrite this entry between getConnection() and session.initialize().
+    require_(
+      !this.sessions.has(sessionId) && !this.pendingSessions.has(sessionId),
+      `Session with ID '${sessionId}' already exists`
+    );
+
+    const creation = (async (): Promise<PersistentSession> => {
+      const client = await this.getConnection(target, username, privateKeyPath, port);
+      const session = new PersistentSession(sessionId, target, username, type, client, port, mode, timeoutMs, shellType);
+
+      // Attach ownership-transfer listeners BEFORE the initialize() await so a
+      // stream close/error during the startup delay is not missed. 'closed'
+      // fires only after cleanup-and-postcondition both pass; 'error' fires
+      // when cleanup detected a postcondition violation. 'timeout' is
+      // informational — close() runs next from the timer callback and emits
+      // 'closed' or 'error' itself. (Codex cycle 3 findings 3 + 4.)
+      session.on('closed', () => {
+        this.sessions.delete(sessionId);
+      });
+      session.on('error', (error) => {
+        console.error(`[SSH] Session ${sessionId} error:`, error);
+        this.sessions.delete(sessionId);
+      });
+      session.on('timeout', () => {
+        console.error(`[SSH] Session ${sessionId} timed out`);
+      });
+
+      await session.initialize();
+      this.sessions.set(sessionId, session);
+      return session;
+    })();
+
+    this.pendingSessions.set(sessionId, creation);
+    try {
+      return await creation;
+    } finally {
+      this.pendingSessions.delete(sessionId);
     }
-
-    const client = await this.getConnection(target, username, privateKeyPath, port);
-    const session = new PersistentSession(sessionId, target, username, type, client, port, mode, timeoutMs, shellType);
-
-    await session.initialize();
-    this.sessions.set(sessionId, session);
-
-    session.on('closed', () => {
-      this.sessions.delete(sessionId);
-    });
-
-    session.on('error', (error) => {
-      console.error(`[SSH] Session ${sessionId} error:`, error);
-      this.sessions.delete(sessionId);
-    });
-
-    session.on('timeout', () => {
-      console.error(`[SSH] Session ${sessionId} timed out`);
-      this.sessions.delete(sessionId);
-    });
-
-    return session;
   }
 
   /**
@@ -635,22 +792,26 @@ export class SSHConnectionManager {
       return false;
     }
 
-    return new Promise<boolean>((resolve) => {
-      const timeout = setTimeout(() => {
-        // Force cleanup even if 'closed' event doesn't fire
-        this.sessions.delete(sessionId);
-        resolve(true);
-      }, TIMEOUTS.FORCE_CLOSE);
-
-      // Use once() instead of on() to avoid multiple event listeners
-      session.once('closed', () => {
-        clearTimeout(timeout);
-        this.sessions.delete(sessionId);
-        resolve(true);
-      });
-
+    // close() is synchronous: it runs cleanup + postcondition synchronously
+    // and either emits 'closed' (success) or throws (postcondition violation).
+    // No need to register an event listener and race against a force-close
+    // timer — both would risk firing inside an async callback where a
+    // contract throw becomes an uncaught exception. (Codex cycle 3 finding-3.)
+    try {
       session.close();
-    });
+      // 'closed' listener installed in createSession already removed the
+      // session synchronously; this delete + ensure is a belt-and-braces
+      // postcondition check from the manager-side.
+      this.sessions.delete(sessionId);
+      ensure(!this.sessions.has(sessionId), `closeSession(${sessionId}) left manager entry behind`);
+      return true;
+    } catch (err) {
+      // Cleanup failed. Drop the broken session from the manager so subsequent
+      // calls don't see it, then propagate so the MCP handler envelope reports
+      // the failure to the caller.
+      this.sessions.delete(sessionId);
+      throw err;
+    }
   }
 
   /**
@@ -663,9 +824,7 @@ export class SSHConnectionManager {
     raw?: boolean
   ): Promise<CommandResult> {
     const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new SSHError(`Session '${sessionId}' not found`);
-    }
+    require_(session !== undefined, `Session '${sessionId}' not found`);
 
     return session.executeCommand(command, timeout, raw);
   }
@@ -675,9 +834,7 @@ export class SSHConnectionManager {
    */
   public getSessionOutput(sessionId: string, lines?: number, clear?: boolean): string[] {
     const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new SSHError(`Session '${sessionId}' not found`);
-    }
+    require_(session !== undefined, `Session '${sessionId}' not found`);
 
     return session.getBufferedOutput(lines, clear);
   }
@@ -686,49 +843,102 @@ export class SSHConnectionManager {
    * Close all connections and sessions
    */
   public async disconnectAll(): Promise<void> {
-    const sessionPromises = Array.from(this.sessions.values()).map(session => {
-      return new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-          resolve(); // Resolve even if 'closed' event doesn't fire
-        }, TIMEOUTS.SESSION_CLOSE);
+    // Each teardown returns ok=true on clean shutdown OR ok=false carrying the
+    // failure. We MUST NOT let a single failure short-circuit the whole sweep
+    // (one stranded session would skip every subsequent close); use
+    // allSettled-style per-target capture, force-clear the maps, then surface
+    // every failure to the caller via the existing SSHError envelope so the
+    // MCP handler can report a non-success result.
+    type TeardownResult = { ok: true } | { ok: false; error: unknown };
 
-        // Use once() instead of on() to avoid multiple event listeners
+    // Quiesce in-flight creates before snapshotting the established maps. A
+    // createSession reserved its id but hasn't yet sessions.set() it; if the
+    // sweep ran first, the established maps would be empty (passing the
+    // ensure postcondition) and the pending create would repopulate after
+    // shutdown returned. Same for pendingConnections. Wait for everything in
+    // flight to settle so its result is either in the established map (which
+    // this sweep then closes) or failed entirely. (Codex cycle 3 finding-1.)
+    if (this.pendingSessions.size > 0 || this.pendingConnections.size > 0) {
+      const pendingPromises: Array<Promise<unknown>> = [
+        ...Array.from(this.pendingSessions.values()),
+        ...Array.from(this.pendingConnections.values()),
+      ];
+      await Promise.allSettled(pendingPromises);
+    }
+
+    const sessionPromises: Array<Promise<TeardownResult>> = Array.from(this.sessions.values()).map(session => {
+      return new Promise<TeardownResult>((resolve) => {
+        let settled = false;
+        const finish = (result: TeardownResult): void => {
+          if (settled) return;
+          settled = true;
+          resolve(result);
+        };
+
+        const timeout = setTimeout(() => finish({ ok: true }), TIMEOUTS.SESSION_CLOSE);
         session.once('closed', () => {
           clearTimeout(timeout);
-          resolve();
+          finish({ ok: true });
         });
 
-        session.close();
-      });
-    });
-
-    const connectionPromises = Array.from(this.connections.values()).map(connInfo => {
-      return new Promise<void>((resolve) => {
-        if (connInfo.connected) {
-          const timeout = setTimeout(() => {
-            resolve(); // Resolve even if 'close' event doesn't fire
-          }, TIMEOUTS.SESSION_CLOSE);
-
-          // Use once() instead of on() to avoid multiple event listeners
-          connInfo.client.once('close', () => {
-            clearTimeout(timeout);
-            resolve();
-          });
-
-          connInfo.client.end();
-        } else {
-          resolve();
+        try {
+          session.close();
+        } catch (err) {
+          clearTimeout(timeout);
+          finish({ ok: false, error: err });
         }
       });
     });
 
-    try {
-      await Promise.all([...sessionPromises, ...connectionPromises]);
-    } catch (error) {
-      console.error('[SSH] Error during disconnectAll:', error);
-    } finally {
-      this.sessions.clear();
-      this.connections.clear();
+    const connectionPromises: Array<Promise<TeardownResult>> = Array.from(this.connections.values()).map(connInfo => {
+      return new Promise<TeardownResult>((resolve) => {
+        if (!connInfo.connected) {
+          resolve({ ok: true });
+          return;
+        }
+        let settled = false;
+        const finish = (result: TeardownResult): void => {
+          if (settled) return;
+          settled = true;
+          resolve(result);
+        };
+
+        const timeout = setTimeout(() => finish({ ok: true }), TIMEOUTS.SESSION_CLOSE);
+        connInfo.client.once('close', () => {
+          clearTimeout(timeout);
+          finish({ ok: true });
+        });
+
+        try {
+          connInfo.client.end();
+        } catch (err) {
+          clearTimeout(timeout);
+          finish({ ok: false, error: err });
+        }
+      });
+    });
+
+    const results = await Promise.all([...sessionPromises, ...connectionPromises]);
+    const failures = results.filter((r): r is { ok: false; error: unknown } => r.ok === false);
+
+    this.sessions.clear();
+    this.connections.clear();
+    ensure(this.sessions.size === 0, 'disconnectAll left sessions behind');
+    ensure(this.connections.size === 0, 'disconnectAll left connections behind');
+
+    if (failures.length > 0) {
+      // Map cleared so the manager is in a defined state, but the caller MUST
+      // learn that one or more teardowns failed (otherwise a stranded command
+      // promise inside a rejected close path looks like clean shutdown).
+      const messages = failures.map(f =>
+        f.error instanceof Error ? f.error.message : String(f.error)
+      );
+      const cause = failures[0].error instanceof Error ? failures[0].error : undefined;
+      console.error('[SSH] disconnectAll teardown failure(s):', messages);
+      throw new SSHError(
+        `disconnectAll: ${failures.length} teardown failure(s): ${messages.join('; ')}`,
+        cause
+      );
     }
   }
 }

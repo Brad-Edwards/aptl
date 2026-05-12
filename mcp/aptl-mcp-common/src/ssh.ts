@@ -548,12 +548,12 @@ export class SSHConnectionManager {
   // before sweeping; otherwise a reserved-but-incomplete create could
   // repopulate the sessions map after teardown returned successfully.
   // (Codex pre-push cycle 3 finding-1.)
-  private pendingSessions: Map<string, Promise<PersistentSession>> = new Map();
+  private readonly pendingSessions: Map<string, Promise<PersistentSession>> = new Map();
   // Joined in-flight connection creations keyed by `${user}@${host}:${port}`.
   // Concurrent callers requesting the same connection share one underlying
   // SSH client rather than racing to `connections.set`, which would orphan
   // every loser of the race.
-  private pendingConnections: Map<string, Promise<Client>> = new Map();
+  private readonly pendingConnections: Map<string, Promise<Client>> = new Map();
 
   /**
    * Execute a command on a target host via SSH
@@ -866,7 +866,14 @@ export class SSHConnectionManager {
       await Promise.allSettled(pendingPromises);
     }
 
-    const sessionPromises: Array<Promise<TeardownResult>> = Array.from(this.sessions.values()).map(session => {
+    // Single teardown primitive shared by sessions and connections — both
+    // race a close-call against an event-listener / timeout, capture the
+    // per-target outcome, and propagate close failures via TeardownResult.
+    const teardown = (
+      doClose: () => void,
+      emitter: EventEmitter,
+      eventName: string,
+    ): Promise<TeardownResult> => {
       return new Promise<TeardownResult>((resolve) => {
         let settled = false;
         const finish = (result: TeardownResult): void => {
@@ -876,46 +883,27 @@ export class SSHConnectionManager {
         };
 
         const timeout = setTimeout(() => finish({ ok: true }), TIMEOUTS.SESSION_CLOSE);
-        session.once('closed', () => {
+        emitter.once(eventName, () => {
           clearTimeout(timeout);
           finish({ ok: true });
         });
 
         try {
-          session.close();
+          doClose();
         } catch (err) {
           clearTimeout(timeout);
           finish({ ok: false, error: err });
         }
       });
-    });
+    };
+
+    const sessionPromises: Array<Promise<TeardownResult>> = Array.from(this.sessions.values()).map(session =>
+      teardown(() => session.close(), session, 'closed')
+    );
 
     const connectionPromises: Array<Promise<TeardownResult>> = Array.from(this.connections.values()).map(connInfo => {
-      return new Promise<TeardownResult>((resolve) => {
-        if (!connInfo.connected) {
-          resolve({ ok: true });
-          return;
-        }
-        let settled = false;
-        const finish = (result: TeardownResult): void => {
-          if (settled) return;
-          settled = true;
-          resolve(result);
-        };
-
-        const timeout = setTimeout(() => finish({ ok: true }), TIMEOUTS.SESSION_CLOSE);
-        connInfo.client.once('close', () => {
-          clearTimeout(timeout);
-          finish({ ok: true });
-        });
-
-        try {
-          connInfo.client.end();
-        } catch (err) {
-          clearTimeout(timeout);
-          finish({ ok: false, error: err });
-        }
-      });
+      if (!connInfo.connected) return Promise.resolve({ ok: true } as TeardownResult);
+      return teardown(() => connInfo.client.end(), connInfo.client, 'close');
     });
 
     const results = await Promise.all([...sessionPromises, ...connectionPromises]);

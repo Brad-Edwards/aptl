@@ -1,0 +1,1 @@
+**Scoped the Kali Trivy image scan.** CI no longer rebuilds and scans the Kali image on every run; the Kali matrix entry runs only when `containers/kali/` or the checks workflow changes, while remaining advisory and artifact-only when it does run.

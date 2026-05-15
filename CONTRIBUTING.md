@@ -1,0 +1,126 @@
+# Contributing to APTL
+
+APTL is an active purple-team lab and autonomous cyber-operations research
+project. Contributions are useful when they make the lab safer, more
+reproducible, easier to operate, easier to test, or more precise for scenario
+authors and agent integrations.
+
+## Before Opening a Pull Request
+
+- For small documentation fixes, typo fixes, and narrow test improvements, a
+  pull request is enough.
+- For lab topology changes, attack-path changes, detection logic changes, MCP
+  API changes, scenario runtime changes, or container configuration changes,
+  open an issue first. Those changes can affect safety boundaries,
+  reproducibility, and documented workflows.
+- Keep unrelated changes in separate pull requests.
+- Base pull requests on `dev`, not `main`. `main` is the stable release line;
+  `dev` is the integration branch.
+- Do not add red-team capability enhancements to the public repository unless
+  the maintainer has explicitly accepted the scope first.
+
+## Development Setup
+
+Prerequisites:
+
+- Python 3.11 or newer
+- Docker and Docker Compose
+- Node.js and npm for MCP server and web UI work
+- [pre-commit](https://pre-commit.com/)
+
+Set up the Python control plane:
+
+```shell
+git clone https://github.com/Brad-Edwards/aptl.git
+cd aptl
+python -m venv .venv
+. .venv/bin/activate
+pip install -e ".[dev]"
+pre-commit install
+```
+
+Build the MCP servers when working on agent integrations:
+
+```shell
+./mcp/build-all-mcps.sh
+```
+
+Install the web UI dependencies when working under `web/`:
+
+```shell
+cd web
+npm install
+```
+
+## Making Changes
+
+1. Fork the repository and create a branch from `dev`.
+2. Make the smallest coherent change that solves the issue.
+3. Add or update tests when behavior changes.
+4. Update scenarios, schemas, documentation, or examples when the public
+   surface changes.
+5. Add a towncrier fragment under [`changelog.d/`](changelog.d/) for
+   user-visible changes unless the change is docs-only, CI-only, or internal
+   maintenance. See [`changelog.d/README.md`](changelog.d/README.md).
+6. Run the relevant checks locally.
+7. Open a pull request against `dev` with a concrete description of what
+   changed and why.
+
+## Verification
+
+The full repository gate is:
+
+```shell
+pre-commit run --all-files
+```
+
+Useful narrower checks:
+
+```shell
+pytest
+pytest -m fuzz
+cd mcp/aptl-mcp-common && npm test
+cd mcp/mcp-red && npm test
+cd web && npm test
+```
+
+When changing files under `mcp/aptl-mcp-common`, rebuild the common package and
+run tests for dependent MCP servers because they consume the local package.
+
+When changing `docker-compose.yml`, container Dockerfiles, or files under
+`config/`, validate the lab from a clean state:
+
+```shell
+aptl lab stop -v
+aptl lab start
+```
+
+## Safety Boundaries
+
+APTL intentionally runs vulnerable services and gives agents access to
+penetration-testing tools. Keep contributions bounded to authorized lab use.
+Do not include real credentials, production secrets, private target data, or
+instructions for using the project against systems you do not own or have
+permission to test.
+
+The repository contains intentional test credentials for lab functionality.
+Those are not production secrets. New credentials should be dummy values unless
+the design explicitly renders or generates them at runtime.
+
+## Changelog
+
+Release notes are generated from towncrier fragments under `changelog.d/`.
+Do not hand-edit `CHANGELOG.md`.
+
+Fragment names follow the pattern described in
+[`changelog.d/README.md`](changelog.d/README.md).
+
+## Security Reports
+
+Do not open public issues for suspected security vulnerabilities. See
+[SECURITY.md](SECURITY.md).
+
+## Community Expectations
+
+Participation in this project is covered by
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).

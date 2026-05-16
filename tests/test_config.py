@@ -51,18 +51,40 @@ class TestLabSettings:
             LabSettings()
 
 
+# Canonical expected defaults for ContainerSettings. Any new field
+# added to ContainerSettings MUST be added here as well, or the
+# ``test_defaults_*`` tests below will fail. That coupling is the
+# point: a new container type accidentally defaulting to ``True`` must
+# not slip past the test suite (it would otherwise enable that
+# container in every lab start).
+_EXPECTED_CONTAINER_DEFAULTS = {
+    "wazuh": True,
+    "victim": True,
+    "kali": True,
+    "reverse": False,
+    "enterprise": False,
+    "soc": False,
+    "mail": False,
+    "fileshare": False,
+    "dns": False,
+}
+
+
 class TestContainerSettings:
     """Tests for the ContainerSettings Pydantic model."""
 
-    def test_defaults_all_containers_enabled(self):
-        """By default, wazuh/victim/kali are enabled, reverse is disabled."""
+    def test_defaults_match_canonical_set(self):
+        """Every ContainerSettings field defaults to its canonical value.
+
+        Compares the full ``model_dump()`` against
+        ``_EXPECTED_CONTAINER_DEFAULTS`` so adding a new field to
+        ``ContainerSettings`` without updating the expected set fails
+        this test loudly — preventing an accidental new-container
+        default-True from shipping silently.
+        """
         from aptl.core.config import ContainerSettings
 
-        settings = ContainerSettings()
-        assert settings.wazuh is True
-        assert settings.victim is True
-        assert settings.kali is True
-        assert settings.reverse is False
+        assert ContainerSettings().model_dump() == _EXPECTED_CONTAINER_DEFAULTS
 
     def test_can_disable_containers(self):
         """User can selectively disable containers."""
@@ -74,15 +96,16 @@ class TestContainerSettings:
         assert settings.victim is True
 
     def test_enabled_profiles_returns_only_enabled(self):
-        """enabled_profiles() should return docker compose profile names for enabled containers."""
+        """enabled_profiles() returns exactly the set of enabled container names.
+
+        Asserts an exact set equality, not a few `in`/`not in` checks,
+        so a new field accidentally defaulting to ``True`` would show
+        up in the profile list and trip this assertion.
+        """
         from aptl.core.config import ContainerSettings
 
         settings = ContainerSettings(wazuh=True, victim=False, kali=True, reverse=False)
-        profiles = settings.enabled_profiles()
-        assert "wazuh" in profiles
-        assert "kali" in profiles
-        assert "victim" not in profiles
-        assert "reverse" not in profiles
+        assert set(settings.enabled_profiles()) == {"wazuh", "kali"}
 
 
 class TestAptlConfig:
@@ -105,12 +128,18 @@ class TestAptlConfig:
         assert config.lab.name == "aptl"
 
     def test_containers_default_when_omitted(self):
-        """If containers section is omitted, defaults apply."""
+        """If containers section is omitted, the canonical defaults apply.
+
+        Asserts the full ``model_dump()`` against
+        ``_EXPECTED_CONTAINER_DEFAULTS`` so a new container field added
+        to ``ContainerSettings`` without updating the expected set
+        fails this top-level path too — preventing an accidental new
+        container from being enabled by default.
+        """
         from aptl.core.config import AptlConfig
 
         config = AptlConfig(lab={"name": "test"})
-        assert config.containers.wazuh is True
-        assert config.containers.reverse is False
+        assert config.containers.model_dump() == _EXPECTED_CONTAINER_DEFAULTS
 
     def test_extra_fields_are_rejected(self):
         """Unknown top-level keys are validation errors per ADR-025."""
@@ -170,6 +199,35 @@ class TestConfigLoading:
         empty.write_text("")
         with pytest.raises(ValueError):
             load_config(empty)
+
+    @pytest.mark.parametrize(
+        "body,top_type",
+        [
+            ("0", "int"),
+            ("3.14", "float"),
+            ('"hello"', "str"),
+            ("true", "bool"),
+            ("null", "NoneType"),
+            ("[1, 2, 3]", "list"),
+        ],
+    )
+    def test_load_from_non_mapping_json_raises_valueerror(
+        self, tmp_config_dir, body, top_type,
+    ):
+        """A JSON top-level that isn't an object must raise ``ValueError``.
+
+        Pre-fix, ``AptlConfig(**data)`` would raise ``TypeError`` for any
+        non-mapping ``data``, leaking past the documented public-exception
+        contract (``FileNotFoundError`` / ``ValueError``). Caught by
+        ``tests/test_config_fuzz.py::test_load_config_arbitrary_text_bounded_outcomes``
+        with falsifying example ``body='0'``.
+        """
+        from aptl.core.config import load_config
+
+        path = tmp_config_dir / "aptl.json"
+        path.write_text(body)
+        with pytest.raises(ValueError, match="JSON object"):
+            load_config(path)
 
     def test_find_config_searches_cwd(self, tmp_config_dir, valid_config_dict):
         """find_config() should locate aptl.json in the given directory."""

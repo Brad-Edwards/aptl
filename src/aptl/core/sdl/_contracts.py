@@ -23,12 +23,15 @@ never leaks the bound `Scenario`'s `repr()` past the breach point:
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
+from typing import Any
 
 import icontract
 
 
-def _narrow_error_factory(description: str) -> Callable[[], icontract.ViolationError]:
+def _narrow_error_factory(
+    description: str,
+) -> Callable[[], icontract.ViolationError]:
     """Return a zero-arg `error=` factory `icontract` will call directly.
 
     `icontract` introspects the callable's signature and tries to resolve
@@ -38,18 +41,22 @@ def _narrow_error_factory(description: str) -> Callable[[], icontract.ViolationE
     """
 
     def _factory() -> icontract.ViolationError:
+        """Build the fixed-message `ViolationError` for this contract."""
         return icontract.ViolationError(description)
 
     return _factory
 
 
-def sdl_require(condition: Callable, description: str):
+def sdl_require(
+    condition: Callable[..., bool], description: str
+) -> Callable[[Any], Any]:
     """`icontract.require` for SDL query/helper boundaries.
 
     The wrapper forces `enabled=True` (survives `python -O`) and pins the
     violation message to ``description`` so a `Scenario` repr never
     crosses the contract boundary into logs, tests, or user-facing
-    surfaces.
+    surfaces. Returns a decorator suitable for attaching to instance
+    methods on Pydantic-derived SDL models.
     """
     return icontract.require(
         condition,
@@ -59,12 +66,16 @@ def sdl_require(condition: Callable, description: str):
     )
 
 
-def sdl_ensure(condition: Callable, description: str):
+def sdl_ensure(
+    condition: Callable[..., bool], description: str
+) -> Callable[[Any], Any]:
     """`icontract.ensure` for SDL query/helper boundaries.
 
     Same secret-safety + ``python -O`` properties as `sdl_require`.
     Use for postconditions that assert the returned object belongs to
-    the same scenario (identity, not equality).
+    the same scenario (identity, not equality). Returns a decorator
+    suitable for attaching to instance methods on Pydantic-derived SDL
+    models.
     """
     return icontract.ensure(
         condition,

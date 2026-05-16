@@ -148,6 +148,16 @@ def load_config(path: Path) -> AptlConfig:
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON in {path}: {e}") from e
 
+    # `AptlConfig(**data)` raises TypeError when `data` is a non-mapping
+    # JSON top-level (int, float, str, bool, null, list). Classify that
+    # into the documented `ValueError` contract so callers doing
+    # `except (FileNotFoundError, ValueError)` see a consistent shape.
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Config root must be a JSON object, got "
+            f"{type(data).__name__}: {path}"
+        )
+
     log.debug("Loaded config from %s", path)
     return AptlConfig(**data)
 

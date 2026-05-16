@@ -59,6 +59,18 @@ except SDLValidationError as e:
         print(f"  - {error}")
 ```
 
+## Contract Guard Boundary
+
+The SDL validation pipeline remains authoritative:
+
+- Pydantic models own field shapes, enum normalization, required fields, ranges, and intra-model constraints.
+- `SemanticValidator` owns cross-reference integrity, graph checks, ambiguous refs, variable placeholder existence, and author-facing aggregated errors.
+- `aptl.core.scenarios.load_scenario()` owns file loading and wraps parse/validation failures in `ScenarioValidationError`.
+
+`icontract` guards may be added around stable query/helper methods when they assert facts about already-validated objects, such as a returned objective or workflow step belonging to the same `Scenario`. They should not become duplicate checks for `name`, `type`, `mode`, legacy `steps`, vulnerability existence, or workflow graph validity; those belong in the structural or semantic layers above.
+
+Contract predicates must be side-effect-free and must not read files, parse YAML, inspect Docker state, load environment variables, resolve secrets, or call deployment/runtime backends. Contract descriptions should be narrow labels that are safe for logs and diagnostics; do not include raw scenario YAML, full model `repr()` output, command lines, credentials, tokens, private keys, or backend stderr.
+
 ## Cross-Reference Resolution
 
 Generic refs are indexed in two forms:

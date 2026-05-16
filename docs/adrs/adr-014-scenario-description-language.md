@@ -48,6 +48,28 @@ Two-phase validation:
 
 The validator collects all errors rather than failing on the first.
 
+### Contract Guards
+
+`icontract` may be used as a fail-fast guard over already-defined SDL state,
+but it is not a third schema layer. Scenario contracts must protect stable
+model/query boundaries such as "this returned objective/step belongs to this
+scenario" or "a caller requesting a concrete workflow step supplied a declared
+workflow and step name." They must not duplicate Pydantic field constraints,
+semantic cross-reference passes, YAML normalization, shorthand expansion, or
+runtime/deployment readiness checks.
+
+Contract predicates and descriptions must be pure, cheap, and safe to expose:
+no filesystem, Docker, network, environment, secret-reading, or backend calls;
+no interpolation of whole scenario objects or raw YAML; and no raw
+`icontract` violation text crossing CLI/API/log/persistence boundaries. Public
+scenario loading still reports failures as `ScenarioValidationError`, wrapping
+`SDLParseError` or `SDLValidationError` as appropriate.
+
+Use contracts only where they add boundary clarity that the SDL validation
+pipeline does not already provide. If an invariant can be expressed as a
+Pydantic model validator or as a collecting `SemanticValidator` pass, keep it
+there so authors get normal field paths or aggregated validation errors.
+
 ### Parser
 
 The parser handles:

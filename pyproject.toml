@@ -82,6 +82,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 markers = [
     "fuzz: property-based fuzz tests (run with: pytest -m fuzz)",
+    "integration: tests that spawn subprocesses or read/write the filesystem; runnable by default but selectable via `pytest -m integration` or `pytest -m 'not integration'`",
 ]
 addopts = "-m 'not fuzz'"
 

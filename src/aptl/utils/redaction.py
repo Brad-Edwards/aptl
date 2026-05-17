@@ -19,10 +19,48 @@ and ``mcp/aptl-mcp-common/tests/redaction.test.ts`` in parity.
 from __future__ import annotations
 
 import json
+import os
 import re
 from typing import Any
 
 REDACTED = "[REDACTED]"
+
+# OBS-003 experimenter opt-out. The toggle is NOT consulted by the
+# shared :func:`redact` primitive — that would disable redaction at
+# every serialization boundary in the project (OTel/Tempo spans,
+# `LocalRunStore` JSON/JSONL writes, snapshot DTOs, stderr OCSF
+# lines, CLI/API JSON), giving any lab/observability user with
+# Tempo/Grafana access the ability to read raw control-plane
+# secrets the moment an experimenter flips the env var (codex
+# pre-push cycle 3 finding-9 — class category: "Global redact()
+# identity bypass affecting every serialization boundary that
+# imports the shared redactor"). Instead, the toggle is consulted
+# ONLY by the local per-run capture sink wrappers
+# (`mcp-red/src/capture.ts` `captureToolCall`,
+# `mcp-red/src/logger.ts` `localOcsfJsonlSink`) and any future
+# experimental sink that explicitly opts in via the documented
+# `experiment_no_redact_active()` helper. See ADR-033's
+# "Secret-handling" Security Layers entry for the boundary contract.
+_EXPERIMENT_NO_REDACT_ENV = "APTL_EXPERIMENT_NO_REDACT"
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
+def experiment_no_redact_active() -> bool:
+    """Public accessor for the OBS-003 experimenter opt-out env var.
+
+    Returns ``True`` only when ``APTL_EXPERIMENT_NO_REDACT`` is set
+    to a truthy value (``1``, ``true``, ``yes``, ``on`` — case-
+    insensitive). Any other value (including ``0``, ``false``,
+    empty, or unset) returns ``False`` (redaction-on default).
+
+    This is the **only** sanctioned consumer of the toggle. Call
+    this from a local per-run capture sink BEFORE invoking
+    :func:`redact`, and skip the redact call when it returns ``True``.
+    Do NOT add a guard inside :func:`redact` itself — that would
+    disable redaction for every serialization boundary in the
+    project, not just the experimental record.
+    """
+    return os.environ.get(_EXPERIMENT_NO_REDACT_ENV, "").strip().lower() in _TRUTHY
 
 # Substring tokens that mark a key as carrying credential material. Match
 # is case-insensitive substring against the *full key name* so a field like
@@ -382,6 +420,16 @@ _NTLM_HASH_ATTACHED_DQUOTE = re.compile(rf"(^|\s|\|)-H({_DQ_VALUE})")
 _NTLM_HASH_ATTACHED_SQUOTE = re.compile(rf"(^|\s|\|)-H({_SQ_VALUE})")
 _NTLM_HASH_ATTACHED_UNQUOTED = re.compile(r"(^|\s|\|)-H([^\s='\"](?:\\.|[^\s'\"\\])*)")
 
+# Impacket's documented short form is `-hashes [<LM>]:<NT>` (single
+# dash, full word). The `-H` patterns above only catch the
+# crackmapexec/nxc shape. Without these, a command like
+# `psexec.py alice@dc -hashes :8846f7eaee8fb117` leaked the NT hash
+# through redaction (test-quality review cycle 1 finding-1 surfaced
+# the missing assertion that exposed this pre-existing bug).
+_NTLM_HASHES_DQUOTE = re.compile(rf"(^|\s|\|)(--?hashes)(\s+|=)({_DQ_VALUE})")
+_NTLM_HASHES_SQUOTE = re.compile(rf"(^|\s|\|)(--?hashes)(\s+|=)({_SQ_VALUE})")
+_NTLM_HASHES_UNQUOTED = re.compile(rf"(^|\s|\|)(--?hashes)(\s+|=)({_BARE_VALUE})")
+
 _LDAP_W_DQUOTE = re.compile(rf"(^|\s|\|)-w(\s+|=)({_DQ_VALUE})")
 _LDAP_W_SQUOTE = re.compile(rf"(^|\s|\|)-w(\s+|=)({_SQ_VALUE})")
 _LDAP_W_UNQUOTED = re.compile(rf"(^|\s|\|)-w(\s+|=)({_BARE_VALUE})")
@@ -550,7 +598,7 @@ def _redact_ntlm_hash_flag(command: str) -> str:
 
         return repl
 
-    return _segment_aware_sub_chain(
+    out = _segment_aware_sub_chain(
         command,
         _HASH_TOOLS_RE,
         [
@@ -562,6 +610,43 @@ def _redact_ntlm_hash_flag(command: str) -> str:
             (_NTLM_HASH_ATTACHED_UNQUOTED, make_repl_attached),
         ],
     )
+
+    # Impacket-specific `-hashes :HASH` / `--hashes <LM>:<NT>` form.
+    # Scoped to segments where an impacket *.py tool appears so we
+    # don't over-redact unrelated `--hashes` flags. Preserves the
+    # flag literal (`m.group(2)` is `-hashes` or `--hashes`) and
+    # only masks the value (group 4).
+    from typing import Callable
+    InSegPredicate = Callable[[int], bool]
+    SubReplacer = Callable[["re.Match[str]"], str]
+
+    def make_repl_hashes(in_seg: InSegPredicate) -> SubReplacer:
+        """Build a `re.sub` replacer that masks `-hashes <value>` /
+        `--hashes <value>` only when ``in_seg(match.start())`` is
+        true (the match falls inside a command segment that names
+        an impacket tool).
+        """
+        def repl(m: "re.Match[str]") -> str:
+            """Mask the value; preserve the flag literal and leading separator."""
+            if not in_seg(m.start()):
+                return m.group(0)
+            return f"{m.group(1)}{m.group(2)}{m.group(3)}{REDACTED}"
+        return repl
+
+    impacket_pred_re = re.compile(
+        "|".join(p.pattern for p in _IMPACKET_TOOL_REGEXES),
+        re.IGNORECASE,
+    )
+    out = _segment_aware_sub_chain(
+        out,
+        impacket_pred_re,
+        [
+            (_NTLM_HASHES_DQUOTE, make_repl_hashes),
+            (_NTLM_HASHES_SQUOTE, make_repl_hashes),
+            (_NTLM_HASHES_UNQUOTED, make_repl_hashes),
+        ],
+    )
+    return out
 
 
 def _redact_ldap_password_flag(command: str) -> str:
@@ -847,6 +932,14 @@ def redact(value: Any) -> Any:
     args.
 
     Pure: never mutates the input.
+
+    Does NOT consult ``APTL_EXPERIMENT_NO_REDACT`` (codex pre-push
+    cycle 3 finding-9). The experiment toggle is scoped to the local
+    per-run capture sinks only; callers that want experimental-record
+    semantics check :func:`experiment_no_redact_active` themselves
+    before invoking ``redact``. This keeps OTel/Tempo, runstore,
+    snapshot, and stderr boundaries redacted at all times regardless
+    of the toggle.
     """
     if isinstance(value, dict):
         return {

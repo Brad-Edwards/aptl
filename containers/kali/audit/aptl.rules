@@ -1,0 +1,43 @@
+# OBS-003: APTL auditd rules.
+#
+# Captures the agent's syscall-level behaviour on the Kali container
+# so we have an independent witness alongside the MCP-side tool-call
+# JSONL and the per-session PTY recording. Loaded by `augenrules` /
+# `auditctl -R` at container start (see entrypoint.sh).
+#
+# Scope rationale:
+#   - execve catches every process the agent (or any tool the agent
+#     spawns) creates, with full argv.
+#   - connect catches outbound socket creation — `nmap`, `curl`, SMB
+#     clients, impacket modules, etc.
+#   - file ops on /home/kali, /tmp, /root, /etc cover the directories
+#     an agent typically reads/writes during an engagement; deeper
+#     coverage of /var or system bins is intentionally NOT included
+#     to keep the audit volume tractable in a long-running scenario.
+#
+# Non-contamination note (ADR-033): auditd runs on Kali for the
+# experimental record only. It is NOT forwarded to the Wazuh SIEM
+# (red activity must not bleed into blue's awareness). Forwarding
+# off the container, if/when needed for the experimental store,
+# happens via a non-SIEM path.
+
+# Reset baseline so a re-load doesn't accumulate rules.
+-D
+-b 16384
+--backlog_wait_time 30000
+
+# Process execution (both 32- and 64-bit).
+-a always,exit -F arch=b64 -S execve -k aptl_exec
+-a always,exit -F arch=b32 -S execve -k aptl_exec
+
+# Outbound network connects.
+-a always,exit -F arch=b64 -S connect -k aptl_net
+-a always,exit -F arch=b32 -S connect -k aptl_net
+
+# File activity in agent-touched directories. `-p wa` covers writes
+# and attribute changes; reads (`r`) would balloon the audit log
+# under normal shell use without adding much signal.
+-w /home/kali -p wa -k aptl_fs_home
+-w /tmp -p wa -k aptl_fs_tmp
+-w /root -p wa -k aptl_fs_root
+-w /etc -p wa -k aptl_fs_etc

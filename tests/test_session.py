@@ -237,6 +237,39 @@ class TestScenarioSessionStart:
         int(session.trace_id, 16)  # should not raise
         int(session.span_id, 16)   # should not raise
 
+    def test_start_writes_trace_context_json(self, aptl_state_dir):
+        """OBS-003 / ADR-012: start() must write `trace-context.json`
+        so MCP servers can read the trace_id for cross-process
+        correlation (and OBS-003 per-run capture routing). Prior to
+        this PR the helper existed but was never invoked, leaving
+        the file absent in production (codex pre-push cycle 1
+        finding-2).
+        """
+        from aptl.core.session import ScenarioSession
+
+        mgr = ScenarioSession(aptl_state_dir)
+        session = mgr.start(_make_scenario_def())
+        ctx_path = aptl_state_dir / "trace-context.json"
+        assert ctx_path.exists(), "trace-context.json must be written by session.start()"
+        ctx = json.loads(ctx_path.read_text())
+        assert ctx["trace_id"] == session.trace_id
+        assert ctx["span_id"] == session.span_id
+        assert ctx["trace_flags"] == "01"
+
+    def test_clear_removes_trace_context_json(self, aptl_state_dir):
+        """clear() must also remove `trace-context.json` so a stale
+        trace_id doesn't route the next scenario's MCP-side captures
+        into the wrong run directory.
+        """
+        from aptl.core.session import ScenarioSession
+
+        mgr = ScenarioSession(aptl_state_dir)
+        mgr.start(_make_scenario_def())
+        ctx_path = aptl_state_dir / "trace-context.json"
+        assert ctx_path.exists()
+        mgr.clear()
+        assert not ctx_path.exists(), "trace-context.json must be removed by clear()"
+
 
 # ---------------------------------------------------------------------------
 # ScenarioSession - get_active / is_active

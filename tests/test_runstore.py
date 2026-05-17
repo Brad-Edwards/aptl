@@ -269,3 +269,114 @@ class TestLocalRunStoreRedactionArgvShape:
         text = (tmp_path / "runs" / "r1" / "evt.json").read_text()
         assert "AAD3:8846" not in text
         assert "alice" in text  # bare username preserved
+
+
+class TestSessionScopedHelpers:
+    """OBS-003: per-session subdirectories under a run.
+
+    Sessions are MCP-level SSH sessions; many can exist per run. The
+    helpers compose under the existing run-id directory contract so a
+    full run looks like:
+
+        <base>/<run_id>/
+          mcp-side/
+            tool-calls.jsonl
+            ocsf.jsonl
+            sessions/<session_id>.jsonl
+          kali-side/
+            <session_id>/{pty,pcap,audit,proc-acct}/...
+    """
+
+    def test_mcp_side_dir(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        store.create_run("run-A")
+        d = store.mcp_side_dir("run-A")
+        assert d == tmp_path / "runs" / "run-A" / "mcp-side"
+
+    def test_kali_side_session_dir(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        store.create_run("run-A")
+        d = store.kali_side_session_dir("run-A", "sess-1")
+        assert d == tmp_path / "runs" / "run-A" / "kali-side" / "sess-1"
+
+    def test_mcp_session_jsonl_path(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        store.create_run("run-A")
+        p = store.mcp_session_jsonl("run-A", "sess-1")
+        assert p == tmp_path / "runs" / "run-A" / "mcp-side" / "sessions" / "sess-1.jsonl"
+
+    def test_session_id_validation_rejects_path_traversal(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        import pytest as _pytest
+
+        for bad in ["../escape", "sess/with/slash", "sess..", ".."]:
+            with _pytest.raises(ValueError):
+                store.kali_side_session_dir("run-A", bad)
+            with _pytest.raises(ValueError):
+                store.mcp_session_jsonl("run-A", bad)
+
+    def test_run_id_validation_rejects_path_traversal(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        import pytest as _pytest
+
+        for bad in ["../escape", "run/with/slash", ".."]:
+            with _pytest.raises(ValueError):
+                store.mcp_side_dir(bad)
+            with _pytest.raises(ValueError):
+                store.kali_side_session_dir(bad, "sess-1")
+
+
+class TestResolveActiveRunDir:
+    """OBS-003: resolve the active scenario's run dir from trace-context.json.
+
+    The MCP servers use this to write per-run captures without taking
+    an explicit run_id from each tool caller. Returns ``None`` cleanly
+    when no scenario is active (no trace-context.json present), so
+    standalone MCP invocations don't error — the caller decides whether
+    to fall back to an ``_unbound`` directory or skip writing.
+    """
+
+    def test_returns_none_when_no_trace_context(self, tmp_path):
+        from aptl.core.runstore import resolve_active_run_dir
+
+        assert resolve_active_run_dir(tmp_path / "state") is None
+
+    def test_returns_run_dir_keyed_by_trace_id(self, tmp_path):
+        from aptl.core.runstore import resolve_active_run_dir
+
+        state = tmp_path / "state"
+        state.mkdir()
+        trace_id = "a" * 32
+        (state / "trace-context.json").write_text(
+            json.dumps({"trace_id": trace_id, "span_id": "b" * 16, "trace_flags": "01"})
+        )
+        result = resolve_active_run_dir(state)
+        assert result == state / "runs" / trace_id
+
+    def test_returns_none_when_trace_context_malformed(self, tmp_path):
+        from aptl.core.runstore import resolve_active_run_dir
+
+        state = tmp_path / "state"
+        state.mkdir()
+        (state / "trace-context.json").write_text("not json")
+        assert resolve_active_run_dir(state) is None
+
+    def test_returns_none_when_trace_context_missing_trace_id(self, tmp_path):
+        from aptl.core.runstore import resolve_active_run_dir
+
+        state = tmp_path / "state"
+        state.mkdir()
+        (state / "trace-context.json").write_text(json.dumps({"span_id": "b" * 16}))
+        assert resolve_active_run_dir(state) is None
+
+    def test_rejects_trace_id_with_path_traversal_chars(self, tmp_path):
+        from aptl.core.runstore import resolve_active_run_dir
+
+        state = tmp_path / "state"
+        state.mkdir()
+        (state / "trace-context.json").write_text(
+            json.dumps({"trace_id": "../escape", "span_id": "b" * 16})
+        )
+        # Invariant: trace_id from a malformed/hostile source must not
+        # let an attacker write outside the runs/ dir. Reject defensively.
+        assert resolve_active_run_dir(state) is None

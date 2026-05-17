@@ -148,14 +148,20 @@ custom child rules) ships absent.
 |---|---|---|
 | `local_rules.xml` | local overrides | varies |
 | `falco_rules.xml` | Falco runtime behaviour | varies |
-| `kali_redteam_rules.xml` | SSH session boundary events from kali | 1–3 (demoted in v6.3.0) |
 | `ad_rules.xml` | brute force, Kerberoasting, AD enumeration, Domain Admin mods | 3–12 |
 | `webapp_rules.xml` | SQLi, XSS, command injection, brute force | 0–12 |
 | `suricata_rules.xml` | network-side correlation against Suricata alerts | 0–10 |
 | `database_rules.xml` | DB brute force, schema mods, large exports | 5–12 |
 
-- Decoders for kali, postgresql, samba ship at
-  [`config/wazuh_cluster/{kali,postgresql,samba}_decoders.xml`](../../config/wazuh_cluster/).
+`kali_redteam_rules.xml` (the prior "SSH session boundary events
+from kali" row) was removed under ADR-033 (OBS-003
+non-contamination): red activity must not be ingested by the
+defensive stack via the SIEM. Red-side captures live in the
+per-run experimental record under `.aptl/runs/<run_id>/`.
+
+- Decoders for postgresql and samba ship at
+  [`config/wazuh_cluster/{postgresql,samba}_decoders.xml`](../../config/wazuh_cluster/).
+  (`kali_decoders.xml` deleted under ADR-033.)
 - **`zzz_purple_loop.xml` ships absent from the repo by design.** It
   only appears under `.aptl/loop/run-*/iter-NN/` (runtime artifacts
   produced by purple-loop runs). The mechanism is: blue authors XML

@@ -54,8 +54,8 @@ services:
       # the .aptl/ copy by hand.
       - ./.aptl/config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
       - ./config/wazuh_cluster/falco_rules.xml:/var/ossec/etc/rules/falco_rules.xml
-      - ./config/wazuh_cluster/kali_redteam_rules.xml:/var/ossec/etc/rules/kali_redteam_rules.xml
-      - ./config/wazuh_cluster/kali_decoders.xml:/var/ossec/etc/decoders/kali_decoders.xml
+      # kali_redteam_rules.xml and kali_decoders.xml mounts removed under
+      # ADR-033 — no red activity flows into the SIEM (non-contamination).
       - ./config/wazuh_cluster/samba_decoders.xml:/var/ossec/etc/decoders/samba_decoders.xml
       - ./config/wazuh_cluster/postgresql_decoders.xml:/var/ossec/etc/decoders/postgresql_decoders.xml
       - ./config/wazuh_cluster/ad_rules.xml:/var/ossec/etc/rules/ad_rules.xml
@@ -1007,7 +1007,28 @@ services:
   # RED TEAM (aptl-redteam network: 172.20.4.0/24)
   # ==========================================================================
 
-  # Kali Container - Red team attack platform
+  # Kali Container - Red team attack platform.
+  #
+  # ADR-033 (OBS-003) revision: the kali service no longer ships logs
+  # to the Wazuh SIEM. Specifically:
+  #   - `SIEM_IP` env var removed (was wazuh.manager on aptl-internal).
+  #   - `depends_on: wazuh.manager` removed — kali no longer requires
+  #     the defensive stack to be up.
+  #   - `kali_logs:/var/log` named volume replaced with
+  #     `kali_captures:/var/log/aptl/captures` (a docker NAMED VOLUME,
+  #     NOT a host bind mount). Per-session captures land in the
+  #     volume; the MCP-red server harvests them out via `docker cp`
+  #     into `.aptl/runs/<run_id>/kali-side/<session_id>/` on the host
+  #     with 0600 permissions. See `mcp/aptl-mcp-common/src/captures.ts`.
+  #   - AUDIT_CONTROL / AUDIT_WRITE caps let entrypoint.sh load the
+  #     APTL audit ruleset at boot; CAP_AUDIT_CONTROL is then dropped
+  #     via `capsh --drop=cap_audit_control` before sshd accepts
+  #     connections so the kali user (passwordless sudo) cannot run
+  #     `sudo auditctl -D` to disable the audit trail.
+  #
+  # The aptl-internal network attachment STAYS — kali still needs to
+  # reach the internal target hosts (db, files, ws01, dc, ns1).
+  # Removing it for SIEM reasons alone would break attack reachability.
   kali:
     profiles: ["kali"]
     build:
@@ -1026,7 +1047,6 @@ services:
     ports:
       - "2023:22"    # SSH access for MCP
     environment:
-      - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
       - VICTIM_IP=172.20.2.20
     extra_hosts:
       - "techvault.local:172.20.2.10"
@@ -1041,13 +1061,35 @@ services:
     volumes:
       - ./keys:/host-ssh-keys:ro
       - kali_operations:/home/kali/operations
-      - kali_logs:/var/log    # Persist logs for Wazuh agent
-    depends_on:
-      wazuh.manager:
-        condition: service_healthy
+      # OBS-003 / ADR-033: per-session captures land in a docker
+      # NAMED VOLUME (not a host bind mount). The named volume is
+      # not visible on the host filesystem to other containers or
+      # to the kali workload's snooping, and an attacker who escalates
+      # to container root cannot read or tamper with prior runs'
+      # MCP-side records (codex pre-push cycle 1 finding-10). The
+      # MCP-red server harvests captures out via `docker cp` on
+      # session close into `.aptl/runs/<run_id>/kali-side/<session_id>/`
+      # on the host with 0600 perms — see `captures.ts` in
+      # aptl-mcp-common.
+      - kali_captures:/var/log/aptl/captures
     cap_add:
-      - NET_RAW      # For packet capture tools
-      - NET_ADMIN    # For network manipulation tools
+      - NET_RAW       # tcpdump / packet capture
+      - NET_ADMIN     # network manipulation tools
+      # OBS-003: AUDIT_CONTROL and AUDIT_WRITE are granted to the
+      # container so entrypoint.sh (running as root, before sshd is
+      # exposed) can load the APTL audit ruleset. The entrypoint
+      # then drops CAP_AUDIT_CONTROL from the sshd-spawning process
+      # via `capsh --drop=cap_audit_control` so the kali user
+      # (passwordless sudo) cannot run `auditctl -D` to disable
+      # the audit trail mid-scenario (codex cycle 1 finding-12).
+      - AUDIT_CONTROL
+      - AUDIT_WRITE
+      # OBS-003 / codex cycle 3 finding-1: SYS_PACCT is required for
+      # `accton` to enable kernel process accounting. Docker's default
+      # cap set excludes it, so without this the entrypoint's
+      # `accton /var/log/aptl/captures/_proc-acct/pacct` silently
+      # fails and the advertised pacct capture is empty.
+      - SYS_PACCT
     security_opt:
       - seccomp:unconfined  # Required for some red team tools
     healthcheck:
@@ -1322,7 +1364,13 @@ volumes:
   victim_logs:
   workstation_logs:
   kali_operations:
-  kali_logs:
+  # kali_logs (was /var/log) removed under ADR-033. Replaced with
+  # kali_captures (mounted at /var/log/aptl/captures) so per-session
+  # behavioural captures stay inside a docker-managed volume — the
+  # kali user cannot escape its current session subdir to read
+  # prior runs' MCP-side records, and the MCP server harvests data
+  # out via `docker cp` on session close.
+  kali_captures:
   reverse_logs:
 
   # OpenTelemetry

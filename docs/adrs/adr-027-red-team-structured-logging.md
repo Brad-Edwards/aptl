@@ -2,11 +2,60 @@
 
 ## Status
 
-accepted
+accepted (amended 2026-05-17 by [ADR-033](adr-033-agent-reasoning-trace-boundary.md))
 
 ## Date
 
-2026-05-09
+2026-05-09 (amended 2026-05-17)
+
+## Status update — 2026-05-17
+
+The SIEM-transport portion of this ADR — rsyslog-to-Wazuh forwarding
+from the Kali container, Wazuh-agent-on-Kali ingestion, and the
+`kali_redteam_rules.xml` decoder loaded by the Wazuh manager — is
+**superseded by ADR-033** under the non-contamination principle. Red
+activity must not bleed into the blue defensive stack's awareness via
+the SIEM, because that injection inflates blue's artificial picture
+of red and contaminates purple-loop experiments.
+
+What stays from this ADR is **the OCSF schema work**:
+
+- The classifier (`mcp/mcp-red/src/classifier.ts`) and extractor
+  (`mcp/mcp-red/src/extractor.ts`) tables.
+- The activity taxonomy with MITRE technique/tactic mappings.
+- `SeverityId` 0–6 aligned with `src/aptl/core/detection.py`.
+- The `OcsfRedTeamRecord` shape including the `aptl` envelope.
+- The `postToolHook` architecture for emitting records.
+- Cross-language redaction at the serialization boundary (ADR-029).
+- Best-effort guarantee: classification / extraction / sink failures
+  do not break tool execution.
+
+What changes is **the sink**:
+
+- The default sink composite now writes to stderr (with `[OCSF]`
+  sentinel — local dev visibility) AND to a per-run JSONL at
+  `<state>/runs/<trace_id>/mcp-side/ocsf.jsonl` — never to a SIEM.
+- `mcp/mcp-red/src/logger.ts` exports `localOcsfJsonlSink(env)` and
+  `defaultRedTeamSinks(env)`; the existing `stderrJsonlSink` is
+  retained as a building block but no longer the default by itself.
+- The `SiemSink` type name is intentionally kept to avoid a churning
+  rename across tests; the *behaviour* under that name is
+  non-SIEM-bound. A future ADR may rename the type if there is
+  appetite.
+
+The "Do not replace the existing Kali Wazuh agent, bash-history
+ingestion, or low-level `kali_redteam_rules.xml` until the OCSF path
+is proven to cover equivalent reconstruction needs" guardrail
+(below) is reversed: those red-side SIEM pipes are removed as part
+of ADR-033's implementation. The equivalent reconstruction surface
+now lives in the per-run capture directory (PTY typescripts, pcaps,
+auditd events, OCSF JSONL, tool-call JSONL), which is more complete
+than the previous SIEM ingestion path.
+
+Everything below this section is the original decision text,
+preserved for historical context.
+
+---
 
 ## Context
 

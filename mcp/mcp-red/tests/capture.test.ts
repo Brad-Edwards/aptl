@@ -1,19 +1,28 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 vi.mock('aptl-mcp-common', async () => {
-  const actual = await vi.importActual<typeof import('../../aptl-mcp-common/src/redaction.js')>(
+  const redaction = await vi.importActual<typeof import('../../aptl-mcp-common/src/redaction.js')>(
     '../../aptl-mcp-common/src/redaction.js',
   );
-  return { redact: actual.redact };
+  const runs = await vi.importActual<typeof import('../../aptl-mcp-common/src/runs.js')>(
+    '../../aptl-mcp-common/src/runs.js',
+  );
+  return {
+    redact: redaction.redact,
+    experimentNoRedactActive: redaction.experimentNoRedactActive,
+    resolveActiveRunDir: runs.resolveActiveRunDir,
+    mcpSideDir: runs.mcpSideDir,
+  };
 });
 
 import {
   appendCaptureRecord,
   buildCaptureRecord,
   captureFilePath,
+  ocsfFilePath,
   captureToolCall,
 } from '../src/capture.js';
 
@@ -29,21 +38,62 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe('captureFilePath', () => {
-  it('writes inside APTL_STATE_DIR by default', () => {
-    expect(captureFilePath({ APTL_STATE_DIR: '/tmp/example' })).toBe(
-      '/tmp/example/red-tool-calls.jsonl',
+describe('captureFilePath — OBS-003 per-run routing', () => {
+  it('routes to runs/<trace_id>/mcp-side/tool-calls.jsonl when scenario active', () => {
+    const tid = 'a'.repeat(32);
+    writeFileSync(
+      join(tmpDir, 'trace-context.json'),
+      JSON.stringify({ trace_id: tid, span_id: 'b'.repeat(16), trace_flags: '01' }),
+    );
+    expect(captureFilePath(env)).toBe(
+      join(tmpDir, 'runs', tid, 'mcp-side', 'tool-calls.jsonl'),
     );
   });
 
-  it('honours APTL_RED_CAPTURE_PATH override', () => {
-    expect(
-      captureFilePath({ APTL_RED_CAPTURE_PATH: '/var/log/red.jsonl', APTL_STATE_DIR: '/x' }),
-    ).toBe('/var/log/red.jsonl');
+  it('falls back to runs/_unbound/mcp-side when no scenario is active', () => {
+    expect(captureFilePath(env)).toBe(
+      join(tmpDir, 'runs', '_unbound', 'mcp-side', 'tool-calls.jsonl'),
+    );
   });
 
-  it('falls back to .aptl when APTL_STATE_DIR is unset', () => {
-    expect(captureFilePath({})).toMatch(/\.aptl\/red-tool-calls\.jsonl$/);
+  it('ignores the legacy APTL_RED_CAPTURE_PATH escape hatch (removed under ADR-033)', () => {
+    // APTL_RED_CAPTURE_PATH was originally a SIEM-bind-mount
+    // override. ADR-033 forbids red→SIEM pipes, so the override is
+    // removed entirely. Setting it has no effect; routing always
+    // goes through the per-run mcp-side directory.
+    expect(
+      captureFilePath({ APTL_RED_CAPTURE_PATH: '/var/log/red.jsonl', APTL_STATE_DIR: '/x' }),
+    ).toBe('/x/runs/_unbound/mcp-side/tool-calls.jsonl');
+  });
+
+  it('defaults APTL_STATE_DIR to .aptl when unset', () => {
+    expect(captureFilePath({})).toMatch(/\.aptl\/runs\/_unbound\/mcp-side\/tool-calls\.jsonl$/);
+  });
+
+  it('falls back to _unbound when trace-context.json is malformed (defensive)', () => {
+    writeFileSync(join(tmpDir, 'trace-context.json'), 'not json');
+    expect(captureFilePath(env)).toBe(
+      join(tmpDir, 'runs', '_unbound', 'mcp-side', 'tool-calls.jsonl'),
+    );
+  });
+});
+
+describe('ocsfFilePath — per-run OCSF JSONL', () => {
+  it('routes to runs/<trace_id>/mcp-side/ocsf.jsonl when scenario active', () => {
+    const tid = 'a'.repeat(32);
+    writeFileSync(
+      join(tmpDir, 'trace-context.json'),
+      JSON.stringify({ trace_id: tid, span_id: 'b'.repeat(16) }),
+    );
+    expect(ocsfFilePath(env)).toBe(
+      join(tmpDir, 'runs', tid, 'mcp-side', 'ocsf.jsonl'),
+    );
+  });
+
+  it('falls back to runs/_unbound/mcp-side/ocsf.jsonl', () => {
+    expect(ocsfFilePath(env)).toBe(
+      join(tmpDir, 'runs', '_unbound', 'mcp-side', 'ocsf.jsonl'),
+    );
   });
 });
 
@@ -154,9 +204,13 @@ describe('appendCaptureRecord — JSONL append', () => {
   });
 
   it('best-effort: never throws on permission/io errors', async () => {
-    // `/dev/null/red.jsonl` — /dev/null exists but is not a directory,
-    // so the mkdir-recursive helper fails fast with ENOTDIR.
-    const bogus = { APTL_RED_CAPTURE_PATH: '/dev/null/red.jsonl' };
+    // /dev/null exists but is not a directory, so any path under it
+    // will fail the mkdir-recursive helper with ENOTDIR. With the
+    // legacy APTL_RED_CAPTURE_PATH override removed (ADR-033), we
+    // force the failure via APTL_STATE_DIR instead — routing then
+    // produces `/dev/null/x/runs/_unbound/mcp-side/tool-calls.jsonl`
+    // and the mkdir under /dev/null fails fast.
+    const bogus = { APTL_STATE_DIR: '/dev/null/x' };
     await expect(
       appendCaptureRecord(
         buildCaptureRecord({
@@ -250,7 +304,11 @@ describe('buildCaptureRecord — opt-in result persistence (cycle-11 security)',
       },
       { APTL_RED_CAPTURE_INCLUDE_RESULT: 'true' },
     );
-    expect(r.result).toBeDefined();
+    // Asserts the actual content round-trips through experimentalRedact
+    // (test-quality cycle 2 finding-2 — the prior `toBeDefined()`
+    // would pass on `{}`, `null`, or a coerced string). No keys are
+    // sensitive, so the redactor passes the value through unchanged.
+    expect(r.result).toEqual({ content: [{ type: 'text', text: 'kali\n' }] });
   });
 
   it('still records error message even when result is opt-out', () => {

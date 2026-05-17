@@ -48,8 +48,10 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [024](adr-024-orchestrator-side-purple-continuity-carve-out.md) | Orchestrator-side purple-team continuity carve-out | accepted | 2026-05-03 |
 | [025](adr-025-strict-first-party-config-schema.md) | Strict first-party config schema | accepted | 2026-05-05 |
 | [026](adr-026-advisory-ci-vulnerability-scanning.md) | Advisory CI Vulnerability Scanning | accepted | 2026-05-09 |
-| [027](adr-027-red-team-structured-logging.md) | Red Team Structured Logging Boundary | accepted | 2026-05-09 |
+| [027](adr-027-red-team-structured-logging.md) | Red Team Structured Logging Boundary (SIEM-transport superseded by ADR-033) | accepted (amended) | 2026-05-09 |
 | [028](adr-028-runtime-rendered-service-config.md) | Runtime-Rendered Service Config | accepted | 2026-05-10 |
 | [029](adr-029-control-plane-secret-handling.md) | Control-Plane Secret Handling in Run Data and Local State | accepted | 2026-05-10 |
 | [030](adr-030-startup-partial-readiness-classification.md) | Startup Partial-Readiness Classification | accepted | 2026-05-11 |
 | [031](adr-031-lab-orchestration-contract-guards.md) | Lab Orchestration Contract Guards | accepted | 2026-05-12 |
+| [032](adr-032-conversation-surface-hardening.md) | Conversation Surface Hardening | accepted | 2026-05-17 |
+| [033](adr-033-agent-reasoning-trace-boundary.md) | Red-Side Behavioural Capture and Non-Contamination Boundary | accepted | 2026-05-17 |

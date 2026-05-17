@@ -500,6 +500,15 @@ class TestFullLoop:
         _require_misp_key()
         _require_thehive_key()
 
+        # Capture the test start time so step 7 can filter TheHive
+        # cases to those created during THIS run, not pre-existing
+        # ones from earlier test invocations (test-quality review
+        # cycle 1 finding-5: previously a pre-existing case would
+        # satisfy `len(case_list) > 0` even when the workflow
+        # ABORTed).
+        from datetime import datetime, timezone
+        test_started_at_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+
         # 1. SQLi from Kali to webapp
         kali_exec(
             "curl -sf 'http://172.20.1.20:8080/login"
@@ -588,6 +597,7 @@ class TestFullLoop:
 
         # 6. Poll Shuffle for completion
         deadline = time.monotonic() + 120
+        status_data: dict = {}
         while time.monotonic() < deadline:
             time.sleep(5)
             try:
@@ -603,8 +613,18 @@ class TestFullLoop:
                     break
             except (AssertionError, json.JSONDecodeError):
                 pass
+        # Workflow MUST complete successfully — without this
+        # assertion an ABORTED/FAILED workflow could still satisfy
+        # step 7 if pre-existing TheHive cases were around
+        # (test-quality review cycle 1 finding-5).
+        assert status_data.get("status") == "FINISHED", (
+            f"Shuffle workflow must reach FINISHED before TheHive check; "
+            f"got: {status_data.get('status')!r}"
+        )
 
-        # 7. Verify TheHive has a case
+        # 7. Verify TheHive has a case CREATED BY THIS RUN. Filter
+        # by createdAt > test_started_at_ms so stale cases from
+        # prior runs cannot satisfy the assertion (cycle 1 finding-5).
         cases = curl_json(
             f"{THEHIVE_URL}/api/v1/query",
             auth_header=f"Bearer {THEHIVE_API_KEY}",
@@ -615,7 +635,7 @@ class TestFullLoop:
                     {"_name": "sort", "_fields": [
                         {"_createdAt": "desc"},
                     ]},
-                    {"_name": "page", "from": 0, "to": 5},
+                    {"_name": "page", "from": 0, "to": 20},
                 ],
             },
         )
@@ -623,8 +643,14 @@ class TestFullLoop:
             cases if isinstance(cases, list)
             else cases.get("data", [])
         )
-        assert len(case_list) > 0, (
-            "No cases in TheHive after workflow execution"
+        fresh_cases = [
+            c for c in case_list
+            if isinstance(c, dict)
+            and c.get("_createdAt", 0) >= test_started_at_ms
+        ]
+        assert len(fresh_cases) > 0, (
+            f"No TheHive cases created during this run "
+            f"(since {test_started_at_ms}); total recent={len(case_list)}"
         )
 
     def test_wazuh_webhook_triggers_shuffle(self):
@@ -1019,13 +1045,15 @@ class TestAttackPaths:
 # -------------------------------------------------------------------
 
 
-# Wazuh custom rule files that MUST be loaded for the prime scenario
+# Wazuh custom rule files that MUST be loaded for the prime scenario.
+# `kali_redteam_rules.xml` was removed under ADR-033 (OBS-003 non-
+# contamination): red-team activity must not bleed into the blue
+# defensive stack's awareness via the SIEM. See ADR-027 amendment.
 REQUIRED_WAZUH_RULES = [
     "webapp_rules.xml",
     "ad_rules.xml",
     "database_rules.xml",
     "suricata_rules.xml",
-    "kali_redteam_rules.xml",
     "falco_rules.xml",
 ]
 
@@ -1243,13 +1271,17 @@ class TestDefensiveStack:
         )
 
     def test_wazuh_decoders_for_enterprise(self):
-        """Custom decoders are mounted for enterprise log sources."""
+        """Custom decoders are mounted for enterprise log sources.
+
+        ``kali_decoders.xml`` was removed under ADR-033 (OBS-003 non-
+        contamination): red activity must not be ingested by the
+        defensive stack.
+        """
         result = docker_exec(
             "aptl-wazuh-manager",
             "ls /var/ossec/etc/decoders/",
         )
-        for decoder in ["kali_decoders.xml",
-                        "postgresql_decoders.xml",
+        for decoder in ["postgresql_decoders.xml",
                         "samba_decoders.xml"]:
             assert decoder in result.stdout, (
                 f"Decoder {decoder} not mounted"

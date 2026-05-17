@@ -1,20 +1,35 @@
 /**
- * Red-team SIEM event logger.
+ * Red-team OCSF event logger.
  *
  * Builds OCSF-shaped activity records for AI-agent-executed commands and
- * writes them to a sink (default: stderr JSONL with `[OCSF]` sentinel
- * prefix). Per ADR-027:
+ * writes them to a sink. Historical name `SiemSink` is retained; per
+ * ADR-033 (OBS-003) the records are NOT shipped to a SIEM — that path
+ * is removed under the non-contamination principle (red activity must
+ * not bleed into the blue defensive stack's awareness). The default
+ * composite sink writes to:
  *
- *   - Best-effort: classification, extraction, redaction, or sink failures
- *     never bubble out of `logRedTeamCommand`. Errors are reported to
- *     stderr and the call returns `null`.
+ *   - stderr (with `[OCSF]` sentinel) — local development visibility
+ *   - the per-run JSONL at `<state>/runs/<trace_id>/mcp-side/ocsf.jsonl`
+ *     — the experimental record, joinable with the rest of the per-run
+ *     captures (tool-calls.jsonl, PTY streams, kali-side audit/pcap)
+ *
+ * The OCSF schema, classifier, extractor, taxonomy alignment, and
+ * post-tool-hook architecture from ADR-027 remain canonical; only the
+ * transport boundary changed.
+ *
+ * Guarantees (unchanged from ADR-027):
+ *   - Best-effort: classification, extraction, redaction, or sink
+ *     failures never bubble out of `logRedTeamCommand`. Errors are
+ *     reported to stderr and the call returns `null`.
  *   - Severity values are OCSF `severity_id` 0–6 — matches the Python
  *     `SeverityId` enum in `src/aptl/core/detection.py`.
- *   - The `process.cmd_line` field is the verbatim command after running
- *     it through the shared `redact()` helper from `aptl-mcp-common`.
- *     The logger never invents a second redaction policy.
+ *   - The `process.cmd_line` field is the verbatim command after
+ *     running it through the shared `redact()` helper. The logger
+ *     never invents a second redaction policy.
  */
 
+import { appendFile, chmod, mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { redact } from 'aptl-mcp-common';
 import {
   classifyCommand,
@@ -23,6 +38,7 @@ import {
   type SeverityIdValue,
 } from './classifier.js';
 import { extractMetadata, type ExtractedFields, type OcsfEndpoint } from './extractor.js';
+import { ocsfFilePath } from './capture.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -104,6 +120,65 @@ export const stderrJsonlSink: SiemSink = (record: OcsfRedTeamRecord): void => {
   const line = `${STDERR_SENTINEL}${JSON.stringify(record)}\n`;
   process.stderr.write(line);
 };
+
+/**
+ * Per-run JSONL sink — appends each record to
+ * `<state>/runs/<trace_id>/mcp-side/ocsf.jsonl`. Routing is delegated
+ * to `ocsfFilePath()` so it matches `captureFilePath()` exactly
+ * (OBS-003: per-scenario aggregation). Best-effort: a write failure
+ * is logged to stderr and the sink resolves without throwing, so a
+ * disk-full / permission / ENOTDIR condition cannot crash the
+ * post-tool-hook.
+ *
+ * Restrictive permissions (dir 0700, file 0600) mirror the capture
+ * sink — OCSF records can contain target endpoints, agent session
+ * IDs, and process-command-lines; other local users on the same host
+ * should not be able to read the experimental record.
+ */
+export function localOcsfJsonlSink(env: NodeJS.ProcessEnv = process.env): SiemSink {
+  return async (record: OcsfRedTeamRecord): Promise<void> => {
+    const file = ocsfFilePath(env);
+    try {
+      await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+      await appendFile(file, `${JSON.stringify(record)}\n`, {
+        encoding: 'utf-8',
+        mode: 0o600,
+      });
+      try {
+        await chmod(file, 0o600);
+      } catch {
+        // Best-effort: repair mode whether the file was just created
+        // (umask widened it) or pre-existed with a wider mode.
+      }
+    } catch (err) {
+      console.error('[OCSF] local sink error:', err);
+    }
+  };
+}
+
+/**
+ * Composite default: emit to stderr (local dev visibility) AND the
+ * per-run JSONL (experimental record). Use this from the postToolHook
+ * so both sinks are independently flushed. Sinks are best-effort and
+ * isolated — a failure in one does not affect the other.
+ */
+export function defaultRedTeamSinks(env: NodeJS.ProcessEnv = process.env): SiemSink {
+  const local = localOcsfJsonlSink(env);
+  return async (record: OcsfRedTeamRecord): Promise<void> => {
+    // stderr is synchronous; run first so the line appears even if the
+    // async file write is still in flight when the host process exits.
+    try {
+      stderrJsonlSink(record);
+    } catch (err) {
+      console.error('[OCSF] stderr sink error:', err);
+    }
+    try {
+      await local(record);
+    } catch (err) {
+      console.error('[OCSF] local sink error (outer):', err);
+    }
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Tool-result success derivation

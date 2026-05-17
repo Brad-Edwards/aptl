@@ -33,7 +33,7 @@ class SessionState(str, Enum):
 
 
 @dataclass
-class ActiveSession:  # NOSONAR(python:S5612) — Python 3, implicit object inheritance
+class ActiveSession(object):
     """Persistent state for a running scenario.
 
     Attributes:
@@ -100,7 +100,7 @@ def _deserialize_session(data: dict[str, Any]) -> ActiveSession:
         raise ValueError(f"Malformed session data: {e}") from e
 
 
-class ScenarioSession:  # NOSONAR(python:S5612) — Python 3, implicit object inheritance
+class ScenarioSession(object):
     """Manages active scenario state across commands.
 
     State is persisted to a JSON file in the .aptl/ directory so that

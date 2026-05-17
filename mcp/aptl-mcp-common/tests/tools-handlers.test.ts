@@ -1,8 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { generateToolHandlers } from '../src/tools/handlers.js';
 
-// Mock SSH manager
-vi.mock('../src/ssh.js');
+// Partial mock: keep the real SSHError class so `assertSessionIdContract`
+// in handlers.ts can throw a real Error subclass (whose `.message`
+// the handler catch block converts into the response envelope).
+// Auto-mocking the whole module replaces SSHError with a Mock that
+// produces empty-message errors and breaks the rejection assertions.
+vi.mock('../src/ssh.js', async () => {
+  const actual = await vi.importActual<typeof import('../src/ssh.js')>('../src/ssh.js');
+  return {
+    ...actual,
+    SSHConnectionManager: vi.fn(),
+  };
+});
 
 describe('generateToolHandlers', () => {
   const mockServerConfig = {
@@ -113,5 +123,155 @@ describe('handler execution logic', () => {
 
     const result = await handlers['test_info']({}, disabledContext);
     expect(result.content[0].text).toContain('not enabled');
+  });
+});
+
+describe('assertSessionIdContract — canonical session_id at MCP ingress', () => {
+  // OBS-003 / codex pre-push cycle 3 finding-4 + finding-10: every
+  // session-taking handler asserts the canonical id contract before
+  // touching the SSH manager so downstream layers (PTY tee, Kali
+  // wrapper, harvest) all see the same id. The schema regex
+  // permits `.` (so version-shaped ids like `sess-1.0` work) but
+  // the handler-level guard additionally rejects `..`.
+
+  const handlers = generateToolHandlers({
+    toolPrefix: 'test',
+    targetName: 'Test',
+    configKey: 'test-container',
+  });
+  const ctx = {
+    sshManager: {} as any,
+    labConfig: {
+      server: { configKey: 'test-container', targetName: 'Test' },
+      lab: { name: 'test-lab', network_subnet: '172.20.0.0/16' },
+      containers: {
+        'test-container': {
+          container_ip: '172.20.0.50',
+          ssh_user: 'testuser',
+          ssh_port: 2022,
+          enabled: true,
+        },
+      },
+    } as any,
+  };
+
+  it.each([
+    ['close_session', 'test_close_session'],
+    ['session_command', 'test_session_command'],
+    ['get_session_output', 'test_get_session_output'],
+  ])('%s rejects an empty session_id', async (_label, handlerName) => {
+    const result = await handlers[handlerName](
+      { session_id: '', command: 'whoami' },
+      ctx,
+    );
+    expect(result.content[0].text.toLowerCase()).toContain('session_id');
+  });
+
+  it.each([
+    ['close_session', 'test_close_session'],
+    ['session_command', 'test_session_command'],
+    ['get_session_output', 'test_get_session_output'],
+  ])('%s rejects a session_id containing ".."', async (_label, handlerName) => {
+    const result = await handlers[handlerName](
+      { session_id: 'sess..with..dots', command: 'whoami' },
+      ctx,
+    );
+    expect(result.content[0].text.toLowerCase()).toContain("'..'");
+  });
+
+  it.each([
+    ['interactive_session', 'test_interactive_session'],
+    ['background_session', 'test_background_session'],
+  ])('%s rejects a session_id containing ".."', async (_label, handlerName) => {
+    const result = await handlers[handlerName](
+      { session_id: '../escape' },
+      ctx,
+    );
+    expect(result.content[0].text.toLowerCase()).toContain("'..'");
+  });
+});
+
+describe('close_session / close_all_sessions harvest behaviour', () => {
+  // OBS-003: when the labConfig has no `containers[configKey].container_name`,
+  // `resolveCaptureContainer` returns undefined and `maybeHarvest`
+  // is a true no-op (returns `true` without invoking docker). This
+  // exercises the close handlers' happy path without involving the
+  // captures module's docker-cp machinery.
+
+  const labConfig = {
+    server: { configKey: 'test-container', targetName: 'Test' },
+    lab: { name: 'test-lab', network_subnet: '172.20.0.0/16' },
+    // No container_name in containers[configKey] — harvest no-ops.
+    containers: {
+      'test-container': {
+        container_ip: '172.20.0.50',
+        ssh_user: 'testuser',
+        ssh_port: 2022,
+        enabled: true,
+      },
+    },
+  };
+
+  it('close_session returns success when session was closed (no harvest_warning)', async () => {
+    const handlers = generateToolHandlers({
+      toolPrefix: 'test',
+      targetName: 'Test',
+      configKey: 'test-container',
+    });
+    const sshManager = {
+      getSessionRunId: vi.fn(() => undefined),
+      closeSession: vi.fn(async () => true),
+    } as any;
+    const result = await handlers['test_close_session'](
+      { session_id: 'sess-1' },
+      { sshManager, labConfig } as any,
+    );
+    const body = JSON.parse(result.content[0].text);
+    expect(body.success).toBe(true);
+    expect(body.session_id).toBe('sess-1');
+    expect(body.harvest_warning).toBeUndefined();
+  });
+
+  it('close_session reports "not found" envelope when session is missing', async () => {
+    const handlers = generateToolHandlers({
+      toolPrefix: 'test',
+      targetName: 'Test',
+      configKey: 'test-container',
+    });
+    const sshManager = {
+      getSessionRunId: vi.fn(() => undefined),
+      closeSession: vi.fn(async () => false),
+    } as any;
+    const result = await handlers['test_close_session'](
+      { session_id: 'sess-missing' },
+      { sshManager, labConfig } as any,
+    );
+    const body = JSON.parse(result.content[0].text);
+    expect(body.success).toBe(false);
+    expect(body.message).toContain('not found');
+  });
+
+  it('close_all_sessions reports session count', async () => {
+    const handlers = generateToolHandlers({
+      toolPrefix: 'test',
+      targetName: 'Test',
+      configKey: 'test-container',
+    });
+    const sshManager = {
+      listSessions: vi.fn(() => [
+        { sessionId: 'sess-a' },
+        { sessionId: 'sess-b' },
+      ]),
+      getSessionRunId: vi.fn(() => undefined),
+      disconnectAll: vi.fn(async () => {}),
+    } as any;
+    const result = await handlers['test_close_all_sessions'](
+      {},
+      { sshManager, labConfig } as any,
+    );
+    const body = JSON.parse(result.content[0].text);
+    expect(body.success).toBe(true);
+    expect(body.sessions_closed).toBe(2);
+    expect(body.harvest_warning).toBeUndefined();
   });
 });

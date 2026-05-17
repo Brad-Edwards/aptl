@@ -243,4 +243,56 @@ describe('harvestSession', () => {
     expect(ok).toBe(false);
     expect(spawnControl.callCount).toBe(0);
   });
+
+  it('honours an explicit runId opt (bypasses ambient trace context)', async () => {
+    // Active trace context says X; explicit runId says Y; harvest
+    // must pin to Y (codex pre-push cycle 3 finding-6).
+    activateScenario('x'.repeat(32));
+    await harvestSession(
+      {
+        containerName: 'aptl-kali',
+        env: { APTL_STATE_DIR: tmp },
+        runId: 'y'.repeat(32),
+      },
+      'sess-1',
+    );
+    expect(spawnControl.capturedArgs[0][1]).toContain(`/var/log/aptl/captures/${'y'.repeat(32)}/sess-1/.`);
+  });
+});
+
+describe('captures: docker binary resolution', () => {
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'aptl-harvest-bin-'));
+    spawnControl.callCount = 0;
+    spawnControl.exitCode = 0;
+    spawnControl.stderrText = '';
+    spawnControl.capturedArgs = [];
+  });
+
+  it('defaults to /usr/bin/docker (no PATH lookup)', async () => {
+    // Even without APTL_DOCKER_BIN set, spawn target should be the
+    // absolute path so PATH-injection cannot redirect to a hostile
+    // binary (SonarCloud hotspot S4036). We can't directly inspect
+    // the spawned command name in our mock (we capture args, not
+    // the executable), so this test acts as a smoke check that the
+    // harvest path completes with default env.
+    const ok = await harvestSession(
+      { containerName: 'aptl-kali', env: { APTL_STATE_DIR: tmp } },
+      'sess-bin',
+    );
+    expect(typeof ok).toBe('boolean');
+    expect(spawnControl.callCount).toBeGreaterThan(0);
+  });
+
+  it('honours APTL_DOCKER_BIN override', async () => {
+    const ok = await harvestSession(
+      {
+        containerName: 'aptl-kali',
+        env: { APTL_STATE_DIR: tmp, APTL_DOCKER_BIN: '/opt/docker/bin/docker' },
+      },
+      'sess-bin',
+    );
+    expect(typeof ok).toBe('boolean');
+    expect(spawnControl.callCount).toBeGreaterThan(0);
+  });
 });

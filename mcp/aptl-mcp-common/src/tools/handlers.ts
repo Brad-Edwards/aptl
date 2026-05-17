@@ -359,9 +359,9 @@ const baseHandlers: Record<string, ToolHandler> = {
 
   session_command: async (args, { sshManager }) => {
     const { session_id, command, timeout = 30000, raw } = args as SessionCommandArgs;
-    assertSessionIdContract(session_id);
 
     try {
+      assertSessionIdContract(session_id);
       const result = await sshManager.executeInSession(session_id, command, timeout, raw);
 
       return {
@@ -439,9 +439,14 @@ const baseHandlers: Record<string, ToolHandler> = {
 
   close_session: async (args, { sshManager, labConfig }) => {
     const { session_id } = args as CloseSessionArgs;
-    assertSessionIdContract(session_id);
 
     try {
+      // Reject MCP-ingress id contract violations through the same
+      // catch block as any other tool error so the response envelope
+      // is consistent (codex pre-push cycle 3 finding-4 + test-quality
+      // followup — the prior precondition outside try threw out of
+      // the handler instead of producing a `success: false` envelope).
+      assertSessionIdContract(session_id);
       // Snapshot the bound run id BEFORE closeSession removes the
       // session from the manager (codex pre-push cycle 3 finding-6).
       const boundRunId = sshManager.getSessionRunId(session_id);
@@ -493,9 +498,9 @@ const baseHandlers: Record<string, ToolHandler> = {
 
   get_session_output: async (args, { sshManager }) => {
     const { session_id, lines, clear = false } = args as GetSessionOutputArgs;
-    assertSessionIdContract(session_id);
 
     try {
+      assertSessionIdContract(session_id);
       // Route through the manager so the centralized session-not-found
       // precondition (and any future manager-level guards) cannot be
       // bypassed. The handler's catch block converts the thrown SSHError

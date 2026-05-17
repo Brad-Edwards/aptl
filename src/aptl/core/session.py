@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from aptl.core.scenarios import ScenarioStateError
 from aptl.utils.logging import get_logger
@@ -33,7 +33,7 @@ class SessionState(str, Enum):
 
 
 @dataclass
-class ActiveSession:
+class ActiveSession:  # NOSONAR(python:S5612) — Python 3, implicit object inheritance
     """Persistent state for a running scenario.
 
     Attributes:
@@ -54,11 +54,11 @@ class ActiveSession:
     span_id: str = ""
     hints_used: dict[str, int] = field(default_factory=dict)
     completed_objectives: list[str] = field(default_factory=list)
-    flags: dict[str, dict[str, dict]] = field(default_factory=dict)
+    flags: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
     run_id: str = ""
 
 
-def _serialize_session(session: ActiveSession) -> dict:
+def _serialize_session(session: ActiveSession) -> dict[str, Any]:
     """Convert an ActiveSession to a JSON-serializable dict.
 
     Args:
@@ -72,7 +72,7 @@ def _serialize_session(session: ActiveSession) -> dict:
     return d
 
 
-def _deserialize_session(data: dict) -> ActiveSession:
+def _deserialize_session(data: dict[str, Any]) -> ActiveSession:
     """Restore an ActiveSession from a deserialized dict.
 
     Args:
@@ -100,7 +100,7 @@ def _deserialize_session(data: dict) -> ActiveSession:
         raise ValueError(f"Malformed session data: {e}") from e
 
 
-class ScenarioSession:
+class ScenarioSession:  # NOSONAR(python:S5612) — Python 3, implicit object inheritance
     """Manages active scenario state across commands.
 
     State is persisted to a JSON file in the .aptl/ directory so that
@@ -386,5 +386,6 @@ class ScenarioSession:
             fcntl.flock(fd, fcntl.LOCK_EX)
             os.write(fd, payload.encode("utf-8"))
         finally:
-            os.close(fd)  # releases lock
+            # `os.close(fd)` releases the LOCK_EX as a side effect.
+            os.close(fd)
         log.debug("Wrote session to %s", self._session_path)

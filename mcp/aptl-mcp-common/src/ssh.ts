@@ -2,8 +2,9 @@
 import { Client, ClientChannel } from 'ssh2';
 import { readFile } from 'fs/promises';
 import { EventEmitter } from 'events';
+import { randomBytes } from 'node:crypto';
 import { ShellFormatter, ShellType, createShellFormatter } from './shells.js';
-import { createPtyTeeWriter, loadActiveTraceId, type PtyChunkDirection } from './runs.js';
+import { createPtyTeeWriter, loadActiveTraceId } from './runs.js';
 
 /**
  * OBS-003: env vars passed to the SSH shell via `SendEnv`/`shell({env})`
@@ -144,7 +145,7 @@ export class PersistentSession extends EventEmitter {
   // constructor parameter was previously consumed into the
   // formatter only, so a regression that ignored it could not be
   // detected by inspecting the session).
-  private shellType: ShellType;
+  private readonly shellType: ShellType;
 
   // OBS-003: per-session PTY tee — writes every byte received from
   // the SSH PTY into a per-run JSONL independent of which tool-call
@@ -674,7 +675,12 @@ export class SSHConnectionManager {
     const client = await this.getConnection(host, username, privateKeyPath, port);
     const sessionId =
       options.sessionId ??
-      `exec-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+      // crypto.randomBytes for the unique-id suffix (SonarCloud
+      // hotspot ssh.ts:677 — Math.random isn't a CSPRNG). The id is
+      // not security-sensitive (it's an experimental-record join
+      // key), but the CSPRNG version is the same cost and removes
+      // the hotspot.
+      `exec-${Date.now()}-${randomBytes(4).toString('hex')}`;
     const shellEnv = aptlShellEnv(sessionId);
     const ptyTee = createPtyTeeWriter(sessionId);
 

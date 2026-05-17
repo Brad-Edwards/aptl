@@ -27,7 +27,8 @@ import { resolve } from 'node:path';
 // components, so reject anything that could break out of the tree.
 // Leading `_` is allowed so the `_unbound` sentinel (used when MCP
 // servers run outside an active scenario context) survives validation.
-const ID_RE = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+// `\w` is `[A-Za-z0-9_]` (SonarCloud S6353).
+const ID_RE = /^\w[\w.-]*$/;
 
 function validateId(value: unknown, kind: string): string {
   if (typeof value !== 'string' || !ID_RE.test(value)) {

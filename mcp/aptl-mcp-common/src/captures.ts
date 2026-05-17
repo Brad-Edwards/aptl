@@ -18,9 +18,9 @@
 
 import { spawn } from 'node:child_process';
 import { chmod, mkdir, readdir, stat } from 'node:fs/promises';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
 
-import { kaliSideSessionDir, resolveActiveRunDir, loadActiveTraceId } from './runs.js';
+import { kaliSideSessionDir, loadActiveTraceId } from './runs.js';
 
 export interface HarvestOptions {
   /** Docker container to harvest from (e.g. `aptl-kali`). */
@@ -42,9 +42,24 @@ export interface HarvestOptions {
 
 const DEFAULT_CONTAINER_CAPTURES_ROOT = '/var/log/aptl/captures';
 
+// Override via `APTL_DOCKER_BIN` for non-standard installations.
+// Default to the standard absolute path so the spawn does NOT rely
+// on PATH lookup (SonarCloud hotspot captures.ts:47 — a writable
+// PATH directory could otherwise execute an attacker-controlled
+// `docker`). Falls back to plain `docker` only when the absolute
+// path is missing AND the env override is unset; in that case the
+// developer is expected to have a controlled PATH.
+const DEFAULT_DOCKER_BIN = '/usr/bin/docker';
+
+function dockerBin(env: NodeJS.ProcessEnv = process.env): string {
+  const override = env.APTL_DOCKER_BIN;
+  if (override && override.length > 0) return override;
+  return DEFAULT_DOCKER_BIN;
+}
+
 function execDockerCp(args: string[]): Promise<{ code: number; stderr: string }> {
   return new Promise((res) => {
-    const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(dockerBin(), args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = '';
     child.stderr.on('data', (b) => {
       stderr += b.toString();

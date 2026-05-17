@@ -616,8 +616,18 @@ def _redact_ntlm_hash_flag(command: str) -> str:
     # don't over-redact unrelated `--hashes` flags. Preserves the
     # flag literal (`m.group(2)` is `-hashes` or `--hashes`) and
     # only masks the value (group 4).
-    def make_repl_hashes(in_seg):
+    from typing import Callable
+    InSegPredicate = Callable[[int], bool]
+    SubReplacer = Callable[["re.Match[str]"], str]
+
+    def make_repl_hashes(in_seg: InSegPredicate) -> SubReplacer:
+        """Build a `re.sub` replacer that masks `-hashes <value>` /
+        `--hashes <value>` only when ``in_seg(match.start())`` is
+        true (the match falls inside a command segment that names
+        an impacket tool).
+        """
         def repl(m: "re.Match[str]") -> str:
+            """Mask the value; preserve the flag literal and leading separator."""
             if not in_seg(m.start()):
                 return m.group(0)
             return f"{m.group(1)}{m.group(2)}{m.group(3)}{REDACTED}"

@@ -31,11 +31,19 @@ log = get_logger("runstore")
 # could break out of the runs/ tree.
 # Allow leading `_` so the `_unbound` sentinel (used when MCP servers run
 # outside an active scenario context) survives validation. No traversal
-# vector — `_` is just a filename character.
-_ID_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]*$")
+# vector — `_` is just a filename character. `\w` is `[A-Za-z0-9_]`
+# (SonarCloud S6353 — concise character class).
+_ID_RE = re.compile(r"^\w[\w.-]*$")
 
 
 def _validate_id(value: str, kind: str) -> str:
+    """Reject anything that could break out of the ``runs/`` tree.
+
+    Returns the value unchanged when it matches the canonical id
+    contract (``^\\w[\\w.-]*$`` AND does not contain ``..``); raises
+    ``ValueError`` otherwise. ``kind`` is included in the error
+    message so callers see e.g. ``invalid trace_id: '../escape'``.
+    """
     if not isinstance(value, str) or not _ID_RE.fullmatch(value):
         raise ValueError(f"invalid {kind}: {value!r}")
     if ".." in value:
@@ -253,17 +261,19 @@ def resolve_active_run_dir(state_dir: Path) -> Path | None:
     ctx_file = state_dir / "trace-context.json"
     if not ctx_file.exists():
         return None
+    # Single return on the failure path (SonarCloud S1142 — at most
+    # 3 returns per function): build a `resolved` local and let
+    # every error branch fall through to the final `return None`.
+    resolved: Path | None = None
     try:
         data = json.loads(ctx_file.read_text(encoding="utf-8"))
+        trace_id = data.get("trace_id") if isinstance(data, dict) else None
+        if isinstance(trace_id, str):
+            try:
+                _validate_id(trace_id, "trace_id")
+                resolved = state_dir / "runs" / trace_id
+            except ValueError:
+                log.warning("trace-context.json contained unsafe trace_id; ignoring")
     except (json.JSONDecodeError, OSError) as exc:
         log.debug("trace-context.json unreadable: %s", exc)
-        return None
-    trace_id = data.get("trace_id")
-    if not isinstance(trace_id, str):
-        return None
-    try:
-        _validate_id(trace_id, "trace_id")
-    except ValueError:
-        log.warning("trace-context.json contained unsafe trace_id; ignoring")
-        return None
-    return state_dir / "runs" / trace_id
+    return resolved

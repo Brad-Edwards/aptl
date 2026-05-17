@@ -24,10 +24,22 @@ export {
   redactBasicAuthUser,
   redactNtlmHashFlag,
   redactLdapPasswordFlag,
+  experimentNoRedactActive,
 } from './redaction.js';
 export type { LabConfig } from './config.js';
 export { loadLabConfig, substituteEnvVars, parseDotEnv } from './config.js';
 export type { ToolContext } from './tools/handlers.js';
+export {
+  loadActiveTraceId,
+  resolveActiveRunDir,
+  mcpSideDir,
+  kaliSideSessionDir,
+  mcpSessionJsonl,
+  createPtyTeeWriter,
+} from './runs.js';
+export type { PtyChunkDirection, PtyTeeRecord } from './runs.js';
+export { harvestSession } from './captures.js';
+export type { HarvestOptions } from './captures.js';
 
 // Export HTTP/API functionality
 export { HTTPClient, type HTTPResponse, type HTTPError } from './http.js';

@@ -224,9 +224,11 @@ describe('Shell Type Support', () => {
       22
     );
 
-    // The shell type is handled internally by the formatter
-    const info = session.getSessionInfo();
-    expect(info).toBeDefined(); // Session created successfully
+    // Asserts the shell-type round-trips, not just that the session
+    // exists (test-quality review cycle 1 finding-2). The previous
+    // `expect(info).toBeDefined()` could not have caught a regression
+    // that silently dropped the shellType default.
+    expect(session.getShellType()).toBe('bash');
   });
 
   it('should create sessions with specified shell types', () => {
@@ -248,13 +250,16 @@ describe('Shell Type Support', () => {
 
       const info = session.getSessionInfo();
       expect(info.sessionId).toBe(`test-${shellType}`);
-      expect(info).toBeDefined(); // Session created successfully with shell type
+      // Asserts the constructor-supplied shellType is stored — without
+      // this, a regression that discarded the parameter would still
+      // produce a passing test (test-quality review cycle 1 finding-3).
+      expect(session.getShellType()).toBe(shellType);
     });
   });
 
   it('should track shell type through session lifecycle', async () => {
     const mockClient = {
-      shell: vi.fn((callback) => {
+      shell: vi.fn((_opts: any, callback: any) => {
         // Mock shell stream
         const mockStream = {
           on: vi.fn(),
@@ -285,8 +290,145 @@ describe('Shell Type Support', () => {
     expect(info.sessionId).toBe('ps-test');
     expect(info.target).toBe('windows-host');
     expect(info.username).toBe('Administrator');
+    // The shellType must survive initialize() — without this
+    // assertion, a regression where initialize() silently switched
+    // back to bash would still pass (test-quality review cycle 1
+    // finding-4).
+    expect(powershellSession.getShellType()).toBe('powershell');
 
     powershellSession.close();
+  });
+});
+
+describe('OBS-003: SendEnv + continuous PTY tee', () => {
+  let tmp = '';
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    const { mkdtempSync } = require('node:fs');
+    const { tmpdir } = require('node:os');
+    const { join } = require('node:path');
+    tmp = mkdtempSync(join(tmpdir(), 'aptl-ssh-obs003-'));
+    process.env.APTL_STATE_DIR = tmp;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    const { rmSync } = require('node:fs');
+    rmSync(tmp, { recursive: true, force: true });
+    delete process.env.APTL_STATE_DIR;
+  });
+
+  it('passes APTL_SESSION_ID + APTL_RUN_ID + APTL_TRACE_ID via shell({env}) when scenario active', async () => {
+    const { writeFileSync } = require('node:fs');
+    const { join } = require('node:path');
+    const tid = 'a'.repeat(32);
+    writeFileSync(
+      join(tmp, 'trace-context.json'),
+      JSON.stringify({ trace_id: tid, span_id: 'b'.repeat(16), trace_flags: '01' }),
+    );
+
+    const shellStream = Object.assign(new EventEmitter(), {
+      write: vi.fn(),
+      end: vi.fn(),
+      stderr: new EventEmitter(),
+    });
+    const shellMock = vi.fn((_opts: any, cb: any) => cb(null, shellStream));
+    const mockClient = { shell: shellMock } as any;
+
+    const session = new PersistentSession(
+      'sess-obs003-1', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000,
+    );
+
+    const init = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await init;
+
+    expect(shellMock).toHaveBeenCalledTimes(1);
+    const opts = shellMock.mock.calls[0][0];
+    expect(opts.env).toMatchObject({
+      APTL_SESSION_ID: 'sess-obs003-1',
+      APTL_RUN_ID: tid,
+      APTL_TRACE_ID: tid,
+    });
+
+    session.close();
+  });
+
+  it('passes only APTL_SESSION_ID when no scenario context is active', async () => {
+    const shellStream = Object.assign(new EventEmitter(), {
+      write: vi.fn(),
+      end: vi.fn(),
+      stderr: new EventEmitter(),
+    });
+    const shellMock = vi.fn((_opts: any, cb: any) => cb(null, shellStream));
+    const mockClient = { shell: shellMock } as any;
+
+    const session = new PersistentSession(
+      'sess-no-scenario', 'host', 'user', 'interactive', mockClient,
+    );
+
+    const init = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await init;
+
+    const opts = shellMock.mock.calls[0][0];
+    expect(opts.env).toEqual({ APTL_SESSION_ID: 'sess-no-scenario' });
+
+    session.close();
+  });
+
+  it('tees every byte from stdout AND stderr into per-session JSONL', async () => {
+    const { writeFileSync, readFileSync, existsSync } = require('node:fs');
+    const { join } = require('node:path');
+    const tid = 'c'.repeat(32);
+    writeFileSync(
+      join(tmp, 'trace-context.json'),
+      JSON.stringify({ trace_id: tid, span_id: 'd'.repeat(16) }),
+    );
+
+    const shellStream = Object.assign(new EventEmitter(), {
+      write: vi.fn(),
+      end: vi.fn(),
+      stderr: new EventEmitter(),
+    });
+    const shellMock = vi.fn((_opts: any, cb: any) => cb(null, shellStream));
+    const mockClient = { shell: shellMock } as any;
+
+    const session = new PersistentSession(
+      'sess-tee-1', 'host', 'user', 'background', mockClient, 22, 'normal', 600000,
+    );
+
+    const init = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await init;
+
+    // Emit a few chunks across both streams.
+    shellStream.emit('data', Buffer.from('first chunk\n'));
+    shellStream.stderr.emit('data', Buffer.from('warning text\n'));
+    shellStream.emit('data', Buffer.from('second chunk\n'));
+
+    // Let the async tee writer flush. Use the writer's own drain
+    // (test-quality review cycle 1 finding-6) — a fixed setTimeout
+    // races the actual write under CI load.
+    vi.useRealTimers();
+    await session.flushPtyTee();
+
+    const file = join(tmp, 'runs', tid, 'mcp-side', 'sessions', 'sess-tee-1.jsonl');
+    expect(existsSync(file)).toBe(true);
+    const lines = readFileSync(file, 'utf-8').trim().split('\n');
+    expect(lines).toHaveLength(3);
+    const r0 = JSON.parse(lines[0]);
+    expect(r0.dir).toBe('out');
+    expect(Buffer.from(r0.b64, 'base64').toString()).toBe('first chunk\n');
+    const r1 = JSON.parse(lines[1]);
+    expect(r1.dir).toBe('err');
+    expect(Buffer.from(r1.b64, 'base64').toString()).toBe('warning text\n');
+    const r2 = JSON.parse(lines[2]);
+    expect(r2.dir).toBe('out');
+    expect(Buffer.from(r2.b64, 'base64').toString()).toBe('second chunk\n');
+
+    session.close();
   });
 });
 
@@ -305,7 +447,7 @@ describe('Session Cleanup and Timeout Handling', () => {
     });
 
     mockClient = {
-      shell: vi.fn((cb: any) => cb(null, mockStream)),
+      shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)),
     };
 
     session = new PersistentSession(
@@ -433,7 +575,7 @@ describe('Contract guards (preconditions)', () => {
         end: vi.fn(),
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       const session = new PersistentSession(
         'pre-closed', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
       );
@@ -506,7 +648,7 @@ describe('Contract guards (postconditions)', () => {
       end: vi.fn(),
       stderr: new EventEmitter(),
     });
-    mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) };
+    mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) };
     session = new PersistentSession(
       'post-test', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
     );
@@ -641,7 +783,7 @@ describe('Manager-level postconditions', () => {
         end: vi.fn(() => mockStream.emit('close')),
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       const session = new PersistentSession(
         'mgr-close', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
       );
@@ -677,11 +819,11 @@ describe('Manager-level postconditions', () => {
         stderr: new EventEmitter(),
       });
       const client1 = Object.assign(new EventEmitter(), {
-        shell: vi.fn((cb: any) => cb(null, stream1)),
+        shell: vi.fn((_opts: any, cb: any) => cb(null,stream1)),
         end: vi.fn(() => client1.emit('close')),
       });
       const client2 = Object.assign(new EventEmitter(), {
-        shell: vi.fn((cb: any) => cb(null, stream2)),
+        shell: vi.fn((_opts: any, cb: any) => cb(null,stream2)),
         end: vi.fn(() => client2.emit('close')),
       });
       const s1 = new PersistentSession('s1', 'h', 'u', 'interactive', client1 as any, 22, 'normal', 600000);
@@ -705,6 +847,12 @@ describe('Manager-level postconditions', () => {
       expect((manager as any).sessions.size).toBe(0);
       expect((manager as any).connections.size).toBe(0);
       expect(manager.listSessions()).toEqual([]);
+      // Both sessions must actually be closed, not just removed
+      // from the manager map (test-quality cycle 2 finding-3 — a
+      // regression that just cleared the map would otherwise leave
+      // active sessions leaking keep-alive timers + SSH channels).
+      expect(s1.getSessionInfo().isActive).toBe(false);
+      expect(s2.getSessionInfo().isActive).toBe(false);
     } finally {
       vi.useRealTimers();
     }
@@ -725,7 +873,7 @@ describe('Manager-level postconditions', () => {
         stderr: new EventEmitter(),
       });
       const client = Object.assign(new EventEmitter(), {
-        shell: vi.fn((cb: any) => cb(null, stream)),
+        shell: vi.fn((_opts: any, cb: any) => cb(null,stream)),
         end: vi.fn(() => client.emit('close')),
       });
       const sessionA = new PersistentSession('a', 'h', 'u', 'interactive', client as any, 22, 'normal', 600000);
@@ -780,7 +928,7 @@ describe('Manager-level postconditions', () => {
         stderr: new EventEmitter(),
       });
       const client = Object.assign(new EventEmitter(), {
-        shell: vi.fn((cb: any) => cb(null, stream)),
+        shell: vi.fn((_opts: any, cb: any) => cb(null,stream)),
       });
       const sessionA = new PersistentSession('a', 'h', 'u', 'interactive', client as any, 22, 'normal', 600000);
       const initP = sessionA.initialize();
@@ -818,7 +966,7 @@ describe('Contract guards (event ordering & concurrency)', () => {
         end: vi.fn(() => mockStream.emit('close')),
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       const session = new PersistentSession(
         'race', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
       );
@@ -852,7 +1000,7 @@ describe('Contract guards (event ordering & concurrency)', () => {
         end: vi.fn(() => mockStream.emit('close')),
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       const session = new PersistentSession(
         'happy', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
       );
@@ -882,7 +1030,7 @@ describe('Contract guards (event ordering & concurrency)', () => {
         end: vi.fn(),
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       const session = new PersistentSession(
         'unsolicited', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
       );
@@ -917,7 +1065,7 @@ describe('Contract guards (event ordering & concurrency)', () => {
         write: vi.fn(), end: vi.fn(), stderr: new EventEmitter(),
       });
       const clientA = Object.assign(new EventEmitter(), {
-        shell: vi.fn((cb: any) => cb(null, streamA)),
+        shell: vi.fn((_opts: any, cb: any) => cb(null,streamA)),
       });
 
       // Stub getConnection so both concurrent calls would otherwise resolve
@@ -985,7 +1133,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
         end: vi.fn(),
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       const session = new PersistentSession(
         'init-die', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
       );
@@ -1010,7 +1158,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
         end: vi.fn(),
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       const session = new PersistentSession(
         'init-err', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
       );
@@ -1040,7 +1188,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
         end: vi.fn(),
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       const session = new PersistentSession(
         'latch', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
       );
@@ -1077,7 +1225,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
         end: vi.fn(),
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       const session = new PersistentSession(
         'error-emit', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
       );
@@ -1126,7 +1274,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
         end: vi.fn(),  // DOES NOT emit 'close' — simulates a stuck stream
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       (manager as any).getConnection = vi.fn().mockResolvedValue(mockClient);
 
       const createP = manager.createSession('timer-test', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
@@ -1158,7 +1306,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
         end: vi.fn(() => mockStream.emit('close')),
         stderr: new EventEmitter(),
       });
-      const mockClient = { shell: vi.fn((cb: any) => cb(null, mockStream)) } as any;
+      const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
 
       // Make getConnection slow enough to overlap with disconnectAll.
       let releaseGetConn: (client: Client) => void;

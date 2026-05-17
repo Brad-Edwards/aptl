@@ -13,6 +13,38 @@
 
 export const REDACTED = '[REDACTED]';
 
+// OBS-003 experimenter opt-out. The toggle is NOT consulted by the
+// shared `redact()` primitive — that would disable redaction at
+// every serialization boundary in the project (OTel/Tempo spans
+// in `traceToolCall`, stderr OCSF lines, snapshot DTOs, CLI/API
+// JSON), giving any lab/observability user with Tempo/Grafana
+// access the ability to read raw control-plane secrets the moment
+// an experimenter flips the env var (codex pre-push cycle 3
+// finding-9). Instead, the toggle is consulted ONLY by the local
+// per-run capture sink wrappers (`mcp-red/src/capture.ts`
+// `captureToolCall`, `mcp-red/src/logger.ts` `localOcsfJsonlSink`,
+// and any future experimental sink that explicitly opts in via
+// the documented `experimentNoRedactActive()` helper). See ADR-033's
+// "Secret-handling" Security Layers entry for the boundary contract.
+const EXPERIMENT_NO_REDACT_ENV = 'APTL_EXPERIMENT_NO_REDACT';
+const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
+
+/**
+ * Public accessor for the OBS-003 experimenter opt-out env var.
+ * Returns true only when `APTL_EXPERIMENT_NO_REDACT` is set to a
+ * truthy value (`1`/`true`/`yes`/`on`, case-insensitive). Any other
+ * value (including `0`, `false`, empty, or unset) returns false
+ * (redaction-on default). This is the only sanctioned consumer of
+ * the toggle — call it from a local per-run capture sink BEFORE
+ * invoking `redact()`, and skip the redact call when it returns
+ * true. Do NOT add a guard inside `redact()` itself.
+ */
+export function experimentNoRedactActive(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env[EXPERIMENT_NO_REDACT_ENV];
+  if (raw === undefined) return false;
+  return TRUTHY.has(raw.trim().toLowerCase());
+}
+
 // `pass` subsumes password/passwd/passphrase; `session` covers replayable
 // session identifiers (Wazuh session_id, etc.). False-positive matches on
 // unrelated tokens like `passport` are an acceptable cost — the ADR-012
@@ -495,6 +527,18 @@ const NTLM_HASH_ATTACHED_DQUOTE = /(^|\s|\|)-H("(?:[^"\\]|\\.)*")/g;
 const NTLM_HASH_ATTACHED_SQUOTE = /(^|\s|\|)-H('(?:[^'\\]|\\.)*')/g;
 const NTLM_HASH_ATTACHED_UNQUOTED = /(^|\s|\|)-H([^\s='"](?:\\.|[^\s'"\\])*)/g;
 
+// Impacket's documented short form is `-hashes [<LM>]:<NT>` (single
+// dash, full word; long form `--hashes` is also valid). Without
+// these patterns a command like
+// `psexec.py alice@dc -hashes :8846f7eaee8fb117` leaked the NT hash
+// through redaction. Scoped to impacket tool segments only via
+// HASH_TOOLS_RE to avoid over-redacting unrelated `--hashes` flags.
+// Test-quality review cycle 1 finding-1 surfaced the missing
+// assertion that exposed this pre-existing bug.
+const NTLM_HASHES_DQUOTE = /(^|\s|\|)(--?hashes)(\s+|=)("(?:[^"\\]|\\.)*")/g;
+const NTLM_HASHES_SQUOTE = /(^|\s|\|)(--?hashes)(\s+|=)('(?:[^'\\]|\\.)*')/g;
+const NTLM_HASHES_UNQUOTED = /(^|\s|\|)(--?hashes)(\s+|=)((?:\\.|[^\s'"\\])+)/g;
+
 const HASH_TOOLS_RE = /(^|[\s|;&])(?:[\w./-]+\/)?(crackmapexec|cme|nxc|psexec\.py|smbexec\.py|wmiexec\.py|secretsdump\.py|impacket-[\w-]+|evil-winrm)(?:\s|$)/i;
 
 function segmentHasHashTool(segment: string): boolean {
@@ -517,6 +561,18 @@ export function redactNtlmHashFlag(command: string): string {
       const offset = args[3] as number;
       return inSeg(offset) ? `${lead}-H ${REDACTED}` : match;
     };
+  // `-hashes`/`--hashes` (full-word impacket form). Preserves the
+  // flag literal (`m[2]` is `-hashes` or `--hashes`) and only masks
+  // the value (m[4]).
+  const makeReplaceHashes = (inSeg: (offset: number) => boolean) =>
+    (...args: unknown[]): string => {
+      const match = args[0] as string;
+      const lead = args[1] as string;
+      const flag = args[2] as string;
+      const sep = args[3] as string;
+      const offset = args[5] as number;
+      return inSeg(offset) ? `${lead}${flag}${sep}${REDACTED}` : match;
+    };
   return segmentAwareReplace(command, segmentHasHashTool, [
     [NTLM_HASH_DQUOTE, makeReplaceSpaced],
     [NTLM_HASH_SQUOTE, makeReplaceSpaced],
@@ -524,6 +580,9 @@ export function redactNtlmHashFlag(command: string): string {
     [NTLM_HASH_ATTACHED_DQUOTE, makeReplaceAttached],
     [NTLM_HASH_ATTACHED_SQUOTE, makeReplaceAttached],
     [NTLM_HASH_ATTACHED_UNQUOTED, makeReplaceAttached],
+    [NTLM_HASHES_DQUOTE, makeReplaceHashes],
+    [NTLM_HASHES_SQUOTE, makeReplaceHashes],
+    [NTLM_HASHES_UNQUOTED, makeReplaceHashes],
   ]);
 }
 
@@ -872,6 +931,13 @@ function redactArray(items: unknown[]): unknown[] {
  * Pure: never mutates the input.
  */
 export function redact(value: unknown): unknown {
+  // Does NOT consult `APTL_EXPERIMENT_NO_REDACT` (codex pre-push
+  // cycle 3 finding-9). The experiment toggle is scoped to the
+  // local per-run capture sinks only; callers that want
+  // experimental-record semantics check `experimentNoRedactActive()`
+  // themselves before invoking `redact`. This keeps OTel/Tempo,
+  // runstore, snapshot, and stderr boundaries redacted at all
+  // times regardless of the toggle.
   if (Array.isArray(value)) {
     return redactArray(value);
   }

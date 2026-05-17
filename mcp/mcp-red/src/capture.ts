@@ -2,12 +2,20 @@
  * Research-grade raw tool-call capture.
  *
  * Companion to the OCSF logger. Where `logger.ts` builds an enriched,
- * structured-but-lossy SIEM event, this module appends a minimal
- * (but redacted) record of every tool call to a JSONL file under
- * `<APTL_STATE_DIR>/red-tool-calls.jsonl`. Researchers can re-parse
- * the captured stream with their own logic in pandas/notebooks; the
- * raw command, args, and result text are preserved (modulo
- * credential redaction via the shared `redact()` helper).
+ * structured OCSF event, this module appends a minimal (but redacted)
+ * record of every tool call to a JSONL file under the per-run mcp-side
+ * directory (OBS-003): `<state_dir>/runs/<trace_id>/mcp-side/tool-calls.jsonl`.
+ *
+ * Researchers can re-parse the captured stream with their own logic;
+ * the raw command, args, and result text are preserved (modulo
+ * credential redaction via the shared `redact()` helper, with an
+ * experimenter-side opt-out via `APTL_EXPERIMENT_NO_REDACT=1`).
+ *
+ * When no scenario context is active (no `trace-context.json` in the
+ * state dir), capture falls back to the `_unbound` sentinel
+ * (`<state_dir>/runs/_unbound/mcp-side/tool-calls.jsonl`) so MCP
+ * invocations outside a scenario don't silently drop their record
+ * — the sentinel makes the "no active scenario" condition visible.
  *
  * Best-effort: I/O errors never propagate to the caller. The capture
  * sink is async-safe so it composes with the `postToolHook` timeout
@@ -16,22 +24,62 @@
 
 import { appendFile, chmod, mkdir, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { redact } from 'aptl-mcp-common';
-
-const DEFAULT_FILE_NAME = 'red-tool-calls.jsonl';
+import {
+  redact,
+  mcpSideDir,
+  resolveActiveRunDir,
+  experimentNoRedactActive,
+} from 'aptl-mcp-common';
 
 /**
- * Resolve the path to the capture file. Honours `APTL_STATE_DIR`
- * (the same env var used by `loadParentContext` in common's telemetry)
- * so the capture lands next to other run artifacts. Override with
- * `APTL_RED_CAPTURE_PATH` if a different location is needed (e.g. a
- * bind-mount into the wazuh-manager container for SIEM ingestion).
+ * OBS-003 / cycle 3 finding-9: experimental opt-out applied at the
+ * local per-run sink only. Returns the value untouched when the
+ * experimenter has explicitly set `APTL_EXPERIMENT_NO_REDACT=1`;
+ * otherwise routes through the shared `redact()` boundary.
+ */
+function experimentalRedact(value: unknown, env: NodeJS.ProcessEnv): unknown {
+  if (experimentNoRedactActive(env)) return value;
+  return redact(value);
+}
+
+const TOOL_CALLS_FILE = 'tool-calls.jsonl';
+const OCSF_FILE = 'ocsf.jsonl';
+const UNBOUND_SENTINEL = '_unbound';
+
+function resolveMcpSideDir(env: NodeJS.ProcessEnv): string {
+  const stateDir = env.APTL_STATE_DIR ?? '.aptl';
+  const active = resolveActiveRunDir(env);
+  if (active) {
+    // `<state>/runs/<trace_id>` -> `.../mcp-side`
+    return resolve(active, 'mcp-side');
+  }
+  return mcpSideDir(stateDir, UNBOUND_SENTINEL);
+}
+
+/**
+ * Resolve the per-run tool-call capture file. Routes by active trace
+ * context to the per-run mcp-side directory, falling back to the
+ * `_unbound` sentinel when no scenario is active.
+ *
+ * The pre-OBS-003 `APTL_RED_CAPTURE_PATH` env-var override (an
+ * escape hatch originally intended for bind-mounting captures into
+ * a SIEM ingester) was removed under ADR-033: no red→SIEM pipe is
+ * allowed (codex pre-push cycle 1 finding-8 also surfaced that the
+ * override only applied to tool-calls and would split records from
+ * OCSF if used).
  */
 export function captureFilePath(env: NodeJS.ProcessEnv = process.env): string {
-  const explicit = env.APTL_RED_CAPTURE_PATH;
-  if (explicit) return resolve(explicit);
-  const stateDir = env.APTL_STATE_DIR ?? '.aptl';
-  return resolve(stateDir, DEFAULT_FILE_NAME);
+  return resolve(resolveMcpSideDir(env), TOOL_CALLS_FILE);
+}
+
+/**
+ * Resolve the per-run OCSF JSONL path. Same routing as
+ * `captureFilePath` — both flow through `resolveMcpSideDir` so the
+ * tool-call and OCSF records can never disagree about which run
+ * they belong to (codex finding-8).
+ */
+export function ocsfFilePath(env: NodeJS.ProcessEnv = process.env): string {
+  return resolve(resolveMcpSideDir(env), OCSF_FILE);
 }
 
 export interface ToolCallCaptureRecord {
@@ -76,11 +124,16 @@ export function buildCaptureRecord(
   ctx: CaptureContext,
   env: NodeJS.ProcessEnv = process.env,
 ): ToolCallCaptureRecord {
+  // OBS-003: this is one of two sanctioned `APTL_EXPERIMENT_NO_REDACT`
+  // sinks (the other is `localOcsfJsonlSink` in logger.ts). The
+  // experimental record can preserve credentials/secrets verbatim
+  // here without affecting OTel/stderr/runstore boundaries. See
+  // `experimentNoRedactActive` in aptl-mcp-common/redaction.ts.
   const record: ToolCallCaptureRecord = {
     time: Date.now(),
     tool_name: ctx.toolName,
     agent_name: ctx.agentName,
-    args: redact(ctx.args),
+    args: experimentalRedact(ctx.args, env),
     duration_ms: ctx.durationMs,
   };
   if (ctx.sessionId) record.session_id = ctx.sessionId;
@@ -88,13 +141,13 @@ export function buildCaptureRecord(
   if (ctx.signal) record.signal = ctx.signal;
   if (typeof ctx.success === 'boolean') record.success = ctx.success;
   if (ctx.error) {
-    record.error = String(redact(ctx.error.message ?? String(ctx.error)));
+    record.error = String(experimentalRedact(ctx.error.message ?? String(ctx.error), env));
   } else if (ctx.result !== undefined && shouldIncludeResult(env)) {
     // Tool stdout/stderr can contain unlabelled credentials (mimikatz
     // dumps, hashcat cracks, file reads) that the shared redactor
     // cannot reliably mask. Capturing them by default would turn the
     // research file into a credential store. Opt-in only.
-    record.result = redact(ctx.result);
+    record.result = experimentalRedact(ctx.result, env);
   }
   return record;
 }

@@ -172,29 +172,37 @@ Two channels run in parallel from the same `postToolHook`:
 
 2. **Research-grade raw capture** (`capture.ts`) — every tool call
    (not just command tools) is appended as a JSONL record to
-   `<APTL_STATE_DIR>/red-tool-calls.jsonl`. The capture is intentionally
-   minimal: timestamp, tool name, redacted args, redacted result/error,
-   exit_code, signal, duration. Researchers can re-parse this stream
-   with their own logic in pandas/notebooks; the parser's classification
+   `<APTL_STATE_DIR>/runs/<run_id>/mcp-side/tool-calls.jsonl` (per-run
+   scope; falls back to the `_unbound` sentinel when no scenario is
+   active). The capture is intentionally minimal: timestamp, tool
+   name, redacted args, redacted result/error, exit_code, signal,
+   duration, session_id. Researchers can re-parse this stream with
+   their own logic in pandas/notebooks; the parser's classification
    choices are not load-bearing for analysis.
 
-   Override the destination via `APTL_RED_CAPTURE_PATH` (e.g. a path
-   bind-mounted into the wazuh-manager container for SIEM ingestion).
+   The legacy `APTL_RED_CAPTURE_PATH` env-var override was removed
+   under ADR-033 (OBS-003 non-contamination) — its only purpose was
+   bind-mounting into the wazuh-manager container for SIEM ingestion,
+   which the non-contamination principle forbids.
 
-Per ADR-027, this PR does **not** wire the records into Wazuh / OpenSearch
-ingestion. The existing `kali_redteam` syslog ingestion path
-(`config/wazuh_cluster/kali_redteam_rules.xml`) remains in place and is
-not modified — the OCSF channel is additive until coverage parity is
-proven.
+Per ADR-027 *as amended by ADR-033*, the OCSF records are NOT
+shipped to Wazuh / OpenSearch. The legacy `kali_redteam` syslog
+ingestion path is removed: the Kali container no longer ships a
+Wazuh agent, no longer forwards rsyslog to the SIEM, and
+`config/wazuh_cluster/kali_redteam_rules.xml` /
+`kali_decoders.xml` are deleted. OCSF records land in the per-run
+JSONL at `<state>/runs/<run_id>/mcp-side/ocsf.jsonl` alongside the
+tool-call JSONL and the PTY tee, plus a stderr `[OCSF]` line for
+local development visibility.
 
 ## Cross-references
 
-- ADR-027 — boundary, guardrails, and non-goals for this work.
+- ADR-027 — boundary, guardrails, and non-goals for OCSF schema
+  work (amended by ADR-033).
+- ADR-033 — Red-Side Behavioural Capture and Non-Contamination
+  Boundary (supersedes the SIEM-transport portion of ADR-027).
 - `src/aptl/core/detection.py` — `SeverityId` enum (Python source of truth
   for the 0–6 scale).
 - `src/aptl/core/attacks.py` — MITRE technique reference shape.
 - `mcp/aptl-mcp-common/src/redaction.ts` — shared TypeScript redaction
   used by `process.cmd_line` serialization.
-- `config/wazuh_cluster/kali_redteam_rules.xml` — existing Wazuh rules for
-  the legacy `kali_redteam` syslog stream; intentionally **not** coupled
-  to OCSF taxonomy labels (ADR-027 guardrail).

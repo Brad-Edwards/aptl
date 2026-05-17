@@ -147,7 +147,8 @@ defenses:
         - "etc/rules/ad_rules.xml"
         - "etc/rules/database_rules.xml"
         - "etc/rules/suricata_rules.xml"
-        - "etc/rules/kali_redteam_rules.xml"
+        # kali_redteam_rules.xml removed under ADR-033 (OBS-003 non-
+        # contamination): red activity no longer flows into the SIEM.
       key_rules:
         302010: "SQL injection attempt"
         302020: "XSS attempt"

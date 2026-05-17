@@ -3,6 +3,32 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { LabConfig } from '../config.js';
 
+/**
+ * Canonical `session_id` validation schema, shared across every tool
+ * argument that accepts one (OBS-003 / ADR-033 / codex pre-push cycle
+ * 3 finding-4 + finding-10). Matches the Python `_ID_RE` in
+ * `src/aptl/core/runstore.py`, the TS `ID_RE` in
+ * `mcp/aptl-mcp-common/src/runs.ts`, and the shell `valid_id()` in
+ * `containers/kali/scripts/aptl-wrap-shell.sh`. Enforcing the
+ * contract at MCP ingress means downstream layers (PTY tee, Kali
+ * wrapper, harvest) all see the same id — no more split-brain where
+ * each layer applies its own fallback substitution and captures end
+ * up under different paths.
+ *
+ * - `^[A-Za-z0-9_][A-Za-z0-9._-]*$` — letters, digits, `_`, `.`, `-`,
+ *   leading char alphanumeric or `_` (so the `_unbound` sentinel and
+ *   `_invalid` fallback round-trip).
+ * - `..` is explicitly forbidden at the handler precondition layer
+ *   (JSON Schema cannot express "no `..` substring" alone, so the
+ *   handler asserts it).
+ * - Length capped at 128 to keep filesystem paths bounded.
+ */
+const SESSION_ID_SCHEMA = {
+  type: 'string' as const,
+  pattern: '^[A-Za-z0-9_][A-Za-z0-9._-]*$',
+  maxLength: 128,
+};
+
 export function generateToolDefinitions(serverConfig: LabConfig['server']): Tool[] {
   return [
   {
@@ -34,7 +60,7 @@ export function generateToolDefinitions(serverConfig: LabConfig['server']): Tool
       type: 'object',
       properties: {
         session_id: {
-          type: 'string',
+          ...SESSION_ID_SCHEMA,
           description: 'Unique session identifier (optional, auto-generated if not provided)',
         },
         timeout_ms: {
@@ -53,7 +79,7 @@ export function generateToolDefinitions(serverConfig: LabConfig['server']): Tool
       type: 'object',
       properties: {
         session_id: {
-          type: 'string',
+          ...SESSION_ID_SCHEMA,
           description: 'Unique session identifier (optional, auto-generated if not provided)',
         },
         raw: {
@@ -77,7 +103,7 @@ export function generateToolDefinitions(serverConfig: LabConfig['server']): Tool
       type: 'object',
       properties: {
         session_id: {
-          type: 'string',
+          ...SESSION_ID_SCHEMA,
           description: 'Session identifier to execute command in',
         },
         command: {
@@ -113,7 +139,7 @@ export function generateToolDefinitions(serverConfig: LabConfig['server']): Tool
       type: 'object',
       properties: {
         session_id: {
-          type: 'string',
+          ...SESSION_ID_SCHEMA,
           description: 'Session identifier to close',
         },
       },
@@ -127,7 +153,7 @@ export function generateToolDefinitions(serverConfig: LabConfig['server']): Tool
       type: 'object',
       properties: {
         session_id: {
-          type: 'string',
+          ...SESSION_ID_SCHEMA,
           description: 'Session identifier to get output from',
         },
         lines: {

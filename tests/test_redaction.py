@@ -711,3 +711,56 @@ class TestArgvShortFlagRedaction:
         out = redact({"args": ["hydra", "-p", "hunter2", "host", "ssh"], "rc": 0})
         assert out["args"] == ["hydra", "-p", REDACTED, "host", "ssh"]
         assert out["rc"] == 0
+
+
+class TestExperimentNoRedactToggle:
+    """``APTL_EXPERIMENT_NO_REDACT`` does NOT affect the shared
+    :func:`redact` primitive (codex pre-push cycle 3 finding-9 —
+    routing it through ``redact()`` would disable OTel/Tempo, runstore,
+    stderr, snapshot, and CLI redaction). The toggle is consulted
+    ONLY via the public :func:`experiment_no_redact_active` accessor,
+    and only by the local per-run capture sink wrappers (e.g.
+    ``mcp-red/src/capture.ts buildCaptureRecord``).
+    """
+
+    def test_redact_always_redacts_regardless_of_toggle(self, monkeypatch):
+        from aptl.utils.redaction import experiment_no_redact_active
+
+        # Toggle on → accessor reports True, but ``redact`` itself
+        # stays redact-on (this is the critical invariant).
+        monkeypatch.setenv("APTL_EXPERIMENT_NO_REDACT", "1")
+        assert experiment_no_redact_active() is True
+        assert redact({"password": "hunter2"}) == {"password": REDACTED}
+
+        # Toggle off → accessor reports False, ``redact`` still redact-on.
+        monkeypatch.delenv("APTL_EXPERIMENT_NO_REDACT", raising=False)
+        assert experiment_no_redact_active() is False
+        assert redact({"password": "hunter2"}) == {"password": REDACTED}
+
+    def test_accessor_unset_default_returns_false(self, monkeypatch):
+        from aptl.utils.redaction import experiment_no_redact_active
+
+        monkeypatch.delenv("APTL_EXPERIMENT_NO_REDACT", raising=False)
+        assert experiment_no_redact_active() is False
+
+    @pytest.mark.parametrize("val", ["1", "true", "TRUE", "yes", "Yes", "on", "ON"])
+    def test_accessor_truthy_returns_true(self, monkeypatch, val):
+        from aptl.utils.redaction import experiment_no_redact_active
+
+        monkeypatch.setenv("APTL_EXPERIMENT_NO_REDACT", val)
+        assert experiment_no_redact_active() is True
+
+    @pytest.mark.parametrize("val", ["0", "", "false", "False", "no", "off", "anything"])
+    def test_accessor_falsy_returns_false(self, monkeypatch, val):
+        from aptl.utils.redaction import experiment_no_redact_active
+
+        monkeypatch.setenv("APTL_EXPERIMENT_NO_REDACT", val)
+        assert experiment_no_redact_active() is False
+
+    def test_accessor_is_read_per_call(self, monkeypatch):
+        from aptl.utils.redaction import experiment_no_redact_active
+
+        monkeypatch.setenv("APTL_EXPERIMENT_NO_REDACT", "1")
+        assert experiment_no_redact_active() is True
+        monkeypatch.delenv("APTL_EXPERIMENT_NO_REDACT")
+        assert experiment_no_redact_active() is False

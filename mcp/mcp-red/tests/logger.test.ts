@@ -1,18 +1,32 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 vi.mock('aptl-mcp-common', async () => {
-  const actual = await vi.importActual<typeof import('../../aptl-mcp-common/src/redaction.js')>(
+  const redaction = await vi.importActual<typeof import('../../aptl-mcp-common/src/redaction.js')>(
     '../../aptl-mcp-common/src/redaction.js',
   );
-  return { redact: actual.redact };
+  const runs = await vi.importActual<typeof import('../../aptl-mcp-common/src/runs.js')>(
+    '../../aptl-mcp-common/src/runs.js',
+  );
+  return {
+    redact: redaction.redact,
+    experimentNoRedactActive: redaction.experimentNoRedactActive,
+    resolveActiveRunDir: runs.resolveActiveRunDir,
+    mcpSideDir: runs.mcpSideDir,
+  };
 });
 
 import {
   deriveCommandSuccess,
   logRedTeamCommand,
+  logRedTeamCommandAsync,
   type OcsfRedTeamRecord,
   type SiemSink,
   stderrJsonlSink,
+  localOcsfJsonlSink,
+  defaultRedTeamSinks,
   PRODUCT_NAME,
   PRODUCT_VENDOR,
 } from '../src/logger.js';
@@ -86,8 +100,18 @@ describe('logRedTeamCommand — best-effort guarantee', () => {
     const sink: SiemSink = () => {
       throw new Error('sink exploded');
     };
-    expect(() => logRedTeamCommand('nmap 10.0.0.1', ctx(), sink)).not.toThrow();
+    // Both halves of the contract matter: must not throw, AND must
+    // return the record so callers depending on it (postToolHook,
+    // OTel span enrichment) get a non-null value (test-quality
+    // cycle 2 finding-1 — the prior assertion only covered the
+    // no-throw half).
+    let result: ReturnType<typeof logRedTeamCommand> | undefined;
+    expect(() => {
+      result = logRedTeamCommand('nmap 10.0.0.1', ctx(), sink);
+    }).not.toThrow();
     expect(errorSpy).toHaveBeenCalled();
+    expect(result).not.toBeNull();
+    expect(result?.process?.cmd_line).toBeDefined();
     errorSpy.mockRestore();
   });
 
@@ -456,5 +480,116 @@ describe('logRedTeamCommand — diagnostic envelope', () => {
     logRedTeamCommand('nmap 10.0.0.1', ctx(), (r) => captured.push(r));
     expect(captured[0].aptl?.activity_type).toBe('port_scan');
     expect(captured[0].aptl?.tool).toBe('nmap');
+  });
+});
+
+describe('localOcsfJsonlSink — OBS-003 per-run JSONL', () => {
+  let tmp = '';
+  let env: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'aptl-ocsf-test-'));
+    env = { APTL_STATE_DIR: tmp };
+  });
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('writes one JSONL line per record to ocsfFilePath when scenario active', async () => {
+    const tid = 'a'.repeat(32);
+    writeFileSync(
+      join(tmp, 'trace-context.json'),
+      JSON.stringify({ trace_id: tid, span_id: 'b'.repeat(16), trace_flags: '01' }),
+    );
+
+    const sink = localOcsfJsonlSink(env);
+    const rec = await logRedTeamCommandAsync('nmap 10.0.0.1', ctx(), sink);
+    expect(rec).not.toBeNull();
+
+    const expected = join(tmp, 'runs', tid, 'mcp-side', 'ocsf.jsonl');
+    expect(existsSync(expected)).toBe(true);
+    const content = readFileSync(expected, 'utf-8');
+    const lines = content.trim().split('\n');
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]);
+    expect(parsed.aptl?.tool).toBe('nmap');
+  });
+
+  it('appends successive records (does not overwrite)', async () => {
+    const tid = 'a'.repeat(32);
+    writeFileSync(
+      join(tmp, 'trace-context.json'),
+      JSON.stringify({ trace_id: tid, span_id: 'b'.repeat(16) }),
+    );
+
+    const sink = localOcsfJsonlSink(env);
+    await logRedTeamCommandAsync('nmap 10.0.0.1', ctx(), sink);
+    await logRedTeamCommandAsync('curl http://example/', ctx(), sink);
+
+    const file = join(tmp, 'runs', tid, 'mcp-side', 'ocsf.jsonl');
+    const lines = readFileSync(file, 'utf-8').trim().split('\n');
+    expect(lines).toHaveLength(2);
+  });
+
+  it('falls back to _unbound when no scenario is active', async () => {
+    const sink = localOcsfJsonlSink(env);
+    await logRedTeamCommandAsync('nmap 10.0.0.1', ctx(), sink);
+
+    const expected = join(tmp, 'runs', '_unbound', 'mcp-side', 'ocsf.jsonl');
+    expect(existsSync(expected)).toBe(true);
+  });
+
+  it('best-effort: filesystem error does not throw out of the sink', async () => {
+    // /dev/null exists but is not a directory; routing through
+    // APTL_STATE_DIR puts the per-run/mcp-side path under /dev/null,
+    // and the mkdir-recursive helper rejects with ENOTDIR. The old
+    // `APTL_RED_CAPTURE_PATH` escape hatch was removed under ADR-033
+    // (codex cycle 1 finding-8 / cycle 2 finding-8) so we use the
+    // same APTL_STATE_DIR pattern as the capture test.
+    const sink = localOcsfJsonlSink({ APTL_STATE_DIR: '/dev/null/x' });
+    // logRedTeamCommandAsync swallows sink errors and still returns the
+    // built record, so we just assert no throw escaped.
+    await expect(
+      logRedTeamCommandAsync('nmap 10.0.0.1', ctx(), sink),
+    ).resolves.not.toBeNull();
+  });
+});
+
+describe('defaultRedTeamSinks — composite stderr + JSONL', () => {
+  let tmp = '';
+  let env: NodeJS.ProcessEnv;
+  let stderrSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'aptl-default-sinks-'));
+    env = { APTL_STATE_DIR: tmp };
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+    stderrSpy.mockRestore();
+  });
+
+  it('routes each record to BOTH stderr (for dev) AND the per-run JSONL', async () => {
+    const tid = 'a'.repeat(32);
+    writeFileSync(
+      join(tmp, 'trace-context.json'),
+      JSON.stringify({ trace_id: tid, span_id: 'b'.repeat(16) }),
+    );
+
+    const sink = defaultRedTeamSinks(env);
+    await logRedTeamCommandAsync('nmap 10.0.0.1', ctx(), sink);
+
+    // stderr received an [OCSF]-prefixed line
+    const stderrCalls = stderrSpy.mock.calls.map((c) => String(c[0]));
+    expect(stderrCalls.some((line) => line.startsWith('[OCSF] '))).toBe(true);
+
+    // JSONL file has one line
+    const expected = join(tmp, 'runs', tid, 'mcp-side', 'ocsf.jsonl');
+    expect(existsSync(expected)).toBe(true);
+    const lines = readFileSync(expected, 'utf-8').trim().split('\n');
+    expect(lines).toHaveLength(1);
   });
 });

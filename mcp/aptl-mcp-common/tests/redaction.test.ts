@@ -4,13 +4,14 @@
  * suite so artifacts emitted from either language match shape.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import {
   redact,
   REDACTED,
   redactShortPasswordFlag,
   redactBasicAuthUser,
+  experimentNoRedactActive,
 } from '../src/redaction.js';
 
 describe('redact - sensitive scalars', () => {
@@ -495,7 +496,14 @@ describe('redactNtlmHashFlag — credential-tool -H redaction (pre-emptive cycle
     // alongside a known tool segment must redact.
     const ncxOut = String(redact('impacket-secretsdump alice@dc.example -H aad3b435:8846f7eaee'));
     expect(ncxOut).not.toContain('aad3b435');
-    expect(out).toBeDefined();
+    // The previous `expect(out).toBeDefined()` was a vacuous
+    // assertion (`String(...)` is always defined) — test-quality
+    // review cycle 1 finding-1. Assert that the actual hash is
+    // gone AND the non-sensitive context is preserved (catches
+    // both under-redaction and over-redaction regressions).
+    expect(out).not.toContain('8846f7eaee8fb117');
+    expect(out).toContain('alice');
+    expect(out).toContain('dc.example');
   });
 
   it('redacts ldapsearch -w <password> (LDAP simple bind, cycle-11 security)', () => {
@@ -754,5 +762,65 @@ describe('argv array short-flag redaction (cycle-3 finding 2)', () => {
   it('argv inside a dict is redacted recursively', () => {
     const out = redact({ args: ['hydra', '-p', 'hunter2', 'host', 'ssh'], rc: 0 });
     expect(out).toEqual({ args: ['hydra', '-p', REDACTED, 'host', 'ssh'], rc: 0 });
+  });
+});
+
+describe('APTL_EXPERIMENT_NO_REDACT scoped opt-out (cycle 3 finding-9)', () => {
+  // The toggle is a PUBLIC accessor only; it does NOT change
+  // `redact()` behaviour. Wiring it through `redact()` would disable
+  // OTel/Tempo, runstore, stderr, snapshot, and CLI redaction. Only
+  // local per-run capture sink wrappers (`capture.ts` /
+  // `localOcsfJsonlSink`) consult the accessor before deciding
+  // whether to call `redact()`.
+
+  const ENV_KEY = 'APTL_EXPERIMENT_NO_REDACT';
+  let saved: string | undefined;
+
+  beforeEach(() => {
+    saved = process.env[ENV_KEY];
+    delete process.env[ENV_KEY];
+  });
+
+  afterEach(() => {
+    if (saved === undefined) {
+      delete process.env[ENV_KEY];
+    } else {
+      process.env[ENV_KEY] = saved;
+    }
+  });
+
+  it('redact() always redacts regardless of toggle (critical invariant)', () => {
+    process.env[ENV_KEY] = '1';
+    expect(experimentNoRedactActive()).toBe(true);
+    expect(redact({ password: 'hunter2' })).toEqual({ password: REDACTED });
+    delete process.env[ENV_KEY];
+    expect(experimentNoRedactActive()).toBe(false);
+    expect(redact({ password: 'hunter2' })).toEqual({ password: REDACTED });
+  });
+
+  it('accessor unset (default) returns false', () => {
+    expect(experimentNoRedactActive()).toBe(false);
+  });
+
+  it.each(['1', 'true', 'TRUE', 'yes', 'Yes', 'on', 'ON'])(
+    'accessor truthy value %s returns true',
+    (val) => {
+      process.env[ENV_KEY] = val;
+      expect(experimentNoRedactActive()).toBe(true);
+    }
+  );
+
+  it.each(['0', '', 'false', 'False', 'no', 'off', 'anything'])(
+    'accessor falsy value %s returns false (fails closed)',
+    (val) => {
+      process.env[ENV_KEY] = val;
+      expect(experimentNoRedactActive()).toBe(false);
+    }
+  );
+
+  it('accessor honours an explicit env override (does not read process.env when env passed)', () => {
+    process.env[ENV_KEY] = '1';
+    expect(experimentNoRedactActive({})).toBe(false);
+    expect(experimentNoRedactActive({ [ENV_KEY]: '1' })).toBe(true);
   });
 });

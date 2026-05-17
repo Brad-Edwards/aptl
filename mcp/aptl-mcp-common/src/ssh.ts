@@ -3,6 +3,30 @@ import { Client, ClientChannel } from 'ssh2';
 import { readFile } from 'fs/promises';
 import { EventEmitter } from 'events';
 import { ShellFormatter, ShellType, createShellFormatter } from './shells.js';
+import { createPtyTeeWriter, loadActiveTraceId, type PtyChunkDirection } from './runs.js';
+
+/**
+ * OBS-003: env vars passed to the SSH shell via `SendEnv`/`shell({env})`
+ * so anything captured on the Kali side (auditd events, shell typescript,
+ * pcaps) can be joined back to the MCP-side scenario run by
+ * timestamp + APTL_SESSION_ID. The Kali sshd_config must list
+ * `AcceptEnv APTL_*` for these to actually arrive in the shell.
+ *
+ * - `APTL_RUN_ID`: scenario run identifier (mirrors `trace_id` so it
+ *   joins both MCP-side and OTel-side captures).
+ * - `APTL_TRACE_ID`: same value, kept as an explicit alias for future
+ *   OTel context propagation into the Kali shell.
+ * - `APTL_SESSION_ID`: the MCP-level SSH session id.
+ */
+function aptlShellEnv(sessionId: string, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  const result: Record<string, string> = { APTL_SESSION_ID: sessionId };
+  const tid = loadActiveTraceId(env);
+  if (tid) {
+    result.APTL_RUN_ID = tid;
+    result.APTL_TRACE_ID = tid;
+  }
+  return result;
+}
 
 // Contract helpers. Internal to this module; intentionally not exported.
 // `require_` guards caller-facing preconditions and preserves the existing
@@ -115,6 +139,26 @@ export class PersistentSession extends EventEmitter {
   private cleanupVerified = false;
   private closedEmitted = false;
 
+  // Stored alongside the formatter so it's externally inspectable
+  // (test-quality review cycle 1 finding-2/3/4 — the shellType
+  // constructor parameter was previously consumed into the
+  // formatter only, so a regression that ignored it could not be
+  // detected by inspecting the session).
+  private shellType: ShellType;
+
+  // OBS-003: per-session PTY tee — writes every byte received from
+  // the SSH PTY into a per-run JSONL independent of which tool-call
+  // response eventually drains the bytes from `outputBuffer`. Lazily
+  // built in `initialize()` so the writer's filesystem resolution
+  // can read the trace context at the moment the session opens.
+  private ptyTee: import('./runs.js').PtyTeeWriter | null = null;
+  // OBS-003: trace id captured at session open. The Kali wrapper's
+  // SendEnv-supplied `APTL_RUN_ID` pins the per-session capture
+  // directory under THIS trace id, even if the scenario is later
+  // cleared or rotated. The MCP-side harvest reads this rather than
+  // the ambient trace context (codex pre-push cycle 3 finding-6).
+  private boundRunId: string | undefined;
+
   private sessionTimeoutMs: number;
 
   private clearCommandTimeout(): void {
@@ -139,6 +183,7 @@ export class PersistentSession extends EventEmitter {
     this.client = client;
     this.sessionTimeoutMs = timeoutMs;
     this.commandDelimiter = `___CMD_${Date.now()}_${Math.random().toString(36).substring(2, 11)}___`;
+    this.shellType = shellType;
     this.shellFormatter = createShellFormatter(shellType);
 
     this.sessionInfo = {
@@ -177,7 +222,19 @@ export class PersistentSession extends EventEmitter {
         reject(err);
       };
 
-      this.client.shell((err, stream) => {
+      // OBS-003: propagate scenario run + session IDs to the Kali shell via
+      // `env`. The Kali sshd_config must `AcceptEnv APTL_*` for these to
+      // land (handled in containers/kali/Dockerfile). Build the PTY tee
+      // up-front so every byte arriving on the shell stream is captured,
+      // independent of which tool call eventually drains the buffer.
+      // Capture the bound run id so a later harvest uses the trace id
+      // that was active at session open, not whatever is active at close
+      // time (codex pre-push cycle 3 finding-6).
+      const shellEnv = aptlShellEnv(this.sessionInfo.sessionId);
+      this.boundRunId = shellEnv.APTL_RUN_ID;
+      this.ptyTee = createPtyTeeWriter(this.sessionInfo.sessionId);
+
+      this.client.shell({ env: shellEnv }, (err, stream) => {
         if (err) {
           settleReject(new SSHError(`Failed to create shell: ${err.message}`, err));
           return;
@@ -188,10 +245,12 @@ export class PersistentSession extends EventEmitter {
         this.isInitialized = true;
 
         stream.on('data', (data: Buffer) => {
+          this.ptyTee?.('out', data);
           this.handleShellOutput(data.toString());
         });
 
         stream.stderr.on('data', (data: Buffer) => {
+          this.ptyTee?.('err', data);
           this.handleShellOutput(data.toString());
         });
 
@@ -426,6 +485,42 @@ export class PersistentSession extends EventEmitter {
     };
   }
 
+  /**
+   * OBS-003: the trace_id (`APTL_RUN_ID`) captured at session-open
+   * time. Returned `undefined` if no scenario was active when the
+   * session opened. The manager's harvest path passes this to
+   * `harvestSession({ runId })` so a scenario rotation during a
+   * long-running session does not redirect the harvest to a different
+   * run dir (codex pre-push cycle 3 finding-6).
+   */
+  getBoundRunId(): string | undefined {
+    return this.boundRunId;
+  }
+
+  /**
+   * OBS-003 testing aid: resolve when the per-session PTY tee has
+   * flushed every chunk handed to it so far (or it failed and was
+   * logged). Production code does NOT call this — the tee is
+   * fires-and-logs by design. Tests use it instead of a
+   * `setTimeout` race (test-quality review cycle 1 finding-6).
+   */
+  async flushPtyTee(): Promise<void> {
+    if (this.ptyTee) {
+      await this.ptyTee.flush();
+    }
+  }
+
+  /**
+   * The shell type that was passed to the constructor (and that
+   * `createShellFormatter` was called with). Exposed for tests that
+   * assert the type round-trips through the session (test-quality
+   * review cycle 1 finding-2/3/4 — vacuous assertions could not
+   * have caught a regression that ignored the constructor arg).
+   */
+  getShellType(): ShellType {
+    return this.shellType;
+  }
+
   getBufferedOutput(lines?: number, clear: boolean = false): string[] {
     const result = lines ? this.outputBuffer.slice(-lines) : [...this.outputBuffer];
     if (clear) {
@@ -556,7 +651,16 @@ export class SSHConnectionManager {
   private readonly pendingConnections: Map<string, Promise<Client>> = new Map();
 
   /**
-   * Execute a command on a target host via SSH
+   * Execute a command on a target host via SSH.
+   *
+   * OBS-003 / ADR-033: when `sessionId` is supplied (or generated
+   * internally as `exec-<ts>-<rand>` when absent), the one-shot
+   * exec path now propagates `APTL_SESSION_ID` / `APTL_RUN_ID` /
+   * `APTL_TRACE_ID` via SSH `env` and tees every byte read from
+   * stdout/stderr into the same per-run JSONL the persistent
+   * session path writes (codex pre-push cycle 1 finding-3). The
+   * caller can read back the session id from the returned envelope
+   * so it can trigger a per-exec capture harvest.
    */
   public async executeCommand(
     host: string,
@@ -564,9 +668,15 @@ export class SSHConnectionManager {
     privateKeyPath: string,
     command: string,
     port: number = 22,
-    timeout: number = TIMEOUTS.DEFAULT_COMMAND
-  ): Promise<CommandResult> {
+    timeout: number = TIMEOUTS.DEFAULT_COMMAND,
+    options: { sessionId?: string } = {},
+  ): Promise<CommandResult & { sessionId: string }> {
     const client = await this.getConnection(host, username, privateKeyPath, port);
+    const sessionId =
+      options.sessionId ??
+      `exec-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+    const shellEnv = aptlShellEnv(sessionId);
+    const ptyTee = createPtyTeeWriter(sessionId);
 
     return new Promise((resolve, reject) => {
       let stdout = '';
@@ -578,7 +688,7 @@ export class SSHConnectionManager {
         reject(new SSHError(`Command timeout after ${timeout}ms: ${command}`));
       }, timeout);
 
-      client.exec(command, (err, stream) => {
+      client.exec(command, { env: shellEnv }, (err, stream) => {
         if (err) {
           clearTimeout(timeoutId);
           reject(new SSHError(`Failed to execute command: ${err.message}`, err));
@@ -588,15 +698,17 @@ export class SSHConnectionManager {
         stream.on('close', (code: number | null, signal: string | null) => {
           clearTimeout(timeoutId);
           if (!hasTimedOut) {
-            resolve({ stdout, stderr, code, signal });
+            resolve({ stdout, stderr, code, signal, sessionId });
           }
         });
 
         stream.on('data', (data: Buffer) => {
+          ptyTee('out', data);
           stdout += data.toString();
         });
 
         stream.stderr.on('data', (data: Buffer) => {
+          ptyTee('err', data);
           stderr += data.toString();
         });
 
@@ -774,6 +886,16 @@ export class SSHConnectionManager {
    */
   public getSession(sessionId: string): PersistentSession | undefined {
     return this.sessions.get(sessionId);
+  }
+
+  /**
+   * OBS-003: expose the trace id (`APTL_RUN_ID`) captured at
+   * session-open time so the close-time harvest can pin the
+   * docker-cp source path to that run id, not the ambient one
+   * (codex pre-push cycle 3 finding-6).
+   */
+  public getSessionRunId(sessionId: string): string | undefined {
+    return this.sessions.get(sessionId)?.getBoundRunId();
   }
 
   /**

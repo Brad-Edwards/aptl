@@ -764,17 +764,21 @@ describe('Contract guards (postconditions)', () => {
     }
   });
 
-  it('timer-callback close path swallows postcondition violations and logs', () => {
+  it('timer-callback close path swallows postcondition rejections and logs', async () => {
     // Same defensive contract for the resetSessionTimeout timer callback — an
-    // uncaught throw from setTimeout crashes Node. We stub close() to throw and
-    // verify the timer-callback try/catch catches it.
+    // uncaught rejection from setTimeout crashes Node. After #304, close() is
+    // async so failures always surface as promise rejections; the timer
+    // callback's `void this.close().catch(...)` swallows them. Stub close to
+    // return a rejecting promise and verify the catch handler logs.
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const originalClose = session.close.bind(session);
-    session.close = () => { throw new SSHError('[contract] simulated close failure'); };
+    session.close = async () => {
+      throw new SSHError('[contract] simulated close failure');
+    };
     try {
       // Advance the timer to fire the session-timeout callback.
       // sessionTimeoutMs is 600000 (set in beforeEach).
-      vi.advanceTimersByTime(600000);
+      await vi.advanceTimersByTimeAsync(600000);
 
       const matched = errorSpy.mock.calls.some(call =>
         typeof call[0] === 'string' && call[0].includes('[SSH] session timeout close failed')

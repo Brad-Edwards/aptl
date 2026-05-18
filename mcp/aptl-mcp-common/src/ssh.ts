@@ -581,18 +581,13 @@ export class PersistentSession extends EventEmitter {
 
     this.sessionTimeout = setTimeout(() => {
       this.emit('timeout');
-      // Timer-callback path: close() asserts postconditions synchronously and
-      // would throw on a contract violation, then awaits remote close. An
-      // uncaught throw OR rejection from a setTimeout callback crashes Node,
-      // so we swallow both. The synchronous throw path is preserved via
-      // try/catch; the async-await path uses .catch().
-      try {
-        void this.close().catch((err) => {
-          console.error('[SSH] session timeout close failed:', err);
-        });
-      } catch (err) {
+      // Timer-callback path: close() is async, so every failure path —
+      // including the synchronous postcondition throw — surfaces as a
+      // rejection on the returned promise. Catch that to keep timer
+      // callbacks crash-safe under Node.
+      void this.close().catch((err) => {
         console.error('[SSH] session timeout close failed:', err);
-      }
+      });
     }, this.sessionTimeoutMs);
   }
 
@@ -1110,9 +1105,9 @@ export class SSHConnectionManager {
     const sessionPromises: Array<Promise<TeardownResult>> = Array.from(this.sessions.values()).map(async (session) => {
       try {
         await session.close();
-        return { ok: true } as TeardownResult;
+        return { ok: true as const };
       } catch (err) {
-        return { ok: false, error: err } as TeardownResult;
+        return { ok: false as const, error: err };
       }
     });
 

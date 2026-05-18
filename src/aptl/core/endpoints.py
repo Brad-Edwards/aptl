@@ -39,7 +39,7 @@ _SSH_KEY_PATH = "~/.ssh/aptl_lab_key"
 
 
 @dataclass(frozen=True)
-class EndpointRegistryEntry:
+class EndpointRegistryEntry(object):
     """Stable lab-topology annotation for a single container endpoint.
 
     Two protocol-shaped fields are kept disjoint because they answer
@@ -143,17 +143,20 @@ def _parse_port_entry(entry: str) -> tuple[int, int, str] | None:
     anything we cannot confidently parse. Intentionally narrow — this
     is not a general Compose parser (ADR-036 anti-pattern guard).
     """
-    if "->" not in entry:
-        return None
-    left, right = entry.split("->", 1)
-    # left is "<host_ip>:<host_port>"; right is "<target>/<proto>".
-    if ":" not in left or "/" not in right:
-        return None
-    host_port_str = left.rsplit(":", 1)[1]
-    target_port_str, protocol = right.split("/", 1)
-    if not host_port_str.isdigit() or not target_port_str.isdigit():
-        return None
-    return int(host_port_str), int(target_port_str), protocol.strip()
+    result: tuple[int, int, str] | None = None
+    if "->" in entry:
+        left, right = entry.split("->", 1)
+        # left is "<host_ip>:<host_port>"; right is "<target>/<proto>".
+        if ":" in left and "/" in right:
+            host_port_str = left.rsplit(":", 1)[1]
+            target_port_str, protocol = right.split("/", 1)
+            if host_port_str.isdigit() and target_port_str.isdigit():
+                result = (
+                    int(host_port_str),
+                    int(target_port_str),
+                    protocol.strip(),
+                )
+    return result
 
 
 def parse_host_port(
@@ -178,12 +181,14 @@ def parse_host_port(
 
 
 def _running(container: ContainerSnapshot) -> bool:
+    """True if the container's status string indicates an up-and-running container."""
     return "Up" in container.status
 
 
 def _container_index(
     containers: list[ContainerSnapshot],
 ) -> dict[str, ContainerSnapshot]:
+    """Index the snapshot list by container name for O(1) registry lookups."""
     return {c.name: c for c in containers}
 
 
@@ -199,8 +204,10 @@ def build_service_endpoints(
         container = by_name.get(entry.container_name)
         if container is None or not _running(container):
             continue
-        if entry.url_scheme is None:  # pragma: no cover - registry invariant
-            continue
+        # Registry invariant: kind="service" entries always carry a
+        # url_scheme. The assert documents this for the type checker
+        # without leaving an unreachable defensive branch.
+        assert entry.url_scheme is not None
         host_port = parse_host_port(
             container.ports,
             entry.target_port,
@@ -233,8 +240,10 @@ def build_ssh_endpoints(
         container = by_name.get(entry.container_name)
         if container is None or not _running(container):
             continue
-        if entry.ssh_user is None:  # pragma: no cover - registry invariant
-            continue
+        # Registry invariant: kind="ssh" entries always carry an ssh_user.
+        # The assert documents this for the type checker without leaving
+        # an unreachable defensive branch.
+        assert entry.ssh_user is not None
         host_port = parse_host_port(
             container.ports,
             entry.target_port,

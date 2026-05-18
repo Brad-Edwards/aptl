@@ -14,6 +14,7 @@
 import { startServer, type PostToolHookInfo } from 'aptl-mcp-common';
 import { captureToolCall, type CaptureContext } from './capture.js';
 import { topLevelSegments } from './classifier.js';
+import { isEffectiveRawCall, isOutcomeKnown } from './effective-mode.js';
 import {
   defaultRedTeamSinks,
   deriveCommandOutcome,
@@ -126,9 +127,15 @@ const ocsfSink = defaultRedTeamSinks();
 async function postToolHook(info: PostToolHookInfo): Promise<void> {
   const { toolName, args, durationMs } = info;
   const sessionId = extractSessionId(info);
-  const isRawSessionCommand = (args as { raw?: boolean }).raw === true;
+  // #282: read effective raw mode from the result envelope (which captures
+  // the inherited-raw case), not from args.raw alone. The helper falls
+  // back to args.raw for compatibility with older common builds.
+  const isRawSessionCommand = isEffectiveRawCall(info);
   const outcome = deriveCommandOutcome(info.result, info.error);
-  const outcomeKnown = !isRawSessionCommand && outcome.success !== null;
+  // Raw-mode Unknown ONLY suppresses the transport exit_code: 0 artifact.
+  // Handler-level KNOWN failures (errors, success:false envelopes) stay
+  // known so OCSF emits Failure, not Unknown. Codex review cycle 2 / D-001.
+  const outcomeKnown = isOutcomeKnown(info.error !== undefined, outcome.success, isRawSessionCommand);
 
   const captureTask = captureToolCall(captureContextFor(info, outcome, outcomeKnown));
 

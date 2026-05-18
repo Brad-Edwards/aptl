@@ -251,6 +251,57 @@ describe('close_session / close_all_sessions harvest behaviour', () => {
     expect(body.message).toContain('not found');
   });
 
+  it("session_command envelope carries session_mode reflecting effective mode (#282)", async () => {
+    const handlers = generateToolHandlers({
+      toolPrefix: 'test',
+      targetName: 'Test',
+      configKey: 'test-container',
+    });
+    // Session created raw, command without raw override → effective raw.
+    // The fake manager returns the CommandResult shape the real
+    // PersistentSession would produce.
+    const sshManager = {
+      executeInSession: vi.fn(async () => ({
+        stdout: 'msf6 >',
+        stderr: '',
+        code: 0,
+        signal: null,
+        mode: 'raw',
+      })),
+    } as any;
+    const result = await handlers['test_session_command'](
+      { session_id: 'inherited-raw', command: 'msfconsole' },
+      { sshManager, labConfig } as any,
+    );
+    const body = JSON.parse(result.content[0].text);
+    expect(body.success).toBe(true);
+    expect(body.session_mode).toBe('raw');
+    expect(body.exit_code).toBe(0);
+  });
+
+  it("session_command envelope reports session_mode='normal' for a normal-mode command", async () => {
+    const handlers = generateToolHandlers({
+      toolPrefix: 'test',
+      targetName: 'Test',
+      configKey: 'test-container',
+    });
+    const sshManager = {
+      executeInSession: vi.fn(async () => ({
+        stdout: 'hi',
+        stderr: '',
+        code: 0,
+        signal: null,
+        mode: 'normal',
+      })),
+    } as any;
+    const result = await handlers['test_session_command'](
+      { session_id: 's1', command: 'echo hi' },
+      { sshManager, labConfig } as any,
+    );
+    const body = JSON.parse(result.content[0].text);
+    expect(body.session_mode).toBe('normal');
+  });
+
   it('close_all_sessions reports session count', async () => {
     const handlers = generateToolHandlers({
       toolPrefix: 'test',

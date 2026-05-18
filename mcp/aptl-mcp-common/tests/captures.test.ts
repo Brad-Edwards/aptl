@@ -32,18 +32,27 @@ interface SpawnControl {
   exitCode: number;
   stderrText: string;
   capturedArgs: string[][];
+  capturedCmds: string[];
   callCount: number;
 }
 const spawnControl: SpawnControl = {
   exitCode: 0,
   stderrText: '',
   capturedArgs: [],
+  capturedCmds: [],
   callCount: 0,
 };
 
 vi.mock('node:child_process', () => ({
-  spawn: (_cmd: string, args: string[]) => {
+  spawn: (cmd: string, args: string[]) => {
     spawnControl.callCount += 1;
+    // Test-quality review cycle 1 T-001/T-002: capture the spawned
+    // binary path so SonarCloud S4036 hardening (the "no PATH lookup"
+    // contract) is actually pinned. Previously the mock discarded
+    // `_cmd`, so both `dockerBin()` regressions (default-vs-override)
+    // and "harvest stopped using docker at all" regressions would
+    // pass vacuously.
+    spawnControl.capturedCmds.push(cmd);
     spawnControl.capturedArgs.push(args);
     const stdout = new EventEmitter();
     const stderr = new EventEmitter();
@@ -72,6 +81,7 @@ beforeEach(() => {
   spawnControl.exitCode = 0;
   spawnControl.stderrText = '';
   spawnControl.capturedArgs = [];
+  spawnControl.capturedCmds = [];
   spawnControl.callCount = 0;
 });
 afterEach(() => {
@@ -172,14 +182,35 @@ describe('harvestSession', () => {
       'sess-1',
     );
 
-    // 3 attempts (per-session + 2 globals), each retried up to 3
-    // times under the retry-with-backoff helper (cycle 2 finding-2).
-    // We don't pin the exact count — the assertion is that the
-    // global attempts happen at all, i.e. > 1 spawn call.
-    expect(spawnControl.callCount).toBeGreaterThan(1);
+    // #304: retry helper removed — remote close is now awaited in
+    // PersistentSession.close before harvest runs, so the 250ms x 3
+    // backoff window is no longer needed. Exactly 3 docker cp calls:
+    // 1 per-session + 2 globals (_audit, _proc-acct), no retries.
+    expect(spawnControl.callCount).toBe(3);
     const globalSrcs = spawnControl.capturedArgs.map((args) => args[1]);
     expect(globalSrcs.some((s) => s.endsWith('_audit/.'))).toBe(true);
     expect(globalSrcs.some((s) => s.endsWith('_proc-acct/.'))).toBe(true);
+  });
+
+  it("#304: per-session docker cp failure invokes spawn exactly once (no retry-with-backoff)", async () => {
+    const tid = 'a'.repeat(32);
+    activateScenario(tid);
+    spawnControl.exitCode = 1;
+    spawnControl.stderrText = 'Error: No such file or directory';
+
+    await harvestSession(
+      { containerName: 'aptl-kali', env: { APTL_STATE_DIR: tmp } },
+      'sess-1',
+    );
+
+    // First call is the per-session attempt; the next two are globals.
+    // With the retry helper removed, the per-session "no such file"
+    // failure is NOT retried — it fails fast and harvest moves on.
+    const perSessionSrc = `aptl-kali:/var/log/aptl/captures/${tid}/sess-1/.`;
+    const perSessionCalls = spawnControl.capturedArgs.filter(
+      (args) => args[1] === perSessionSrc,
+    );
+    expect(perSessionCalls.length).toBe(1);
   });
 
   it('returns false on real docker cp failure but does not throw', async () => {
@@ -267,32 +298,44 @@ describe('captures: docker binary resolution', () => {
     spawnControl.exitCode = 0;
     spawnControl.stderrText = '';
     spawnControl.capturedArgs = [];
+    spawnControl.capturedCmds = [];
   });
 
   it('defaults to /usr/bin/docker (no PATH lookup)', async () => {
-    // Even without APTL_DOCKER_BIN set, spawn target should be the
-    // absolute path so PATH-injection cannot redirect to a hostile
-    // binary (SonarCloud hotspot S4036). We can't directly inspect
-    // the spawned command name in our mock (we capture args, not
-    // the executable), so this test acts as a smoke check that the
-    // harvest path completes with default env.
-    const ok = await harvestSession(
+    // Without APTL_DOCKER_BIN set, the spawned binary must be the
+    // absolute /usr/bin/docker so PATH-injection cannot redirect to
+    // a hostile binary (SonarCloud hotspot S4036). Test-quality
+    // review cycle 1 T-001: the mock now captures the spawned cmd
+    // (previously discarded), so a regression in `dockerBin()` —
+    // e.g., returning plain `'docker'` — fails this test.
+    await harvestSession(
       { containerName: 'aptl-kali', env: { APTL_STATE_DIR: tmp } },
       'sess-bin',
     );
-    expect(typeof ok).toBe('boolean');
     expect(spawnControl.callCount).toBeGreaterThan(0);
+    expect(spawnControl.capturedCmds[0]).toBe('/usr/bin/docker');
+    // Every subsequent spawn (globals harvest) must use the same path.
+    for (const cmd of spawnControl.capturedCmds) {
+      expect(cmd).toBe('/usr/bin/docker');
+    }
   });
 
   it('honours APTL_DOCKER_BIN override', async () => {
-    const ok = await harvestSession(
+    // Test-quality review cycle 1 T-002: previously this test could
+    // not observe whether APTL_DOCKER_BIN was actually consumed —
+    // the mock discarded `_cmd`. With cmd capture in place, a
+    // regression that ignores the env override fails this test.
+    await harvestSession(
       {
         containerName: 'aptl-kali',
         env: { APTL_STATE_DIR: tmp, APTL_DOCKER_BIN: '/opt/docker/bin/docker' },
       },
       'sess-bin',
     );
-    expect(typeof ok).toBe('boolean');
     expect(spawnControl.callCount).toBeGreaterThan(0);
+    expect(spawnControl.capturedCmds[0]).toBe('/opt/docker/bin/docker');
+    for (const cmd of spawnControl.capturedCmds) {
+      expect(cmd).toBe('/opt/docker/bin/docker');
+    }
   });
 });

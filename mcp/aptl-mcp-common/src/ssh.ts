@@ -55,6 +55,12 @@ const TIMEOUTS = {
   KEEP_ALIVE_INTERVAL: 30000,
   FORCE_CLOSE: 3000,
   SESSION_CLOSE: 5000,
+  // #304: close() awaits the SSH stream's remote 'close' event before
+  // returning so harvest does not race the wrapper's EXIT trap. If the
+  // remote never fires close (channel torn down forcibly, ssh2 bug),
+  // we log a [SSH] warning and return anyway — local cleanup is already
+  // verified, so the manager's bookkeeping is unaffected.
+  REMOTE_CLOSE_AWAIT: 3000,
 } as const;
 
 const BUFFER_LIMITS = {
@@ -73,6 +79,13 @@ export interface CommandResult {
   stderr: string;
   code: number | null;
   signal: string | null;
+  /**
+   * Effective execution mode for this command (#282). `raw` carries the
+   * unknown-outcome signal — observability layers (mcp-red OCSF emitter,
+   * tool-call JSONL) consume this rather than guessing from `args.raw`,
+   * which misses inherited-raw sessions whose command omitted the override.
+   */
+  mode: SessionMode;
 }
 
 export class SSHError extends Error {
@@ -139,6 +152,14 @@ export class PersistentSession extends EventEmitter {
   // emit 'close' arbitrarily later. (Codex pre-push cycle 3, ADR-004.)
   private cleanupVerified = false;
   private closedEmitted = false;
+  // #304: latched promise that resolves when the SSH stream's remote
+  // 'close' event fires. close() awaits this before returning so the
+  // post-close harvest does not race the kali wrapper's EXIT trap.
+  // Built once in initialize() and never replaced — re-binding it would
+  // break the "stream-driven close (unsolicited)" path that relies on a
+  // single resolver.
+  private remoteClosed: Promise<void> = Promise.resolve();
+  private resolveRemoteClosed: () => void = () => {};
 
   // Stored alongside the formatter so it's externally inspectable
   // (test-quality review cycle 1 finding-2/3/4 — the shellType
@@ -235,6 +256,12 @@ export class PersistentSession extends EventEmitter {
       this.boundRunId = shellEnv.APTL_RUN_ID;
       this.ptyTee = createPtyTeeWriter(this.sessionInfo.sessionId);
 
+      // #304: rebuild the remote-closed latch for THIS session's shell. A
+      // fresh promise is needed once we have an actual stream so close() can
+      // await the remote shutdown rather than returning the moment the local
+      // cleanup completes.
+      this.remoteClosed = new Promise((res) => { this.resolveRemoteClosed = res; });
+
       this.client.shell({ env: shellEnv }, (err, stream) => {
         if (err) {
           settleReject(new SSHError(`Failed to create shell: ${err.message}`, err));
@@ -257,6 +284,10 @@ export class PersistentSession extends EventEmitter {
 
         stream.on('close', () => {
           this.sessionInfo.isActive = false;
+          // #304: signal the remote-close latch so any in-flight close()
+          // call can return. Idempotent — Promise resolvers ignore second
+          // calls.
+          this.resolveRemoteClosed();
           if (!initSettled) {
             // Shell died before initialize() resolved — reject so the
             // caller does not receive a session that's already gone.
@@ -328,7 +359,10 @@ export class PersistentSession extends EventEmitter {
         stdout: `Command '${command}' queued in background session '${this.sessionInfo.sessionId}'`,
         stderr: '',
         code: 0,
-        signal: null
+        signal: null,
+        // #282: even the immediate-return path carries effective mode so
+        // observability sees the same signal as the eventual completion.
+        mode: request.raw ? 'raw' : 'normal',
       };
     }
 
@@ -379,7 +413,8 @@ export class PersistentSession extends EventEmitter {
               stdout: output,
               stderr: '',
               code: 0, // Unknown in raw mode
-              signal: null
+              signal: null,
+              mode: 'raw',
             });
             this.currentCommand = null;
             this.processNextCommand();
@@ -469,7 +504,8 @@ export class PersistentSession extends EventEmitter {
           stdout: cleanOutput,
           stderr: '',
           code: exitCode,
-          signal: null
+          signal: null,
+          mode: 'normal',
         });
 
         this.currentCommand = null;
@@ -545,29 +581,67 @@ export class PersistentSession extends EventEmitter {
 
     this.sessionTimeout = setTimeout(() => {
       this.emit('timeout');
-      // Timer-callback path: close() asserts postconditions and would throw on
-      // a contract violation. An uncaught throw from a setTimeout callback
-      // crashes Node, so log loud here instead of propagating.
+      // Timer-callback path: close() asserts postconditions synchronously and
+      // would throw on a contract violation, then awaits remote close. An
+      // uncaught throw OR rejection from a setTimeout callback crashes Node,
+      // so we swallow both. The synchronous throw path is preserved via
+      // try/catch; the async-await path uses .catch().
       try {
-        this.close();
+        void this.close().catch((err) => {
+          console.error('[SSH] session timeout close failed:', err);
+        });
       } catch (err) {
         console.error('[SSH] session timeout close failed:', err);
       }
     }, this.sessionTimeoutMs);
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.doCleanup();
     if (this.shell) {
       this.shell.end();
     }
     // Run the postcondition before flipping cleanupVerified so a violation
     // cannot mark the session as cleanly torn down. If assertion throws,
-    // cleanupVerified stays false; emitClosedIfVerified refuses to fire;
-    // the manager catches the throw and routes failure through its reject
-    // path. (Codex pre-push cycle 3 finding-2 + finding-3.)
+    // cleanupVerified stays false; the manager catches the throw and routes
+    // failure through its reject path. (Codex pre-push cycle 3 finding-2 +
+    // finding-3.)
     this.assertCleanupInvariants();
     this.cleanupVerified = true;
+
+    // #304 + codex review (class-finding): emitClosedIfVerified() does NOT
+    // run yet. The 'closed' event's contract is "local cleanup verified AND
+    // remote close observed or bounded timeout fired" — the manager's
+    // session-map drop must not happen while the kali wrapper's EXIT trap
+    // could still be flushing tcpdump / typescript. The stream.on('close')
+    // handler's cleanup() will emit 'closed' synchronously if the remote
+    // fires close during this await; we cover the timeout case explicitly
+    // below. The closedEmitted latch keeps emission single-shot regardless
+    // of which path wins.
+    await new Promise<void>((res) => {
+      let settled = false;
+      const settle = (timedOut: boolean): void => {
+        if (settled) return;
+        settled = true;
+        if (timedOut) {
+          console.error(
+            `[SSH] remote close timeout for session ${this.sessionInfo.sessionId}; ` +
+              'kali-side capture may be partial. MCP-side captures remain authoritative.',
+          );
+        }
+        clearTimeout(timer);
+        res();
+      };
+      const timer = setTimeout(() => settle(true), TIMEOUTS.REMOTE_CLOSE_AWAIT);
+      this.remoteClosed.then(() => settle(false));
+    });
+
+    // Now safe to signal 'closed' to the manager. If stream.on('close')
+    // already ran cleanup() during the await, emitClosedIfVerified() is a
+    // no-op via the closedEmitted latch. If we reached here via the
+    // bounded timeout, this is the only emission path — the manager
+    // releases the session id only after the wrapper's flush window has
+    // either completed or expired.
     this.emitClosedIfVerified();
   }
 
@@ -704,7 +778,9 @@ export class SSHConnectionManager {
         stream.on('close', (code: number | null, signal: string | null) => {
           clearTimeout(timeoutId);
           if (!hasTimedOut) {
-            resolve({ stdout, stderr, code, signal, sessionId });
+            // One-shot exec has no session-level mode; the wrapping always
+            // emits a real exit code so the effective mode is 'normal'.
+            resolve({ stdout, stderr, code, signal, sessionId, mode: 'normal' });
           }
         });
 
@@ -920,13 +996,14 @@ export class SSHConnectionManager {
       return false;
     }
 
-    // close() is synchronous: it runs cleanup + postcondition synchronously
-    // and either emits 'closed' (success) or throws (postcondition violation).
-    // No need to register an event listener and race against a force-close
-    // timer — both would risk firing inside an async callback where a
-    // contract throw becomes an uncaught exception. (Codex cycle 3 finding-3.)
+    // close() runs cleanup + postcondition synchronously (so in-flight /
+    // queued command promises reject immediately), then awaits the remote
+    // SSH channel close so the post-close harvest cannot race the kali
+    // wrapper's EXIT trap (#304). A postcondition violation throws
+    // synchronously and surfaces here as an awaited rejection; the catch
+    // handles both shapes via the standard rejection path.
     try {
-      session.close();
+      await session.close();
       // 'closed' listener installed in createSession already removed the
       // session synchronously; this delete + ensure is a belt-and-braces
       // postcondition check from the manager-side.
@@ -1025,16 +1102,35 @@ export class SSHConnectionManager {
       });
     };
 
-    const sessionPromises: Array<Promise<TeardownResult>> = Array.from(this.sessions.values()).map(session =>
-      teardown(() => session.close(), session, 'closed')
-    );
+    // Sessions: await close() directly (#304). close() resolves after the
+    // remote SSH channel has actually closed or the bounded timeout fires,
+    // so we no longer need the event-listener race against the SESSION_CLOSE
+    // force-close timer. A throw from the synchronous postcondition stage
+    // surfaces here as a rejection and is captured as TeardownResult.error.
+    const sessionPromises: Array<Promise<TeardownResult>> = Array.from(this.sessions.values()).map(async (session) => {
+      try {
+        await session.close();
+        return { ok: true } as TeardownResult;
+      } catch (err) {
+        return { ok: false, error: err } as TeardownResult;
+      }
+    });
+
+    // #304 + codex review (class-finding): wait for every session's
+    // close() promise to settle BEFORE tearing down the parent SSH
+    // transport. Otherwise client.end() can begin while sessions are
+    // still draining their channels — exactly the race close()
+    // already closes per-session. The connections teardown happens in
+    // a second phase below.
+    const sessionResults = await Promise.all(sessionPromises);
 
     const connectionPromises: Array<Promise<TeardownResult>> = Array.from(this.connections.values()).map(connInfo => {
       if (!connInfo.connected) return Promise.resolve({ ok: true } as TeardownResult);
       return teardown(() => connInfo.client.end(), connInfo.client, 'close');
     });
 
-    const results = await Promise.all([...sessionPromises, ...connectionPromises]);
+    const connectionResults = await Promise.all(connectionPromises);
+    const results = [...sessionResults, ...connectionResults];
     const failures = results.filter((r): r is { ok: false; error: unknown } => r.ok === false);
 
     this.sessions.clear();

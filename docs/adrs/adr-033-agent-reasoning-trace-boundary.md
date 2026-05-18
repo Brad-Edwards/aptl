@@ -253,20 +253,22 @@ agent CLI ships.
   kali user's reach"](https://github.com/Brad-Edwards/aptl/issues/305)
   — a separate ADR will record the writer-ownership design
   decision when that issue lands.
-- **Harvest race window** (codex cycle 2 finding-2; tracked in
+- **Harvest race window** (closed by
   [issue #304](https://github.com/Brad-Edwards/aptl/issues/304)):
-  the MCP-server `closeSession` returns after local `shell.end()`
-  but before the remote SSH channel close fires the kali wrapper's
-  EXIT trap that kills tcpdump and flushes script's typescript.
-  The harvest helper applies bounded retries with backoff
-  (3 × 250ms) to cover the typical cleanup window; in pathological
-  cases a partial capture may still be copied. The MCP-side PTY
-  tee is unaffected (it captures byte-by-byte on the MCP-server
-  side). The proper fix — awaiting the remote-close event in
-  `PersistentSession.close()` before `SSHConnectionManager.closeSession`
-  returns — touches ADR-004's SSH close contract and is tracked as
-  [#304 "Await remote SSH channel close in PersistentSession.close
-  before harvest"](https://github.com/Brad-Edwards/aptl/issues/304).
+  `PersistentSession.close()` now resolves only after the SSH stream's
+  remote `close` event has fired (or a bounded
+  `TIMEOUTS.REMOTE_CLOSE_AWAIT` has elapsed with a logged
+  `[SSH] remote close timeout` warning). The kali wrapper's EXIT trap
+  — which kills tcpdump and flushes the `script(1)` typescript — runs
+  on remote channel close, so awaiting that event before the
+  `docker cp` harvest eliminates the truncation race. The
+  `dockerCpWithRetry` helper that previously masked the window with a
+  3 × 250ms backoff has been removed; the missing-source loud-stderr
+  path (which surfaces deletion-by-kali-user as a visible anomaly)
+  remains in place because it is independent of the race fix. Local
+  cleanup — rejecting in-flight and queued command promises — is still
+  synchronous so command callers are not blocked by the remote-close
+  await.
 - **Error envelopes**: capture failures log to stderr only. The
   PostToolHook architecture from ADR-027 still applies: capture or
   OCSF emission errors never break tool execution.

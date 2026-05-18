@@ -231,11 +231,14 @@ describe('Shell Type Support', () => {
     expect(session.getShellType()).toBe('bash');
   });
 
-  it('should create sessions with specified shell types', () => {
-    const mockClient = {} as any;
-    const shellTypes: ShellType[] = ['bash', 'sh', 'powershell', 'cmd'];
-
-    shellTypes.forEach(shellType => {
+  // Test-quality review cycle 1 T-004: split the previous forEach loop
+  // into one named test per shell type so a regression affecting only
+  // one type points at that type in the failure output, not at an
+  // anonymous loop iteration.
+  it.each<ShellType>(['bash', 'sh', 'powershell', 'cmd'])(
+    'should create session with %s shell type',
+    (shellType) => {
+      const mockClient = {} as any;
       const session = new PersistentSession(
         `test-${shellType}`,
         'test-host',
@@ -245,7 +248,7 @@ describe('Shell Type Support', () => {
         22,
         'normal',
         60000,
-        shellType
+        shellType,
       );
 
       const info = session.getSessionInfo();
@@ -254,49 +257,60 @@ describe('Shell Type Support', () => {
       // this, a regression that discarded the parameter would still
       // produce a passing test (test-quality review cycle 1 finding-3).
       expect(session.getShellType()).toBe(shellType);
-    });
-  });
+    },
+  );
 
   it('should track shell type through session lifecycle', async () => {
-    const mockClient = {
-      shell: vi.fn((_opts: any, callback: any) => {
-        // Mock shell stream
-        const mockStream = {
-          on: vi.fn(),
-          stderr: { on: vi.fn() },
-          write: vi.fn(),
-          end: vi.fn()
-        };
-        callback(null, mockStream);
-        return mockStream;
-      })
-    } as any;
+    // Test-quality review cycle 1 T-003: PR #304 made
+    // PersistentSession.close() async. The previous unawaited
+    // close() left a 3-second remote-close-await timer hanging
+    // after the test returned. Use a real EventEmitter for the
+    // stream so we can emit 'close' deterministically and await
+    // the close promise cleanly.
+    vi.useFakeTimers();
+    try {
+      const mockStream = Object.assign(new EventEmitter(), {
+        write: vi.fn(),
+        end: vi.fn(() => mockStream.emit('close')),
+        stderr: new EventEmitter(),
+      });
+      const mockClient = {
+        shell: vi.fn((_opts: any, callback: any) => {
+          callback(null, mockStream);
+          return mockStream;
+        })
+      } as any;
 
-    const powershellSession = new PersistentSession(
-      'ps-test',
-      'windows-host',
-      'Administrator',
-      'interactive',
-      mockClient,
-      22,
-      'normal',
-      60000,
-      'powershell'
-    );
+      const powershellSession = new PersistentSession(
+        'ps-test',
+        'windows-host',
+        'Administrator',
+        'interactive',
+        mockClient,
+        22,
+        'normal',
+        60000,
+        'powershell'
+      );
 
-    // Initialize the session
-    await powershellSession.initialize();
-    const info = powershellSession.getSessionInfo();
-    expect(info.sessionId).toBe('ps-test');
-    expect(info.target).toBe('windows-host');
-    expect(info.username).toBe('Administrator');
-    // The shellType must survive initialize() — without this
-    // assertion, a regression where initialize() silently switched
-    // back to bash would still pass (test-quality review cycle 1
-    // finding-4).
-    expect(powershellSession.getShellType()).toBe('powershell');
+      const initP = powershellSession.initialize();
+      await vi.advanceTimersByTimeAsync(1000);
+      await initP;
 
-    powershellSession.close();
+      const info = powershellSession.getSessionInfo();
+      expect(info.sessionId).toBe('ps-test');
+      expect(info.target).toBe('windows-host');
+      expect(info.username).toBe('Administrator');
+      // The shellType must survive initialize() — without this
+      // assertion, a regression where initialize() silently switched
+      // back to bash would still pass (test-quality review cycle 1
+      // finding-4).
+      expect(powershellSession.getShellType()).toBe('powershell');
+
+      await powershellSession.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -750,17 +764,21 @@ describe('Contract guards (postconditions)', () => {
     }
   });
 
-  it('timer-callback close path swallows postcondition violations and logs', () => {
+  it('timer-callback close path swallows postcondition rejections and logs', async () => {
     // Same defensive contract for the resetSessionTimeout timer callback — an
-    // uncaught throw from setTimeout crashes Node. We stub close() to throw and
-    // verify the timer-callback try/catch catches it.
+    // uncaught rejection from setTimeout crashes Node. After #304, close() is
+    // async so failures always surface as promise rejections; the timer
+    // callback's `void this.close().catch(...)` swallows them. Stub close to
+    // return a rejecting promise and verify the catch handler logs.
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const originalClose = session.close.bind(session);
-    session.close = () => { throw new SSHError('[contract] simulated close failure'); };
+    session.close = async () => {
+      throw new SSHError('[contract] simulated close failure');
+    };
     try {
       // Advance the timer to fire the session-timeout callback.
       // sessionTimeoutMs is 600000 (set in beforeEach).
-      vi.advanceTimersByTime(600000);
+      await vi.advanceTimersByTimeAsync(600000);
 
       const matched = errorSpy.mock.calls.some(call =>
         typeof call[0] === 'string' && call[0].includes('[SSH] session timeout close failed')
@@ -982,7 +1000,10 @@ describe('Contract guards (event ordering & concurrency)', () => {
       const onClosed = vi.fn();
       session.on('closed', onClosed);
 
-      expect(() => session.close()).toThrow(/simulated late violation/);
+      // close() is async (#304): the assertCleanupInvariants throw surfaces
+      // as the returned promise's rejection. The 'closed' invariant — never
+      // fired when the postcondition violated — is unchanged.
+      await expect(session.close()).rejects.toThrow(/simulated late violation/);
       expect(onClosed).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -1175,14 +1196,17 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
   });
 
   it("'closed' is emitted at most once even when shell.end() emits stream-close after close()", async () => {
-    // Codex cycle-3 finding-2: closedEmitted latch must prevent a double-emit
-    // when close() succeeded and then the underlying stream's 'close' event
-    // fires again later (async ssh2 channel behavior). Without the latch, a
-    // listener that resubscribes (e.g. test isolation) could see two events.
+    // Codex cycle-3 finding-2 + #304 codex review (class-finding): the
+    // closedEmitted latch must prevent a double-emit when close()'s
+    // remote-close await resolves AND a subsequent stream-close event
+    // re-runs cleanup(). After the #304 fix, close() defers emitting
+    // 'closed' until AFTER the remote-close latch resolves (or the
+    // bounded timeout fires), so this test now stages the events in
+    // that order: explicit stream emit → close() promise resolves
+    // (and emits 'closed' via the latch's first winner) → second
+    // stream emit must be a no-op.
     vi.useFakeTimers();
     try {
-      // mockStream where end() does NOT immediately emit close; we'll fire
-      // close manually AFTER close() has returned.
       const mockStream = Object.assign(new EventEmitter(), {
         write: vi.fn(),
         end: vi.fn(),
@@ -1199,12 +1223,22 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
       const onClosed = vi.fn();
       session.on('closed', onClosed);
 
-      session.close();
-      // close() should have emitted 'closed' synchronously after assertion.
+      const closeP = session.close();
+      // Before the remote 'close' fires, 'closed' has NOT been emitted —
+      // the #304 fix guarantees the manager's session-id drop happens
+      // only after the wrapper's flush window completes.
+      await Promise.resolve();
+      expect(onClosed).toHaveBeenCalledTimes(0);
+
+      // First stream-close: stream.on('close') handler fires cleanup()
+      // → emitClosedIfVerified emits 'closed' AND resolveRemoteClosed
+      // unblocks the close() await.
+      mockStream.emit('close');
+      await closeP;
       expect(onClosed).toHaveBeenCalledTimes(1);
 
-      // Now the stream fires its delayed 'close' event. The latch must
-      // suppress a second 'closed' emission.
+      // A second stream emit (delayed async ssh2 behavior) must be
+      // a no-op via the closedEmitted latch.
       mockStream.emit('close');
       expect(onClosed).toHaveBeenCalledTimes(1);
     } finally {
@@ -1334,5 +1368,358 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// Helper for the effective-mode + awaitable-close suites below. Driving a
+// command-and-response through the mock shell is identical in every test —
+// extract it so each `it` block reads as "construct → drive → assert".
+async function driveCommand(
+  session: PersistentSession,
+  mockStream: EventEmitter & { write: ReturnType<typeof vi.fn> },
+  command: string,
+  output: string,
+  exitCode: number,
+  raw?: boolean,
+): Promise<import('../src/ssh.js').CommandResult> {
+  const promise = session.executeCommand(command, 60000, raw);
+  // For normal-mode commands the parser keys on the delimiter; for raw-mode
+  // commands the timeout resolves with collected output.
+  const delimiter = (session as any).commandDelimiter;
+  const cmdId = (session as any).currentCommand?.id;
+  if (raw === true || (raw === undefined && session.getSessionInfo().mode === 'raw')) {
+    // Raw path: deliver output then advance past the per-command timeout.
+    mockStream.emit('data', Buffer.from(output));
+    await vi.advanceTimersByTimeAsync(60000);
+  } else {
+    const startMarker = `${delimiter}_START_${cmdId}`;
+    const endMarker = `${delimiter}_END_${cmdId}`;
+    mockStream.emit('data', Buffer.from(`${startMarker}\n${output}\n${endMarker}:${exitCode}\n`));
+  }
+  return promise;
+}
+
+describe('OBS-003 / #282: effective session-mode metadata in CommandResult', () => {
+  let mockStream: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn>; stderr: EventEmitter };
+  let mockClient: any;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    mockStream = Object.assign(new EventEmitter(), {
+      write: vi.fn(),
+      end: vi.fn(),
+      stderr: new EventEmitter(),
+    });
+    mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null, mockStream)) };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("executeCommand on a normal session with no override resolves with mode: 'normal'", async () => {
+    const session = new PersistentSession('em-1', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+    const initP = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await initP;
+
+    const result = await driveCommand(session, mockStream, 'echo hi', 'hi', 0);
+    expect(result.mode).toBe('normal');
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe('hi');
+  });
+
+  it("executeCommand on a RAW session with no override resolves with mode: 'raw' (the inherited-raw case from issue #282)", async () => {
+    const session = new PersistentSession('em-2', 'h', 'u', 'background', mockClient, 22, 'raw', 600000);
+    const initP = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await initP;
+
+    const result = await driveCommand(session, mockStream, 'msfconsole', 'msf6 >', 0);
+    expect(result.mode).toBe('raw');
+    // raw mode resolves with code 0 by design, but `mode` carries the
+    // unknown-outcome signal that downstream observability consumes.
+    expect(result.code).toBe(0);
+  });
+
+  it("per-call raw: true override on a normal session resolves with mode: 'raw'", async () => {
+    const session = new PersistentSession('em-3', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+    const initP = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await initP;
+
+    const result = await driveCommand(session, mockStream, 'something', 'out', 0, true);
+    expect(result.mode).toBe('raw');
+  });
+
+  it("per-call raw: false override on a RAW session resolves with mode: 'normal'", async () => {
+    const session = new PersistentSession('em-4', 'h', 'u', 'interactive', mockClient, 22, 'raw', 600000);
+    const initP = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await initP;
+
+    const result = await driveCommand(session, mockStream, 'echo hi', 'hi', 0, false);
+    expect(result.mode).toBe('normal');
+  });
+
+  it("background-session immediate-return envelope carries effective mode (inherited raw)", async () => {
+    const session = new PersistentSession('em-5', 'h', 'u', 'background', mockClient, 22, 'raw', 600000);
+    const initP = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await initP;
+
+    // Background sessions resolve immediately with a queued envelope; no
+    // delimiter dance, no advanceTimers needed.
+    const result = await session.executeCommand('long-running', 60000);
+    expect(result.mode).toBe('raw');
+    // The queued-envelope contract from ssh.ts: stdout describes the queue,
+    // code is 0. The new `mode` field reflects the effective mode at queue time.
+    expect(result.stdout).toContain('queued in background');
+  });
+});
+
+describe('#304: PersistentSession.close() awaits remote stream-close', () => {
+  let mockStream: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn>; stderr: EventEmitter };
+  let mockClient: any;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    mockStream = Object.assign(new EventEmitter(), {
+      write: vi.fn(),
+      end: vi.fn(), // does NOT auto-emit 'close' — tests drive it manually
+      stderr: new EventEmitter(),
+    });
+    mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null, mockStream)) };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("close() returns a Promise that resolves only after the stream's 'close' event fires", async () => {
+    const session = new PersistentSession('aw-1', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+    const initP = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await initP;
+
+    const closeP = session.close();
+    let resolved = false;
+    closeP.then(() => { resolved = true; });
+
+    // Microtask drain — local cleanup is sync, but the close promise must
+    // still be pending because remote 'close' has not fired.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+
+    // Fire the remote close; close() resolves.
+    mockStream.emit('close');
+    await closeP;
+    expect(resolved).toBe(true);
+  });
+
+  it("close() resolves after the bounded timeout when stream 'close' never fires, and logs a [SSH] warning", async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const session = new PersistentSession('aw-2', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+      const initP = session.initialize();
+      await vi.advanceTimersByTimeAsync(1000);
+      await initP;
+
+      const closeP = session.close();
+      let resolved = false;
+      closeP.then(() => { resolved = true; });
+
+      // Just shy of the timeout — promise is still pending.
+      await vi.advanceTimersByTimeAsync(2999);
+      expect(resolved).toBe(false);
+
+      // Past the timeout — promise resolves.
+      await vi.advanceTimersByTimeAsync(2);
+      await closeP;
+      expect(resolved).toBe(true);
+
+      const matched = errorSpy.mock.calls.some(call =>
+        typeof call[0] === 'string' && call[0].includes('[SSH] remote close timeout')
+      );
+      expect(matched).toBe(true);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("in-flight and queued command rejections happen BEFORE close()'s remote-await resolves", async () => {
+    const session = new PersistentSession('aw-3', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+    const initP = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await initP;
+
+    const inFlight = session.executeCommand('p1', 60000);
+    const queued1 = session.executeCommand('p2', 60000);
+    const queued2 = session.executeCommand('p3', 60000);
+
+    // Capture order: rejections must settle before closeP — observable via the
+    // microtask queue. Track resolution order with timestamps.
+    const events: string[] = [];
+    inFlight.catch(() => events.push('inFlight'));
+    queued1.catch(() => events.push('queued1'));
+    queued2.catch(() => events.push('queued2'));
+
+    const closeP = session.close();
+    closeP.then(() => events.push('close'));
+
+    // Drain microtasks WITHOUT firing remote close yet — rejections should
+    // already have landed because cleanup runs synchronously inside close().
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(events).toContain('inFlight');
+    expect(events).toContain('queued1');
+    expect(events).toContain('queued2');
+    expect(events).not.toContain('close');
+
+    mockStream.emit('close');
+    await closeP;
+    expect(events[events.length - 1]).toBe('close');
+  });
+
+  it("SSHConnectionManager.closeSession() awaits the remote close before returning", async () => {
+    const manager = new SSHConnectionManager();
+    (manager as any).getConnection = vi.fn().mockResolvedValue(mockClient);
+
+    const createP = manager.createSession('aw-mgr', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
+    await vi.advanceTimersByTimeAsync(1000);
+    await createP;
+
+    let resolved = false;
+    const closeP = manager.closeSession('aw-mgr').then(v => { resolved = true; return v; });
+
+    // Microtask drain — manager promise should NOT resolve before remote close.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+
+    mockStream.emit('close');
+    const result = await closeP;
+    expect(result).toBe(true);
+    expect(resolved).toBe(true);
+  });
+
+  it("close() does NOT emit 'closed' before the remote-close await settles (the manager must not release the id while captures are still flushing)", async () => {
+    // Codex pre-push review (class-finding): emitClosedIfVerified must run
+    // AFTER the bounded remote-close await, otherwise a concurrent caller
+    // can re-create the same session id while the old wrapper's EXIT trap
+    // is still flushing tcpdump / typescript captures.
+    const session = new PersistentSession('order-1', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+    const initP = session.initialize();
+    await vi.advanceTimersByTimeAsync(1000);
+    await initP;
+
+    const onClosed = vi.fn();
+    session.on('closed', onClosed);
+
+    const closeP = session.close();
+    // Several microtask ticks must NOT cause 'closed' to fire — the
+    // remote latch is unresolved and the timeout has not elapsed.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onClosed).toHaveBeenCalledTimes(0);
+
+    // Releasing the remote close lets close() finish; the 'closed'
+    // signal lands at that point, not before.
+    mockStream.emit('close');
+    await closeP;
+    expect(onClosed).toHaveBeenCalledTimes(1);
+  });
+
+  it("disconnectAll() awaits every session close BEFORE tearing down the parent SSH transport", async () => {
+    // Codex pre-push review (class-finding): client.end() must not fire
+    // while session.close() is still awaiting its remote close. Otherwise
+    // the parent transport drops while channels are still draining.
+    const manager = new SSHConnectionManager();
+
+    const streamA = Object.assign(new EventEmitter(), {
+      write: vi.fn(),
+      end: vi.fn(),
+      stderr: new EventEmitter(),
+    });
+    const clientEnd = vi.fn();
+    const sharedClient: any = Object.assign(new EventEmitter(), {
+      shell: vi.fn((_opts: any, cb: any) => cb(null, streamA)),
+      end: clientEnd,
+    });
+    (manager as any).getConnection = vi.fn().mockResolvedValue(sharedClient);
+    (manager as any).connections.set('u@h:22', { client: sharedClient, connected: true });
+
+    const createA = manager.createSession('a', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
+    await vi.advanceTimersByTimeAsync(1000);
+    await createA;
+
+    const disconnectP = manager.disconnectAll();
+    // client.end() MUST NOT have been called yet — sessions are still
+    // awaiting remote close. Drain several microtask ticks to confirm
+    // the ordering is not just "not yet" but "actively blocked on the
+    // session close phase".
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    expect(clientEnd).not.toHaveBeenCalled();
+
+    // Release the session's remote close. Session.close() now resolves
+    // and disconnectAll progresses to the connection teardown phase.
+    streamA.emit('close');
+    // Drain microtasks past session-close → teardown-helper listener
+    // registration. Only THEN can we emit the connection-close that
+    // settles teardown's `emitter.once('close', ...)`.
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    expect(clientEnd).toHaveBeenCalledTimes(1);
+    sharedClient.emit('close');
+    await disconnectP;
+  });
+
+  it("disconnectAll() awaits every session's remote close before clearing the map", async () => {
+    const manager = new SSHConnectionManager();
+
+    // Two separate mock streams so each session has its own close gate.
+    const streamA = Object.assign(new EventEmitter(), {
+      write: vi.fn(),
+      end: vi.fn(),
+      stderr: new EventEmitter(),
+    });
+    const streamB = Object.assign(new EventEmitter(), {
+      write: vi.fn(),
+      end: vi.fn(),
+      stderr: new EventEmitter(),
+    });
+    let i = 0;
+    const sharedClient: any = {
+      shell: vi.fn((_opts: any, cb: any) => {
+        cb(null, i === 0 ? streamA : streamB);
+        i += 1;
+      }),
+    };
+    (manager as any).getConnection = vi.fn().mockResolvedValue(sharedClient);
+
+    const createA = manager.createSession('a', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
+    await vi.advanceTimersByTimeAsync(1000);
+    await createA;
+    const createB = manager.createSession('b', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
+    await vi.advanceTimersByTimeAsync(1000);
+    await createB;
+
+    let resolved = false;
+    const disconnectP = manager.disconnectAll().then(() => { resolved = true; });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+
+    streamA.emit('close');
+    await Promise.resolve();
+    expect(resolved).toBe(false); // B still pending
+
+    streamB.emit('close');
+    await disconnectP;
+    expect(resolved).toBe(true);
+    expect((manager as any).sessions.size).toBe(0);
   });
 });

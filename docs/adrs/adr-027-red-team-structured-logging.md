@@ -29,6 +29,10 @@ What stays from this ADR is **the OCSF schema work**:
 - Cross-language redaction at the serialization boundary (ADR-029).
 - Best-effort guarantee: classification / extraction / sink failures
   do not break tool execution.
+- Raw-session outcome handling: the Kali `postToolHook` must use the effective
+  mode surfaced in the `session_command` result envelope. The request argument
+  `raw` is only a per-call override and does not reveal inherited raw mode from
+  a session created with raw mode enabled.
 
 What changes is **the sink**:
 
@@ -54,6 +58,19 @@ than the previous SIEM ingestion path.
 
 Everything below this section is the original decision text,
 preserved for historical context.
+
+## Status update - 2026-05-18
+
+For `*_session_command`, OCSF status must be derived from the effective command
+mode and observed command outcome, not from request arguments alone. If the
+`session_command` result envelope reports `session_mode: "raw"`, the OCSF
+record must emit `status_id=0` / `status="Unknown"` even when the raw-mode SSH
+result contains `exit_code: 0`.
+
+This keeps the common MCP session layer as the source of truth for execution
+mode and keeps `mcp-red` as a best-effort observer. Do not duplicate the common
+session mode rules in `mcp-red`, do not parse session ids or query session state
+from the logger, and do not let OCSF logging failures affect tool execution.
 
 ---
 

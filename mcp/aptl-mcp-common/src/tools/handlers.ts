@@ -375,6 +375,11 @@ const baseHandlers: Record<string, ToolHandler> = {
               output: result.stdout,
               stderr: result.stderr,
               exit_code: result.code,
+              // #282: surface the EFFECTIVE mode (per-call override OR
+              // inherited session default) so downstream observability
+              // can distinguish raw (unknown-outcome) from normal even
+              // when args.raw was omitted.
+              session_mode: result.mode,
             }, null, 2),
           },
         ],

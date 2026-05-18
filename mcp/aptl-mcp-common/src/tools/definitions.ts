@@ -117,8 +117,14 @@ export function generateToolDefinitions(serverConfig: LabConfig['server']): Tool
         },
         raw: {
           type: 'boolean',
-          description: 'Execute in raw mode (no echo wrapping, for interactive programs). Defaults to session mode',
-          default: false,
+          description: 'Execute in raw mode (no echo wrapping, for interactive programs). Omit to inherit the session mode set at creation time; supplying false explicitly is an explicit override of an inherited-raw session.',
+          // #282 + codex review: NO default here. A schema default of
+          // `false` causes generated clients (which materialize defaults)
+          // to send `raw: false`, which the handler interprets as an
+          // explicit normal-mode override and runs the command in normal
+          // mode on an inherited-raw session — the exact bug #282 fixes
+          // gone in a different shape. Omitting the field is the only
+          // signal that means "use session default".
         },
       },
       required: ['session_id', 'command'],

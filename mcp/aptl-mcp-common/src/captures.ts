@@ -57,9 +57,17 @@ function dockerBin(env: NodeJS.ProcessEnv = process.env): string {
   return DEFAULT_DOCKER_BIN;
 }
 
-function execDockerCp(args: string[]): Promise<{ code: number; stderr: string }> {
+function execDockerCp(
+  args: string[],
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ code: number; stderr: string }> {
+  // Thread the caller's env through so APTL_DOCKER_BIN overrides set on
+  // HarvestOptions actually reach dockerBin(). Without this, the test
+  // mock could not observe the override and the SonarCloud S4036
+  // "no PATH lookup" contract was unverifiable. (Test-quality review
+  // cycle 1 T-002.)
   return new Promise((res) => {
-    const child = spawn(dockerBin(), args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(dockerBin(env), args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = '';
     child.stderr.on('data', (b) => {
       stderr += b.toString();
@@ -71,36 +79,6 @@ function execDockerCp(args: string[]): Promise<{ code: number; stderr: string }>
       res({ code: code ?? -1, stderr });
     });
   });
-}
-
-const HARVEST_RETRIES = 3;
-const HARVEST_BACKOFF_MS = 250;
-
-/**
- * Run `docker cp` with bounded retries. The MCP-side `closeSession`
- * returns as soon as `shell.end()` resolves locally, but the remote
- * SSH channel close (which fires the Kali wrapper's EXIT trap that
- * kills tcpdump and flushes the script typescript) can take a few
- * hundred milliseconds longer (codex cycle 2 finding-2). Without a
- * retry the harvest can race the cleanup and copy a truncated or
- * partially-flushed tree. The retry isn't a correctness substitute
- * for awaiting remote-close — see the SSH layer for that work — but
- * it makes the practical case land cleanly.
- */
-async function dockerCpWithRetry(args: string[]): Promise<{ code: number; stderr: string }> {
-  let last = await execDockerCp(args);
-  for (let attempt = 1; attempt < HARVEST_RETRIES; attempt += 1) {
-    // Retry on docker-side transient failures and on
-    // "No such file" (the typical "wrapper not finished" symptom).
-    if (last.code === 0) return last;
-    if (/No such file or directory/i.test(last.stderr) || last.code === 1) {
-      await new Promise((r) => setTimeout(r, HARVEST_BACKOFF_MS * attempt));
-      last = await execDockerCp(args);
-      continue;
-    }
-    break;
-  }
-  return last;
 }
 
 async function chmodTreeBestEffort(root: string, fileMode: number, dirMode: number): Promise<void> {
@@ -165,11 +143,10 @@ export async function harvestSession(opts: HarvestOptions, sessionId: string): P
   // copies the source directory itself into dest, producing
   // dest/<session_id>/... which would nest one level too deep.
   const src = `${containerCapturesRoot}/${tid}/${sessionId}/.`;
-  const cpResult = await dockerCpWithRetry([
-    'cp',
-    `${opts.containerName}:${src}`,
-    destDir,
-  ]);
+  const cpResult = await execDockerCp(
+    ['cp', `${opts.containerName}:${src}`, destDir],
+    env,
+  );
   // Track whether the per-session subtree was actually copied — even
   // on a "not found" no-op, we still want to attempt the global
   // captures harvest below (codex cycle 2 finding-6).
@@ -213,11 +190,14 @@ export async function harvestSession(opts: HarvestOptions, sessionId: string): P
   }
   for (const globalSub of ['_audit', '_proc-acct']) {
     const globalSrc = `${containerCapturesRoot}/${globalSub}/.`;
-    const gRes = await dockerCpWithRetry([
-      'cp',
-      `${opts.containerName}:${globalSrc}`,
-      join(globalDest, globalSub.replace(/^_/, '')),
-    ]);
+    const gRes = await execDockerCp(
+      [
+        'cp',
+        `${opts.containerName}:${globalSrc}`,
+        join(globalDest, globalSub.replace(/^_/, '')),
+      ],
+      env,
+    );
     if (gRes.code !== 0 && !/No such file or directory/i.test(gRes.stderr)) {
       console.error(
         `[captures] global ${globalSub} harvest failed (rc=${gRes.code}):`,

@@ -128,11 +128,21 @@ const baseAPIHandlers = {
       // Use per-query auth if specified, otherwise fall back to default client
       let result;
       if (queryConfig.auth) {
-        // Create temporary HTTP client with query-specific auth
+        // Create temporary HTTP client with query-specific auth.
+        // SEC-006 / ADR-034 § Gotchas: both `verify_ssl` and
+        // `ca_cert_path` must inherit from the top-level api config
+        // when the query does not override them. Treating
+        // `queryConfig.verify_ssl !== false` as the verify decision
+        // forced verification on whenever a query had its own auth
+        // block but no explicit `verify_ssl`, which silently broke the
+        // documented local-debug override at the api level and made
+        // every predefined query repeat the flag. Explicit query
+        // override first, then fall back to the api setting.
         const queryAPIConfig = {
           baseUrl: '', // Not used since we have full URL
           auth: queryConfig.auth,
-          verify_ssl: queryConfig.verify_ssl !== false
+          verify_ssl: queryConfig.verify_ssl ?? context.labConfig.api?.verify_ssl ?? true,
+          ca_cert_path: queryConfig.ca_cert_path ?? context.labConfig.api?.ca_cert_path,
         };
         const queryClient = new HTTPClient(queryAPIConfig);
         result = await queryClient.makeRequest(url, queryConfig.method, {

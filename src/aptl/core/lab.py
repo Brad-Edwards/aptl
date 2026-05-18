@@ -16,6 +16,7 @@ import icontract
 import yaml
 
 from aptl.core.certs import ensure_ssl_certs
+from aptl.core.soc_ca import ensure_soc_certs
 from aptl.core.config import AptlConfig, find_config, load_config
 from aptl.core.contracts import (
     backend_is_initialized,
@@ -265,13 +266,25 @@ def lab_status(
     return backend.status()
 
 
-def _check_bind_mounts(project_dir: Path) -> list[str]:
+def _check_bind_mounts(
+    project_dir: Path,
+    enabled_profiles: list[str] | None = None,
+) -> list[str]:
     """Check that bind-mount source paths exist as files, not root-owned dirs.
 
     Parses docker-compose.yml for relative bind mounts (``./`` prefix) and
     verifies that each source path exists. Returns a list of error messages
     for any missing sources so the caller can fail early instead of letting
     Docker silently create root-owned directories.
+
+    Profile-aware (SEC-006 / ADR-034 § Guardrails): only services whose
+    Compose profile is enabled by the current ``aptl.json`` are checked.
+    A service with ``profiles: ["soc"]`` whose bind-mount source lives
+    under a generated, gitignored directory (e.g. ``config/soc_certs/``,
+    rendered only by ``_step_generate_soc_certs`` when SOC is enabled)
+    would otherwise fail this preflight on a non-SOC lab start, even
+    though the service is never started. ``enabled_profiles=None`` keeps
+    the original "check every service" behaviour for direct callers.
     """
     compose_path = project_dir / "docker-compose.yml"
     if not compose_path.exists():
@@ -283,11 +296,18 @@ def _check_bind_mounts(project_dir: Path) -> list[str]:
     except yaml.YAMLError as e:
         return [f"Failed to parse docker-compose.yml: {e}"]
 
+    active = set(enabled_profiles) if enabled_profiles is not None else None
     errors: list[str] = []
     services = data.get("services", {}) if isinstance(data, dict) else {}
     for svc_name, svc_def in services.items():
         if not isinstance(svc_def, dict):
             continue
+        if active is not None:
+            svc_profiles = svc_def.get("profiles") or []
+            # A service with no `profiles:` key runs unconditionally;
+            # a service with profiles only runs when at least one is active.
+            if svc_profiles and not (set(svc_profiles) & active):
+                continue
         for vol in svc_def.get("volumes", []):
             if isinstance(vol, str) and vol.startswith("./"):
                 src = vol.split(":")[0]
@@ -638,9 +658,53 @@ def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
+@_runtime_require(
+    lambda ctx: config_is_loaded(ctx.config),
+    description="config_is_loaded(ctx.config)",
+)
+@_runtime_require(
+    lambda ctx: backend_is_initialized(ctx.backend),
+    description="backend_is_initialized(ctx.backend)",
+)
+def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
+    log.info("Step 6c: Generating SOC stack lab CA + service certs...")
+    assert ctx.config is not None  # runtime guard above
+    if not ctx.config.containers.soc:
+        log.debug("SOC profile not enabled, skipping SOC CA generation")
+        return None
+    # Generated artifacts land under config/soc_certs/ on the host running
+    # `aptl lab start`. With the SSH-remote backend the Docker daemon is
+    # on another host whose bind mounts cannot see them — same shape as
+    # `_step_sync_credentials` (ADR-028).
+    from aptl.core.deployment import SSHComposeBackend
+    if isinstance(ctx.backend, SSHComposeBackend):
+        return LabResult(
+            success=False,
+            error=(
+                "SOC stack lab CA is generated under config/soc_certs/ on "
+                "the host running `aptl lab start`, but the configured "
+                "deployment backend targets a remote Docker daemon, so the "
+                "remote bind mounts would not see it. Run `aptl lab start` "
+                "on the deployment host instead, or switch "
+                "deployment.provider to the local Docker Compose backend."
+            ),
+        )
+    cert_result = ensure_soc_certs(ctx.project_dir)
+    if cert_result.success:
+        return None
+    log.error("SOC certificate generation failed: %s", cert_result.error)
+    return LabResult(
+        success=False,
+        error=f"SOC certificate generation failed: {cert_result.error}",
+    )
+
+
 def _step_check_bind_mounts(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 6b: Checking bind-mount sources...")
-    mount_errors = _check_bind_mounts(ctx.project_dir)
+    enabled = (
+        ctx.config.containers.enabled_profiles() if ctx.config is not None else None
+    )
+    mount_errors = _check_bind_mounts(ctx.project_dir, enabled_profiles=enabled)
     if not mount_errors:
         return None
     for err in mount_errors:
@@ -1112,6 +1176,7 @@ _LAB_START_STEPS = (
     _step_sync_credentials,
     _step_sync_suricata_misp_rule_baselines,
     _step_generate_certs,
+    _step_generate_soc_certs,
     _step_check_bind_mounts,
     _step_pull_images,
     _step_start_containers,

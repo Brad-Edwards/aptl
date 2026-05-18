@@ -21,7 +21,8 @@
       "apiKey": "${MISP_API_KEY}"
     },
     "timeout": 30000,
-    "verify_ssl": false,
+    "verify_ssl": true,
+    "ca_cert_path": "../../config/soc_certs/lab-ca.pem",
     "default_headers": {
       "Content-Type": "application/json",
       "Accept": "application/json"
@@ -36,7 +37,6 @@
         "header": "Authorization",
         "apiKey": "${MISP_API_KEY}"
       },
-      "verify_ssl": false,
       "body": {
         "returnFormat": "json",
         "limit": 50
@@ -51,7 +51,6 @@
         "header": "Authorization",
         "apiKey": "${MISP_API_KEY}"
       },
-      "verify_ssl": false,
       "body": {
         "returnFormat": "json",
         "limit": 20
@@ -66,7 +65,6 @@
         "header": "Authorization",
         "apiKey": "${MISP_API_KEY}"
       },
-      "verify_ssl": false,
       "description": "Add a new indicator of compromise to MISP. Required fields: event_id, type, value. Example: {\"body\": {\"event_id\": 1, \"type\": \"ip-dst\", \"value\": \"10.0.0.1\", \"comment\": \"C2 server\"}}"
     },
     "correlate_observable": {
@@ -77,7 +75,6 @@
         "header": "Authorization",
         "apiKey": "${MISP_API_KEY}"
       },
-      "verify_ssl": false,
       "body": {
         "returnFormat": "json",
         "includeCorrelations": true

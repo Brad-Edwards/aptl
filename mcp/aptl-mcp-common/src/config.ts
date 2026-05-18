@@ -43,6 +43,14 @@ export interface LabConfig {
     };
     timeout?: number;
     verify_ssl?: boolean;
+    /**
+     * SEC-006 / ADR-034: PEM path to the lab-managed CA bundle. When
+     * verify_ssl is true and this is set, the HTTPClient loads the file
+     * once at construction and validates server certs against it via a
+     * per-instance https.Agent. Relative paths are resolved by
+     * loadDockerLabConfig against the docker-lab-config.json's directory.
+     */
+    ca_cert_path?: string;
     default_headers?: Record<string, string>;
   };
   queries?: {
@@ -63,6 +71,7 @@ export interface LabConfig {
       description: string;
       response_type?: 'json' | 'text';
       verify_ssl?: boolean;
+      ca_cert_path?: string;
     };
   };
 }
@@ -183,6 +192,19 @@ async function loadDockerLabConfig(configPath: string): Promise<LabConfig> {
 }
 
 /**
+ * Resolve a `ca_cert_path` value relative to the docker-lab-config.json's
+ * directory. Absolute paths and `~`-prefixed paths pass through verbatim.
+ * SEC-006: kept alongside `expandTilde` (the SSH-key convention) so every
+ * MCP resolves CA bundles the same way.
+ */
+function resolveCaCertPath(configPath: string, caPath: string | undefined): string | undefined {
+  if (!caPath) return caPath;
+  if (caPath.startsWith('~')) return expandTilde(caPath);
+  if (caPath.startsWith('/')) return caPath;
+  return resolve(dirname(configPath), caPath);
+}
+
+/**
  * Load lab configuration from Docker setup
  */
 export async function loadLabConfig(configPath: string): Promise<LabConfig> {
@@ -194,6 +216,22 @@ export async function loadLabConfig(configPath: string): Promise<LabConfig> {
     const container = config.containers[configKey];
     if (container && container.ssh_key.startsWith('~')) {
       container.ssh_key = expandTilde(container.ssh_key);
+    }
+  }
+
+  // SEC-006 / ADR-034: resolve ca_cert_path values relative to the config
+  // file's directory so each MCP's docker-lab-config.json can reference
+  // the lab CA via a stable repo-relative path. Applied to both the
+  // top-level api config and each query override so the per-query temp
+  // HTTPClient (api-handlers) sees an absolute path.
+  if (config.api?.ca_cert_path) {
+    config.api.ca_cert_path = resolveCaCertPath(configPath, config.api.ca_cert_path);
+  }
+  if (config.queries) {
+    for (const q of Object.values(config.queries)) {
+      if (q.ca_cert_path) {
+        q.ca_cert_path = resolveCaCertPath(configPath, q.ca_cert_path);
+      }
     }
   }
 

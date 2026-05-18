@@ -35,6 +35,43 @@ log = get_logger("collectors")
 # explicitly at every call site so the choice is visible.
 _COLLECTOR_HTTP_TIMEOUT = 120
 
+# SEC-006 / ADR-034: SOC-stack collectors verify against the lab-managed
+# CA by default. Resolution order at call time:
+#   1. Explicit ``ca_cert_path`` argument (operator/test override).
+#   2. ``APTL_LAB_CA_PATH`` environment variable (host-level override —
+#      lets the controlling CLI/web layer thread a known-good absolute
+#      path through to library code).
+#   3. ``APTL_PROJECT_DIR / config/soc_certs/lab-ca.pem`` when the env
+#      var is set.
+#   4. The canonical project-relative path materialized by
+#      ``aptl.core.soc_ca.ensure_soc_certs``, anchored to whatever the
+#      process happens to consider its CWD — explicitly the last
+#      resort so a library caller invoked from outside the repo root
+#      doesn't silently miss the bundle.
+# Wazuh collectors deliberately do NOT consult this — they stay under
+# SEC-004's rejectUnauthorized:false allowance.
+_DEFAULT_LAB_CA_RELPATH = "config/soc_certs/lab-ca.pem"
+
+
+def _resolve_lab_ca_path(explicit: str | None) -> str:
+    """Return the CA bundle path SOC collectors should pass to curl.
+
+    The resolution order is documented above. The final fallback uses
+    the canonical project-relative path; library callers running from
+    outside the repo root should pass ``ca_cert_path`` explicitly or
+    set ``APTL_LAB_CA_PATH`` / ``APTL_PROJECT_DIR`` so curl does not
+    silently look for the bundle in the wrong place.
+    """
+    if explicit:
+        return explicit
+    env_value = os.environ.get("APTL_LAB_CA_PATH", "").strip()
+    if env_value:
+        return env_value
+    project_dir = os.environ.get("APTL_PROJECT_DIR", "").strip()
+    if project_dir:
+        return os.path.join(project_dir, _DEFAULT_LAB_CA_RELPATH)
+    return _DEFAULT_LAB_CA_RELPATH
+
 
 def _run_cmd(
     cmd: list[str], timeout: int = 30
@@ -164,10 +201,16 @@ def collect_suricata_eve(
 def collect_thehive_cases(
     start_iso: str,
     end_iso: str,
-    url: str = "http://localhost:9000",
+    url: str = "https://localhost:9000",
     api_key: str = "",
+    ca_cert_path: str | None = None,
 ) -> list[dict]:
-    """Query TheHive API for cases/alerts created during the run."""
+    """Query TheHive API for cases/alerts created during the run.
+
+    SEC-006: defaults to HTTPS verified against the lab-managed CA. An
+    explicit ``ca_cert_path`` (or ``APTL_LAB_CA_PATH`` env override)
+    selects a different CA bundle.
+    """
     if not api_key:
         log.info("No TheHive API key, skipping case collection")
         return []
@@ -191,6 +234,8 @@ def collect_thehive_cases(
         f"{url}/api/v1/query",
         auth_header=f"Bearer {api_key}",
         body=query_body,
+        insecure=False,
+        ca_cert_path=_resolve_lab_ca_path(ca_cert_path),
         timeout=_COLLECTOR_HTTP_TIMEOUT,
     )
 
@@ -208,8 +253,15 @@ def collect_misp_events(
     end_iso: str,
     url: str = "https://localhost:8443",
     api_key: str = "",
+    ca_cert_path: str | None = None,
 ) -> list[dict]:
-    """Query MISP API for events correlated during the run."""
+    """Query MISP API for events correlated during the run.
+
+    SEC-006: verifies TLS against the lab-managed CA by default. The
+    previous ``insecure=True`` accepted MISP's self-signed cert; under
+    ADR-034 MISP serves a cert issued by the lab CA, so verification
+    is the right posture.
+    """
     if not api_key:
         log.info("No MISP API key, skipping event collection")
         return []
@@ -230,7 +282,8 @@ def collect_misp_events(
         f"{url}/events/restSearch",
         auth_header=api_key,
         body=query_body,
-        insecure=True,
+        insecure=False,
+        ca_cert_path=_resolve_lab_ca_path(ca_cert_path),
         timeout=_COLLECTOR_HTTP_TIMEOUT,
     )
 
@@ -264,10 +317,17 @@ def collect_misp_events(
 def collect_shuffle_executions(
     start_iso: str,
     end_iso: str,
-    url: str = "http://localhost:5001",
+    url: str = "https://localhost:3443",
     api_key: str = "",
+    ca_cert_path: str | None = None,
 ) -> list[dict]:
-    """Query Shuffle API for workflow executions during the run."""
+    """Query Shuffle API for workflow executions during the run.
+
+    SEC-006: hits the lab-CA-signed Shuffle frontend (3443) over HTTPS
+    by default; ``shuffle-frontend`` terminates TLS for SOC consumers.
+    The backend (5001) remains internal HTTP on the security network
+    per ADR-034 § Decision.
+    """
     if not api_key:
         log.info("No Shuffle API key, skipping execution collection")
         return []
@@ -275,6 +335,8 @@ def collect_shuffle_executions(
     data = _curl_json(
         f"{url}/api/v1/workflows/executions",
         auth_header=f"Bearer {api_key}",
+        insecure=False,
+        ca_cert_path=_resolve_lab_ca_path(ca_cert_path),
         timeout=_COLLECTOR_HTTP_TIMEOUT,
     )
 

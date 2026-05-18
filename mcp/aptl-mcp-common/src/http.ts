@@ -1,5 +1,6 @@
 import https from 'node:https';
 import http from 'node:http';
+import { readFileSync } from 'node:fs';
 import { LabConfig } from './config.js';
 
 export interface HTTPError extends Error {
@@ -21,10 +22,18 @@ const insecureAgent = new https.Agent({ rejectUnauthorized: false });
  * Generic HTTP client for API operations
  */
 export class HTTPClient {
+  // SEC-006 / ADR-034: per-instance CA-aware agent. Built lazily once at
+  // construction when `verify_ssl=true` AND `ca_cert_path` is set. Cached
+  // here so the CA file is read once per HTTPClient, not per request.
+  // `null` means "no custom CA — fall back to fetch() with system trust";
+  // an instantiated Agent means "use node:https with this CA, rejectUnauthorized=true".
+  private readonly caAgent: https.Agent | null;
+
   constructor(private config: LabConfig['api']) {
     if (!config) {
       throw new Error('API configuration is required');
     }
+    this.caAgent = buildCaAgent(config);
   }
 
   // cached JWT for wazuh-jwt mode (per HTTPClient instance)
@@ -136,7 +145,9 @@ export class HTTPClient {
           ...(body ? { 'Content-Length': String(Buffer.byteLength(body)) } : {}),
         },
         timeout,
-        ...(parsed.protocol === 'https:' && !verify_ssl ? { agent: insecureAgent } : {}),
+        ...(parsed.protocol === 'https:'
+          ? this.resolveHttpsAgentOpts(verify_ssl)
+          : {}),
       };
       const req = transport.request(reqOpts, (res) => {
         const chunks: Buffer[] = [];
@@ -205,10 +216,14 @@ export class HTTPClient {
       }
     }
 
-    // Use node:https with per-request agent when SSL verification is disabled,
-    // avoiding the process-global NODE_TLS_REJECT_UNAUTHORIZED race condition
-    if (!verify_ssl) {
-      return this.makeRequestWithAgent(url, method, headers, { ...options, body: bodyStr } as any, timeout);
+    // SEC-006 / ADR-034: Node's `fetch` cannot accept a custom CA bundle.
+    // Three-state TLS policy:
+    //  1. verify_ssl=false → node:https with insecureAgent (existing SEC-004 path).
+    //  2. verify_ssl=true + ca_cert_path set → node:https with the CA-aware
+    //     agent built once at construction (`this.caAgent`).
+    //  3. verify_ssl=true + no CA path → fetch() with system trust (legacy).
+    if (!verify_ssl || this.caAgent) {
+      return this.makeRequestWithAgent(url, method, headers, { ...options, body: bodyStr } as any, timeout, verify_ssl);
     }
 
     try {
@@ -256,15 +271,20 @@ export class HTTPClient {
   }
 
   /**
-   * Make HTTP request using node:https with a per-request insecure agent.
-   * Used when verify_ssl is false to avoid mutating process.env.
+   * Make HTTP request using node:https with a per-request agent.
+   *
+   * SEC-006 / ADR-034: this path now serves two cases — the SEC-004
+   * insecure path (``verify_ssl=false``) AND the CA-pinned path
+   * (``verify_ssl=true`` + ``ca_cert_path`` set). The right agent is
+   * resolved per call from ``this.caAgent`` + ``verify_ssl``.
    */
   private makeRequestWithAgent(
     url: string,
     method: string,
     headers: Record<string, string>,
     options: { body?: any; responseType?: 'json' | 'text' },
-    timeout: number
+    timeout: number,
+    verify_ssl: boolean = false
   ): Promise<HTTPResponse> {
     return new Promise((resolve, reject) => {
       const parsed = new URL(url);
@@ -284,7 +304,9 @@ export class HTTPClient {
           ...(bodyStr ? { 'Content-Length': String(Buffer.byteLength(bodyStr)) } : {}),
         },
         timeout,
-        ...(parsed.protocol === 'https:' ? { agent: insecureAgent } : {}),
+        ...(parsed.protocol === 'https:'
+          ? this.resolveHttpsAgentOpts(verify_ssl)
+          : {}),
       };
 
       const req = transport.request(reqOptions, (res) => {
@@ -322,6 +344,23 @@ export class HTTPClient {
   }
 
   /**
+   * Resolve the per-request agent options for an HTTPS URL.
+   *
+   * Three-state policy (SEC-006 / ADR-034):
+   *  - verify_ssl=false → process-safe ``insecureAgent`` (SEC-004 path).
+   *  - verify_ssl=true + CA configured → the per-instance CA-aware agent.
+   *  - verify_ssl=true + no CA → ``{}`` so Node falls back to its default
+   *    HTTPS agent with system trust (the existing fetch() path covers this
+   *    case at the call sites; this branch is here for the JWT exchange's
+   *    ``lowLevelRequest`` path which always goes through node:https).
+   */
+  private resolveHttpsAgentOpts(verify_ssl: boolean): { agent?: https.Agent } {
+    if (!verify_ssl) return { agent: insecureAgent };
+    if (this.caAgent) return { agent: this.caAgent };
+    return {};
+  }
+
+  /**
    * Parse a fetch Response into our HTTPResponse format
    */
   private async parseResponse(
@@ -342,4 +381,34 @@ export class HTTPClient {
       text: responseText,
     };
   }
+}
+
+/**
+ * Build the per-instance CA-aware HTTPS agent (SEC-006 / ADR-034).
+ *
+ * Returns:
+ *  - `null` when the config has no `ca_cert_path` or has `verify_ssl: false`
+ *    — the existing two-state behavior is preserved.
+ *  - An `https.Agent({ ca, rejectUnauthorized: true })` when both
+ *    `ca_cert_path` is set and verification is enabled.
+ *
+ * The CA bundle is read at construction time and cached on the agent —
+ * subsequent requests do not re-read the file. If `ca_cert_path` is set
+ * but the file cannot be read, this throws synchronously so the failure
+ * surfaces at HTTPClient construction (fail-closed) rather than at the
+ * first request, and never silently degrades to "verify against system
+ * trust" or "skip verification".
+ */
+function buildCaAgent(config: NonNullable<LabConfig['api']>): https.Agent | null {
+  const caPath = config.ca_cert_path;
+  if (!caPath) return null;
+  if (config.verify_ssl === false) return null;
+  let ca: Buffer;
+  try {
+    ca = readFileSync(caPath);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`ca_cert_path "${caPath}" not readable: ${reason}`);
+  }
+  return new https.Agent({ ca, rejectUnauthorized: true });
 }

@@ -24,12 +24,29 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-SHUFFLE_URL="${SHUFFLE_URL:-http://localhost:5001}"
+# SEC-006 / ADR-034: the host-facing Shuffle backend moved from
+# http://localhost:5001 to the HTTPS frontend at localhost:3443. The
+# seed script is a host-side CLIENT of Shuffle, so it verifies against
+# the lab-managed CA.
+SHUFFLE_URL="${SHUFFLE_URL:-https://localhost:3443}"
+SHUFFLE_CACERT="${SHUFFLE_CACERT:-${APTL_PROJECT_DIR:-.}/config/soc_certs/lab-ca.pem}"
 SHUFFLE_API_KEY="${SHUFFLE_API_KEY:-31a211c4-ea5c-4a49-b022-5e2434e758a7}"
-THEHIVE_INTERNAL_URL="http://172.20.0.18:9000"
+# Container-internal URLs used INSIDE Shuffle workflow actions. These
+# are intra-trust-boundary calls on the aptl-security Docker network
+# (ADR-034 § Decision: SOC consumers OF Shuffle verify; Shuffle's own
+# SOAR-internal HTTP actions are not the SOC-consumer surface and
+# retain ``verify_ssl: false`` until Shuffle's bundled HTTP app is
+# taught about the lab CA bundle — see workflow JSON below).
+THEHIVE_INTERNAL_URL="https://172.20.0.18:9000"
 MISP_INTERNAL_URL="https://172.20.0.16"
 MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
 WORKFLOW_NAME="APTL Alert to Case"
+
+# Build TLS flags once for the host-side Shuffle CLIENT calls below.
+SHUFFLE_TLS_FLAGS=()
+if [ -f "$SHUFFLE_CACERT" ]; then
+    SHUFFLE_TLS_FLAGS+=(--cacert "$SHUFFLE_CACERT")
+fi
 
 # ---------------------------------------------------------------------------
 # Preflight checks
@@ -61,9 +78,16 @@ echo ""
 # Check Shuffle connectivity
 # ---------------------------------------------------------------------------
 echo "Checking Shuffle backend connectivity..."
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+# curl -w "%{http_code}" prints "000" itself when the transport fails
+# (e.g. TLS verification refusal under the new --cacert path) AND exits
+# non-zero. The previous ``|| echo "000"`` appended another "000",
+# producing the literal string "000000" and short-circuiting the
+# transport-failure guard below.
+if ! HTTP_CODE=$(curl -sS "${SHUFFLE_TLS_FLAGS[@]}" -o /dev/null -w "%{http_code}" \
     -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
-    "${SHUFFLE_URL}/api/v1/workflows" 2>/dev/null || echo "000")
+    "${SHUFFLE_URL}/api/v1/workflows" 2>/dev/null); then
+    HTTP_CODE="000"
+fi
 
 if [[ "${HTTP_CODE}" == "000" ]]; then
     echo "ERROR: Cannot reach Shuffle backend at ${SHUFFLE_URL}."
@@ -84,7 +108,7 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "Checking for existing '${WORKFLOW_NAME}' workflow..."
 
-WORKFLOWS_JSON=$(curl -s \
+WORKFLOWS_JSON=$(curl -s "${SHUFFLE_TLS_FLAGS[@]}" \
     -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
     "${SHUFFLE_URL}/api/v1/workflows")
 
@@ -193,7 +217,7 @@ ENDJSON
 
 echo "Creating workflow '${WORKFLOW_NAME}'..."
 
-CREATE_RESPONSE=$(curl -s -w "\n%{http_code}" \
+CREATE_RESPONSE=$(curl -s "${SHUFFLE_TLS_FLAGS[@]}" -w "\n%{http_code}" \
     -X POST \
     -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
     -H "Content-Type: application/json" \
@@ -222,7 +246,7 @@ if [[ "${CREATE_CODE}" -ge 200 ]] && [[ "${CREATE_CODE}" -lt 300 ]]; then
     # may reference our original trigger ID which no longer exists.
     # Fetch the workflow and fix the start node to point to the actual trigger.
     echo "  Fixing start node..."
-    WF_JSON=$(curl -s \
+    WF_JSON=$(curl -s "${SHUFFLE_TLS_FLAGS[@]}" \
         -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
         "${SHUFFLE_URL}/api/v1/workflows/${CREATED_ID}")
 
@@ -245,7 +269,7 @@ wf['start']='${REAL_TRIGGER_ID}'
 print(json.dumps(wf))
 " 2>/dev/null)
 
-        curl -s -X PUT \
+        curl -s "${SHUFFLE_TLS_FLAGS[@]}" -X PUT \
             -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "${UPDATED}" \
@@ -255,7 +279,7 @@ print(json.dumps(wf))
 
         # Register and start the webhook trigger (Shuffle requires explicit registration)
         echo "  Registering webhook trigger..."
-        curl -s -X POST \
+        curl -s "${SHUFFLE_TLS_FLAGS[@]}" -X POST \
             -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "{\"name\": \"Alert Webhook\", \"id\": \"${REAL_TRIGGER_ID}\", \"type\": \"webhook\", \"workflow\": \"${CREATED_ID}\", \"start\": \"${REAL_TRIGGER_ID}\", \"status\": \"running\", \"environment\": \"Shuffle\"}" \

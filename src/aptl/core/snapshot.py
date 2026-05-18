@@ -359,51 +359,6 @@ def _hash_config_files(config_dir: Path | None = None) -> dict[str, str]:
     return hashes
 
 
-def _get_service_endpoints(containers: list[ContainerSnapshot]) -> list[ServiceEndpoint]:
-    """Derive host-accessible service endpoints from container port mappings."""
-    endpoints = []
-    # Map container names to known services
-    service_map = {
-        "aptl-wazuh-dashboard": ("Wazuh Dashboard", "https", 443, "admin/SecretPassword"),
-        "aptl-wazuh-indexer": ("Wazuh Indexer", "https", 9200, "admin/SecretPassword"),
-        "aptl-wazuh-manager": ("Wazuh API", "https", 55000, "wazuh-wui/WazuhPass123!"),
-    }
-    running_names = {c.name for c in containers if "Up" in c.status}
-    for cname, (label, proto, port, creds) in service_map.items():
-        if cname in running_names:
-            endpoints.append(ServiceEndpoint(
-                name=label,
-                url=f"{proto}://localhost:{port}",
-                host="localhost",
-                port=port,
-                protocol=proto,
-                credentials=creds,
-            ))
-    return endpoints
-
-
-def _get_ssh_endpoints(containers: list[ContainerSnapshot]) -> list[SSHEndpoint]:
-    """Derive SSH endpoints from running containers."""
-    ssh_map = {
-        "aptl-victim": ("Victim", 2022, "labadmin"),
-        "aptl-kali": ("Kali", 2023, "kali"),
-        "aptl-reverse": ("Reverse Engineering", 2027, "labadmin"),
-    }
-    endpoints = []
-    running_names = {c.name for c in containers if "Up" in c.status}
-    for cname, (label, port, user) in ssh_map.items():
-        if cname in running_names:
-            cmd = f"ssh -i ~/.ssh/aptl_lab_key {user}@localhost -p {port}"
-            endpoints.append(SSHEndpoint(
-                name=label,
-                host="localhost",
-                port=port,
-                user=user,
-                command=cmd,
-            ))
-    return endpoints
-
-
 def capture_snapshot(
     config_dir: Path | None,
     backend: "DeploymentBackend",
@@ -428,6 +383,11 @@ def capture_snapshot(
     """
     from datetime import datetime, timezone
 
+    from aptl.core.endpoints import (
+        build_service_endpoints,
+        build_ssh_endpoints,
+    )
+
     log.info("Capturing range snapshot")
 
     containers = _get_container_snapshots(backend)
@@ -438,8 +398,8 @@ def capture_snapshot(
         wazuh_rules=_get_wazuh_rules_snapshot(backend),
         networks=_get_network_snapshots(backend),
         config_hashes=_hash_config_files(config_dir),
-        services=_get_service_endpoints(containers),
-        ssh=_get_ssh_endpoints(containers),
+        services=build_service_endpoints(containers),
+        ssh=build_ssh_endpoints(containers),
     )
 
     log.info(

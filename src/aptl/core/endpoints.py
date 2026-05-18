@@ -18,10 +18,12 @@ Per ADR-036:
   target port + protocol → endpoint is omitted (treated as unavailable,
   not raised as a validation exception that would fail the whole
   snapshot).
-- ``RangeSnapshot.to_dict()`` remains the redaction boundary; the
-  ``credentials`` field carries the existing display strings unchanged
-  for one-place deduplication only, not as a credential-management
-  layer.
+- ``RangeSnapshot.to_dict()`` remains the redaction boundary. The
+  registry carries no credential material at all: ``ServiceEndpoint``
+  still has a ``credentials`` field for backward on-the-wire shape,
+  but its value is the dataclass default empty string and ADR-029's
+  redactor masks it regardless. Credential ownership is out of scope
+  per ADR-036 Non-Goals.
 """
 
 from dataclasses import dataclass
@@ -60,9 +62,15 @@ class EndpointRegistryEntry(object):
     "target port + transport protocol" boundary ADR-036 names.
 
     ``ssh_user`` is required for ``kind="ssh"`` and unused for services.
-    ``credentials`` is optional and only carries the existing snapshot
-    display strings used today by ``aptl lab status``; it must not be
-    repurposed as a credential-management surface (ADR-029).
+
+    No ``credentials`` field. ``ServiceEndpoint.credentials`` is the
+    on-the-wire shape, and ADR-029 redacts it at
+    ``RangeSnapshot.to_dict()`` (the field-name redactor in
+    ``aptl.utils.redaction`` matches ``credentials`` as sensitive). A
+    literal value in the registry would be source-side dead data —
+    masked at every serialization boundary — so the registry carries
+    no credential material at all. Credential ownership and surfacing
+    are out of scope per ADR-036 Non-Goals.
     """
 
     container_name: str
@@ -72,7 +80,6 @@ class EndpointRegistryEntry(object):
     url_scheme: str | None = None
     transport_protocol: str = "tcp"
     ssh_user: str | None = None
-    credentials: str | None = None
 
 
 ENDPOINT_REGISTRY: tuple[EndpointRegistryEntry, ...] = (
@@ -87,7 +94,6 @@ ENDPOINT_REGISTRY: tuple[EndpointRegistryEntry, ...] = (
         target_port=5601,
         url_scheme="https",
         transport_protocol="tcp",
-        credentials="admin/SecretPassword",
     ),
     EndpointRegistryEntry(
         container_name="aptl-wazuh-indexer",
@@ -96,7 +102,6 @@ ENDPOINT_REGISTRY: tuple[EndpointRegistryEntry, ...] = (
         target_port=9200,
         url_scheme="https",
         transport_protocol="tcp",
-        credentials="admin/SecretPassword",
     ),
     EndpointRegistryEntry(
         container_name="aptl-wazuh-manager",
@@ -105,7 +110,6 @@ ENDPOINT_REGISTRY: tuple[EndpointRegistryEntry, ...] = (
         target_port=55000,
         url_scheme="https",
         transport_protocol="tcp",
-        credentials="wazuh-wui/WazuhPass123!",
     ),
     EndpointRegistryEntry(
         container_name="aptl-victim",
@@ -222,7 +226,9 @@ def build_service_endpoints(
                 host="localhost",
                 port=host_port,
                 protocol=entry.url_scheme,
-                credentials=entry.credentials or "",
+                # No registry-side credential literal (see class docstring).
+                # ``ServiceEndpoint.credentials`` defaults to empty; ADR-029
+                # redacts the field at ``RangeSnapshot.to_dict()`` regardless.
             )
         )
     return endpoints

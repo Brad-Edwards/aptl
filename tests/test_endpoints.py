@@ -11,10 +11,11 @@ ADR-036 contract that these tests pin down:
 - A registered container whose runtime ports don't expose the registry's
   expected target port + protocol → endpoint is omitted (not exception).
 - Stopped containers are skipped.
-- The credential display string for ``ServiceEndpoint.credentials`` flows
-  through unchanged from the registry; ``RangeSnapshot.to_dict()``'s
+- The registry carries no credential material. ``ServiceEndpoint``
+  still has a ``credentials`` field for backward shape but its value
+  is the dataclass default empty string; ``RangeSnapshot.to_dict()``'s
   redactor (tested in ``tests/test_snapshot.py``) is the redaction
-  boundary.
+  boundary regardless.
 """
 
 from aptl.core.endpoints import (
@@ -245,10 +246,13 @@ class TestBuildServiceEndpoints:
     def test_empty_input(self):
         assert build_service_endpoints([]) == []
 
-    def test_credentials_flow_from_registry(self):
-        # The registry carries today's credential display strings
-        # unchanged; redaction at to_dict() (covered in test_snapshot.py)
-        # is the boundary, not the registry.
+    def test_no_credential_literals_in_built_endpoint(self):
+        # The registry carries no credential literals (see
+        # `EndpointRegistryEntry` docstring): ADR-029 redacts
+        # `ServiceEndpoint.credentials` at `RangeSnapshot.to_dict()`,
+        # so a source-side literal would be dead data. The on-the-wire
+        # `credentials` field stays for backward shape but is the
+        # dataclass default empty string.
         containers = [
             ContainerSnapshot(
                 name="aptl-wazuh-manager",
@@ -258,15 +262,10 @@ class TestBuildServiceEndpoints:
         ]
         endpoints = build_service_endpoints(containers)
         assert len(endpoints) == 1
-        # We don't assert the literal string here (don't bake the
-        # credential into a test). It must be a non-empty value that
-        # came from the registry entry.
-        entry = next(
-            e for e in ENDPOINT_REGISTRY
-            if e.container_name == "aptl-wazuh-manager"
-        )
-        assert endpoints[0].credentials == entry.credentials
-        assert endpoints[0].credentials  # registry did supply one
+        assert endpoints[0].credentials == ""
+        # Registry-level invariant: no EndpointRegistryEntry carries
+        # credential material as an attribute.
+        assert not hasattr(ENDPOINT_REGISTRY[0], "credentials")
 
 
 class TestBuildSSHEndpoints:
@@ -389,7 +388,9 @@ class TestRegistryEntryShape:
         assert entry.container_name == "aptl-x"
         assert entry.transport_protocol == "tcp"  # default
         assert entry.ssh_user is None
-        assert entry.credentials is None
+        # Registry intentionally does not carry credentials (see
+        # `EndpointRegistryEntry` docstring).
+        assert not hasattr(entry, "credentials")
 
     def test_udp_transport_protocol_drives_parser(self):
         # A hypothetical UDP service must select the UDP mapping from the

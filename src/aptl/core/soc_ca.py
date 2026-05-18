@@ -331,7 +331,10 @@ def _ensure_ca_pair(
     # because the consistency check accepted it.
     _enforce_mode(ca_cert_path, 0o644, kind="file")
     _enforce_mode(ca_key_path, 0o600, kind="file")
-    assert ca_key is not None and ca_cert is not None  # reusable_ca contract
+    # reusable_ca contract: _try_load_ca returns (True, cert, key) only
+    # when both are non-None. The assert is a typing hint for static
+    # checkers, not a runtime guard the caller relies on.
+    assert ca_key is not None and ca_cert is not None
     return ca_key, ca_cert
 
 

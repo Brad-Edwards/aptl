@@ -62,15 +62,17 @@ def _resolve_lab_ca_path(explicit: str | None) -> str:
     set ``APTL_LAB_CA_PATH`` / ``APTL_PROJECT_DIR`` so curl does not
     silently look for the bundle in the wrong place.
     """
-    if explicit:
-        return explicit
     env_value = os.environ.get("APTL_LAB_CA_PATH", "").strip()
-    if env_value:
-        return env_value
     project_dir = os.environ.get("APTL_PROJECT_DIR", "").strip()
-    if project_dir:
-        return os.path.join(project_dir, _DEFAULT_LAB_CA_RELPATH)
-    return _DEFAULT_LAB_CA_RELPATH
+    if explicit:
+        resolved = explicit
+    elif env_value:
+        resolved = env_value
+    elif project_dir:
+        resolved = os.path.join(project_dir, _DEFAULT_LAB_CA_RELPATH)
+    else:
+        resolved = _DEFAULT_LAB_CA_RELPATH
+    return resolved
 
 
 def _run_cmd(

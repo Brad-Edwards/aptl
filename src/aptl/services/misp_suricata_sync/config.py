@@ -43,18 +43,21 @@ def _bool_env(name: str, value: str | None, default: bool) -> bool:
     (``MISP_VERIFY_SSL=ture`` would disable verification).
     """
     if value is None:
-        return default
-    token = value.strip().lower()
-    if not token:
-        return default
-    if token in _TRUE_TOKENS:
-        return True
-    if token in _FALSE_TOKENS:
-        return False
-    raise ValueError(
-        f"Invalid boolean value for {name}: {value!r}; "
-        f"expected one of {sorted(_TRUE_TOKENS | _FALSE_TOKENS)}"
-    )
+        result = default
+    else:
+        token = value.strip().lower()
+        if not token:
+            result = default
+        elif token in _TRUE_TOKENS:
+            result = True
+        elif token in _FALSE_TOKENS:
+            result = False
+        else:
+            raise ValueError(
+                f"Invalid boolean value for {name}: {value!r}; "
+                f"expected one of {sorted(_TRUE_TOKENS | _FALSE_TOKENS)}"
+            )
+    return result
 
 
 def _int_env(name: str, value: str | None, default: int) -> int:

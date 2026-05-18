@@ -26,6 +26,7 @@ from tests.helpers import (
     DB_IP,
     FILESHARE_IP,
     KALI_DMZ_IP,
+    LAB_CA_PATH,
     LIVE_LAB,
     MISP_API_KEY,
     MISP_URL,
@@ -330,7 +331,7 @@ class TestSOCTools:
                 "value": KALI_DMZ_IP,
                 "type": "ip-src",
             },
-            insecure=True,
+            ca_cert_path=LAB_CA_PATH,
         )
         attrs = data.get("response", {}).get("Attribute", [])
         assert len(attrs) > 0, (
@@ -350,7 +351,7 @@ class TestSOCTools:
                 "type": "ip-src",
                 "includeCorrelations": True,
             },
-            insecure=True,
+            ca_cert_path=LAB_CA_PATH,
         )
         attrs = data.get("response", {}).get("Attribute", [])
         assert len(attrs) > 0, (
@@ -546,7 +547,7 @@ class TestFullLoop:
             auth_header=MISP_API_KEY,
             method="POST",
             body={"value": src_ip, "type": "ip-src"},
-            insecure=True,
+            ca_cert_path=LAB_CA_PATH,
         )
         misp_attrs = misp_data.get(
             "response", {},

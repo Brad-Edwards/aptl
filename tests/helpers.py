@@ -25,7 +25,14 @@ MISP_URL = os.getenv("MISP_URL", "https://localhost:8443")
 MISP_API_KEY = os.getenv(
     "MISP_API_KEY", "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw",
 )
-THEHIVE_URL = os.getenv("THEHIVE_URL", "http://localhost:9000")
+# SEC-006 / ADR-034: TheHive and Shuffle's host-facing surfaces moved
+# to HTTPS with lab-CA-signed certs. Tests default to the verified
+# endpoints and to the lab CA bundle materialized by `aptl lab start`.
+THEHIVE_URL = os.getenv("THEHIVE_URL", "https://localhost:9000")
+LAB_CA_PATH = os.getenv(
+    "APTL_LAB_CA_PATH",
+    os.path.join(PROJECT_ROOT, "config", "soc_certs", "lab-ca.pem"),
+)
 
 
 def _provision_thehive_key() -> str:
@@ -44,7 +51,7 @@ def _provision_thehive_key() -> str:
 
 
 THEHIVE_API_KEY = os.getenv("THEHIVE_API_KEY", "") or _provision_thehive_key()
-SHUFFLE_URL = os.getenv("SHUFFLE_URL", "http://localhost:5001")
+SHUFFLE_URL = os.getenv("SHUFFLE_URL", "https://localhost:3443")
 SHUFFLE_API_KEY = os.getenv(
     "SHUFFLE_API_KEY", "31a211c4-ea5c-4a49-b022-5e2434e758a7",
 )
@@ -434,11 +441,21 @@ def curl_json(
     body: dict | None = None,
     timeout: int = 120,
     insecure: bool = False,
+    ca_cert_path: str | None = None,
 ) -> dict:
-    """Make an HTTP request via curl and return parsed JSON."""
+    """Make an HTTP request via curl and return parsed JSON.
+
+    SEC-006 / ADR-034: SOC stack callers should pass
+    ``ca_cert_path=LAB_CA_PATH`` to verify against the lab-managed CA.
+    ``insecure=True`` remains for Wazuh inter-component traffic
+    (SEC-004 territory) and for fallback when the lab CA bundle is
+    unavailable. Mutually exclusive — ``insecure`` wins when both set.
+    """
     cmd = ["curl", "-sf", url]
     if insecure:
         cmd.insert(1, "-k")
+    elif ca_cert_path:
+        cmd[1:1] = ["--cacert", ca_cert_path]
     if method != "GET":
         cmd += ["-X", method]
     if auth_header:

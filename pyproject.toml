@@ -17,6 +17,7 @@ dependencies = [
     "opentelemetry-sdk>=1.33.0",
     "opentelemetry-exporter-otlp-proto-http>=1.33.0",
     "opentelemetry-semantic-conventions>=0.54b0",
+    "cryptography>=42.0.0",
 ]
 
 [project.scripts]

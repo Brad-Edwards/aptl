@@ -2292,3 +2292,117 @@ class TestSeedSocPrimeProfileDiagnostic:
         result = _step_seed_soc(ctx)
         assert result is None
         assert ctx.diagnostics == []
+
+
+class TestGenerateSocCertsStep:
+    """SEC-006 / ADR-034: lab-start materializes the SOC CA + per-tool
+    server certs before `_step_check_bind_mounts` runs, so every
+    Compose bind mount that references `config/soc_certs/...` resolves
+    cleanly on first boot.
+    """
+
+    def _ctx(self, tmp_path: Path, *, soc: bool, backend=None):
+        from aptl.core.config import AptlConfig
+        from aptl.core.env import EnvVars
+        from aptl.core.lab import _LabStartContext
+
+        containers = {"wazuh": True, "victim": True, "kali": True, "soc": soc}
+        return _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            env=EnvVars(
+                indexer_username="u",
+                indexer_password="p",
+                api_username="u",
+                api_password="p",
+            ),
+            config=AptlConfig(lab={"name": "t"}, containers=containers),
+            backend=backend or MagicMock(),
+        )
+
+    def test_skips_when_soc_disabled(self, tmp_path, mocker):
+        """SOC disabled → no CA generation, no diagnostics."""
+        from aptl.core.lab import _step_generate_soc_certs
+
+        spy = mocker.patch("aptl.core.lab.ensure_soc_certs")
+        ctx = self._ctx(tmp_path, soc=False)
+        result = _step_generate_soc_certs(ctx)
+        assert result is None
+        assert ctx.diagnostics == []
+        spy.assert_not_called()
+
+    def test_calls_ensure_soc_certs_with_project_dir_when_soc_enabled(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_generate_soc_certs
+        from aptl.core.soc_ca import CertResult
+
+        spy = mocker.patch(
+            "aptl.core.lab.ensure_soc_certs",
+            return_value=CertResult(success=True, generated=True, certs_dir=tmp_path),
+        )
+        ctx = self._ctx(tmp_path, soc=True)
+        result = _step_generate_soc_certs(ctx)
+        assert result is None
+        spy.assert_called_once_with(tmp_path)
+
+    def test_returns_failed_labresult_on_cert_generation_failure(
+        self, tmp_path, mocker
+    ):
+        from aptl.core.lab import _step_generate_soc_certs
+        from aptl.core.soc_ca import CertResult
+
+        mocker.patch(
+            "aptl.core.lab.ensure_soc_certs",
+            return_value=CertResult(
+                success=False,
+                generated=False,
+                error="something went wrong",
+            ),
+        )
+        ctx = self._ctx(tmp_path, soc=True)
+        result = _step_generate_soc_certs(ctx)
+        assert result is not None
+        assert result.success is False
+        assert "soc" in (result.error or "").lower()
+
+    def test_ssh_remote_backend_refuses_with_adr_028_message(self, tmp_path, mocker):
+        """ADR-028: generated artifacts materialize on the host running
+        `aptl lab start`. With an SSH-remote backend the daemon is on
+        another host, so the bind mounts would not see them — refuse
+        with the same shape as `_step_sync_credentials`."""
+        from aptl.core.deployment import SSHComposeBackend
+        from aptl.core.lab import _step_generate_soc_certs
+
+        # Cert generator must NOT run when we refuse early.
+        spy = mocker.patch("aptl.core.lab.ensure_soc_certs")
+
+        backend = MagicMock(spec=SSHComposeBackend)
+        ctx = self._ctx(tmp_path, soc=True, backend=backend)
+        result = _step_generate_soc_certs(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "remote" in (result.error or "").lower()
+        spy.assert_not_called()
+
+    def test_runs_before_check_bind_mounts_in_step_sequence(self):
+        """ADR-028 sequencing: generated cert files must exist before
+        `_check_bind_mounts` inspects the Compose mount list. Encode
+        the ordering as a test so a future refactor cannot quietly
+        invert the two and let the lab boot fail with a missing
+        bind-mount source."""
+        from aptl.core.lab import (
+            _LAB_START_STEPS,
+            _step_check_bind_mounts,
+            _step_generate_soc_certs,
+        )
+
+        names = [s.__name__ for s in _LAB_START_STEPS]
+        assert "_step_generate_soc_certs" in names
+        i_soc = names.index("_step_generate_soc_certs")
+        i_mounts = names.index("_step_check_bind_mounts")
+        assert i_soc < i_mounts, (
+            f"_step_generate_soc_certs must precede _step_check_bind_mounts; "
+            f"got order {names[i_soc]} → ... → {names[i_mounts]}"
+        )

@@ -43,18 +43,21 @@ def _bool_env(name: str, value: str | None, default: bool) -> bool:
     (``MISP_VERIFY_SSL=ture`` would disable verification).
     """
     if value is None:
-        return default
-    token = value.strip().lower()
-    if not token:
-        return default
-    if token in _TRUE_TOKENS:
-        return True
-    if token in _FALSE_TOKENS:
-        return False
-    raise ValueError(
-        f"Invalid boolean value for {name}: {value!r}; "
-        f"expected one of {sorted(_TRUE_TOKENS | _FALSE_TOKENS)}"
-    )
+        result = default
+    else:
+        token = value.strip().lower()
+        if not token:
+            result = default
+        elif token in _TRUE_TOKENS:
+            result = True
+        elif token in _FALSE_TOKENS:
+            result = False
+        else:
+            raise ValueError(
+                f"Invalid boolean value for {name}: {value!r}; "
+                f"expected one of {sorted(_TRUE_TOKENS | _FALSE_TOKENS)}"
+            )
+    return result
 
 
 def _int_env(name: str, value: str | None, default: int) -> int:
@@ -143,8 +146,13 @@ class ServiceConfig(BaseModel):
         return cls(
             misp_url=os.environ.get("MISP_URL", "https://misp"),
             misp_api_key=api_key,
+            # SEC-006: verification ENABLED by default. ADR-034 makes the
+            # lab CA the trust anchor; MISP_VERIFY_SSL=false is reserved
+            # for local debugging only. The strict bool parser still
+            # rejects typos like ``ture`` so a fat-fingered env value
+            # fails closed instead of silently disabling verification.
             misp_verify_ssl=_bool_env(
-                "MISP_VERIFY_SSL", os.environ.get("MISP_VERIFY_SSL"), False
+                "MISP_VERIFY_SSL", os.environ.get("MISP_VERIFY_SSL"), True
             ),
             misp_ca_cert_path=ca_cert,
             ioc_tag_filter=os.environ.get("IOC_TAG_FILTER", "aptl:enforce"),

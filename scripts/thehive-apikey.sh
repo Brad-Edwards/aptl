@@ -12,7 +12,12 @@ set -euo pipefail
 # Idempotent -- safe to re-run. Creates org/user only if missing.
 # =============================================================================
 
-THEHIVE_URL="${THEHIVE_URL:-http://localhost:9000}"
+# SEC-006 / ADR-034: TheHive now serves HTTPS on 9000 using the
+# lab-managed CA. Seed paths verify against the CA bundle that
+# `aptl lab start` materializes under `config/soc_certs/lab-ca.pem`.
+# Override via THEHIVE_URL / THEHIVE_CACERT for local debugging.
+THEHIVE_URL="${THEHIVE_URL:-https://localhost:9000}"
+THEHIVE_CACERT="${THEHIVE_CACERT:-${APTL_PROJECT_DIR:-.}/config/soc_certs/lab-ca.pem}"
 ADMIN_USER="${THEHIVE_ADMIN_USER:-admin@thehive.local}"
 ADMIN_PASS="${THEHIVE_ADMIN_PASS:-secret}"
 ORG_NAME="APTL"
@@ -22,12 +27,19 @@ ORG_USER_PASS="AptlService2024!"
 COOKIE=$(mktemp)
 trap 'rm -f "$COOKIE"' EXIT
 
+# Build the CA-verification flag once; if the bundle file is missing
+# we fall back to system trust (still verify), never to ``-k``.
+TLS_FLAGS=()
+if [ -f "$THEHIVE_CACERT" ]; then
+    TLS_FLAGS+=(--cacert "$THEHIVE_CACERT")
+fi
+
 _curl() {
-    curl -sf -b "$COOKIE" -H "Content-Type: application/json" "$@" 2>/dev/null
+    curl -sf "${TLS_FLAGS[@]}" -b "$COOKIE" -H "Content-Type: application/json" "$@" 2>/dev/null
 }
 
 # 1. Login as platform admin
-curl -sf -c "$COOKIE" -X POST "${THEHIVE_URL}/api/v1/login" \
+curl -sf "${TLS_FLAGS[@]}" -c "$COOKIE" -X POST "${THEHIVE_URL}/api/v1/login" \
     -H "Content-Type: application/json" \
     -d "{\"user\":\"${ADMIN_USER}\",\"password\":\"${ADMIN_PASS}\"}" \
     >/dev/null 2>&1 || {

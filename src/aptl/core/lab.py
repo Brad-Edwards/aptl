@@ -16,6 +16,7 @@ import icontract
 import yaml
 
 from aptl.core.certs import ensure_ssl_certs
+from aptl.core.soc_ca import ensure_soc_certs
 from aptl.core.config import AptlConfig, find_config, load_config
 from aptl.core.contracts import (
     backend_is_initialized,
@@ -265,13 +266,25 @@ def lab_status(
     return backend.status()
 
 
-def _check_bind_mounts(project_dir: Path) -> list[str]:
+def _check_bind_mounts(
+    project_dir: Path,
+    enabled_profiles: list[str] | None = None,
+) -> list[str]:
     """Check that bind-mount source paths exist as files, not root-owned dirs.
 
     Parses docker-compose.yml for relative bind mounts (``./`` prefix) and
     verifies that each source path exists. Returns a list of error messages
     for any missing sources so the caller can fail early instead of letting
     Docker silently create root-owned directories.
+
+    Profile-aware (SEC-006 / ADR-034 § Guardrails): only services whose
+    Compose profile is enabled by the current ``aptl.json`` are checked.
+    A service with ``profiles: ["soc"]`` whose bind-mount source lives
+    under a generated, gitignored directory (e.g. ``config/soc_certs/``,
+    rendered only by ``_step_generate_soc_certs`` when SOC is enabled)
+    would otherwise fail this preflight on a non-SOC lab start, even
+    though the service is never started. ``enabled_profiles=None`` keeps
+    the original "check every service" behaviour for direct callers.
     """
     compose_path = project_dir / "docker-compose.yml"
     if not compose_path.exists():
@@ -283,21 +296,49 @@ def _check_bind_mounts(project_dir: Path) -> list[str]:
     except yaml.YAMLError as e:
         return [f"Failed to parse docker-compose.yml: {e}"]
 
-    errors: list[str] = []
+    active = set(enabled_profiles) if enabled_profiles is not None else None
     services = data.get("services", {}) if isinstance(data, dict) else {}
+    errors: list[str] = []
     for svc_name, svc_def in services.items():
-        if not isinstance(svc_def, dict):
+        errors.extend(
+            _check_service_bind_mounts(svc_name, svc_def, project_dir, active)
+        )
+    return errors
+
+
+def _check_service_bind_mounts(
+    svc_name: str,
+    svc_def: object,
+    project_dir: Path,
+    active_profiles: set[str] | None,
+) -> list[str]:
+    """Return bind-mount errors for one Compose service.
+
+    Extracted from :func:`_check_bind_mounts` so the parent stays inside
+    the cognitive-complexity budget. Handles the profile-filter gating
+    (``profiles:`` with no overlap → skip) and the per-volume relative
+    path check.
+    """
+    if not isinstance(svc_def, dict):
+        return []
+    if active_profiles is not None:
+        svc_profiles = svc_def.get("profiles") or []
+        # A service with no `profiles:` key runs unconditionally;
+        # a service with profiles only runs when at least one is active.
+        if svc_profiles and not (set(svc_profiles) & active_profiles):
+            return []
+    errors: list[str] = []
+    for vol in svc_def.get("volumes", []):
+        if not isinstance(vol, str) or not vol.startswith("./"):
             continue
-        for vol in svc_def.get("volumes", []):
-            if isinstance(vol, str) and vol.startswith("./"):
-                src = vol.split(":")[0]
-                src_path = (project_dir / src).resolve()
-                if not src_path.exists():
-                    errors.append(
-                        f"Service '{svc_name}': bind-mount source "
-                        f"'{src}' does not exist. Create it before "
-                        f"starting the lab to avoid root-owned directories."
-                    )
+        src = vol.split(":")[0]
+        src_path = (project_dir / src).resolve()
+        if not src_path.exists():
+            errors.append(
+                f"Service '{svc_name}': bind-mount source "
+                f"'{src}' does not exist. Create it before "
+                f"starting the lab to avoid root-owned directories."
+            )
     return errors
 
 
@@ -638,9 +679,71 @@ def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
+@_runtime_require(
+    lambda ctx: config_is_loaded(ctx.config),
+    description="config_is_loaded(ctx.config)",
+)
+@_runtime_require(
+    lambda ctx: backend_is_initialized(ctx.backend),
+    description="backend_is_initialized(ctx.backend)",
+)
+def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
+    """Step 6c: materialize the SOC stack lab CA + per-service certs.
+
+    Returns ``None`` on success (including the SOC-disabled no-op path)
+    so the orchestrator continues to the next step. Returns a failed
+    :class:`LabResult` when (a) the configured backend is remote (the
+    generated tree lives on the *controlling* host and would not be
+    visible across the SSH boundary — same shape as
+    ``_step_sync_credentials`` / ADR-028) or (b) the in-process
+    cryptography generation itself failed.
+    """
+    log.info("Step 6c: Generating SOC stack lab CA + service certs...")
+    # runtime guard above; this assert is for the type-checker.
+    assert ctx.config is not None
+    result: LabResult | None = None
+    if not ctx.config.containers.soc:
+        log.debug("SOC profile not enabled, skipping SOC CA generation")
+    else:
+        # Generated artifacts land under config/soc_certs/ on the host running
+        # `aptl lab start`. With the SSH-remote backend the Docker daemon is
+        # on another host whose bind mounts cannot see them — same shape as
+        # `_step_sync_credentials` (ADR-028).
+        from aptl.core.deployment import SSHComposeBackend
+        if isinstance(ctx.backend, SSHComposeBackend):
+            result = LabResult(
+                success=False,
+                error=(
+                    "SOC stack lab CA is generated under config/soc_certs/ on "
+                    "the host running `aptl lab start`, but the configured "
+                    "deployment backend targets a remote Docker daemon, so the "
+                    "remote bind mounts would not see it. Run `aptl lab start` "
+                    "on the deployment host instead, or switch "
+                    "deployment.provider to the local Docker Compose backend."
+                ),
+            )
+        else:
+            cert_result = ensure_soc_certs(ctx.project_dir)
+            if not cert_result.success:
+                log.error(
+                    "SOC certificate generation failed: %s", cert_result.error
+                )
+                result = LabResult(
+                    success=False,
+                    error=(
+                        "SOC certificate generation failed: "
+                        f"{cert_result.error}"
+                    ),
+                )
+    return result
+
+
 def _step_check_bind_mounts(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 6b: Checking bind-mount sources...")
-    mount_errors = _check_bind_mounts(ctx.project_dir)
+    enabled = (
+        ctx.config.containers.enabled_profiles() if ctx.config is not None else None
+    )
+    mount_errors = _check_bind_mounts(ctx.project_dir, enabled_profiles=enabled)
     if not mount_errors:
         return None
     for err in mount_errors:
@@ -1112,6 +1215,7 @@ _LAB_START_STEPS = (
     _step_sync_credentials,
     _step_sync_suricata_misp_rule_baselines,
     _step_generate_certs,
+    _step_generate_soc_certs,
     _step_check_bind_mounts,
     _step_pull_images,
     _step_start_containers,

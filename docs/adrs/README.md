@@ -55,3 +55,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [031](adr-031-lab-orchestration-contract-guards.md) | Lab Orchestration Contract Guards | accepted | 2026-05-12 |
 | [032](adr-032-conversation-surface-hardening.md) | Conversation Surface Hardening | accepted | 2026-05-17 |
 | [033](adr-033-agent-reasoning-trace-boundary.md) | Red-Side Behavioural Capture and Non-Contamination Boundary | accepted | 2026-05-17 |
+| [034](adr-034-lab-managed-soc-tls-ca.md) | Lab-Managed CA for Verified SOC Stack TLS | accepted | 2026-05-18 |

@@ -29,7 +29,12 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[0/6] Waiting for SOC tools to be healthy..."
 
-for svc in aptl-thehive aptl-misp aptl-shuffle-backend; do
+# SEC-006 / ADR-034: seed-shuffle.sh now talks to the HTTPS frontend
+# at https://localhost:3443. The readiness gate waits for
+# `aptl-shuffle-frontend` (which has a healthcheck post-SEC-006)
+# rather than the headless `aptl-shuffle-backend` container that
+# Docker reports without a `.State.Health.Status`.
+for svc in aptl-thehive aptl-misp aptl-shuffle-frontend; do
     max_wait=600
     elapsed=0
     while [ $elapsed -lt $max_wait ]; do

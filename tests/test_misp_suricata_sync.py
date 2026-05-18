@@ -72,7 +72,10 @@ class TestServiceConfig:
         cfg = ServiceConfig.from_env()
         assert cfg.misp_url == "https://misp"
         assert cfg.misp_api_key == "test-key"
-        assert cfg.misp_verify_ssl is False
+        # SEC-006: verification is ENABLED by default; ADR-034 makes the
+        # lab CA the trust anchor. Disabling verification is reserved for
+        # local debugging via an explicit MISP_VERIFY_SSL=false override.
+        assert cfg.misp_verify_ssl is True
         assert cfg.ioc_tag_filter == "aptl:enforce"
         assert cfg.sync_interval_seconds == 300
         # Default lives well above ET Open's 2.x million range; see
@@ -183,6 +186,17 @@ class TestServiceConfig:
         monkeypatch.setenv("MISP_CA_CERT_PATH", "   ")
         cfg = ServiceConfig.from_env()
         assert cfg.misp_ca_cert_path is None
+
+    def test_explicit_verify_ssl_false_still_disables(self, monkeypatch):
+        """SEC-006 keeps an explicit per-client override for local
+        debugging. The strict parser still accepts ``false`` and disables
+        verification; only the *default* flipped to ``True``."""
+        from aptl.services.misp_suricata_sync.config import ServiceConfig
+
+        monkeypatch.setenv("MISP_API_KEY", "k")
+        monkeypatch.setenv("MISP_VERIFY_SSL", "false")
+        cfg = ServiceConfig.from_env()
+        assert cfg.misp_verify_ssl is False
 
 
 # ---------------------------------------------------------------------------

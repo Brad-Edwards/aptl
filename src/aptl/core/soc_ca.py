@@ -226,7 +226,9 @@ def _generate_with_error_envelope(output_dir: Path) -> CertResult:
             certs_dir=output_dir,
             error=f"SOC certificate generation failed: {exc}",
         )
-    except Exception as exc:  # noqa: BLE001 — cryptography stack raises a heterogeneous tree; ADR-029 contract converts ANY of them to a fatal CertResult (see docstring for the catalog).
+    # Broad except is the ADR-029 contract: ANY cryptography failure
+    # converts to a fatal CertResult (see docstring catalog).
+    except Exception as exc:
         layer = _classify_failure_layer(exc)
         log.exception(
             "soc_cert_generation: %s failed: %s",

@@ -203,7 +203,10 @@ def _ca_signature_verifies(
             _signature_padding_for(cert),
             cert.signature_hash_algorithm,
         )
-    except Exception:  # noqa: BLE001 — any cryptography failure (InvalidSignature, AttributeError on a truncated cert, ValueError on bad encoding, TypeError on key-mismatch shapes, future classes) means the chain is broken; the consistency-check contract is "any failure ⇒ regenerate".
+    # Broad except is the consistency-check contract: any cryptography
+    # failure (InvalidSignature, AttributeError, ValueError, future
+    # classes) means the chain is broken; regenerate.
+    except Exception:
         return False
     return True
 

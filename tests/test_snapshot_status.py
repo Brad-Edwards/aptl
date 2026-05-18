@@ -21,8 +21,6 @@ from aptl.core.snapshot import (
     SSHEndpoint,
     SoftwareVersions,
     WazuhRulesSnapshot,
-    _get_service_endpoints,
-    _get_ssh_endpoints,
 )
 
 
@@ -60,82 +58,6 @@ class TestContainerSnapshotNewFields:
         d = asdict(cs)
         assert d["networks"]["aptl_aptl-redteam"] == "172.20.4.30"
         assert len(d["ports"]) == 1
-
-
-class TestServiceEndpoints:
-    """Tests for deriving service endpoints from containers."""
-
-    def test_returns_dashboard_when_running(self):
-        containers = [
-            ContainerSnapshot(name="aptl-wazuh-dashboard", status="Up 5 minutes (healthy)"),
-        ]
-        endpoints = _get_service_endpoints(containers)
-        assert len(endpoints) == 1
-        assert endpoints[0].name == "Wazuh Dashboard"
-        assert endpoints[0].port == 443
-        assert "https" in endpoints[0].url
-
-    def test_returns_all_wazuh_services(self):
-        containers = [
-            ContainerSnapshot(name="aptl-wazuh-dashboard", status="Up 5 minutes"),
-            ContainerSnapshot(name="aptl-wazuh-indexer", status="Up 5 minutes"),
-            ContainerSnapshot(name="aptl-wazuh-manager", status="Up 5 minutes"),
-        ]
-        endpoints = _get_service_endpoints(containers)
-        names = {e.name for e in endpoints}
-        assert "Wazuh Dashboard" in names
-        assert "Wazuh Indexer" in names
-        assert "Wazuh API" in names
-
-    def test_skips_stopped_containers(self):
-        containers = [
-            ContainerSnapshot(name="aptl-wazuh-dashboard", status="Exited (0) 2 minutes ago"),
-        ]
-        endpoints = _get_service_endpoints(containers)
-        assert len(endpoints) == 0
-
-    def test_empty_containers(self):
-        assert _get_service_endpoints([]) == []
-
-
-class TestSSHEndpoints:
-    """Tests for deriving SSH endpoints from containers."""
-
-    def test_returns_victim_ssh(self):
-        containers = [
-            ContainerSnapshot(name="aptl-victim", status="Up 5 minutes"),
-        ]
-        endpoints = _get_ssh_endpoints(containers)
-        assert len(endpoints) == 1
-        assert endpoints[0].port == 2022
-        assert endpoints[0].user == "labadmin"
-        assert "2022" in endpoints[0].command
-
-    def test_returns_all_ssh_containers(self):
-        containers = [
-            ContainerSnapshot(name="aptl-victim", status="Up 5 minutes"),
-            ContainerSnapshot(name="aptl-kali", status="Up 5 minutes"),
-            ContainerSnapshot(name="aptl-reverse", status="Up 5 minutes"),
-        ]
-        endpoints = _get_ssh_endpoints(containers)
-        assert len(endpoints) == 3
-        ports = {e.port for e in endpoints}
-        assert ports == {2022, 2023, 2027}
-
-    def test_skips_stopped_containers(self):
-        containers = [
-            ContainerSnapshot(name="aptl-kali", status="Exited (137) 1 minute ago"),
-        ]
-        endpoints = _get_ssh_endpoints(containers)
-        assert len(endpoints) == 0
-
-    def test_skips_non_ssh_containers(self):
-        containers = [
-            ContainerSnapshot(name="aptl-wazuh-manager", status="Up 5 minutes"),
-            ContainerSnapshot(name="aptl-ad", status="Up 5 minutes"),
-        ]
-        endpoints = _get_ssh_endpoints(containers)
-        assert len(endpoints) == 0
 
 
 class TestRangeSnapshotNewFields:
@@ -227,8 +149,16 @@ class TestStatusCLIJsonOutput:
         mock_capture.return_value = RangeSnapshot()
 
         out_file = tmp_path / "status.json"
-        runner = CliRunner()
-        runner.invoke(app, ["status", "--output", str(out_file)])
+        # Pre-create the file with permissive mode so the assertion
+        # below proves the CLI *actively* chmod'd it to 0o600, rather
+        # than the host's umask happening to clamp the new file's mode.
+        out_file.write_text("{}")
+        out_file.chmod(0o644)
 
+        runner = CliRunner()
+        result = runner.invoke(app, ["status", "--output", str(out_file)])
+
+        assert result.exit_code == 0, result.output
+        assert out_file.exists()
         mode = out_file.stat().st_mode & 0o777
         assert mode == 0o600

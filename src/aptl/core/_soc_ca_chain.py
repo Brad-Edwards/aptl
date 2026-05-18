@@ -203,14 +203,7 @@ def _ca_signature_verifies(
             _signature_padding_for(cert),
             cert.signature_hash_algorithm,
         )
-    # noqa(BLE001) is intentional here: the cryptography stack raises
-    # InvalidSignature on real mismatch but the call can also surface
-    # AttributeError on a truncated cert, ValueError on bad encoding,
-    # TypeError on key-mismatch shapes, or future exception classes
-    # we don't want to enumerate. The consistency-check contract is
-    # "any failure ⇒ chain is broken, regenerate" — broad-except is
-    # the explicit design here, not an oversight.
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 — any cryptography failure (InvalidSignature, AttributeError on a truncated cert, ValueError on bad encoding, TypeError on key-mismatch shapes, future classes) means the chain is broken; the consistency-check contract is "any failure ⇒ regenerate".
         return False
     return True
 

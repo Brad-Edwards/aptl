@@ -6,51 +6,63 @@ drive the lab through the ACES :class:`RuntimeManager` against the
 :class:`aptl.backends.aces.AptlProvisioner` adapter, translating
 :class:`aces_processor.models.ApplyResult` diagnostics into APTL's
 :class:`LabResult` envelope at the boundary (ADR-035 § Update 2026-05-19).
-
-``start``/``stop`` are not yet wired end-to-end; the integration test
-``TestScenarioHarness::test_scenario_lifecycle_with_live_detection``
-will go green once they are.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 
+from aptl.cli._common import resolve_config_for_cli
 from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aces_processor.models import ApplyResult
 
 log = get_logger("cli.scenario")
 
 app = typer.Typer(help="Scenario authoring lifecycle (ACES SDL).")
-
 
 #: Filename suffix for ACES SDL scenario documents under ``scenarios/``.
 SDL_SUFFIX = ".sdl.yaml"
 
 
 def _find_sdl_scenarios(scenarios_dir: Path) -> list[Path]:
-    """Return sorted paths to ``*.sdl.yaml`` files in ``scenarios_dir``.
-
-    Non-recursive. Returns ``[]`` when the directory is missing — the
-    CLI surfaces that as "no scenarios discovered" rather than an error
-    so a fresh project tree doesn't fail the listing command.
-    """
+    """Return sorted paths to ``*.sdl.yaml`` files in ``scenarios_dir``."""
     if not scenarios_dir.is_dir():
         return []
     return sorted(scenarios_dir.glob(f"*{SDL_SUFFIX}"))
 
 
 def _scenario_id_from_path(path: Path) -> str:
-    """Strip the ``.sdl.yaml`` suffix from a scenario file's stem.
+    """Strip ``.sdl.yaml`` to produce the user-visible scenario id.
 
     ``Path.stem`` only strips one suffix; for ``foo.sdl.yaml`` the stem
-    is ``foo.sdl``. The user-visible scenario id is just ``foo``.
+    is ``foo.sdl``. We want ``foo``.
     """
     name = path.name
     if name.endswith(SDL_SUFFIX):
         return name[: -len(SDL_SUFFIX)]
     return path.stem
+
+
+def _scenario_path_for_id(scenarios_dir: Path, scenario_id: str) -> Path:
+    """Return the expected file path for a scenario id (no IO)."""
+    return scenarios_dir / f"{scenario_id}{SDL_SUFFIX}"
+
+
+def _emit_apply_diagnostics(result: "ApplyResult") -> None:
+    """Print each ACES diagnostic on stderr in the same severity-tagged
+    shape APTL's existing CLI renders ``StartupDiagnostic`` entries —
+    keeps the user-visible failure output indistinguishable from the
+    pre-cutover lab-start path (ADR-035 invariant 4)."""
+    for diag in result.diagnostics:
+        typer.echo(
+            f"[{diag.severity.name}] {diag.code}: {diag.message}",
+            err=True,
+        )
 
 
 @app.command("list")
@@ -87,28 +99,79 @@ def start_scenario(
         "--scenarios-dir",
         help="Directory to search for *.sdl.yaml scenario files.",
     ),
+    skip_seed: bool = typer.Option(
+        False,
+        "--skip-seed",
+        help="Skip SOC tool seeding after startup (forwards to lab start).",
+    ),
 ) -> None:
-    """Start a scenario via the ACES backend.
+    """Start a scenario through the ACES backend.
 
-    Loads the SDL document, plans through ACES's
-    :class:`RuntimeManager` against an APTL :class:`RuntimeTarget`
-    wired to the project's :class:`DeploymentBackend`, applies the
-    plan, and records the session.
-
-    Not yet wired end-to-end — exits with code 2 and a structured
-    "not implemented" message until the scenario engine lands. The
-    contract surface (CLI args, project-state file path, success
-    message format) is locked in here so the integration test's
-    expectations can be pinned today.
+    SDL → :func:`aces_sdl.parse_sdl_file` →
+    :meth:`aces_processor.manager.RuntimeManager.plan` →
+    :meth:`~aces_processor.manager.RuntimeManager.apply` against APTL's
+    :class:`~aptl.backends.aces.AptlProvisioner` (wired to the project's
+    :class:`~aptl.core.deployment.backend.DeploymentBackend`). Writes
+    ``.aptl/session.json`` on success so subsequent commands see the
+    active scenario.
     """
-    _ = scenarios_dir  # consumed once the loader is wired
-    typer.echo(
-        f"aptl scenario start is not yet wired through the ACES "
-        f"backend — scenario_id={scenario_id!r}, "
-        f"project_dir={project_dir!s}",
-        err=True,
-    )
-    raise typer.Exit(code=2)
+    sdl_path = _scenario_path_for_id(scenarios_dir, scenario_id)
+    if not sdl_path.exists():
+        typer.echo(
+            f"Scenario '{scenario_id}' not found at {sdl_path}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    # Imports stay local: aces-sdl is an optional dev dep, and CLI startup
+    # for unrelated subcommands (``aptl lab start``, ``aptl runs list``)
+    # shouldn't pay the ACES import cost.
+    try:
+        from aces_sdl import parse_sdl_file
+        from aces_processor.manager import RuntimeManager
+    except ImportError as exc:
+        typer.echo(
+            f"ACES SDL not installed: {exc}. See docs/lessons/2026-05-19-aces-backend-integration.md "
+            "for the install recipe.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
+
+    from aptl.backends.aces import create_aptl_target
+    from aptl.core.deployment import get_backend
+    from aptl.core.session import ScenarioSession
+
+    config, resolved_project_dir = resolve_config_for_cli(project_dir)
+
+    session = ScenarioSession(state_dir=resolved_project_dir / ".aptl")
+    if session.is_active():
+        existing = session.get_active()
+        active_id = existing.scenario_id if existing else "<unknown>"
+        typer.echo(
+            f"Scenario '{active_id}' is already active in {resolved_project_dir}; "
+            "stop it first with 'aptl scenario stop'.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    backend = get_backend(config, resolved_project_dir)
+    target = create_aptl_target(backend=backend, build=not skip_seed)
+    sdl = parse_sdl_file(sdl_path)
+
+    manager = RuntimeManager(target=target)
+    plan = manager.plan(scenario=sdl)
+    result = manager.apply(plan)
+
+    if not result.success:
+        _emit_apply_diagnostics(result)
+        typer.echo(
+            f"Failed to start scenario '{scenario_id}'.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    session.start(scenario_id)
+    typer.echo(f"Started scenario '{scenario_id}'")
 
 
 @app.command("stop")
@@ -119,14 +182,39 @@ def stop_scenario(
         "-d",
         help="Path to the APTL project directory.",
     ),
+    volumes: bool = typer.Option(
+        False,
+        "--volumes",
+        "-v",
+        help="Also remove Docker volumes (full cleanup).",
+    ),
 ) -> None:
-    """Stop the active scenario in ``project-dir``.
+    """Stop the active scenario.
 
-    Not yet wired — see ``start`` docstring.
+    Loads the active session, stops the lab via the project's
+    :class:`DeploymentBackend`, and clears ``.aptl/session.json``.
     """
-    _ = project_dir
-    typer.echo(
-        "aptl scenario stop is not yet wired through the ACES backend",
-        err=True,
-    )
-    raise typer.Exit(code=2)
+    from aptl.backends.aces import DEFAULT_PROFILES
+    from aptl.core.deployment import get_backend
+    from aptl.core.session import ScenarioSession
+
+    config, resolved_project_dir = resolve_config_for_cli(project_dir)
+    session = ScenarioSession(state_dir=resolved_project_dir / ".aptl")
+
+    active = session.get_active()
+    if active is None:
+        typer.echo(
+            f"No active scenario in {resolved_project_dir}.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    backend = get_backend(config, resolved_project_dir)
+    lab_result = backend.stop(list(DEFAULT_PROFILES), remove_volumes=volumes)
+    if not lab_result.success:
+        message = lab_result.error or lab_result.message or "stop failed"
+        typer.echo(message, err=True)
+        raise typer.Exit(code=1)
+
+    session.clear()
+    typer.echo(f"Scenario stopped: '{active.scenario_id}'")

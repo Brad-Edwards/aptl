@@ -1,0 +1,42 @@
+name: detect-brute-force
+description: >
+  Blue-team SSH brute-force detection scenario. Kali drives the attack;
+  Wazuh observes authentication failures on the victim and generates
+  rule 5763 alerts. The ACES SDL describes the lab topology; container
+  bring-up + Wazuh rule wiring is handled by the APTL deployment
+  backend (Docker Compose profiles) at apply time.
+
+nodes:
+  kali-net:
+    type: Switch
+    description: Kali attack-segment network.
+
+  victim-net:
+    type: Switch
+    description: Victim-segment network (Wazuh agent ingest path).
+
+  soc-net:
+    type: Switch
+    description: SOC network (Wazuh manager + indexer + dashboard).
+
+  kali:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 22, name: ssh}
+
+  victim:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 22, name: ssh}
+
+  wazuh-manager:
+    type: VM
+    os: linux
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 1514, name: wazuh-agent-ingest}
+      - {port: 55000, name: wazuh-api}

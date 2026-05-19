@@ -135,26 +135,99 @@ class TestUserVisibleInvariance:
         pytest.fail("not yet implemented — pre-cutover stub")
 
 
-@PARITY_GATE
 class TestAcesBackendDrivesLab:
     """The ACES-backend realization path produces a working lab —
     not a shape-correct manifest, but actual containers responding
-    to scenario commands the same way the legacy path's lab does."""
+    to scenario commands the same way the legacy path's lab does.
+
+    NOT gated by PARITY_GATE — these tests run on every push because
+    they exercise SDL parsing + planning without needing the lab. The
+    `live` variants below (gated) drive real containers."""
+
+    def test_techvault_sdl_parses_and_plans_through_aces(self):
+        """TechVault is the parity-gate target scenario. It must parse
+        cleanly via aces_sdl + plan via RuntimeManager against the APTL
+        target without producing fatal diagnostics. The plan must cover
+        every node-type the legacy ``scenarios/*.yaml`` set referenced
+        (kali, victim, webapp, database, AD, fileshare, workstation,
+        wazuh stack). Capability-parity check from ADR-035."""
+        pytest.importorskip("aces_processor")
+        from aces_sdl import parse_sdl_file
+        from aces_processor.manager import RuntimeManager
+        from aptl.backends.aces import create_aptl_target
+
+        sdl_path = Path(__file__).resolve().parent.parent / "scenarios" / "techvault.sdl.yaml"
+        assert sdl_path.exists(), f"TechVault SDL missing at {sdl_path}"
+
+        sdl = parse_sdl_file(sdl_path)
+        target = create_aptl_target()
+        manager = RuntimeManager(target=target)
+        plan = manager.plan(scenario=sdl)
+
+        # No fatal plan diagnostics
+        from aces_processor.models import Severity
+        fatals = [d for d in plan.diagnostics if d.severity == Severity.ERROR]
+        assert not fatals, f"plan emitted fatal diagnostics: {fatals}"
+
+        # Every legacy-scenario node surface is covered. Each node in the
+        # SDL produces a ``provision.node.<name>`` op; networks produce
+        # ``provision.network.<name>``. Pin the full set so an SDL edit
+        # that drops a node surface fails this test.
+        addresses = {op.address for op in plan.provisioning.operations}
+        expected_nodes = {
+            "provision.node.kali",
+            "provision.node.victim",
+            "provision.node.webapp",
+            "provision.node.database",
+            "provision.node.active-directory",
+            "provision.node.fileshare",
+            "provision.node.workstation",
+            "provision.node.wazuh-manager",
+            "provision.node.wazuh-indexer",
+            "provision.node.wazuh-dashboard",
+        }
+        missing = expected_nodes - addresses
+        assert not missing, f"TechVault SDL missing legacy node surfaces: {missing}"
+
+    def test_brute_force_sdl_parses_and_plans_through_aces(self):
+        """The brute-force scenario referenced by the integration test
+        parses + plans cleanly. Pins the SDL exists with the right name
+        so ``aptl scenario start detect-brute-force`` can reach it."""
+        pytest.importorskip("aces_processor")
+        from aces_sdl import parse_sdl_file
+        from aces_processor.manager import RuntimeManager
+        from aptl.backends.aces import create_aptl_target
+
+        sdl_path = (
+            Path(__file__).resolve().parent.parent
+            / "scenarios" / "detect-brute-force.sdl.yaml"
+        )
+        assert sdl_path.exists(), f"Brute-force SDL missing at {sdl_path}"
+
+        sdl = parse_sdl_file(sdl_path)
+        target = create_aptl_target()
+        plan = RuntimeManager(target=target).plan(scenario=sdl)
+
+        addresses = {op.address for op in plan.provisioning.operations}
+        # Three nodes required by the scenario: kali (attacker), victim
+        # (target), wazuh-manager (observer).
+        for required in ("kali", "victim", "wazuh-manager"):
+            assert f"provision.node.{required}" in addresses, (
+                f"brute-force SDL missing node '{required}'; got: {addresses}"
+            )
+
+
+@PARITY_GATE
+class TestAcesBackendDrivesLabLive:
+    """Live-lab parity probes — gated behind APTL_PARITY=1 because they
+    drive real Docker. Run with::
+
+        APTL_PARITY=1 pytest tests/test_aces_parity.py::TestAcesBackendDrivesLabLive
+    """
 
     def test_aces_driven_scenario_start_produces_running_containers(self):
         """The most basic parity probe: start the equivalent ACES
         scenario, assert the same Docker containers are running with
         the same names, networks, and reachability the legacy path
-        produces.
-
-        This test depends on the full APTL adapter wiring through
-        DeploymentBackend. Skipped until that wiring exists.
-        """
-        pytest.fail("not yet implemented — pre-cutover stub")
-
-    def test_aces_driven_techvault_matches_legacy_scenario_set_surfaces(self):
-        """TechVault under ACES exercises the same node/service/
-        vulnerability/feature/inject/objective surfaces as the union
-        of the current scenarios/*.yaml set. The capability-parity
-        check from ADR-035's Parity Gate, mechanized."""
+        produces."""
         pytest.fail("not yet implemented — pre-cutover stub")

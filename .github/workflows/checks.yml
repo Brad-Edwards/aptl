@@ -47,7 +47,16 @@ jobs:
           python-version: "3.12"
       - run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,web]"
+          # aces-sdl carries its controlled-vocabulary catalog as a
+          # repo-relative artifact under contracts/; aces_contracts
+          # resolves it via Path(__file__).parents[4] which only points
+          # at a real directory under an EDITABLE install. As a wheel
+          # the catalog is unreachable. Install aces-sdl editably first
+          # so the path walk lands; APTL's own install then sees the
+          # dependency satisfied and skips re-resolution. Tracked in
+          # docs/lessons/2026-05-19-aces-backend-skeleton.md.
+          pip install -e "git+https://github.com/Brad-Edwards/aces.git@12d9a8234b354f4f181a5db251d791ac57441f52#subdirectory=implementations/python&egg=aces-sdl"
+          pip install -e ".[dev,web,aces]"
       - run: |
           coverage run -m pytest tests/ -q -k "not integration"
           coverage xml -o coverage.xml
@@ -75,7 +84,11 @@ jobs:
           python-version: "3.12"
       - run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          # See note on python-tests job: aces-sdl must be installed
+          # editably so its controlled-vocabulary catalog is reachable
+          # via the package's parents[4] path walk.
+          pip install -e "git+https://github.com/Brad-Edwards/aces.git@12d9a8234b354f4f181a5db251d791ac57441f52#subdirectory=implementations/python&egg=aces-sdl"
+          pip install -e ".[dev,aces]"
       - name: Run conformance against provisioning-only profile
         run: |
           python -c "

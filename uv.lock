@@ -55,7 +55,6 @@ name = "aptl"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "aces-sdl" },
     { name = "cryptography" },
     { name = "icontract" },
     { name = "opentelemetry-api" },
@@ -69,6 +68,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+aces = [
+    { name = "aces-sdl" },
+]
 dev = [
     { name = "coverage" },
     { name = "httpx" },
@@ -89,7 +91,7 @@ web = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aces-sdl", git = "https://github.com/Brad-Edwards/aces.git?subdirectory=implementations%2Fpython&rev=12d9a8234b354f4f181a5db251d791ac57441f52" },
+    { name = "aces-sdl", marker = "extra == 'aces'", git = "https://github.com/Brad-Edwards/aces.git?subdirectory=implementations%2Fpython&rev=12d9a8234b354f4f181a5db251d791ac57441f52" },
     { name = "asyncssh", marker = "extra == 'web'", specifier = ">=2.17.0" },
     { name = "boto3", marker = "extra == 's3'", specifier = ">=1.28.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.0.0" },
@@ -112,7 +114,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'web'", specifier = ">=0.34.0" },
 ]
-provides-extras = ["s3", "web", "dev"]
+provides-extras = ["s3", "aces", "web", "dev"]
 
 [[package]]
 name = "asttokens"

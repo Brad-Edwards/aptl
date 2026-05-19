@@ -18,11 +18,6 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.33.0",
     "opentelemetry-semantic-conventions>=0.54b0",
     "cryptography>=42.0.0",
-    # ACES SDL backend-contract surface (#310, ADR-035). Pinned to a
-    # specific dev-branch SHA during co-evolution; bump in a dedicated
-    # PR with a docs/lessons/ entry capturing what the pin bump
-    # surfaces. See docs/lessons/2026-05-19-aces-backend-skeleton.md.
-    "aces-sdl @ git+https://github.com/Brad-Edwards/aces.git@12d9a8234b354f4f181a5db251d791ac57441f52#subdirectory=implementations/python",
 ]
 
 [project.scripts]
@@ -32,6 +27,20 @@ aptl-misp-suricata-sync = "aptl.services.misp_suricata_sync.main:main"
 [project.optional-dependencies]
 s3 = [
     "boto3>=1.28.0",
+]
+# ACES SDL backend-contract surface (#310, ADR-035). Optional extra
+# during Phase A so the smaller APTL containers (misp-suricata-sync,
+# web-api, webapp) don't pay the dependency cost; the Python test job
+# and the aces-conformance advisory job install it explicitly. Pinned
+# to a specific dev-branch SHA during co-evolution; bump in a dedicated
+# PR with a docs/lessons/ entry capturing what the bump surfaces.
+# Becomes a core dep at Phase B cutover.
+# NOTE: install editably (`pip install -e .[aces]`) or pre-install
+# aces-sdl with `pip install -e "git+..."` because aces-sdl carries its
+# controlled-vocabulary catalog as a repo-relative file unreachable
+# under a wheel install. See docs/lessons/2026-05-19-aces-backend-skeleton.md.
+aces = [
+    "aces-sdl @ git+https://github.com/Brad-Edwards/aces.git@12d9a8234b354f4f181a5db251d791ac57441f52#subdirectory=implementations/python",
 ]
 web = [
     "fastapi>=0.115.0",
@@ -50,6 +59,13 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
+
+[tool.hatch.metadata]
+# Opt in to direct-reference dependencies so the pinned aces-sdl git
+# dependency in [project].dependencies is accepted. aces-sdl is
+# co-developed; pinning to a specific SHA is the right pattern during
+# Phase A / pre-cutover (#310, ADR-035).
+allow-direct-references = true
 
 [tool.ruff]
 # Lint only the Python control-plane source. Tests, generated files, and

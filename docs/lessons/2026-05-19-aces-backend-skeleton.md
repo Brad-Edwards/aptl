@@ -58,6 +58,28 @@ Three contract-surface frictions surfaced during the scaffolding:
    classes so this doesn't bite it; downstream backend authors will
    trip on the same wall the first time they try to assert
    conformance in tests.
+4. **`aces_contracts` cannot find its controlled-vocabulary catalog
+   under a non-editable install.** `_repo_root()` is defined as
+   `Path(__file__).resolve().parents[4]` and the catalog at
+   `contracts/concept-authority/controlled-vocabularies-v1.json` is
+   expected to live there. This assumes the source-tree layout
+   `<repo>/implementations/python/packages/aces_contracts/__init__.py`,
+   which only matches when aces-sdl is installed editably. A wheel
+   install lands the package under `site-packages/aces_contracts/`,
+   and `parents[4]` points at the venv root or higher — the catalog
+   file isn't found, every BackendManifest construction call dies
+   with `FileNotFoundError`. APTL's CI first hit this when the
+   `python-tests` job installed aces-sdl as a transitive resolution
+   from `pip install -e ".[dev]"`. Workaround applied: APTL's CI
+   installs aces-sdl with `pip install -e "git+..."` BEFORE its own
+   install, and `aces-sdl` is declared as an OPTIONAL `[aces]` extra
+   rather than a core dep so the smaller APTL containers
+   (misp-suricata-sync, web-api, webapp) don't pay the cost. Real
+   fix lives on the ACES side: package the contracts/ tree as data
+   files (PEP 561-style `package_data`) so the resolution works
+   regardless of install mode, or expose the catalog via an
+   `importlib.resources` lookup that doesn't rely on the source-tree
+   path walk.
 
 ## Decision
 
@@ -106,3 +128,8 @@ arguably the duck-type-in-tests pattern is fine).
   profile JSONs.
 - aces — `@runtime_checkable` decision on `aces_backend_protocols.protocols`
   (Provisioner / Orchestrator / Evaluator / ParticipantRuntime).
+- aces — package the `contracts/` tree as installable package data
+  (or use `importlib.resources`) so wheel installs work. The
+  `parents[4]` source-tree-relative path walk is a real bug for any
+  downstream that doesn't install aces-sdl editably (#310 Phase A.1
+  hit it in APTL's CI before the editable-install workaround).

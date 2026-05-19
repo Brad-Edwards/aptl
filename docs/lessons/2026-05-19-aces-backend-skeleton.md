@@ -59,7 +59,9 @@ Three contract-surface frictions surfaced during the scaffolding:
    trip on the same wall the first time they try to assert
    conformance in tests.
 4. **`aces_contracts` cannot find its controlled-vocabulary catalog
-   under a non-editable install.** `_repo_root()` is defined as
+   under a non-editable install — and pip's interaction with
+   direct-reference dependencies makes "just install editably"
+   non-trivial.** `_repo_root()` is defined as
    `Path(__file__).resolve().parents[4]` and the catalog at
    `contracts/concept-authority/controlled-vocabularies-v1.json` is
    expected to live there. This assumes the source-tree layout
@@ -69,25 +71,45 @@ Three contract-surface frictions surfaced during the scaffolding:
    `site-packages/aces_contracts/` and `parents[4]` points at the
    venv root or higher — the catalog file isn't found, every
    `BackendManifest` construction call dies with `FileNotFoundError`.
-   APTL's CI first hit this when the `python-tests` job installed
-   aces-sdl as a transitive resolution from `pip install -e ".[dev]"`.
-   We then learned a second, more subtle variant: **`pip install -e
-   "git+...#subdirectory=implementations/python&egg=aces-sdl"` does
-   not produce an editable install on GitHub Actions even when the
-   `-e` flag is supplied.** Pip builds a wheel from the subdirectory
-   anyway, installs into `site-packages/`, and `parents[4]` lands at
-   `/opt/hostedtoolcache/Python/3.12.13/x64/` — the catalog file
-   isn't there. Workaround we adopted: clone aces-sdl explicitly with
-   `git clone` to a known sibling path in CI, then install with `pip
-   install -e ../aces-sdl/implementations/python`. The clone-and-path-
-   install IS unambiguously editable. We also kept `aces-sdl` as an
-   OPTIONAL `[aces]` extra rather than a core dep so the smaller
-   APTL containers (misp-suricata-sync, web-api, webapp) don't pay
-   the cost. Real fix lives on the ACES side: package the
-   `contracts/` tree as data files (PEP 561-style `package_data`) so
-   the resolution works regardless of install mode, or expose the
-   catalog via an `importlib.resources` lookup that doesn't rely on
-   the source-tree path walk.
+
+   We hit three layered variants of this:
+
+   - **Variant A — transitive wheel install.** APTL's CI initially
+     declared aces-sdl in `[project].dependencies` as a `name @
+     git+...` direct reference, then ran `pip install -e ".[dev]"`.
+     Pip built aces-sdl as a wheel and installed it into
+     site-packages; the path walk failed.
+   - **Variant B — `pip install -e "git+...#subdirectory=..."` is
+     not editable on GitHub Actions.** Even with the explicit `-e`
+     flag, pip builds a wheel from the subdirectory and installs
+     to site-packages.
+   - **Variant C — extras with direct-ref deps re-install over
+     existing editable installs.** We tried installing aces-sdl
+     editably first via `pip install -e "git+..."` (which DID land
+     editably in some configurations) and THEN running `pip install
+     -e ".[aces]"`. Pip's resolution of the `[aces]` extra's
+     `aces-sdl @ git+...` line re-installed aces-sdl from the URL as
+     a wheel, OVERWRITING the editable install. The first install
+     was fine; the second invocation silently invalidated it.
+
+   **Resolution we shipped.** Drop the dependency declaration
+   entirely from APTL's pyproject — neither core nor extra. CI and
+   developers clone aces-sdl with `git clone` to `../aces-sdl`,
+   checkout the pinned SHA, then `pip install -e
+   ../aces-sdl/implementations/python` BEFORE installing APTL.
+   `aptl.backends.aces` imports succeed; tests using
+   `pytest.importorskip("aces_backend_protocols.protocols")` skip
+   gracefully when aces-sdl is absent. The pinned SHA lives in the
+   GitHub workflow + this lessons entry rather than in
+   pyproject.toml, but the trade-off is worth it: pyproject's
+   declarative dependency model fights us as long as aces-sdl
+   carries source-tree-relative resource lookups.
+
+   **Real fix on the ACES side.** Package the `contracts/` tree as
+   installable data files (PEP 561-style `package_data` /
+   `tool.hatch.build.targets.wheel.shared-data`) and load via
+   `importlib.resources`. With that, every install mode works and
+   APTL can declare aces-sdl as a normal pyproject dependency.
 
 ## Decision
 

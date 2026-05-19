@@ -28,20 +28,25 @@ aptl-misp-suricata-sync = "aptl.services.misp_suricata_sync.main:main"
 s3 = [
     "boto3>=1.28.0",
 ]
-# ACES SDL backend-contract surface (#310, ADR-035). Optional extra
-# during Phase A so the smaller APTL containers (misp-suricata-sync,
-# web-api, webapp) don't pay the dependency cost; the Python test job
-# and the aces-conformance advisory job install it explicitly. Pinned
-# to a specific dev-branch SHA during co-evolution; bump in a dedicated
-# PR with a docs/lessons/ entry capturing what the bump surfaces.
-# Becomes a core dep at Phase B cutover.
-# NOTE: install editably (`pip install -e .[aces]`) or pre-install
-# aces-sdl with `pip install -e "git+..."` because aces-sdl carries its
-# controlled-vocabulary catalog as a repo-relative file unreachable
-# under a wheel install. See docs/lessons/2026-05-19-aces-backend-skeleton.md.
-aces = [
-    "aces-sdl @ git+https://github.com/Brad-Edwards/aces.git@12d9a8234b354f4f181a5db251d791ac57441f52#subdirectory=implementations/python",
-]
+# NOTE on aces-sdl (#310, ADR-035): NOT declared as an APTL dep at
+# all (neither core nor optional extra) because pip's resolution of
+# `[name @ git+url]` extras re-installs the package from the URL as a
+# wheel even when an editable install already exists, breaking
+# aces_contracts's source-tree-relative catalog lookup. Developers
+# and CI install aces-sdl explicitly, e.g.:
+#
+#     git clone https://github.com/Brad-Edwards/aces.git ../aces-sdl
+#     (cd ../aces-sdl && git checkout 12d9a8234b354f4f181a5db251d791ac57441f52)
+#     pip install -e ../aces-sdl/implementations/python
+#     pip install -e .  # APTL itself
+#
+# `aptl.backends.aces` import-side and the conformance tests use
+# `pytest.importorskip` so an APTL install without aces-sdl skips
+# the ACES backend tests gracefully. The pinned SHA lives in CI
+# (.github/workflows/checks.yml) and developer documentation. Phase
+# B cutover formalizes the dependency once ACES ships a packaging
+# layout that survives wheel install — tracked in
+# docs/lessons/2026-05-19-aces-backend-skeleton.md.
 web = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
@@ -59,13 +64,6 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
-
-[tool.hatch.metadata]
-# Opt in to direct-reference dependencies so the pinned aces-sdl git
-# dependency in [project].dependencies is accepted. aces-sdl is
-# co-developed; pinning to a specific SHA is the right pattern during
-# Phase A / pre-cutover (#310, ADR-035).
-allow-direct-references = true
 
 [tool.ruff]
 # Lint only the Python control-plane source. Tests, generated files, and

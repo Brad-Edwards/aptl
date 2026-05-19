@@ -63,7 +63,7 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           pip install -e ../aces-sdl/implementations/python
-          pip install -e ".[dev,web,aces]"
+          pip install -e ".[dev,web]"
       - run: |
           coverage run -m pytest tests/ -q -k "not integration"
           coverage xml -o coverage.xml
@@ -101,7 +101,7 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           pip install -e ../aces-sdl/implementations/python
-          pip install -e ".[dev,aces]"
+          pip install -e ".[dev]"
       - name: Run conformance against provisioning-only profile
         run: |
           python -c "

@@ -1,0 +1,82 @@
+name: prime-enterprise
+description: >
+  Prime enterprise scenario — full lab topology exercising all three
+  attack paths (webapp → DB, AD compromise, lateral movement) under
+  one scenario. Equivalent in scope to TechVault but framed as the
+  full prime exercise.
+
+nodes:
+  dmz-net:
+    type: Switch
+  internal-net:
+    type: Switch
+  identity-net:
+    type: Switch
+  redteam-net:
+    type: Switch
+  soc-net:
+    type: Switch
+
+  webapp:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 8080, name: http}
+
+  database:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 5432, name: postgres}
+
+  victim:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 22, name: ssh}
+
+  workstation:
+    type: VM
+    os: windows
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 3389, name: rdp}
+
+  fileshare:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 1}
+    services:
+      - {port: 445, name: smb}
+
+  active-directory:
+    type: VM
+    os: windows
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 389, name: ldap}
+      - {port: 445, name: smb}
+
+  kali:
+    type: VM
+    os: linux
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 22, name: ssh}
+
+  wazuh-manager:
+    type: VM
+    os: linux
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 1514, name: wazuh-agent-ingest}
+
+  wazuh-indexer:
+    type: VM
+    os: linux
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 9200, name: opensearch}

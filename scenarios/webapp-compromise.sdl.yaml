@@ -1,0 +1,43 @@
+name: webapp-compromise
+description: >
+  Path A: kali compromises the DMZ webapp via SQLi → DB access. Wazuh
+  observes the request path; SOAR enrichment via MISP correlation on
+  the attacker IP.
+
+nodes:
+  dmz-net:
+    type: Switch
+  internal-net:
+    type: Switch
+  redteam-net:
+    type: Switch
+  soc-net:
+    type: Switch
+
+  kali:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 22, name: ssh}
+
+  webapp:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 8080, name: http}
+
+  database:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 5432, name: postgres}
+
+  wazuh-manager:
+    type: VM
+    os: linux
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 1514, name: wazuh-agent-ingest}

@@ -1,0 +1,42 @@
+name: ad-domain-compromise
+description: >
+  Path B: kali pivots through workstation → AD domain controller via
+  credential reuse + Kerberoasting. Wazuh observes auth events; SOAR
+  case lifecycle exercises TheHive case creation.
+
+nodes:
+  identity-net:
+    type: Switch
+  redteam-net:
+    type: Switch
+  soc-net:
+    type: Switch
+
+  kali:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 22, name: ssh}
+
+  workstation:
+    type: VM
+    os: windows
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 3389, name: rdp}
+
+  active-directory:
+    type: VM
+    os: windows
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 389, name: ldap}
+      - {port: 445, name: smb}
+
+  wazuh-manager:
+    type: VM
+    os: linux
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 1514, name: wazuh-agent-ingest}

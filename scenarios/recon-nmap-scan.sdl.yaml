@@ -1,0 +1,34 @@
+name: recon-nmap-scan
+description: >
+  Red-team reconnaissance scenario. Kali performs nmap discovery against
+  internal subnets; Wazuh observes the scanning behavior on the victim
+  + workstation hosts.
+
+nodes:
+  redteam-net:
+    type: Switch
+  internal-net:
+    type: Switch
+  soc-net:
+    type: Switch
+
+  kali:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 22, name: ssh}
+
+  victim:
+    type: VM
+    os: linux
+    resources: {ram: 2 gib, cpu: 2}
+    services:
+      - {port: 22, name: ssh}
+
+  wazuh-manager:
+    type: VM
+    os: linux
+    resources: {ram: 4 gib, cpu: 2}
+    services:
+      - {port: 1514, name: wazuh-agent-ingest}

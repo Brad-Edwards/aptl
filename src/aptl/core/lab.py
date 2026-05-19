@@ -6,6 +6,8 @@ Compose as the default backend.  Includes the full orchestration of lab
 startup.
 """
 
+import os
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from functools import partial
@@ -660,11 +662,49 @@ def _step_sync_suricata_misp_rule_baselines(
                 "to the local Docker Compose backend."
             ),
         )
+    # Suricata's in-container drop-privileges target (systemd-network)
+    # writes generated rule + hash sidecar files to the host bind mount
+    # under its container-uid. After `compose down`, the host-side
+    # ``.aptl/suricata/rules/misp/`` directory is left owned by that
+    # foreign user, and the next `aptl lab start` cannot chmod it back
+    # to ``0o755`` for the render contract — even though the mode is
+    # already correct. Reclaim ownership before the render so the
+    # baseline-sync step can succeed without manual cleanup.
+    _reclaim_suricata_misp_ownership(ctx.project_dir)
     return _run_credential_sync(
         "Suricata MISP rule baselines",
         sync_suricata_misp_rule_baselines,
         ctx.project_dir,
     )
+
+
+def _reclaim_suricata_misp_ownership(project_dir: Path) -> None:
+    """Best-effort: chown ``.aptl/suricata/`` back to the current user.
+
+    The suricata sidecar writes its generated rules/hashes as the
+    container-side privilege-drop user (typically ``systemd-network``
+    on the host's mapped UID range), so after ``compose down`` the
+    bind-mount directory is owned by a different user than the one
+    invoking ``aptl lab start``. The downstream render needs to chmod
+    that directory, and chmod fails with EPERM when we no longer own
+    it. ``sudo -n`` is non-interactive: a missing sudoers entry or a
+    password prompt is silently treated as "skip"; the subsequent
+    render will then surface a clean, actionable error.
+    """
+    target = project_dir / ".aptl" / "suricata"
+    if not target.exists():
+        return
+    sudo_bin = shutil.which("sudo")
+    if not sudo_bin:
+        return
+    try:
+        subprocess.run(
+            [sudo_bin, "-n", "chown", "-R", f"{os.getuid()}:{os.getgid()}",
+             str(target)],
+            capture_output=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
@@ -894,6 +934,41 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+def _test_ssh_via_kali(target_ip: str, user: str) -> bool:
+    """Probe SSH from inside the kali container.
+
+    The internal-mode Docker networks (``aptl-internal``,
+    ``aptl-redteam``, ``aptl-dmz``) by design block host-port DNAT
+    forwarding — so ``localhost:2022`` from the host cannot reach
+    sshd on victim. Scenarios drive containers via container-to-
+    container SSH; probe along the same path so a green readiness
+    check actually proves the path the scenarios use.
+
+    Uses kali's mounted ``/host-ssh-keys/aptl_lab_key`` for auth.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker", "exec", "aptl-kali",
+                "ssh",
+                "-i", "/host-ssh-keys/aptl_lab_key",
+                "-o", "ConnectTimeout=5",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "BatchMode=yes",
+                "-o", "UserKnownHostsFile=/dev/null",
+                f"{user}@{target_ip}",
+                "echo", "SSH OK",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+        log.debug("SSH-via-kali probe failed: %s", exc)
+        return False
+
+
 @_runtime_require(
     lambda ctx: config_is_loaded(ctx.config),
     description="config_is_loaded(ctx.config)",
@@ -905,22 +980,30 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
 def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 10: Testing SSH connectivity...")
     assert ctx.config is not None and ctx.ssh_key_path is not None  # runtime guards above
-    ssh_tests: list[tuple[str, int, str]] = []
+    # Scenarios drive containers via container-to-container SSH (kali →
+    # victim, kali → workstation, etc.) over the internal Docker bridges.
+    # The legacy probe used host-port SSH (``localhost:2022``), which is
+    # structurally blocked by the ``internal: true`` declaration on
+    # ``aptl-internal`` / ``aptl-redteam`` / ``aptl-dmz`` networks (Docker
+    # never installs the iptables DNAT rule for internal networks). The
+    # right reachability probe is the same path the scenarios use:
+    # ``docker exec`` into kali and SSH to the target via its bridge IP.
+    ssh_tests: list[tuple[str, str, str]] = []
     if ctx.config.containers.victim:
-        ssh_tests.append(("victim", 2022, "labadmin"))
+        ssh_tests.append(("victim", "172.20.2.20", "labadmin"))
     if ctx.config.containers.kali:
-        ssh_tests.append(("kali", 2023, "kali"))
+        # Self-loopback test from inside kali — confirms kali's SSH key
+        # is mounted and the private/public pair is consistent.
+        ssh_tests.append(("kali", "127.0.0.1", "kali"))
     if ctx.config.containers.reverse:
-        ssh_tests.append(("reverse", 2027, "labadmin"))
+        ssh_tests.append(("reverse", "172.20.4.40", "labadmin"))
 
-    for name, port, user in ssh_tests:
+    for name, ip, user in ssh_tests:
         ssh_wait = wait_for_service(
             check_fn=partial(
-                test_ssh_connection,
-                host="localhost",
-                port=port,
+                _test_ssh_via_kali,
+                target_ip=ip,
                 user=user,
-                key_path=ctx.ssh_key_path,
             ),
             timeout=60,
             interval=5,

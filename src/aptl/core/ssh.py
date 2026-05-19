@@ -100,7 +100,20 @@ def ensure_ssh_keys(keys_dir: Path, host_ssh_dir: Path) -> SSHKeyResult:
     (keys_dir / f"{_KEY_NAME}.pub").write_text(pub_content)
     (keys_dir / "authorized_keys").write_text(pub_content)
 
-    log.debug("Public key distributed to %s", keys_dir)
+    # Copy the private key too — kali / reverse-sandbox mount keys_dir
+    # read-only and use ``keys_dir/aptl_lab_key`` to SSH into victim. If
+    # we only copy the public side and the keys_dir already contains a
+    # STALE private key (different key pair than host_ssh_dir's),
+    # authentication silently fails with "private key contents do not
+    # match public" and every SSH-driven integration test breaks. The
+    # host private key is the source of truth (#310 cutover, found via
+    # iptables debugging — actually a key-distribution bug).
+    private_content = private_key.read_bytes()
+    keys_dir_private = keys_dir / _KEY_NAME
+    keys_dir_private.write_bytes(private_content)
+    os.chmod(keys_dir_private, 0o600)
+
+    log.debug("Key pair distributed to %s", keys_dir)
 
     return SSHKeyResult(
         success=True,

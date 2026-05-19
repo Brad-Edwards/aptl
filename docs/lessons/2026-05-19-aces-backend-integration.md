@@ -152,6 +152,62 @@ mark the protocols `@runtime_checkable` (which would couple ACES's
 protocol surface to its consumers in a way that may not be intended;
 arguably the duck-type-in-tests pattern is fine).
 
+## Dead-code audit (the "legacy SDL" reality)
+
+The migration framing in #310 / ADR-035 implies replacing a live
+in-tree SDL with ACES. The codebase audit shows otherwise:
+
+- **`aptl.core.sdl/` (the in-tree SDL package, 20+ modules)** —
+  parsing/validation/contracts code, used only by its own tests.
+  No active CLI path reaches it.
+- **`aptl.core.scenarios.load_scenario`** — wraps
+  `aptl.core.sdl.parse_sdl`. Called only by `tests/test_scenarios.py`
+  and `tests/test_scenario_contracts.py`. No user-facing CLI command
+  invokes it.
+- **`aptl.core.runtime/`** — mirror of ACES's runtime model
+  (capabilities, manager, models, planner, registry). Used only by
+  `tests/test_runtime_manager.py`. No active code path.
+- **`src/aptl/backends/stubs.py`** — stub Provisioner/Orchestrator
+  /Evaluator wired against `aptl.core.runtime`'s in-tree mirror. Used
+  only by runtime tests.
+- **`scenarios/*.yaml` files (6 files, 1575 lines)** — authored with a
+  Pydantic-style schema (`metadata`/`mode`/`containers`/`objectives`/etc.)
+  but NO loader code anywhere in `src/aptl/` parses them. The Pydantic
+  `ScenarioDefinition` referenced in #310's body and ADR-035 (SCN-001
+  / DSL-001..DSL-009) does not exist as importable code today.
+- **`aptl scenario` CLI** — referenced by
+  `tests/test_range_integration.py::TestScenarioHarness` but the
+  Typer subcommand does not exist. Running
+  `APTL_SMOKE=1 pytest tests/test_range_integration.py::TestScenarioHarness`
+  fails today with "No such command 'scenario'".
+
+**What this means for the parity bar.** "User-visible behavior
+indistinguishable pre- and post-cutover" is easier than #310's framing
+suggests: nothing user-facing currently flows through SDL, so the
+cutover doesn't change anything users touch. The actual work:
+
+- Add real `aptl scenario start/stop/list` CLI commands (NEW
+  functionality, not a migration). Build them on the ACES path
+  directly — there's no legacy CLI to be parity-compatible with.
+- Author one or more ACES SDL scenarios (TechVault, plus the
+  brute-force variant the integration test references) such that
+  `aptl scenario start <name>` produces a working lab via the ACES
+  RuntimeManager → AptlProvisioner → DeploymentBackend chain.
+- Delete the dead-code surface listed above (~3000 lines of unused
+  module code + their tests).
+- Make `tests/test_range_integration.py::TestScenarioHarness::test_scenario_lifecycle_with_live_detection`
+  actually pass (it fails today; success post-PR is a parity
+  improvement, not regression).
+- Flip the `aces-conformance` CI job from advisory to blocking.
+- Update DSL-001 / SCN-001 / DSL-002..DSL-009 requirements per
+  #310's reconciliation list (they're DRAFT today; transition to
+  DEPRECATED via Ground Control as part of the cutover).
+
+**The parity bar is now empirical, not aspirational.** Every test
+that passes today must pass post-cutover. Tests that fail today
+(like `aptl scenario` integration tests) are net new capability
+when they go green; they don't constrain parity.
+
 ## Smoke probe findings (post-scaffolding)
 
 Drove a minimal SDL document through ACES end-to-end against the

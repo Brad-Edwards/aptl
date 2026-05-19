@@ -105,6 +105,76 @@ corresponds to SCN-007 (Objective-Based Scoring with Hints), tracked
 under issue #312. The `full-remote-control-plane` profile is out of
 scope.
 
+## Integration Guardrails
+
+The ACES backend is an adapter around APTL's existing control-plane
+boundaries, not a replacement deployment stack inside APTL.
+
+- Scenario authoring and semantic validation belong to ACES. APTL must
+  not recreate ACES SDL models, validators, import resolution, lockfile
+  handling, backend contract schemas, conformance profile logic, or
+  operation/result envelope schemas.
+- Durable APTL configuration remains `aptl.json` loaded through
+  `aptl.core.config.load_config` / `AptlConfig`. Backend-specific knobs
+  needed by the ACES adapter must enter through that strict first-party
+  schema only when APTL owns them; ACES-owned contract payloads stay as
+  ACES schemas and are validated by ACES tooling.
+- Runtime secrets remain in `.env`, parsed by `load_dotenv`, shaped by
+  `EnvVars`, and placeholder-checked by `find_placeholder_env_values`.
+  The ACES adapter may consume typed environment state after the normal
+  binding step, but must not parse `.env` itself or move secrets into
+  `aptl.json`, manifests, SDL documents, logs, command lines, snapshots,
+  or conformance output.
+- Docker lifecycle, container interaction, host inventory, and SSH-remote
+  transport stay behind `DeploymentBackend`. The ACES `RuntimeTarget`
+  must call existing lab/deployment orchestration helpers or the backend
+  protocol; it must not shell out to raw `docker`, `docker compose`, or
+  SSH independently.
+- User-facing lifecycle results continue to cross APTL edges as
+  `LabResult`, `StartupOutcome`, `StartupDiagnostic`,
+  `LabActionResponse`, and the existing CLI rendering. ACES diagnostics
+  should be translated at the adapter boundary into these existing
+  envelopes where they reach APTL CLI/API/web surfaces; do not add a
+  second APTL exception hierarchy or readiness DTO.
+- Snapshot and run-archive data remain owned by `RangeSnapshot.to_dict()`
+  and `LocalRunStore`. New ACES-produced runtime or conformance artifacts
+  that enter APTL run data must go through the same redaction/persistence
+  boundary instead of relying on archive/export code to sanitize later.
+- Logging uses `aptl.utils.logging.get_logger()`, and every diagnostic,
+  exception string, persisted JSON/JSONL record, CLI/API payload, and
+  trace-facing value remains subject to ADR-029 redaction. Process
+  boundaries must not place bearer tokens, API keys, cookies, private
+  keys, generated config contents, or credentialized curl bodies in
+  argv; use existing safe helpers such as `curl_safe` for SOC HTTP
+  subprocess access.
+
+The intended extensibility seam is the ACES profile/backend manifest
+plus a thin APTL adapter configuration boundary. Promotion from
+`provisioning-only` to `orchestration-capable` or
+`orchestration-evaluation` should update the declared ACES profile and
+adapter capability mapping, not fork scenario loading, duplicate
+contracts, or special-case TechVault in the control plane.
+
+## Non-Goals and Anti-Patterns
+
+- Do not implement an APTL dialect of ACES SDL or a compatibility
+  translator from legacy `scenarios/*.yaml` into ACES as part of
+  cutover. Legacy YAML is archived as reference material only.
+- Do not keep `aptl.core.sdl` or Pydantic `ScenarioDefinition` alive as
+  hidden fallback paths after Phase B. A dual default surface would
+  invalidate the canonical-authoring decision.
+- Do not infer runtime mode, backend profile, SOC/prime capability,
+  objective support, or orchestration/evaluation support from filenames,
+  scenario names, legacy fixture contents, or English diagnostics.
+  Capability is declared in ACES contracts and APTL config/backend
+  state, then validated by the planner/conformance gates.
+- Do not add raw Docker, raw SSH, or raw subprocess command assembly in
+  the ACES adapter when `DeploymentBackend` or existing lab helpers
+  already own the operation.
+- Do not introduce adapter-local secret taxonomies, redaction filters,
+  config validators, manifest schemas, run-storage writers, or API
+  response models beside the canonical APTL/ACES ones.
+
 ## Parity Gate
 
 Before cutover, the ACES TechVault scenario must reach capability parity

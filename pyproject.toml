@@ -18,6 +18,11 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.33.0",
     "opentelemetry-semantic-conventions>=0.54b0",
     "cryptography>=42.0.0",
+    # ACES SDL backend-contract surface (#310, ADR-035). Pinned to a
+    # specific dev-branch SHA during co-evolution; bump in a dedicated
+    # PR with a docs/lessons/ entry capturing what the pin bump
+    # surfaces. See docs/lessons/2026-05-19-aces-backend-skeleton.md.
+    "aces-sdl @ git+https://github.com/Brad-Edwards/aces.git@12d9a8234b354f4f181a5db251d791ac57441f52#subdirectory=implementations/python",
 ]
 
 [project.scripts]

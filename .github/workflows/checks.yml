@@ -57,6 +57,50 @@ jobs:
           path: coverage.xml
           retention-days: 7
 
+  # ADVISORY: ACES backend conformance for the provisioning-only profile
+  # (Phase A.1 of #310 / ADR-035). Runs the published ACES conformance
+  # suite against APTL's RuntimeTarget and surfaces the report as job
+  # output. `continue-on-error: true` keeps the gate non-blocking
+  # until Phase B cutover flips it to enforced. Bumping the aces-sdl
+  # pin in pyproject.toml is what bumps the contract surface this gate
+  # validates against; record findings in docs/lessons/.
+  aces-conformance:
+    name: ACES backend conformance (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run conformance against provisioning-only profile
+        run: |
+          python -c "
+          import json
+          from aces_conformance.conformance import run_target_conformance
+          from aptl.backends.aces import create_aptl_target
+
+          report = run_target_conformance(
+              create_aptl_target(), profile='provisioning-only'
+          )
+          # Report shape: passed bool + diagnostics. Print structured.
+          print(json.dumps({
+              'passed': report.passed,
+              'diagnostic_count': len(report.diagnostics),
+              'diagnostics': [
+                  {'code': d.code, 'address': d.address, 'severity': d.severity.value, 'message': d.message}
+                  for d in report.diagnostics
+              ],
+          }, indent=2))
+          # Exit non-zero on failure so the job surface flags it,
+          # even though continue-on-error suppresses the overall
+          # workflow failure.
+          raise SystemExit(0 if report.passed else 1)
+          "
+
   mcp-tests:
     name: MCP TypeScript tests + coverage
     runs-on: ubuntu-latest

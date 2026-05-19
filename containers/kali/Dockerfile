@@ -16,6 +16,8 @@ RUN apt-get update && \
         kali-tools-top10 \
         openssh-server \
         iputils-ping \
+        sshpass \
+        wget \
         # OBS-003 behavioural capture (ADR-033):
         #   auditd        — syscall / process / file events
         #   acct          — process accounting (accton + pacct)

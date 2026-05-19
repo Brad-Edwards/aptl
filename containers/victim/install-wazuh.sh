@@ -105,9 +105,24 @@ killall wazuh-execd wazuh-agentd wazuh-syscheckd wazuh-logcollector wazuh-module
 echo "Cleaning PID files..."
 rm -f /var/ossec/var/run/*.pid
 
-# Enable and start Wazuh agent using systemctl
+# Enable and start Wazuh agent.
+#
+# `systemctl enable wazuh-agent` invokes systemd's SysV compatibility layer
+# (`systemd-sysv-install`) because the Wazuh RPM also registers a SysV
+# alias. The Rocky base image used here doesn't ship that helper binary
+# (`chkconfig` not installed), so the enable step exits non-zero and
+# crashes lab-install.service — leaving wazuh-agent inactive and breaking
+# every Wazuh-detection test.
+#
+# Skip systemd-sysv-install by creating the multi-user.target.wants
+# symlink directly. That's what `systemctl enable` resolves to when the
+# unit file is a pure systemd service (which wazuh-agent.service is —
+# see /usr/lib/systemd/system/wazuh-agent.service).
 echo "Enabling and starting Wazuh agent service..."
-systemctl enable wazuh-agent
+mkdir -p /etc/systemd/system/multi-user.target.wants
+ln -sf /usr/lib/systemd/system/wazuh-agent.service \
+    /etc/systemd/system/multi-user.target.wants/wazuh-agent.service
+systemctl daemon-reload
 
 # Start the service with retry logic
 echo "Starting Wazuh agent service..."

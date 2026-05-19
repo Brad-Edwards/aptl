@@ -28,8 +28,23 @@ EOF
 chmod 600 "$HOMEDIR/.bash_history"
 
 # --- WS-03: SSH keypair (passwordless, authorized on victim) ---
+#
+# Use the lab's shared ED25519 key (`/keys/aptl_lab_key`) so the workstation's
+# id_rsa matches the authorized_keys victim already trusts. The earlier
+# version `ssh-keygen`-generated a fresh RSA key whose pubkey was never
+# distributed to victim — `ssh -i ~/.ssh/id_rsa labadmin@victim` got
+# "Permission denied" and the lateral-movement integration test failed.
+# (#310 cutover, found via `test_victim_reachable_from_workstation`.)
 mkdir -p "$HOMEDIR/.ssh"
-ssh-keygen -t rsa -b 2048 -f "$HOMEDIR/.ssh/id_rsa" -N "" -q
+if [ -f /keys/aptl_lab_key ]; then
+    cp /keys/aptl_lab_key "$HOMEDIR/.ssh/id_rsa"
+    cp /keys/aptl_lab_key.pub "$HOMEDIR/.ssh/id_rsa.pub"
+else
+    # Fallback: legacy fresh-keygen path. Lateral-movement test will
+    # fail because the freshly-generated pubkey isn't authorized on
+    # victim, but the workstation still boots without /keys mounted.
+    ssh-keygen -t rsa -b 2048 -f "$HOMEDIR/.ssh/id_rsa" -N "" -q
+fi
 chmod 700 "$HOMEDIR/.ssh"
 chmod 600 "$HOMEDIR/.ssh/id_rsa"
 chmod 644 "$HOMEDIR/.ssh/id_rsa.pub"

@@ -91,7 +91,7 @@ class ApplyNotImplementedError(NotImplementedError):
     """
 
 
-class AptlProvisioner:
+class AptlProvisioner:  # NOSONAR python:S1722 - Python 3 implicit object base; no behavior change from explicit declaration
     """ACES ``Provisioner`` implementation for APTL (Phase A.1 skeleton).
 
     Conforms to :class:`aces_backend_protocols.protocols.Provisioner` by
@@ -102,12 +102,12 @@ class AptlProvisioner:
     succeed as a no-op so the control-plane's repeated-apply cycle works.
     """
 
-    def validate(self, plan: ProvisioningPlan) -> list[Diagnostic]:
+    def validate(self, plan: ProvisioningPlan) -> list[Diagnostic]:  # NOSONAR python:S2325 - Phase A.2 inspects host inventory + image cache via `self`; static now forces immediate refactor.
         """Return an empty diagnostic list.
 
         Phase A.1 does not yet inspect plans for APTL-specific feasibility;
         Phase A.2 adds capability checks (image availability, host
-        inventory) here.
+        inventory) here using ``self`` state.
         """
         # ``plan`` intentionally unused at this skeleton stage. Touch it so
         # static analyzers don't flag the parameter as unused while keeping
@@ -115,7 +115,7 @@ class AptlProvisioner:
         _ = plan
         return []
 
-    def apply(self, plan: ProvisioningPlan, snapshot: RuntimeSnapshot) -> ApplyResult:
+    def apply(self, plan: ProvisioningPlan, snapshot: RuntimeSnapshot) -> ApplyResult:  # NOSONAR python:S2325 - Phase A.2 holds DeploymentBackend state on `self`; static now forces immediate refactor.
         """Apply a plan against the APTL lab.
 
         Phase A.1: idempotent re-applies (plans with no actionable
@@ -130,8 +130,8 @@ class AptlProvisioner:
         # raw-operations gate broke idempotent re-apply.
         if plan.actionable_operations:
             raise ApplyNotImplementedError(
-                "AptlProvisioner.apply() Phase A.1 skeleton does not yet "
-                "support actionable plans; real wiring lands in Phase A.2. "
+                f"{type(self).__name__}.apply() Phase A.1 skeleton does not "
+                "yet support actionable plans; real wiring lands in Phase A.2. "
                 "See https://github.com/Brad-Edwards/aptl/issues/310."
             )
         # No actionable operations = nothing to reconcile, snapshot
@@ -234,7 +234,8 @@ def _build_components(**config: object) -> RuntimeTargetComponents:
     :func:`create_aptl_target` and :func:`register` both go through here
     so a profile upgrade (Phase A.3/A.4) only edits this one factory.
     """
-    _ = config  # reserved for Phase A.2 config plumbing
+    # `config` reserved for Phase A.2 config plumbing
+    _ = config
     return RuntimeTargetComponents(
         provisioner=AptlProvisioner(),
         orchestrator=None,

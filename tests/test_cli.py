@@ -29,22 +29,31 @@ class TestMainApp:
         assert "0.1.0" in result.stdout
 
     def test_help_shows_subcommands(self, runner):
-        """Help output should list the major subcommands."""
+        """Help output should list the major subcommands.
+
+        ``scenario`` re-introduced for #310 / SCN-010 against the ACES
+        SDL authoring surface (NOT the legacy Pydantic-style group that
+        previously held this name)."""
         from aptl.cli.main import app
 
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
         assert "lab" in result.stdout
         assert "config" in result.stdout
-        assert "scenario" not in result.stdout
+        assert "scenario" in result.stdout
 
-    def test_removed_scenario_subcommand_is_not_available(self, runner):
-        """The legacy scenario command group should not be exposed."""
+    def test_scenario_subcommand_available_for_aces_authoring(self, runner):
+        """``aptl scenario`` is the ACES SDL authoring surface
+        (#310 / SCN-010). The legacy Pydantic-style scenario group that
+        previously lived here was deleted as part of the cutover; the
+        re-introduced surface is the ACES-backed one."""
         from aptl.cli.main import app
 
         result = runner.invoke(app, ["scenario", "--help"])
-        assert result.exit_code != 0
-        assert "No such command" in result.output
+        assert result.exit_code == 0
+        assert "list" in result.output
+        assert "start" in result.output
+        assert "stop" in result.output
 
 
 class TestLabCommands:

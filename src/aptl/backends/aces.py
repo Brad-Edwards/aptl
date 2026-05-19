@@ -1,28 +1,24 @@
 """APTL backend adapter for the ACES runtime contract surface (#310).
 
-Phase A.1 scaffolding: this module exposes a shape-correct
-``provisioning-only`` backend that the ACES conformance suite accepts, but
-does NOT yet wire ``apply()`` through to APTL's deployment helpers.
-Actionable plan operations (anything other than
-:class:`~aces_processor.models.ChangeAction.UNCHANGED`) raise
-:class:`ApplyNotImplementedError` so the unwiring is explicit. Plans
-containing only ``UNCHANGED`` operations apply as no-op success — that
-preserves idempotent re-apply behavior the control plane relies on.
-Phase A.2 (next PR) replaces the raise with real orchestration calling
-:func:`aptl.core.lab.orchestrate_lab_start` via
-:class:`aptl.core.deployment.DeploymentBackend`, translating ACES
-diagnostics into the existing :class:`aptl.core.lab_types.LabResult`
-envelope per ADR-035 integration guardrails.
+APTL implements the ACES ``provisioning-only`` profile. ``apply()`` wires
+through an :class:`aptl.core.deployment.DeploymentBackend` (passed at
+construction); the backend's ``start()`` drives the lab and the resulting
+:class:`aptl.core.lab_types.LabResult` is translated into an ACES
+:class:`~aces_processor.models.ApplyResult`. Failure flows as a structured
+diagnostic on the result (matching ACES's idiom) — apply() never raises.
 
-The module is import-side-effect-free; explicit
-:func:`register` registration is required to add APTL to any ACES
-:class:`~aces_processor.registry.BackendRegistry`.
+When no backend is wired (the conformance-only path used by tests + the
+``aces conformance backend`` advisory CI job) apply() returns a
+diagnostic-bearing failure rather than driving real Docker.
+
+The module is import-side-effect-free; explicit :func:`register` is
+required to add APTL to any ACES :class:`~aces_processor.registry.BackendRegistry`.
 """
 
 from __future__ import annotations
 
 from importlib import metadata
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from aces_backend_protocols.capabilities import (
     BackendManifest,
@@ -39,12 +35,16 @@ from aces_processor.models import (
     Diagnostic,
     ProvisioningPlan,
     RuntimeSnapshot,
+    Severity,
 )
 from aces_processor.registry import (
     BackendRegistry,
     RuntimeTarget,
     RuntimeTargetComponents,
 )
+
+if TYPE_CHECKING:
+    from aptl.core.deployment.backend import DeploymentBackend
 
 #: Backend name as registered with ACES. Matches ``backend-manifest-v2.identity.name``.
 BACKEND_NAME: Final = "aptl"
@@ -82,65 +82,129 @@ def _aptl_package_version(default: str = "0.0.0+unknown") -> str:
         return default
 
 
-class ApplyNotImplementedError(NotImplementedError):
-    """Phase A.1 marker: real ``apply()`` wiring lands in Phase A.2.
+#: Default Docker Compose profile set APTL activates when an actionable
+#: plan arrives without explicit profile selection. Matches the legacy
+#: lab's full-profile bring-up.
+DEFAULT_PROFILES: Final[tuple[str, ...]] = (
+    "wazuh", "victim", "kali", "enterprise", "soc",
+)
 
-    A subclass of :class:`NotImplementedError` so callers can keep generic
-    ``except NotImplementedError`` paths working while the test suite can
-    pin the specific shape during the skeleton phase.
+
+class AptlProvisioner:
+    """ACES ``Provisioner`` driving APTL's lab via :class:`DeploymentBackend`.
+
+    When ``backend`` is supplied, ``apply()`` calls ``backend.start()`` with
+    the configured profile set and translates the resulting
+    :class:`~aptl.core.lab_types.LabResult` into an ACES
+    :class:`~aces_processor.models.ApplyResult`. Failure flows as a
+    structured diagnostic on the result; ``apply()`` never raises (ADR-035
+    user-visible-invariance contract + ACES idiom).
+
+    When ``backend`` is None (conformance-only paths: tests, the advisory
+    CI job, ``aces conformance backend`` runs), ``apply()`` returns a
+    diagnostic-bearing failure for any actionable plan rather than
+    accidentally drive Docker. Idempotent re-applies (plans containing only
+    ``ChangeAction.UNCHANGED`` operations) succeed as a no-op regardless.
     """
 
+    def __init__(
+        self,
+        *,
+        backend: "DeploymentBackend | None" = None,
+        profiles: tuple[str, ...] | list[str] = DEFAULT_PROFILES,
+        build: bool = True,
+    ) -> None:
+        self._backend = backend
+        self._profiles = list(profiles)
+        self._build = build
 
-class AptlProvisioner:  # NOSONAR python:S1722 - Python 3 implicit object base; no behavior change from explicit declaration
-    """ACES ``Provisioner`` implementation for APTL (Phase A.1 skeleton).
+    def validate(self, plan: ProvisioningPlan) -> list[Diagnostic]:
+        """Pre-flight capability check against APTL's adapter.
 
-    Conforms to :class:`aces_backend_protocols.protocols.Provisioner` by
-    shape. Reconciliation against the APTL lab is NOT yet wired; plans
-    with actionable operations surface as
-    :class:`ApplyNotImplementedError` rather than silently no-op'ing.
-    Idempotent re-applies (plans containing only ``UNCHANGED`` operations)
-    succeed as a no-op so the control-plane's repeated-apply cycle works.
-    """
-
-    def validate(self, plan: ProvisioningPlan) -> list[Diagnostic]:  # NOSONAR python:S2325 - Phase A.2 inspects host inventory + image cache via `self`; static now forces immediate refactor.
-        """Return an empty diagnostic list.
-
-        Phase A.1 does not yet inspect plans for APTL-specific feasibility;
-        Phase A.2 adds capability checks (image availability, host
-        inventory) here using ``self`` state.
+        Emits no diagnostics today — the manifest's controlled vocabulary
+        already gates plan feasibility at compile time. Host-inventory +
+        image-cache probes will land here in a follow-on commit using
+        ``self._backend`` state.
         """
-        # ``plan`` intentionally unused at this skeleton stage. Touch it so
-        # static analyzers don't flag the parameter as unused while keeping
-        # the public Protocol signature stable.
         _ = plan
         return []
 
-    def apply(self, plan: ProvisioningPlan, snapshot: RuntimeSnapshot) -> ApplyResult:  # NOSONAR python:S2325 - Phase A.2 holds DeploymentBackend state on `self`; static now forces immediate refactor.
-        """Apply a plan against the APTL lab.
+    def apply(
+        self,
+        plan: ProvisioningPlan,
+        snapshot: RuntimeSnapshot,
+    ) -> ApplyResult:
+        """Reconcile the lab against ``plan`` and return an ``ApplyResult``.
 
-        Phase A.1: idempotent re-applies (plans with no actionable
-        operations) succeed as a no-op; any plan that includes a real
-        change action raises :class:`ApplyNotImplementedError`. Phase A.2
-        wires real reconciliation through
-        :class:`aptl.core.deployment.DeploymentBackend`.
+        Failure surfaces as a structured diagnostic on the result, not as a
+        raised exception. ``RuntimeManager`` would catch a raise and wrap
+        it, but owning the diagnostic shape lets APTL preserve its error
+        vocabulary across the cutover (per ADR-035).
         """
-        # `actionable_operations` filters out `ChangeAction.UNCHANGED`,
-        # which is what the control plane emits when the snapshot already
-        # matches the plan. Codex pre-push cycle 1 (#310) — the prior
-        # raw-operations gate broke idempotent re-apply.
-        if plan.actionable_operations:
-            raise ApplyNotImplementedError(
-                f"{type(self).__name__}.apply() Phase A.1 skeleton does not "
-                "yet support actionable plans; real wiring lands in Phase A.2. "
-                "See https://github.com/Brad-Edwards/aptl/issues/310."
+        if not plan.actionable_operations:
+            return ApplyResult(
+                success=True, snapshot=snapshot, changed_addresses=[]
             )
-        # No actionable operations = nothing to reconcile, snapshot
-        # returned unchanged. `changed_addresses=[]` is set explicitly so
-        # test assertions exercise APTL's behavior, not the SDK's default
-        # constructor (test-quality review cycle 1 T-002 #310). Phase A.2
-        # will populate it with the addresses orchestrate_lab_start
-        # actually touched.
-        return ApplyResult(success=True, snapshot=snapshot, changed_addresses=[])
+
+        if self._backend is None:
+            return _failure_apply_result(
+                snapshot,
+                code="aptl.backend-not-wired",
+                address="runtime.apply.provisioning",
+                message=(
+                    "AptlProvisioner has no DeploymentBackend wired; "
+                    "construct via create_aptl_target(backend=...) to drive "
+                    "the lab. Conformance-only paths use the no-backend "
+                    "form intentionally."
+                ),
+            )
+
+        lab_result = self._backend.start(self._profiles, build=self._build)
+        if lab_result.success:
+            return ApplyResult(
+                success=True,
+                snapshot=snapshot,
+                changed_addresses=[
+                    op.address for op in plan.actionable_operations
+                ],
+            )
+        return _failure_apply_result(
+            snapshot,
+            code="aptl.lab-start-failed",
+            address="runtime.apply.provisioning",
+            message=(
+                lab_result.error or lab_result.message
+                or f"DeploymentBackend.start returned outcome={lab_result.outcome.value}"
+            ),
+        )
+
+
+def _failure_apply_result(
+    snapshot: RuntimeSnapshot,
+    *,
+    code: str,
+    address: str,
+    message: str,
+) -> ApplyResult:
+    """Build an ``ApplyResult(success=False, diagnostics=[...])`` envelope.
+
+    Centralizes the failure shape so every apply-path failure carries
+    APTL's error code namespace and a non-empty diagnostic.
+    """
+    return ApplyResult(
+        success=False,
+        snapshot=snapshot,
+        diagnostics=[
+            Diagnostic(
+                code=code,
+                domain="provisioning",
+                address=address,
+                message=message,
+                severity=Severity.ERROR,
+            )
+        ],
+        changed_addresses=[],
+    )
 
 
 def create_aptl_manifest(*, version: str | None = None) -> BackendManifest:
@@ -225,34 +289,51 @@ def create_aptl_manifest(*, version: str | None = None) -> BackendManifest:
     )
 
 
-def _build_components(**config: object) -> RuntimeTargetComponents:
+def _build_components(
+    *,
+    backend: "DeploymentBackend | None" = None,
+    profiles: tuple[str, ...] | list[str] = DEFAULT_PROFILES,
+    build: bool = True,
+    **_extra: object,
+) -> RuntimeTargetComponents:
     """Construct the component bundle for the APTL target.
 
-    ``provisioning-only`` declares only a Provisioner; orchestrator,
-    evaluator, and participant_runtime are absent at this profile tier.
-    This is the single source of truth for which roles APTL ships —
-    :func:`create_aptl_target` and :func:`register` both go through here
-    so a profile upgrade (Phase A.3/A.4) only edits this one factory.
+    ``provisioning-only`` declares only a Provisioner. Orchestrator,
+    evaluator, and participant_runtime are absent at this profile tier
+    and graduate in follow-on commits. Single source of truth — both
+    :func:`create_aptl_target` and :func:`register` route through here.
+
+    ``backend`` / ``profiles`` / ``build`` flow into the provisioner so
+    callers (CLI, tests, advisory CI) control whether ``apply()`` drives
+    real Docker or returns a not-wired diagnostic.
     """
-    # `config` reserved for Phase A.2 config plumbing
-    _ = config
     return RuntimeTargetComponents(
-        provisioner=AptlProvisioner(),
+        provisioner=AptlProvisioner(
+            backend=backend, profiles=profiles, build=build
+        ),
         orchestrator=None,
         evaluator=None,
         participant_runtime=None,
     )
 
 
-def create_aptl_target(*, version: str | None = None, **config: object) -> RuntimeTarget:
+def create_aptl_target(
+    *,
+    version: str | None = None,
+    backend: "DeploymentBackend | None" = None,
+    profiles: tuple[str, ...] | list[str] = DEFAULT_PROFILES,
+    build: bool = True,
+) -> RuntimeTarget:
     """Return APTL as an ACES :class:`RuntimeTarget`.
 
-    Builds the manifest and component bundle once and passes the bundle
-    through to :class:`RuntimeTarget` so a future profile upgrade only
-    edits :func:`_build_components` — there's no parallel wiring path
-    here that can drift. Codex pre-push cycle 1 (#310).
+    Pass ``backend=...`` (a configured :class:`DeploymentBackend`) to wire
+    ``apply()`` through to the lab. Without it the target is
+    conformance-only and ``apply()`` of an actionable plan returns a
+    ``aptl.backend-not-wired`` diagnostic.
     """
-    components = _build_components(**config)
+    components = _build_components(
+        backend=backend, profiles=profiles, build=build
+    )
     return RuntimeTarget(
         name=BACKEND_NAME,
         manifest=create_aptl_manifest(version=version),
@@ -263,16 +344,25 @@ def create_aptl_target(*, version: str | None = None, **config: object) -> Runti
     )
 
 
-def register(registry: BackendRegistry, *, version: str | None = None) -> None:
+def register(
+    registry: BackendRegistry,
+    *,
+    version: str | None = None,
+    backend: "DeploymentBackend | None" = None,
+    profiles: tuple[str, ...] | list[str] = DEFAULT_PROFILES,
+    build: bool = True,
+) -> None:
     """Register APTL with an ACES :class:`BackendRegistry`.
 
     No auto-registration at import time — callers (CI, test harness,
-    Phase B lab CLI) decide when to wire APTL into ACES. Matches the
-    reference :func:`aces_backend_stubs.stubs.create_stub_target` /
-    explicit-registration pattern.
+    APTL's CLI at cutover) decide when to wire APTL into ACES. Backend
+    + profiles + build flags closure into the components factory so the
+    registry-driven path produces a fully-wired provisioner.
     """
     registry.register(
         BACKEND_NAME,
         manifest_factory=lambda **cfg: create_aptl_manifest(version=version),
-        components_factory=lambda **cfg: _build_components(**cfg),
+        components_factory=lambda **cfg: _build_components(
+            backend=backend, profiles=profiles, build=build, **cfg
+        ),
     )

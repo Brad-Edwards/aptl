@@ -160,17 +160,16 @@ def test_provisioner_apply_succeeds_for_unchanged_only_plan() -> None:
     assert result.snapshot is snapshot
 
 
-def test_provisioner_apply_raises_for_non_empty_plan_phase_a1_skeleton() -> None:
-    """The skeleton does NOT silently swallow real reconciliation work —
-    a non-empty plan raises so callers see the explicit unwiring during
-    Phase A.1. Phase A.2 replaces the raise with real orchestration."""
-    from aptl.backends.aces import AptlProvisioner, ApplyNotImplementedError
+def test_provisioner_apply_returns_diagnostic_when_no_backend_wired() -> None:
+    """With no DeploymentBackend wired, an actionable plan does NOT
+    raise — it returns ``ApplyResult(success=False, diagnostics=[...])``
+    with code ``aptl.backend-not-wired``. ACES's idiom is that backend
+    errors flow as diagnostics on the result, never as exceptions out
+    of apply(). ADR-035 user-visible-invariance contract."""
+    from aces_processor.models import ChangeAction, ProvisionOp
+    from aptl.backends.aces import AptlProvisioner
 
     provisioner = AptlProvisioner()
-    # A non-empty actionable plan: any non-UNCHANGED action will do —
-    # we don't validate operation internals here, only that apply()
-    # refuses to no-op silently when there's real work to reconcile.
-    from aces_processor.models import ChangeAction, ProvisionOp
     plan = ProvisioningPlan(
         operations=[
             ProvisionOp(
@@ -183,8 +182,88 @@ def test_provisioner_apply_raises_for_non_empty_plan_phase_a1_skeleton() -> None
     )
     snapshot = RuntimeSnapshot()
 
-    with pytest.raises(ApplyNotImplementedError):
-        provisioner.apply(plan, snapshot)
+    result = provisioner.apply(plan, snapshot)
+
+    assert result.success is False
+    assert len(result.diagnostics) == 1
+    diag = result.diagnostics[0]
+    assert diag.code == "aptl.backend-not-wired"
+    assert diag.address == "runtime.apply.provisioning"
+
+
+def test_provisioner_apply_drives_backend_start_for_actionable_plan() -> None:
+    """With a backend wired, apply() calls backend.start() with the
+    configured profiles and returns ApplyResult(success=True) when the
+    LabResult is successful. changed_addresses lists the addresses of
+    every actionable operation in the plan."""
+    from unittest.mock import MagicMock
+
+    from aces_processor.models import ChangeAction, ProvisionOp
+    from aptl.backends.aces import AptlProvisioner
+    from aptl.core.lab_types import LabResult, StartupOutcome
+
+    backend = MagicMock()
+    backend.start.return_value = LabResult(
+        success=True, message="ok", outcome=StartupOutcome.READY
+    )
+    provisioner = AptlProvisioner(
+        backend=backend, profiles=["wazuh", "kali"], build=False
+    )
+    plan = ProvisioningPlan(
+        operations=[
+            ProvisionOp(
+                action=ChangeAction.CREATE,
+                address="provision.node.victim",
+                resource_type="node",
+                payload={},
+            ),
+        ],
+    )
+    snapshot = RuntimeSnapshot()
+
+    result = provisioner.apply(plan, snapshot)
+
+    assert result.success is True
+    assert result.changed_addresses == ["provision.node.victim"]
+    backend.start.assert_called_once_with(["wazuh", "kali"], build=False)
+
+
+def test_provisioner_apply_surfaces_backend_failure_as_diagnostic() -> None:
+    """When backend.start() returns LabResult(success=False), apply()
+    returns ApplyResult(success=False) with a structured diagnostic
+    carrying APTL's error code namespace. Lab failure messages flow
+    through to ACES diagnostics without losing semantics."""
+    from unittest.mock import MagicMock
+
+    from aces_processor.models import ChangeAction, ProvisionOp
+    from aptl.backends.aces import AptlProvisioner
+    from aptl.core.lab_types import LabResult, StartupOutcome
+
+    backend = MagicMock()
+    backend.start.return_value = LabResult(
+        success=False,
+        error="container 'wazuh-manager' refused to start",
+        outcome=StartupOutcome.FAILED,
+    )
+    provisioner = AptlProvisioner(backend=backend)
+    plan = ProvisioningPlan(
+        operations=[
+            ProvisionOp(
+                action=ChangeAction.CREATE,
+                address="provision.node.victim",
+                resource_type="node",
+                payload={},
+            ),
+        ],
+    )
+
+    result = provisioner.apply(plan, RuntimeSnapshot())
+
+    assert result.success is False
+    assert len(result.diagnostics) == 1
+    diag = result.diagnostics[0]
+    assert diag.code == "aptl.lab-start-failed"
+    assert "wazuh-manager" in diag.message
 
 
 def test_create_aptl_target_returns_runtime_target_with_provisioner() -> None:

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from aptl.cli._common import resolve_config_for_cli
+from aptl.core.config import AptlConfig, find_config, load_config
 from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -51,6 +51,27 @@ def _scenario_id_from_path(path: Path) -> str:
 def _scenario_path_for_id(scenarios_dir: Path, scenario_id: str) -> Path:
     """Return the expected file path for a scenario id (no IO)."""
     return scenarios_dir / f"{scenario_id}{SDL_SUFFIX}"
+
+
+def _resolve_scenario_runtime(
+    project_dir: Path,
+) -> tuple[AptlConfig, Path]:
+    """Resolve config + deployment dir for ``aptl scenario`` commands.
+
+    Unlike ``aptl lab``, scenarios don't require a project-local
+    ``aptl.json``. ``project_dir`` is for session state
+    (``.aptl/session.json``); the deployment-backend working dir is
+    wherever ``aptl.json`` lives (walked up from CWD), falling back to
+    :class:`AptlConfig` defaults (docker-compose against CWD) when
+    none exists. Lets ``aptl scenario start <id>
+    --project-dir /tmp/xyz`` work against the global lab without
+    requiring the user to copy ``aptl.json`` into the project dir.
+    """
+    config_path = find_config(Path.cwd())
+    if config_path is None:
+        return AptlConfig(), Path.cwd()
+    config = load_config(config_path)
+    return config, config_path.parent
 
 
 def _emit_apply_diagnostics(result: "ApplyResult") -> None:
@@ -141,20 +162,21 @@ def start_scenario(
     from aptl.core.deployment import get_backend
     from aptl.core.session import ScenarioSession
 
-    config, resolved_project_dir = resolve_config_for_cli(project_dir)
+    config, deployment_dir = _resolve_scenario_runtime(project_dir)
 
-    session = ScenarioSession(state_dir=resolved_project_dir / ".aptl")
+    project_dir.mkdir(parents=True, exist_ok=True)
+    session = ScenarioSession(state_dir=project_dir / ".aptl")
     if session.is_active():
         existing = session.get_active()
         active_id = existing.scenario_id if existing else "<unknown>"
         typer.echo(
-            f"Scenario '{active_id}' is already active in {resolved_project_dir}; "
+            f"Scenario '{active_id}' is already active in {project_dir}; "
             "stop it first with 'aptl scenario stop'.",
             err=True,
         )
         raise typer.Exit(code=1)
 
-    backend = get_backend(config, resolved_project_dir)
+    backend = get_backend(config, deployment_dir)
     target = create_aptl_target(backend=backend, build=not skip_seed)
     sdl = parse_sdl_file(sdl_path)
 
@@ -188,6 +210,14 @@ def stop_scenario(
         "-v",
         help="Also remove Docker volumes (full cleanup).",
     ),
+    scenarios_dir: Path = typer.Option(
+        Path("scenarios"),
+        "--scenarios-dir",
+        help=(
+            "Ignored by stop — accepted for symmetry with `start`/`list` "
+            "so wrapping scripts can pass the same flags to all three."
+        ),
+    ),
 ) -> None:
     """Stop the active scenario.
 
@@ -198,18 +228,18 @@ def stop_scenario(
     from aptl.core.deployment import get_backend
     from aptl.core.session import ScenarioSession
 
-    config, resolved_project_dir = resolve_config_for_cli(project_dir)
-    session = ScenarioSession(state_dir=resolved_project_dir / ".aptl")
+    config, deployment_dir = _resolve_scenario_runtime(project_dir)
+    session = ScenarioSession(state_dir=project_dir / ".aptl")
 
     active = session.get_active()
     if active is None:
         typer.echo(
-            f"No active scenario in {resolved_project_dir}.",
+            f"No active scenario in {project_dir}.",
             err=True,
         )
         raise typer.Exit(code=1)
 
-    backend = get_backend(config, resolved_project_dir)
+    backend = get_backend(config, deployment_dir)
     lab_result = backend.stop(list(DEFAULT_PROFILES), remove_volumes=volumes)
     if not lab_result.success:
         message = lab_result.error or lab_result.message or "stop failed"

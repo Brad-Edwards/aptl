@@ -130,10 +130,119 @@ else
 fi
 
 if [[ -n "${EXISTING_ID}" ]]; then
+    # The workflow already exists, but two things still need to be
+    # reconciled on every run:
+    #   1. The `create_thehive_case` action's hardcoded `Authorization:
+    #      Bearer <key>` drifts whenever TheHive's API key gets
+    #      regenerated (scripts/thehive-apikey.sh is run during seeding,
+    #      and TheHive's bootstrap key rotates per fresh container).
+    #   2. Shuffle's webhook trigger needs to be explicitly
+    #      registered with `POST /api/v1/hooks/new` before it fires —
+    #      if the workflow row exists but the hook registration was
+    #      never made (or was dropped on a Shuffle restart), the
+    #      Wazuh→Shuffle webhook path stays silent.
+    # Both were previously "skip if workflow exists", which masked
+    # key rotation and dropped webhook registrations.
     echo "Workflow '${WORKFLOW_NAME}' already exists (id: ${EXISTING_ID})."
-    echo "Skipping creation."
+    echo "Refreshing TheHive auth header and re-registering webhook trigger..."
+
+    WF_JSON=$(curl -s "${SHUFFLE_TLS_FLAGS[@]}" \
+        -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
+        "${SHUFFLE_URL}/api/v1/workflows/${EXISTING_ID}")
+
+    UPDATED=$(echo "${WF_JSON}" | THEHIVE_API_KEY="${THEHIVE_API_KEY}" python3 -c '
+import json, os, sys
+
+key = os.environ["THEHIVE_API_KEY"]
+wf = json.load(sys.stdin)
+
+# Shuffle/HTTP-1.4.0 reads the SSL flag as "verify", not "verify_ssl".
+# Earlier seeds wrote "verify_ssl"; the action silently dropped it,
+# verification stayed on, and every internal HTTPS call to MISP /
+# TheHive against the lab CA failed. Rename in place so existing
+# workflows pick up the fix without a manual reseed.
+def _set(action, name, value):
+    for p in action.get("parameters", []):
+        if p.get("name") == name:
+            p["value"] = value
+            return
+    action.setdefault("parameters", []).append({"name": name, "value": value})
+
+def _rename(action, old, new):
+    for p in action.get("parameters", []):
+        if p.get("name") == old:
+            p["name"] = new
+
+# Embedding the raw $misp_ip_lookup output broke JSON parsing on the
+# create_thehive_case body — its quoted/braced payload appeared
+# inside a string literal and Shuffle surfaced an "unterminated
+# string literal" error. Replace with a static reference; the MISP
+# IOCs can be attached via a separate observable action later.
+CASE_BODY = (
+    "{\"title\": \"[Wazuh $exec.rule.id] $exec.rule.description\", "
+    "\"description\": \"Wazuh Alert Details:\\n"
+    "- Rule: $exec.rule.id ($exec.rule.description)\\n"
+    "- Level: $exec.rule.level\\n"
+    "- Source IP: $exec.data.srcip\\n"
+    "- Agent: $exec.agent.name\\n"
+    "- Timestamp: $exec.timestamp\\n\\n"
+    "MISP enrichment results are attached as an observable on the case "
+    "(see create_observable action).\", "
+    "\"severity\": 3}"
+)
+
+for action in wf.get("actions", []):
+    _rename(action, "verify_ssl", "verify")
+    if action.get("label") == "create_thehive_case":
+        _set(action, "headers",
+             "Authorization: Bearer " + key + "\nContent-Type: application/json")
+        _set(action, "body", CASE_BODY)
+
+print(json.dumps(wf))
+')
+
+    curl -s "${SHUFFLE_TLS_FLAGS[@]}" -X PUT \
+        -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d "${UPDATED}" \
+        "${SHUFFLE_URL}/api/v1/workflows/${EXISTING_ID}" > /dev/null
+
+    REAL_TRIGGER_ID=$(echo "${WF_JSON}" | python3 -c "
+import sys,json
+wf=json.load(sys.stdin)
+triggers=wf.get('triggers',[])
+if triggers:
+    print(triggers[0].get('id',''))
+")
+
+    if [[ -n "${REAL_TRIGGER_ID}" ]]; then
+        curl -s "${SHUFFLE_TLS_FLAGS[@]}" -X POST \
+            -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"Alert Webhook\", \"id\": \"${REAL_TRIGGER_ID}\", \"type\": \"webhook\", \"workflow\": \"${EXISTING_ID}\", \"start\": \"${REAL_TRIGGER_ID}\", \"status\": \"running\", \"environment\": \"Shuffle\"}" \
+            "${SHUFFLE_URL}/api/v1/hooks/new" > /dev/null
+
+        WEBHOOK_URL="http://shuffle-backend:5001/api/v1/hooks/webhook_${REAL_TRIGGER_ID}"
+        echo "$WEBHOOK_URL" > /tmp/aptl_shuffle_webhook_url
+        # Also install the webhook URL into the running Wazuh manager,
+        # mirroring `seed-prime.sh` § step 5. The refresh path was
+        # previously a no-op for the manager-side config, which left
+        # /var/ossec/etc/shuffle_webhook_url stale (or absent) and the
+        # custom-shuffle integration silently exiting 0 for every alert.
+        if docker ps --format '{{.Names}}' | grep -q '^aptl-wazuh-manager$'; then
+            docker exec aptl-wazuh-manager bash -c \
+                "echo '${WEBHOOK_URL}' > /var/ossec/etc/shuffle_webhook_url"
+            # Tell wazuh-manager to reload so the new file is picked up
+            # by the next alert-driven integration call. (custom-shuffle
+            # reads the file per-invocation, so this is belt-and-braces.)
+            docker exec aptl-wazuh-manager /var/ossec/bin/wazuh-control restart >/dev/null 2>&1 || true
+            echo "  Webhook URL installed on aptl-wazuh-manager"
+        fi
+        echo "  Webhook trigger registered (id: ${REAL_TRIGGER_ID})"
+    fi
+
     echo ""
-    echo "=== Seed Complete (no changes) ==="
+    echo "=== Seed Complete (refreshed) ==="
     exit 0
 fi
 
@@ -166,7 +275,7 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
                 {"name": "method", "value": "POST"},
                 {"name": "headers", "value": "Authorization: ${MISP_API_KEY}\nContent-Type: application/json\nAccept: application/json"},
                 {"name": "body", "value": "{\"value\": \"\$exec.data.srcip\", \"type\": \"ip-src\", \"returnFormat\": \"json\"}"},
-                {"name": "verify_ssl", "value": "false"}
+                {"name": "verify", "value": "false"}
             ]
         },
         {
@@ -181,8 +290,8 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
                 {"name": "url", "value": "${THEHIVE_INTERNAL_URL}/api/v1/case"},
                 {"name": "method", "value": "POST"},
                 {"name": "headers", "value": "Authorization: Bearer ${THEHIVE_API_KEY}\nContent-Type: application/json"},
-                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh Alert Details:\\n- Rule: \$exec.rule.id (\$exec.rule.description)\\n- Level: \$exec.rule.level\\n- Source IP: \$exec.data.srcip\\n- Agent: \$exec.agent.name\\n- Timestamp: \$exec.timestamp\\n\\nMISP Enrichment:\\n\$misp_ip_lookup\", \"severity\": 3}"},
-                {"name": "verify_ssl", "value": "false"}
+                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh Alert Details:\\n- Rule: \$exec.rule.id (\$exec.rule.description)\\n- Level: \$exec.rule.level\\n- Source IP: \$exec.data.srcip\\n- Agent: \$exec.agent.name\\n- Timestamp: \$exec.timestamp\\n\\nMISP enrichment results are attached as an observable on the case (see create_observable action).\", \"severity\": 3}"},
+                {"name": "verify", "value": "false"}
             ]
         }
     ],

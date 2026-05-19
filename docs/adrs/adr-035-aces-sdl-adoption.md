@@ -189,6 +189,59 @@ exercise:
 The parity check is reviewed in the cutover PR description and is a hard
 prerequisite. No cutover PR merges without it.
 
+## Update (2026-05-19): User-Visible Invariance contract
+
+Parity is not "the ACES contract surface is reachable and shape-correct"
+— it is **user-visible behavior across the entire stack is identical
+pre- and post-cutover**. The cutover lands the SDL replacement
+underneath APTL; nobody using APTL should be able to tell the difference
+from how the stack responds to their commands.
+
+This makes the gate measurable rather than aspirational. The
+following invariants are NON-NEGOTIABLE before cutover and are
+the literal contract the cutover commit must meet:
+
+1. **Every test in `tests/test_range_integration.py` that passes on
+   the legacy path passes on the ACES path.** The full LIVE_LAB suite
+   is the parity benchmark — not just the smoke subset. If a test
+   relies on `scenarios/detect-brute-force.yaml`, the ACES-driven
+   equivalent must produce the same observable outcomes (alerts
+   indexed, scenario start/stop semantics, run archive contents,
+   timing windows).
+2. **`aptl` CLI surface unchanged.** Every command, flag, exit code,
+   stdout/stderr shape, and config file path that APTL exposes today
+   continues to work identically. `aptl lab start`, `aptl scenario
+   start/stop/list`, `aptl runs`, all of it. The CLI does not learn
+   about ACES; the cutover is an internal substitution.
+3. **`aptl.json` schema unchanged in user-visible shape.** Internal
+   knobs the adapter needs may land in the config, but the schema
+   APTL has documented and shipped today must continue to validate
+   every existing user config without rejection. No user has to
+   edit their `aptl.json` to migrate.
+4. **`LabResult` / `StartupOutcome` / `LabActionResponse` envelopes
+   unchanged.** Web API consumers, CLI rendering, and persistence
+   layers see the same shapes they see today. ACES `Diagnostic`
+   entries translate into the existing envelopes at the adapter
+   boundary; downstream code does not learn about ACES.
+5. **Run archive shape unchanged.** `RangeSnapshot.to_dict()` and
+   `LocalRunStore` produce JSON/JSONL bytes that match the existing
+   structure. A diff of post-cutover archives against pre-cutover
+   archives (with timestamps normalized) must show no semantic
+   difference.
+6. **Performance envelope unchanged.** Lab start/stop wall-clock
+   times are within the existing performance envelope. No new
+   per-scenario startup tax > 10%.
+7. **Failure modes match.** When the legacy path raises
+   `LabResult(success=False, error=...)`, the ACES path raises the
+   same shape with the same error code class. Translation happens
+   at the adapter boundary; user-facing error messages are
+   indistinguishable in semantics.
+
+The parity-gate pytest target (`tests/test_aces_parity.py`) is the
+mechanical embodiment of this contract. It is `@pytest.mark.skip` until
+the cutover PR is ready to merge; flipping the skip is what "meets
+parity" literally means.
+
 ## Migration Plan
 
 The migration splits into a multi-PR prep phase and a single-PR cutover.

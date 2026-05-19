@@ -3,10 +3,10 @@ date: 2026-05-19
 side: both
 sibling_entry:
 follow_ups:
-  - Brad-Edwards/aptl#310 — Phase A.2 wires `AptlProvisioner.apply()` through `aptl.core.lab.orchestrate_lab_start` + `aptl.core.deployment.DeploymentBackend`
+  - Brad-Edwards/aptl#310 — wire `AptlProvisioner.apply()` through `aptl.core.lab.orchestrate_lab_start` + `aptl.core.deployment.DeploymentBackend`, returning `ApplyResult(success=False, diagnostics=[...])` instead of raising
   - Brad-Edwards/aces — open an issue tracking the `provisioner-node-types` vocabulary review (no `container` term; APTL containerized labs model as `vm`)
 adr_impact:
-  - ADR-035 — Phase A.1 lands the scaffolding the ADR's "Integration Guardrails" section anticipates; no amendment needed yet
+  - ADR-035 — amended with a User-Visible Invariance section spelling out the parity contract (pre-/post-cutover indistinguishable from a user's perspective)
 contract_impact:
   - backend-manifest-v2 — APTL's manifest factory exercises the
     `concept_bindings` + `realization_support` requirements end-to-end
@@ -17,11 +17,19 @@ profile_impact:
 
 ## Context
 
-Phase A.1 of #310: stand up the minimum credible surface that proves
-ACES's `provisioning-only` profile is reachable from APTL — a pinned
-dependency, a backend adapter module, a manifest factory, a target
-factory, an explicit `register()` helper, and an advisory CI job. No
-lab orchestration is wired yet; that's Phase A.2.
+#310 / SCN-010 / ADR-035 adopt ACES SDL as APTL's canonical scenario
+authoring surface. This PR (#316) is the full implementation —
+foundational scaffolding, real `apply()` wiring, TechVault scenario
+authoring, parity-gate verification, and the legacy-SDL cutover all
+land here as separate commits on one branch. The user's parity bar:
+**someone using APTL pre- and post-cutover must not be able to tell
+the difference from the stack's behavior.** Every test in
+`tests/test_range_integration.py` that passes on the legacy path must
+pass on the ACES path; `aptl` CLI surface unchanged; lab orchestration
+unchanged.
+
+This entry captures findings from the first integration probes
+(scaffolding + end-to-end smoke test) that landed on the branch.
 
 ## What we expected
 
@@ -144,12 +152,49 @@ mark the protocols `@runtime_checkable` (which would couple ACES's
 protocol surface to its consumers in a way that may not be intended;
 arguably the duck-type-in-tests pattern is fine).
 
+## Smoke probe findings (post-scaffolding)
+
+Drove a minimal SDL document through ACES end-to-end against the
+APTL target — `parse_sdl_file` → `compile_runtime_model` →
+`RuntimeManager(target=create_aptl_target()).plan(scenario=sdl)` →
+`manager.apply(plan)`. Captured three contract-shape findings that
+shape Phase A.2 wiring:
+
+5. **`RuntimeManager.apply()` catches backend exceptions and
+   surfaces them as diagnostics, not propagated raises.** Our
+   `AptlProvisioner.apply()` raises `ApplyNotImplementedError` for
+   actionable plans; the manager catches it and returns
+   `ApplyResult(success=False, diagnostics=[Diagnostic(code=
+   'runtime.backend-call-failed', address='runtime.apply.provisioning',
+   message='Backend method ... raised ApplyNotImplementedError: ...')])`.
+   **Implication for real apply():** match the idiom. Catch our own
+   errors *inside* `apply()` and return `ApplyResult(success=False,
+   diagnostics=[...])` rather than raising. Same end-state from the
+   manager's perspective but APTL controls the diagnostic shape
+   (severity, code namespace, address resolution).
+6. **Planner output is shape-stable across runs.** A minimal SDL with
+   one `Switch` and one `VM` produces exactly two `ProvisionOp`
+   entries: `CREATE provision.network.<switch-name>` and `CREATE
+   provision.node.<vm-name>`. Resource types are `network` and
+   `node`. APTL's apply path needs a translator from these
+   address-prefixed resource types to Docker Compose primitives
+   (networks → Docker networks, nodes → Docker Compose services).
+   `provision.network.X` is one structural family; `provision.node.X`
+   is another. The translator is the seam Phase A.2 builds.
+7. **`RuntimeManager` is one-target.** Constructor takes a single
+   `target=...` keyword; there's no registry-based selection at the
+   manager level. `BackendRegistry` exists for "look up a backend by
+   name" patterns (CLI flags, scenario manifest references), but the
+   apply pipeline binds to one target at construction time. APTL's
+   CLI will need to build the manager with the APTL target directly,
+   not look it up via the registry.
+
 ## Follow-ups
 
-- aptl#310 Phase A.2 — wire `AptlProvisioner.apply()` through
-  `DeploymentBackend` + `aptl.core.lab.orchestrate_lab_start`, raising
-  `LabResult`-shaped diagnostics translated from ACES `Diagnostic`
-  entries per ADR-035 guardrails.
+- aptl#310 — wire `AptlProvisioner.apply()` through
+  `DeploymentBackend` + `aptl.core.lab.orchestrate_lab_start`,
+  returning `ApplyResult(success=False, diagnostics=[...])` for
+  failures (don't raise — match ACES's idiom per finding 5 above).
 - aces — vocabulary review issue (`provisioner-node-types`): add
   `container` term, or publish mapping guidance for container-shaped
   taxonomies.

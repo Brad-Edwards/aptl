@@ -1,7 +1,7 @@
 """APTL backend implementations.
 
-Concrete provisioners, orchestrators, and evaluators for
-specific deployment targets. These depend on ``aptl.core.runtime``
-protocols and are APTL-specific (not part of the generic SDL or
-runtime packages).
+ACES backend adapter (`aces`) declaring conformance to the ACES
+``provisioning-only`` profile. The provisioner wraps APTL's
+``DeploymentBackend`` and translates ACES ``ApplyResult`` shapes to
+``LabResult`` envelopes at the boundary (per ADR-035).
 """

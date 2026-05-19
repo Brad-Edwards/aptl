@@ -64,22 +64,30 @@ Three contract-surface frictions surfaced during the scaffolding:
    `contracts/concept-authority/controlled-vocabularies-v1.json` is
    expected to live there. This assumes the source-tree layout
    `<repo>/implementations/python/packages/aces_contracts/__init__.py`,
-   which only matches when aces-sdl is installed editably. A wheel
-   install lands the package under `site-packages/aces_contracts/`,
-   and `parents[4]` points at the venv root or higher — the catalog
-   file isn't found, every BackendManifest construction call dies
-   with `FileNotFoundError`. APTL's CI first hit this when the
-   `python-tests` job installed aces-sdl as a transitive resolution
-   from `pip install -e ".[dev]"`. Workaround applied: APTL's CI
-   installs aces-sdl with `pip install -e "git+..."` BEFORE its own
-   install, and `aces-sdl` is declared as an OPTIONAL `[aces]` extra
-   rather than a core dep so the smaller APTL containers
-   (misp-suricata-sync, web-api, webapp) don't pay the cost. Real
-   fix lives on the ACES side: package the contracts/ tree as data
-   files (PEP 561-style `package_data`) so the resolution works
-   regardless of install mode, or expose the catalog via an
-   `importlib.resources` lookup that doesn't rely on the source-tree
-   path walk.
+   which only matches when aces-sdl is installed editably from the
+   actual source tree. A wheel install lands the package under
+   `site-packages/aces_contracts/` and `parents[4]` points at the
+   venv root or higher — the catalog file isn't found, every
+   `BackendManifest` construction call dies with `FileNotFoundError`.
+   APTL's CI first hit this when the `python-tests` job installed
+   aces-sdl as a transitive resolution from `pip install -e ".[dev]"`.
+   We then learned a second, more subtle variant: **`pip install -e
+   "git+...#subdirectory=implementations/python&egg=aces-sdl"` does
+   not produce an editable install on GitHub Actions even when the
+   `-e` flag is supplied.** Pip builds a wheel from the subdirectory
+   anyway, installs into `site-packages/`, and `parents[4]` lands at
+   `/opt/hostedtoolcache/Python/3.12.13/x64/` — the catalog file
+   isn't there. Workaround we adopted: clone aces-sdl explicitly with
+   `git clone` to a known sibling path in CI, then install with `pip
+   install -e ../aces-sdl/implementations/python`. The clone-and-path-
+   install IS unambiguously editable. We also kept `aces-sdl` as an
+   OPTIONAL `[aces]` extra rather than a core dep so the smaller
+   APTL containers (misp-suricata-sync, web-api, webapp) don't pay
+   the cost. Real fix lives on the ACES side: package the
+   `contracts/` tree as data files (PEP 561-style `package_data`) so
+   the resolution works regardless of install mode, or expose the
+   catalog via an `importlib.resources` lookup that doesn't rely on
+   the source-tree path walk.
 
 ## Decision
 

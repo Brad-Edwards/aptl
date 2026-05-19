@@ -45,17 +45,24 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - name: Clone aces-sdl at pinned SHA
+        # aces-sdl carries its controlled-vocabulary catalog as a
+        # repo-relative artifact under contracts/; aces_contracts
+        # resolves it via Path(__file__).parents[4]. That only points
+        # at a real directory under an EDITABLE install rooted in the
+        # actual source tree. `pip install -e "git+..."` with a
+        # `subdirectory=` URL fragment does NOT produce an editable
+        # install on GitHub Actions today — it builds a wheel anyway,
+        # the catalog falls outside parents[4], and BackendManifest
+        # construction dies with FileNotFoundError. Workaround: clone
+        # the repo explicitly so we install from a real path. Tracked
+        # in docs/lessons/2026-05-19-aces-backend-skeleton.md.
+        run: |
+          git clone --depth 1 https://github.com/Brad-Edwards/aces.git ../aces-sdl
+          (cd ../aces-sdl && git fetch --depth 1 origin 12d9a8234b354f4f181a5db251d791ac57441f52 && git checkout 12d9a8234b354f4f181a5db251d791ac57441f52)
       - run: |
           python -m pip install --upgrade pip
-          # aces-sdl carries its controlled-vocabulary catalog as a
-          # repo-relative artifact under contracts/; aces_contracts
-          # resolves it via Path(__file__).parents[4] which only points
-          # at a real directory under an EDITABLE install. As a wheel
-          # the catalog is unreachable. Install aces-sdl editably first
-          # so the path walk lands; APTL's own install then sees the
-          # dependency satisfied and skips re-resolution. Tracked in
-          # docs/lessons/2026-05-19-aces-backend-skeleton.md.
-          pip install -e "git+https://github.com/Brad-Edwards/aces.git@12d9a8234b354f4f181a5db251d791ac57441f52#subdirectory=implementations/python&egg=aces-sdl"
+          pip install -e ../aces-sdl/implementations/python
           pip install -e ".[dev,web,aces]"
       - run: |
           coverage run -m pytest tests/ -q -k "not integration"
@@ -82,12 +89,18 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - name: Clone aces-sdl at pinned SHA
+        # See note on python-tests job: pip install -e "git+..." with
+        # a subdirectory= fragment does NOT produce an editable install
+        # on GitHub Actions; the aces_contracts parents[4] path walk
+        # for the controlled-vocabulary catalog falls outside the
+        # cloned tree. Clone explicitly and install from path.
+        run: |
+          git clone --depth 1 https://github.com/Brad-Edwards/aces.git ../aces-sdl
+          (cd ../aces-sdl && git fetch --depth 1 origin 12d9a8234b354f4f181a5db251d791ac57441f52 && git checkout 12d9a8234b354f4f181a5db251d791ac57441f52)
       - run: |
           python -m pip install --upgrade pip
-          # See note on python-tests job: aces-sdl must be installed
-          # editably so its controlled-vocabulary catalog is reachable
-          # via the package's parents[4] path walk.
-          pip install -e "git+https://github.com/Brad-Edwards/aces.git@12d9a8234b354f4f181a5db251d791ac57441f52#subdirectory=implementations/python&egg=aces-sdl"
+          pip install -e ../aces-sdl/implementations/python
           pip install -e ".[dev,aces]"
       - name: Run conformance against provisioning-only profile
         run: |

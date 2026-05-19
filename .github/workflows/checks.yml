@@ -73,17 +73,17 @@ jobs:
           path: coverage.xml
           retention-days: 7
 
-  # ADVISORY: ACES backend conformance for the provisioning-only profile
-  # (Phase A.1 of #310 / ADR-035). Runs the published ACES conformance
-  # suite against APTL's RuntimeTarget and surfaces the report as job
-  # output. `continue-on-error: true` keeps the gate non-blocking
-  # until Phase B cutover flips it to enforced. Bumping the aces-sdl
-  # pin in pyproject.toml is what bumps the contract surface this gate
-  # validates against; record findings in docs/lessons/.
+  # ACES backend conformance for the provisioning-only profile
+  # (#310 / SCN-010 / ADR-035). Runs the published ACES conformance
+  # suite against APTL's RuntimeTarget. Blocking — APTL has cut over
+  # to the ACES authoring surface; a failure here means the backend
+  # contract surface has drifted relative to the pinned aces-sdl SHA.
+  # Bumping that SHA in .github/workflows/checks.yml is what bumps
+  # the contract surface this gate validates against; record findings
+  # in docs/lessons/.
   aces-conformance:
-    name: ACES backend conformance (advisory)
+    name: ACES backend conformance
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -121,9 +121,8 @@ jobs:
                   for d in report.diagnostics
               ],
           }, indent=2))
-          # Exit non-zero on failure so the job surface flags it,
-          # even though continue-on-error suppresses the overall
-          # workflow failure.
+          # Non-zero exit gates the workflow (the surrounding
+          # continue-on-error: true was removed at cutover).
           raise SystemExit(0 if report.passed else 1)
           "
 

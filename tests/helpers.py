@@ -385,9 +385,15 @@ def mcp_tool_text(result: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def run_cmd(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
+def run_cmd(
+    cmd: list[str],
+    timeout: int = 30,
+    cwd: str | None = None,
+) -> subprocess.CompletedProcess:
     """Run a subprocess command with capture and timeout."""
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    return subprocess.run(
+        cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
+    )
 
 
 def docker_exec(
@@ -445,17 +451,21 @@ def curl_json(
 ) -> dict:
     """Make an HTTP request via curl and return parsed JSON.
 
-    SEC-006 / ADR-034: SOC stack callers should pass
-    ``ca_cert_path=LAB_CA_PATH`` to verify against the lab-managed CA.
-    ``insecure=True`` remains for Wazuh inter-component traffic
-    (SEC-004 territory) and for fallback when the lab CA bundle is
-    unavailable. Mutually exclusive — ``insecure`` wins when both set.
+    SEC-006 / ADR-034: SOC stack endpoints are signed by the lab-managed
+    CA, not a system-trusted authority. When neither ``insecure`` nor
+    ``ca_cert_path`` is supplied, the helper defaults to verifying
+    against :data:`LAB_CA_PATH` if that file exists — every SOC stack
+    caller (MISP, Shuffle, TheHive) gets correct cert verification
+    without remembering to thread ``ca_cert_path`` through. ``insecure``
+    still wins when explicitly set (Wazuh inter-component / SEC-004).
     """
     cmd = ["curl", "-sf", url]
     if insecure:
         cmd.insert(1, "-k")
-    elif ca_cert_path:
-        cmd[1:1] = ["--cacert", ca_cert_path]
+    else:
+        cert = ca_cert_path or (LAB_CA_PATH if os.path.exists(LAB_CA_PATH) else None)
+        if cert:
+            cmd[1:1] = ["--cacert", cert]
     if method != "GET":
         cmd += ["-X", method]
     if auth_header:

@@ -134,8 +134,18 @@ class TestDetectionPipeline:
             f"Log '{tag}' not in Wazuh archives within 240s"
         )
 
-    def test_kali_redteam_log_reaches_manager(self):
-        """Red-team log on Kali reaches Wazuh archives."""
+    def test_kali_redteam_log_does_not_reach_manager(self):
+        """ADR-033 non-contamination: kali logs MUST NOT reach the blue SIEM.
+
+        Red-team activity is captured to a dedicated red-side store
+        (`kali_captures` docker volume, harvested to
+        `.aptl/runs/<run>/kali-side/`). Re-introducing a kali→SIEM pipe
+        (rsyslog forwarding, Wazuh agent on kali, OCSF dispatch, etc.)
+        is explicitly listed in ADR-033 § "Non-Goals" as a forbidden
+        change without an overriding ADR. This test pins that
+        invariant: a kali-side `logger` line must NOT appear in the
+        Wazuh manager's archives within a reasonable window.
+        """
         tag = f"APTL_INTEG_KALI_{int(time.time())}"
         kali_exec(
             "logger -t kali_redteam "
@@ -143,23 +153,18 @@ class TestDetectionPipeline:
             'target=172.20.2.20"'
         )
 
-        deadline = time.monotonic() + 180
-        while time.monotonic() < deadline:
-            time.sleep(5)
-            result = docker_exec(
-                "aptl-wazuh-manager",
-                [
-                    "grep", "-c", tag,
-                    "/var/ossec/logs/archives/archives.log",
-                ],
-            )
-            if (
-                result.returncode == 0
-                and result.stdout.strip() != "0"
-            ):
-                return
-        pytest.fail(
-            f"Log '{tag}' not in Wazuh archives within 180s"
+        time.sleep(30)
+        result = docker_exec(
+            "aptl-wazuh-manager",
+            [
+                "grep", "-c", tag,
+                "/var/ossec/logs/archives/archives.log",
+            ],
+        )
+        count = result.stdout.strip() if result.returncode == 0 else "0"
+        assert count == "0", (
+            f"ADR-033 violation: kali tag '{tag}' reached Wazuh archives "
+            f"({count} matches). Red activity must not contaminate the blue SIEM."
         )
 
     def test_wazuh_agents_registered(self):
@@ -574,6 +579,13 @@ class TestFullLoop:
 
         ts = int(time.time())
         alert_title = f"SQLi from {src_ip} (integ test {ts})"
+        # Use the same payload schema that Wazuh's webhook integration
+        # script emits: $exec.data.srcip, $exec.rule.{id,description,
+        # level}, $exec.agent.name, $exec.timestamp. The seed-shuffle
+        # workflow's body template (`scripts/seed-shuffle.sh`) reads
+        # exactly these fields — anything else expands to empty
+        # strings and the create_thehive_case body becomes invalid
+        # JSON.
         exec_result = curl_json(
             f"{SHUFFLE_URL}/api/v1/workflows/"
             f"{aptl_wf['id']}/execute",
@@ -581,11 +593,14 @@ class TestFullLoop:
             method="POST",
             body={
                 "execution_argument": json.dumps({
-                    "title": alert_title,
-                    "description": f"SQLi from {src_ip}",
-                    "severity": 3,
-                    "source_ip": src_ip,
-                    "rule_id": "302010",
+                    "data": {"srcip": src_ip},
+                    "rule": {
+                        "id": "302010",
+                        "description": alert_title,
+                        "level": 10,
+                    },
+                    "agent": {"name": "integration-test"},
+                    "timestamp": str(ts),
                 }),
             },
         )
@@ -696,9 +711,17 @@ class TestFullLoop:
             timeout=30,
         )
 
-        # 3. Wait for new webhook-triggered execution (up to 240s)
+        # 3. Wait for new webhook-triggered execution (up to 240s).
+        # Shuffle caps the executions list (the API returns at most
+        # ~100 entries even when more exist), so a count-grew check is
+        # unreliable once the workflow has fired many times — old
+        # executions drop off and `len(after) == before_count` even
+        # though new executions ARE present. Instead, scan for ANY
+        # webhook-sourced execution with `started_at >= ts`; that's the
+        # one this test's SQLi triggered.
         deadline = time.monotonic() + 240
         new_exec = None
+        after = before
         while time.monotonic() < deadline:
             time.sleep(10)
             exec_data = curl_json(
@@ -706,16 +729,15 @@ class TestFullLoop:
                 auth_header=f"Bearer {SHUFFLE_API_KEY}",
             )
             after = exec_data if isinstance(exec_data, list) else exec_data.get("data", [])
-            if len(after) > before_count:
-                # Find the newest webhook-triggered execution
-                for e in after:
-                    if e.get("execution_source") == "webhook":
-                        started = e.get("started_at", 0)
-                        if isinstance(started, (int, float)) and started >= ts:
-                            new_exec = e
-                            break
-                if new_exec:
+            for e in after:
+                if e.get("execution_source") != "webhook":
+                    continue
+                started = e.get("started_at", 0)
+                if isinstance(started, (int, float)) and started >= ts:
+                    new_exec = e
                     break
+            if new_exec:
+                break
 
         assert new_exec is not None, (
             f"No webhook-triggered execution within 240s "
@@ -792,12 +814,27 @@ class TestScenarioHarness:
         session = json.loads(session_path.read_text())
         assert session["state"] == "active"
 
-        # 2. Generate failed SSH attempts from Kali
-        for _ in range(7):
+        # 2. Generate failed SSH attempts from Kali.
+        # UserKnownHostsFile=/dev/null bypasses a stale host key in
+        # /root/.ssh/known_hosts (which `aptl scenario stop`/recreate
+        # leaves behind from earlier runs, and which `-o
+        # StrictHostKeyChecking=no` alone does NOT override — ssh
+        # still REFUSES to connect on host-key MISMATCH, only the
+        # first-time prompt is suppressed).
+        # Rule 5763 fires on 8 sshd failed-password events from same
+        # source IP within 120s, then sleeps 60s (`ignore=60`). When
+        # this test runs after an earlier test in the suite triggered
+        # SSH activity in the same lab, the in-memory correlation
+        # window can carry residual state — 8 attempts then become a
+        # boundary case. Send 12 attempts to leave headroom for any
+        # event the agent or analysisd drops, and to keep the rule
+        # firing even if a small subset is suppressed by the cooldown.
+        for i in range(12):
             docker_exec(
                 "aptl-kali",
-                "sshpass -p wrongpassword ssh "
+                f"sshpass -p wrong{i} ssh "
                 "-o StrictHostKeyChecking=no "
+                "-o UserKnownHostsFile=/dev/null "
                 "-o ConnectTimeout=3 "
                 "labadmin@172.20.2.20 echo fail "
                 "2>/dev/null || true",
@@ -820,28 +857,47 @@ class TestScenarioHarness:
                     "must": [
                         {"match": {"rule.id": "5763"}},
                         {"range": {
-                            "timestamp": {"gte": "now-3m"},
+                            "timestamp": {"gte": "now-5m"},
                         }},
                     ]
                 }
             },
-            timeout=180,
+            timeout=240,
         )
         assert hit.get("rule", {}).get("id") == "5763", (
             f"Expected SSH brute-force alert (rule 5763), got: {hit.get('rule')}"
         )
 
         # 4. Stop and verify run was assembled
-        result = _aptl("stop")
-        assert result.returncode == 0, (
-            f"stop failed: {result.stderr}"
-        )
-        assert "Scenario stopped" in result.stdout
+        try:
+            result = _aptl("stop")
+            assert result.returncode == 0, (
+                f"stop failed: {result.stderr}"
+            )
+            assert "Scenario stopped" in result.stdout
 
-        # Session file is removed after stop (clear())
-        assert not session_path.exists(), (
-            "session.json should be removed after stop"
-        )
+            # Session file is removed after stop (clear())
+            assert not session_path.exists(), (
+                "session.json should be removed after stop"
+            )
+        finally:
+            # `aptl scenario stop` brings the lab fully down. The
+            # remaining test classes (TestAttackPaths,
+            # TestDefensiveStack, TestCTFFlags, TestMCPSessionHarvest)
+            # all assume an up lab. Restart it from the project root
+            # so the suite stays a single-pass sequence — moving this
+            # to a teardown fixture would still leave subsequent
+            # classes failing if the teardown is class-scoped on this
+            # class, and a session-scoped fixture would slow every
+            # unrelated test run.
+            project_root = os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__))
+            )
+            run_cmd(
+                ["aptl", "lab", "start"],
+                timeout=300,
+                cwd=project_root,
+            )
 
 
 # -------------------------------------------------------------------

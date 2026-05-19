@@ -245,22 +245,38 @@ shape Phase A.2 wiring:
    CLI will need to build the manager with the APTL target directly,
    not look it up via the registry.
 
+## Ground Control reconciliation (post-cutover state)
+
+- **DSL-001** (Formal Scenario Specification Language) → DEPRECATED.
+- **SCN-001** (Declarative YAML Scenario Specifications) → DEPRECATED.
+- **DSL-002** (Control Flow Primitives in Scenario DSL) → DEPRECATED.
+- **DSL-003..DSL-009**: stay DRAFT. Ground Control rejects
+  DRAFT→DEPRECATED as `invalid_status_transition` (only DRAFT→ACTIVE,
+  ACTIVE→DEPRECATED, ACTIVE→ARCHIVED, DEPRECATED→ARCHIVED are legal).
+  These DRAFT requirements are effectively superseded by SCN-010 per
+  ADR-035; their status accurately reflects "not pursued" without the
+  promote-to-deprecate dance.
+- **RTE-001** (Scenario Runtime Engine): statement should read "takes
+  an ACES SDL document compiled through the ACES RuntimeModel" rather
+  than the DSL-001 reference; recorded in ADR-035 § Update 2026-05-19
+  rather than via a status transition.
+- **CLI-005** (Scenario Start/Stop/List Commands) gains
+  `src/aptl/cli/scenario.py` + `tests/test_cli_scenario.py`
+  traceability — the CLI implementation lands as part of this PR.
+- **SCN-010**: ACTIVE, traceability extended with the new scaffolding
+  artifacts (backend adapter, manifest factory, register helper,
+  CLI module, SDLs, parity tests, conformance CI job, lessons entry).
+
 ## Follow-ups
 
-- aptl#310 — wire `AptlProvisioner.apply()` through
-  `DeploymentBackend` + `aptl.core.lab.orchestrate_lab_start`,
-  returning `ApplyResult(success=False, diagnostics=[...])` for
-  failures (don't raise — match ACES's idiom per finding 5 above).
 - aces — vocabulary review issue (`provisioner-node-types`): add
   `container` term, or publish mapping guidance for container-shaped
-  taxonomies.
+  taxonomies. APTL declares `vm` + `switch` today.
 - aces — manifest-construction documentation issue: document
   `realization_support` / `concept_bindings` minimums next to the
   profile JSONs.
 - aces — `@runtime_checkable` decision on `aces_backend_protocols.protocols`
   (Provisioner / Orchestrator / Evaluator / ParticipantRuntime).
 - aces — package the `contracts/` tree as installable package data
-  (or use `importlib.resources`) so wheel installs work. The
-  `parents[4]` source-tree-relative path walk is a real bug for any
-  downstream that doesn't install aces-sdl editably (#310 Phase A.1
-  hit it in APTL's CI before the editable-install workaround).
+  (or use `importlib.resources`) so wheel installs work; APTL's
+  current workaround clones aces-sdl explicitly in CI.

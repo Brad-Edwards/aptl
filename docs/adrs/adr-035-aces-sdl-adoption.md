@@ -119,6 +119,100 @@ exercise:
 The parity check is reviewed in the cutover PR description and is a hard
 prerequisite. No cutover PR merges without it.
 
+## Parity Inventory Boundary
+
+Issue #318's parity inventory is the authoritative review surface for
+deciding whether the ACES TechVault can replace the legacy scenario set. It
+is not a runtime schema, not a new SDL, and not a deployment authority.
+
+The inventory lives at
+[`docs/aces/parity-inventory.yaml`](../aces/parity-inventory.yaml) with a
+human-readable overview at
+[`docs/aces/parity-inventory.md`](../aces/parity-inventory.md). Its schema
+is enforced by `tests/test_parity_inventory.py`.
+
+The inventory must map every legacy surface to exactly one owning category:
+
+- **ACES SDL** when the authored scenario can express the surface directly
+  through the ACES parser, schemas, semantic validators, and compiled
+  `RuntimeModel`.
+- **ACES schema/profile gap** when the concept belongs in ACES rather than
+  APTL; these rows must cite an ACES follow-up instead of adding an APTL
+  extension that recreates the retired in-tree SDL.
+- **APTL backend responsibility** when the concept is backend realization
+  detail: Docker Compose profiles, generated runtime config, lab-managed TLS,
+  SOC seed material, deployment inventory, readiness classification, snapshots,
+  run archive persistence, or host/container interaction.
+- **Validation gate** when the surface is not authored but must be proven by
+  conformance, static parity tests, live lab validation, snapshots, or run
+  archive assertions.
+- **Cutover-only archive/cleanup** when the legacy field is retained only as
+  reference material after the Phase B move to `scenarios/archive/`.
+
+The canonical source for a row is the existing owner, not the inventory
+document itself. In particular:
+
+- authored legacy fields come from `scenarios/*.yaml` until cutover;
+- topology, profiles, networks, static IPs, hostnames, volumes, health checks,
+  published ports, and service dependencies come from `docker-compose.yml` and
+  the `DeploymentBackend` inventory methods;
+- durable first-party knobs come from `AptlConfig`, not ad hoc YAML keys;
+- `.env` values and generated secret-bearing config come from `EnvVars`,
+  `find_placeholder_env_values`, ADR-028, ADR-029, and ADR-034;
+- lab lifecycle and readiness surfaces come from `_LAB_START_STEPS`,
+  `LabResult`, `StartupOutcome`, and `StartupDiagnostic`;
+- runtime snapshots come from `RangeSnapshot.to_dict()` and the endpoint
+  registry boundary in ADR-036;
+- run archives come from `LocalRunStore` and its redacting JSON/JSONL write
+  boundary.
+
+The inventory may be human-readable or machine-readable, but if it becomes
+machine-readable it must stay a narrow audit manifest: stable legacy
+identifier, canonical source, owning category, ACES/runtime/backend target,
+validation evidence, and blocking follow-up. It must not introduce a second
+Pydantic `ScenarioDefinition`, a second ACES model, a duplicate Docker Compose
+parser, a duplicate secret taxonomy, a duplicate readiness taxonomy, or a
+parallel exception/result envelope.
+
+## ACES Backend Integration Guardrails
+
+APTL's ACES backend target is an adapter over existing APTL control-plane
+boundaries. The implementation must not bypass those boundaries just because
+the caller is ACES.
+
+- ACES SDL documents enter through the ACES reference parser and semantic
+  validators; APTL does not perform structural revalidation of ACES SDL with
+  local models.
+- ACES runtime work enters APTL through the ACES `RuntimeModel`,
+  `ExecutionPlan`, backend manifest, operation receipt/status, and runtime
+  snapshot contracts. The APTL-side target adapts those contracts to existing
+  APTL owners rather than inventing a parallel runtime manager.
+- Docker, container, and host inventory operations continue through
+  `DeploymentBackend`; no ACES adapter code should call raw Docker or parse
+  Compose output directly.
+- Lab start/stop behavior continues to produce `LabResult` and structured
+  startup diagnostics at APTL-facing edges. ACES-facing failures are translated
+  into ACES diagnostics or operation-status envelopes at the adapter boundary;
+  do not add an `AcesAptlError` hierarchy or expose raw backend exception text.
+- Generated config, SOC TLS material, seed outputs, and any other
+  secret-bearing runtime artifacts remain under the ADR-028 / ADR-034 generated
+  artifact model. The backend manifest and parity inventory must not embed
+  `.env` values, private key material, API tokens, cookies, or rendered config.
+- Snapshot, status, telemetry, CLI/API output, run archives, and conformance
+  artifacts remain subject to ADR-029 redaction. New ACES status or run
+  evidence writers must reuse `RangeSnapshot.to_dict()` and `LocalRunStore`
+  JSON/JSONL redaction boundaries where those artifacts cross APTL
+  serialization.
+- Published backend capability stays profile-named and contract-validated:
+  `provisioning-only` is the initial claim, and any profile promotion belongs
+  to the follow-on issues already named here.
+
+The extensibility seam is the ACES backend capability profile plus a small
+backend realization map from ACES runtime resource kinds to existing APTL
+control-plane owners. Do not make TechVault-specific branches the public
+adapter contract; TechVault is the parity proving case for the supported
+expressivity class, not the backend's type system.
+
 ## Migration Plan
 
 The migration splits into a multi-PR prep phase and a single-PR cutover.

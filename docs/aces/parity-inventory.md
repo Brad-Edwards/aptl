@@ -121,6 +121,13 @@ accurate. Example PR-description line:
 
 - **ADR-035** — ACES SDL adoption and the parity-inventory boundary
   (the binding document).
+- **TechVault ACES SDL authoring preflight** —
+  `docs/aces/techvault-sdl-authoring-preflight.md` records the SCN-010B
+  authoring guardrails for issue #319. The ACES-authored document that
+  satisfies those guardrails is `scenarios/techvault.sdl.yaml`; its
+  parser / compile / surface-coverage gates live in
+  `tests/test_techvault_sdl.py` and execute against the sibling
+  `Brad-Edwards/aces` checkout the `python-tests` CI job sets up.
 - **ADR-028** — Runtime-rendered service config (generated-secret
   boundary referenced by `env_vars_and_secrets` rows).
 - **ADR-029** — Snapshot / runstore redaction boundary.

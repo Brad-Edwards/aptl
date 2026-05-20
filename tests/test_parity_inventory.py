@@ -200,10 +200,19 @@ def test_gap_rows_cite_a_followup(inventory):
 
 
 def test_every_legacy_scenario_yaml_is_covered(inventory):
-    """Every existing scenarios/*.yaml file must appear in legacy_source
-    of at least one row in the ``scenarios_yaml`` surface bucket."""
+    """Every existing legacy ``scenarios/<name>.yaml`` file must appear in
+    ``legacy_source`` of at least one row in the ``scenarios_yaml`` bucket.
+
+    The ACES-authored ``scenarios/<name>.sdl.yaml`` documents (SCN-010
+    Phase A, issue #319 onward) are deliberately excluded: they are the
+    *replacement* surface, not legacy material to audit.
+    """
     scenarios_dir = PROJECT_ROOT / "scenarios"
-    on_disk = {p.name for p in scenarios_dir.glob("*.yaml")}
+    on_disk = {
+        p.name
+        for p in scenarios_dir.glob("*.yaml")
+        if not p.name.endswith(".sdl.yaml")
+    }
     cited = {
         Path(row["legacy_source"]).name
         for row in inventory["rows"]

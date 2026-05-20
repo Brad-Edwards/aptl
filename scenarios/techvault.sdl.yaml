@@ -1,0 +1,839 @@
+name: techvault
+description: >
+  TechVault is APTL's canonical purple-team enterprise scenario, authored
+  directly in ACES SDL per ADR-035 (SCN-010 adoption). Three independent
+  adversary paths traverse the same realistic environment: web-app
+  exploitation through SQL injection / command injection / data
+  exfiltration; Active Directory enumeration / Kerberoasting / lateral
+  movement to Domain Admin; anonymous SMB enumeration into engineering
+  / IT-backup loot. Kali is declared as a first-class attacker
+  apparatus with its own SSH bridge and a loot-listener service so the
+  scenario remains true to the legacy 172.20.4.30 attacker host and is
+  not reduced to a scenario-name preset. The defensive stack — Wazuh
+  SIEM, Suricata IDS, Shuffle SOAR, MISP threat intel, TheHive case
+  management — is represented as observation surfaces and conditions so
+  detection / SOAR / case-creation outcomes can score blue objectives.
+
+nodes:
+  # ----------------------------------------------------------------------
+  # Switches — five enterprise subnets preserving the legacy 172.20.x.0/24
+  # layout from scenarios/prime-enterprise.yaml.
+  # ----------------------------------------------------------------------
+  aptl-public:
+    type: switch
+    description: Lab management and operator ingress (172.20.0.0/24).
+  aptl-dmz:
+    type: switch
+    description: External-facing DMZ hosting the TechVault webapp (172.20.1.0/24).
+  aptl-internal:
+    type: switch
+    description: Internal enterprise network — AD, DB, file share, workstation, mail, DNS (172.20.2.0/24).
+  aptl-security:
+    type: switch
+    description: SOC monitoring network — Wazuh, MISP, TheHive, Shuffle (172.20.3.0/24).
+  aptl-redteam:
+    type: switch
+    description: Red-team network for the Kali attacker apparatus (172.20.4.0/24).
+
+  # ----------------------------------------------------------------------
+  # Target VMs.
+  # ----------------------------------------------------------------------
+  webapp:
+    type: vm
+    description: TechVault customer-facing web application — SQL-injectable login plus a network-tools endpoint that pipes user input into a shell.
+    os: linux
+    source: techvault-webapp
+    resources: {ram: 4 gib, cpu: 2}
+    features:
+      webapp-app: webapp-admin
+    conditions:
+      webapp-healthy: webapp-admin
+      webapp-sqli-detected: webapp-admin
+      webapp-rce-detected: webapp-admin
+      webapp-info-disclosure-detected: webapp-admin
+    services:
+      - {port: 8080, name: webapp-http}
+    roles:
+      webapp-admin:
+        username: webapp
+        entities: [techvault-enterprise.devops]
+    asset_value:
+      confidentiality: high
+      integrity: high
+      availability: high
+
+  postgres-db:
+    type: vm
+    description: PostgreSQL backing the TechVault webapp; carries the customers PII table and a backup_config row with deliberately weak AWS keys.
+    os: linux
+    source: techvault-postgres
+    resources: {ram: 6 gib, cpu: 2}
+    features:
+      postgres-store: postgres-dba
+    conditions:
+      postgres-healthy: postgres-dba
+      postgres-bulk-export-detected: postgres-dba
+    services:
+      - {port: 5432, name: techvault-postgres}
+    roles:
+      postgres-dba:
+        username: postgres
+        entities: [techvault-enterprise.it]
+    asset_value:
+      confidentiality: critical
+      integrity: critical
+      availability: high
+
+  samba-ad-dc:
+    type: vm
+    description: Samba Active Directory domain controller for techvault.local — over-permissive password policy plus Kerberoastable service principal names.
+    os: linux
+    source: techvault-samba-ad
+    resources: {ram: 4 gib, cpu: 2}
+    features:
+      samba-ad-svc: ad-admin
+    conditions:
+      ad-healthy: ad-admin
+      ad-bruteforce-detected: ad-admin
+      ad-kerberoast-detected: ad-admin
+      ad-ldap-enumeration-detected: ad-admin
+    services:
+      - {port: 88, name: kerberos}
+      - {port: 389, name: ldap}
+      - {port: 445, name: ad-smb}
+      - {port: 464, name: kpasswd}
+    roles:
+      ad-admin:
+        username: Administrator
+        entities: [techvault-enterprise.it]
+    asset_value:
+      confidentiality: critical
+      integrity: critical
+      availability: critical
+
+  fileshare:
+    type: vm
+    description: SMB file server with anonymous Public / Shared / Engineering / IT-Backups shares — exposes deploy.sh credentials and wifi passwords.
+    os: linux
+    source: techvault-fileshare
+    resources: {ram: 2 gib, cpu: 1}
+    features:
+      smb-share-svc: fileshare-admin
+    conditions:
+      fileshare-healthy: fileshare-admin
+      fileshare-loot-exfiltrated: fileshare-admin
+    services:
+      - {port: 139, name: smb-netbios}
+      - {port: 445, name: smb-share}
+    roles:
+      fileshare-admin:
+        username: fileadmin
+        entities: [techvault-enterprise.it]
+
+  windows-workstation:
+    type: vm
+    description: Domain-joined Windows 10 workstation belonging to a DevOps user who is also Domain Admin and stores cached AD credentials.
+    os: windows
+    os_version: "10"
+    source: techvault-workstation
+    resources: {ram: 4 gib, cpu: 2}
+    features:
+      rdp-svc: workstation-user
+    conditions:
+      workstation-healthy: workstation-user
+      workstation-lateral-rdp-detected: workstation-user
+    services:
+      - {port: 3389, name: rdp}
+      - {port: 445, name: workstation-smb}
+    roles:
+      workstation-user:
+        username: emily.chen
+        entities: [techvault-enterprise.devops]
+    asset_value:
+      confidentiality: high
+      integrity: medium
+      availability: medium
+
+  mail:
+    type: vm
+    description: TechVault corporate mailbox host — receives phishing lures during the purple-loop story.
+    os: linux
+    source: techvault-mail
+    resources: {ram: 2 gib, cpu: 1}
+    features:
+      mail-svc: mail-admin
+    conditions:
+      mail-healthy: mail-admin
+    services:
+      - {port: 25, name: smtp}
+      - {port: 143, name: imap}
+    roles:
+      mail-admin:
+        username: postmaster
+        entities: [techvault-enterprise.it]
+
+  dns:
+    type: vm
+    description: Internal recursive resolver for techvault.local — also the DNS-tunneling sink during exfiltration.
+    os: linux
+    source: techvault-dns
+    resources: {ram: 1 gib, cpu: 1}
+    features:
+      dns-svc: dns-admin
+    conditions:
+      dns-healthy: dns-admin
+      dns-tunneling-detected: dns-admin
+    services:
+      - {port: 53, protocol: udp, name: dns-udp}
+      - {port: 53, name: dns-tcp}
+    roles:
+      dns-admin:
+        username: bind
+        entities: [techvault-enterprise.it]
+
+  victim:
+    type: vm
+    description: Linux victim host on the lab management network — owns the labadmin SSH credentials used for harvested-credential lateral steps.
+    os: linux
+    source: techvault-victim
+    resources: {ram: 2 gib, cpu: 1}
+    features:
+      ssh-svc: lab-admin
+    conditions:
+      victim-healthy: lab-admin
+      ssh-bruteforce-detected: lab-admin
+    services:
+      - {port: 22, name: victim-ssh}
+    roles:
+      lab-admin:
+        username: labadmin
+        entities: [techvault-enterprise.it]
+
+  kali:
+    type: vm
+    description: Kali Linux attacker apparatus dual-homed on aptl-dmz (DMZ-facing 172.20.1.30) and aptl-redteam (loot-listener 172.20.4.30). Carries the MCP-over-SSH bridge APTL exposes to its red-team MCP server.
+    os: linux
+    source: kali-rolling
+    resources: {ram: 6 gib, cpu: 2}
+    features:
+      kali-toolkit: kali-operator
+      kali-loot-listener: kali-operator
+    conditions:
+      kali-bridge-up: kali-operator
+    services:
+      - {port: 22, name: kali-ssh}
+      - {port: 8888, name: kali-loot-listener}
+    roles:
+      kali-operator:
+        username: kali
+        entities: [red-cartel]
+
+  wazuh-manager:
+    type: vm
+    description: Wazuh manager + dashboard hosting the SIEM rule set; also the Shuffle SOAR + MISP + TheHive control surfaces in the SOC stack.
+    os: linux
+    source: wazuh-stack
+    resources: {ram: 8 gib, cpu: 4}
+    features:
+      wazuh-siem: soc-analyst
+      shuffle-soar: soc-analyst
+      thehive-cases: soc-analyst
+    conditions:
+      wazuh-healthy: soc-analyst
+      shuffle-case-created: soc-analyst
+    services:
+      - {port: 5601, name: wazuh-dashboard}
+      - {port: 55000, name: wazuh-api}
+    roles:
+      soc-analyst:
+        username: socanalyst
+        entities: [techvault-enterprise.incident-command]
+    asset_value:
+      confidentiality: high
+      integrity: critical
+      availability: high
+
+infrastructure:
+  # Subnets — each switch becomes a routable subnet with optional ACLs.
+  aptl-public:
+    count: 1
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1}
+  aptl-dmz:
+    count: 1
+    properties: {cidr: 172.20.1.0/24, gateway: 172.20.1.1}
+  aptl-internal:
+    count: 1
+    properties: {cidr: 172.20.2.0/24, gateway: 172.20.2.1, internal: true}
+    acls:
+      - {name: allow-dmz-to-postgres, direction: in, from_net: aptl-dmz, protocol: tcp, ports: [5432], action: allow}
+      - {name: allow-dmz-to-ad, direction: in, from_net: aptl-dmz, protocol: tcp, ports: [389, 445], action: allow}
+      - {name: deny-redteam-direct, direction: in, from_net: aptl-redteam, action: deny}
+  aptl-security:
+    count: 1
+    properties: {cidr: 172.20.3.0/24, gateway: 172.20.3.1, internal: true}
+    acls:
+      - {name: deny-redteam-soc, direction: in, from_net: aptl-redteam, action: deny}
+  aptl-redteam:
+    count: 1
+    properties: {cidr: 172.20.4.0/24, gateway: 172.20.4.1, internal: true}
+
+  # VM placements — Kali deliberately dual-homes on aptl-dmz + aptl-redteam.
+  webapp: {count: 1, links: [aptl-dmz]}
+  postgres-db:
+    count: 1
+    links: [aptl-internal]
+    dependencies: [samba-ad-dc]
+  samba-ad-dc:
+    count: 1
+    links: [aptl-internal]
+  fileshare:
+    count: 1
+    links: [aptl-internal]
+    dependencies: [samba-ad-dc]
+  windows-workstation:
+    count: 1
+    links: [aptl-internal]
+    dependencies: [samba-ad-dc]
+  mail: {count: 1, links: [aptl-internal]}
+  dns: {count: 1, links: [aptl-internal]}
+  victim: {count: 1, links: [aptl-public]}
+  kali: {count: 1, links: [aptl-dmz, aptl-redteam]}
+  wazuh-manager: {count: 1, links: [aptl-security, aptl-public]}
+
+features:
+  webapp-app: {type: service, source: techvault-webapp}
+  postgres-store: {type: service, source: postgres-15}
+  samba-ad-svc: {type: service, source: samba-ad-dc-image}
+  smb-share-svc: {type: service, source: samba-fileshare-image}
+  rdp-svc: {type: service, source: windows-rdp}
+  mail-svc: {type: service, source: techvault-mail-image}
+  dns-svc: {type: service, source: bind9}
+  ssh-svc: {type: service, source: openssh-server}
+  kali-toolkit: {type: service, source: kali-tools}
+  kali-loot-listener: {type: service, source: kali-loot-listener}
+  wazuh-siem: {type: service, source: wazuh-manager-image}
+  shuffle-soar: {type: service, source: shuffle-image}
+  thehive-cases: {type: service, source: thehive-image}
+
+conditions:
+  webapp-healthy: {command: /usr/local/bin/check-webapp, interval: 30}
+  webapp-sqli-detected: {command: /usr/local/bin/check-wazuh-rule, interval: 30, description: "Wazuh rule 302010 (SQL injection) fired."}
+  webapp-rce-detected: {command: /usr/local/bin/check-wazuh-rule, interval: 30, description: "Wazuh rule 302030 (command injection) fired."}
+  webapp-info-disclosure-detected: {command: /usr/local/bin/check-wazuh-rule, interval: 30, description: "Wazuh rule 302040 (.env / debug exposure) fired."}
+  postgres-healthy: {command: /usr/local/bin/check-postgres, interval: 30}
+  postgres-bulk-export-detected: {command: /usr/local/bin/check-wazuh-rule, interval: 30, description: "Wazuh rule 304030 (large data export from customers/backup_config) fired."}
+  ad-healthy: {command: /usr/local/bin/check-ad, interval: 30}
+  ad-bruteforce-detected: {command: /usr/local/bin/check-wazuh-rule, interval: 30, description: "Wazuh rule 301002 (AD brute force) fired."}
+  ad-kerberoast-detected: {command: /usr/local/bin/check-wazuh-rule, interval: 30, description: "Wazuh rule 301011 / Suricata SID 1000040 (Kerberoasting) fired."}
+  ad-ldap-enumeration-detected: {command: /usr/local/bin/check-wazuh-rule, interval: 30, description: "Wazuh rule 301021 (LDAP enumeration) fired."}
+  fileshare-healthy: {command: /usr/local/bin/check-fileshare, interval: 30}
+  fileshare-loot-exfiltrated: {command: /usr/local/bin/check-wazuh-rule, interval: 30, description: "deploy.sh or wifi-passwords.txt observed leaving fileshare."}
+  workstation-healthy: {command: /usr/local/bin/check-workstation, interval: 60}
+  workstation-lateral-rdp-detected: {command: /usr/local/bin/check-wazuh-rule, interval: 30, description: "Wazuh rule 301040 (service-account interactive login) fired."}
+  mail-healthy: {command: /usr/local/bin/check-mail, interval: 60}
+  dns-healthy: {command: /usr/local/bin/check-dns, interval: 30}
+  dns-tunneling-detected: {command: /usr/local/bin/check-suricata-sid, interval: 30, description: "Suricata SID 1000060 (DNS tunneling) fired."}
+  victim-healthy: {command: /usr/local/bin/check-victim, interval: 30}
+  ssh-bruteforce-detected: {command: /usr/local/bin/check-wazuh-rule, interval: 30, description: "Wazuh built-in rule 5763 (SSH brute force) fired and active-response engaged."}
+  kali-bridge-up: {command: /usr/local/bin/check-kali-bridge, interval: 30, description: "Kali MCP-over-SSH bridge reachable from APTL control plane."}
+  wazuh-healthy: {command: /usr/local/bin/check-wazuh, interval: 30}
+  shuffle-case-created: {command: /usr/local/bin/check-shuffle, interval: 60, description: "Shuffle SOAR auto-created a TheHive case from a level-10+ Wazuh alert."}
+  # Red-side progress conditions — kept distinct from blue-side detected
+  # conditions so the ACES semantic validator (one metric per condition)
+  # holds while still allowing both sides to score the same underlying
+  # event.
+  webapp-attacker-pivot: {command: /usr/local/bin/check-webapp-pivot, interval: 60, description: "Attacker reached RCE on the webapp host (red-side progress marker)."}
+  red-domain-admin-achieved: {command: /usr/local/bin/check-da, interval: 60, description: "Attacker authenticated as a Domain Admin account from the DevOps workstation."}
+  red-pii-exfiltrated: {command: /usr/local/bin/check-pii-exfil, interval: 60, description: "PII rows from customers / backup_config left the enterprise boundary."}
+
+vulnerabilities:
+  webapp-sql-injection:
+    name: Web application SQL injection
+    description: TechVault webapp login form and customer-search endpoint accept un-parameterized SQL fragments.
+    technical: true
+    class: CWE-89
+  webapp-command-injection:
+    name: Web application command injection
+    description: The /tools/ping endpoint pipes the `host` POST parameter into a shell command without sanitization.
+    technical: true
+    class: CWE-77
+  webapp-info-disclosure:
+    name: Web application information disclosure
+    description: The webapp serves /.env and /debug without authentication, exposing database credentials and stack details.
+    technical: true
+    class: CWE-200
+  ad-weak-password-policy:
+    name: Weak Active Directory password policy
+    description: Multiple AD accounts use guessable seasonal passwords (password123, Summer2024, Welcome1!) and no MFA is enforced.
+    technical: true
+    class: CWE-521
+  ad-overprivileged-service-account:
+    name: Over-privileged service accounts
+    description: svc-backup is a Domain Admin; emily.chen carries Domain Admin from her DevOps workstation.
+    technical: true
+    class: CWE-269
+  samba-kerberoastable-spn:
+    name: Kerberoastable service principal names
+    description: AD service accounts have human-set passwords plus SPNs, making TGS tickets crackable offline.
+    technical: true
+    class: CWE-294
+  smb-guest-anonymous:
+    name: Anonymous SMB share access
+    description: Public and Shared file-server drives accept guest authentication, exposing sensitive files without credentials.
+    technical: true
+    class: CWE-287
+  pgsql-trust-internal-subnet:
+    name: PostgreSQL trusts internal subnet
+    description: pg_hba.conf grants the entire internal subnet trust authentication — any host with credentials connects directly.
+    technical: true
+    class: CWE-284
+  creds-in-env-and-share:
+    name: Credential sprawl in .env and shared files
+    description: Database credentials live in webapp/.env, deploy.sh on the file share, .bash_history, and .pgpass.
+    technical: true
+    class: CWE-256
+  no-waf-no-mfa:
+    name: Missing WAF and MFA controls
+    description: No WAF in front of the webapp; no MFA on AD, SSH, or database access.
+    technical: true
+    class: CWE-1021
+
+metrics:
+  blue-detect-webapp-sqli:
+    type: conditional
+    max_score: 100
+    condition: webapp-sqli-detected
+  blue-detect-webapp-rce:
+    type: conditional
+    max_score: 100
+    condition: webapp-rce-detected
+  blue-detect-ad-kerberoast:
+    type: conditional
+    max_score: 100
+    condition: ad-kerberoast-detected
+  blue-detect-fileshare-loot:
+    type: conditional
+    max_score: 100
+    condition: fileshare-loot-exfiltrated
+  blue-shuffle-case-created:
+    type: conditional
+    max_score: 100
+    condition: shuffle-case-created
+  blue-soc-triage-manual:
+    type: manual
+    max_score: 50
+    artifact: true
+  red-webapp-pivot:
+    type: conditional
+    max_score: 150
+    condition: webapp-attacker-pivot
+  red-ad-domain-admin:
+    type: conditional
+    max_score: 200
+    condition: red-domain-admin-achieved
+  red-exfiltrate-pii:
+    type: conditional
+    max_score: 200
+    condition: red-pii-exfiltrated
+
+evaluations:
+  blue-defensive-coverage:
+    metrics: [blue-detect-webapp-sqli, blue-detect-webapp-rce, blue-detect-ad-kerberoast, blue-detect-fileshare-loot, blue-shuffle-case-created, blue-soc-triage-manual]
+    min_score: 50
+  red-multipath-impact:
+    metrics: [red-webapp-pivot, red-ad-domain-admin, red-exfiltrate-pii]
+    min_score: 60
+
+tlos:
+  sustain-techvault-monitoring:
+    name: Sustain TechVault monitoring and response
+    evaluation: blue-defensive-coverage
+  compromise-techvault:
+    name: Compromise TechVault across at least two attack paths
+    evaluation: red-multipath-impact
+
+goals:
+  techvault-blue-goal:
+    description: Detect and triage every red activity within the assigned scoring window.
+    tlos: [sustain-techvault-monitoring]
+  techvault-red-goal:
+    description: Compromise TechVault data, identity, and lateral-movement surfaces.
+    tlos: [compromise-techvault]
+
+entities:
+  techvault-enterprise:
+    name: TechVault Enterprise
+    role: Blue
+    mission: Operate and defend the TechVault enterprise during purple-team exercises.
+    tlos: [sustain-techvault-monitoring]
+    entities:
+      it:
+        name: TechVault IT operations
+      devops:
+        name: TechVault DevOps
+      finance:
+        name: TechVault Finance
+      incident-command:
+        name: TechVault Incident Command (SOC analysts)
+  red-cartel:
+    name: Red Cartel (TechVault adversary)
+    role: Red
+    mission: Compromise TechVault customer data, identity, and lateral-movement surfaces.
+    tlos: [compromise-techvault]
+  white-cell:
+    name: White Cell (exercise control)
+    role: White
+    mission: Run the purple-team exercise, inject events, and arbitrate scoring.
+
+injects:
+  customer-phish:
+    source: customer-phishing-lure
+    from_entity: white-cell
+    to_entities: [techvault-enterprise, red-cartel]
+    description: A targeted phishing lure surfaces in TechVault's mailbox, kicking off the recon phase.
+  webapp-exposure-tip:
+    source: webapp-exposure-tip
+    from_entity: white-cell
+    to_entities: [red-cartel]
+    description: White cell reveals the DMZ-facing webapp endpoint to the attacker apparatus.
+  ad-credential-leak:
+    source: ad-credential-leak
+    from_entity: white-cell
+    to_entities: [red-cartel]
+    description: White cell drops a hint about weak AD credentials and the over-privileged svc-backup account.
+  fileshare-guest-tip:
+    source: fileshare-guest-tip
+    from_entity: white-cell
+    to_entities: [red-cartel]
+    description: White cell reveals that the SMB file share allows anonymous access.
+
+events:
+  scenario-start:
+    injects: [customer-phish]
+  red-knows-webapp:
+    injects: [webapp-exposure-tip]
+  red-knows-ad:
+    injects: [ad-credential-leak]
+    conditions: [webapp-rce-detected]
+  red-knows-fileshare:
+    injects: [fileshare-guest-tip]
+    conditions: [ad-bruteforce-detected]
+
+scripts:
+  arrival-phase:
+    start_time: 0
+    end_time: 15 min
+    speed: 1
+    events:
+      scenario-start: 1 min
+  webapp-compromise-phase:
+    start_time: 15 min
+    end_time: 1 hour
+    speed: 1
+    events:
+      red-knows-webapp: 16 min
+  ad-compromise-phase:
+    start_time: 1 hour
+    end_time: 2 hour
+    speed: 1
+    events:
+      red-knows-ad: 65 min
+  lateral-movement-phase:
+    start_time: 2 hour
+    end_time: 3 hour
+    speed: 1
+    events:
+      red-knows-fileshare: 125 min
+
+stories:
+  purple-loop:
+    description: >
+      The canonical TechVault purple-loop story — arrival, webapp
+      compromise, AD compromise, lateral movement, exfiltration. The
+      three attack paths are independent but share the same enterprise
+      and Kali apparatus.
+    scripts: [arrival-phase, webapp-compromise-phase, ad-compromise-phase, lateral-movement-phase]
+
+content:
+  customers-pii:
+    type: dataset
+    target: postgres-db
+    format: postgres
+    source: techvault-customers-seed
+    sensitive: true
+    description: Synthetic customer PII (names, emails, addresses, phones) for the customers table.
+  backup-config-aws-creds:
+    type: dataset
+    target: postgres-db
+    format: postgres
+    items:
+      - name: backup_config-aws-row
+        tags: [credentials, intentional-weakness]
+        description: Single backup_config row carrying intentionally weak AWS access-key fixture for the exfil objective.
+    sensitive: true
+  deploy-sh-with-creds:
+    type: file
+    target: fileshare
+    path: /share/IT-Backups/deploy.sh
+    text: "#!/usr/bin/env bash\n# Fixture only — intentional credential exposure.\nDB_USER=techvault\nDB_PASS=ChangeMe2024!\n"
+    sensitive: true
+    description: Intentional credential-leak shell script readable from the IT-Backups share.
+  wifi-passwords-txt:
+    type: file
+    target: fileshare
+    path: /share/Shared/wifi-passwords.txt
+    text: "techvault-guest=GuestWifi!\ntechvault-corp=CorpWifi2024!\n"
+    sensitive: true
+  meeting-notes-q3:
+    type: file
+    target: fileshare
+    path: /share/Shared/meeting-notes-q3.txt
+    text: "Q3 strategy: see Engineering/ for technical roadmap.\n"
+    sensitive: false
+  kerberos-spn-list:
+    type: dataset
+    target: samba-ad-dc
+    format: ldif
+    items:
+      - name: svc-sql-spn
+        tags: [spn, kerberoastable]
+        description: SPN for the svc-sql account with a human-set crackable password.
+      - name: svc-backup-spn
+        tags: [spn, kerberoastable, domain-admin]
+        description: SPN for the over-privileged svc-backup Domain Admin service account.
+
+accounts:
+  labadmin:
+    username: labadmin
+    node: victim
+    groups: [Operators]
+    password_strength: strong
+    description: Lab management account on the victim host.
+  jessica.williams:
+    username: jessica.williams
+    node: samba-ad-dc
+    groups: [Domain Users, Finance]
+    password_strength: weak
+    description: AD user with a deliberately weak, guessable password (password123).
+  svc-sql:
+    username: svc-sql
+    node: samba-ad-dc
+    groups: [Domain Users, Service Accounts]
+    password_strength: weak
+    spn: MSSQLSvc/techvault.local:1433
+    description: Service account with an SPN — Kerberoastable.
+  svc-backup:
+    username: svc-backup
+    node: samba-ad-dc
+    groups: [Domain Admins, Service Accounts]
+    password_strength: weak
+    spn: backup/techvault.local
+    description: Over-privileged service account with Domain Admin and an SPN.
+  emily.chen:
+    username: emily.chen
+    node: windows-workstation
+    groups: [Domain Admins, DevOps]
+    password_strength: medium
+    description: DevOps user with Domain Admin privileges and cached credentials on the workstation.
+  techvault-postgres:
+    username: techvault
+    node: postgres-db
+    groups: [postgres]
+    password_strength: weak
+    description: PostgreSQL application user shared with the webapp .env file.
+  postmaster-svc:
+    username: postmaster
+    node: mail
+    groups: [mail]
+    password_strength: medium
+    description: Mail-server administrative account.
+  kali-operator:
+    username: kali
+    node: kali
+    groups: [sudo, redteam]
+    password_strength: strong
+    description: Red-team operator account on the Kali attacker apparatus.
+  soc-analyst:
+    username: socanalyst
+    node: wazuh-manager
+    groups: [SOC]
+    password_strength: strong
+    description: Blue-team SOC analyst account on the Wazuh manager.
+
+relationships:
+  webapp-uses-postgres:
+    type: connects_to
+    source: webapp-app
+    target: postgres-store
+    properties: {protocol: tcp, port: "5432"}
+  webapp-authenticates-ad:
+    type: authenticates_with
+    source: webapp-app
+    target: samba-ad-svc
+    properties: {protocol: ldap}
+  workstation-joined-ad:
+    type: authenticates_with
+    source: rdp-svc
+    target: samba-ad-svc
+  fileshare-trusts-ad:
+    type: authenticates_with
+    source: smb-share-svc
+    target: samba-ad-svc
+  fileshare-depends-on-dns:
+    type: depends_on
+    source: smb-share-svc
+    target: dns-svc
+  kali-targets-webapp:
+    type: connects_to
+    source: kali-toolkit
+    target: webapp-app
+    properties: {protocol: tcp, port: "8080"}
+  kali-targets-ad:
+    type: connects_to
+    source: kali-toolkit
+    target: samba-ad-svc
+    properties: {protocol: tcp, port: "445"}
+  shuffle-creates-thehive-case:
+    type: federates_with
+    source: shuffle-soar
+    target: thehive-cases
+
+agents:
+  red-kali-agent:
+    entity: red-cartel
+    description: Kali-resident attacker apparatus running through APTL's MCP-over-SSH bridge.
+    actions: [Recon, InitialAccess, Execute, CredAccess, Discovery, LateralMove, Collect, Exfiltrate]
+    starting_accounts: [kali-operator]
+    initial_knowledge:
+      hosts: [webapp, kali]
+      subnets: [aptl-dmz, aptl-redteam]
+      services: [webapp-http, kali-ssh, kali-loot-listener]
+      accounts: [kali-operator]
+    allowed_subnets: [aptl-dmz, aptl-redteam, aptl-internal]
+    reward_calculator: MultiPathImpact
+  blue-soc-agent:
+    entity: techvault-enterprise.incident-command
+    description: SOC analyst driving Wazuh, Shuffle SOAR, and TheHive case triage.
+    actions: [Monitor, Triage, Investigate, Contain, Recover]
+    starting_accounts: [soc-analyst]
+    initial_knowledge:
+      hosts: [wazuh-manager, webapp, samba-ad-dc, fileshare, victim, postgres-db, windows-workstation]
+      subnets: [aptl-security, aptl-internal, aptl-public]
+      services: [wazuh-dashboard, wazuh-api]
+      accounts: [soc-analyst]
+    allowed_subnets: [aptl-security, aptl-internal, aptl-public]
+    reward_calculator: CoordinatedResponse
+
+objectives:
+  red-webapp-compromise:
+    description: Compromise the TechVault webapp via SQL injection and command injection.
+    agent: red-kali-agent
+    actions: [Recon, InitialAccess, Execute]
+    targets: [webapp, postgres-db, kali-targets-webapp]
+    success:
+      mode: any_of
+      conditions: [webapp-sqli-detected, webapp-rce-detected, webapp-info-disclosure-detected]
+      metrics: [red-webapp-pivot]
+    window:
+      stories: [purple-loop]
+      scripts: [webapp-compromise-phase]
+      events: [red-knows-webapp]
+  red-ad-domain-admin:
+    description: Reach Domain Admin via Kerberoasting and lateral movement to the DevOps workstation.
+    agent: red-kali-agent
+    actions: [Discovery, CredAccess, LateralMove]
+    targets: [samba-ad-dc, windows-workstation, fileshare, kali-targets-ad]
+    success:
+      mode: any_of
+      conditions: [ad-kerberoast-detected, workstation-lateral-rdp-detected]
+      metrics: [red-ad-domain-admin]
+    depends_on: [red-webapp-compromise]
+    window:
+      stories: [purple-loop]
+      scripts: [ad-compromise-phase, lateral-movement-phase]
+      events: [red-knows-ad]
+  red-exfiltrate-pii:
+    description: Exfiltrate customers PII and the backup_config AWS keys from PostgreSQL.
+    agent: red-kali-agent
+    actions: [Collect, Exfiltrate]
+    targets: [postgres-db, customers-pii, backup-config-aws-creds, dns]
+    success:
+      mode: all_of
+      conditions: [postgres-bulk-export-detected, dns-tunneling-detected]
+      metrics: [red-exfiltrate-pii]
+    depends_on: [red-webapp-compromise]
+    window:
+      stories: [purple-loop]
+      scripts: [lateral-movement-phase]
+  blue-detect-webapp-attacks:
+    description: Detect webapp SQLi / RCE / info-disclosure via Wazuh and Suricata.
+    agent: blue-soc-agent
+    actions: [Monitor, Triage]
+    targets: [webapp, wazuh-manager]
+    success:
+      mode: all_of
+      conditions: [webapp-sqli-detected, webapp-rce-detected]
+      metrics: [blue-detect-webapp-sqli, blue-detect-webapp-rce]
+    window:
+      stories: [purple-loop]
+      scripts: [webapp-compromise-phase]
+      workflows: [techvault-incident-response]
+      steps: [techvault-incident-response.detect-webapp]
+  blue-detect-kerberoast:
+    description: Detect Kerberoasting via Wazuh rule 301011 and Suricata SID 1000040.
+    agent: blue-soc-agent
+    actions: [Monitor, Investigate]
+    targets: [samba-ad-dc, wazuh-manager]
+    success:
+      conditions: [ad-kerberoast-detected]
+      metrics: [blue-detect-ad-kerberoast]
+    depends_on: [blue-detect-webapp-attacks]
+    window:
+      stories: [purple-loop]
+      scripts: [ad-compromise-phase]
+      workflows: [techvault-incident-response]
+      steps: [techvault-incident-response.detect-ad]
+  blue-shuffle-soar-case:
+    description: Auto-create a TheHive case through Shuffle SOAR for any level-10+ Wazuh alert.
+    agent: blue-soc-agent
+    actions: [Triage, Contain]
+    targets: [wazuh-manager, shuffle-creates-thehive-case]
+    success:
+      conditions: [shuffle-case-created]
+      metrics: [blue-shuffle-case-created]
+    depends_on: [blue-detect-webapp-attacks]
+    window:
+      stories: [purple-loop]
+      scripts: [ad-compromise-phase, lateral-movement-phase]
+      workflows: [techvault-incident-response]
+      steps: [techvault-incident-response.soar-triage]
+
+workflows:
+  techvault-incident-response:
+    description: >
+      Canonical TechVault SOC workflow — detect webapp attacks, branch
+      into AD compromise detection plus Shuffle SOAR triage, join, then
+      finish.
+    start: detect-webapp
+    steps:
+      detect-webapp:
+        type: objective
+        objective: blue-detect-webapp-attacks
+        on_success: fanout-ad-soar
+      fanout-ad-soar:
+        type: parallel
+        branches: [detect-ad, soar-triage]
+        join: ad-soar-joined
+      detect-ad:
+        type: objective
+        objective: blue-detect-kerberoast
+        on_success: ad-soar-joined
+      soar-triage:
+        type: objective
+        objective: blue-shuffle-soar-case
+        on_success: ad-soar-joined
+      ad-soar-joined:
+        type: join
+        next: finish
+      finish:
+        type: end

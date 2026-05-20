@@ -1,0 +1,1657 @@
+# SCN-010 parity inventory.
+#
+# Audit surface for the ACES-SDL cutover (ADR-035, "Parity Inventory
+# Boundary"). Every legacy APTL surface that the ACES-authored
+# `techvault.sdl.yaml` scenario must preserve is mapped here to exactly
+# one of the five owning categories. Specification issues #319-#324 and
+# the cutover PR cite rows by `id` (anchor-style, e.g.
+# `parity#scen.recon-nmap.metadata`).
+#
+# This file is NOT a runtime schema, not a new SDL, not a deployment
+# authority. The canonical source for a row's data is the existing
+# owner cited in `legacy_source`; the inventory just routes each owner
+# to its post-cutover home.
+
+schema_version: 1
+generated_for: SCN-010
+related_adr: docs/adrs/adr-035-aces-sdl-adoption.md
+
+# Closed enum. Adding a category is a deliberate change to ADR-035
+# AND `tests/test_parity_inventory.py` AND this list.
+categories:
+  - aces_sdl
+  - aces_schema_profile_gap
+  - aptl_backend_responsibility
+  - validation_gate
+  - cutover_only_archive
+
+# Surface buckets — the canonical legacy owners. The schema test asserts
+# every bucket carries at least one row so the inventory cannot silently
+# drop a surface area.
+surfaces:
+  - scenarios_yaml
+  - docker_compose_topology
+  - aptl_config
+  - env_vars_and_secrets
+  - lab_lifecycle
+  - deployment_backend
+  - snapshots_and_runstore
+  - defensive_stack_configs
+  - test_and_validation
+
+# ---------------------------------------------------------------------------
+# Rows.
+#
+# Per-row fields (all required):
+#   id                    — stable kebab/dot-segmented anchor for citation
+#   surface               — one of surfaces[] above
+#   legacy_source         — canonical owner (file path + symbol/field)
+#   legacy_field          — field/key/method name being mapped
+#   category              — one of categories[] above
+#   aces_target           — ACES SDL element / contract / profile, or n/a
+#   runtime_owner         — APTL owner symbol when backend or validation
+#   validation_evidence   — test path or conformance suite proving parity
+#   blocking_followup     — issue ref or ACES upstream pointer (n/a when none)
+#   notes                 — short prose; one line preferred
+#
+# Required reuse per ADR-035: rows reference existing owners
+# (DeploymentBackend, AptlConfig, EnvVars, _LAB_START_STEPS, LabResult,
+# RangeSnapshot, LocalRunStore, ADR-028 / ADR-029 / ADR-030 / ADR-034)
+# rather than introducing duplicate models, parsers, or taxonomies.
+# ---------------------------------------------------------------------------
+
+rows:
+  # ---- surface: scenarios_yaml ------------------------------------------
+  # One row per top-level key in each scenarios/*.yaml file. Six legacy
+  # scenarios: ad-domain-compromise, detect-brute-force,
+  # lateral-movement-data-theft, prime-enterprise, recon-nmap-scan,
+  # webapp-compromise.
+
+  - id: scen.ad-domain-compromise.metadata
+    surface: scenarios_yaml
+    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_field: metadata
+    category: aces_sdl
+    aces_target: ACES scenario header (id, name, description, tags)
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml header parse via aces_sdl.parse_sdl_file
+    blocking_followup: "#319"
+    notes: TechVault scenario header carries the same identifier and description fields.
+
+  - id: scen.ad-domain-compromise.mode
+    surface: scenarios_yaml
+    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_field: mode
+    category: cutover_only_archive
+    aces_target: n/a
+    runtime_owner: n/a
+    validation_evidence: scenarios/archive/ README marks legacy `mode` field as reference-only
+    blocking_followup: n/a
+    notes: Legacy execution-mode hint; ACES SDL selects realization via backend profile, not a scenario field.
+
+  - id: scen.ad-domain-compromise.containers
+    surface: scenarios_yaml
+    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_field: containers
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure / nodes (lab realization side)
+    runtime_owner: docker-compose profile selection + DeploymentBackend.start
+    validation_evidence: tests/test_consistency.py (compose container presence)
+    blocking_followup: "#320"
+    notes: Maps to docker-compose profiles + ContainerSettings toggle set; not authored in ACES SDL.
+
+  - id: scen.ad-domain-compromise.scoring
+    surface: scenarios_yaml
+    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_field: scoring
+    category: aces_schema_profile_gap
+    aces_target: ACES evaluator profile (orchestration-evaluation)
+    runtime_owner: n/a
+    validation_evidence: aces conformance backend --profile orchestration-evaluation (blocked until #312)
+    blocking_followup: "#312"
+    notes: Scoring belongs to the orchestration-evaluation profile; out of scope for the provisioning-only initial backend target.
+
+  - id: scen.ad-domain-compromise.attack_chain
+    surface: scenarios_yaml
+    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_field: attack_chain
+    category: aces_sdl
+    aces_target: ACES injects / scenario flow
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml injects equivalence
+    blocking_followup: "#321"
+    notes: Adversary inject sequence; ACES SDL expresses the same shape via inject blocks.
+
+  - id: scen.ad-domain-compromise.steps
+    surface: scenarios_yaml
+    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_field: steps
+    category: aces_sdl
+    aces_target: ACES scenario steps / workflow
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml steps equivalence
+    blocking_followup: "#321"
+    notes: Step ordering and per-step actions map directly onto ACES scenario flow.
+
+  - id: scen.detect-brute-force.metadata
+    surface: scenarios_yaml
+    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_field: metadata
+    category: aces_sdl
+    aces_target: ACES scenario header
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml header parse
+    blocking_followup: "#319"
+    notes: Same header shape as ad-domain-compromise.
+
+  - id: scen.detect-brute-force.mode
+    surface: scenarios_yaml
+    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_field: mode
+    category: cutover_only_archive
+    aces_target: n/a
+    runtime_owner: n/a
+    validation_evidence: scenarios/archive/ README marks legacy `mode` as reference-only
+    blocking_followup: n/a
+    notes: See scen.ad-domain-compromise.mode.
+
+  - id: scen.detect-brute-force.containers
+    surface: scenarios_yaml
+    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_field: containers
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure / nodes (lab realization side)
+    runtime_owner: docker-compose profile selection + DeploymentBackend.start
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Backend selects profile set from the authored node list.
+
+  - id: scen.detect-brute-force.preconditions
+    surface: scenarios_yaml
+    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_field: preconditions
+    category: aces_sdl
+    aces_target: ACES conditions (pre-conditions)
+    runtime_owner: n/a
+    validation_evidence: ACES semantic validator
+    blocking_followup: "#321"
+    notes: Conditions are first-class in ACES SDL.
+
+  - id: scen.detect-brute-force.objectives
+    surface: scenarios_yaml
+    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_field: objectives
+    category: aces_schema_profile_gap
+    aces_target: ACES objectives (evaluator profile)
+    runtime_owner: n/a
+    validation_evidence: aces conformance backend --profile orchestration-evaluation
+    blocking_followup: "#312"
+    notes: Objective-based scoring requires SCN-007 / #312 backend promotion.
+
+  - id: scen.detect-brute-force.scoring
+    surface: scenarios_yaml
+    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_field: scoring
+    category: aces_schema_profile_gap
+    aces_target: ACES evaluator profile
+    runtime_owner: n/a
+    validation_evidence: aces conformance backend --profile orchestration-evaluation
+    blocking_followup: "#312"
+    notes: See scen.ad-domain-compromise.scoring.
+
+  - id: scen.lateral-movement-data-theft.metadata
+    surface: scenarios_yaml
+    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_field: metadata
+    category: aces_sdl
+    aces_target: ACES scenario header
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml header parse
+    blocking_followup: "#319"
+    notes: Same shape.
+
+  - id: scen.lateral-movement-data-theft.mode
+    surface: scenarios_yaml
+    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_field: mode
+    category: cutover_only_archive
+    aces_target: n/a
+    runtime_owner: n/a
+    validation_evidence: scenarios/archive/ README marker
+    blocking_followup: n/a
+    notes: See scen.ad-domain-compromise.mode.
+
+  - id: scen.lateral-movement-data-theft.containers
+    surface: scenarios_yaml
+    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_field: containers
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure / nodes (lab realization side)
+    runtime_owner: docker-compose profile selection + DeploymentBackend.start
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Backend-realized.
+
+  - id: scen.lateral-movement-data-theft.scoring
+    surface: scenarios_yaml
+    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_field: scoring
+    category: aces_schema_profile_gap
+    aces_target: ACES evaluator profile
+    runtime_owner: n/a
+    validation_evidence: aces conformance backend --profile orchestration-evaluation
+    blocking_followup: "#312"
+    notes: See scen.ad-domain-compromise.scoring.
+
+  - id: scen.lateral-movement-data-theft.attack_chain
+    surface: scenarios_yaml
+    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_field: attack_chain
+    category: aces_sdl
+    aces_target: ACES injects / scenario flow
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml injects equivalence
+    blocking_followup: "#321"
+    notes: See scen.ad-domain-compromise.attack_chain.
+
+  - id: scen.lateral-movement-data-theft.steps
+    surface: scenarios_yaml
+    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_field: steps
+    category: aces_sdl
+    aces_target: ACES scenario steps / workflow
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml steps equivalence
+    blocking_followup: "#321"
+    notes: See scen.ad-domain-compromise.steps.
+
+  - id: scen.prime-enterprise.metadata
+    surface: scenarios_yaml
+    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_field: metadata
+    category: aces_sdl
+    aces_target: ACES scenario header
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml header parse
+    blocking_followup: "#319"
+    notes: Same shape.
+
+  - id: scen.prime-enterprise.mode
+    surface: scenarios_yaml
+    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_field: mode
+    category: cutover_only_archive
+    aces_target: n/a
+    runtime_owner: n/a
+    validation_evidence: scenarios/archive/ README marker
+    blocking_followup: n/a
+    notes: See scen.ad-domain-compromise.mode.
+
+  - id: scen.prime-enterprise.containers
+    surface: scenarios_yaml
+    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_field: containers
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure / nodes
+    runtime_owner: docker-compose profile selection + DeploymentBackend.start
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Backend-realized.
+
+  - id: scen.prime-enterprise.defenses
+    surface: scenarios_yaml
+    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_field: defenses
+    category: aptl_backend_responsibility
+    aces_target: APTL backend defensive-stack provisioning (no ACES SDL equivalent yet)
+    runtime_owner: docker-compose `soc` profile + config/wazuh_cluster, config/suricata, config/thehive, config/cortex
+    validation_evidence: tests/test_certs.py + lab health smoke (StartupOutcome.READY)
+    blocking_followup: "#322"
+    notes: Defensive-stack composition is backend realization; the authored scenario does not enumerate Wazuh/Suricata/TheHive rules.
+
+  - id: scen.prime-enterprise.objectives
+    surface: scenarios_yaml
+    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_field: objectives
+    category: aces_schema_profile_gap
+    aces_target: ACES objectives (evaluator profile)
+    runtime_owner: n/a
+    validation_evidence: aces conformance backend --profile orchestration-evaluation
+    blocking_followup: "#312"
+    notes: SCN-007 / #312 promotion.
+
+  - id: scen.prime-enterprise.scoring
+    surface: scenarios_yaml
+    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_field: scoring
+    category: aces_schema_profile_gap
+    aces_target: ACES evaluator profile
+    runtime_owner: n/a
+    validation_evidence: aces conformance backend --profile orchestration-evaluation
+    blocking_followup: "#312"
+    notes: See scen.ad-domain-compromise.scoring.
+
+  - id: scen.prime-enterprise.attack_chain
+    surface: scenarios_yaml
+    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_field: attack_chain
+    category: aces_sdl
+    aces_target: ACES injects / scenario flow
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml injects equivalence
+    blocking_followup: "#321"
+    notes: Same shape.
+
+  - id: scen.prime-enterprise.steps
+    surface: scenarios_yaml
+    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_field: steps
+    category: aces_sdl
+    aces_target: ACES scenario steps / workflow
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml steps equivalence
+    blocking_followup: "#321"
+    notes: Same shape.
+
+  - id: scen.recon-nmap-scan.metadata
+    surface: scenarios_yaml
+    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_field: metadata
+    category: aces_sdl
+    aces_target: ACES scenario header
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml header parse
+    blocking_followup: "#319"
+    notes: Same shape.
+
+  - id: scen.recon-nmap-scan.mode
+    surface: scenarios_yaml
+    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_field: mode
+    category: cutover_only_archive
+    aces_target: n/a
+    runtime_owner: n/a
+    validation_evidence: scenarios/archive/ README marker
+    blocking_followup: n/a
+    notes: See scen.ad-domain-compromise.mode.
+
+  - id: scen.recon-nmap-scan.containers
+    surface: scenarios_yaml
+    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_field: containers
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure / nodes
+    runtime_owner: docker-compose profile selection + DeploymentBackend.start
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Backend-realized.
+
+  - id: scen.recon-nmap-scan.preconditions
+    surface: scenarios_yaml
+    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_field: preconditions
+    category: aces_sdl
+    aces_target: ACES conditions (pre-conditions)
+    runtime_owner: n/a
+    validation_evidence: ACES semantic validator
+    blocking_followup: "#321"
+    notes: First-class in ACES SDL.
+
+  - id: scen.recon-nmap-scan.objectives
+    surface: scenarios_yaml
+    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_field: objectives
+    category: aces_schema_profile_gap
+    aces_target: ACES objectives (evaluator profile)
+    runtime_owner: n/a
+    validation_evidence: aces conformance backend --profile orchestration-evaluation
+    blocking_followup: "#312"
+    notes: SCN-007 / #312 promotion.
+
+  - id: scen.recon-nmap-scan.scoring
+    surface: scenarios_yaml
+    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_field: scoring
+    category: aces_schema_profile_gap
+    aces_target: ACES evaluator profile
+    runtime_owner: n/a
+    validation_evidence: aces conformance backend --profile orchestration-evaluation
+    blocking_followup: "#312"
+    notes: See scen.ad-domain-compromise.scoring.
+
+  - id: scen.webapp-compromise.metadata
+    surface: scenarios_yaml
+    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_field: metadata
+    category: aces_sdl
+    aces_target: ACES scenario header
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml header parse
+    blocking_followup: "#319"
+    notes: Same shape.
+
+  - id: scen.webapp-compromise.mode
+    surface: scenarios_yaml
+    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_field: mode
+    category: cutover_only_archive
+    aces_target: n/a
+    runtime_owner: n/a
+    validation_evidence: scenarios/archive/ README marker
+    blocking_followup: n/a
+    notes: See scen.ad-domain-compromise.mode.
+
+  - id: scen.webapp-compromise.containers
+    surface: scenarios_yaml
+    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_field: containers
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure / nodes
+    runtime_owner: docker-compose profile selection + DeploymentBackend.start
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Backend-realized.
+
+  - id: scen.webapp-compromise.scoring
+    surface: scenarios_yaml
+    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_field: scoring
+    category: aces_schema_profile_gap
+    aces_target: ACES evaluator profile
+    runtime_owner: n/a
+    validation_evidence: aces conformance backend --profile orchestration-evaluation
+    blocking_followup: "#312"
+    notes: See scen.ad-domain-compromise.scoring.
+
+  - id: scen.webapp-compromise.attack_chain
+    surface: scenarios_yaml
+    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_field: attack_chain
+    category: aces_sdl
+    aces_target: ACES injects / scenario flow
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml injects equivalence
+    blocking_followup: "#321"
+    notes: Same shape.
+
+  - id: scen.webapp-compromise.steps
+    surface: scenarios_yaml
+    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_field: steps
+    category: aces_sdl
+    aces_target: ACES scenario steps / workflow
+    runtime_owner: n/a
+    validation_evidence: techvault.sdl.yaml steps equivalence
+    blocking_followup: "#321"
+    notes: Same shape.
+
+  # ---- surface: docker_compose_topology ---------------------------------
+  # One row per Compose profile (11), per network (4), and one summary
+  # row for volume conventions (43 volumes; per-volume rows would dilute
+  # rather than aid mechanical review). All are aptl_backend_responsibility.
+
+  - id: compose.profile.wazuh
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: wazuh)"
+    legacy_field: wazuh
+    category: aptl_backend_responsibility
+    aces_target: ACES backend manifest capability claim (provisioning-only)
+    runtime_owner: AptlConfig.containers.wazuh -> ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_consistency.py (compose profile assertions)
+    blocking_followup: "#320"
+    notes: Wazuh manager/indexer/dashboard trio.
+
+  - id: compose.profile.soc
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: soc)"
+    legacy_field: soc
+    category: aptl_backend_responsibility
+    aces_target: ACES backend manifest capability claim
+    runtime_owner: AptlConfig.containers.soc -> ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Suricata + MISP + TheHive + Cortex + Shuffle + Wazuh sidecars.
+
+  - id: compose.profile.enterprise
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: enterprise)"
+    legacy_field: enterprise
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure realization
+    runtime_owner: AptlConfig.containers.enterprise -> ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: ad, db, webapp, workstation.
+
+  - id: compose.profile.victim
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: victim)"
+    legacy_field: victim
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure realization
+    runtime_owner: AptlConfig.containers.victim
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Generic victim host.
+
+  - id: compose.profile.kali
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: kali)"
+    legacy_field: kali
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure realization (red-side node)
+    runtime_owner: AptlConfig.containers.kali
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Attacker box with audit/capture surface (ADR-033).
+
+  - id: compose.profile.reverse
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: reverse)"
+    legacy_field: reverse
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure realization
+    runtime_owner: AptlConfig.containers.reverse
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Reverse-shell sink.
+
+  - id: compose.profile.mail
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: mail)"
+    legacy_field: mail
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure realization
+    runtime_owner: AptlConfig.containers.mail
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: mailserver enterprise fixture.
+
+  - id: compose.profile.dns
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: dns)"
+    legacy_field: dns
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure realization
+    runtime_owner: AptlConfig.containers.dns
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: dns enterprise fixture.
+
+  - id: compose.profile.fileshare
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: fileshare)"
+    legacy_field: fileshare
+    category: aptl_backend_responsibility
+    aces_target: ACES infrastructure realization
+    runtime_owner: AptlConfig.containers.fileshare
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: SMB fileshare fixture.
+
+  - id: compose.profile.otel
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: otel)"
+    legacy_field: otel
+    category: aptl_backend_responsibility
+    aces_target: ACES telemetry adapter (provisioning-only side; no ACES profile claim)
+    runtime_owner: docker-compose profile `otel` + config/otel
+    validation_evidence: tests/test_consistency.py + lab health (OpenTelemetry collector reachable)
+    blocking_followup: "#322"
+    notes: APTL-side OTel collector + Tempo + Grafana stack; not enumerated in ACES SDL.
+
+  - id: compose.profile.web
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (profile: web)"
+    legacy_field: web
+    category: aptl_backend_responsibility
+    aces_target: APTL operator UI (no ACES SDL surface)
+    runtime_owner: docker-compose profile `web` + src/aptl/api
+    validation_evidence: tests/test_api_lab.py
+    blocking_followup: n/a
+    notes: APTL operator API + UI; out of ACES authoring scope.
+
+  - id: compose.network.aptl-security
+    surface: docker_compose_topology
+    legacy_source: docker-compose.yml (networks)
+    legacy_field: aptl-security
+    category: aptl_backend_responsibility
+    aces_target: ACES network topology surface
+    runtime_owner: docker-compose networks
+    validation_evidence: tests/test_consistency.py (network presence)
+    blocking_followup: "#320"
+    notes: SOC + Wazuh segment.
+
+  - id: compose.network.aptl-dmz
+    surface: docker_compose_topology
+    legacy_source: docker-compose.yml (networks)
+    legacy_field: aptl-dmz
+    category: aptl_backend_responsibility
+    aces_target: ACES network topology surface
+    runtime_owner: docker-compose networks
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: DMZ segment for external-facing services.
+
+  - id: compose.network.aptl-internal
+    surface: docker_compose_topology
+    legacy_source: docker-compose.yml (networks)
+    legacy_field: aptl-internal
+    category: aptl_backend_responsibility
+    aces_target: ACES network topology surface
+    runtime_owner: docker-compose networks
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Enterprise internal segment (ADR-006).
+
+  - id: compose.network.aptl-redteam
+    surface: docker_compose_topology
+    legacy_source: docker-compose.yml (networks)
+    legacy_field: aptl-redteam
+    category: aptl_backend_responsibility
+    aces_target: ACES network topology surface
+    runtime_owner: docker-compose networks
+    validation_evidence: tests/test_consistency.py
+    blocking_followup: "#320"
+    notes: Red-team segment isolating Kali (ADR-006).
+
+  - id: compose.volumes.summary
+    surface: docker_compose_topology
+    legacy_source: docker-compose.yml (volumes)
+    legacy_field: named-volume conventions (43 volumes)
+    category: aptl_backend_responsibility
+    aces_target: n/a (backend realization detail)
+    runtime_owner: docker-compose volume declarations
+    validation_evidence: tests/test_consistency.py (volume references close over services)
+    blocking_followup: n/a
+    notes: 43 named volumes split into data / config / logs by component; per-volume rows would dilute review without adding signal.
+
+  # ---- surface: aptl_config ---------------------------------------------
+  # ContainerSettings toggles + LabSettings core fields. Survives cutover
+  # as backend config — the ACES scenario describes nodes/services; the
+  # backend translates that into which profiles to start.
+
+  - id: cfg.containers.wazuh
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (ContainerSettings.wazuh)
+    legacy_field: containers.wazuh
+    category: aptl_backend_responsibility
+    aces_target: ACES backend realization choice
+    runtime_owner: ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: Backend config toggle; ACES SDL does not enumerate profile toggles.
+
+  - id: cfg.containers.victim
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (ContainerSettings.victim)
+    legacy_field: containers.victim
+    category: aptl_backend_responsibility
+    aces_target: ACES backend realization choice
+    runtime_owner: ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: See cfg.containers.wazuh.
+
+  - id: cfg.containers.kali
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (ContainerSettings.kali)
+    legacy_field: containers.kali
+    category: aptl_backend_responsibility
+    aces_target: ACES backend realization choice
+    runtime_owner: ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: See cfg.containers.wazuh.
+
+  - id: cfg.containers.reverse
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (ContainerSettings.reverse)
+    legacy_field: containers.reverse
+    category: aptl_backend_responsibility
+    aces_target: ACES backend realization choice
+    runtime_owner: ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: See cfg.containers.wazuh.
+
+  - id: cfg.containers.enterprise
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (ContainerSettings.enterprise)
+    legacy_field: containers.enterprise
+    category: aptl_backend_responsibility
+    aces_target: ACES backend realization choice
+    runtime_owner: ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: See cfg.containers.wazuh.
+
+  - id: cfg.containers.soc
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (ContainerSettings.soc)
+    legacy_field: containers.soc
+    category: aptl_backend_responsibility
+    aces_target: ACES backend realization choice
+    runtime_owner: ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: See cfg.containers.wazuh.
+
+  - id: cfg.containers.mail
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (ContainerSettings.mail)
+    legacy_field: containers.mail
+    category: aptl_backend_responsibility
+    aces_target: ACES backend realization choice
+    runtime_owner: ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: See cfg.containers.wazuh.
+
+  - id: cfg.containers.fileshare
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (ContainerSettings.fileshare)
+    legacy_field: containers.fileshare
+    category: aptl_backend_responsibility
+    aces_target: ACES backend realization choice
+    runtime_owner: ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: See cfg.containers.wazuh.
+
+  - id: cfg.containers.dns
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (ContainerSettings.dns)
+    legacy_field: containers.dns
+    category: aptl_backend_responsibility
+    aces_target: ACES backend realization choice
+    runtime_owner: ContainerSettings.enabled_profiles()
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: See cfg.containers.wazuh.
+
+  - id: cfg.lab.name
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (LabSettings.name)
+    legacy_field: lab.name
+    category: aptl_backend_responsibility
+    aces_target: ACES backend operational identity
+    runtime_owner: AptlConfig.lab.name
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: Backend identity, not authored in ACES SDL.
+
+  - id: cfg.lab.network_subnet
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (LabSettings.network_subnet)
+    legacy_field: lab.network_subnet
+    category: aptl_backend_responsibility
+    aces_target: ACES backend realization detail
+    runtime_owner: AptlConfig.lab.network_subnet
+    validation_evidence: tests/test_config.py
+    blocking_followup: n/a
+    notes: Default 172.20.0.0/16; backend addressing detail.
+
+  - id: cfg.deployment.provider
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (DeploymentConfig.provider)
+    legacy_field: deployment.provider
+    category: aptl_backend_responsibility
+    aces_target: ACES RuntimeTarget selection
+    runtime_owner: AptlConfig.deployment.provider -> DeploymentBackend
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: docker-compose vs ssh-compose; the ACES adapter sits on top of this.
+
+  - id: cfg.run_storage.local_path
+    surface: aptl_config
+    legacy_source: src/aptl/core/config.py (RunStorageConfig.local_path)
+    legacy_field: run_storage.local_path
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot persistence side
+    runtime_owner: AptlConfig.run_storage.local_path -> LocalRunStore
+    validation_evidence: tests/test_runstore.py
+    blocking_followup: n/a
+    notes: APTL-side run persistence root; reused by ACES adapter via LocalRunStore.
+
+  # ---- surface: env_vars_and_secrets ------------------------------------
+  # EnvVars fields + the placeholder gate. All aptl_backend_responsibility
+  # — ADR-028 / ADR-034 own the secret-bearing surface.
+
+  - id: env.indexer_username
+    surface: env_vars_and_secrets
+    legacy_source: src/aptl/core/env.py (EnvVars.indexer_username)
+    legacy_field: INDEXER_USERNAME
+    category: aptl_backend_responsibility
+    aces_target: n/a (lab-side credential, never authored in ACES SDL)
+    runtime_owner: EnvVars + find_placeholder_env_values
+    validation_evidence: tests/test_env.py
+    blocking_followup: n/a
+    notes: ADR-028 generated-config boundary; field name only — value lives in .env.
+
+  - id: env.indexer_password
+    surface: env_vars_and_secrets
+    legacy_source: src/aptl/core/env.py (EnvVars.indexer_password)
+    legacy_field: INDEXER_PASSWORD
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: EnvVars + find_placeholder_env_values
+    validation_evidence: tests/test_env.py + tests/test_credentials.py
+    blocking_followup: n/a
+    notes: See env.indexer_username.
+
+  - id: env.api_username
+    surface: env_vars_and_secrets
+    legacy_source: src/aptl/core/env.py (EnvVars.api_username)
+    legacy_field: API_USERNAME
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: EnvVars + find_placeholder_env_values
+    validation_evidence: tests/test_env.py
+    blocking_followup: n/a
+    notes: See env.indexer_username.
+
+  - id: env.api_password
+    surface: env_vars_and_secrets
+    legacy_source: src/aptl/core/env.py (EnvVars.api_password)
+    legacy_field: API_PASSWORD
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: EnvVars + find_placeholder_env_values (_NO_PLACEHOLDER_VARS)
+    validation_evidence: tests/test_env.py + tests/test_credentials.py
+    blocking_followup: n/a
+    notes: Field is in the placeholder-blocked set; value never embedded in committed files.
+
+  - id: env.dashboard_username
+    surface: env_vars_and_secrets
+    legacy_source: src/aptl/core/env.py (EnvVars.dashboard_username)
+    legacy_field: DASHBOARD_USERNAME
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: EnvVars + find_placeholder_env_values
+    validation_evidence: tests/test_env.py
+    blocking_followup: n/a
+    notes: See env.indexer_username.
+
+  - id: env.dashboard_password
+    surface: env_vars_and_secrets
+    legacy_source: src/aptl/core/env.py (EnvVars.dashboard_password)
+    legacy_field: DASHBOARD_PASSWORD
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: EnvVars + find_placeholder_env_values
+    validation_evidence: tests/test_env.py
+    blocking_followup: n/a
+    notes: See env.indexer_username.
+
+  - id: env.wazuh_cluster_key
+    surface: env_vars_and_secrets
+    legacy_source: src/aptl/core/env.py (EnvVars.wazuh_cluster_key)
+    legacy_field: WAZUH_CLUSTER_KEY
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: EnvVars + find_placeholder_env_values (_NO_PLACEHOLDER_VARS)
+    validation_evidence: tests/test_env.py + tests/test_credentials.py
+    blocking_followup: n/a
+    notes: Placeholder-blocked; bug #183 history motivates the gate.
+
+  - id: env.placeholder_gate
+    surface: env_vars_and_secrets
+    legacy_source: src/aptl/core/env.py (find_placeholder_env_values + _NO_PLACEHOLDER_VARS)
+    legacy_field: find_placeholder_env_values
+    category: validation_gate
+    aces_target: n/a (APTL-side preflight)
+    runtime_owner: find_placeholder_env_values
+    validation_evidence: tests/test_env_fuzz.py + tests/test_env.py
+    blocking_followup: n/a
+    notes: ADR-028 / ADR-034 generated-secret guard; runs in _step_load_env at lab start.
+
+  # ---- surface: lab_lifecycle -------------------------------------------
+  # Every step in _LAB_START_STEPS, plus the readiness taxonomy
+  # (StartupOutcome / DiagnosticImpact / DiagnosticSeverity /
+  # StartupDiagnostic / LabResult). ADR-030 owns the taxonomy; the
+  # inventory does NOT introduce a parallel one.
+
+  - id: lab.step.load_env
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_load_env)
+    legacy_field: _step_load_env
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` lifecycle pre-flight
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py (TestOrchestrateLabStart)
+    blocking_followup: n/a
+    notes: Reads .env via EnvVars.
+
+  - id: lab.step.load_config
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_load_config)
+    legacy_field: _step_load_config
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` lifecycle pre-flight
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: Reads AptlConfig from aptl.json.
+
+  - id: lab.step.ensure_ssh_keys
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_ensure_ssh_keys)
+    legacy_field: _step_ensure_ssh_keys
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` lifecycle pre-flight
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: APTL-side SSH key material; not authored in ACES SDL.
+
+  - id: lab.step.check_sysreqs
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_check_sysreqs)
+    legacy_field: _step_check_sysreqs
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` host pre-flight
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: Host-side capability check.
+
+  - id: lab.step.sync_credentials
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_sync_credentials)
+    legacy_field: _step_sync_credentials
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` lifecycle (backend-only)
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py + tests/test_credentials.py
+    blocking_followup: n/a
+    notes: ADR-028 generated-config materialization.
+
+  - id: lab.step.sync_suricata_misp_rule_baselines
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_sync_suricata_misp_rule_baselines)
+    legacy_field: _step_sync_suricata_misp_rule_baselines
+    category: aptl_backend_responsibility
+    aces_target: n/a (defensive-stack realization)
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: SOC-rules baseline sync; APTL backend defensive plumbing.
+
+  - id: lab.step.generate_certs
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_generate_certs)
+    legacy_field: _step_generate_certs
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_certs.py
+    blocking_followup: n/a
+    notes: Lab-issued PKI; ADR-028.
+
+  - id: lab.step.generate_soc_certs
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_generate_soc_certs)
+    legacy_field: _step_generate_soc_certs
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_certs.py
+    blocking_followup: n/a
+    notes: SOC-side PKI.
+
+  - id: lab.step.check_bind_mounts
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_check_bind_mounts)
+    legacy_field: _step_check_bind_mounts
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py (TestCheckBindMounts)
+    blocking_followup: n/a
+    notes: Container bind-mount staging.
+
+  - id: lab.step.pull_images
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_pull_images)
+    legacy_field: _step_pull_images
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` image fetch
+    runtime_owner: DeploymentBackend.pull_images
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: DeploymentBackend method.
+
+  - id: lab.step.start_containers
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_start_containers)
+    legacy_field: _step_start_containers
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` start
+    runtime_owner: DeploymentBackend.start
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: DeploymentBackend method.
+
+  - id: lab.step.wait_for_services
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_wait_for_services)
+    legacy_field: _step_wait_for_services
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` readiness wait
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: Backend health-wait loop.
+
+  - id: lab.step.test_ssh
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_test_ssh)
+    legacy_field: _step_test_ssh
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` readiness check
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: SSH reachability gate for the kali attacker box.
+
+  - id: lab.step.capture_snapshot
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_capture_snapshot)
+    legacy_field: _step_capture_snapshot
+    category: aptl_backend_responsibility
+    aces_target: ACES `runtime-snapshot-v1` boundary
+    runtime_owner: RangeSnapshot.to_dict() + orchestrate_lab_start
+    validation_evidence: tests/test_snapshot.py
+    blocking_followup: n/a
+    notes: ACES runtime-snapshot envelope wraps APTL's RangeSnapshot dict.
+
+  - id: lab.step.build_mcps
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_build_mcps)
+    legacy_field: _step_build_mcps
+    category: aptl_backend_responsibility
+    aces_target: n/a (MCP servers are APTL-side operator tooling)
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: MCP server build step.
+
+  - id: lab.step.seed_soc
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_seed_soc)
+    legacy_field: _step_seed_soc
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: SOC seed material; defensive stack only.
+
+  - id: lab.step.sync_mcp_config
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab.py (_step_sync_mcp_config)
+    legacy_field: _step_sync_mcp_config
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: orchestrate_lab_start
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: MCP config sync.
+
+  - id: lab.outcome.startup_outcome
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab_types.py (StartupOutcome)
+    legacy_field: StartupOutcome
+    category: aptl_backend_responsibility
+    aces_target: ACES operation-status-v1 envelope (mapped via adapter)
+    runtime_owner: StartupOutcome (ADR-030)
+    validation_evidence: tests/test_lab.py (TestStartupClassificationTypes)
+    blocking_followup: n/a
+    notes: READY / DEGRADED_USABLE / DEGRADED_UNUSABLE / FAILED. ADR-030 is canonical owner.
+
+  - id: lab.outcome.diagnostic_impact
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab_types.py (DiagnosticImpact)
+    legacy_field: DiagnosticImpact
+    category: aptl_backend_responsibility
+    aces_target: ACES operation-status-v1 (mapped)
+    runtime_owner: DiagnosticImpact (ADR-030)
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: COSMETIC / TELEMETRY / CAPABILITY / READINESS. Do not duplicate.
+
+  - id: lab.outcome.diagnostic_severity
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab_types.py (DiagnosticSeverity)
+    legacy_field: DiagnosticSeverity
+    category: aptl_backend_responsibility
+    aces_target: ACES operation-status-v1 (mapped)
+    runtime_owner: DiagnosticSeverity (ADR-030)
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: INFO / WARNING / ERROR.
+
+  - id: lab.outcome.startup_diagnostic
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab_types.py (StartupDiagnostic)
+    legacy_field: StartupDiagnostic
+    category: aptl_backend_responsibility
+    aces_target: ACES operation-status-v1 diagnostic entries
+    runtime_owner: StartupDiagnostic (ADR-030)
+    validation_evidence: tests/test_lab.py
+    blocking_followup: n/a
+    notes: Per-step diagnostic record.
+
+  - id: lab.outcome.lab_result
+    surface: lab_lifecycle
+    legacy_source: src/aptl/core/lab_types.py (LabResult)
+    legacy_field: LabResult
+    category: aptl_backend_responsibility
+    aces_target: ACES operation-receipt-v1 / operation-status-v1 envelopes (mapped)
+    runtime_owner: LabResult
+    validation_evidence: tests/test_lab.py + tests/test_api_lab.py
+    blocking_followup: n/a
+    notes: APTL-facing result shape; ACES adapter translates at boundary.
+
+  # ---- surface: deployment_backend --------------------------------------
+  # Every method of the DeploymentBackend protocol. All
+  # aptl_backend_responsibility — this is the boundary the ACES adapter
+  # sits on top of.
+
+  - id: backend.start
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.start)
+    legacy_field: start
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` start phase
+    runtime_owner: DeploymentBackend.start
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: Compose / SSH-compose start.
+
+  - id: backend.stop
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.stop)
+    legacy_field: stop
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` stop phase
+    runtime_owner: DeploymentBackend.stop
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: Tear-down.
+
+  - id: backend.status
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.status)
+    legacy_field: status
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot-v1 source
+    runtime_owner: DeploymentBackend.status
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: Status inventory the snapshot consumes.
+
+  - id: backend.kill
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.kill)
+    legacy_field: kill
+    category: aptl_backend_responsibility
+    aces_target: ACES forceful stop
+    runtime_owner: DeploymentBackend.kill
+    validation_evidence: tests/test_api_kill.py + tests/test_cli_kill.py
+    blocking_followup: n/a
+    notes: Forceful teardown.
+
+  - id: backend.pull_images
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.pull_images)
+    legacy_field: pull_images
+    category: aptl_backend_responsibility
+    aces_target: ACES `apply` image fetch
+    runtime_owner: DeploymentBackend.pull_images
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: Pre-start image hydration.
+
+  - id: backend.container_list
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.container_list)
+    legacy_field: container_list
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot-v1 inventory side
+    runtime_owner: DeploymentBackend.container_list
+    validation_evidence: tests/test_deployment_backend.py + tests/test_cli_container.py
+    blocking_followup: n/a
+    notes: ADR-023 (container interaction in deployment backend).
+
+  - id: backend.container_logs
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.container_logs)
+    legacy_field: container_logs
+    category: aptl_backend_responsibility
+    aces_target: n/a (operator tooling)
+    runtime_owner: DeploymentBackend.container_logs
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: APTL-side log retrieval; not authored.
+
+  - id: backend.container_logs_capture
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.container_logs_capture)
+    legacy_field: container_logs_capture
+    category: aptl_backend_responsibility
+    aces_target: n/a (operator tooling)
+    runtime_owner: DeploymentBackend.container_logs_capture
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: Captured-log boundary.
+
+  - id: backend.container_shell
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.container_shell)
+    legacy_field: container_shell
+    category: aptl_backend_responsibility
+    aces_target: n/a (operator tooling)
+    runtime_owner: DeploymentBackend.container_shell
+    validation_evidence: tests/test_deployment_backend.py + tests/test_api_terminal.py
+    blocking_followup: n/a
+    notes: ADR-023.
+
+  - id: backend.container_exec
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.container_exec)
+    legacy_field: container_exec
+    category: aptl_backend_responsibility
+    aces_target: n/a (operator tooling)
+    runtime_owner: DeploymentBackend.container_exec
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: ADR-023.
+
+  - id: backend.container_inspect
+    surface: deployment_backend
+    legacy_source: src/aptl/core/deployment/backend.py (DeploymentBackend.container_inspect)
+    legacy_field: container_inspect
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot-v1 inventory side
+    runtime_owner: DeploymentBackend.container_inspect
+    validation_evidence: tests/test_deployment_backend.py
+    blocking_followup: n/a
+    notes: ADR-023.
+
+  # ---- surface: snapshots_and_runstore ----------------------------------
+  # Each RangeSnapshot field + each RunManifest field. Reuses ADR-029
+  # redaction boundary; the inventory does NOT introduce a parallel
+  # redactor.
+
+  - id: snap.software
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/snapshot.py (RangeSnapshot.software)
+    legacy_field: software
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot-v1 software section
+    runtime_owner: RangeSnapshot.to_dict()
+    validation_evidence: tests/test_snapshot.py
+    blocking_followup: n/a
+    notes: SoftwareVersions component.
+
+  - id: snap.containers
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/snapshot.py (RangeSnapshot.containers)
+    legacy_field: containers
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot-v1 containers section
+    runtime_owner: RangeSnapshot.to_dict()
+    validation_evidence: tests/test_snapshot.py
+    blocking_followup: n/a
+    notes: ContainerSnapshot list.
+
+  - id: snap.wazuh_rules
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/snapshot.py (RangeSnapshot.wazuh_rules)
+    legacy_field: wazuh_rules
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot extension (backend-specific)
+    runtime_owner: RangeSnapshot.to_dict()
+    validation_evidence: tests/test_snapshot.py
+    blocking_followup: n/a
+    notes: Defensive-stack ruleset fingerprint.
+
+  - id: snap.networks
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/snapshot.py (RangeSnapshot.networks)
+    legacy_field: networks
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot-v1 networks section
+    runtime_owner: RangeSnapshot.to_dict()
+    validation_evidence: tests/test_snapshot.py
+    blocking_followup: n/a
+    notes: NetworkSnapshot list.
+
+  - id: snap.config_hashes
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/snapshot.py (RangeSnapshot.config_hashes)
+    legacy_field: config_hashes
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot integrity section
+    runtime_owner: RangeSnapshot.to_dict()
+    validation_evidence: tests/test_snapshot.py
+    blocking_followup: n/a
+    notes: ADR-028 generated config integrity.
+
+  - id: snap.services
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/snapshot.py (RangeSnapshot.services)
+    legacy_field: services
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot-v1 services section
+    runtime_owner: RangeSnapshot.to_dict() (redacted)
+    validation_evidence: tests/test_snapshot.py
+    blocking_followup: n/a
+    notes: Service endpoints with redaction (ADR-029).
+
+  - id: snap.ssh
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/snapshot.py (RangeSnapshot.ssh)
+    legacy_field: ssh
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot-v1 endpoint section
+    runtime_owner: RangeSnapshot.to_dict() (redacted)
+    validation_evidence: tests/test_snapshot.py
+    blocking_followup: n/a
+    notes: SSH endpoint reachability (ADR-029 redaction).
+
+  - id: runstore.run_id
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/runstore.py (RunManifest.run_id)
+    legacy_field: run_id
+    category: aptl_backend_responsibility
+    aces_target: ACES run identity
+    runtime_owner: LocalRunStore.create_run
+    validation_evidence: tests/test_runstore.py
+    blocking_followup: n/a
+    notes: Per-run directory id.
+
+  - id: runstore.scenario_id
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/runstore.py (RunManifest.scenario_id)
+    legacy_field: scenario_id
+    category: aces_sdl
+    aces_target: ACES scenario id (authored)
+    runtime_owner: LocalRunStore
+    validation_evidence: tests/test_runstore.py
+    blocking_followup: "#319"
+    notes: After cutover, scenario_id is the ACES scenario id.
+
+  - id: runstore.scenario_name
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/runstore.py (RunManifest.scenario_name)
+    legacy_field: scenario_name
+    category: aces_sdl
+    aces_target: ACES scenario name
+    runtime_owner: LocalRunStore
+    validation_evidence: tests/test_runstore.py
+    blocking_followup: "#319"
+    notes: ACES authored name.
+
+  - id: runstore.started_at
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/runstore.py (RunManifest.started_at)
+    legacy_field: started_at
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime clock surface
+    runtime_owner: LocalRunStore
+    validation_evidence: tests/test_runstore.py
+    blocking_followup: n/a
+    notes: Backend-recorded.
+
+  - id: runstore.finished_at
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/runstore.py (RunManifest.finished_at)
+    legacy_field: finished_at
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime clock surface
+    runtime_owner: LocalRunStore
+    validation_evidence: tests/test_runstore.py
+    blocking_followup: n/a
+    notes: Backend-recorded.
+
+  - id: runstore.duration_seconds
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/runstore.py (RunManifest.duration_seconds)
+    legacy_field: duration_seconds
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime clock surface
+    runtime_owner: LocalRunStore
+    validation_evidence: tests/test_runstore.py
+    blocking_followup: n/a
+    notes: Derived from started_at/finished_at.
+
+  - id: runstore.trace_id
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/runstore.py (RunManifest.trace_id)
+    legacy_field: trace_id
+    category: aptl_backend_responsibility
+    aces_target: ACES correlation id (OBS-003 hook)
+    runtime_owner: LocalRunStore + trace-context.json
+    validation_evidence: tests/test_runstore.py
+    blocking_followup: n/a
+    notes: Cross-side correlation id (ADR-033).
+
+  - id: runstore.config_snapshot
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/runstore.py (RunManifest.config_snapshot)
+    legacy_field: config_snapshot
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot-v1 config-hash section
+    runtime_owner: LocalRunStore (ADR-029 redaction)
+    validation_evidence: tests/test_runstore.py
+    blocking_followup: n/a
+    notes: Config snapshot at run start.
+
+  - id: runstore.containers
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/runstore.py (RunManifest.containers)
+    legacy_field: containers
+    category: aptl_backend_responsibility
+    aces_target: ACES runtime-snapshot-v1 containers section
+    runtime_owner: LocalRunStore
+    validation_evidence: tests/test_runstore.py
+    blocking_followup: n/a
+    notes: Backend-derived container list at run start.
+
+  - id: runstore.flags_captured
+    surface: snapshots_and_runstore
+    legacy_source: src/aptl/core/runstore.py (RunManifest.flags_captured)
+    legacy_field: flags_captured
+    category: aces_schema_profile_gap
+    aces_target: ACES evaluator outcome (orchestration-evaluation profile)
+    runtime_owner: LocalRunStore
+    validation_evidence: aces conformance backend --profile orchestration-evaluation
+    blocking_followup: "#312"
+    notes: Scoring outcome; full coverage requires evaluator-profile promotion.
+
+  # ---- surface: defensive_stack_configs ---------------------------------
+  # One row per config/ subdirectory (10). All aptl_backend_responsibility
+  # — ADR-028 generated-config boundary.
+
+  - id: defconf.cortex
+    surface: defensive_stack_configs
+    legacy_source: config/cortex/
+    legacy_field: application.conf
+    category: aptl_backend_responsibility
+    aces_target: n/a (defensive-stack realization)
+    runtime_owner: config/cortex + docker-compose `soc` profile
+    validation_evidence: lab health (Cortex reachable from TheHive)
+    blocking_followup: "#322"
+    notes: Cortex analyzer service config.
+
+  - id: defconf.otel
+    surface: defensive_stack_configs
+    legacy_source: config/otel/
+    legacy_field: otel-collector-config.yaml, tempo-config.yaml, grafana-datasources.yaml
+    category: aptl_backend_responsibility
+    aces_target: n/a (telemetry realization)
+    runtime_owner: config/otel + docker-compose `otel` profile
+    validation_evidence: lab health (collector reachable)
+    blocking_followup: "#322"
+    notes: OTel collector + Tempo + Grafana datasources.
+
+  - id: defconf.soc_certs
+    surface: defensive_stack_configs
+    legacy_source: config/soc_certs/
+    legacy_field: lab-ca.{key,pem} + cortex/, misp/, shuffle-frontend/, thehive/
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: config/soc_certs + _step_generate_soc_certs
+    validation_evidence: tests/test_certs.py + lab health
+    blocking_followup: n/a
+    notes: SOC PKI material (ADR-028 generated).
+
+  - id: defconf.suricata
+    surface: defensive_stack_configs
+    legacy_source: config/suricata/
+    legacy_field: suricata.yaml + rules/
+    category: aptl_backend_responsibility
+    aces_target: n/a (defensive-stack realization)
+    runtime_owner: config/suricata + docker-compose `soc`
+    validation_evidence: tests/test_detection.py
+    blocking_followup: "#322"
+    notes: Suricata config + custom rules.
+
+  - id: defconf.thehive
+    surface: defensive_stack_configs
+    legacy_source: config/thehive/
+    legacy_field: application.conf
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: config/thehive + docker-compose `soc`
+    validation_evidence: lab health (TheHive reachable)
+    blocking_followup: "#322"
+    notes: TheHive case/alert config.
+
+  - id: defconf.wazuh_cluster
+    surface: defensive_stack_configs
+    legacy_source: config/wazuh_cluster/
+    legacy_field: wazuh_manager.conf + custom rule XML
+    category: aptl_backend_responsibility
+    aces_target: n/a (defensive-stack realization)
+    runtime_owner: config/wazuh_cluster + docker-compose `wazuh`
+    validation_evidence: tests/test_detection.py + lab health
+    blocking_followup: "#322"
+    notes: Wazuh manager + custom decoders/rules per component.
+
+  - id: defconf.wazuh_dashboard
+    surface: defensive_stack_configs
+    legacy_source: config/wazuh_dashboard/
+    legacy_field: opensearch_dashboards.yml + wazuh.yml
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: config/wazuh_dashboard + docker-compose `wazuh`
+    validation_evidence: lab health (Dashboard reachable)
+    blocking_followup: n/a
+    notes: Wazuh dashboard UI config.
+
+  - id: defconf.wazuh_indexer
+    surface: defensive_stack_configs
+    legacy_source: config/wazuh_indexer/
+    legacy_field: internal_users.yml + wazuh.indexer.yml
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: config/wazuh_indexer + docker-compose `wazuh`
+    validation_evidence: lab health (Indexer reachable)
+    blocking_followup: n/a
+    notes: Indexer + internal users.
+
+  - id: defconf.wazuh_indexer_ssl_certs
+    surface: defensive_stack_configs
+    legacy_source: config/wazuh_indexer_ssl_certs/
+    legacy_field: admin, indexer, dashboard, root-ca certs
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: config/wazuh_indexer_ssl_certs + _step_generate_certs
+    validation_evidence: tests/test_certs.py
+    blocking_followup: n/a
+    notes: Wazuh PKI bundle.
+
+  - id: defconf.certs_yml
+    surface: defensive_stack_configs
+    legacy_source: config/certs.yml
+    legacy_field: certs.yml
+    category: aptl_backend_responsibility
+    aces_target: n/a
+    runtime_owner: config/certs.yml + _step_generate_certs
+    validation_evidence: tests/test_certs.py
+    blocking_followup: n/a
+    notes: Cert-generation manifest (root + per-component).
+
+  # ---- surface: test_and_validation -------------------------------------
+  # Gates that hold the cutover honest. The conformance suite and the
+  # parity inventory itself are the validation_gate rows.
+
+  - id: gate.aces_conformance_backend_provisioning
+    surface: test_and_validation
+    legacy_source: aces-sdl reference suite
+    legacy_field: aces conformance backend --profile provisioning-only
+    category: validation_gate
+    aces_target: ACES `backend-manifest-v2` conformance
+    runtime_owner: APTL backend manifest (path pinned during #320)
+    validation_evidence: aces conformance backend --profile provisioning-only
+    blocking_followup: "#320"
+    notes: Advisory in Phase A; enforced pre-push at Phase B cutover.
+
+  - id: gate.aces_conformance_backend_evaluation
+    surface: test_and_validation
+    legacy_source: aces-sdl reference suite
+    legacy_field: aces conformance backend --profile orchestration-evaluation
+    category: validation_gate
+    aces_target: ACES evaluator-profile conformance
+    runtime_owner: APTL backend manifest (post-promotion)
+    validation_evidence: aces conformance backend --profile orchestration-evaluation
+    blocking_followup: "#312"
+    notes: Required only once #312 promotes the backend.
+
+  - id: gate.parity_inventory_schema
+    surface: test_and_validation
+    legacy_source: tests/test_parity_inventory.py
+    legacy_field: tests/test_parity_inventory.py
+    category: validation_gate
+    aces_target: n/a
+    runtime_owner: tests/test_parity_inventory.py + docs/aces/parity-inventory.yaml
+    validation_evidence: pytest tests/test_parity_inventory.py
+    blocking_followup: n/a
+    notes: This file's structural gate; runs in CI on every PR.
+
+  - id: gate.scenarios_load
+    surface: test_and_validation
+    legacy_source: tests/test_scenarios.py
+    legacy_field: test_example_scenarios_load
+    category: validation_gate
+    aces_target: ACES parser equivalence at cutover
+    runtime_owner: tests/test_scenarios.py
+    validation_evidence: pytest tests/test_scenarios.py
+    blocking_followup: "#323"
+    notes: Migrates to assert ACES SDL load at cutover.
+
+  - id: gate.compose_consistency
+    surface: test_and_validation
+    legacy_source: tests/test_consistency.py
+    legacy_field: TestComposeConsistency
+    category: validation_gate
+    aces_target: n/a (backend-side gate)
+    runtime_owner: tests/test_consistency.py
+    validation_evidence: pytest tests/test_consistency.py
+    blocking_followup: n/a
+    notes: Compose internal consistency; backend-side.
+
+  - id: gate.placeholder_env_block
+    surface: test_and_validation
+    legacy_source: tests/test_env_fuzz.py
+    legacy_field: find_placeholder_env_values invariants
+    category: validation_gate
+    aces_target: n/a (APTL-side preflight)
+    runtime_owner: find_placeholder_env_values + tests/test_env_fuzz.py
+    validation_evidence: pytest -m fuzz
+    blocking_followup: n/a
+    notes: Property-based gate guarding ADR-028 / ADR-034 secret boundary.

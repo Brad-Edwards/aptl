@@ -26,11 +26,12 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
 IMAGE_ID = "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0"
 IMAGE_DIGEST = f"aptl-webapp@{IMAGE_ID}"
-ACES_IDENTITY_GAP = 365
 ACES_NETWORK_GAP = 366
 ACES_HTTP_SURFACE_GAP = 367
 BUILD_HISTORY_LAYER_COUNT = 31
 SOURCE_INPUT_COUNT = 18
+LOCAL_IDENTITY_USER_COUNT = 23
+LOCAL_IDENTITY_GROUP_COUNT = 45
 FULL_RUNTIME_PACKAGE_COUNT = 223
 FULL_TRIVY_FINDING_COUNT = 469
 
@@ -133,11 +134,10 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     result = validate_mapping_ledger(WEBAPP_DIR)
     assert result.ok, result.errors
     assert result.fact_count == 23
-    assert result.encoded_count == 20
-    assert result.blocked_count == 3
+    assert result.encoded_count == 21
+    assert result.blocked_count == 2
     assert result.triage_count == 0
     assert result.gap_issues == [
-        f"ACES #{ACES_IDENTITY_GAP}",
         f"ACES #{ACES_NETWORK_GAP}",
         f"ACES #{ACES_HTTP_SURFACE_GAP}",
     ]
@@ -153,7 +153,7 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     assert dispositions["webapp.runtime.filesystem-content"] == "encoded"
     assert dispositions["webapp.runtime.filesystem-metadata"] == "encoded"
     assert dispositions["webapp.runtime.local-accounts"] == "encoded_with_caveat"
-    assert dispositions["webapp.runtime.local-identity-database"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.runtime.local-identity-database"] == "encoded"
     assert dispositions["webapp.network.realization-metadata"] == "blocked_by_aces_gap"
     assert dispositions["webapp.application.http-surface"] == "blocked_by_aces_gap"
     assert dispositions["webapp.runtime.container-host-config"] == "encoded"
@@ -166,14 +166,10 @@ def test_webapp_gap_report_surfaces_remaining_aces_gaps_only():
     report = gap_report(WEBAPP_DIR)
     gaps = {gap["fact_id"]: gap for gap in report["gaps"]}
     assert set(gaps) == {
-        "webapp.runtime.local-identity-database",
         "webapp.network.realization-metadata",
         "webapp.application.http-surface",
     }
     assert not report["triage_needed"]
-    assert gaps["webapp.runtime.local-identity-database"]["gap_issue"]["number"] == (
-        ACES_IDENTITY_GAP
-    )
     assert gaps["webapp.network.realization-metadata"]["gap_issue"]["number"] == (
         ACES_NETWORK_GAP
     )
@@ -468,6 +464,30 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert accounts["webapp-local-root"]["shell"] == "/bin/bash"
     assert accounts["webapp-local-wazuh"]["home"] == "/var/ossec"
     assert accounts["webapp-local-wazuh"]["disabled"] is True
+    local_identity = runtime["local_identity"]
+    assert len(local_identity["users"]) == LOCAL_IDENTITY_USER_COUNT
+    assert len(local_identity["groups"]) == LOCAL_IDENTITY_GROUP_COUNT
+    assert local_identity["sudo_rules"] == []
+    local_users = {user["username"]: user for user in local_identity["users"]}
+    assert local_users["root"]["uid"] == 0
+    assert local_users["root"]["primary_gid"] == 0
+    assert local_users["root"]["primary_group"] == "root"
+    assert local_users["root"]["gecos"] == "root"
+    assert local_users["root"]["shell"] == "/bin/bash"
+    assert local_users["wazuh"]["uid"] == 101
+    assert local_users["wazuh"]["primary_gid"] == 102
+    assert local_users["wazuh"]["primary_group"] == "wazuh"
+    assert local_users["wazuh"]["home"] == "/var/ossec"
+    assert local_users["wazuh"]["shell"] == "/sbin/nologin"
+    assert local_users["wazuh"]["no_login"] is True
+    local_groups = {group["name"]: group for group in local_identity["groups"]}
+    assert local_groups["wazuh"] == {
+        "name": "wazuh",
+        "gid": 102,
+        "members": [],
+        "provenance": "package",
+    }
+    assert local_groups["sudo"]["gid"] == 27
 
 
 def test_webapp_filesystem_checksum_paths_are_encoded_as_content():
@@ -520,6 +540,50 @@ def test_webapp_passwd_users_are_encoded_as_accounts():
     assert passwd_usernames <= account_usernames
 
 
+def test_webapp_runtime_local_identity_matches_passwd_and_group_evidence():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    local_identity = data["nodes"]["webapp"]["runtime"]["local_identity"]
+    encoded_users = {user["username"]: user for user in local_identity["users"]}
+    encoded_groups = {group["name"]: group for group in local_identity["groups"]}
+
+    group_rows = {}
+    gid_names = {}
+    for line in _runtime_baseline_section("groups"):
+        name, _password, gid, members = line.split(":")
+        member_list = [member for member in members.split(",") if member]
+        group_rows[name] = {"gid": int(gid), "members": member_list}
+        gid_names[int(gid)] = name
+
+    assert set(encoded_groups) == set(group_rows)
+    for name, expected in group_rows.items():
+        assert encoded_groups[name]["gid"] == expected["gid"]
+        assert encoded_groups[name]["members"] == expected["members"]
+
+    passwd_rows = {}
+    for line in _runtime_baseline_section("users"):
+        username, _password, uid, gid, gecos, home, shell = line.split(":")
+        passwd_rows[username] = {
+            "uid": int(uid),
+            "primary_gid": int(gid),
+            "primary_group": gid_names[int(gid)],
+            "gecos": gecos,
+            "home": home,
+            "shell": shell,
+            "no_login": shell.endswith("nologin"),
+        }
+
+    assert set(encoded_users) == set(passwd_rows)
+    for username, expected in passwd_rows.items():
+        encoded = encoded_users[username]
+        for field, value in expected.items():
+            if field == "gecos" and not value:
+                assert encoded.get(field, "") == ""
+            else:
+                assert encoded[field] == value
+
+    assert local_identity["sudo_rules"] == []
+
+
 def test_webapp_runtime_mount_targets_are_encoded():
     data = _yaml_file(TECHVAULT_SDL_PATH)
     mount_targets = {mount["target"] for mount in data["nodes"]["webapp"]["runtime"]["mounts"]}
@@ -545,6 +609,9 @@ def test_techvault_sdl_parses_and_compiles_with_aces_runtime_fields():
     assert len(build["layers"]) == BUILD_HISTORY_LAYER_COUNT
     assert len(build["source_inputs"]) == SOURCE_INPUT_COUNT
     assert build["attestation"]["status"] == "absent"
+    assert len(runtime["local_identity"]["users"]) == LOCAL_IDENTITY_USER_COUNT
+    assert len(runtime["local_identity"]["groups"]) == LOCAL_IDENTITY_GROUP_COUNT
+    assert runtime["local_identity"]["sudo_rules"] == []
     assert len(runtime["mounts"]) == 26
     assert len(runtime["filesystem_inventory"]) == 24
     assert runtime["container"]["runtime_name"] == "runc"
@@ -571,7 +638,10 @@ def test_parity_inventory_cites_webapp_inventory_and_aces_sdl():
     assert "Brad-Edwards/aces#364" not in rows["scen.techvault.webapp-inventory"][
         "blocking_followup"
     ]
-    assert "ACES #363/#364/#368 consumed" in rows["scen.techvault.webapp-inventory"][
+    assert "Brad-Edwards/aces#365" not in rows["scen.techvault.webapp-inventory"][
+        "blocking_followup"
+    ]
+    assert "ACES #363/#364/#365/#368 consumed" in rows["scen.techvault.webapp-inventory"][
         "validation_evidence"
     ]
     assert "Brad-Edwards/aces#363" not in rows["scen.techvault.webapp-inventory"][

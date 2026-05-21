@@ -1247,6 +1247,441 @@ nodes:
             \n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
           output_redacted: false
         description: Observed Docker health status and healthcheck output from docker inspect.
+      local_identity:
+        description: Full local identity database observed via getent passwd/group inside the aptl-webapp container; no sudoers section was present in the captured baseline.
+        users:
+        - username: root
+          uid: 0
+          primary_gid: 0
+          primary_group: root
+          gecos: root
+          home: /root
+          shell: /bin/bash
+          disabled: false
+          no_login: false
+          provenance: image
+          stability: stable
+        - username: daemon
+          uid: 1
+          primary_gid: 1
+          primary_group: daemon
+          gecos: daemon
+          home: /usr/sbin
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: bin
+          uid: 2
+          primary_gid: 2
+          primary_group: bin
+          gecos: bin
+          home: /bin
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: sys
+          uid: 3
+          primary_gid: 3
+          primary_group: sys
+          gecos: sys
+          home: /dev
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: sync
+          uid: 4
+          primary_gid: 65534
+          primary_group: nogroup
+          gecos: sync
+          home: /bin
+          shell: /bin/sync
+          disabled: false
+          no_login: false
+          provenance: image
+          stability: stable
+        - username: games
+          uid: 5
+          primary_gid: 60
+          primary_group: games
+          gecos: games
+          home: /usr/games
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: man
+          uid: 6
+          primary_gid: 12
+          primary_group: man
+          gecos: man
+          home: /var/cache/man
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: lp
+          uid: 7
+          primary_gid: 7
+          primary_group: lp
+          gecos: lp
+          home: /var/spool/lpd
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: mail
+          uid: 8
+          primary_gid: 8
+          primary_group: mail
+          gecos: mail
+          home: /var/mail
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: news
+          uid: 9
+          primary_gid: 9
+          primary_group: news
+          gecos: news
+          home: /var/spool/news
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: uucp
+          uid: 10
+          primary_gid: 10
+          primary_group: uucp
+          gecos: uucp
+          home: /var/spool/uucp
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: proxy
+          uid: 13
+          primary_gid: 13
+          primary_group: proxy
+          gecos: proxy
+          home: /bin
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: www-data
+          uid: 33
+          primary_gid: 33
+          primary_group: www-data
+          gecos: www-data
+          home: /var/www
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: backup
+          uid: 34
+          primary_gid: 34
+          primary_group: backup
+          gecos: backup
+          home: /var/backups
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: list
+          uid: 38
+          primary_gid: 38
+          primary_group: list
+          gecos: Mailing List Manager
+          home: /var/list
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: irc
+          uid: 39
+          primary_gid: 39
+          primary_group: irc
+          gecos: ircd
+          home: /run/ircd
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: _apt
+          uid: 42
+          primary_gid: 65534
+          primary_group: nogroup
+          home: /nonexistent
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: nobody
+          uid: 65534
+          primary_gid: 65534
+          primary_group: nogroup
+          gecos: nobody
+          home: /nonexistent
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: systemd-network
+          uid: 998
+          primary_gid: 998
+          primary_group: systemd-network
+          gecos: systemd Network Management
+          home: /
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: package
+          stability: stable
+        - username: systemd-timesync
+          uid: 996
+          primary_gid: 996
+          primary_group: systemd-timesync
+          gecos: systemd Time Synchronization
+          home: /
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: package
+          stability: stable
+        - username: Debian-exim
+          uid: 100
+          primary_gid: 101
+          primary_group: Debian-exim
+          home: /var/spool/exim4
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: package
+          stability: stable
+        - username: messagebus
+          uid: 995
+          primary_gid: 995
+          primary_group: messagebus
+          gecos: System Message Bus
+          home: /nonexistent
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: package
+          stability: stable
+        - username: wazuh
+          uid: 101
+          primary_gid: 102
+          primary_group: wazuh
+          home: /var/ossec
+          shell: /sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: package
+          stability: stable
+        groups:
+        - name: root
+          gid: 0
+          members: []
+          provenance: image
+        - name: daemon
+          gid: 1
+          members: []
+          provenance: image
+        - name: bin
+          gid: 2
+          members: []
+          provenance: image
+        - name: sys
+          gid: 3
+          members: []
+          provenance: image
+        - name: adm
+          gid: 4
+          members: []
+          provenance: image
+        - name: tty
+          gid: 5
+          members: []
+          provenance: image
+        - name: disk
+          gid: 6
+          members: []
+          provenance: image
+        - name: lp
+          gid: 7
+          members: []
+          provenance: image
+        - name: mail
+          gid: 8
+          members: []
+          provenance: image
+        - name: news
+          gid: 9
+          members: []
+          provenance: image
+        - name: uucp
+          gid: 10
+          members: []
+          provenance: image
+        - name: man
+          gid: 12
+          members: []
+          provenance: image
+        - name: proxy
+          gid: 13
+          members: []
+          provenance: image
+        - name: kmem
+          gid: 15
+          members: []
+          provenance: image
+        - name: dialout
+          gid: 20
+          members: []
+          provenance: image
+        - name: fax
+          gid: 21
+          members: []
+          provenance: image
+        - name: voice
+          gid: 22
+          members: []
+          provenance: image
+        - name: cdrom
+          gid: 24
+          members: []
+          provenance: image
+        - name: floppy
+          gid: 25
+          members: []
+          provenance: image
+        - name: tape
+          gid: 26
+          members: []
+          provenance: image
+        - name: sudo
+          gid: 27
+          members: []
+          provenance: image
+        - name: audio
+          gid: 29
+          members: []
+          provenance: image
+        - name: dip
+          gid: 30
+          members: []
+          provenance: image
+        - name: www-data
+          gid: 33
+          members: []
+          provenance: image
+        - name: backup
+          gid: 34
+          members: []
+          provenance: image
+        - name: operator
+          gid: 37
+          members: []
+          provenance: image
+        - name: list
+          gid: 38
+          members: []
+          provenance: image
+        - name: irc
+          gid: 39
+          members: []
+          provenance: image
+        - name: src
+          gid: 40
+          members: []
+          provenance: image
+        - name: shadow
+          gid: 42
+          members: []
+          provenance: image
+        - name: utmp
+          gid: 43
+          members: []
+          provenance: image
+        - name: video
+          gid: 44
+          members: []
+          provenance: image
+        - name: sasl
+          gid: 45
+          members: []
+          provenance: image
+        - name: plugdev
+          gid: 46
+          members: []
+          provenance: image
+        - name: staff
+          gid: 50
+          members: []
+          provenance: image
+        - name: games
+          gid: 60
+          members: []
+          provenance: image
+        - name: users
+          gid: 100
+          members: []
+          provenance: image
+        - name: nogroup
+          gid: 65534
+          members: []
+          provenance: image
+        - name: systemd-journal
+          gid: 999
+          members: []
+          provenance: package
+        - name: systemd-network
+          gid: 998
+          members: []
+          provenance: package
+        - name: crontab
+          gid: 997
+          members: []
+          provenance: package
+        - name: systemd-timesync
+          gid: 996
+          members: []
+          provenance: package
+        - name: Debian-exim
+          gid: 101
+          members: []
+          provenance: package
+        - name: messagebus
+          gid: 995
+          members: []
+          provenance: package
+        - name: wazuh
+          gid: 102
+          members: []
+          provenance: package
+        sudo_rules: []
       process:
         name: supervisord
         pid: 1

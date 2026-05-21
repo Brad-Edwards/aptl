@@ -74,8 +74,8 @@ notes:
     and supervised-process-set expressivity; it is closed, and those fields are
     now encoded in scenarios/techvault.sdl.yaml for the webapp asset.
   - >
-    ACES #363, #364, and #368 are closed and consumed by this SDL update. ACES
-    #365, #366, and #367 remain blocking expressivity gaps for observable
+    ACES #363, #364, #365, and #368 are closed and consumed by this SDL update.
+    ACES #366 and #367 remain blocking expressivity gaps for observable
     webapp facts that remain outside current ACES SDL expressivity. Those gaps
     are blockers, not waivers; this asset is not complete until ACES supports
     those facts and the SDL is updated to use the new surfaces.
@@ -324,7 +324,7 @@ facts:
     summary: >
       The observed /etc/passwd users are represented as ACES accounts with the
       username, node, shell, home directory, disabled/no-login classification,
-      and local-file auth method current ACES can express.
+      and local-file auth method for curated account-placement compatibility.
     evidence:
       - path: evidence/runtime-baseline.txt
     aces:
@@ -355,12 +355,13 @@ facts:
         - accounts.webapp-local-messagebus
         - accounts.webapp-local-wazuh
       caveat: >
-        Current ACES accounts cannot carry UID, primary GID, local group
-        records, group GIDs, or sudoers facts. ACES #365 blocks those remaining
-        observable identity facts.
+        Top-level ACES accounts are curated account placements, not the full
+        observed Linux identity database. The complete passwd/group/sudo
+        inventory is encoded under nodes.webapp.runtime.local_identity.
       rationale: >
         ACES can express local account name, node binding, shell, home, auth
-        method, and disabled state, so those observed fields are encoded.
+        method, and disabled state, so those account-placement fields remain
+        encoded.
 
   - id: webapp.scenario.weaknesses
     category: vulnerability-inventory
@@ -485,18 +486,18 @@ facts:
     evidence:
       - path: evidence/runtime-baseline.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - accounts
-        - nodes
-      why_not_current_surfaces: >
-        Current ACES accounts express usernames, node binding, shell, home,
-        auth method, disabled state, and group names, but not UID/GID,
-        primary-group identity, group database records, or sudoers semantics.
-      gap_issue:
-        tracker: ACES
-        number: 365
-        url: https://github.com/Brad-Edwards/aces/issues/365
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.local_identity.users
+        - nodes.webapp.runtime.local_identity.groups
+        - nodes.webapp.runtime.local_identity.sudo_rules
+      rationale: >
+        ACES #365 added the runtime.local_identity surface, so the observed
+        /etc/passwd users, UID/GID values, primary groups, GECOS fields, home
+        directories, shells, no-login state, /etc/group rows, group GIDs,
+        supplemental member lists, provenance/stability classifications, and
+        empty observed sudo-rule set are encoded directly.
 
   - id: webapp.network.realization-metadata
     category: network

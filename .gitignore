@@ -18,6 +18,8 @@ config/soc_certs/
 .claude/*.lock
 .claude/scheduled_tasks.lock
 
+# Ground Control local tool caches.
+.gc/sonar/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

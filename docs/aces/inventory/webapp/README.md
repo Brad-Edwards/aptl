@@ -76,7 +76,10 @@ Current ACES SDL encodes the webapp's node identity, source image pin,
 network links, service exposure, healthcheck, runtime log mount, primary
 process, supervised process set, observed runtime environment, Linux
 capabilities, restart/resource policy, package inventory, scanner findings,
-scenario weakness IDs, and relationships in `scenarios/techvault.sdl.yaml`.
+scenario weakness IDs, relationships, ACES-content entries for the focused
+runtime filesystem inventory, local account records for the observed
+`/etc/passwd` users, and the ACES-expressible subset of the runtime mount table
+in `scenarios/techvault.sdl.yaml`.
 
 ACES #354 is closed and covers the runtime fields for mounts, primary process,
 packages, dependency manifests, and scanner-derived package findings. ACES #358
@@ -88,6 +91,20 @@ APTL consumption remains blocked by the existing SCN-010 implementation issues:
 APTL #321 for the public ACES RuntimeManager handoff and APTL #324 for the
 generic ACES-to-APTL realizer. This inventory records those gaps instead of
 adding a TechVault-only backend shortcut.
+
+Full observable parity is still blocked on ACES expressivity gaps, not waived by
+the evidence bundle:
+
+- ACES #363: runtime filesystem metadata, permissions, ownership, checksums,
+  stability, and first-class digest fields.
+- ACES #364: container image build recipe, Dockerfile/layer history, source
+  input mapping, image config, and attestation status.
+- ACES #365: local identity database UID/GID/group/sudo facts.
+- ACES #366: Docker network aliases, endpoint metadata, MACs, DNS names, and
+  published host bindings.
+- ACES #367: application HTTP route/API/UI inventory.
+- ACES #368: container HostConfig, namespace/security settings, health logs,
+  and full mount filesystem facts.
 
 Run:
 
@@ -105,5 +122,7 @@ aptl aces-inventory gaps docs/aces/inventory/webapp
 - The ACES SDL records the captured package and scanner inventories from this
   frozen evidence bundle. Vulnerability records remain time-sensitive to the
   Trivy database and advisory feeds.
-- The capture does not assert attack-induced state changes, log-volume history,
-  or operator-driven runtime modifications.
+- The capture does not assert attack-induced state changes or later
+  operator-driven runtime modifications. Observable steady-state fields that
+  current ACES cannot express are explicitly blocked by ACES #363-#368 rather
+  than treated as out of scope.

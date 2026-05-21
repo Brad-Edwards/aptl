@@ -28,6 +28,12 @@ IMAGE_ID = "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a2
 IMAGE_DIGEST = f"aptl-webapp@{IMAGE_ID}"
 APTL_PUBLIC_HANDOFF_GAP = 321
 APTL_GENERIC_REALIZER_GAP = 324
+ACES_FILESYSTEM_GAP = 363
+ACES_BUILD_PROVENANCE_GAP = 364
+ACES_IDENTITY_GAP = 365
+ACES_NETWORK_GAP = 366
+ACES_HTTP_SURFACE_GAP = 367
+ACES_HOST_CONFIG_GAP = 368
 FULL_RUNTIME_PACKAGE_COUNT = 223
 FULL_TRIVY_FINDING_COUNT = 469
 
@@ -75,6 +81,15 @@ def _yaml_file(path: Path):
         return yaml.safe_load(fh)
 
 
+def _runtime_baseline_section(name: str) -> list[str]:
+    text = (EVIDENCE_DIR / "runtime-baseline.txt").read_text(encoding="utf-8")
+    marker = f"--{name}--\n"
+    _, rest = text.split(marker, maxsplit=1)
+    next_marker = re.search(r"\n--[a-z-]+--\n", rest)
+    section = rest[: next_marker.start()] if next_marker else rest
+    return [line for line in section.strip().splitlines() if line]
+
+
 def test_webapp_preflight_artifact_records_local_guardrails():
     text = PREFLIGHT_PATH.read_text(encoding="utf-8")
     required = (
@@ -107,6 +122,12 @@ def test_webapp_inventory_note_declares_scope_and_evidence():
         "aptl aces-inventory validate",
         "ACES #354",
         "ACES #358",
+        "ACES #363",
+        "ACES #364",
+        "ACES #365",
+        "ACES #366",
+        "ACES #367",
+        "ACES #368",
         "APTL #321",
         "APTL #324",
     )
@@ -117,11 +138,17 @@ def test_webapp_inventory_note_declares_scope_and_evidence():
 def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     result = validate_mapping_ledger(WEBAPP_DIR)
     assert result.ok, result.errors
-    assert result.fact_count == 17
-    assert result.encoded_count == 15
-    assert result.blocked_count == 2
+    assert result.fact_count == 25
+    assert result.encoded_count == 17
+    assert result.blocked_count == 8
     assert result.triage_count == 0
     assert result.gap_issues == [
+        f"ACES #{ACES_FILESYSTEM_GAP}",
+        f"ACES #{ACES_BUILD_PROVENANCE_GAP}",
+        f"ACES #{ACES_IDENTITY_GAP}",
+        f"ACES #{ACES_NETWORK_GAP}",
+        f"ACES #{ACES_HTTP_SURFACE_GAP}",
+        f"ACES #{ACES_HOST_CONFIG_GAP}",
         f"APTL #{APTL_PUBLIC_HANDOFF_GAP}",
         f"APTL #{APTL_GENERIC_REALIZER_GAP}",
     ]
@@ -131,23 +158,53 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     assert ledger["provenance"]["attestation"]["status"] == "not_available"
     assert len(ledger["correspondence_checks"]) == 3
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
+    assert dispositions["webapp.build.recipe"] == "blocked_by_aces_gap"
     assert dispositions["webapp.runtime.log-volume"] == "encoded"
+    assert dispositions["webapp.runtime.mount-table"] == "encoded_with_caveat"
+    assert dispositions["webapp.runtime.filesystem-content"] == "encoded_with_caveat"
+    assert dispositions["webapp.runtime.filesystem-metadata"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.runtime.local-accounts"] == "encoded_with_caveat"
+    assert dispositions["webapp.runtime.local-identity-database"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.network.realization-metadata"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.application.http-surface"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.runtime.container-host-config"] == "blocked_by_aces_gap"
     assert dispositions["webapp.runtime.supervised-process-set"] == "encoded"
     assert dispositions["webapp.runtime.environment-policy"] == "encoded"
     assert dispositions["webapp.runtime.capability-restart-policy"] == "encoded"
     assert dispositions["webapp.aptl.public-start-handoff"] == "blocked_by_aptl_gap"
     assert dispositions["webapp.aptl.generic-realizer"] == "blocked_by_aptl_gap"
-    assert "blocked_by_aces_gap" not in dispositions.values()
 
 
 def test_webapp_gap_report_surfaces_aces_and_aptl_handoffs():
     report = gap_report(WEBAPP_DIR)
     gaps = {gap["fact_id"]: gap for gap in report["gaps"]}
     assert set(gaps) == {
+        "webapp.build.recipe",
+        "webapp.runtime.filesystem-metadata",
+        "webapp.runtime.local-identity-database",
+        "webapp.network.realization-metadata",
+        "webapp.application.http-surface",
+        "webapp.runtime.container-host-config",
         "webapp.aptl.public-start-handoff",
         "webapp.aptl.generic-realizer",
     }
     assert not report["triage_needed"]
+    assert gaps["webapp.build.recipe"]["gap_issue"]["number"] == ACES_BUILD_PROVENANCE_GAP
+    assert gaps["webapp.runtime.filesystem-metadata"]["gap_issue"]["number"] == (
+        ACES_FILESYSTEM_GAP
+    )
+    assert gaps["webapp.runtime.local-identity-database"]["gap_issue"]["number"] == (
+        ACES_IDENTITY_GAP
+    )
+    assert gaps["webapp.network.realization-metadata"]["gap_issue"]["number"] == (
+        ACES_NETWORK_GAP
+    )
+    assert gaps["webapp.application.http-surface"]["gap_issue"]["number"] == (
+        ACES_HTTP_SURFACE_GAP
+    )
+    assert gaps["webapp.runtime.container-host-config"]["gap_issue"]["number"] == (
+        ACES_HOST_CONFIG_GAP
+    )
     assert gaps["webapp.aptl.public-start-handoff"]["gap_issue"]["number"] == (
         APTL_PUBLIC_HANDOFF_GAP
     )
@@ -300,15 +357,12 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert {"port": 8080, "protocol": "tcp", "name": "http"} in webapp["services"]
     assert "webapp-sqli-login" in webapp["vulnerabilities"]
     assert "webapp-command-injection" in webapp["vulnerabilities"]
-    assert runtime["mounts"] == [
-        {
-            "target": "/var/log/gunicorn",
-            "source": "aptl_webapp_logs",
-            "source_kind": "volume",
-            "read_only": False,
-            "description": "Gunicorn access-log volume tailed by the in-process Wazuh agent.",
-        }
-    ]
+    mounts = {mount["target"]: mount for mount in runtime["mounts"]}
+    assert len(mounts) == 26
+    assert mounts["/var/log/gunicorn"]["source"] == "aptl_webapp_logs"
+    assert mounts["/var/log/gunicorn"]["source_kind"] == "volume"
+    assert mounts["/sys"]["read_only"] is True
+    assert "nsdelegate" in mounts["/sys/fs/cgroup"]["options"]
     assert runtime["process"]["command"] == [
         "/usr/bin/python3",
         "/usr/bin/supervisord",
@@ -360,6 +414,62 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     ]
     assert infrastructure["webapp"]["dependencies"] == ["db", "wazuh-manager"]
 
+    content = data["content"]
+    assert len(content) == 24
+    assert content["webapp-file-app-app-py"]["path"] == "/app/app.py"
+    assert content["webapp-file-app-app-py"]["source"] == {
+        "name": "containers/webapp/app/app.py",
+        "version": "sha256:08beb9eec94aee668f19dc3d9302e465031ded519342205d1f1421d55b0814d6",
+    }
+    assert content["webapp-file-app-user-txt"]["sensitive"] is True
+    assert content["webapp-dir-opt-aptl-wazuh"]["destination"] == "/opt/aptl/wazuh"
+
+    accounts = data["accounts"]
+    assert len([name for name in accounts if name.startswith("webapp-local-")]) == 23
+    assert accounts["webapp-local-root"]["shell"] == "/bin/bash"
+    assert accounts["webapp-local-wazuh"]["home"] == "/var/ossec"
+    assert accounts["webapp-local-wazuh"]["disabled"] is True
+
+
+def test_webapp_filesystem_checksum_paths_are_encoded_as_content():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    content_paths = {
+        item["path"]
+        for item in data["content"].values()
+        if item["type"] == "File"
+    }
+    checksum_paths = {
+        line.split("  ", maxsplit=1)[1]
+        for line in (EVIDENCE_DIR / "filesystem-checksums.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    }
+    assert checksum_paths <= content_paths
+
+
+def test_webapp_passwd_users_are_encoded_as_accounts():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    account_usernames = {
+        account["username"]
+        for name, account in data["accounts"].items()
+        if name.startswith("webapp-local-")
+    }
+    passwd_usernames = {
+        line.split(":", maxsplit=1)[0] for line in _runtime_baseline_section("users")
+    }
+    assert passwd_usernames <= account_usernames
+
+
+def test_webapp_runtime_mount_targets_are_encoded():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    mount_targets = {mount["target"] for mount in data["nodes"]["webapp"]["runtime"]["mounts"]}
+    observed_targets = set()
+    for line in _runtime_baseline_section("mounts"):
+        match = re.match(r".+? on (\S+) type \S+ \(", line)
+        if match:
+            observed_targets.add(match.group(1))
+    assert observed_targets <= mount_targets
+
 
 def test_techvault_sdl_parses_and_compiles_with_aces_runtime_fields():
     from aces_processor.compiler import compile_runtime_model
@@ -369,6 +479,7 @@ def test_techvault_sdl_parses_and_compiles_with_aces_runtime_fields():
     model = compile_runtime_model(scenario)
     runtime = model.node_deployments["provision.node.webapp"].spec["node"]["runtime"]
 
+    assert len(runtime["mounts"]) == 26
     assert len(runtime["processes"]) == 11
     assert len(runtime["environment"]) == 21
     assert len(runtime["packages"]) == FULL_RUNTIME_PACKAGE_COUNT
@@ -384,7 +495,12 @@ def test_parity_inventory_cites_webapp_inventory_and_aces_sdl():
     assert rows["scen.techvault.webapp-inventory"]["legacy_source"] == (
         "scenarios/techvault.sdl.yaml"
     )
-    assert rows["scen.techvault.webapp-inventory"]["category"] == "aces_sdl"
+    assert rows["scen.techvault.webapp-inventory"]["category"] == (
+        "aces_schema_profile_gap"
+    )
+    assert "Brad-Edwards/aces#363" in rows["scen.techvault.webapp-inventory"][
+        "blocking_followup"
+    ]
     assert "docs/aces/inventory/webapp/" in rows["scen.techvault.webapp-inventory"][
         "validation_evidence"
     ]

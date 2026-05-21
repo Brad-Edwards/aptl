@@ -88,6 +88,12 @@ notes:
   - >
     APTL #321 and #324 own consumption of the encoded ACES content by the
     public startup path and generic backend realizer.
+  - >
+    ACES #363, #364, #365, #366, #367, and #368 are blocking expressivity
+    gaps for observable webapp facts that remain outside current ACES SDL
+    expressivity. They are blockers, not waivers; this asset is not complete
+    until ACES supports those facts and the SDL is updated to use the new
+    surfaces.
 facts:
   - id: webapp.image.identity
     category: provenance
@@ -117,16 +123,20 @@ facts:
       - path: evidence/docker-history.image.txt
       - path: evidence/source-checksums.txt
     aces:
-      disposition: encoded_with_caveat
-      surface: nodes
-      fields:
-        - nodes.webapp.source
-      caveat: >
-        ACES source pins the built artifact; the detailed Dockerfile/COPY/RUN
-        recipe remains provenance evidence in this bundle.
-      rationale: >
-        The source field is the ACES handle for the source package/image that
-        backend realization later resolves.
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - nodes
+        - features
+        - runtime_contract
+      why_not_current_surfaces: >
+        ACES source pins the built artifact, but current ACES cannot express
+        the detailed Dockerfile instruction stream, image history/layers,
+        build args, copied source inputs, image config fields, or attestation
+        absence as first-class SDL facts.
+      gap_issue:
+        tracker: ACES
+        number: 364
+        url: https://github.com/Brad-Edwards/aces/issues/364
 
   - id: webapp.os.version
     category: runtime-configuration
@@ -209,6 +219,30 @@ facts:
         - nodes.webapp.runtime.mounts
       rationale: ACES #354 added typed runtime mount inventory.
 
+  - id: webapp.runtime.mount-table
+    category: runtime-configuration
+    summary: >
+      The realized container exposes 26 mount targets at steady state,
+      including overlay root, proc/sys/tmpfs pseudo-filesystems, Docker-managed
+      resolver/hostname/hosts files, and the Gunicorn log volume.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.mounts
+      caveat: >
+        Current ACES mount entries encode target, source, source kind,
+        read-only flag, options, and description. ACES #368 blocks full mount
+        parity for filesystem type, propagation, host/security namespace
+        semantics, health logs, and other Docker HostConfig fields.
+      rationale: >
+        The current runtime mount model can carry the observed mount targets
+        and options, so those are encoded directly rather than left only in
+        evidence.
+
   - id: webapp.runtime.primary-process
     category: runtime-configuration
     summary: >
@@ -240,6 +274,57 @@ facts:
         - nodes.webapp.runtime.dependency_manifests
       rationale: ACES #354 added runtime package and dependency-manifest inventory.
 
+  - id: webapp.runtime.filesystem-content
+    category: filesystem-inventory
+    summary: >
+      The observed webapp runtime files and directories under /app,
+      /entrypoint.sh, /etc/rsyslog.d, /etc/supervisor/conf.d,
+      /opt/aptl/wazuh, and /var/ossec/etc are represented as ACES content
+      entries with checksum-addressed source references where current ACES can
+      carry them.
+    evidence:
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: content
+      fields:
+        - content.webapp-file-app-app-py
+        - content.webapp-file-app-requirements-txt
+        - content.webapp-file-app-static-style-css
+        - content.webapp-file-app-templates-admin-html
+        - content.webapp-file-app-templates-base-html
+        - content.webapp-file-app-templates-dashboard-html
+        - content.webapp-file-app-templates-login-html
+        - content.webapp-file-app-templates-search-html
+        - content.webapp-file-app-templates-tools-html
+        - content.webapp-file-app-templates-upload-html
+        - content.webapp-file-app-user-txt
+        - content.webapp-file-entrypoint-sh
+        - content.webapp-file-etc-rsyslog-d-80-gunicorn-conf
+        - content.webapp-file-etc-rsyslog-d-90-forward-conf
+        - content.webapp-file-etc-supervisor-conf-d-webapp-conf
+        - content.webapp-file-opt-aptl-wazuh-ossec-conf-template
+        - content.webapp-file-opt-aptl-wazuh-wazuh-agent-sh
+        - content.webapp-file-var-ossec-etc-ossec-conf
+        - content.webapp-dir-app
+        - content.webapp-dir-app-static
+        - content.webapp-dir-app-templates
+        - content.webapp-dir-etc-rsyslog-d
+        - content.webapp-dir-etc-supervisor-conf-d
+        - content.webapp-dir-opt-aptl-wazuh
+      caveat: >
+        Current ACES content can encode target path, content type, source, and
+        sensitivity, but ACES #363 blocks full first-class filesystem parity
+        for file type metadata, owner/group, UID/GID, mode bits, size,
+        checksum algorithm fields, symlinks/devices, and stability
+        classification.
+      rationale: >
+        ACES can express content placement for files/directories, so every
+        observed runtime file and directory in the focused webapp filesystem
+        inventory is encoded instead of relying on evidence-only references.
+
   - id: webapp.runtime.vulnerability-scan
     category: vulnerability-inventory
     summary: >
@@ -255,6 +340,49 @@ facts:
       fields:
         - nodes.webapp.runtime.package_vulnerabilities
       rationale: ACES #354 added scanner-derived package vulnerability findings.
+
+  - id: webapp.runtime.local-accounts
+    category: identity-surface
+    summary: >
+      The observed /etc/passwd users are represented as ACES accounts with the
+      username, node, shell, home directory, disabled/no-login classification,
+      and local-file auth method current ACES can express.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: accounts
+      fields:
+        - accounts.webapp-local-root
+        - accounts.webapp-local-daemon
+        - accounts.webapp-local-bin
+        - accounts.webapp-local-sys
+        - accounts.webapp-local-sync
+        - accounts.webapp-local-games
+        - accounts.webapp-local-man
+        - accounts.webapp-local-lp
+        - accounts.webapp-local-mail
+        - accounts.webapp-local-news
+        - accounts.webapp-local-uucp
+        - accounts.webapp-local-proxy
+        - accounts.webapp-local-www-data
+        - accounts.webapp-local-backup
+        - accounts.webapp-local-list
+        - accounts.webapp-local-irc
+        - accounts.webapp-local-apt
+        - accounts.webapp-local-nobody
+        - accounts.webapp-local-systemd-network
+        - accounts.webapp-local-systemd-timesync
+        - accounts.webapp-local-debian-exim
+        - accounts.webapp-local-messagebus
+        - accounts.webapp-local-wazuh
+      caveat: >
+        Current ACES accounts cannot carry UID, primary GID, local group
+        records, group GIDs, or sudoers facts. ACES #365 blocks those remaining
+        observable identity facts.
+      rationale: >
+        ACES can express local account name, node binding, shell, home, auth
+        method, and disabled state, so those observed fields are encoded.
 
   - id: webapp.scenario.weaknesses
     category: vulnerability-inventory
@@ -348,6 +476,133 @@ facts:
       rationale: >
         ACES #358 added typed Linux capability policy plus restart and resource
         limit inventory under runtime operational policy.
+
+  - id: webapp.runtime.filesystem-metadata
+    category: filesystem-inventory
+    summary: >
+      The focused filesystem inventory includes observable file types,
+      owner/group names, permissions, sizes, checksums, generated/runtime
+      stability, and runtime/source correspondence that current ACES cannot
+      fully represent as first-class SDL fields.
+    evidence:
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - content
+        - nodes
+        - runtime_contract
+      why_not_current_surfaces: >
+        Current ACES content entries can identify files/directories and source
+        references, but cannot express complete runtime filesystem metadata,
+        permissions, UID/GID, checksum algorithm fields, symlink/device types,
+        or stability classifications.
+      gap_issue:
+        tracker: ACES
+        number: 363
+        url: https://github.com/Brad-Edwards/aces/issues/363
+
+  - id: webapp.runtime.local-identity-database
+    category: identity-surface
+    summary: >
+      The runtime identity database includes UID/GID, primary groups, local
+      group records, group GIDs, GECOS fields, and sudo/sudoers scope that
+      current ACES accounts cannot fully represent.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - accounts
+        - nodes
+      why_not_current_surfaces: >
+        Current ACES accounts express usernames, node binding, shell, home,
+        auth method, disabled state, and group names, but not UID/GID,
+        primary-group identity, group database records, or sudoers semantics.
+      gap_issue:
+        tracker: ACES
+        number: 365
+        url: https://github.com/Brad-Edwards/aces/issues/365
+
+  - id: webapp.network.realization-metadata
+    category: network
+    summary: >
+      Docker exposes per-network aliases, DNS names, endpoint IDs, MAC
+      addresses, prefix lengths, network IDs, and host-published port bindings
+      for the webapp container.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-network.aptl-dmz.json
+      - path: evidence/docker-network.aptl-internal.json
+      - path: evidence/compose-service.webapp.json
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - infrastructure
+        - nodes.services
+        - runtime_contract
+      why_not_current_surfaces: >
+        Current ACES infrastructure can encode network links and static IP
+        assignments, but not Docker aliases/DNS names, endpoint IDs, MAC
+        addresses, prefix lengths, host port publication, backend network IDs,
+        or stable-versus-ephemeral realization metadata.
+      gap_issue:
+        tracker: ACES
+        number: 366
+        url: https://github.com/Brad-Edwards/aces/issues/366
+
+  - id: webapp.application.http-surface
+    category: service-surface
+    summary: >
+      Participants and agents can observe the Flask HTTP route/API/UI surface,
+      including paths, methods, forms, response templates, static assets,
+      redirects, diagnostics, auth boundaries, and route-specific weaknesses.
+    evidence:
+      - path: evidence/source-checksums.txt
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - nodes.services
+        - features
+        - content
+        - vulnerabilities
+      why_not_current_surfaces: >
+        Current ACES can encode the listening service, source files, and
+        CWE-style vulnerabilities, but not application route/API/UI inventory,
+        route parameters, response/template mappings, route auth boundaries, or
+        route-to-vulnerability placement.
+      gap_issue:
+        tracker: ACES
+        number: 367
+        url: https://github.com/Brad-Edwards/aces/issues/367
+
+  - id: webapp.runtime.container-host-config
+    category: runtime-configuration
+    summary: >
+      Docker inspect exposes container host/security/runtime configuration such
+      as entrypoint, log driver, namespace modes, privileged/read-only flags,
+      shm size, masked/read-only paths, runtime name, devices, DNS lists, and
+      health observation logs.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - nodes
+        - runtime_contract
+      why_not_current_surfaces: >
+        ACES #358 covers capability policy, restart policy, resource limits,
+        and process sets, but current ACES cannot express the remaining Docker
+        HostConfig, namespace/security, health-log, and full mount filesystem
+        facts.
+      gap_issue:
+        tracker: ACES
+        number: 368
+        url: https://github.com/Brad-Edwards/aces/issues/368
 
   - id: webapp.aptl.public-start-handoff
     category: aptl-backend-gap

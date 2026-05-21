@@ -66,11 +66,162 @@ nodes:
       - {port: 8080, protocol: tcp, name: http}
     runtime:
       mounts:
+      - target: /
+        source: overlay
+        source_kind: other
+        read_only: false
+        options: [rw, relatime, nouserxattr]
+        description: Observed overlay mount from the runtime mount table; layer paths require ACES #368 for first-class representation.
+      - target: /proc
+        source: proc
+        source_kind: other
+        read_only: false
+        options: [rw, nosuid, nodev, noexec, relatime]
+        description: Observed proc mount from the runtime mount table.
+      - target: /dev
+        source: tmpfs
+        source_kind: tmpfs
+        read_only: false
+        options: [rw, nosuid, size=65536k, mode=755, inode64]
+        description: Observed tmpfs mount from the runtime mount table.
+      - target: /dev/pts
+        source: devpts
+        source_kind: other
+        read_only: false
+        options: [rw, nosuid, noexec, relatime, gid=5, mode=620, ptmxmode=666]
+        description: Observed devpts mount from the runtime mount table.
+      - target: /sys
+        source: sysfs
+        source_kind: other
+        read_only: true
+        options: [ro, nosuid, nodev, noexec, relatime]
+        description: Observed sysfs mount from the runtime mount table.
+      - target: /sys/fs/cgroup
+        source: cgroup
+        source_kind: other
+        read_only: true
+        options: [ro, nosuid, nodev, noexec, relatime, nsdelegate, memory_recursiveprot]
+        description: Observed cgroup2 mount from the runtime mount table.
+      - target: /dev/mqueue
+        source: mqueue
+        source_kind: other
+        read_only: false
+        options: [rw, nosuid, nodev, noexec, relatime]
+        description: Observed mqueue mount from the runtime mount table.
+      - target: /dev/shm
+        source: shm
+        source_kind: tmpfs
+        read_only: false
+        options: [rw, nosuid, nodev, noexec, relatime, size=65536k, inode64]
+        description: Observed tmpfs mount from the runtime mount table.
+      - target: /etc/resolv.conf
+        source: /dev/md2
+        source_kind: other
+        read_only: false
+        options: [rw, relatime]
+        description: Observed Docker-managed resolver file mount from the runtime mount table.
+      - target: /etc/hostname
+        source: /dev/md2
+        source_kind: other
+        read_only: false
+        options: [rw, relatime]
+        description: Observed Docker-managed hostname file mount from the runtime mount table.
+      - target: /etc/hosts
+        source: /dev/md2
+        source_kind: other
+        read_only: false
+        options: [rw, relatime]
+        description: Observed Docker-managed hosts file mount from the runtime mount table.
       - target: /var/log/gunicorn
         source: aptl_webapp_logs
         source_kind: volume
         read_only: false
+        options: [rw, relatime]
         description: Gunicorn access-log volume tailed by the in-process Wazuh agent.
+      - target: /proc/bus
+        source: proc
+        source_kind: other
+        read_only: true
+        options: [ro, nosuid, nodev, noexec, relatime]
+        description: Observed read-only proc mount from the runtime mount table.
+      - target: /proc/fs
+        source: proc
+        source_kind: other
+        read_only: true
+        options: [ro, nosuid, nodev, noexec, relatime]
+        description: Observed read-only proc mount from the runtime mount table.
+      - target: /proc/irq
+        source: proc
+        source_kind: other
+        read_only: true
+        options: [ro, nosuid, nodev, noexec, relatime]
+        description: Observed read-only proc mount from the runtime mount table.
+      - target: /proc/sys
+        source: proc
+        source_kind: other
+        read_only: true
+        options: [ro, nosuid, nodev, noexec, relatime]
+        description: Observed read-only proc mount from the runtime mount table.
+      - target: /proc/sysrq-trigger
+        source: proc
+        source_kind: other
+        read_only: true
+        options: [ro, nosuid, nodev, noexec, relatime]
+        description: Observed read-only proc mount from the runtime mount table.
+      - target: /proc/acpi
+        source: tmpfs
+        source_kind: tmpfs
+        read_only: true
+        options: [ro, relatime, inode64]
+        description: Observed masked tmpfs mount from the runtime mount table.
+      - target: /proc/interrupts
+        source: tmpfs
+        source_kind: tmpfs
+        read_only: false
+        options: [rw, nosuid, size=65536k, mode=755, inode64]
+        description: Observed tmpfs mount from the runtime mount table.
+      - target: /proc/kcore
+        source: tmpfs
+        source_kind: tmpfs
+        read_only: false
+        options: [rw, nosuid, size=65536k, mode=755, inode64]
+        description: Observed tmpfs mount from the runtime mount table.
+      - target: /proc/keys
+        source: tmpfs
+        source_kind: tmpfs
+        read_only: false
+        options: [rw, nosuid, size=65536k, mode=755, inode64]
+        description: Observed tmpfs mount from the runtime mount table.
+      - target: /proc/latency_stats
+        source: tmpfs
+        source_kind: tmpfs
+        read_only: false
+        options: [rw, nosuid, size=65536k, mode=755, inode64]
+        description: Observed tmpfs mount from the runtime mount table.
+      - target: /proc/scsi
+        source: tmpfs
+        source_kind: tmpfs
+        read_only: true
+        options: [ro, relatime, inode64]
+        description: Observed masked tmpfs mount from the runtime mount table.
+      - target: /proc/timer_list
+        source: tmpfs
+        source_kind: tmpfs
+        read_only: false
+        options: [rw, nosuid, size=65536k, mode=755, inode64]
+        description: Observed tmpfs mount from the runtime mount table.
+      - target: /sys/devices/virtual/powercap
+        source: tmpfs
+        source_kind: tmpfs
+        read_only: true
+        options: [ro, relatime, inode64]
+        description: Observed masked tmpfs mount from the runtime mount table.
+      - target: /sys/firmware
+        source: tmpfs
+        source_kind: tmpfs
+        read_only: true
+        options: [ro, relatime, inode64]
+        description: Observed masked tmpfs mount from the runtime mount table.
       process:
         name: supervisord
         pid: 1
@@ -6015,7 +6166,328 @@ vulnerabilities:
     technical: true
     class: CWE-798
 
+content:
+  webapp-file-app-app-py:
+    type: File
+    target: webapp
+    path: /app/app.py
+    source: {name: containers/webapp/app/app.py, version: sha256:08beb9eec94aee668f19dc3d9302e465031ded519342205d1f1421d55b0814d6}
+  webapp-file-app-requirements-txt:
+    type: File
+    target: webapp
+    path: /app/requirements.txt
+    source: {name: containers/webapp/requirements.txt, version: sha256:6e55730ccdc1cce6c4e09c2431a8d56d085c3c544a0bb5f42ff1af3918c04ec5}
+  webapp-file-app-static-style-css:
+    type: File
+    target: webapp
+    path: /app/static/style.css
+    source: {name: containers/webapp/app/static/style.css, version: sha256:34af32a9b1c0c538f4b2e5dd7df6e3e44ca976988d34f482c80b03ece662d53c}
+  webapp-file-app-templates-admin-html:
+    type: File
+    target: webapp
+    path: /app/templates/admin.html
+    source: {name: containers/webapp/app/templates/admin.html, version: sha256:80ad82948ea5ed17a472f065b99d938acfba1b35d3869327f5cbe88d38558449}
+  webapp-file-app-templates-base-html:
+    type: File
+    target: webapp
+    path: /app/templates/base.html
+    source: {name: containers/webapp/app/templates/base.html, version: sha256:7c28af474bb0bb9d75667a8acad4b2b87fede111780b6ee6960b1c80ed841629}
+  webapp-file-app-templates-dashboard-html:
+    type: File
+    target: webapp
+    path: /app/templates/dashboard.html
+    source: {name: containers/webapp/app/templates/dashboard.html, version: sha256:2bb50cbd55b25a1d87def04201a9c3cac5794f8c98b1abedfdb2ab79340442f7}
+  webapp-file-app-templates-login-html:
+    type: File
+    target: webapp
+    path: /app/templates/login.html
+    source: {name: containers/webapp/app/templates/login.html, version: sha256:945929a03b9f99fe99333cf1a0812c9f085ee9a83260b4dd3ca9a58690d66f2e}
+  webapp-file-app-templates-search-html:
+    type: File
+    target: webapp
+    path: /app/templates/search.html
+    source: {name: containers/webapp/app/templates/search.html, version: sha256:2071771a5dd91c618fe2ce4356a7aab33e5b2314847bc06ac4c4c545fe1bc89b}
+  webapp-file-app-templates-tools-html:
+    type: File
+    target: webapp
+    path: /app/templates/tools.html
+    source: {name: containers/webapp/app/templates/tools.html, version: sha256:c9251a2d135de24cde145d82dc6f6b2b7505ab232ef5329c6cd8c4ab10bec184}
+  webapp-file-app-templates-upload-html:
+    type: File
+    target: webapp
+    path: /app/templates/upload.html
+    source: {name: containers/webapp/app/templates/upload.html, version: sha256:6a45749c307b1f11de109ba363155428f3a1bc1beb6cc0be3b857563d3b6dea8}
+  webapp-file-app-user-txt:
+    type: File
+    target: webapp
+    path: /app/user.txt
+    source: {name: runtime-observed:/app/user.txt, version: sha256:f03ebaa44e60dfda9ca49d1c4850ddd79109d7b27077c13c4457a0faa2539ad1}
+    sensitive: true
+  webapp-file-entrypoint-sh:
+    type: File
+    target: webapp
+    path: /entrypoint.sh
+    source: {name: containers/webapp/entrypoint.sh, version: sha256:dd191e81a760b9046e5cb011b229eccc690877c0a87556d91a94b927d0032957}
+  webapp-file-etc-rsyslog-d-80-gunicorn-conf:
+    type: File
+    target: webapp
+    path: /etc/rsyslog.d/80-gunicorn.conf
+    source: {name: runtime-observed:/etc/rsyslog.d/80-gunicorn.conf, version: sha256:c000906fb2a97a309481fe8620492847211d60a057046e5bfbc0b26a9c664be4}
+  webapp-file-etc-rsyslog-d-90-forward-conf:
+    type: File
+    target: webapp
+    path: /etc/rsyslog.d/90-forward.conf
+    source: {name: runtime-observed:/etc/rsyslog.d/90-forward.conf, version: sha256:0db955102dd0b1a898ba2faa1847a7c6d1c159f3d0abd2a2b80d2522d5011e75}
+  webapp-file-etc-supervisor-conf-d-webapp-conf:
+    type: File
+    target: webapp
+    path: /etc/supervisor/conf.d/webapp.conf
+    source: {name: containers/webapp/supervisord.conf, version: sha256:dcdab3319b81ee13ed1048a24415abf90867f790a5ada67d107cf712407b3c6a}
+  webapp-file-opt-aptl-wazuh-ossec-conf-template:
+    type: File
+    target: webapp
+    path: /opt/aptl/wazuh/ossec.conf.template
+    source: {name: containers/_wazuh-agent/ossec.conf.template, version: sha256:35579f1c69c77a4792da5bccb15dc9feb0d1c623ba9c7df14cb7922ec113c301}
+  webapp-file-opt-aptl-wazuh-wazuh-agent-sh:
+    type: File
+    target: webapp
+    path: /opt/aptl/wazuh/wazuh-agent.sh
+    source: {name: containers/_wazuh-agent/wazuh-agent.sh, version: sha256:0b0b2b8ba176edeeb37594acd2c5b4fca062b5d20b906c6b8581be8fcf97ac84}
+  webapp-file-var-ossec-etc-ossec-conf:
+    type: File
+    target: webapp
+    path: /var/ossec/etc/ossec.conf
+    source: {name: runtime-observed:/var/ossec/etc/ossec.conf, version: sha256:8a98da4e9eef1f7327adfd39aad4cb3bee212639522e90b27d5783367893a86b}
+  webapp-dir-app:
+    type: Directory
+    target: webapp
+    destination: /app
+  webapp-dir-app-static:
+    type: Directory
+    target: webapp
+    destination: /app/static
+  webapp-dir-app-templates:
+    type: Directory
+    target: webapp
+    destination: /app/templates
+  webapp-dir-etc-rsyslog-d:
+    type: Directory
+    target: webapp
+    destination: /etc/rsyslog.d
+  webapp-dir-etc-supervisor-conf-d:
+    type: Directory
+    target: webapp
+    destination: /etc/supervisor/conf.d
+  webapp-dir-opt-aptl-wazuh:
+    type: Directory
+    target: webapp
+    destination: /opt/aptl/wazuh
+
 accounts:
+  webapp-local-root:
+    username: root
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /bin/bash
+    home: /root
+    disabled: false
+    description: root
+  webapp-local-daemon:
+    username: daemon
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /usr/sbin
+    disabled: true
+    description: daemon
+  webapp-local-bin:
+    username: bin
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+    description: bin
+  webapp-local-sys:
+    username: sys
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /dev
+    disabled: true
+    description: sys
+  webapp-local-sync:
+    username: sync
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /bin/sync
+    home: /bin
+    disabled: false
+    description: sync
+  webapp-local-games:
+    username: games
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /usr/games
+    disabled: true
+    description: games
+  webapp-local-man:
+    username: man
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /var/cache/man
+    disabled: true
+    description: man
+  webapp-local-lp:
+    username: lp
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+    description: lp
+  webapp-local-mail:
+    username: mail
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /var/mail
+    disabled: true
+    description: mail
+  webapp-local-news:
+    username: news
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /var/spool/news
+    disabled: true
+    description: news
+  webapp-local-uucp:
+    username: uucp
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /var/spool/uucp
+    disabled: true
+    description: uucp
+  webapp-local-proxy:
+    username: proxy
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+    description: proxy
+  webapp-local-www-data:
+    username: www-data
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /var/www
+    disabled: true
+    description: www-data
+  webapp-local-backup:
+    username: backup
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /var/backups
+    disabled: true
+    description: backup
+  webapp-local-list:
+    username: list
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /var/list
+    disabled: true
+    description: Mailing List Manager
+  webapp-local-irc:
+    username: irc
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /run/ircd
+    disabled: true
+    description: ircd
+  webapp-local-apt:
+    username: _apt
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  webapp-local-nobody:
+    username: nobody
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+    description: nobody
+  webapp-local-systemd-network:
+    username: systemd-network
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /
+    disabled: true
+    description: systemd Network Management
+  webapp-local-systemd-timesync:
+    username: systemd-timesync
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /
+    disabled: true
+    description: systemd Time Synchronization
+  webapp-local-debian-exim:
+    username: Debian-exim
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /var/spool/exim4
+    disabled: true
+  webapp-local-messagebus:
+    username: messagebus
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+    description: System Message Bus
+  webapp-local-wazuh:
+    username: wazuh
+    node: webapp
+    auth_method: local-file
+    password_strength: none
+    shell: /sbin/nologin
+    home: /var/ossec
+    disabled: true
   webapp-db-account:
     username: techvault
     node: db

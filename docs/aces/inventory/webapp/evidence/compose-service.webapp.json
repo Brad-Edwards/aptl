@@ -1,0 +1,78 @@
+{
+  "profiles": [
+    "enterprise"
+  ],
+  "build": {
+    "context": "/home/atomik/src/aptl",
+    "dockerfile": "containers/webapp/Dockerfile"
+  },
+  "cap_add": [
+    "NET_ADMIN"
+  ],
+  "command": null,
+  "container_name": "aptl-webapp",
+  "depends_on": {
+    "db": {
+      "condition": "service_healthy",
+      "required": true
+    }
+  },
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "536870912"
+      }
+    },
+    "placement": {}
+  },
+  "entrypoint": null,
+  "environment": {
+    "AGENT_NAME": "aptl-webapp-agent",
+    "DB_HOST": "172.20.2.11",
+    "DB_NAME": "techvault",
+    "DB_PASSWORD": "<REDACTED-DB-PASSWORD>",
+    "DB_PORT": "5432",
+    "DB_USER": "techvault",
+    "FLASK_ENV": "production",
+    "LOG_FORMAT": "syslog",
+    "LOG_PATHS": "/var/log/gunicorn/access.log",
+    "SIEM_IP": "172.20.2.30",
+    "WAZUH_MANAGER": "wazuh.manager"
+  },
+  "hostname": "webapp",
+  "healthcheck": {
+    "test": [
+      "CMD-SHELL",
+      "curl -sf http://localhost:8080/ || exit 1"
+    ],
+    "timeout": "5s",
+    "interval": "15s",
+    "retries": 5,
+    "start_period": "30s"
+  },
+  "networks": {
+    "aptl-dmz": {
+      "ipv4_address": "172.20.1.20"
+    },
+    "aptl-internal": {
+      "ipv4_address": "172.20.2.25"
+    }
+  },
+  "ports": [
+    {
+      "mode": "ingress",
+      "target": 8080,
+      "published": "8080",
+      "protocol": "tcp"
+    }
+  ],
+  "restart": "unless-stopped",
+  "volumes": [
+    {
+      "type": "volume",
+      "source": "webapp_logs",
+      "target": "/var/log/gunicorn",
+      "volume": {}
+    }
+  ]
+}

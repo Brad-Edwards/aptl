@@ -1,0 +1,399 @@
+schema_version: 1
+asset:
+  id: webapp
+  scenario: TechVault
+  aptl_issue: 330
+  aces_methodology_issue: 353
+  source_class: custom-build
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: aptl-webapp@sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence: []
+    limits:
+      - >
+        This first-party local image was captured from the local Docker daemon.
+        No registry-visible OCI, in-toto, or SLSA attestation was available for
+        the mutable local tag at capture time.
+correspondence_checks:
+  - id: webapp-node-source-correspondence
+    status: planned
+    source: nodes.webapp.source
+    realized_evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/source-checksums.txt
+    ledger_fact_ids:
+      - webapp.image.identity
+      - webapp.build.recipe
+    method: >
+      Compare the ACES source name/version in scenarios/techvault.sdl.yaml
+      against the realized local image digest and source package checksums
+      captured here.
+    limit: >
+      Planned because issue #330 records the asset spec; public APTL startup
+      does not yet consume ACES source pins.
+  - id: webapp-runtime-correspondence
+    status: planned
+    source: nodes.webapp.runtime
+    realized_evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/os-packages.txt
+      - path: evidence/language-manifests.txt
+    ledger_fact_ids:
+      - webapp.runtime.log-volume
+      - webapp.runtime.primary-process
+      - webapp.runtime.package-inventory
+      - webapp.runtime.vulnerability-scan
+    method: >
+      After #321/#324 wire APTL startup through ACES runtime content, run the
+      encoded scenario, recapture runtime evidence, and compare the mount,
+      process, package, and scanner surfaces against this ledger.
+    limit: >
+      Planned because this issue records the desired ACES content and evidence,
+      not the backend interpreter.
+  - id: webapp-gap-correspondence
+    status: blocked
+    source: ACES #358 plus APTL #321/#324
+    realized_evidence:
+      - path: evidence/docker-top.txt
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.container.json
+    ledger_fact_ids:
+      - webapp.runtime.supervised-process-set
+      - webapp.runtime.environment-policy
+      - webapp.runtime.capability-restart-policy
+      - webapp.aptl.public-start-handoff
+      - webapp.aptl.generic-realizer
+    method: >
+      Convert blocked ledger rows into implemented correspondence checks once
+      ACES exposes the missing runtime-operation fields and APTL consumes ACES
+      RuntimeModel content through the generic backend path.
+    limit: >
+      Blocked by the cited ACES/APTL issues.
+notes:
+  - >
+    ACES #354 is closed and covers runtime mounts, primary process identity,
+    package inventory, dependency manifests, and scanner-derived package
+    findings.
+  - >
+    ACES #358 owns remaining container runtime env, capability, restart-policy,
+    and supervised-process-set expressivity.
+  - >
+    APTL #321 and #324 own consumption of the encoded ACES content by the
+    public startup path and generic backend realizer.
+facts:
+  - id: webapp.image.identity
+    category: provenance
+    summary: >
+      The asset uses first-party local image aptl-webapp:latest, captured as
+      aptl-webapp@sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0.
+    evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.source.name
+        - nodes.webapp.source.version
+      rationale: >
+        ACES node source identifies the provider-neutral artifact and immutable
+        digest used by later backend realization.
+
+  - id: webapp.build.recipe
+    category: provenance
+    summary: >
+      The image is a custom build from containers/webapp/Dockerfile with source
+      inputs from containers/webapp/ and containers/_wazuh-agent/.
+    evidence:
+      - path: evidence/compose-service.webapp.json
+      - path: evidence/docker-history.image.txt
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      fields:
+        - nodes.webapp.source
+      caveat: >
+        ACES source pins the built artifact; the detailed Dockerfile/COPY/RUN
+        recipe remains provenance evidence in this bundle.
+      rationale: >
+        The source field is the ACES handle for the source package/image that
+        backend realization later resolves.
+
+  - id: webapp.os.version
+    category: runtime-configuration
+    summary: The realized runtime OS is Debian GNU/Linux 13 (trixie).
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.os
+        - nodes.webapp.os_version
+      rationale: ACES nodes have explicit OS family and version fields.
+
+  - id: webapp.network.identity
+    category: network
+    summary: >
+      The service is attached to aptl_aptl-dmz at 172.20.1.20 and
+      aptl_aptl-internal at 172.20.2.25, with aliases aptl-webapp and webapp.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-network.aptl-dmz.json
+      - path: evidence/docker-network.aptl-internal.json
+      - path: evidence/compose-service.webapp.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: infrastructure
+      fields:
+        - infrastructure.webapp.links
+        - infrastructure.webapp.properties
+      caveat: >
+        ACES encodes network attachment and static IPs. Docker DNS aliases are
+        backend-derived names tied to container realization.
+      rationale: Infrastructure properties support per-link IP assignments.
+
+  - id: webapp.http.service
+    category: service-surface
+    summary: >
+      The webapp exposes HTTP on TCP port 8080 and listens on 0.0.0.0:8080
+      inside the container.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/compose-service.webapp.json
+    aces:
+      disposition: encoded
+      surface: nodes.services
+      fields:
+        - nodes.webapp.services
+      rationale: ACES node service bindings model exposed network services by port.
+
+  - id: webapp.healthcheck
+    category: runtime-configuration
+    summary: >
+      Compose declares a healthcheck using curl against http://localhost:8080/
+      with 15s interval, 5s timeout, 5 retries, and 30s start period.
+    evidence:
+      - path: evidence/compose-service.webapp.json
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: conditions
+      fields:
+        - conditions.webapp-http-ready
+        - nodes.webapp.conditions
+      rationale: ACES conditions represent health/readiness commands and timing.
+
+  - id: webapp.runtime.log-volume
+    category: runtime-configuration
+    summary: The named volume aptl_webapp_logs is mounted at /var/log/gunicorn.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-volume.webapp-logs.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.mounts
+      rationale: ACES #354 added typed runtime mount inventory.
+
+  - id: webapp.runtime.primary-process
+    category: runtime-configuration
+    summary: >
+      PID 1 runs supervisord as root with working directory /app.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-top.txt
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.process
+      rationale: ACES #354 added primary runtime process identity.
+
+  - id: webapp.runtime.package-inventory
+    category: runtime-inventory
+    summary: >
+      The runtime image contains 212 Debian OS packages and Python dependency
+      manifests for Flask, gunicorn, psycopg2-binary, and PyJWT.
+    evidence:
+      - path: evidence/os-packages.txt
+      - path: evidence/language-manifests.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.packages
+        - nodes.webapp.runtime.dependency_manifests
+      rationale: ACES #354 added runtime package and dependency-manifest inventory.
+
+  - id: webapp.runtime.vulnerability-scan
+    category: vulnerability-inventory
+    summary: >
+      Trivy reported 469 package vulnerability findings at capture time:
+      17 critical, 76 high, 209 medium, and 167 low.
+    evidence:
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-vulnerability-counts.json
+      - path: evidence/trivy-vulnerability-list.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.package_vulnerabilities
+      rationale: ACES #354 added scanner-derived package vulnerability findings.
+
+  - id: webapp.scenario.weaknesses
+    category: vulnerability-inventory
+    summary: >
+      The webapp intentionally carries SQL injection, command injection, XSS,
+      IDOR, exposed secrets, weak JWT, unrestricted upload, and verbose error
+      disclosure scenario weaknesses.
+    evidence:
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: vulnerabilities
+      fields:
+        - vulnerabilities.webapp-sqli-login
+        - vulnerabilities.webapp-command-injection
+        - nodes.webapp.vulnerabilities
+      rationale: ACES top-level vulnerabilities model CWE-classified scenario weaknesses.
+
+  - id: webapp.relationships
+    category: relationship
+    summary: >
+      The webapp connects to the database at 172.20.2.11:5432 and forwards
+      telemetry/logs toward Wazuh manager/syslog surfaces.
+    evidence:
+      - path: evidence/compose-service.webapp.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: relationships
+      fields:
+        - relationships.webapp-connects-db
+        - relationships.webapp-forwards-wazuh
+      rationale: ACES relationships model typed dependency and connectivity edges.
+
+  - id: webapp.runtime.supervised-process-set
+    category: runtime-configuration
+    summary: >
+      The realized container has a supervised process set: supervisord, gunicorn
+      master/workers, rsyslog, the Wazuh agent wrapper, and Wazuh daemons.
+    evidence:
+      - path: evidence/docker-top.txt
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/filesystem-tree.txt
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - nodes
+        - features
+      why_not_current_surfaces: >
+        ACES runtime.process records one process identity. Features can describe
+        authored software units, but not the observed supervised process tree.
+      gap_issue:
+        tracker: ACES
+        number: 358
+        url: https://github.com/Brad-Edwards/aces/issues/358
+
+  - id: webapp.runtime.environment-policy
+    category: runtime-configuration
+    summary: >
+      The container has Compose/runtime environment variables that need
+      redaction classification and provenance separate from authored feature
+      environment.
+    evidence:
+      - path: evidence/compose-service.webapp.json
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - nodes
+        - features
+        - variables
+      why_not_current_surfaces: >
+        Feature environment is authored deployment input, while this inventory
+        needs observed runtime env vars with secret-fixture/redaction
+        classification and container provenance.
+      gap_issue:
+        tracker: ACES
+        number: 358
+        url: https://github.com/Brad-Edwards/aces/issues/358
+
+  - id: webapp.runtime.capability-restart-policy
+    category: runtime-configuration
+    summary: >
+      The container carries CAP_NET_ADMIN, restart policy unless-stopped, and a
+      512 MiB memory limit.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/compose-service.webapp.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - nodes
+        - infrastructure
+        - runtime_contract
+      why_not_current_surfaces: >
+        ACES can express resources but does not type effective Linux
+        capabilities, restart policy, or equivalent container operation policy
+        as observed runtime facts.
+      gap_issue:
+        tracker: ACES
+        number: 358
+        url: https://github.com/Brad-Edwards/aces/issues/358
+
+  - id: webapp.aptl.public-start-handoff
+    category: aptl-backend-gap
+    summary: >
+      APTL's public startup path does not yet route TechVault through ACES
+      RuntimeManager interpretation before backend instantiation.
+    evidence:
+      - path: evidence/compose-service.webapp.json
+    aces:
+      disposition: blocked_by_aptl_gap
+      checked_surfaces:
+        - runtime_contract
+        - nodes
+      why_not_current_surfaces: >
+        The ACES SDL can declare the webapp surfaces, but APTL issue #321 owns
+        wiring public lab/scenario startup through the ACES parser/runtime path.
+      gap_issue:
+        tracker: APTL
+        number: 321
+        url: https://github.com/Brad-Edwards/aptl/issues/321
+
+  - id: webapp.aptl.generic-realizer
+    category: aptl-backend-gap
+    summary: >
+      APTL does not yet have the scenario-generic ACES-to-APTL realizer that
+      consumes equivalent expressivity without TechVault name dispatch.
+    evidence:
+      - path: evidence/compose-service.webapp.json
+    aces:
+      disposition: blocked_by_aptl_gap
+      checked_surfaces:
+        - runtime_contract
+        - infrastructure
+      why_not_current_surfaces: >
+        The ACES SDL can declare the content, but APTL issue #324 owns the
+        generic backend interpretation contract and negative tests.
+      gap_issue:
+        tracker: APTL
+        number: 324
+        url: https://github.com/Brad-Edwards/aptl/issues/324

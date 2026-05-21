@@ -1,0 +1,14 @@
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+root                42607               42561               0                   May19               ?                   00:00:12            /usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
+root                43753               42607               0                   May19               ?                   00:00:01            /usr/sbin/rsyslogd -n
+root                43754               42607               0                   May19               ?                   00:00:09            /usr/local/bin/python3.11 /usr/local/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
+root                43786               43754               0                   May19               ?                   00:00:04            /usr/local/bin/python3.11 /usr/local/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
+root                43807               43754               0                   May19               ?                   00:00:04            /usr/local/bin/python3.11 /usr/local/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
+root                51650               42607               0                   May19               ?                   00:00:09            /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
+root                52270               42607               0                   May19               ?                   00:00:02            /var/ossec/bin/wazuh-execd
+message+            52278               42607               0                   May19               ?                   00:00:22            /var/ossec/bin/wazuh-agentd
+root                52499               42607               0                   May19               ?                   00:00:01            /var/ossec/bin/wazuh-syscheckd
+root                52514               42607               0                   May19               ?                   00:00:08            /var/ossec/bin/wazuh-logcollector
+root                52790               42607               0                   May19               ?                   00:00:01            /var/ossec/bin/wazuh-modulesd
+root                54290               51650               0                   May19               ?                   00:00:03            tail -F /var/ossec/logs/ossec.log
+root                3851717             51650               0                   06:47               ?                   00:00:00            sleep 5

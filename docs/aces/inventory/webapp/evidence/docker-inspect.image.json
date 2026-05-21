@@ -1,0 +1,81 @@
+[
+  {
+    "Id": "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0",
+    "RepoTags": [
+      "aptl-webapp:latest"
+    ],
+    "RepoDigests": [
+      "aptl-webapp@sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2026-05-10T08:04:26.302688447+02:00",
+    "Config": {
+      "ExposedPorts": {
+        "8080/tcp": {}
+      },
+      "Env": [
+        "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG=C.UTF-8",
+        "GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D",
+        "PYTHON_VERSION=3.11.15",
+        "PYTHON_SHA256=272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625",
+        "DEBIAN_FRONTEND=noninteractive",
+        "FLASK_APP=app.py",
+        "FLASK_ENV=production"
+      ],
+      "Entrypoint": [
+        "/entrypoint.sh"
+      ],
+      "WorkingDir": "/app",
+      "Labels": {
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.service": "webapp",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 111688721,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:79dd1f4c855cd061f687a994426634cf5f84c8ecdbc66c7a7d118e828dd93c99",
+        "sha256:2e53cb234c597e3f6a8f896df5efafd6ceca83645632661f2e32cd7144b43738",
+        "sha256:799edc77eb3d21542943122b97c5ba1e80c2a1eb3d222e23196717126398ef61",
+        "sha256:94e760ec30748f73d19bcb5d4da140b8dde956299eac18e3372d89236f56c995",
+        "sha256:21957f40a26b23621dfbe2b494bef51909b82dd8b859f6da03d9d17d11b26315",
+        "sha256:7715c6741d9dff0fc7118ed46acc81c61ea228c6e4d34eb0324681c4e8f0e1b5",
+        "sha256:e5cb98e67ace8314855201e3cb56d8b242567acb9a75a69e231c2b362e3bc59e",
+        "sha256:dd3baf146995d5887248b4f0648d52974b3eddad4a2b041f433b73fca8369fa7",
+        "sha256:b827ec22799aea1efcaf26a7b9c3122075d2d5448d951806a4078122de2e4fa2",
+        "sha256:d22a58c577184d5c42db5043f19f2cf858b97e070ae016a9972387aab46b9703",
+        "sha256:f259288c477202a349aae8004ccec85ed063da63de50869cb036236c27bc8ac9",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+        "sha256:9fad9967e87cf37d6057e0e72d12331260bf52adcb2a38a32ca2e3c8bbc637c4",
+        "sha256:d8d4a58cd512dec90a272cc370e3ddd2c87cc4b800f712591e933c13b515468d",
+        "sha256:82c77ca0cdf9fa6b64b52724c474dd25b3d67539cc139dab227da4c79160e6c5",
+        "sha256:6da34036d451d4d624f1f5118c6a2c9427da532478ff9df45818a0dd25e1676b",
+        "sha256:6bd72a573ab2259fdc2248f67522c37b5059e695431b55ba5431edbf24c24dcb",
+        "sha256:b29949715cb939a7fb70f999a06faabd0a72bcf779e5b87013c64682714238e8",
+        "sha256:2c64f20c42f027931f3582894a72cf2a0e1380337946bb42ad4b3562e7d97ea8",
+        "sha256:622338701f7b3204a528003eb94e09d1f2e38f584835a6658b266a0f87ba8a91"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-05-19T21:44:25.283147058Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0",
+      "size": 856
+    },
+    "Identity": {
+      "Build": [
+        {
+          "Ref": "ukxekr2sidauwa23xtxapwxm3",
+          "CreatedAt": "2026-05-19T23:44:25.629326844+02:00"
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,171 @@
+--os-release--
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+NAME="Debian GNU/Linux"
+VERSION_ID="13"
+VERSION="13 (trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_FULL=13.4
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+--id--
+uid=0(root) gid=0(root) groups=0(root)
+--pwd--
+/app
+--uname--
+Linux webapp 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 GNU/Linux
+--capabilities-pid1--
+CapInh:	0000000000000000
+CapPrm:	00000000a80435fb
+CapEff:	00000000a80435fb
+CapBnd:	00000000a80435fb
+CapAmb:	0000000000000000
+--environment--
+AGENT_NAME=aptl-webapp-agent
+DB_HOST=172.20.2.11
+DB_NAME=techvault
+DB_PASSWORD=<REDACTED-DB-PASSWORD>
+DB_PORT=5432
+DB_USER=techvault
+DEBIAN_FRONTEND=noninteractive
+FLASK_APP=app.py
+FLASK_ENV=production
+GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D
+HOME=/root
+HOSTNAME=webapp
+LANG=C.UTF-8
+LOG_FORMAT=syslog
+LOG_PATHS=/var/log/gunicorn/access.log
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PWD=/app
+PYTHON_SHA256=272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625
+PYTHON_VERSION=3.11.15
+SIEM_IP=172.20.2.30
+WAZUH_MANAGER=wazuh.manager
+--listeners--
+sh: 16: ss: not found
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN      11/python3.11
+tcp        0      0 127.0.0.11:38059        0.0.0.0:*               LISTEN      -
+udp        0      0 127.0.0.11:39436        0.0.0.0:*                           -
+udp        0      0 0.0.0.0:47925           0.0.0.0:*                           10/rsyslogd
+--mounts--
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40948/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11307/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11306/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11305/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11304/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11303/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11302/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11301/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11300/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11299/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11298/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11297/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11296/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11295/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11294/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11293/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11292/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11171/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11168/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11167/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/10862/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40954/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40954/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+/dev/md2 on /var/log/gunicorn type ext4 (rw,relatime)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
+--users--
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+games:x:5:60:games:/usr/games:/usr/sbin/nologin
+man:x:6:12:man:/var/cache/man:/usr/sbin/nologin
+lp:x:7:7:lp:/var/spool/lpd:/usr/sbin/nologin
+mail:x:8:8:mail:/var/mail:/usr/sbin/nologin
+news:x:9:9:news:/var/spool/news:/usr/sbin/nologin
+uucp:x:10:10:uucp:/var/spool/uucp:/usr/sbin/nologin
+proxy:x:13:13:proxy:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+backup:x:34:34:backup:/var/backups:/usr/sbin/nologin
+list:x:38:38:Mailing List Manager:/var/list:/usr/sbin/nologin
+irc:x:39:39:ircd:/run/ircd:/usr/sbin/nologin
+_apt:x:42:65534::/nonexistent:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+systemd-network:x:998:998:systemd Network Management:/:/usr/sbin/nologin
+systemd-timesync:x:996:996:systemd Time Synchronization:/:/usr/sbin/nologin
+Debian-exim:x:100:101::/var/spool/exim4:/usr/sbin/nologin
+messagebus:x:995:995:System Message Bus:/nonexistent:/usr/sbin/nologin
+wazuh:x:101:102::/var/ossec:/sbin/nologin
+--groups--
+root:x:0:
+daemon:x:1:
+bin:x:2:
+sys:x:3:
+adm:x:4:
+tty:x:5:
+disk:x:6:
+lp:x:7:
+mail:x:8:
+news:x:9:
+uucp:x:10:
+man:x:12:
+proxy:x:13:
+kmem:x:15:
+dialout:x:20:
+fax:x:21:
+voice:x:22:
+cdrom:x:24:
+floppy:x:25:
+tape:x:26:
+sudo:x:27:
+audio:x:29:
+dip:x:30:
+www-data:x:33:
+backup:x:34:
+operator:x:37:
+list:x:38:
+irc:x:39:
+src:x:40:
+shadow:x:42:
+utmp:x:43:
+video:x:44:
+sasl:x:45:
+plugdev:x:46:
+staff:x:50:
+games:x:60:
+users:x:100:
+nogroup:x:65534:
+systemd-journal:x:999:
+systemd-network:x:998:
+crontab:x:997:
+systemd-timesync:x:996:
+Debian-exim:x:101:
+messagebus:x:995:
+wazuh:x:102:
+--supervisor--
+gunicorn                         RUNNING   pid 11, uptime 1 day, 7:01:13
+rsyslog                          RUNNING   pid 10, uptime 1 day, 7:01:13
+wazuh-agent                      RUNNING   pid 316, uptime 1 day, 7:00:42
+--process-tree--
+    PID    PPID USER     COMMAND
+      1       0 root     /usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
+     10       1 root     /usr/sbin/rsyslogd -n
+     11       1 root     /usr/local/bin/python3.11 /usr/local/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
+     20      11 root     /usr/local/bin/python3.11 /usr/local/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
+     21      11 root     /usr/local/bin/python3.11 /usr/local/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
+    316       1 root     /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
+    362       1 root     /var/ossec/bin/wazuh-execd
+    370       1 wazuh    /var/ossec/bin/wazuh-agentd
+    388       1 root     /var/ossec/bin/wazuh-syscheckd
+    398       1 root     /var/ossec/bin/wazuh-logcollector
+    426       1 root     /var/ossec/bin/wazuh-modulesd
+    487     316 root     tail -F /var/ossec/logs/ossec.log
+  74735     316 root     sleep 5
+  74736       0 root     sh -lc set -eu redact_env() { sed -E "s/^(APTL_FLAG_KEY|DB_PASSWORD|JWT_SECRET|SECRET_KEY)=.*/\1=<REDACTED-\1>/" | sed "s/<REDACTED-APTL_FLAG_KEY>/<REDACTED-APTL-FLAG-KEY>/;s/<REDACTED-DB_PASSWORD>/<REDACTED-DB-PASSWORD>/;s/<REDACTED-JWT_SECRET>/<REDACTED-JWT-SECRET>/;s/<REDACTED-SECRET_KEY>/<REDACTED-SECRET-KEY>/"; } echo --os-release-- cat /etc/os-release echo --id-- id echo --pwd-- pwd echo --uname-- uname -a echo --capabilities-pid1-- grep "^Cap" /proc/1/status || true echo --environment-- env | sort | redact_env echo --listeners-- (ss -lntup || netstat -lntup || true) 2>&1 echo --mounts-- mount | sed -n "1,120p" echo --users-- getent passwd | sed -n "1,160p" echo --groups-- getent group | sed -n "1,120p" echo --supervisor-- supervisorctl status || true echo --process-tree-- ps -eo pid,ppid,user,args || true
+  74763   74736 root     ps -eo pid,ppid,user,args

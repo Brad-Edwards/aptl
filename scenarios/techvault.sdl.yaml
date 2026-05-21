@@ -1,0 +1,259 @@
+name: techvault
+description: >
+  ACES-authored TechVault scenario inventory surface. This file is the
+  incremental SCN-010 authoring target for the webapp inventory pass and does
+  not replace the legacy scenario set until the cutover issue completes.
+
+nodes:
+  dmz-net:
+    type: Switch
+    description: TechVault DMZ network for externally reachable services.
+  internal-net:
+    type: Switch
+    description: TechVault internal network for application-to-database traffic.
+  security-net:
+    type: Switch
+    description: Security/SOC network used by Wazuh and related telemetry.
+
+  db:
+    type: VM
+    os: linux
+    source: postgres-16-alpine
+    services:
+      - {port: 5432, protocol: tcp, name: postgres}
+
+  wazuh-manager:
+    type: VM
+    os: linux
+    source: wazuh-manager-4.12
+    services:
+      - {port: 1514, protocol: tcp, name: wazuh-agent-events}
+      - {port: 1515, protocol: tcp, name: wazuh-agent-registration}
+      - {port: 514, protocol: udp, name: syslog}
+
+  webapp:
+    type: VM
+    description: TechVault customer portal web application container.
+    os: linux
+    os_version: Debian GNU/Linux 13 (trixie)
+    source:
+      name: aptl-webapp
+      version: aptl-webapp@sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0
+    resources: {ram: 536870912, cpu: 1}
+    features:
+      techvault-webapp-service: webapp-root
+      webapp-rsyslog-forwarding: webapp-root
+      webapp-wazuh-agent: webapp-root
+    conditions:
+      webapp-http-ready: webapp-root
+    vulnerabilities:
+      - webapp-sqli-login
+      - webapp-sqli-search
+      - webapp-command-injection
+      - webapp-reflected-xss
+      - webapp-stored-xss
+      - webapp-idor-files
+      - webapp-idor-users
+      - webapp-env-disclosure
+      - webapp-debug-disclosure
+      - webapp-weak-jwt
+      - webapp-unrestricted-upload
+      - webapp-hardcoded-secret
+    roles:
+      webapp-root:
+        username: root
+    services:
+      - {port: 8080, protocol: tcp, name: http}
+    runtime:
+      mounts:
+        - target: /var/log/gunicorn
+          source: aptl_webapp_logs
+          source_kind: volume
+          read_only: false
+          description: Gunicorn access-log volume tailed by the in-process Wazuh agent.
+      process:
+        pid: 1
+        command:
+          - /usr/bin/python3
+          - /usr/bin/supervisord
+          - -n
+          - -c
+          - /etc/supervisor/supervisord.conf
+        user: root
+        group: root
+        working_directory: /app
+      packages:
+        - {manager: dpkg, name: python3, version: 3.13.5-1, architecture: amd64}
+        - {manager: dpkg, name: supervisor, version: 4.2.5-3, architecture: all}
+        - {manager: dpkg, name: curl, version: 8.14.1-2+deb13u2, architecture: amd64}
+        - {manager: dpkg, name: iptables, version: 1.8.11-2, architecture: amd64}
+        - {manager: dpkg, name: iputils-ping, version: "3:20240905-3", architecture: amd64}
+        - {manager: dpkg, name: net-tools, version: 2.10-1.3, architecture: amd64}
+        - {manager: dpkg, name: rsyslog, version: 8.2504.0-1, architecture: amd64}
+        - {manager: pip, name: Flask, version: 3.1.0}
+        - {manager: pip, name: gunicorn, version: 23.0.0}
+        - {manager: pip, name: psycopg2-binary, version: 2.9.10}
+        - {manager: pip, name: PyJWT, version: 2.10.1}
+      dependency_manifests:
+        - {ecosystem: python, path: /app/requirements.txt, format: pip-requirements, name: techvault-webapp}
+      package_vulnerabilities:
+        - id: CVE-2026-40685
+          package_name: exim4-base
+          installed_version: 4.98.2-1
+          fixed_version: 4.98.2-1+deb13u2
+          severity: critical
+          scanner: trivy
+          scanner_version: 0.70.0
+          image_digest: aptl-webapp@sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0
+          scan_time: "2026-05-21T06:47:00Z"
+        - id: CVE-2026-33845
+          package_name: libgnutls-dane0t64
+          installed_version: 3.8.9-3+deb13u2
+          fixed_version: 3.8.9-3+deb13u4
+          severity: critical
+          scanner: trivy
+          scanner_version: 0.70.0
+          image_digest: aptl-webapp@sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0
+          scan_time: "2026-05-21T06:47:00Z"
+
+infrastructure:
+  dmz-net:
+    count: 1
+    properties: {cidr: 172.20.1.0/24, gateway: 172.20.1.1}
+  internal-net:
+    count: 1
+    properties: {cidr: 172.20.2.0/24, gateway: 172.20.2.1, internal: true}
+  security-net:
+    count: 1
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: true}
+  db:
+    count: 1
+    links: [internal-net]
+    properties:
+      - {internal-net: 172.20.2.11}
+  wazuh-manager:
+    count: 1
+    links: [security-net]
+  webapp:
+    count: 1
+    links: [dmz-net, internal-net]
+    dependencies: [db, wazuh-manager]
+    properties:
+      - {dmz-net: 172.20.1.20}
+      - {internal-net: 172.20.2.25}
+
+features:
+  techvault-webapp-service:
+    type: Service
+    source: flask-gunicorn-techvault
+    dependencies: [webapp-wazuh-agent]
+    environment:
+      - DB_HOST=172.20.2.11
+      - DB_PORT=5432
+      - DB_NAME=techvault
+      - DB_USER=techvault
+      - DB_PASSWORD=<scenario-fixture-secret>
+      - FLASK_ENV=production
+  webapp-rsyslog-forwarding:
+    type: Configuration
+    source: containers/webapp/entrypoint.sh
+    environment:
+      - SIEM_IP=172.20.2.30
+      - LOG_FORMAT=syslog
+      - LOG_PATHS=/var/log/gunicorn/access.log
+  webapp-wazuh-agent:
+    type: Artifact
+    source: containers/_wazuh-agent
+    destination: /opt/aptl/wazuh
+
+conditions:
+  webapp-http-ready:
+    command: curl -sf http://localhost:8080/ || exit 1
+    interval: 15
+    timeout: 5
+    retries: 5
+    start_period: 30
+
+vulnerabilities:
+  webapp-sqli-login:
+    name: SQL injection in login
+    description: Login form interpolates username into SQL.
+    technical: true
+    class: CWE-89
+  webapp-sqli-search:
+    name: SQL injection in search
+    description: Customer and user search paths interpolate query text into SQL.
+    technical: true
+    class: CWE-89
+  webapp-command-injection:
+    name: Command injection in ping tool
+    description: The ping tool passes user input to a shell command.
+    technical: true
+    class: CWE-78
+  webapp-reflected-xss:
+    name: Reflected XSS
+    description: Search query content is reflected into HTML.
+    technical: true
+    class: CWE-79
+  webapp-stored-xss:
+    name: Stored XSS
+    description: Comment content is stored and rendered without sanitization.
+    technical: true
+    class: CWE-79
+  webapp-idor-files:
+    name: File IDOR
+    description: File metadata API lacks ownership checks.
+    technical: true
+    class: CWE-639
+  webapp-idor-users:
+    name: User IDOR
+    description: User API lacks authorization checks and exposes API keys.
+    technical: true
+    class: CWE-639
+  webapp-env-disclosure:
+    name: Exposed environment file
+    description: The /.env route discloses database and JWT configuration.
+    technical: true
+    class: CWE-200
+  webapp-debug-disclosure:
+    name: Debug information disclosure
+    description: The /debug route discloses application and database metadata.
+    technical: true
+    class: CWE-200
+  webapp-weak-jwt:
+    name: Weak JWT secret and no expiry
+    description: JWT tokens use a weak shared secret and no expiration.
+    technical: true
+    class: CWE-347
+  webapp-unrestricted-upload:
+    name: Unrestricted file upload
+    description: Upload path lacks type and size validation.
+    technical: true
+    class: CWE-434
+  webapp-hardcoded-secret:
+    name: Hardcoded Flask secret
+    description: Flask secret key is hardcoded in application source.
+    technical: true
+    class: CWE-798
+
+accounts:
+  webapp-db-account:
+    username: techvault
+    node: db
+    password_strength: weak
+    auth_method: password
+    description: Database account used by the TechVault webapp fixture.
+
+relationships:
+  webapp-connects-db:
+    type: connects_to
+    source: webapp
+    target: db
+    description: Webapp uses PostgreSQL on the internal network.
+    properties: {protocol: postgresql, port: "5432", auth_method: password}
+  webapp-forwards-wazuh:
+    type: connects_to
+    source: webapp
+    target: wazuh-manager
+    description: Webapp forwards logs and Wazuh agent telemetry to the SOC stack.
+    properties: {protocol: syslog-and-wazuh-agent}

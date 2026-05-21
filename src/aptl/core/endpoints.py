@@ -184,6 +184,28 @@ def parse_host_port(
     return None
 
 
+def select_ssh_host(networks: dict[str, str]) -> str | None:
+    """Pick a host-reachable IP for SSH from a container's network map.
+
+    Lab target containers (kali, victim, workstation) sit only on
+    ``internal: true`` networks — SAF-002 makes them internal to block
+    target internet egress — so Docker publishes no host port for them
+    and a ``localhost:<port>`` endpoint is unreachable. The host can
+    still reach those containers directly by container IP over the
+    bridge (``internal: true`` blocks container↔internet and
+    cross-network traffic, not host↔container). Any of a container's
+    bridge IPs is host-reachable; the lowest network name is chosen so
+    a multi-homed container (kali spans three networks) resolves to a
+    stable IP across snapshots. Blank IPs are skipped; ``None`` means
+    no addressable interface (the caller omits the endpoint).
+    """
+    for net_name in sorted(networks):
+        ip = networks[net_name]
+        if ip:
+            return ip
+    return None
+
+
 def _running(container: ContainerSnapshot) -> bool:
     """True if the container's status string indicates an up-and-running container."""
     return "Up" in container.status
@@ -250,21 +272,20 @@ def build_ssh_endpoints(
         # The assert documents this for the type checker without leaving
         # an unreachable defensive branch.
         assert entry.ssh_user is not None
-        host_port = parse_host_port(
-            container.ports,
-            entry.target_port,
-            protocol=entry.transport_protocol,
-        )
-        if host_port is None:
+        # Lab SSH targets sit on internal-only networks with no
+        # published host port (issue #293), so they are addressed by
+        # container IP — the host reaches them over the bridge. The
+        # endpoint connects to the container-side target port directly,
+        # not a remapped host port.
+        host = select_ssh_host(container.networks)
+        if host is None:
             continue
-        command = (
-            f"ssh -i {_SSH_KEY_PATH} {entry.ssh_user}@localhost -p {host_port}"
-        )
+        command = f"ssh -i {_SSH_KEY_PATH} {entry.ssh_user}@{host}"
         endpoints.append(
             SSHEndpoint(
                 name=entry.display_name,
-                host="localhost",
-                port=host_port,
+                host=host,
+                port=entry.target_port,
                 user=entry.ssh_user,
                 key_path=_SSH_KEY_PATH,
                 command=command,

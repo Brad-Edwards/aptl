@@ -993,8 +993,11 @@ services:
     networks:
       aptl-internal:
         ipv4_address: 172.20.2.20
-    ports:
-      - "2022:22"    # SSH access
+    # No host port published: victim is attached only to an
+    # internal-only network, and Docker does not publish host ports
+    # for internal-only containers. The control plane reaches victim
+    # by container IP over the bridge — see endpoints.py
+    # select_ssh_host (issue #293).
     environment:
       - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
@@ -1038,8 +1041,11 @@ services:
     networks:
       aptl-internal:
         ipv4_address: 172.20.2.40
-    ports:
-      - "2028:22"    # SSH access
+    # No host port published: workstation is attached only to an
+    # internal-only network, and Docker does not publish host ports
+    # for internal-only containers. The control plane reaches it by
+    # container IP over the bridge — see endpoints.py select_ssh_host
+    # (issue #293).
     environment:
       - SIEM_IP=172.20.2.30  # wazuh.manager on aptl-internal
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
@@ -1115,8 +1121,11 @@ services:
         ipv4_address: 172.20.1.30
       aptl-internal:
         ipv4_address: 172.20.2.35
-    ports:
-      - "2023:22"    # SSH access for MCP
+    # No host port published: kali is attached only to internal-only
+    # networks (aptl-redteam / aptl-dmz / aptl-internal), and Docker
+    # does not publish host ports for internal-only containers. The
+    # MCP / control plane reaches kali by container IP over the bridge
+    # — see endpoints.py select_ssh_host (issue #293).
     environment:
       - VICTIM_IP=172.20.2.20
     extra_hosts:

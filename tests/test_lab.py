@@ -742,6 +742,13 @@ class TestOrchestrateLabStart:
             return_value=MagicMock(returncode=0, stdout="", stderr=""),
         )
 
+        # Mock container IP resolution for the SSH readiness step —
+        # lab targets are addressed by container IP (issue #293).
+        mocks["container_networks"] = mocker.patch(
+            "aptl.core.lab.container_networks",
+            return_value={"aptl_aptl-internal": "172.20.2.20"},
+        )
+
         return mocks
 
     def test_orchestrates_all_steps_in_order(self, mocker, tmp_path):
@@ -1283,6 +1290,7 @@ class TestStartupClassificationWiring:
             env=self._make_env_vars(),
             config=config or self._make_config(),
             ssh_key_path=Path("/tmp/aptl_lab_key"),
+            backend=MagicMock(),
         )
 
     # -- redaction at the diagnostic boundary --------------------------
@@ -1449,6 +1457,12 @@ class TestStartupClassificationWiring:
         from aptl.core.services import ServiceResult
 
         ctx = self._ctx(tmp_path)
+        # Targets are addressed by container IP (issue #293), not a
+        # published host port — resolve a stub IP for every target.
+        mocker.patch(
+            "aptl.core.lab.container_networks",
+            return_value={"aptl_aptl-internal": "172.20.2.20"},
+        )
         # victim ready, kali timeout, reverse ready
         mocker.patch(
             "aptl.core.lab.wait_for_service",
@@ -1470,11 +1484,63 @@ class TestStartupClassificationWiring:
         assert diag.component == "ssh:kali"
         assert diag.severity is DiagnosticSeverity.WARNING
 
+    def test_test_ssh_probes_container_ip_on_port_22(self, tmp_path, mocker):
+        # Regression for issue #293: the SSH probe must target the
+        # container IP on port 22, not localhost on a (never-published)
+        # remapped host port.
+        from aptl.core.lab import _step_test_ssh
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.container_networks",
+            return_value={"aptl_aptl-redteam": "172.20.4.30"},
+        )
+        wait = mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            return_value=ServiceResult(ready=True, elapsed_seconds=1.0),
+        )
+
+        _step_test_ssh(ctx)
+
+        # Inspect the partial passed to wait_for_service for the SSH probe.
+        for call in wait.call_args_list:
+            check_fn = call.kwargs["check_fn"]
+            assert check_fn.keywords["host"] == "172.20.4.30"
+            assert check_fn.keywords["port"] == 22
+
+    def test_test_ssh_unresolvable_ip_emits_readiness_warning(
+        self, tmp_path, mocker
+    ):
+        # A target whose container has no resolvable network IP cannot
+        # be probed — surface it as a readiness diagnostic rather than
+        # silently skipping (issue #293).
+        from aptl.core.lab import _step_test_ssh
+        from aptl.core.lab_types import DiagnosticImpact
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch("aptl.core.lab.container_networks", return_value={})
+        wait = mocker.patch("aptl.core.lab.wait_for_service")
+
+        _step_test_ssh(ctx)
+
+        readiness_diags = [
+            d for d in ctx.diagnostics if d.impact is DiagnosticImpact.READINESS
+        ]
+        assert {d.component for d in readiness_diags} >= {"ssh:kali"}
+        assert all("no resolvable network IP" in d.message for d in readiness_diags)
+        # No SSH probe is attempted when the IP cannot be resolved.
+        wait.assert_not_called()
+
     def test_test_ssh_all_ready_emits_no_diagnostic(self, tmp_path, mocker):
         from aptl.core.lab import _step_test_ssh
         from aptl.core.services import ServiceResult
 
         ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.container_networks",
+            return_value={"aptl_aptl-internal": "172.20.2.20"},
+        )
         mocker.patch(
             "aptl.core.lab.wait_for_service",
             return_value=ServiceResult(ready=True, elapsed_seconds=2.0),

@@ -201,9 +201,15 @@ def _parse_health(status: str) -> str:
     return ""
 
 
-def _container_networks(
+def container_networks(
     backend: "DeploymentBackend", name: str
 ) -> dict[str, str]:
+    """Return a container's ``{network_name: IPv4 address}`` map.
+
+    Public because the lab-start SSH readiness step (``lab.py``) needs
+    the same per-network IPs the snapshot builder records, to address
+    internal-only targets by container IP (issue #293).
+    """
     networks: dict[str, str] = {}
     info = backend.container_inspect(name)
     net_data = info.get("NetworkSettings", {}).get("Networks", {})
@@ -229,7 +235,7 @@ def _row_to_snapshot(
         status=status,
         health=_parse_health(status),
         labels=row.get("labels", {}),
-        networks=_container_networks(backend, name),
+        networks=container_networks(backend, name),
         ports=row.get("ports", []),
     )
 

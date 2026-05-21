@@ -19,6 +19,16 @@
 # blue defensive stack's awareness. See ADR-033.
 set -e
 
+# ADR-033 §2 / issue #293: per-subsystem boot outcomes. Each starts
+# `degraded` and is promoted to `ok` once its boot step succeeds. The
+# values are written into the readiness marker at the end of boot so
+# the healthcheck (aptl-healthcheck.sh) can surface a degraded
+# capture surface instead of masking it behind an open port 22.
+sshd_status=degraded
+auditd_status=degraded
+procacct_status=degraded
+wrapper_status=degraded
+
 # Set up SSH keys from host.
 if [ -f "/host-ssh-keys/authorized_keys" ]; then
     mkdir -p /home/kali/.ssh
@@ -64,9 +74,12 @@ if command -v accton >/dev/null 2>&1; then
     touch /var/log/aptl/captures/_proc-acct/pacct
     chown root:root /var/log/aptl/captures/_proc-acct/pacct
     chmod 0600 /var/log/aptl/captures/_proc-acct/pacct
-    accton /var/log/aptl/captures/_proc-acct/pacct \
-      || echo "[entrypoint] accton failed (best-effort)"
-    echo "Process accounting active"
+    if accton /var/log/aptl/captures/_proc-acct/pacct; then
+        procacct_status=ok
+        echo "Process accounting active"
+    else
+        echo "[entrypoint] accton failed (best-effort)"
+    fi
 fi
 
 # OBS-003: auditd. Load rules with full CAP_AUDIT_CONTROL (we have it
@@ -95,8 +108,11 @@ if [ "$audit_loaded" = "1" ] && command -v auditd >/dev/null 2>&1; then
     # audit events on container restart (codex cycle 2 finding-3).
     touch /var/log/aptl/captures/_audit/audit.log
     chmod 0600 /var/log/aptl/captures/_audit/audit.log
-    auditd >/dev/null 2>&1 \
-      || echo "[entrypoint] auditd start failed (missing CAP_AUDIT_*?)"
+    if auditd >/dev/null 2>&1; then
+        auditd_status=ok
+    else
+        echo "[entrypoint] auditd start failed (missing CAP_AUDIT_*?)"
+    fi
 fi
 
 # Final ownership repair on home dir (cheap, idempotent — NOT the
@@ -114,21 +130,59 @@ if command -v capsh >/dev/null 2>&1; then
     # `--drop=cap_audit_control` removes only the dangerous capability;
     # sshd retains everything else it needs. If capsh fails (unlikely
     # — it's in libcap2-bin which is in the kali base), fall back to
-    # unwrapped sshd so the lab still works, but log loudly.
-    capsh --drop=cap_audit_control -- -c '/usr/sbin/sshd' \
-      || { echo "[entrypoint] capsh-wrapped sshd failed; falling back" >&2 ; \
-           /usr/sbin/sshd ; }
+    # unwrapped sshd so the lab still works, but log loudly. The `if`
+    # guards keep a sshd failure from tripping `set -e` so the boot
+    # still reaches the readiness marker (issue #293).
+    if capsh --drop=cap_audit_control -- -c '/usr/sbin/sshd'; then
+        sshd_status=ok
+    else
+        echo "[entrypoint] capsh-wrapped sshd failed; falling back" >&2
+        if /usr/sbin/sshd; then sshd_status=ok; fi
+    fi
 else
     echo "[entrypoint] capsh missing; sshd running with full caps (auditd disable risk)" >&2
-    /usr/sbin/sshd
+    if /usr/sbin/sshd; then sshd_status=ok; fi
 fi
-echo "SSH daemon started"
+if [ "$sshd_status" = "ok" ]; then
+    echo "SSH daemon started"
+else
+    echo "[entrypoint] WARNING: sshd failed to start" >&2
+fi
+
+# OBS-003 ForceCommand wrapper presence — the per-session capture
+# wiring sshd hands every kali login to. A missing/non-executable
+# wrapper means logins fall back to an unwrapped shell with no
+# capture, so it is part of the usable surface the healthcheck gates.
+if [ -x /usr/local/bin/aptl-wrap-shell.sh ]; then
+    wrapper_status=ok
+else
+    echo "[entrypoint] WARNING: OBS-003 ForceCommand wrapper missing/not executable" >&2
+fi
+
+# ADR-033 §2 / issue #293: boot-readiness marker. Written only after
+# every boot step above — `set -e` aborts the entrypoint before this
+# point on any hard failure, so the marker's presence proves a
+# complete boot. aptl-healthcheck.sh treats a missing marker as
+# unhealthy and surfaces any `=degraded` subsystem in its health log.
+mkdir -p /run
+{
+    echo "ready_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "sshd=${sshd_status}"
+    echo "wrapper=${wrapper_status}"
+    echo "auditd=${auditd_status}"
+    echo "procacct=${procacct_status}"
+} > /run/aptl-kali-ready
 
 echo "=== APTL Kali Red Team Container Ready ==="
 echo "SSH: ssh kali@<container_ip>"
 echo "Working directory: /home/kali/operations"
 echo "Per-session captures: /var/log/aptl/captures/<run_id>/<session_id>/ (in named volume)"
 echo "Harvest target on host: .aptl/runs/<run_id>/kali-side/<session_id>/"
+echo "Boot readiness: sshd=${sshd_status} wrapper=${wrapper_status} auditd=${auditd_status} procacct=${procacct_status}"
 
-# Keep container alive (PID 1 keepalive).
+# ADR-033 §2 / issue #293: terminal keepalive. The kali service sets
+# `init: true` (docker-compose.yml), so PID 1 is Docker's bundled
+# init (docker-init / tini) — it reaps orphaned children and forwards
+# signals. This `sleep` is a child of that init, NOT PID 1, so it no
+# longer needs to (and could not) reap anything itself.
 exec sleep infinity

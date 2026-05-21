@@ -97,7 +97,37 @@ process via `capsh --drop=cap_audit_control` so the kali user
 cannot run `sudo auditctl -D` to disable the audit trail
 mid-scenario.
 
-### 2. Per-run aggregation directory
+### 2. Kali process lifecycle and readiness
+
+The Kali entrypoint owns startup of sshd plus the OBS-003 capture
+daemons (`auditd` and process accounting). Because that entrypoint is
+PID 1, it must also own child-process reaping. A plain
+`exec sleep infinity` keepalive is not an acceptable terminal process
+after boot-time children have been spawned: it cannot reap exited
+children and can leave failed startup work hidden behind a healthy,
+long-running container.
+
+The canonical fix for Kali lifecycle bugs is either:
+
+- run the service under a real init/reaper such as `tini`, or
+- keep the entrypoint shell as PID 1 with explicit signal handling and
+  `wait`/reap logic for background children it starts.
+
+Do not solve Kali lifecycle failures by reintroducing the removed
+Wazuh installer, rsyslog forwarding, `install-all.sh`, or any other
+red→SIEM pipe. If a future check mentions Wazuh placeholders on Kali,
+the expected invariant is that no Kali Wazuh config exists at all. Wazuh
+agent rendering and placeholder validation for blue/target containers
+belongs to the shared `_wazuh-agent` path recorded in ADR-020.
+
+Kali health/readiness should represent the services and evidence
+surface that make the container usable: sshd must accept connections,
+the ForceCommand wrapper must be present, and capture daemons that are
+advertised as active should either be running or should have produced a
+clear degraded-startup signal. Health checks must not mask a failed
+boot-time child merely because port 22 is open.
+
+### 3. Per-run aggregation directory
 
 `<state_dir>/runs/<trace_id>/`:
 
@@ -124,7 +154,7 @@ The directory contract is owned by `src/aptl/core/runstore.py`
 (`LocalRunStore`, `resolve_active_run_dir`, session-scoped helpers)
 and mirrored by `mcp/aptl-mcp-common/src/runs.ts`.
 
-### 3. Non-contamination principle
+### 4. Non-contamination principle
 
 **No scenario information crosses the red/blue boundary.** Scenario
 information means:
@@ -170,7 +200,7 @@ active-response wrapper's kali-source-IP whitelist (referenced in
 `wazuh_manager.conf` lines ~224 / ~308) is the blue-side prevention
 chain (ADR-019 / ADR-021 / #248 / #249) and unrelated to this ADR.
 
-### 4. Future path for blue's red-activity awareness
+### 5. Future path for blue's red-activity awareness
 
 When a future requirement wants the blue agent to learn about red
 activity (cross-team summary reports, lessons-learned overlays,
@@ -184,7 +214,7 @@ and NEVER pipe red logs into the SIEM directly. The SIEM is the
 defender's perception layer; it must reflect only what the defender's
 own sensors detected.
 
-### 5. Experimenter-side reasoning capture
+### 6. Experimenter-side reasoning capture
 
 Capturing the LLM's internal reasoning is the experimenter's
 responsibility. Each coding-agent CLI (Claude Code, Codex, Cursor,
@@ -225,6 +255,12 @@ agent CLI ships.
   and `script` running on Kali (`ps aux` will show them). That is
   intentional and acceptable per the non-contamination principle —
   observation tooling is not scenario information.
+- **PID 1 / OS lifecycle**: the Kali container starts child processes
+  during boot. PID 1 must reap children and propagate termination
+  correctly, either through a real init/reaper or through a shell
+  entrypoint that stays PID 1 and waits on the children it starts. A
+  keepalive process that only sleeps is not a lifecycle boundary and
+  must not be used to hide failed boot work.
 - **Capture integrity from a sudo-capable kali user** (residual
   risk, codex pre-push cycle 2 finding-9; tracked in
   [issue #305](https://github.com/Brad-Edwards/aptl/issues/305)):
@@ -325,6 +361,10 @@ policy without changing call sites.
   and outside the OBS-003 boundary.
 - Pcap content redaction — deliberately out of scope. Pcaps are raw
   wire bytes; semantic redaction does not apply.
+- Installing, configuring, or health-checking a Wazuh agent on Kali.
+  That red→SIEM path was removed by this ADR; Wazuh placeholder
+  handling remains in the target/blue agent bootstrap paths, not in
+  Kali.
 
 ## Anti-patterns
 
@@ -342,5 +382,9 @@ policy without changing call sites.
 - Re-introducing any red→SIEM pipe (rsyslog forwarding, Wazuh agent
   on Kali, OCSF dispatch to a SIEM sink, etc.) without an ADR that
   explicitly overrides the non-contamination principle.
+- Ending the Kali entrypoint with an unreaping `sleep`, `tail -f`, or
+  equivalent keepalive after spawning background children.
+- Treating "SSH port open" as complete Kali readiness when the
+  advertised capture surface failed during startup.
 - Treating `APTL_EXPERIMENT_NO_REDACT=1` as a default-on setting in
   production. It is an experimenter-side opt-out, never a baseline.

@@ -112,6 +112,16 @@ RUN chmod 0640 /etc/audit/rules.d/aptl.rules && \
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# ADR-033 §2 / issue #293: container healthcheck script. Installed to
+# /usr/local/bin (root-owned, outside the kali user's home — the same
+# hardening pattern as aptl-wrap-shell.sh above). docker-compose.yml
+# wires it as the kali service healthcheck; it verifies sshd, the
+# OBS-003 ForceCommand wrapper, and the entrypoint's boot-readiness
+# marker rather than merely that port 22 is open.
+COPY healthcheck.sh /usr/local/bin/aptl-healthcheck.sh
+RUN chmod 0755 /usr/local/bin/aptl-healthcheck.sh && \
+    chown root:root /usr/local/bin/aptl-healthcheck.sh
+
 EXPOSE 22
 
 USER kali
@@ -123,7 +133,11 @@ USER root
 
 # Entrypoint starts sshd (via capsh dropping CAP_AUDIT_CONTROL),
 # auditd (rules loaded at boot before the cap is dropped), process
-# accounting, and a keepalive sleep. Wazuh agent + rsyslog-to-SIEM
+# accounting, and a keepalive sleep. The kali service sets
+# `init: true` in docker-compose.yml so PID 1 is Docker's bundled
+# init (docker-init / tini), which reaps orphaned children — the
+# keepalive sleep is its child, not PID 1 (ADR-033 §2 / issue #293).
+# Wazuh agent + rsyslog-to-SIEM
 # forwarding from prior versions were removed under ADR-033
 # (non-contamination): red activity must not bleed into the blue
 # SIEM. The experimental record lives in the docker named volume

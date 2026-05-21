@@ -246,6 +246,16 @@ class TestEndToEndCapture:
         modes = kali_exec(
             f"find {sess_path} -mindepth 1 -printf '%m %p\\n' 2>/dev/null | head -20"
         ).stdout
+        # Pre-condition: without this, a silently-failed SSH session (or a
+        # wrapper that created no files) leaves `modes` empty, the loop
+        # below never executes, and the test passes having asserted
+        # nothing about permissions. Mirrors the precondition pattern in
+        # test_session_captures_pty_typescript_and_pcap.
+        assert modes.strip(), (
+            f"No capture artifacts found under {sess_path}; the SSH session "
+            "may have failed or the wrapper produced no files — permission "
+            "assertions would otherwise be silently skipped"
+        )
         for line in modes.splitlines():
             parts = line.split(None, 1)
             if len(parts) < 2:
@@ -256,3 +266,98 @@ class TestEndToEndCapture:
                 assert mode in ("700", "0700"), f"{path} dir mode {mode}, expected 0700"
             else:
                 assert mode in ("600", "0600"), f"{path} file mode {mode}, expected 0600"
+
+
+class TestProcessLifecycle:
+    """Issue #293 / ADR-033 §2: PID 1 must reap children, and the
+    container's readiness surface must reflect a completed boot rather
+    than masking a failed boot-time child behind an open port 22."""
+
+    def test_pid1_is_an_init_reaper(self):
+        # `init: true` on the kali service makes Docker inject its
+        # bundled init (docker-init, a tini build) as PID 1. The
+        # entrypoint's terminal `exec sleep infinity` is then a child
+        # of that init — never PID 1 itself — so orphaned children get
+        # reaped instead of zombifying (issue #293).
+        comm = kali_exec("cat /proc/1/comm 2>/dev/null || true").stdout.strip()
+        assert comm in ("docker-init", "tini"), (
+            f"PID 1 should be an init/reaper (docker-init / tini) via "
+            f"`init: true`; got {comm!r}. A bare `sleep` as PID 1 cannot "
+            "reap orphaned children."
+        )
+
+    def test_no_zombie_processes_present(self):
+        # The reaping defect surfaced in issue #293 as a `<defunct>`
+        # process. With a real init as PID 1 there should be no
+        # un-reaped zombies in the container's process table.
+        count = kali_exec(
+            "ps -eo stat= 2>/dev/null | grep -c '^Z' || true"
+        ).stdout.strip()
+        assert count == "0", (
+            f"container process table has {count} zombie process(es); "
+            "PID 1 is not reaping children"
+        )
+
+    def test_boot_readiness_marker_present_and_well_formed(self):
+        # The entrypoint writes /run/aptl-kali-ready only after every
+        # boot step; its presence proves a complete boot. Each capture
+        # subsystem records ok|degraded.
+        marker = kali_exec(
+            "cat /run/aptl-kali-ready 2>/dev/null || true"
+        ).stdout
+        assert marker.strip(), (
+            "/run/aptl-kali-ready is absent — the entrypoint did not "
+            "complete boot (the hidden-failure mode of issue #293)"
+        )
+        keys = dict(
+            line.split("=", 1)
+            for line in marker.splitlines()
+            if "=" in line
+        )
+        for required in ("ready_at", "sshd", "wrapper", "auditd", "procacct"):
+            assert required in keys, (
+                f"readiness marker missing `{required}`; got keys {sorted(keys)}"
+            )
+        for subsystem in ("sshd", "wrapper", "auditd", "procacct"):
+            assert keys[subsystem] in ("ok", "degraded"), (
+                f"readiness marker `{subsystem}` should be ok|degraded; "
+                f"got {keys[subsystem]!r}"
+            )
+        # sshd and the ForceCommand wrapper are the usable surface —
+        # in a healthy lab they must not be degraded.
+        assert keys["sshd"] == "ok", "sshd recorded degraded in readiness marker"
+        assert keys["wrapper"] == "ok", (
+            "OBS-003 ForceCommand wrapper recorded degraded in readiness marker"
+        )
+
+    def test_healthcheck_script_installed_root_owned_executable(self):
+        # aptl-healthcheck.sh lives under /usr/local/bin (outside the
+        # kali user's home) and must be root-owned + executable so the
+        # docker healthcheck can run it.
+        r = kali_exec(
+            "stat -c '%U %a' /usr/local/bin/aptl-healthcheck.sh 2>/dev/null "
+            "|| echo missing"
+        )
+        parts = r.stdout.strip().split()
+        assert len(parts) == 2, (
+            f"aptl-healthcheck.sh not installed; stat output: {r.stdout!r}"
+        )
+        owner, mode = parts
+        assert owner == "root", f"aptl-healthcheck.sh should be root-owned; got {owner!r}"
+        owner_mode = int(mode[-3]) if len(mode) >= 3 else 0
+        assert owner_mode & 1, (
+            f"aptl-healthcheck.sh missing owner-execute bit; mode {mode!r}"
+        )
+
+    def test_healthcheck_passes_on_healthy_container(self):
+        # Running the healthcheck against an up, healthy container must
+        # exit 0 and report healthy — the script is what docker-compose
+        # wires as the kali healthcheck.
+        r = kali_exec("/usr/local/bin/aptl-healthcheck.sh; echo EXIT=$?")
+        assert "EXIT=0" in r.stdout, (
+            f"aptl-healthcheck.sh should pass on a healthy container; "
+            f"output: {r.stdout!r} stderr: {r.stderr!r}"
+        )
+        assert "healthy" in r.stdout, (
+            f"aptl-healthcheck.sh should report healthy; got {r.stdout!r}"
+        )

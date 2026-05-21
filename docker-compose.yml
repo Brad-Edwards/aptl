@@ -1102,6 +1102,12 @@ services:
     container_name: aptl-kali
     hostname: kali-redteam
     restart: unless-stopped
+    # ADR-033 §2 / issue #293: run under Docker's bundled init
+    # (docker-init / tini) as PID 1. The entrypoint's terminal
+    # `exec sleep infinity` is otherwise PID 1 and cannot reap
+    # children, so any process orphaned to PID 1 — red-team agents
+    # routinely background processes — zombies out.
+    init: true
     networks:
       aptl-redteam:
         ipv4_address: 172.20.4.30
@@ -1157,8 +1163,13 @@ services:
       - SYS_PACCT
     security_opt:
       - seccomp:unconfined  # Required for some red team tools
+    # ADR-033 §2 / issue #293: the healthcheck verifies the usable
+    # surface — sshd, the OBS-003 ForceCommand wrapper, and the
+    # boot-readiness marker — not merely that port 22 is open. A boot
+    # that died before completing the capture surface no longer
+    # reports healthy.
     healthcheck:
-      test: ["CMD-SHELL", "ss -tlnp | grep ':22' || exit 1"]
+      test: ["CMD", "/usr/local/bin/aptl-healthcheck.sh"]
       interval: 15s
       timeout: 5s
       retries: 5

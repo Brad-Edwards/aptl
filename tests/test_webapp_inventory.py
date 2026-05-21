@@ -26,13 +26,32 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
 IMAGE_ID = "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0"
 IMAGE_DIGEST = f"aptl-webapp@{IMAGE_ID}"
-ACES_HTTP_SURFACE_GAP = 367
 BUILD_HISTORY_LAYER_COUNT = 31
 SOURCE_INPUT_COUNT = 18
 LOCAL_IDENTITY_USER_COUNT = 23
 LOCAL_IDENTITY_GROUP_COUNT = 45
 FULL_RUNTIME_PACKAGE_COUNT = 223
 FULL_TRIVY_FINDING_COUNT = 469
+APPLICATION_ROUTE_COUNT = 19
+WEBAPP_SCENARIO_WEAKNESSES = {
+    "webapp-admin-authz-bypass",
+    "webapp-api-rate-limit-missing",
+    "webapp-backup-secret-disclosure",
+    "webapp-command-injection",
+    "webapp-debug-disclosure",
+    "webapp-env-disclosure",
+    "webapp-hardcoded-secret",
+    "webapp-idor-files",
+    "webapp-idor-users",
+    "webapp-reflected-xss",
+    "webapp-sqli-login",
+    "webapp-sqli-search",
+    "webapp-stored-xss",
+    "webapp-unrestricted-upload",
+    "webapp-upload-path-traversal",
+    "webapp-verbose-error-disclosure",
+    "webapp-weak-jwt",
+}
 
 REQUIRED_EVIDENCE_FILES = {
     "captured-at-utc.txt",
@@ -133,10 +152,10 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     result = validate_mapping_ledger(WEBAPP_DIR)
     assert result.ok, result.errors
     assert result.fact_count == 23
-    assert result.encoded_count == 22
-    assert result.blocked_count == 1
+    assert result.encoded_count == 23
+    assert result.blocked_count == 0
     assert result.triage_count == 0
-    assert result.gap_issues == [f"ACES #{ACES_HTTP_SURFACE_GAP}"]
+    assert result.gap_issues == []
 
     ledger = load_mapping_ledger(LEDGER_PATH)
     assert ledger["provenance"]["image_digest"] == IMAGE_DIGEST
@@ -151,7 +170,7 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     assert dispositions["webapp.runtime.local-accounts"] == "encoded_with_caveat"
     assert dispositions["webapp.runtime.local-identity-database"] == "encoded"
     assert dispositions["webapp.network.realization-metadata"] == "encoded"
-    assert dispositions["webapp.application.http-surface"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.application.http-surface"] == "encoded"
     assert dispositions["webapp.runtime.container-host-config"] == "encoded"
     assert dispositions["webapp.runtime.supervised-process-set"] == "encoded"
     assert dispositions["webapp.runtime.environment-policy"] == "encoded"
@@ -161,11 +180,8 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
 def test_webapp_gap_report_surfaces_remaining_aces_gaps_only():
     report = gap_report(WEBAPP_DIR)
     gaps = {gap["fact_id"]: gap for gap in report["gaps"]}
-    assert set(gaps) == {"webapp.application.http-surface"}
+    assert set(gaps) == set()
     assert not report["triage_needed"]
-    assert gaps["webapp.application.http-surface"]["gap_issue"]["number"] == (
-        ACES_HTTP_SURFACE_GAP
-    )
 
 
 def test_webapp_evidence_bundle_files_are_present_and_non_empty():
@@ -343,8 +359,7 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert webapp["os"] == "linux"
     assert webapp["os_version"] == "Debian GNU/Linux 13 (trixie)"
     assert {"port": 8080, "protocol": "tcp", "name": "http"} in webapp["services"]
-    assert "webapp-sqli-login" in webapp["vulnerabilities"]
-    assert "webapp-command-injection" in webapp["vulnerabilities"]
+    assert set(webapp["vulnerabilities"]) == WEBAPP_SCENARIO_WEAKNESSES
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
     assert len(mounts) == 26
     assert mounts["/var/log/gunicorn"]["source"] == "aptl_webapp_logs"
@@ -486,6 +501,94 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
                 "an empty HostIp, meaning all host interfaces for this capture."
             ),
         }
+    ]
+    applications = runtime["applications"]
+    assert len(applications) == 1
+    application = applications[0]
+    assert application["application_id"] == "techvault-portal"
+    assert application["service"] == "http"
+    assert application["protocol"] == "http"
+    assert application["framework"] == "Flask 3.1.0"
+    assert application["base_path"] == "/"
+    routes = {route["route_id"]: route for route in application["routes"]}
+    assert len(routes) == APPLICATION_ROUTE_COUNT
+    assert {route["path"] for route in routes.values()} >= {
+        "/",
+        "/login",
+        "/logout",
+        "/dashboard",
+        "/admin",
+        "/upload",
+        "/api/v1/files/<int:file_id>",
+        "/api/v1/users/<int:user_id>",
+        "/api/v1/customers",
+        "/api/v1/token",
+        "/tools/ping",
+        "/search",
+        "/comment",
+        "/debug",
+        "/robots.txt",
+        "/.env",
+        "/static/<path:filename>",
+        "/<unmatched_path>",
+        "/<erroring_path>",
+    }
+    login_route = routes["webapp-login"]
+    assert login_route["methods"] == ["GET", "HEAD", "OPTIONS", "POST"]
+    assert {
+        param["name"]: param["location"] for param in login_route["parameters"]
+    } == {
+        "username": "form",
+        "password": "form",
+    }
+    assert {response["status_code"] for response in login_route["responses"]} == {
+        200,
+        401,
+        500,
+    }
+    assert login_route["templates"] == [
+        "/app/templates/login.html",
+        "/app/templates/base.html",
+    ]
+    assert login_route["static_assets"] == ["/app/static/style.css"]
+    assert set(login_route["vulnerability_refs"]) == {
+        "webapp-sqli-login",
+        "webapp-verbose-error-disclosure",
+    }
+
+    admin_route = routes["webapp-admin"]
+    assert admin_route["auth_required"] is True
+    assert admin_route["session_required"] is True
+    assert set(admin_route["vulnerability_refs"]) == {
+        "webapp-admin-authz-bypass",
+        "webapp-backup-secret-disclosure",
+    }
+    admin_fields = {field["name"]: field for field in admin_route["exposed_fields"]}
+    assert admin_fields["backup_config.secret_key"]["sensitivity"] == "secret_fixture"
+
+    env_route = routes["webapp-env"]
+    env_fields = {field["name"]: field for field in env_route["exposed_fields"]}
+    assert env_fields["DB_PASSWORD"]["value"] == "techvault_db_pass"
+    assert env_fields["DB_PASSWORD"]["sensitivity"] == "secret_fixture"
+    assert env_fields["SECRET_KEY"]["value"] == "techvault-secret-key-2024"
+    assert env_fields["JWT_SECRET"]["value"] == "techvault-jwt-weak"
+    assert set(env_route["vulnerability_refs"]) == {
+        "webapp-env-disclosure",
+        "webapp-hardcoded-secret",
+        "webapp-weak-jwt",
+    }
+
+    debug_route = routes["webapp-debug"]
+    debug_fields = {field["name"]: field for field in debug_route["exposed_fields"]}
+    assert debug_fields["framework"]["value"] == "Flask 3.1.0"
+    assert debug_fields["secret_key_length"]["value"] == "25"
+    assert debug_fields["jwt_algorithm"]["value"] == "HS256"
+    assert debug_route["vulnerability_refs"] == ["webapp-debug-disclosure"]
+
+    assert routes["webapp-static-style"]["static_assets"] == ["/app/static/style.css"]
+    assert routes["webapp-error-404"]["responses"][0]["status_code"] == 404
+    assert routes["webapp-error-500"]["vulnerability_refs"] == [
+        "webapp-verbose-error-disclosure"
     ]
     package_names = {package["name"] for package in runtime["packages"]}
     assert len(runtime["packages"]) == FULL_RUNTIME_PACKAGE_COUNT
@@ -686,6 +789,71 @@ def test_webapp_runtime_network_matches_docker_evidence():
     assert binding["host_port"] == int(host_binding["HostPort"])
 
 
+def test_webapp_runtime_application_surface_matches_flask_source():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    routes = {
+        route["route_id"]: route
+        for route in data["nodes"]["webapp"]["runtime"]["applications"][0]["routes"]
+    }
+    source = (PROJECT_ROOT / "containers" / "webapp" / "app" / "app.py").read_text(
+        encoding="utf-8"
+    )
+
+    source_route_paths = set(re.findall(r'@app\.route\("([^"]+)"', source))
+    encoded_paths = {route["path"] for route in routes.values()}
+    assert source_route_paths <= encoded_paths
+    assert "/static/<path:filename>" in encoded_paths
+    assert "/<unmatched_path>" in encoded_paths
+    assert "/<erroring_path>" in encoded_paths
+    assert "@app.errorhandler(404)" in source
+    assert "@app.errorhandler(500)" in source
+
+    explicit_method_expectations = {
+        "webapp-login": {"GET", "POST"},
+        "webapp-upload": {"GET", "POST"},
+        "webapp-api-token": {"POST"},
+        "webapp-tools-ping": {"GET", "POST"},
+        "webapp-comment": {"POST"},
+    }
+    for route_id, expected_methods in explicit_method_expectations.items():
+        assert expected_methods <= set(routes[route_id]["methods"])
+
+    parameter_expectations = {
+        "webapp-login": {"username", "password"},
+        "webapp-upload": {"file"},
+        "webapp-api-file": {"file_id", "X-API-Key", "api_key", "session"},
+        "webapp-api-user": {"user_id"},
+        "webapp-api-customers": {"search", "X-API-Key", "api_key", "session"},
+        "webapp-api-token": {"username", "password"},
+        "webapp-tools-ping": {"host", "session"},
+        "webapp-search": {"q", "session"},
+        "webapp-comment": {"content", "page", "session"},
+    }
+    for route_id, expected_parameters in parameter_expectations.items():
+        encoded_parameters = {param["name"] for param in routes[route_id]["parameters"]}
+        assert expected_parameters <= encoded_parameters
+
+    template_names = set(re.findall(r'render_template\("([^"]+)"', source))
+    encoded_templates = {
+        Path(template).name
+        for route in routes.values()
+        for template in route.get("templates", [])
+    }
+    assert template_names <= encoded_templates
+
+    vulnerability_refs = {
+        ref for route in routes.values() for ref in route.get("vulnerability_refs", [])
+    }
+    assert vulnerability_refs <= set(data["vulnerabilities"])
+    assert {
+        "webapp-admin-authz-bypass",
+        "webapp-backup-secret-disclosure",
+        "webapp-upload-path-traversal",
+        "webapp-api-rate-limit-missing",
+        "webapp-verbose-error-disclosure",
+    } <= vulnerability_refs
+
+
 def test_webapp_runtime_mount_targets_are_encoded():
     data = _yaml_file(TECHVAULT_SDL_PATH)
     mount_targets = {
@@ -720,6 +888,8 @@ def test_techvault_sdl_parses_and_compiles_with_aces_runtime_fields():
     assert len(runtime["filesystem_inventory"]) == 24
     assert len(runtime["network"]["endpoints"]) == 2
     assert len(runtime["network"]["published_ports"]) == 1
+    assert len(runtime["applications"]) == 1
+    assert len(runtime["applications"][0]["routes"]) == APPLICATION_ROUTE_COUNT
     assert runtime["container"]["runtime_name"] == "runc"
     assert runtime["health"]["status"] == "healthy"
     assert len(runtime["health"]["log"]) == 5
@@ -738,9 +908,8 @@ def test_parity_inventory_cites_webapp_inventory_and_aces_sdl():
     assert rows["scen.techvault.webapp-inventory"]["legacy_source"] == (
         "scenarios/techvault.sdl.yaml"
     )
-    assert rows["scen.techvault.webapp-inventory"]["category"] == (
-        "aces_schema_profile_gap"
-    )
+    assert rows["scen.techvault.webapp-inventory"]["category"] == "aces_sdl"
+    assert rows["scen.techvault.webapp-inventory"]["blocking_followup"] == "n/a"
     assert (
         "Brad-Edwards/aces#364"
         not in rows["scen.techvault.webapp-inventory"]["blocking_followup"]
@@ -754,7 +923,11 @@ def test_parity_inventory_cites_webapp_inventory_and_aces_sdl():
         not in rows["scen.techvault.webapp-inventory"]["blocking_followup"]
     )
     assert (
-        "ACES #363/#364/#365/#366/#368 consumed"
+        "Brad-Edwards/aces#367"
+        not in rows["scen.techvault.webapp-inventory"]["blocking_followup"]
+    )
+    assert (
+        "ACES #363/#364/#365/#366/#367/#368 consumed"
         in rows["scen.techvault.webapp-inventory"]["validation_evidence"]
     )
     assert (

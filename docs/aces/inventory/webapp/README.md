@@ -80,8 +80,9 @@ supervised process set, observed runtime environment, Linux capabilities,
 restart/resource policy, package inventory, scanner findings, scenario weakness
 IDs, relationships, ACES-content entries for source placement, full local
 identity database records for the observed `/etc/passwd` and `/etc/group`
-surfaces, Docker network realization metadata, and local account records for the
-observed `/etc/passwd` users in `scenarios/techvault.sdl.yaml`.
+surfaces, Docker network realization metadata, Flask HTTP route/API/UI
+inventory, and local account records for the observed `/etc/passwd` users in
+`scenarios/techvault.sdl.yaml`.
 
 ACES #354 is closed and covers the runtime fields for mounts, primary process,
 packages, dependency manifests, and scanner-derived package findings. ACES #358
@@ -97,15 +98,16 @@ configuration, and attestation status. ACES #365 is closed and covers local
 identity database users, UID/GID values, primary groups, GECOS/home/shell
 fields, group records, and sudo-rule inventory. ACES #366 is closed and covers
 Docker network aliases, endpoint IDs, MACs, DNS names, host-published port
-bindings, backend network IDs, and bridge/IPAM realization details. ACES #368
-is closed and covers container HostConfig, namespace/security settings, health
-logs, and full mount filesystem facts. Those fields are now used by the
-TechVault SDL.
+bindings, backend network IDs, and bridge/IPAM realization details. ACES #367
+is closed and covers application HTTP route/API/UI inventory: paths, methods,
+auth/session boundaries, request inputs, responses, redirects, disclosures,
+template/static associations, exposed fields, and route-specific vulnerability
+placement. ACES #368 is closed and covers container HostConfig,
+namespace/security settings, health logs, and full mount filesystem facts. Those
+fields are now used by the TechVault SDL.
 
-Full observable parity is still blocked on ACES expressivity gaps, not waived by
-the evidence bundle:
-
-- ACES #367: application HTTP route/API/UI inventory.
+No ACES expressivity gap remains for the captured webapp steady-state inventory
+facts in this ledger.
 
 Run:
 
@@ -125,5 +127,5 @@ aptl aces-inventory gaps docs/aces/inventory/webapp
   Trivy database and advisory feeds.
 - The capture does not assert attack-induced state changes or later
   operator-driven runtime modifications. Observable steady-state fields that
-  current ACES cannot express are explicitly blocked by ACES #367 rather
-  than treated as out of scope.
+  current ACES could not express during this pass were tracked as blocking ACES
+  issues and have now been consumed in the SDL.

@@ -74,11 +74,9 @@ notes:
     and supervised-process-set expressivity; it is closed, and those fields are
     now encoded in scenarios/techvault.sdl.yaml for the webapp asset.
   - >
-    ACES #363, #364, #365, #366, and #368 are closed and consumed by this SDL
-    update. ACES #367 remains a blocking expressivity gap for observable webapp
-    facts that remain outside current ACES SDL expressivity. That gap is a
-    blocker, not a waiver; this asset is not complete until ACES supports those
-    facts and the SDL is updated to use the new surface.
+    ACES #363, #364, #365, #366, #367, and #368 are closed and consumed by this
+    SDL update. No ACES expressivity gap remains for the captured webapp
+    steady-state inventory facts in this mapping ledger.
 facts:
   - id: webapp.image.identity
     category: provenance
@@ -377,9 +375,28 @@ facts:
       surface: vulnerabilities
       fields:
         - vulnerabilities.webapp-sqli-login
+        - vulnerabilities.webapp-sqli-search
         - vulnerabilities.webapp-command-injection
+        - vulnerabilities.webapp-reflected-xss
+        - vulnerabilities.webapp-stored-xss
+        - vulnerabilities.webapp-idor-files
+        - vulnerabilities.webapp-idor-users
+        - vulnerabilities.webapp-admin-authz-bypass
+        - vulnerabilities.webapp-backup-secret-disclosure
+        - vulnerabilities.webapp-env-disclosure
+        - vulnerabilities.webapp-debug-disclosure
+        - vulnerabilities.webapp-weak-jwt
+        - vulnerabilities.webapp-unrestricted-upload
+        - vulnerabilities.webapp-upload-path-traversal
+        - vulnerabilities.webapp-api-rate-limit-missing
+        - vulnerabilities.webapp-hardcoded-secret
+        - vulnerabilities.webapp-verbose-error-disclosure
         - nodes.webapp.vulnerabilities
-      rationale: ACES top-level vulnerabilities model CWE-classified scenario weaknesses.
+        - nodes.webapp.runtime.applications.routes.vulnerability_refs
+      rationale: >
+        ACES top-level vulnerabilities model CWE-classified scenario weaknesses,
+        and ACES #367 runtime.application route refs place those weaknesses on
+        the observable Flask route/API/UI surface.
 
   - id: webapp.relationships
     category: relationship
@@ -536,21 +553,25 @@ facts:
       - path: evidence/source-checksums.txt
       - path: evidence/docker-inspect.container.json
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes.services
-        - features
-        - content
-        - vulnerabilities
-      why_not_current_surfaces: >
-        Current ACES can encode the listening service, source files, and
-        CWE-style vulnerabilities, but not application route/API/UI inventory,
-        route parameters, response/template mappings, route auth boundaries, or
-        route-to-vulnerability placement.
-      gap_issue:
-        tracker: ACES
-        number: 367
-        url: https://github.com/Brad-Edwards/aces/issues/367
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.applications
+        - nodes.webapp.runtime.applications.routes
+        - nodes.webapp.runtime.applications.routes.parameters
+        - nodes.webapp.runtime.applications.routes.responses
+        - nodes.webapp.runtime.applications.routes.redirects
+        - nodes.webapp.runtime.applications.routes.disclosures
+        - nodes.webapp.runtime.applications.routes.exposed_fields
+        - nodes.webapp.runtime.applications.routes.templates
+        - nodes.webapp.runtime.applications.routes.static_assets
+        - nodes.webapp.runtime.applications.routes.vulnerability_refs
+      rationale: >
+        ACES #367 added runtime.applications, so the Flask route/API/UI
+        surface now directly encodes route paths, methods, auth/session
+        boundaries, request inputs, response shapes, template/static
+        associations, redirects, disclosed diagnostic/fixture fields, error
+        behavior, and route-specific vulnerability placement.
 
   - id: webapp.runtime.container-host-config
     category: runtime-configuration

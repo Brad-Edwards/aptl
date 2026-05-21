@@ -406,11 +406,16 @@ nodes:
       - webapp-stored-xss
       - webapp-idor-files
       - webapp-idor-users
+      - webapp-admin-authz-bypass
+      - webapp-backup-secret-disclosure
       - webapp-env-disclosure
       - webapp-debug-disclosure
       - webapp-weak-jwt
       - webapp-unrestricted-upload
+      - webapp-upload-path-traversal
+      - webapp-api-rate-limit-missing
       - webapp-hardcoded-secret
+      - webapp-verbose-error-disclosure
     roles:
       webapp-root:
         username: root
@@ -1745,6 +1750,746 @@ nodes:
           host_ip: ''
           host_port: 8080
           description: Docker HostConfig publishes 8080/tcp to host port 8080 with an empty HostIp, meaning all host interfaces for this capture.
+      applications:
+      - application_id: techvault-portal
+        service: http
+        protocol: http
+        name: TechVault Solutions Customer Portal
+        base_path: /
+        framework: Flask 3.1.0
+        description: Participant-observable Flask route, API, and UI surface implemented by /app/app.py and rendered templates/static assets.
+        routes:
+        - route_id: webapp-root
+          path: /
+          methods: [GET, HEAD, OPTIONS]
+          name: Login entrypoint
+          description: Root entrypoint renders the login UI for anonymous sessions and redirects authenticated sessions to the dashboard.
+          auth_required: false
+          session_required: false
+          parameters:
+          - name: session
+            location: cookie
+            required: false
+            data_type: Flask session cookie
+            description: Optional session cookie changes the response from login page to dashboard redirect.
+          responses:
+          - status_code: 200
+            content_type: text/html
+            description: Login page for anonymous sessions.
+          redirects:
+          - target: /dashboard
+            status_code: 302
+            condition: user_id present in Flask session
+            description: Authenticated sessions are redirected to the dashboard.
+          templates:
+          - /app/templates/login.html
+          - /app/templates/base.html
+          static_assets:
+          - /app/static/style.css
+        - route_id: webapp-login
+          path: /login
+          methods: [GET, HEAD, OPTIONS, POST]
+          name: Login form
+          description: Login endpoint renders the login form, accepts username/password form fields, and interpolates the username into a SQL query.
+          auth_required: false
+          session_required: false
+          parameters:
+          - name: username
+            location: form
+            required: true
+            data_type: string
+            description: Login username used directly in the SQL WHERE clause on POST.
+          - name: password
+            location: form
+            required: true
+            data_type: string
+            description: Password is MD5 hashed before comparison.
+          responses:
+          - status_code: 200
+            content_type: text/html
+            description: Login form on GET.
+          - status_code: 401
+            content_type: text/html
+            description: Invalid credentials re-render the login form.
+          - status_code: 500
+            content_type: application/json
+            description: SQL exceptions are returned as JSON errors.
+          redirects:
+          - target: /dashboard
+            status_code: 302
+            condition: successful login
+            description: Successful credentials create a session and redirect to the dashboard.
+          disclosures:
+          - trigger: SQL exception during login query execution
+            status_code: 500
+            disclosure: Raw database exception string in JSON error field.
+            sensitivity: unknown
+            description: Verbose login error path exposes backend exception details.
+          templates:
+          - /app/templates/login.html
+          - /app/templates/base.html
+          static_assets:
+          - /app/static/style.css
+          vulnerability_refs:
+          - webapp-sqli-login
+          - webapp-verbose-error-disclosure
+        - route_id: webapp-logout
+          path: /logout
+          methods: [GET, HEAD, OPTIONS]
+          name: Logout
+          description: Clears the Flask session and redirects to the root entrypoint.
+          auth_required: false
+          session_required: false
+          parameters:
+          - name: session
+            location: cookie
+            required: false
+            data_type: Flask session cookie
+            description: Session cookie is cleared if present.
+          redirects:
+          - target: /
+            status_code: 302
+            condition: always
+            description: Logout always redirects to the root entrypoint.
+        - route_id: webapp-dashboard
+          path: /dashboard
+          methods: [GET, HEAD, OPTIONS]
+          name: Dashboard
+          description: Authenticated dashboard renders user, role, customer count, file count, recent comments, and the add-comment form.
+          auth_required: true
+          auth_scheme: Flask session
+          session_required: true
+          parameters:
+          - name: session
+            location: cookie
+            required: true
+            data_type: Flask session cookie
+            description: Must contain user_id, username, and role.
+          responses:
+          - status_code: 200
+            content_type: text/html
+            description: Dashboard page with recent activity and comment form.
+          redirects:
+          - target: /login
+            status_code: 302
+            condition: user_id missing from session
+            description: Unauthenticated requests are redirected to login.
+          templates:
+          - /app/templates/dashboard.html
+          - /app/templates/base.html
+          static_assets:
+          - /app/static/style.css
+          exposed_fields:
+          - name: username
+            sensitivity: plain
+            description: Session username rendered in page content and navigation.
+          - name: role
+            sensitivity: plain
+            description: Session role rendered in page content and navigation.
+          - name: customer_count
+            sensitivity: plain
+            description: Aggregate customer count from the database.
+          - name: file_count
+            sensitivity: plain
+            description: Count of files owned by the session user.
+          - name: comments.content
+            sensitivity: plain
+            description: Recent comment content is rendered with the safe filter.
+          vulnerability_refs:
+          - webapp-stored-xss
+        - route_id: webapp-admin
+          path: /admin
+          methods: [GET, HEAD, OPTIONS]
+          name: Admin panel
+          description: Authenticated admin UI lacks a role check and renders user management plus backup configuration tables.
+          auth_required: true
+          auth_scheme: Flask session without role enforcement
+          session_required: true
+          parameters:
+          - name: session
+            location: cookie
+            required: true
+            data_type: Flask session cookie
+            description: Any authenticated session can access the route.
+          responses:
+          - status_code: 200
+            content_type: text/html
+            description: Admin table page for users and backup configuration.
+          redirects:
+          - target: /login
+            status_code: 302
+            condition: user_id missing from session
+            description: Unauthenticated requests are redirected to login.
+          templates:
+          - /app/templates/admin.html
+          - /app/templates/base.html
+          static_assets:
+          - /app/static/style.css
+          exposed_fields:
+          - name: users.id
+            sensitivity: plain
+            description: User id column rendered in the admin table.
+          - name: users.username
+            sensitivity: plain
+            description: Username column rendered in the admin table.
+          - name: users.email
+            sensitivity: plain
+            description: Email column rendered in the admin table.
+          - name: users.role
+            sensitivity: plain
+            description: Role column rendered in the admin table.
+          - name: backup_config.access_key
+            sensitivity: secret_fixture
+            description: Backup access key column rendered in the backup table.
+          - name: backup_config.secret_key
+            sensitivity: secret_fixture
+            description: Backup secret key column rendered in the backup table.
+          vulnerability_refs:
+          - webapp-admin-authz-bypass
+          - webapp-backup-secret-disclosure
+        - route_id: webapp-upload
+          path: /upload
+          methods: [GET, HEAD, OPTIONS, POST]
+          name: File upload
+          description: Authenticated upload route accepts an uploaded file and saves the submitted filename under /tmp/uploads without type, size, or traversal validation.
+          auth_required: true
+          auth_scheme: Flask session
+          session_required: true
+          parameters:
+          - name: session
+            location: cookie
+            required: true
+            data_type: Flask session cookie
+            description: Required for both GET and POST.
+          - name: file
+            location: uploaded_file
+            required: true
+            data_type: multipart file
+            description: Uploaded file object saved using the submitted filename.
+          responses:
+          - status_code: 200
+            content_type: text/html
+            description: Upload form on GET.
+          redirects:
+          - target: /login
+            status_code: 302
+            condition: user_id missing from session
+            description: Unauthenticated requests are redirected to login.
+          - target: /upload
+            status_code: 302
+            condition: POST without file
+            description: Missing file redirects back to upload.
+          - target: /dashboard
+            status_code: 302
+            condition: successful upload
+            description: Successful upload records file metadata and redirects to dashboard.
+          templates:
+          - /app/templates/upload.html
+          - /app/templates/base.html
+          static_assets:
+          - /app/static/style.css
+          vulnerability_refs:
+          - webapp-unrestricted-upload
+          - webapp-upload-path-traversal
+        - route_id: webapp-api-file
+          path: /api/v1/files/<int:file_id>
+          methods: [GET, HEAD, OPTIONS]
+          name: File metadata API
+          description: File metadata API accepts API key or session auth and lacks an ownership check for the requested file id.
+          auth_required: true
+          auth_scheme: Flask session or X-API-Key/api_key
+          session_required: false
+          parameters:
+          - name: file_id
+            location: path
+            required: true
+            data_type: integer
+            description: File id path variable.
+          - name: X-API-Key
+            location: header
+            required: false
+            data_type: string
+            description: Optional API key alternative to session.
+          - name: api_key
+            location: query
+            required: false
+            data_type: string
+            description: Optional query API key alternative to session.
+          - name: session
+            location: cookie
+            required: false
+            data_type: Flask session cookie
+            description: Optional authenticated session alternative to API key.
+          responses:
+          - status_code: 200
+            content_type: application/json
+            description: File metadata JSON with id, user_id, filename, file_size, mime_type, and created_at.
+          - status_code: 401
+            content_type: application/json
+            description: Missing API key and session returns authentication error.
+          - status_code: 404
+            content_type: application/json
+            description: Unknown file id returns not-found JSON.
+          exposed_fields:
+          - name: id
+            sensitivity: plain
+            description: File id.
+          - name: user_id
+            sensitivity: plain
+            description: Owning user id is returned without ownership enforcement.
+          - name: filename
+            sensitivity: plain
+            description: Stored filename.
+          - name: mime_type
+            sensitivity: plain
+            description: Uploaded MIME type.
+          vulnerability_refs:
+          - webapp-idor-files
+        - route_id: webapp-api-user
+          path: /api/v1/users/<int:user_id>
+          methods: [GET, HEAD, OPTIONS]
+          name: User API
+          description: User API lacks authorization checks and returns user profile fields including API key.
+          auth_required: false
+          session_required: false
+          parameters:
+          - name: user_id
+            location: path
+            required: true
+            data_type: integer
+            description: User id path variable.
+          responses:
+          - status_code: 200
+            content_type: application/json
+            description: User profile JSON.
+          - status_code: 404
+            content_type: application/json
+            description: Unknown user id returns not-found JSON.
+          exposed_fields:
+          - name: id
+            sensitivity: plain
+            description: User id.
+          - name: username
+            sensitivity: plain
+            description: Username.
+          - name: email
+            sensitivity: plain
+            description: Email address.
+          - name: role
+            sensitivity: plain
+            description: User role.
+          - name: department
+            sensitivity: plain
+            description: User department.
+          - name: api_key
+            sensitivity: secret_fixture
+            description: API key value returned in the response.
+          vulnerability_refs:
+          - webapp-idor-users
+        - route_id: webapp-api-customers
+          path: /api/v1/customers
+          methods: [GET, HEAD, OPTIONS]
+          name: Customers API
+          description: Customer API accepts optional search text, supports API key or session auth, has no rate limit, and interpolates search into SQL.
+          auth_required: true
+          auth_scheme: Flask session or X-API-Key/api_key
+          session_required: false
+          parameters:
+          - name: search
+            location: query
+            required: false
+            data_type: string
+            description: Search text interpolated into a SQL LIKE query.
+          - name: X-API-Key
+            location: header
+            required: false
+            data_type: string
+            description: Optional API key alternative to session.
+          - name: api_key
+            location: query
+            required: false
+            data_type: string
+            description: Optional query API key alternative to session.
+          - name: session
+            location: cookie
+            required: false
+            data_type: Flask session cookie
+            description: Optional authenticated session alternative to API key.
+          responses:
+          - status_code: 200
+            content_type: application/json
+            description: Customer array JSON with id, company, contact, email, and plan fields.
+          - status_code: 401
+            content_type: application/json
+            description: Missing API key and session returns authentication error.
+          exposed_fields:
+          - name: id
+            sensitivity: plain
+            description: Customer id.
+          - name: company
+            sensitivity: plain
+            description: Company name.
+          - name: contact
+            sensitivity: plain
+            description: Contact name.
+          - name: email
+            sensitivity: plain
+            description: Contact email.
+          - name: plan
+            sensitivity: plain
+            description: Plan tier.
+          vulnerability_refs:
+          - webapp-sqli-search
+          - webapp-api-rate-limit-missing
+        - route_id: webapp-api-token
+          path: /api/v1/token
+          methods: [OPTIONS, POST]
+          name: JWT token API
+          description: Token API accepts JSON credentials and issues HS256 JWTs signed with a weak shared secret and no expiration.
+          auth_required: false
+          session_required: false
+          parameters:
+          - name: username
+            location: json_body
+            required: false
+            data_type: string
+            description: JSON username field.
+          - name: password
+            location: json_body
+            required: false
+            data_type: string
+            description: JSON password field.
+          responses:
+          - status_code: 200
+            content_type: application/json
+            description: JWT token JSON.
+          - status_code: 401
+            content_type: application/json
+            description: Invalid credentials JSON.
+          exposed_fields:
+          - name: token
+            sensitivity: secret_fixture
+            description: JWT signed with the hardcoded weak JWT secret.
+          vulnerability_refs:
+          - webapp-weak-jwt
+        - route_id: webapp-tools-ping
+          path: /tools/ping
+          methods: [GET, HEAD, OPTIONS, POST]
+          name: Network diagnostics ping tool
+          description: Authenticated ping tool accepts a host form value and passes it directly to a shell command.
+          auth_required: true
+          auth_scheme: Flask session
+          session_required: true
+          parameters:
+          - name: session
+            location: cookie
+            required: true
+            data_type: Flask session cookie
+            description: Required for both GET and POST.
+          - name: host
+            location: form
+            required: true
+            data_type: string
+            description: Hostname or IP string passed to ping through shell=True.
+          responses:
+          - status_code: 200
+            content_type: text/html
+            description: Network tools page with optional command output.
+          redirects:
+          - target: /login
+            status_code: 302
+            condition: user_id missing from session
+            description: Unauthenticated requests are redirected to login.
+          templates:
+          - /app/templates/tools.html
+          - /app/templates/base.html
+          static_assets:
+          - /app/static/style.css
+          exposed_fields:
+          - name: result
+            sensitivity: plain
+            description: Combined stdout and stderr from ping command is rendered in a pre block.
+          vulnerability_refs:
+          - webapp-command-injection
+        - route_id: webapp-search
+          path: /search
+          methods: [GET, HEAD, OPTIONS]
+          name: User search page
+          description: Authenticated search page accepts q, interpolates it into SQL, and reflects the query into HTML with the safe filter.
+          auth_required: true
+          auth_scheme: Flask session
+          session_required: true
+          parameters:
+          - name: session
+            location: cookie
+            required: true
+            data_type: Flask session cookie
+            description: Required to access the route.
+          - name: q
+            location: query
+            required: false
+            data_type: string
+            description: Search query reflected into the page and interpolated into SQL.
+          responses:
+          - status_code: 200
+            content_type: text/html
+            description: Search form and optional results table.
+          redirects:
+          - target: /login
+            status_code: 302
+            condition: user_id missing from session
+            description: Unauthenticated requests are redirected to login.
+          templates:
+          - /app/templates/search.html
+          - /app/templates/base.html
+          static_assets:
+          - /app/static/style.css
+          exposed_fields:
+          - name: query
+            sensitivity: plain
+            description: Query string reflected into the page with the safe filter.
+          - name: results.username
+            sensitivity: plain
+            description: Username column in search results.
+          - name: results.email
+            sensitivity: plain
+            description: Email column in search results.
+          - name: results.department
+            sensitivity: plain
+            description: Department column in search results.
+          vulnerability_refs:
+          - webapp-sqli-search
+          - webapp-reflected-xss
+        - route_id: webapp-comment
+          path: /comment
+          methods: [OPTIONS, POST]
+          name: Add comment
+          description: Authenticated comment endpoint stores submitted content and redirects to dashboard where content is rendered without sanitization.
+          auth_required: true
+          auth_scheme: Flask session
+          session_required: true
+          parameters:
+          - name: session
+            location: cookie
+            required: true
+            data_type: Flask session cookie
+            description: Required to submit a comment.
+          - name: content
+            location: form
+            required: false
+            data_type: string
+            description: Comment body stored without sanitization.
+          - name: page
+            location: form
+            required: false
+            data_type: string
+            description: Page string stored with the comment, defaulting to /dashboard.
+          redirects:
+          - target: /login
+            status_code: 302
+            condition: user_id missing from session
+            description: Unauthenticated requests are redirected to login.
+          - target: /dashboard
+            status_code: 302
+            condition: comment stored
+            description: Stored comments redirect back to the dashboard.
+          vulnerability_refs:
+          - webapp-stored-xss
+        - route_id: webapp-debug
+          path: /debug
+          methods: [GET, HEAD, OPTIONS]
+          name: Debug metadata API
+          description: Unauthenticated debug route returns application, framework, database, secret-length, JWT, and environment metadata.
+          auth_required: false
+          session_required: false
+          responses:
+          - status_code: 200
+            content_type: application/json
+            description: Debug metadata JSON.
+          exposed_fields:
+          - name: app
+            sensitivity: plain
+            value: TechVault Portal
+            description: Application name.
+          - name: version
+            sensitivity: plain
+            value: 2.4.1
+            description: Application version.
+          - name: python
+            sensitivity: plain
+            value: '3.11'
+            description: Python version string.
+          - name: framework
+            sensitivity: plain
+            value: Flask 3.1.0
+            description: Framework version string.
+          - name: database
+            sensitivity: plain
+            value: db
+            description: Database host.
+          - name: db_port
+            sensitivity: plain
+            value: '5432'
+            description: Database port.
+          - name: db_name
+            sensitivity: plain
+            value: techvault
+            description: Database name.
+          - name: db_user
+            sensitivity: plain
+            value: techvault
+            description: Database user.
+          - name: secret_key_length
+            sensitivity: plain
+            value: '25'
+            description: Length of the Flask secret key.
+          - name: jwt_algorithm
+            sensitivity: plain
+            value: HS256
+            description: JWT signing algorithm.
+          - name: environment
+            sensitivity: plain
+            value: unknown
+            description: Flask environment value returned when FLASK_ENV is unset.
+          vulnerability_refs:
+          - webapp-debug-disclosure
+        - route_id: webapp-robots
+          path: /robots.txt
+          methods: [GET, HEAD, OPTIONS]
+          name: Robots policy
+          description: Unauthenticated robots.txt route discloses disallowed paths for admin, internal API, debug, and backup surfaces.
+          auth_required: false
+          session_required: false
+          responses:
+          - status_code: 200
+            content_type: text/plain
+            description: Plain text robots policy.
+          exposed_fields:
+          - name: disallow
+            sensitivity: plain
+            value: /admin,/api/internal,/debug,/backup
+            description: Disallowed paths listed in robots.txt.
+        - route_id: webapp-env
+          path: /.env
+          methods: [GET, HEAD, OPTIONS]
+          name: Exposed environment file
+          description: Unauthenticated .env route returns database configuration and hardcoded Flask/JWT secrets as text/plain.
+          auth_required: false
+          session_required: false
+          responses:
+          - status_code: 200
+            content_type: text/plain
+            description: Plain text environment-style configuration file.
+          exposed_fields:
+          - name: DB_HOST
+            sensitivity: plain
+            value: db
+            description: Database host.
+          - name: DB_PORT
+            sensitivity: plain
+            value: '5432'
+            description: Database port.
+          - name: DB_NAME
+            sensitivity: plain
+            value: techvault
+            description: Database name.
+          - name: DB_USER
+            sensitivity: plain
+            value: techvault
+            description: Database user.
+          - name: DB_PASSWORD
+            sensitivity: secret_fixture
+            value: techvault_db_pass
+            description: Scenario fixture database password exposed by the route.
+          - name: SECRET_KEY
+            sensitivity: secret_fixture
+            value: techvault-secret-key-2024
+            description: Hardcoded Flask secret exposed by the route.
+          - name: JWT_SECRET
+            sensitivity: secret_fixture
+            value: techvault-jwt-weak
+            description: Hardcoded JWT secret exposed by the route.
+          vulnerability_refs:
+          - webapp-env-disclosure
+          - webapp-hardcoded-secret
+          - webapp-weak-jwt
+        - route_id: webapp-static-style
+          path: /static/<path:filename>
+          methods: [GET, HEAD, OPTIONS]
+          name: Flask static asset route
+          description: Flask static route serves the stylesheet referenced by rendered templates.
+          auth_required: false
+          session_required: false
+          parameters:
+          - name: filename
+            location: path
+            required: true
+            data_type: path
+            description: Static asset filename path variable.
+          responses:
+          - status_code: 200
+            content_type: text/css
+            description: Static CSS asset response for style.css.
+          static_assets:
+          - /app/static/style.css
+        - route_id: webapp-error-404
+          path: /<unmatched_path>
+          methods: [GET, HEAD, OPTIONS, POST, PUT, DELETE, PATCH]
+          name: JSON 404 handler
+          description: Flask 404 handler returns JSON containing the requested path for unmatched routes.
+          auth_required: false
+          session_required: false
+          parameters:
+          - name: unmatched_path
+            location: path
+            required: true
+            data_type: path
+            description: Unmatched requested path reflected in the JSON error response.
+          responses:
+          - status_code: 404
+            content_type: application/json
+            description: JSON not-found response with error and path fields.
+          disclosures:
+          - trigger: unmatched route
+            status_code: 404
+            disclosure: Requested path is returned in the JSON path field.
+            sensitivity: plain
+            description: 404 responses reflect the request path.
+          exposed_fields:
+          - name: error
+            sensitivity: plain
+            value: Not found
+            description: Static error string.
+          - name: path
+            sensitivity: plain
+            description: Requested path reflected by the 404 handler.
+        - route_id: webapp-error-500
+          path: /<erroring_path>
+          methods: [GET, HEAD, OPTIONS, POST, PUT, DELETE, PATCH]
+          name: JSON 500 handler
+          description: Flask 500 handler returns JSON with an internal server error string and exception details.
+          auth_required: false
+          session_required: false
+          responses:
+          - status_code: 500
+            content_type: application/json
+            description: JSON internal server error response.
+          disclosures:
+          - trigger: unhandled server exception
+            status_code: 500
+            disclosure: Exception details are returned in the JSON details field.
+            sensitivity: unknown
+            description: Generic 500 handling exposes exception details.
+          exposed_fields:
+          - name: error
+            sensitivity: plain
+            value: Internal server error
+            description: Static error string.
+          - name: details
+            sensitivity: unknown
+            description: Stringified exception detail.
+          vulnerability_refs:
+          - webapp-verbose-error-disclosure
       process:
         name: supervisord
         pid: 1
@@ -7663,6 +8408,16 @@ vulnerabilities:
     description: User API lacks authorization checks and exposes API keys.
     technical: true
     class: CWE-639
+  webapp-admin-authz-bypass:
+    name: Admin authorization bypass
+    description: Admin panel checks only for an authenticated session and does not enforce an admin role.
+    technical: true
+    class: CWE-862
+  webapp-backup-secret-disclosure:
+    name: Backup secret disclosure
+    description: Admin panel renders backup access key and secret key fields from backup_config.
+    technical: true
+    class: CWE-200
   webapp-env-disclosure:
     name: Exposed environment file
     description: The /.env route discloses database and JWT configuration.
@@ -7683,11 +8438,26 @@ vulnerabilities:
     description: Upload path lacks type and size validation.
     technical: true
     class: CWE-434
+  webapp-upload-path-traversal:
+    name: Upload path traversal
+    description: Upload handler saves the submitted filename directly below /tmp/uploads.
+    technical: true
+    class: CWE-22
+  webapp-api-rate-limit-missing:
+    name: Missing API rate limit
+    description: Customer search API has no rate limiting.
+    technical: true
+    class: CWE-770
   webapp-hardcoded-secret:
     name: Hardcoded Flask secret
     description: Flask secret key is hardcoded in application source.
     technical: true
     class: CWE-798
+  webapp-verbose-error-disclosure:
+    name: Verbose error disclosure
+    description: Login query and generic server error handling can expose internal exception details.
+    technical: true
+    class: CWE-209
 
 content:
   webapp-file-app-app-py:

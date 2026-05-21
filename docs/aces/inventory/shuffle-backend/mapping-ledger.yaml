@@ -1,0 +1,259 @@
+schema_version: 1
+asset:
+  id: shuffle-backend
+  scenario: TechVault
+  aptl_issue: 353
+  aces_methodology_issue: 353
+  source_class: upstream-image
+  proof_scope: methodology-smoke-test
+provenance:
+  image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+  attestation:
+    status: captured
+    verification_status: not_verified
+    standards:
+      - OCI image index
+      - in-toto
+      - SLSA provenance
+    predicate_types:
+      - https://slsa.dev/provenance/v0.2
+    evidence:
+      - path: evidence/docker-buildx-imagetools.image.txt
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+      - path: evidence/docker-buildx-imagetools.attestation-amd64.raw.json
+    limits:
+      - >
+        This smoke pass captured registry-visible attestation manifests but did
+        not cryptographically verify signatures, transparency-log inclusion, or
+        builder identity. Later clean-lab capture should verify signatures when
+        upstream publishes verifiable signing material, and custom-build assets
+        should emit first-party SBOM/provenance attestations at build time.
+correspondence_checks:
+  - id: shuffle-backend.node-source-correspondence
+    status: planned
+    source: nodes.shuffle-backend.source
+    realized_evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+    ledger_fact_ids:
+      - shuffle-backend.image.identity
+    method: >
+      Compare the ACES source name/version selected by later encoding work
+      against the realized OCI image digest and manifest digest captured here.
+      The check passes only when the encoded digest resolves to the same image
+      index and platform manifest used by the running container.
+    limit: >
+      Planned because this issue is proving methodology/tooling, not
+      producing the final TechVault ACES SDL.
+  - id: shuffle-backend-runtime-correspondence
+    status: planned
+    source: "nodes.shuffle-backend plus current ACES #354 successor surfaces"
+    realized_evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.container.json
+    ledger_fact_ids:
+      - shuffle-backend.os.version
+      - shuffle-backend.api.listener
+      - shuffle-backend.data.mount
+      - shuffle-backend.docker.socket
+      - shuffle-backend.process.identity
+    method: >
+      After later issues encode the supported ACES fields and consume the #354
+      successor surface, run the encoded scenario, recapture runtime evidence,
+      and compare OS/version, listener, mount/socket, and process identity
+      against this ledger with explicit tolerances for clean-lab drift.
+    limit: >
+      Planned because #354 blocks semantically correct encoding of the
+      runtime configuration surfaces today.
+notes:
+  - This ledger is a methodology artifact, not the final SCN-010 asset spec.
+  - The participant-discoverable rule defines this proof pass's capture boundary,
+    not the semantic reason ACES may need new SDL surfaces.
+  - Later per-asset issues should expand this ledger to full coverage before
+    producing or updating SDL/source-package encodings.
+  - The ledger is validated by the Pydantic schema exposed through
+    `aptl aces-inventory schema`; schema violations fail `aptl aces-inventory
+    validate`.
+facts:
+  - id: shuffle-backend.image.identity
+    category: provenance
+    summary: >
+      The asset uses upstream image ghcr.io/shuffle/shuffle-backend:latest,
+      resolved to digest
+      ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d.
+    evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/compose-service.shuffle-backend.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.shuffle-backend.source.name
+        - nodes.shuffle-backend.source.version
+      rationale: >
+        ACES node source is a provider-neutral artifact reference and can carry
+        the immutable image digest as the version/pin used by later encoders.
+
+  - id: shuffle-backend.os.version
+    category: runtime-configuration
+    summary: The realized runtime OS is Alpine Linux 3.22.2.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.shuffle-backend.os
+        - nodes.shuffle-backend.os_version
+      rationale: ACES nodes have explicit OS family and version fields.
+
+  - id: shuffle-backend.network.identity
+    category: network
+    summary: >
+      The service is attached to aptl_aptl-security with IPv4 address
+      172.20.0.20 and aliases aptl-shuffle-backend and shuffle-backend.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-network.aptl-security.json
+      - path: evidence/compose-service.shuffle-backend.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: infrastructure
+      fields:
+        - infrastructure.shuffle-backend.links
+        - infrastructure.shuffle-backend.properties
+      caveat: >
+        ACES can encode network attachment and static IP. Service/container DNS
+        aliases may need a naming convention or source-package support in later
+        encoding work.
+      rationale: Infrastructure properties support per-link IP assignments.
+
+  - id: shuffle-backend.api.listener
+    category: service-surface
+    summary: >
+      Shuffle backend exposes its API on TCP port 5001 and the runtime listener
+      is bound to IPv6 wildcard :::5001.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes.services
+      fields:
+        - nodes.shuffle-backend.services
+      rationale: ACES node service bindings model exposed network services by port.
+
+  - id: shuffle-backend.data.mount
+    category: runtime-configuration
+    summary: The named volume aptl_shuffle_data is mounted at /shuffle-database.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-volume.shuffle-data.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - content
+        - features
+        - infrastructure
+      why_not_current_surfaces: >
+        Content can describe files or directories placed into a node, but a
+        runtime mount with persistence/backing-volume semantics is not merely
+        placed content. Features are authored deployable units, and
+        infrastructure does not type node-local mounts.
+      gap_issue:
+        tracker: ACES
+        number: 354
+        url: https://github.com/Brad-Edwards/aces/issues/354
+
+  - id: shuffle-backend.docker.socket
+    category: runtime-configuration
+    summary: >
+      The container has a writable Docker socket bind recorded by Docker as
+      /var/run/docker.sock:/var/run/docker.sock:rw and visible in-container at
+      /run/docker.sock.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/compose-service.shuffle-backend.json
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - nodes.services
+        - content
+        - relationships
+      why_not_current_surfaces: >
+        Node services model network ports, content models placed files/data, and
+        relationships can express trust edges only after endpoints exist. None
+        typed a path-local runtime control interface mounted into the asset.
+      gap_issue:
+        tracker: ACES
+        number: 354
+        url: https://github.com/Brad-Edwards/aces/issues/354
+
+  - id: shuffle-backend.process.identity
+    category: runtime-configuration
+    summary: PID 1 runs ./shufflebackend as root with working directory /app.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-top.txt
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - nodes
+        - features
+      why_not_current_surfaces: >
+        Nodes and features can identify the asset and deployed software but do
+        not type process command, effective user, or working directory.
+      gap_issue:
+        tracker: ACES
+        number: 354
+        url: https://github.com/Brad-Edwards/aces/issues/354
+
+  - id: shuffle-backend.package.inventory
+    category: runtime-inventory
+    summary: >
+      The runtime image contains 21 Alpine OS packages and visible Go module
+      manifests; no Python, pip, Node, npm, or Go compiler was observed.
+    evidence:
+      - path: evidence/os-packages.txt
+      - path: evidence/language-manifests.txt
+      - path: evidence/trivy-sbom.cyclonedx.json
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - features
+      why_not_current_surfaces: >
+        Features are authored deployable service/configuration/artifact units
+        with dependency semantics. A full observed package/SBOM inventory is
+        runtime inventory and should not be misrepresented as authored features.
+      gap_issue:
+        tracker: ACES
+        number: 354
+        url: https://github.com/Brad-Edwards/aces/issues/354
+
+  - id: shuffle-backend.vulnerability.scan-state
+    category: vulnerability-inventory
+    summary: >
+      Trivy reported 86 package vulnerability findings at capture time:
+      5 critical, 33 high, 41 medium, and 7 low.
+    evidence:
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-vulnerabilities.json
+      - path: evidence/trivy-vulnerability-counts.json
+      - path: evidence/trivy-vulnerability-list.json
+    aces:
+      disposition: blocked_by_aces_gap
+      checked_surfaces:
+        - vulnerabilities
+      why_not_current_surfaces: >
+        ACES vulnerabilities are named CWE-classified scenario weaknesses.
+        Trivy output is package/CVE/advisory scanner state tied to an image
+        digest and scan time, so encoding it as CWE-only vulnerabilities would
+        lose the evidence semantics.
+      gap_issue:
+        tracker: ACES
+        number: 354
+        url: https://github.com/Brad-Edwards/aces/issues/354

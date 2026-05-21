@@ -1,0 +1,40 @@
+{
+  "profiles": [
+    "soc"
+  ],
+  "image": "ghcr.io/shuffle/shuffle-backend:latest",
+  "container_name": "aptl-shuffle-backend",
+  "hostname": "shuffle-backend",
+  "restart": "unless-stopped",
+  "environment": [
+    "SHUFFLE_APP_SDK_TIMEOUT=120",
+    "SHUFFLE_DEFAULT_USERNAME=admin",
+    "SHUFFLE_DEFAULT_PASSWORD=<REDACTED-SHUFFLE-DEFAULT-PASSWORD>",
+    "SHUFFLE_DEFAULT_APIKEY=<REDACTED-SHUFFLE-DEFAULT-APIKEY>",
+    "SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200",
+    "SHUFFLE_OPENSEARCH_USERNAME=admin",
+    "SHUFFLE_OPENSEARCH_PASSWORD=<REDACTED-SHUFFLE-OPENSEARCH-PASSWORD>",
+    "SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true"
+  ],
+  "volumes": [
+    "shuffle_data:/shuffle-database",
+    "/var/run/docker.sock:/var/run/docker.sock"
+  ],
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "1g"
+      }
+    }
+  },
+  "depends_on": {
+    "shuffle-opensearch": {
+      "condition": "service_healthy"
+    }
+  },
+  "networks": {
+    "aptl-security": {
+      "ipv4_address": "172.20.0.20"
+    }
+  }
+}

@@ -1,16 +1,21 @@
 import { describe, it, expect, vi } from 'vitest';
 import { generateToolHandlers } from '../src/tools/handlers.js';
 
-// Partial mock: keep the real SSHError class so `assertSessionIdContract`
-// in handlers.ts can throw a real Error subclass (whose `.message`
-// the handler catch block converts into the response envelope).
-// Auto-mocking the whole module replaces SSHError with a Mock that
-// produces empty-message errors and breaks the rejection assertions.
-vi.mock('../src/ssh.js', async () => {
-  const actual = await vi.importActual<typeof import('../src/ssh.js')>('../src/ssh.js');
+// Partial mock: keep SSHError as a real Error subclass so
+// `assertSessionIdContract` in handlers.ts throws an object whose `.message`
+// the handler catch block can convert into the response envelope.
+vi.mock('../src/ssh.js', () => {
+  class SSHError extends Error {
+    constructor(message: string, cause?: Error) {
+      super(message);
+      this.name = 'SSHError';
+      this.cause = cause;
+    }
+  }
+
   return {
-    ...actual,
     SSHConnectionManager: vi.fn(),
+    SSHError,
   };
 });
 

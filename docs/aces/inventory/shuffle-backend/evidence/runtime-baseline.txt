@@ -1,0 +1,110 @@
+Wed May 20 20:17:02 UTC 2026
+Linux shuffle-backend 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 Linux
+uid=0(root) gid=0(root) groups=0(root),0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),10(wheel),11(floppy),20(dialout),26(tape),27(video)
+/app
+NAME="Alpine Linux"
+ID=alpine
+VERSION_ID=3.22.2
+PRETTY_NAME="Alpine Linux v3.22"
+HOME_URL="https://alpinelinux.org/"
+BUG_REPORT_URL="https://gitlab.alpinelinux.org/alpine/aports/-/issues"
+
+-- processes --
+PID   USER     TIME  COMMAND
+    1 root      2:09 ./shufflebackend
+   53 root      0:00 sh -lc  date -u uname -a id pwd cat /etc/os-release || true printf "\n-- processes --\n" ps auxww 2>/dev/null || ps -ef 2>/dev/null || true printf "\n-- listeners --\n" netstat -lntup 2>/dev/null || cat /proc/net/tcp /proc/net/tcp6 printf "\n-- mounts --\n" cat /proc/mounts printf "\n-- passwd --\n" cat /etc/passwd printf "\n-- group --\n" cat /etc/group printf "\n-- sudoers --\n" find /etc/sudoers /etc/sudoers.d -maxdepth 1 -type f -print -exec sed -n "1,220p" {} \; 2>/dev/null || true
+   63 root      0:00 ps auxww
+
+-- listeners --
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+tcp        0      0 127.0.0.11:36983        0.0.0.0:*               LISTEN      -
+tcp        0      0 :::5001                 :::*                    LISTEN      1/shufflebackend
+udp        0      0 127.0.0.11:60218        0.0.0.0:*                           -
+
+-- mounts --
+overlay / overlay rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40945/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/303/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/295/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/288/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/284/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/213/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/212/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/211/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/60/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40951/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40951/work,nouserxattr 0 0
+proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
+tmpfs /dev tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
+devpts /dev/pts devpts rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666 0 0
+sysfs /sys sysfs ro,nosuid,nodev,noexec,relatime 0 0
+cgroup /sys/fs/cgroup cgroup2 ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot 0 0
+mqueue /dev/mqueue mqueue rw,nosuid,nodev,noexec,relatime 0 0
+shm /dev/shm tmpfs rw,nosuid,nodev,noexec,relatime,size=65536k,inode64 0 0
+/dev/md2 /shuffle-database ext4 rw,relatime 0 0
+/dev/md2 /etc/resolv.conf ext4 rw,relatime 0 0
+/dev/md2 /etc/hostname ext4 rw,relatime 0 0
+/dev/md2 /etc/hosts ext4 rw,relatime 0 0
+tmpfs /run/docker.sock tmpfs rw,nosuid,nodev,noexec,relatime,size=13180520k,mode=755,inode64 0 0
+proc /proc/bus proc ro,nosuid,nodev,noexec,relatime 0 0
+proc /proc/fs proc ro,nosuid,nodev,noexec,relatime 0 0
+proc /proc/irq proc ro,nosuid,nodev,noexec,relatime 0 0
+proc /proc/sys proc ro,nosuid,nodev,noexec,relatime 0 0
+proc /proc/sysrq-trigger proc ro,nosuid,nodev,noexec,relatime 0 0
+tmpfs /proc/acpi tmpfs ro,relatime,inode64 0 0
+tmpfs /proc/interrupts tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
+tmpfs /proc/kcore tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
+tmpfs /proc/keys tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
+tmpfs /proc/latency_stats tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
+tmpfs /proc/scsi tmpfs ro,relatime,inode64 0 0
+tmpfs /proc/timer_list tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
+tmpfs /sys/devices/virtual/powercap tmpfs ro,relatime,inode64 0 0
+tmpfs /sys/firmware tmpfs ro,relatime,inode64 0 0
+
+-- passwd --
+root:x:0:0:root:/root:/bin/sh
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+lp:x:4:7:lp:/var/spool/lpd:/sbin/nologin
+sync:x:5:0:sync:/sbin:/bin/sync
+shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+halt:x:7:0:halt:/sbin:/sbin/halt
+mail:x:8:12:mail:/var/mail:/sbin/nologin
+news:x:9:13:news:/usr/lib/news:/sbin/nologin
+uucp:x:10:14:uucp:/var/spool/uucppublic:/sbin/nologin
+cron:x:16:16:cron:/var/spool/cron:/sbin/nologin
+ftp:x:21:21::/var/lib/ftp:/sbin/nologin
+sshd:x:22:22:sshd:/dev/null:/sbin/nologin
+games:x:35:35:games:/usr/games:/sbin/nologin
+ntp:x:123:123:NTP:/var/empty:/sbin/nologin
+guest:x:405:100:guest:/dev/null:/sbin/nologin
+nobody:x:65534:65534:nobody:/:/sbin/nologin
+
+-- group --
+root:x:0:root
+bin:x:1:root,bin,daemon
+daemon:x:2:root,bin,daemon
+sys:x:3:root,bin
+adm:x:4:root,daemon
+tty:x:5:
+disk:x:6:root
+lp:x:7:lp
+kmem:x:9:
+wheel:x:10:root
+floppy:x:11:root
+mail:x:12:mail
+news:x:13:news
+uucp:x:14:uucp
+cron:x:16:cron
+audio:x:18:
+cdrom:x:19:
+dialout:x:20:root
+ftp:x:21:
+sshd:x:22:
+input:x:23:
+tape:x:26:root
+video:x:27:root
+netdev:x:28:
+kvm:x:34:kvm
+games:x:35:
+shadow:x:42:
+www-data:x:82:
+users:x:100:games
+ntp:x:123:
+abuild:x:300:
+utmp:x:406:
+ping:x:999:
+nogroup:x:65533:
+nobody:x:65534:
+
+-- sudoers --

@@ -22,14 +22,19 @@ MUST already exist and be linked. If it doesn't, file that first.
 
 Apply the ACES asset-inventorying methodology to the `<ASSET>` container as
 realized in a fresh `aptl lab start`, capture the inventory at experiment
-grade, and encode the result in `scenarios/techvault.sdl.yaml` and any
-referenced source packages / supporting artifacts.
+grade, and encode every observable fact directly in
+`scenarios/techvault.sdl.yaml`. Referenced source packages and supporting
+artifacts are evidence/provenance only; they are not substitutes for SDL
+expression.
 
 **Snapshot point**: steady state *after* `aptl lab start` has fully
-completed and the container has reached its operational state. Time
-dynamics are out of scope; the target is a single steady-state spec
-sufficient to reproduce this asset bit-for-bit (where bit-identity is
-possible) or behaviorally (where it is not).
+completed and the container has reached its operational state. The target
+is complete participant/agent-observable steady-state parity, sufficient
+to reproduce this asset bit-for-bit (where bit-identity is possible) or
+behaviorally (where it is not). Time dynamics and attack-induced changes
+may be owned by separate linked work, but every fact observable at the
+snapshot point is in scope here and must be encoded or blocked by a
+specific ACES expressivity issue.
 
 ## Identifying information
 
@@ -66,10 +71,15 @@ Apply every dimension named by the ACES asset-inventorying methodology
   ports, capabilities, mounted volumes (bind + named), network
   attachments, healthcheck command + interval + retries + start_period,
   restart policy, ulimits.
-- **Filesystem inventory at steady state**: paths + checksums for
-  scenario-load-bearing content. Exclude transient state (logs,
-  caches); include configuration files, fixture content, certificates,
-  pre-seeded data, agent installers.
+- **Filesystem inventory at steady state**: all participant/agent-observable
+  paths, metadata, permissions, ownership, checksums/content references,
+  configuration files, fixture content, certificates, pre-seeded data,
+  agent installers, source, templates, static assets, generated startup
+  artifacts, logs, caches, runtime files, and volume contents present at
+  the snapshot point. Do not exclude logs, caches, generated state, or
+  runtime-created state solely because they are transient; record stability
+  limits and encode the observable shape, or file/link a blocking ACES
+  expressivity issue.
 - **Identity surfaces local to this host**: local users + UID/GID,
   shells, home dirs, sudo entries, any service accounts owned by this
   container (AD users live in `ad`'s inventory, not in their consumer's).
@@ -88,9 +98,72 @@ Apply every dimension named by the ACES asset-inventorying methodology
   are provenance (covered by ACES EXP-720 / equivalent). Cite the
   methodology section that governs each.
 
-The inventory is steady-state. Document what is deliberately excluded
-(time dynamics, attack-induced state changes, log volumes, ephemeral
-runtime telemetry).
+The inventory is steady-state. Time dynamics and attack-induced transitions
+may be covered by separate linked work, but any observable state present at
+the steady-state snapshot, including log volumes, caches, generated files,
+volume contents, and ephemeral runtime telemetry, must be encoded or
+blocked by a specific ACES expressivity issue rather than silently excluded.
+
+## Absolute Observable-Parity Gate
+
+This issue is not complete until the TechVault ACES SDL expresses every
+fact that a participant, adversary, defender, autonomous agent, tool,
+evaluator, or harness could observe from inside the realized range for
+this asset.
+
+Parity means full observable parity. It is not relevance-filtered. It is
+not limited to facts needed by APTL's current implementation, not limited
+to load-bearing behavior, and not satisfied by storing evidence outside
+the SDL.
+
+Evidence bundles, checksums, source trees, Docker/Compose files,
+screenshots, logs, inventories, comments, and mapping ledgers are proof
+inputs only. They are not substitutes for SDL expression. If an observable
+file, config, package, version, environment value, route, user, permission,
+process, service, vulnerability, relationship, log path, filesystem entry,
+credential fixture, or scanner finding is within this issue's scope, then
+the SDL-backed spec must encode it directly using ACES.
+
+If ACES can express it, encode it in `scenarios/techvault.sdl.yaml` and
+add validation that proves it is present. If ACES cannot express it, file
+one or more blocking issues in `Brad-Edwards/aces`, link them here, and do
+not mark this issue complete. A filed ACES issue is a blocker, not a
+waiver. After ACES merges/releases the needed expressivity, this issue
+remains incomplete until the SDL is updated to use the new ACES surface and
+validation passes.
+
+APTL runtime consumption is separate. Lack of APTL support for consuming an
+SDL field may require a linked APTL issue, but it never excuses missing SDL
+parity and must not be used to close this issue.
+
+Forbidden completion claims:
+
+- "Captured in evidence" unless also encoded in SDL or blocked by a
+  specific ACES expressivity issue.
+- "Representative subset" for packages, files, vulnerabilities, processes,
+  configs, env, services, routes, users, permissions, logs, filesystem
+  state, or scanner findings.
+- "Relevant fields encoded", "load-bearing fields encoded", or
+  "implementation-important fields encoded".
+- "APTL cannot consume it yet" as a reason to omit SDL content.
+- "Out of scope" for any in-scope fact observable from inside the range
+  unless a separate linked issue owns that observable surface and blocks
+  final SCN-010 parity.
+
+Completion checklist:
+
+- [ ] Enumerated every participant/agent-observable fact for this asset.
+- [ ] Encoded every ACES-expressible fact in
+  `scenarios/techvault.sdl.yaml`.
+- [ ] Filed and linked ACES blocker issue(s) for every observable fact ACES
+  cannot express.
+- [ ] Verified no evidence-only observable facts remain without SDL
+  encoding or an ACES blocker.
+- [ ] Updated the mapping ledger so every row is `encoded` or blocked by a
+  specific ACES issue.
+- [ ] Did not mark this issue complete based on evidence capture,
+  representative samples, summaries, relevance judgments, or APTL
+  consumption status.
 
 ## Acceptance
 
@@ -99,9 +172,10 @@ runtime telemetry).
   claim cites the source it was observed at (provisioner line,
   `docker inspect` output, `dpkg -l` line, file checksum, etc.).
   Reviewer can re-run the cited commands and reproduce each claim.
-- All inventory surfaces that ACES can express today are encoded in
-  `scenarios/techvault.sdl.yaml` (or in a referenced source package
-  under `containers/<ASSET>/` that the SDL pins by name+version).
+- All inventory surfaces that ACES can express today are encoded directly
+  in `scenarios/techvault.sdl.yaml`. Source packages, Dockerfiles, Compose
+  files, checksums, evidence artifacts, and ledger rows are proof inputs
+  only, not substitutes for SDL expression.
 - **ACES expressivity gaps**: every surface the inventory captured but
   ACES grammar cannot represent today has a corresponding new issue
   filed against `Brad-Edwards/aces`, with the issue URL linked from
@@ -128,9 +202,11 @@ runtime telemetry).
 - The inventory does NOT itself prove byte-identical re-buildability;
   that's a separate equivalence-checker concern. It does provide the
   ground truth a future equivalence checker compares against.
-- The inventory does NOT cover time dynamics, attack-induced state
-  transitions, or operator-driven runtime changes. Those are out of
-  scope; document them as such.
+- The inventory does NOT by itself cover behavior over time,
+  attack-induced transitions, or later operator-driven runtime changes.
+  Any state present at the steady-state snapshot is still in scope. If a
+  dynamic surface is excluded, link the issue that owns it and record the
+  limit.
 - Any surface where the inventory could not be fully resolved (closed
   upstream source, opaque image, undocumented behavior) must be flagged
   in the inventory artifact as a known limit, not silently elided.

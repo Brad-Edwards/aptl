@@ -72,11 +72,11 @@ rows:
     legacy_source: scenarios/techvault.sdl.yaml
     legacy_field: nodes.webapp + infrastructure.webapp + runtime + content + accounts
     category: aces_schema_profile_gap
-    aces_target: ACES nodes / infrastructure / runtime / content / accounts fields plus ACES expressivity blockers
+    aces_target: ACES nodes / infrastructure / runtime / content / accounts fields plus remaining ACES expressivity blockers
     runtime_owner: n/a
-    validation_evidence: docs/aces/inventory/webapp/ + tests/test_webapp_inventory.py + ACES #363/#364/#365/#366/#367/#368
-    blocking_followup: "#330; Brad-Edwards/aces#363; Brad-Edwards/aces#364; Brad-Edwards/aces#365; Brad-Edwards/aces#366; Brad-Edwards/aces#367; Brad-Edwards/aces#368"
-    notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL encodes ACES-expressible observed fields and blocks remaining observable parity on the cited ACES expressivity issues.
+    validation_evidence: docs/aces/inventory/webapp/ + tests/test_webapp_inventory.py + ACES #363/#368 consumed + ACES #364/#365/#366/#367 blockers
+    blocking_followup: "#330; Brad-Edwards/aces#364; Brad-Edwards/aces#365; Brad-Edwards/aces#366; Brad-Edwards/aces#367"
+    notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL consumes ACES #363 and #368 and blocks remaining observable parity on the cited ACES expressivity issues.
 
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml

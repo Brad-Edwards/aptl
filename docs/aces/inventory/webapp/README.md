@@ -73,13 +73,14 @@ observed lab instance, not as a clean-lab rebuild proof.
 ## ACES Mapping Result
 
 Current ACES SDL encodes the webapp's node identity, source image pin,
-network links, service exposure, healthcheck, runtime log mount, primary
-process, supervised process set, observed runtime environment, Linux
-capabilities, restart/resource policy, package inventory, scanner findings,
-scenario weakness IDs, relationships, ACES-content entries for the focused
-runtime filesystem inventory, local account records for the observed
-`/etc/passwd` users, and the ACES-expressible subset of the runtime mount table
-in `scenarios/techvault.sdl.yaml`.
+network links, service exposure, healthcheck, full observed runtime mount table,
+focused runtime filesystem inventory with metadata and digests, container
+host/security configuration, health observation logs, primary process,
+supervised process set, observed runtime environment, Linux capabilities,
+restart/resource policy, package inventory, scanner findings, scenario weakness
+IDs, relationships, ACES-content entries for source placement, and local
+account records for the observed `/etc/passwd` users in
+`scenarios/techvault.sdl.yaml`.
 
 ACES #354 is closed and covers the runtime fields for mounts, primary process,
 packages, dependency manifests, and scanner-derived package findings. ACES #358
@@ -87,24 +88,21 @@ is closed and covers container runtime environment classification, Linux
 capability/restart policy, resource limits, and supervised process sets; those
 fields are now used by the TechVault SDL.
 
-APTL consumption remains blocked by the existing SCN-010 implementation issues:
-APTL #321 for the public ACES RuntimeManager handoff and APTL #324 for the
-generic ACES-to-APTL realizer. This inventory records those gaps instead of
-adding a TechVault-only backend shortcut.
+ACES #363 is closed and covers runtime filesystem metadata, permissions,
+ownership, checksums, stability, and first-class digest fields. ACES #368 is
+closed and covers container HostConfig, namespace/security settings, health
+logs, and full mount filesystem facts. Those fields are now used by the
+TechVault SDL.
 
 Full observable parity is still blocked on ACES expressivity gaps, not waived by
 the evidence bundle:
 
-- ACES #363: runtime filesystem metadata, permissions, ownership, checksums,
-  stability, and first-class digest fields.
 - ACES #364: container image build recipe, Dockerfile/layer history, source
   input mapping, image config, and attestation status.
 - ACES #365: local identity database UID/GID/group/sudo facts.
 - ACES #366: Docker network aliases, endpoint metadata, MACs, DNS names, and
   published host bindings.
 - ACES #367: application HTTP route/API/UI inventory.
-- ACES #368: container HostConfig, namespace/security settings, health logs,
-  and full mount filesystem facts.
 
 Run:
 
@@ -124,5 +122,5 @@ aptl aces-inventory gaps docs/aces/inventory/webapp
   Trivy database and advisory feeds.
 - The capture does not assert attack-induced state changes or later
   operator-driven runtime modifications. Observable steady-state fields that
-  current ACES cannot express are explicitly blocked by ACES #363-#368 rather
+  current ACES cannot express are explicitly blocked by ACES #364-#367 rather
   than treated as out of scope.

@@ -26,14 +26,10 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
 IMAGE_ID = "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0"
 IMAGE_DIGEST = f"aptl-webapp@{IMAGE_ID}"
-APTL_PUBLIC_HANDOFF_GAP = 321
-APTL_GENERIC_REALIZER_GAP = 324
-ACES_FILESYSTEM_GAP = 363
 ACES_BUILD_PROVENANCE_GAP = 364
 ACES_IDENTITY_GAP = 365
 ACES_NETWORK_GAP = 366
 ACES_HTTP_SURFACE_GAP = 367
-ACES_HOST_CONFIG_GAP = 368
 FULL_RUNTIME_PACKAGE_COUNT = 223
 FULL_TRIVY_FINDING_COUNT = 469
 
@@ -98,8 +94,7 @@ def test_webapp_preflight_artifact_records_local_guardrails():
         "docs/aces/inventory/webapp/",
         "scenarios/techvault.sdl.yaml",
         "ACES #354",
-        "#321",
-        "#324",
+        "ACES expressivity gaps only",
         "The documentation carve-out does not apply",
     )
     missing = [needle for needle in required if needle not in text]
@@ -128,8 +123,6 @@ def test_webapp_inventory_note_declares_scope_and_evidence():
         "ACES #366",
         "ACES #367",
         "ACES #368",
-        "APTL #321",
-        "APTL #324",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Webapp inventory note missing scope markers: {missing}"
@@ -138,61 +131,48 @@ def test_webapp_inventory_note_declares_scope_and_evidence():
 def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     result = validate_mapping_ledger(WEBAPP_DIR)
     assert result.ok, result.errors
-    assert result.fact_count == 25
-    assert result.encoded_count == 17
-    assert result.blocked_count == 8
+    assert result.fact_count == 23
+    assert result.encoded_count == 19
+    assert result.blocked_count == 4
     assert result.triage_count == 0
     assert result.gap_issues == [
-        f"ACES #{ACES_FILESYSTEM_GAP}",
         f"ACES #{ACES_BUILD_PROVENANCE_GAP}",
         f"ACES #{ACES_IDENTITY_GAP}",
         f"ACES #{ACES_NETWORK_GAP}",
         f"ACES #{ACES_HTTP_SURFACE_GAP}",
-        f"ACES #{ACES_HOST_CONFIG_GAP}",
-        f"APTL #{APTL_PUBLIC_HANDOFF_GAP}",
-        f"APTL #{APTL_GENERIC_REALIZER_GAP}",
     ]
 
     ledger = load_mapping_ledger(LEDGER_PATH)
     assert ledger["provenance"]["image_digest"] == IMAGE_DIGEST
     assert ledger["provenance"]["attestation"]["status"] == "not_available"
-    assert len(ledger["correspondence_checks"]) == 3
+    assert len(ledger["correspondence_checks"]) == 2
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
     assert dispositions["webapp.build.recipe"] == "blocked_by_aces_gap"
     assert dispositions["webapp.runtime.log-volume"] == "encoded"
-    assert dispositions["webapp.runtime.mount-table"] == "encoded_with_caveat"
-    assert dispositions["webapp.runtime.filesystem-content"] == "encoded_with_caveat"
-    assert dispositions["webapp.runtime.filesystem-metadata"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.runtime.mount-table"] == "encoded"
+    assert dispositions["webapp.runtime.filesystem-content"] == "encoded"
+    assert dispositions["webapp.runtime.filesystem-metadata"] == "encoded"
     assert dispositions["webapp.runtime.local-accounts"] == "encoded_with_caveat"
     assert dispositions["webapp.runtime.local-identity-database"] == "blocked_by_aces_gap"
     assert dispositions["webapp.network.realization-metadata"] == "blocked_by_aces_gap"
     assert dispositions["webapp.application.http-surface"] == "blocked_by_aces_gap"
-    assert dispositions["webapp.runtime.container-host-config"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.runtime.container-host-config"] == "encoded"
     assert dispositions["webapp.runtime.supervised-process-set"] == "encoded"
     assert dispositions["webapp.runtime.environment-policy"] == "encoded"
     assert dispositions["webapp.runtime.capability-restart-policy"] == "encoded"
-    assert dispositions["webapp.aptl.public-start-handoff"] == "blocked_by_aptl_gap"
-    assert dispositions["webapp.aptl.generic-realizer"] == "blocked_by_aptl_gap"
 
 
-def test_webapp_gap_report_surfaces_aces_and_aptl_handoffs():
+def test_webapp_gap_report_surfaces_remaining_aces_gaps_only():
     report = gap_report(WEBAPP_DIR)
     gaps = {gap["fact_id"]: gap for gap in report["gaps"]}
     assert set(gaps) == {
         "webapp.build.recipe",
-        "webapp.runtime.filesystem-metadata",
         "webapp.runtime.local-identity-database",
         "webapp.network.realization-metadata",
         "webapp.application.http-surface",
-        "webapp.runtime.container-host-config",
-        "webapp.aptl.public-start-handoff",
-        "webapp.aptl.generic-realizer",
     }
     assert not report["triage_needed"]
     assert gaps["webapp.build.recipe"]["gap_issue"]["number"] == ACES_BUILD_PROVENANCE_GAP
-    assert gaps["webapp.runtime.filesystem-metadata"]["gap_issue"]["number"] == (
-        ACES_FILESYSTEM_GAP
-    )
     assert gaps["webapp.runtime.local-identity-database"]["gap_issue"]["number"] == (
         ACES_IDENTITY_GAP
     )
@@ -201,15 +181,6 @@ def test_webapp_gap_report_surfaces_aces_and_aptl_handoffs():
     )
     assert gaps["webapp.application.http-surface"]["gap_issue"]["number"] == (
         ACES_HTTP_SURFACE_GAP
-    )
-    assert gaps["webapp.runtime.container-host-config"]["gap_issue"]["number"] == (
-        ACES_HOST_CONFIG_GAP
-    )
-    assert gaps["webapp.aptl.public-start-handoff"]["gap_issue"]["number"] == (
-        APTL_PUBLIC_HANDOFF_GAP
-    )
-    assert gaps["webapp.aptl.generic-realizer"]["gap_issue"]["number"] == (
-        APTL_GENERIC_REALIZER_GAP
     )
 
 
@@ -361,8 +332,47 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert len(mounts) == 26
     assert mounts["/var/log/gunicorn"]["source"] == "aptl_webapp_logs"
     assert mounts["/var/log/gunicorn"]["source_kind"] == "volume"
+    assert mounts["/var/log/gunicorn"]["filesystem_type"] == "ext4"
+    assert mounts["/var/log/gunicorn"]["stability"] == "volume_backed"
     assert mounts["/sys"]["read_only"] is True
+    assert mounts["/sys"]["filesystem_type"] == "sysfs"
+    assert mounts["/"]["backend_generated"] is True
+    assert any(option.startswith("lowerdir=") for option in mounts["/"]["options"])
     assert "nsdelegate" in mounts["/sys/fs/cgroup"]["options"]
+    filesystem = {entry["path"]: entry for entry in runtime["filesystem_inventory"]}
+    assert len(filesystem) == 24
+    assert filesystem["/app/app.py"]["content_digest"] == (
+        "08beb9eec94aee668f19dc3d9302e465031ded519342205d1f1421d55b0814d6"
+    )
+    assert filesystem["/app/app.py"]["mode"] == "0644"
+    assert filesystem["/app/user.txt"]["sensitivity"] == "secret_fixture"
+    assert filesystem["/app/user.txt"]["stability"] == "generated"
+    assert filesystem["/var/ossec/etc/ossec.conf"]["owner_group"] == "wazuh"
+    assert filesystem["/var/ossec/etc/ossec.conf"]["gid"] == 102
+    assert filesystem["/entrypoint.sh"]["mode"] == "0775"
+    assert filesystem["/app"]["entry_type"] == "directory"
+    container_config = runtime["container"]
+    assert container_config["entrypoint"] == ["/entrypoint.sh"]
+    assert container_config["log_driver"] == "json-file"
+    assert container_config["namespaces"] == {
+        "cgroup": "private",
+        "ipc": "private",
+        "pid": "",
+        "userns": "",
+        "uts": "",
+    }
+    assert container_config["privileged"] is False
+    assert container_config["read_only_rootfs"] is False
+    assert container_config["publish_all_ports"] is False
+    assert container_config["autoremove"] is False
+    assert container_config["shm_size"] == 67108864
+    assert "/proc/kcore" in container_config["masked_paths"]
+    assert "/proc/sys" in container_config["read_only_paths"]
+    assert container_config["runtime_name"] == "runc"
+    assert runtime["health"]["status"] == "healthy"
+    assert runtime["health"]["failing_streak"] == 0
+    assert len(runtime["health"]["log"]) == 5
+    assert "TechVault Solutions" in runtime["health"]["log"][0]["output"]
     assert runtime["process"]["command"] == [
         "/usr/bin/python3",
         "/usr/bin/supervisord",
@@ -447,6 +457,27 @@ def test_webapp_filesystem_checksum_paths_are_encoded_as_content():
     assert checksum_paths <= content_paths
 
 
+def test_webapp_filesystem_tree_is_encoded_as_runtime_inventory():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    filesystem = {
+        entry["path"]: entry
+        for entry in data["nodes"]["webapp"]["runtime"]["filesystem_inventory"]
+    }
+    observed_paths = {
+        line.split(maxsplit=4)[4]
+        for line in (EVIDENCE_DIR / "filesystem-tree.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    }
+    assert observed_paths <= filesystem.keys()
+    for digest_line in (EVIDENCE_DIR / "filesystem-checksums.txt").read_text(
+        encoding="utf-8"
+    ).splitlines():
+        expected_digest, path = digest_line.split("  ", maxsplit=1)
+        assert filesystem[path]["digest_algorithm"] == "sha256"
+        assert filesystem[path]["content_digest"] == expected_digest
+
+
 def test_webapp_passwd_users_are_encoded_as_accounts():
     data = _yaml_file(TECHVAULT_SDL_PATH)
     account_usernames = {
@@ -480,6 +511,10 @@ def test_techvault_sdl_parses_and_compiles_with_aces_runtime_fields():
     runtime = model.node_deployments["provision.node.webapp"].spec["node"]["runtime"]
 
     assert len(runtime["mounts"]) == 26
+    assert len(runtime["filesystem_inventory"]) == 24
+    assert runtime["container"]["runtime_name"] == "runc"
+    assert runtime["health"]["status"] == "healthy"
+    assert len(runtime["health"]["log"]) == 5
     assert len(runtime["processes"]) == 11
     assert len(runtime["environment"]) == 21
     assert len(runtime["packages"]) == FULL_RUNTIME_PACKAGE_COUNT
@@ -498,7 +533,13 @@ def test_parity_inventory_cites_webapp_inventory_and_aces_sdl():
     assert rows["scen.techvault.webapp-inventory"]["category"] == (
         "aces_schema_profile_gap"
     )
-    assert "Brad-Edwards/aces#363" in rows["scen.techvault.webapp-inventory"][
+    assert "Brad-Edwards/aces#364" in rows["scen.techvault.webapp-inventory"][
+        "blocking_followup"
+    ]
+    assert "Brad-Edwards/aces#363" not in rows["scen.techvault.webapp-inventory"][
+        "blocking_followup"
+    ]
+    assert "Brad-Edwards/aces#368" not in rows["scen.techvault.webapp-inventory"][
         "blocking_followup"
     ]
     assert "docs/aces/inventory/webapp/" in rows["scen.techvault.webapp-inventory"][

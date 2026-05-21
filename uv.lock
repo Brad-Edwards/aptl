@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 [[package]]
 name = "aces-sdl"
 version = "0.2.0"
-source = { git = "https://github.com/Brad-Edwards/aces.git?subdirectory=implementations%2Fpython&rev=ee12cd08d36d3fa4a46050cc49f78181bf44208b#ee12cd08d36d3fa4a46050cc49f78181bf44208b" }
+source = { git = "https://github.com/Brad-Edwards/aces.git?subdirectory=implementations%2Fpython&rev=dev#a4bc74d9c0dce3d3d871fede505c3d46eb56f9c7" }
 dependencies = [
     { name = "asyncssh" },
     { name = "cryptography" },
@@ -89,7 +89,7 @@ web = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aces-sdl", git = "https://github.com/Brad-Edwards/aces.git?subdirectory=implementations%2Fpython&rev=ee12cd08d36d3fa4a46050cc49f78181bf44208b" },
+    { name = "aces-sdl", git = "https://github.com/Brad-Edwards/aces.git?subdirectory=implementations%2Fpython&rev=dev" },
     { name = "asyncssh", marker = "extra == 'web'", specifier = ">=2.17.0" },
     { name = "boto3", marker = "extra == 's3'", specifier = ">=1.28.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.0.0" },

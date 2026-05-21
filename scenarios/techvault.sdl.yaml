@@ -69,159 +69,832 @@ nodes:
       - target: /
         source: overlay
         source_kind: other
+        filesystem_type: overlay
         read_only: false
-        options: [rw, relatime, nouserxattr]
-        description: Observed overlay mount from the runtime mount table; layer paths require ACES #368 for first-class representation.
+        options:
+        - rw
+        - relatime
+        - lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40948/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11307/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11306/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11305/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11304/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11303/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11302/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11301/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11300/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11299/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11298/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11297/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11296/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11295/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11294/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11293/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11292/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11171/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11168/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/11167/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/10862/fs
+        - upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40954/fs
+        - workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40954/work
+        - nouserxattr
+        propagation: unknown
+        stability: generated
+        backend_generated: true
+        description: Observed overlay root filesystem mount including lower, upper, and workdir options.
       - target: /proc
         source: proc
         source_kind: other
+        filesystem_type: proc
         read_only: false
-        options: [rw, nosuid, nodev, noexec, relatime]
-        description: Observed proc mount from the runtime mount table.
+        options:
+        - rw
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /dev
         source: tmpfs
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: false
-        options: [rw, nosuid, size=65536k, mode=755, inode64]
-        description: Observed tmpfs mount from the runtime mount table.
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /dev/pts
         source: devpts
         source_kind: other
+        filesystem_type: devpts
         read_only: false
-        options: [rw, nosuid, noexec, relatime, gid=5, mode=620, ptmxmode=666]
-        description: Observed devpts mount from the runtime mount table.
+        options:
+        - rw
+        - nosuid
+        - noexec
+        - relatime
+        - gid=5
+        - mode=620
+        - ptmxmode=666
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /sys
         source: sysfs
         source_kind: other
+        filesystem_type: sysfs
         read_only: true
-        options: [ro, nosuid, nodev, noexec, relatime]
-        description: Observed sysfs mount from the runtime mount table.
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /sys/fs/cgroup
         source: cgroup
         source_kind: other
+        filesystem_type: cgroup2
         read_only: true
-        options: [ro, nosuid, nodev, noexec, relatime, nsdelegate, memory_recursiveprot]
-        description: Observed cgroup2 mount from the runtime mount table.
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        - nsdelegate
+        - memory_recursiveprot
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /dev/mqueue
         source: mqueue
         source_kind: other
+        filesystem_type: mqueue
         read_only: false
-        options: [rw, nosuid, nodev, noexec, relatime]
-        description: Observed mqueue mount from the runtime mount table.
+        options:
+        - rw
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /dev/shm
         source: shm
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: false
-        options: [rw, nosuid, nodev, noexec, relatime, size=65536k, inode64]
-        description: Observed tmpfs mount from the runtime mount table.
+        options:
+        - rw
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        - size=65536k
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /etc/resolv.conf
         source: /dev/md2
         source_kind: other
+        filesystem_type: ext4
         read_only: false
-        options: [rw, relatime]
-        description: Observed Docker-managed resolver file mount from the runtime mount table.
+        options:
+        - rw
+        - relatime
+        propagation: unknown
+        stability: generated
+        backend_generated: true
+        description: Docker-managed container file mount observed in the runtime mount table.
       - target: /etc/hostname
         source: /dev/md2
         source_kind: other
+        filesystem_type: ext4
         read_only: false
-        options: [rw, relatime]
-        description: Observed Docker-managed hostname file mount from the runtime mount table.
+        options:
+        - rw
+        - relatime
+        propagation: unknown
+        stability: generated
+        backend_generated: true
+        description: Docker-managed container file mount observed in the runtime mount table.
       - target: /etc/hosts
         source: /dev/md2
         source_kind: other
+        filesystem_type: ext4
         read_only: false
-        options: [rw, relatime]
-        description: Observed Docker-managed hosts file mount from the runtime mount table.
+        options:
+        - rw
+        - relatime
+        propagation: unknown
+        stability: generated
+        backend_generated: true
+        description: Docker-managed container file mount observed in the runtime mount table.
       - target: /var/log/gunicorn
         source: aptl_webapp_logs
         source_kind: volume
+        filesystem_type: ext4
         read_only: false
-        options: [rw, relatime]
-        description: Gunicorn access-log volume tailed by the in-process Wazuh agent.
+        options:
+        - rw
+        - relatime
+        propagation: unknown
+        stability: volume_backed
+        backend_generated: true
+        description: Docker named volume aptl_webapp_logs mounted at /var/log/gunicorn; mount table reports ext4 backing device
+          /dev/md2.
       - target: /proc/bus
         source: proc
         source_kind: other
+        filesystem_type: proc
         read_only: true
-        options: [ro, nosuid, nodev, noexec, relatime]
-        description: Observed read-only proc mount from the runtime mount table.
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/fs
         source: proc
         source_kind: other
+        filesystem_type: proc
         read_only: true
-        options: [ro, nosuid, nodev, noexec, relatime]
-        description: Observed read-only proc mount from the runtime mount table.
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/irq
         source: proc
         source_kind: other
+        filesystem_type: proc
         read_only: true
-        options: [ro, nosuid, nodev, noexec, relatime]
-        description: Observed read-only proc mount from the runtime mount table.
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/sys
         source: proc
         source_kind: other
+        filesystem_type: proc
         read_only: true
-        options: [ro, nosuid, nodev, noexec, relatime]
-        description: Observed read-only proc mount from the runtime mount table.
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/sysrq-trigger
         source: proc
         source_kind: other
+        filesystem_type: proc
         read_only: true
-        options: [ro, nosuid, nodev, noexec, relatime]
-        description: Observed read-only proc mount from the runtime mount table.
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/acpi
         source: tmpfs
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: true
-        options: [ro, relatime, inode64]
-        description: Observed masked tmpfs mount from the runtime mount table.
+        options:
+        - ro
+        - relatime
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/interrupts
         source: tmpfs
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: false
-        options: [rw, nosuid, size=65536k, mode=755, inode64]
-        description: Observed tmpfs mount from the runtime mount table.
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/kcore
         source: tmpfs
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: false
-        options: [rw, nosuid, size=65536k, mode=755, inode64]
-        description: Observed tmpfs mount from the runtime mount table.
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/keys
         source: tmpfs
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: false
-        options: [rw, nosuid, size=65536k, mode=755, inode64]
-        description: Observed tmpfs mount from the runtime mount table.
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/latency_stats
         source: tmpfs
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: false
-        options: [rw, nosuid, size=65536k, mode=755, inode64]
-        description: Observed tmpfs mount from the runtime mount table.
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/scsi
         source: tmpfs
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: true
-        options: [ro, relatime, inode64]
-        description: Observed masked tmpfs mount from the runtime mount table.
+        options:
+        - ro
+        - relatime
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /proc/timer_list
         source: tmpfs
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: false
-        options: [rw, nosuid, size=65536k, mode=755, inode64]
-        description: Observed tmpfs mount from the runtime mount table.
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /sys/devices/virtual/powercap
         source: tmpfs
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: true
-        options: [ro, relatime, inode64]
-        description: Observed masked tmpfs mount from the runtime mount table.
+        options:
+        - ro
+        - relatime
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
       - target: /sys/firmware
         source: tmpfs
         source_kind: tmpfs
+        filesystem_type: tmpfs
         read_only: true
-        options: [ro, relatime, inode64]
-        description: Observed masked tmpfs mount from the runtime mount table.
+        options:
+        - ro
+        - relatime
+        - inode64
+        propagation: unknown
+        stability: runtime_created
+        backend_generated: true
+        description: Container runtime pseudo-filesystem or masked-path mount observed in the runtime mount table.
+      filesystem_inventory:
+      - path: /var/ossec/etc/ossec.conf
+        entry_type: file
+        owner_user: root
+        owner_group: wazuh
+        uid: 0
+        gid: 102
+        mode: '0640'
+        size: 766
+        source_path: containers/_wazuh-agent/ossec.conf.template
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: generated
+        sensitivity: plain
+        content_digest: 8a98da4e9eef1f7327adfd39aad4cb3bee212639522e90b27d5783367893a86b
+        digest_algorithm: sha256
+      - path: /app/templates/admin.html
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 1130
+        source_path: containers/webapp/app/templates/admin.html
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 80ad82948ea5ed17a472f065b99d938acfba1b35d3869327f5cbe88d38558449
+        digest_algorithm: sha256
+      - path: /app/templates/dashboard.html
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 1168
+        source_path: containers/webapp/app/templates/dashboard.html
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 2bb50cbd55b25a1d87def04201a9c3cac5794f8c98b1abedfdb2ab79340442f7
+        digest_algorithm: sha256
+      - path: /app/app.py
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 11911
+        source_path: containers/webapp/app/app.py
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 08beb9eec94aee668f19dc3d9302e465031ded519342205d1f1421d55b0814d6
+        digest_algorithm: sha256
+      - path: /app/templates/base.html
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 1408
+        source_path: containers/webapp/app/templates/base.html
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 7c28af474bb0bb9d75667a8acad4b2b87fede111780b6ee6960b1c80ed841629
+        digest_algorithm: sha256
+      - path: /etc/rsyslog.d/80-gunicorn.conf
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 152
+        source_path: containers/webapp/entrypoint.sh
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: generated
+        sensitivity: plain
+        content_digest: c000906fb2a97a309481fe8620492847211d60a057046e5bfbc0b26a9c664be4
+        digest_algorithm: sha256
+      - path: /app/user.txt
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 204
+        source_path: containers/webapp/entrypoint.sh
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: generated
+        sensitivity: secret_fixture
+        content_digest: f03ebaa44e60dfda9ca49d1c4850ddd79109d7b27077c13c4457a0faa2539ad1
+        digest_algorithm: sha256
+      - path: /etc/rsyslog.d/90-forward.conf
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 21
+        source_path: containers/webapp/entrypoint.sh
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: generated
+        sensitivity: plain
+        content_digest: 0db955102dd0b1a898ba2faa1847a7c6d1c159f3d0abd2a2b80d2522d5011e75
+        digest_algorithm: sha256
+      - path: /app/static/style.css
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 3866
+        source_path: containers/webapp/app/static/style.css
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 34af32a9b1c0c538f4b2e5dd7df6e3e44ca976988d34f482c80b03ece662d53c
+        digest_algorithm: sha256
+      - path: /app/templates/upload.html
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 398
+        source_path: containers/webapp/app/templates/upload.html
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 6a45749c307b1f11de109ba363155428f3a1bc1beb6cc0be3b857563d3b6dea8
+        digest_algorithm: sha256
+      - path: /app/templates/tools.html
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 498
+        source_path: containers/webapp/app/templates/tools.html
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: c9251a2d135de24cde145d82dc6f6b2b7505ab232ef5329c6cd8c4ab10bec184
+        digest_algorithm: sha256
+      - path: /app/requirements.txt
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 68
+        source_path: containers/webapp/requirements.txt
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 6e55730ccdc1cce6c4e09c2431a8d56d085c3c544a0bb5f42ff1af3918c04ec5
+        digest_algorithm: sha256
+      - path: /app/templates/search.html
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 794
+        source_path: containers/webapp/app/templates/search.html
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 2071771a5dd91c618fe2ce4356a7aab33e5b2314847bc06ac4c4c545fe1bc89b
+        digest_algorithm: sha256
+      - path: /app/templates/login.html
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 890
+        source_path: containers/webapp/app/templates/login.html
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 945929a03b9f99fe99333cf1a0812c9f085ee9a83260b4dd3ca9a58690d66f2e
+        digest_algorithm: sha256
+      - path: /etc/supervisor/conf.d/webapp.conf
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 1114
+        source_path: containers/webapp/supervisord.conf
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: dcdab3319b81ee13ed1048a24415abf90867f790a5ada67d107cf712407b3c6a
+        digest_algorithm: sha256
+      - path: /opt/aptl/wazuh/ossec.conf.template
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 670
+        source_path: containers/_wazuh-agent/ossec.conf.template
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 35579f1c69c77a4792da5bccb15dc9feb0d1c623ba9c7df14cb7922ec113c301
+        digest_algorithm: sha256
+      - path: /entrypoint.sh
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0775'
+        size: 1357
+        source_path: containers/webapp/entrypoint.sh
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: dd191e81a760b9046e5cb011b229eccc690877c0a87556d91a94b927d0032957
+        digest_algorithm: sha256
+      - path: /opt/aptl/wazuh/wazuh-agent.sh
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0775'
+        size: 6902
+        source_path: containers/_wazuh-agent/wazuh-agent.sh
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt; docs/aces/inventory/webapp/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 0b0b2b8ba176edeeb37594acd2c5b4fca062b5d20b906c6b8581be8fcf97ac84
+        digest_algorithm: sha256
+      - path: /app
+        entry_type: directory
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0755'
+        size: 4096
+        source_path: ''
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt
+        stability: stable
+        sensitivity: plain
+      - path: /app/static
+        entry_type: directory
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0755'
+        size: 4096
+        source_path: ''
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt
+        stability: stable
+        sensitivity: plain
+      - path: /app/templates
+        entry_type: directory
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0755'
+        size: 4096
+        source_path: ''
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt
+        stability: stable
+        sensitivity: plain
+      - path: /etc/rsyslog.d
+        entry_type: directory
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0755'
+        size: 4096
+        source_path: ''
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt
+        stability: stable
+        sensitivity: plain
+      - path: /etc/supervisor/conf.d
+        entry_type: directory
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0755'
+        size: 4096
+        source_path: ''
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt
+        stability: stable
+        sensitivity: plain
+      - path: /opt/aptl/wazuh
+        entry_type: directory
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0755'
+        size: 4096
+        source_path: ''
+        provenance: docs/aces/inventory/webapp/evidence/filesystem-tree.txt
+        stability: stable
+        sensitivity: plain
+      container:
+        entrypoint:
+        - /entrypoint.sh
+        command: []
+        log_driver: json-file
+        log_options: {}
+        namespaces:
+          cgroup: private
+          ipc: private
+          pid: ''
+          userns: ''
+          uts: ''
+        privileged: false
+        read_only_rootfs: false
+        publish_all_ports: false
+        autoremove: false
+        shm_size: 67108864
+        masked_paths:
+        - /proc/acpi
+        - /proc/asound
+        - /proc/interrupts
+        - /proc/kcore
+        - /proc/keys
+        - /proc/latency_stats
+        - /proc/sched_debug
+        - /proc/scsi
+        - /proc/timer_list
+        - /proc/timer_stats
+        - /sys/devices/virtual/powercap
+        - /sys/firmware
+        read_only_paths:
+        - /proc/bus
+        - /proc/fs
+        - /proc/irq
+        - /proc/sys
+        - /proc/sysrq-trigger
+        cgroup_parent: ''
+        runtime_name: runc
+        devices: []
+        device_cgroup_rules: []
+        extra_hosts: []
+        dns: []
+        dns_options: []
+        dns_search: []
+        group_add: []
+        description: Observed Docker Config and HostConfig host/security fields for aptl-webapp.
+      health:
+        status: healthy
+        failing_streak: 0
+        log:
+        - start: '2026-05-21T06:46:26.465117511+02:00'
+          end: '2026-05-21T06:46:26.517180351+02:00'
+          exit_code: 0
+          output: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"\
+            width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\"\
+            \ href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n\
+            \        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n  \
+            \      <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div\
+            \ class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\"\
+            \ id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n\
+            \                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\"\
+            \ name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n\
+            \        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\
+            \n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
+          output_redacted: false
+        - start: '2026-05-21T06:46:41.518543481+02:00'
+          end: '2026-05-21T06:46:41.575976219+02:00'
+          exit_code: 0
+          output: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"\
+            width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\"\
+            \ href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n\
+            \        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n  \
+            \      <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div\
+            \ class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\"\
+            \ id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n\
+            \                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\"\
+            \ name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n\
+            \        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\
+            \n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
+          output_redacted: false
+        - start: '2026-05-21T06:46:56.577074285+02:00'
+          end: '2026-05-21T06:46:56.638506636+02:00'
+          exit_code: 0
+          output: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"\
+            width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\"\
+            \ href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n\
+            \        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n  \
+            \      <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div\
+            \ class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\"\
+            \ id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n\
+            \                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\"\
+            \ name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n\
+            \        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\
+            \n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
+          output_redacted: false
+        - start: '2026-05-21T06:47:11.639670965+02:00'
+          end: '2026-05-21T06:47:11.69074508+02:00'
+          exit_code: 0
+          output: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"\
+            width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\"\
+            \ href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n\
+            \        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n  \
+            \      <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div\
+            \ class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\"\
+            \ id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n\
+            \                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\"\
+            \ name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n\
+            \        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\
+            \n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
+          output_redacted: false
+        - start: '2026-05-21T06:47:26.691406992+02:00'
+          end: '2026-05-21T06:47:26.741569157+02:00'
+          exit_code: 0
+          output: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"\
+            width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\"\
+            \ href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n\
+            \        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n  \
+            \      <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div\
+            \ class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\"\
+            \ id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n\
+            \                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\"\
+            \ name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n\
+            \        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\
+            \n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
+          output_redacted: false
+        description: Observed Docker health status and healthcheck output from docker inspect.
       process:
         name: supervisord
         pid: 1

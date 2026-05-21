@@ -18,9 +18,10 @@ replacement for ADR-035 or the ACES asset-inventorying methodology.
   network service, runtime mounts, process identity, package inventory,
   dependency manifests, scanner findings, and declared CWE weaknesses. These
   fields belong in `scenarios/techvault.sdl.yaml`.
-- APTL-specific realization and public start-path interpretation remain owned
-  by the SCN-010 follow-up series, especially #321 and #324. This issue may
-  cite those gaps; it must not implement a TechVault-only backend shortcut.
+- APTL-specific realization and public start-path interpretation are outside
+  this issue. This issue records ACES expressivity gaps only when the webapp
+  ACES SDL/spec inventory cannot express an observed fact. It must not
+  implement a TechVault-only backend shortcut.
 - `docs/aces/parity-inventory.yaml` remains the audit router for SCN-010.
   Update rows only to point at the new webapp inventory/SDL evidence; do not
   turn the parity inventory into a runtime input schema.
@@ -58,10 +59,9 @@ replacement for ADR-035 or the ACES asset-inventorying methodology.
   with every captured fact assigned an ACES/APTL disposition and no temporary
   `needs_gap_triage` rows.
 - Tests must fail if the webapp bundle omits required evidence, if evidence
-  checksums drift, if raw secret assignments leak, if the ledger loses the
-  ACES #354 / APTL #321 / APTL #324 handoff, or if
-  `scenarios/techvault.sdl.yaml` stops declaring the ACES-expressible webapp
-  runtime fields.
+  checksums drift, if raw secret assignments leak, if the ledger loses ACES gap
+  accountability, or if `scenarios/techvault.sdl.yaml` stops declaring the
+  ACES-expressible webapp runtime fields.
 - The issue changes executable tests and YAML artifacts, so the documentation
   carve-out does not apply. The documentation carve-out does not apply. Run
   focused pytest while iterating, then the
@@ -74,8 +74,8 @@ TechVault SDL node. Later per-asset inventory issues should be able to add
 their own bundle by reusing the same validator and tests with a different asset
 fixture, without adding new parser branches or a second inventory schema.
 
-When APTL later consumes these ACES fields, the generic interpreter work must
-land behind the ACES backend boundary in #321/#324, not in this evidence pass.
+When APTL later consumes these ACES fields, that work must land behind the ACES
+backend boundary, not in this evidence pass.
 
 ## Non-Goals
 

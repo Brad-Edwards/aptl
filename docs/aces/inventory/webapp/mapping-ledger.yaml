@@ -34,8 +34,8 @@ correspondence_checks:
       against the realized local image digest and source package checksums
       captured here.
     limit: >
-      Planned because issue #330 records the asset spec; public APTL startup
-      does not yet consume ACES source pins.
+      Planned because issue #330 records the asset spec and this branch does
+      not rerun the lab for live equivalence proof.
   - id: webapp-runtime-correspondence
     status: planned
     source: nodes.webapp.runtime
@@ -46,36 +46,24 @@ correspondence_checks:
       - path: evidence/language-manifests.txt
     ledger_fact_ids:
       - webapp.runtime.log-volume
+      - webapp.runtime.mount-table
+      - webapp.runtime.filesystem-content
+      - webapp.runtime.filesystem-metadata
       - webapp.runtime.primary-process
       - webapp.runtime.supervised-process-set
       - webapp.runtime.environment-policy
       - webapp.runtime.capability-restart-policy
+      - webapp.runtime.container-host-config
       - webapp.runtime.package-inventory
       - webapp.runtime.vulnerability-scan
     method: >
-      After #321/#324 wire APTL startup through ACES runtime content, run the
-      encoded scenario, recapture runtime evidence, and compare the mount,
+      Re-run the encoded scenario from ACES SDL, recapture runtime evidence,
+      and compare the mount, filesystem, container host/security, health,
       process, environment, capability, operational-policy, package, and
       scanner surfaces against this ledger.
     limit: >
-      Planned because this issue records the desired ACES content and evidence,
-      not the backend interpreter.
-  - id: webapp-gap-correspondence
-    status: blocked
-    source: APTL #321/#324
-    realized_evidence:
-      - path: evidence/docker-top.txt
-      - path: evidence/runtime-baseline.txt
-      - path: evidence/docker-inspect.container.json
-    ledger_fact_ids:
-      - webapp.aptl.public-start-handoff
-      - webapp.aptl.generic-realizer
-    method: >
-      Convert blocked APTL consumption rows into implemented correspondence
-      checks once APTL consumes ACES RuntimeModel content through the generic
-      backend path.
-    limit: >
-      Blocked by the cited APTL issues.
+      Planned because this issue records the frozen steady-state ACES spec and
+      evidence, not a fresh live equivalence run.
 notes:
   - >
     ACES #354 is closed and covers runtime mounts, primary process identity,
@@ -86,14 +74,11 @@ notes:
     and supervised-process-set expressivity; it is closed, and those fields are
     now encoded in scenarios/techvault.sdl.yaml for the webapp asset.
   - >
-    APTL #321 and #324 own consumption of the encoded ACES content by the
-    public startup path and generic backend realizer.
-  - >
-    ACES #363, #364, #365, #366, #367, and #368 are blocking expressivity
-    gaps for observable webapp facts that remain outside current ACES SDL
-    expressivity. They are blockers, not waivers; this asset is not complete
-    until ACES supports those facts and the SDL is updated to use the new
-    surfaces.
+    ACES #363 and #368 are closed and consumed by this SDL update. ACES #364,
+    #365, #366, and #367 remain blocking expressivity gaps for observable
+    webapp facts that remain outside current ACES SDL expressivity. Those
+    remaining gaps are blockers, not waivers; this asset is not complete until
+    ACES supports those facts and the SDL is updated to use the new surfaces.
 facts:
   - id: webapp.image.identity
     category: provenance
@@ -229,19 +214,14 @@ facts:
       - path: evidence/runtime-baseline.txt
       - path: evidence/docker-inspect.container.json
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: nodes
       fields:
         - nodes.webapp.runtime.mounts
-      caveat: >
-        Current ACES mount entries encode target, source, source kind,
-        read-only flag, options, and description. ACES #368 blocks full mount
-        parity for filesystem type, propagation, host/security namespace
-        semantics, health logs, and other Docker HostConfig fields.
       rationale: >
-        The current runtime mount model can carry the observed mount targets
-        and options, so those are encoded directly rather than left only in
-        evidence.
+        ACES #368 added filesystem type, propagation, stability, and
+        backend-generated fields to typed runtime mounts, so the full observed
+        mount table is encoded directly.
 
   - id: webapp.runtime.primary-process
     category: runtime-configuration
@@ -287,9 +267,10 @@ facts:
       - path: evidence/filesystem-checksums.txt
       - path: evidence/source-checksums.txt
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: content
       fields:
+        - nodes.webapp.runtime.filesystem_inventory
         - content.webapp-file-app-app-py
         - content.webapp-file-app-requirements-txt
         - content.webapp-file-app-static-style-css
@@ -314,16 +295,10 @@ facts:
         - content.webapp-dir-etc-rsyslog-d
         - content.webapp-dir-etc-supervisor-conf-d
         - content.webapp-dir-opt-aptl-wazuh
-      caveat: >
-        Current ACES content can encode target path, content type, source, and
-        sensitivity, but ACES #363 blocks full first-class filesystem parity
-        for file type metadata, owner/group, UID/GID, mode bits, size,
-        checksum algorithm fields, symlinks/devices, and stability
-        classification.
       rationale: >
-        ACES can express content placement for files/directories, so every
-        observed runtime file and directory in the focused webapp filesystem
-        inventory is encoded instead of relying on evidence-only references.
+        ACES #363 added first-class runtime filesystem inventory entries;
+        the SDL now encodes the focused observed file and directory set
+        with metadata and keeps content entries as source-placement references.
 
   - id: webapp.runtime.vulnerability-scan
     category: vulnerability-inventory
@@ -489,20 +464,14 @@ facts:
       - path: evidence/filesystem-checksums.txt
       - path: evidence/source-checksums.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - content
-        - nodes
-        - runtime_contract
-      why_not_current_surfaces: >
-        Current ACES content entries can identify files/directories and source
-        references, but cannot express complete runtime filesystem metadata,
-        permissions, UID/GID, checksum algorithm fields, symlink/device types,
-        or stability classifications.
-      gap_issue:
-        tracker: ACES
-        number: 363
-        url: https://github.com/Brad-Edwards/aces/issues/363
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.filesystem_inventory
+      rationale: >
+        ACES #363 added path type, owner/group, UID/GID, mode, size, digest,
+        source, stability, and sensitivity fields for runtime filesystem
+        entries.
 
   - id: webapp.runtime.local-identity-database
     category: identity-surface
@@ -590,56 +559,12 @@ facts:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - runtime_contract
-      why_not_current_surfaces: >
-        ACES #358 covers capability policy, restart policy, resource limits,
-        and process sets, but current ACES cannot express the remaining Docker
-        HostConfig, namespace/security, health-log, and full mount filesystem
-        facts.
-      gap_issue:
-        tracker: ACES
-        number: 368
-        url: https://github.com/Brad-Edwards/aces/issues/368
-
-  - id: webapp.aptl.public-start-handoff
-    category: aptl-backend-gap
-    summary: >
-      APTL's public startup path does not yet route TechVault through ACES
-      RuntimeManager interpretation before backend instantiation.
-    evidence:
-      - path: evidence/compose-service.webapp.json
-    aces:
-      disposition: blocked_by_aptl_gap
-      checked_surfaces:
-        - runtime_contract
-        - nodes
-      why_not_current_surfaces: >
-        The ACES SDL can declare the webapp surfaces, but APTL issue #321 owns
-        wiring public lab/scenario startup through the ACES parser/runtime path.
-      gap_issue:
-        tracker: APTL
-        number: 321
-        url: https://github.com/Brad-Edwards/aptl/issues/321
-
-  - id: webapp.aptl.generic-realizer
-    category: aptl-backend-gap
-    summary: >
-      APTL does not yet have the scenario-generic ACES-to-APTL realizer that
-      consumes equivalent expressivity without TechVault name dispatch.
-    evidence:
-      - path: evidence/compose-service.webapp.json
-    aces:
-      disposition: blocked_by_aptl_gap
-      checked_surfaces:
-        - runtime_contract
-        - infrastructure
-      why_not_current_surfaces: >
-        The ACES SDL can declare the content, but APTL issue #324 owns the
-        generic backend interpretation contract and negative tests.
-      gap_issue:
-        tracker: APTL
-        number: 324
-        url: https://github.com/Brad-Edwards/aptl/issues/324
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.container
+        - nodes.webapp.runtime.health
+        - nodes.webapp.runtime.mounts
+      rationale: >
+        ACES #368 added container host/security configuration, runtime health
+        observation, and full runtime mount fields.

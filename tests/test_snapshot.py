@@ -481,7 +481,8 @@ class TestCaptureSnapshot:
                 name="aptl-victim",
                 image="aptl/victim:latest",
                 status="Up 5 minutes",
-                ports=["0.0.0.0:2022->22/tcp"],
+                networks={"aptl_aptl-internal": "172.20.2.20"},
+                ports=[],
             ),
         ]
         mock_wazuh.return_value = WazuhRulesSnapshot(total_rules=100)
@@ -500,9 +501,11 @@ class TestCaptureSnapshot:
         assert snap.wazuh_rules.total_rules == 100
         assert len(snap.networks) == 1
         assert "aptl.json" in snap.config_hashes
-        # SSH endpoints derived from registry + runtime ContainerSnapshot.ports
+        # SSH endpoints address the target by container IP — internal-only
+        # targets publish no host port (issue #293).
         assert len(snap.ssh) == 1
-        assert snap.ssh[0].port == 2022
+        assert snap.ssh[0].host == "172.20.2.20"
+        assert snap.ssh[0].port == 22
 
     @patch("aptl.core.snapshot._get_network_snapshots")
     @patch("aptl.core.snapshot._get_wazuh_rules_snapshot")

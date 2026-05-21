@@ -53,7 +53,8 @@ from aptl.core.services import (
     test_ssh_connection,
     wait_for_service,
 )
-from aptl.core.snapshot import capture_snapshot
+from aptl.core.endpoints import select_ssh_host
+from aptl.core.snapshot import capture_snapshot, container_networks
 from aptl.core.ssh import ensure_ssh_keys
 from aptl.core.sysreqs import check_max_map_count
 from aptl.utils.logging import get_logger
@@ -904,21 +905,46 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
 )
 def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 10: Testing SSH connectivity...")
-    assert ctx.config is not None and ctx.ssh_key_path is not None  # runtime guards above
-    ssh_tests: list[tuple[str, int, str]] = []
+    # config / ssh_key guarded by the decorators above; backend is set
+    # by the earlier compose-up step and is a structural invariant here.
+    assert (
+        ctx.config is not None
+        and ctx.ssh_key_path is not None
+        and ctx.backend is not None
+    )
+    ssh_tests: list[tuple[str, str]] = []
     if ctx.config.containers.victim:
-        ssh_tests.append(("victim", 2022, "labadmin"))
+        ssh_tests.append(("victim", "labadmin"))
     if ctx.config.containers.kali:
-        ssh_tests.append(("kali", 2023, "kali"))
+        ssh_tests.append(("kali", "kali"))
     if ctx.config.containers.reverse:
-        ssh_tests.append(("reverse", 2027, "labadmin"))
+        ssh_tests.append(("reverse", "labadmin"))
 
-    for name, port, user in ssh_tests:
+    for name, user in ssh_tests:
+        # Lab targets sit on internal-only networks with no published
+        # host port (issue #293), so a `localhost:<port>` probe never
+        # connects. Address sshd by container IP — the host reaches it
+        # over the bridge — on the container-side port 22 directly.
+        host = select_ssh_host(container_networks(ctx.backend, f"aptl-{name}"))
+        if host is None:
+            _emit_diagnostic(
+                ctx,
+                step="test_ssh",
+                component=f"ssh:{name}",
+                impact=DiagnosticImpact.READINESS,
+                severity=DiagnosticSeverity.WARNING,
+                message=f"{name} container has no resolvable network IP",
+                operator_action=(
+                    f"Check that the aptl-{name} container is running and "
+                    "attached to a lab network"
+                ),
+            )
+            continue
         ssh_wait = wait_for_service(
             check_fn=partial(
                 test_ssh_connection,
-                host="localhost",
-                port=port,
+                host=host,
+                port=22,
                 user=user,
                 key_path=ctx.ssh_key_path,
             ),

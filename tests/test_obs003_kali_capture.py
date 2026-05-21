@@ -169,8 +169,35 @@ class TestEndToEndCapture:
     """
 
     SSH_KEY = "keys/aptl_lab_key"
-    SSH_HOST = "kali@localhost"
-    SSH_PORT = "2023"
+    SSH_USER = "kali"
+
+    def _kali_ip(self) -> str:
+        """Resolve aptl-kali's container IP.
+
+        kali sits only on internal-only networks and publishes no host
+        port (issue #293), so the host reaches it by container IP over
+        the bridge — the same path the control plane uses. Any of
+        kali's bridge IPs is reachable; the lowest is taken for a
+        deterministic target.
+        """
+        import subprocess as sp
+
+        r = sp.run(
+            [
+                "docker",
+                "inspect",
+                "aptl-kali",
+                "--format",
+                "{{range .NetworkSettings.Networks}}{{.IPAddress}}\n{{end}}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        ips = sorted(ip for ip in r.stdout.split() if ip)
+        if not ips:
+            pytest.skip("could not resolve aptl-kali container IP")
+        return ips[0]
 
     def _ssh_with_env(self, run_id: str, session_id: str, command: str) -> str:
         """SSH into kali with APTL_* env vars and return stdout."""
@@ -186,15 +213,13 @@ class TestEndToEndCapture:
             "ssh",
             "-i",
             self.SSH_KEY,
-            "-p",
-            self.SSH_PORT,
             "-o",
             "StrictHostKeyChecking=no",
             "-o",
             "UserKnownHostsFile=/dev/null",
             "-o",
-            f"SendEnv=APTL_SESSION_ID APTL_RUN_ID APTL_TRACE_ID",
-            self.SSH_HOST,
+            "SendEnv=APTL_SESSION_ID APTL_RUN_ID APTL_TRACE_ID",
+            f"{self.SSH_USER}@{self._kali_ip()}",
             command,
         ]
         env = {

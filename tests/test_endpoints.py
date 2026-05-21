@@ -24,6 +24,7 @@ from aptl.core.endpoints import (
     build_service_endpoints,
     build_ssh_endpoints,
     parse_host_port,
+    select_ssh_host,
 )
 from aptl.core.snapshot import ContainerSnapshot
 
@@ -268,52 +269,93 @@ class TestBuildServiceEndpoints:
         assert not hasattr(ENDPOINT_REGISTRY[0], "credentials")
 
 
-class TestBuildSSHEndpoints:
-    """``build_ssh_endpoints`` mirrors the service builder."""
+class TestSelectSSHHost:
+    """``select_ssh_host`` picks a deterministic, host-reachable
+    container IP from a container's per-network IP map (issue #293)."""
 
-    def test_victim_ssh(self):
+    def test_picks_the_only_ip(self):
+        assert select_ssh_host({"aptl_aptl-internal": "172.20.2.20"}) == "172.20.2.20"
+
+    def test_picks_lowest_network_name_deterministically(self):
+        # A container on several networks (e.g. kali) must resolve to a
+        # stable IP across snapshots; the lowest network name wins.
+        nets = {
+            "aptl_aptl-redteam": "172.20.4.30",
+            "aptl_aptl-dmz": "172.20.1.30",
+            "aptl_aptl-internal": "172.20.2.35",
+        }
+        assert select_ssh_host(nets) == "172.20.1.30"
+
+    def test_skips_blank_ip(self):
+        nets = {"aptl_aptl-dmz": "", "aptl_aptl-internal": "172.20.2.35"}
+        assert select_ssh_host(nets) == "172.20.2.35"
+
+    def test_no_networks_returns_none(self):
+        assert select_ssh_host({}) is None
+
+    def test_all_blank_returns_none(self):
+        assert select_ssh_host({"a": "", "b": ""}) is None
+
+
+class TestBuildSSHEndpoints:
+    """``build_ssh_endpoints`` addresses targets by container IP. Lab
+    targets sit on ``internal: true`` networks with no published host
+    port, so a ``localhost:<port>`` endpoint is unreachable; the host
+    reaches them by container IP over the bridge (issue #293)."""
+
+    def test_victim_ssh_by_container_ip(self):
         containers = [
             ContainerSnapshot(
                 name="aptl-victim",
                 status="Up 5 minutes",
-                ports=["0.0.0.0:2022->22/tcp"],
+                networks={"aptl_aptl-internal": "172.20.2.20"},
+                ports=[],
             ),
         ]
         endpoints = build_ssh_endpoints(containers)
         assert len(endpoints) == 1
         assert endpoints[0].name == "Victim"
-        assert endpoints[0].port == 2022
+        assert endpoints[0].host == "172.20.2.20"
+        assert endpoints[0].port == 22
         assert endpoints[0].user == "labadmin"
-        assert "labadmin@localhost" in endpoints[0].command
-        assert "-p 2022" in endpoints[0].command
+        assert "labadmin@172.20.2.20" in endpoints[0].command
+        assert "localhost" not in endpoints[0].command
 
     def test_all_ssh_containers(self):
         containers = [
             ContainerSnapshot(
                 name="aptl-victim",
                 status="Up 5 minutes",
-                ports=["0.0.0.0:2022->22/tcp"],
+                networks={"aptl_aptl-internal": "172.20.2.20"},
             ),
             ContainerSnapshot(
                 name="aptl-kali",
                 status="Up 5 minutes",
-                ports=["0.0.0.0:2023->22/tcp"],
+                networks={
+                    "aptl_aptl-redteam": "172.20.4.30",
+                    "aptl_aptl-internal": "172.20.2.35",
+                },
             ),
             ContainerSnapshot(
                 name="aptl-reverse",
                 status="Up 5 minutes",
-                ports=["0.0.0.0:2027->22/tcp"],
+                networks={"aptl_aptl-security": "172.20.0.27"},
             ),
         ]
         endpoints = build_ssh_endpoints(containers)
-        assert {e.port for e in endpoints} == {2022, 2023, 2027}
+        assert {e.host for e in endpoints} == {
+            "172.20.2.20",
+            "172.20.2.35",
+            "172.20.0.27",
+        }
+        assert all(e.port == 22 for e in endpoints)
 
     def test_skips_stopped_containers(self):
         containers = [
             ContainerSnapshot(
                 name="aptl-kali",
                 status="Exited (137) 1 minute ago",
-                ports=["0.0.0.0:2023->22/tcp"],
+                networks={"aptl_aptl-redteam": "172.20.4.30"},
             ),
         ]
         assert build_ssh_endpoints(containers) == []
@@ -323,22 +365,25 @@ class TestBuildSSHEndpoints:
             ContainerSnapshot(
                 name="aptl-wazuh-manager",
                 status="Up 5 minutes",
-                ports=["0.0.0.0:55000->55000/tcp"],
+                networks={"aptl_aptl-security": "172.20.0.10"},
             ),
             ContainerSnapshot(
                 name="aptl-unregistered",
                 status="Up 5 minutes",
-                ports=["0.0.0.0:1234->22/tcp"],
+                networks={"aptl_aptl-internal": "172.20.2.99"},
             ),
         ]
         assert build_ssh_endpoints(containers) == []
 
-    def test_omits_endpoint_when_host_port_missing(self):
+    def test_omits_endpoint_when_no_network_ip(self):
+        # A registered SSH container with no resolvable network IP
+        # cannot be addressed — omit it rather than emit a broken
+        # localhost endpoint.
         containers = [
             ContainerSnapshot(
                 name="aptl-victim",
                 status="Up 5 minutes",
-                ports=[],
+                networks={},
             ),
         ]
         assert build_ssh_endpoints(containers) == []
@@ -348,7 +393,7 @@ class TestBuildSSHEndpoints:
             ContainerSnapshot(
                 name="aptl-kali",
                 status="Up 5 minutes",
-                ports=["0.0.0.0:2023->22/tcp"],
+                networks={"aptl_aptl-redteam": "172.20.4.30"},
             ),
         ]
         endpoints = build_ssh_endpoints(containers)

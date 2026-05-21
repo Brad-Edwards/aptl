@@ -1,0 +1,16 @@
+[
+  {
+    "CreatedAt": "2026-05-19T23:45:37+02:00",
+    "Driver": "local",
+    "Labels": {
+      "com.docker.compose.config-hash": "acd78b651fe0a36ffaa432624cdd5aa1d92a25045147e5f5095a0692038216b8",
+      "com.docker.compose.project": "aptl",
+      "com.docker.compose.version": "5.1.3",
+      "com.docker.compose.volume": "shuffle_data"
+    },
+    "Mountpoint": "/var/lib/docker/volumes/aptl_shuffle_data/_data",
+    "Name": "aptl_shuffle_data",
+    "Options": null,
+    "Scope": "local"
+  }
+]

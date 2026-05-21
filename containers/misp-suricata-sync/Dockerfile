@@ -7,7 +7,7 @@
 FROM python:3.11-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && apt-get install -y --no-install-recommends curl ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -15,7 +15,11 @@ WORKDIR /app
 COPY pyproject.toml /app/
 COPY src /app/src
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . \
+    && apt-get purge -y git \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Run as root: the service writes to a bind-mounted host directory
 # (./config/suricata/rules/misp), and dropping to an unprivileged UID would

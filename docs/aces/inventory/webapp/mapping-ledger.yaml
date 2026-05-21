@@ -74,11 +74,11 @@ notes:
     and supervised-process-set expressivity; it is closed, and those fields are
     now encoded in scenarios/techvault.sdl.yaml for the webapp asset.
   - >
-    ACES #363, #364, #365, and #368 are closed and consumed by this SDL update.
-    ACES #366 and #367 remain blocking expressivity gaps for observable
-    webapp facts that remain outside current ACES SDL expressivity. Those gaps
-    are blockers, not waivers; this asset is not complete until ACES supports
-    those facts and the SDL is updated to use the new surfaces.
+    ACES #363, #364, #365, #366, and #368 are closed and consumed by this SDL
+    update. ACES #367 remains a blocking expressivity gap for observable webapp
+    facts that remain outside current ACES SDL expressivity. That gap is a
+    blocker, not a waiver; this asset is not complete until ACES supports those
+    facts and the SDL is updated to use the new surface.
 facts:
   - id: webapp.image.identity
     category: provenance
@@ -151,15 +151,16 @@ facts:
       - path: evidence/docker-network.aptl-internal.json
       - path: evidence/compose-service.webapp.json
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: infrastructure
       fields:
         - infrastructure.webapp.links
         - infrastructure.webapp.properties
-      caveat: >
-        ACES encodes network attachment and static IPs. Docker DNS aliases are
-        backend-derived names tied to container realization.
-      rationale: Infrastructure properties support per-link IP assignments.
+        - nodes.webapp.runtime.network.endpoints
+      rationale: >
+        ACES infrastructure properties encode authored network attachment and
+        static IP assignments; ACES #366 runtime.network now encodes Docker
+        aliases and DNS names as observed runtime realization facts.
 
   - id: webapp.http.service
     category: service-surface
@@ -511,20 +512,19 @@ facts:
       - path: evidence/docker-network.aptl-internal.json
       - path: evidence/compose-service.webapp.json
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - infrastructure
-        - nodes.services
-        - runtime_contract
-      why_not_current_surfaces: >
-        Current ACES infrastructure can encode network links and static IP
-        assignments, but not Docker aliases/DNS names, endpoint IDs, MAC
-        addresses, prefix lengths, host port publication, backend network IDs,
-        or stable-versus-ephemeral realization metadata.
-      gap_issue:
-        tracker: ACES
-        number: 366
-        url: https://github.com/Brad-Edwards/aces/issues/366
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.network.hostname
+        - nodes.webapp.runtime.network.domainname
+        - nodes.webapp.runtime.network.endpoints
+        - nodes.webapp.runtime.network.published_ports
+      rationale: >
+        ACES #366 added runtime.network, so the Docker aliases, DNS names,
+        generated DNS prefix, endpoint IDs, MAC addresses, IP prefix lengths,
+        gateways, backend network IDs with stability classes, bridge/IPAM
+        backend detail, and host-published 8080/tcp binding are encoded
+        directly.
 
   - id: webapp.application.http-surface
     category: service-surface

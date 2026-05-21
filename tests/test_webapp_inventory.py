@@ -26,7 +26,6 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
 IMAGE_ID = "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0"
 IMAGE_DIGEST = f"aptl-webapp@{IMAGE_ID}"
-ACES_NETWORK_GAP = 366
 ACES_HTTP_SURFACE_GAP = 367
 BUILD_HISTORY_LAYER_COUNT = 31
 SOURCE_INPUT_COUNT = 18
@@ -134,13 +133,10 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     result = validate_mapping_ledger(WEBAPP_DIR)
     assert result.ok, result.errors
     assert result.fact_count == 23
-    assert result.encoded_count == 21
-    assert result.blocked_count == 2
+    assert result.encoded_count == 22
+    assert result.blocked_count == 1
     assert result.triage_count == 0
-    assert result.gap_issues == [
-        f"ACES #{ACES_NETWORK_GAP}",
-        f"ACES #{ACES_HTTP_SURFACE_GAP}",
-    ]
+    assert result.gap_issues == [f"ACES #{ACES_HTTP_SURFACE_GAP}"]
 
     ledger = load_mapping_ledger(LEDGER_PATH)
     assert ledger["provenance"]["image_digest"] == IMAGE_DIGEST
@@ -154,7 +150,7 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     assert dispositions["webapp.runtime.filesystem-metadata"] == "encoded"
     assert dispositions["webapp.runtime.local-accounts"] == "encoded_with_caveat"
     assert dispositions["webapp.runtime.local-identity-database"] == "encoded"
-    assert dispositions["webapp.network.realization-metadata"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.network.realization-metadata"] == "encoded"
     assert dispositions["webapp.application.http-surface"] == "blocked_by_aces_gap"
     assert dispositions["webapp.runtime.container-host-config"] == "encoded"
     assert dispositions["webapp.runtime.supervised-process-set"] == "encoded"
@@ -165,14 +161,8 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
 def test_webapp_gap_report_surfaces_remaining_aces_gaps_only():
     report = gap_report(WEBAPP_DIR)
     gaps = {gap["fact_id"]: gap for gap in report["gaps"]}
-    assert set(gaps) == {
-        "webapp.network.realization-metadata",
-        "webapp.application.http-surface",
-    }
+    assert set(gaps) == {"webapp.application.http-surface"}
     assert not report["triage_needed"]
-    assert gaps["webapp.network.realization-metadata"]["gap_issue"]["number"] == (
-        ACES_NETWORK_GAP
-    )
     assert gaps["webapp.application.http-surface"]["gap_issue"]["number"] == (
         ACES_HTTP_SURFACE_GAP
     )
@@ -342,11 +332,13 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
         layer["digest"] for layer in build["layers"] if layer.get("digest")
     }
     assert len(rootfs_layer_digests) == 20
-    assert "sha256:79dd1f4c855cd061f687a994426634cf5f84c8ecdbc66c7a7d118e828dd93c99" in (
-        rootfs_layer_digests
+    assert (
+        "sha256:79dd1f4c855cd061f687a994426634cf5f84c8ecdbc66c7a7d118e828dd93c99"
+        in (rootfs_layer_digests)
     )
-    assert "sha256:622338701f7b3204a528003eb94e09d1f2e38f584835a6658b266a0f87ba8a91" in (
-        rootfs_layer_digests
+    assert (
+        "sha256:622338701f7b3204a528003eb94e09d1f2e38f584835a6658b266a0f87ba8a91"
+        in (rootfs_layer_digests)
     )
     assert webapp["os"] == "linux"
     assert webapp["os_version"] == "Debian GNU/Linux 13 (trixie)"
@@ -431,15 +423,82 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
         "memory": 536870912,
         "memory_swap": 1073741824,
     }
+    network = runtime["network"]
+    assert network["hostname"] == "webapp"
+    assert network["domainname"] == ""
+    assert len(network["endpoints"]) == 2
+    endpoints = {endpoint["network"]: endpoint for endpoint in network["endpoints"]}
+    dmz_endpoint = endpoints["dmz-net"]
+    assert dmz_endpoint["network_id"] == (
+        "da8da844dbb2e771c0d77dd3a0a33392b53ef0547f5cab073acf3d7c8136b06b"
+    )
+    assert dmz_endpoint["network_id_stability"] == "stable"
+    assert dmz_endpoint["endpoint_id"] == (
+        "601208e50783a00e3124c4c0797dfde773f89aeaf159b67791b1057f691be5e0"
+    )
+    assert dmz_endpoint["endpoint_id_stability"] == "ephemeral"
+    assert dmz_endpoint["backend_generated"] is True
+    assert dmz_endpoint["ip_address"] == "172.20.1.20"
+    assert dmz_endpoint["ip_prefix_length"] == 24
+    assert dmz_endpoint["gateway"] == "172.20.1.1"
+    assert dmz_endpoint["mac_address"] == "ea:76:a0:d9:0f:2c"
+    assert dmz_endpoint["aliases"] == ["aptl-webapp", "webapp"]
+    assert dmz_endpoint["dns_names"] == ["aptl-webapp", "webapp", "dfcf66bdcb7b"]
+    assert dmz_endpoint["generated_dns_names"] == ["dfcf66bdcb7b"]
+    assert dmz_endpoint["backend"]["driver"] == "bridge"
+    assert dmz_endpoint["backend"]["ipam_driver"] == "default"
+    assert dmz_endpoint["backend"]["driver_options"] == {}
+    assert dmz_endpoint["backend"]["ipam_options"] == {}
+
+    internal_endpoint = endpoints["internal-net"]
+    assert internal_endpoint["network_id"] == (
+        "13398d126254b7592401f00b79f8e80a4ff32fe680b7b3f999028fb6dbe8fb20"
+    )
+    assert internal_endpoint["network_id_stability"] == "stable"
+    assert internal_endpoint["endpoint_id"] == (
+        "56ce35d9af612ec7a488a076b079cea14359481498f3fdd1826ae34b689dd5e8"
+    )
+    assert internal_endpoint["endpoint_id_stability"] == "ephemeral"
+    assert internal_endpoint["backend_generated"] is True
+    assert internal_endpoint["ip_address"] == "172.20.2.25"
+    assert internal_endpoint["ip_prefix_length"] == 24
+    assert internal_endpoint["gateway"] == "172.20.2.1"
+    assert internal_endpoint["mac_address"] == "42:7a:3e:d1:8c:ed"
+    assert internal_endpoint["aliases"] == ["aptl-webapp", "webapp"]
+    assert internal_endpoint["dns_names"] == [
+        "aptl-webapp",
+        "webapp",
+        "dfcf66bdcb7b",
+    ]
+    assert internal_endpoint["generated_dns_names"] == ["dfcf66bdcb7b"]
+    assert internal_endpoint["backend"]["driver"] == "bridge"
+    assert internal_endpoint["backend"]["ipam_driver"] == "default"
+    assert internal_endpoint["backend"]["driver_options"] == {}
+    assert internal_endpoint["backend"]["ipam_options"] == {}
+    assert network["published_ports"] == [
+        {
+            "container_port": 8080,
+            "protocol": "tcp",
+            "host_ip": "",
+            "host_port": 8080,
+            "description": (
+                "Docker HostConfig publishes 8080/tcp to host port 8080 with "
+                "an empty HostIp, meaning all host interfaces for this capture."
+            ),
+        }
+    ]
     package_names = {package["name"] for package in runtime["packages"]}
     assert len(runtime["packages"]) == FULL_RUNTIME_PACKAGE_COUNT
     assert {"python3", "supervisor", "curl", "iptables", "Jinja2"} <= package_names
     manifest_paths = {manifest["path"] for manifest in runtime["dependency_manifests"]}
     assert "/app/requirements.txt" in manifest_paths
     assert len(runtime["package_vulnerabilities"]) == FULL_TRIVY_FINDING_COUNT
-    assert {
-        item["severity"] for item in runtime["package_vulnerabilities"]
-    } == {"critical", "high", "medium", "low"}
+    assert {item["severity"] for item in runtime["package_vulnerabilities"]} == {
+        "critical",
+        "high",
+        "medium",
+        "low",
+    }
 
     infrastructure = data["infrastructure"]
     assert infrastructure["webapp"]["links"] == ["dmz-net", "internal-net"]
@@ -493,9 +552,7 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
 def test_webapp_filesystem_checksum_paths_are_encoded_as_content():
     data = _yaml_file(TECHVAULT_SDL_PATH)
     content_paths = {
-        item["path"]
-        for item in data["content"].values()
-        if item["type"] == "File"
+        item["path"] for item in data["content"].values() if item["type"] == "File"
     }
     checksum_paths = {
         line.split("  ", maxsplit=1)[1]
@@ -519,9 +576,11 @@ def test_webapp_filesystem_tree_is_encoded_as_runtime_inventory():
         .splitlines()
     }
     assert observed_paths <= filesystem.keys()
-    for digest_line in (EVIDENCE_DIR / "filesystem-checksums.txt").read_text(
-        encoding="utf-8"
-    ).splitlines():
+    for digest_line in (
+        (EVIDENCE_DIR / "filesystem-checksums.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ):
         expected_digest, path = digest_line.split("  ", maxsplit=1)
         assert filesystem[path]["digest_algorithm"] == "sha256"
         assert filesystem[path]["content_digest"] == expected_digest
@@ -584,9 +643,54 @@ def test_webapp_runtime_local_identity_matches_passwd_and_group_evidence():
     assert local_identity["sudo_rules"] == []
 
 
+def test_webapp_runtime_network_matches_docker_evidence():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    network = data["nodes"]["webapp"]["runtime"]["network"]
+    container = _json_file("docker-inspect.container.json")[0]
+    docker_networks = {
+        "dmz-net": ("aptl_aptl-dmz", _json_file("docker-network.aptl-dmz.json")[0]),
+        "internal-net": (
+            "aptl_aptl-internal",
+            _json_file("docker-network.aptl-internal.json")[0],
+        ),
+    }
+
+    assert network["hostname"] == container["Config"]["Hostname"]
+    assert network["domainname"] == container["Config"]["Domainname"]
+
+    endpoints = {endpoint["network"]: endpoint for endpoint in network["endpoints"]}
+    for sdl_network, (docker_name, docker_network) in docker_networks.items():
+        observed = container["NetworkSettings"]["Networks"][docker_name]
+        endpoint = endpoints[sdl_network]
+        assert endpoint["network_id"] == observed["NetworkID"] == docker_network["Id"]
+        assert endpoint["endpoint_id"] == observed["EndpointID"]
+        assert endpoint["ip_address"] == observed["IPAddress"]
+        assert endpoint["ip_prefix_length"] == observed["IPPrefixLen"]
+        assert endpoint["mac_address"] == observed["MacAddress"]
+        assert endpoint["aliases"] == observed["Aliases"]
+        assert endpoint["dns_names"] == observed["DNSNames"]
+        assert endpoint["generated_dns_names"] == ["dfcf66bdcb7b"]
+        assert endpoint["gateway"] == docker_network["IPAM"]["Config"][0]["Gateway"]
+        assert endpoint["backend"]["driver"] == docker_network["Driver"]
+        assert endpoint["backend"]["ipam_driver"] == docker_network["IPAM"]["Driver"]
+        assert endpoint["backend"]["driver_options"] == docker_network["Options"]
+        assert endpoint["backend"]["ipam_options"] == {}
+
+    published = network["published_ports"]
+    assert len(published) == 1
+    binding = published[0]
+    host_binding = container["HostConfig"]["PortBindings"]["8080/tcp"][0]
+    assert binding["container_port"] == 8080
+    assert binding["protocol"] == "tcp"
+    assert binding["host_ip"] == host_binding["HostIp"]
+    assert binding["host_port"] == int(host_binding["HostPort"])
+
+
 def test_webapp_runtime_mount_targets_are_encoded():
     data = _yaml_file(TECHVAULT_SDL_PATH)
-    mount_targets = {mount["target"] for mount in data["nodes"]["webapp"]["runtime"]["mounts"]}
+    mount_targets = {
+        mount["target"] for mount in data["nodes"]["webapp"]["runtime"]["mounts"]
+    }
     observed_targets = set()
     for line in _runtime_baseline_section("mounts"):
         match = re.match(r".+? on (\S+) type \S+ \(", line)
@@ -614,6 +718,8 @@ def test_techvault_sdl_parses_and_compiles_with_aces_runtime_fields():
     assert runtime["local_identity"]["sudo_rules"] == []
     assert len(runtime["mounts"]) == 26
     assert len(runtime["filesystem_inventory"]) == 24
+    assert len(runtime["network"]["endpoints"]) == 2
+    assert len(runtime["network"]["published_ports"]) == 1
     assert runtime["container"]["runtime_name"] == "runc"
     assert runtime["health"]["status"] == "healthy"
     assert len(runtime["health"]["log"]) == 5
@@ -635,24 +741,34 @@ def test_parity_inventory_cites_webapp_inventory_and_aces_sdl():
     assert rows["scen.techvault.webapp-inventory"]["category"] == (
         "aces_schema_profile_gap"
     )
-    assert "Brad-Edwards/aces#364" not in rows["scen.techvault.webapp-inventory"][
-        "blocking_followup"
-    ]
-    assert "Brad-Edwards/aces#365" not in rows["scen.techvault.webapp-inventory"][
-        "blocking_followup"
-    ]
-    assert "ACES #363/#364/#365/#368 consumed" in rows["scen.techvault.webapp-inventory"][
-        "validation_evidence"
-    ]
-    assert "Brad-Edwards/aces#363" not in rows["scen.techvault.webapp-inventory"][
-        "blocking_followup"
-    ]
-    assert "Brad-Edwards/aces#368" not in rows["scen.techvault.webapp-inventory"][
-        "blocking_followup"
-    ]
-    assert "docs/aces/inventory/webapp/" in rows["scen.techvault.webapp-inventory"][
-        "validation_evidence"
-    ]
+    assert (
+        "Brad-Edwards/aces#364"
+        not in rows["scen.techvault.webapp-inventory"]["blocking_followup"]
+    )
+    assert (
+        "Brad-Edwards/aces#365"
+        not in rows["scen.techvault.webapp-inventory"]["blocking_followup"]
+    )
+    assert (
+        "Brad-Edwards/aces#366"
+        not in rows["scen.techvault.webapp-inventory"]["blocking_followup"]
+    )
+    assert (
+        "ACES #363/#364/#365/#366/#368 consumed"
+        in rows["scen.techvault.webapp-inventory"]["validation_evidence"]
+    )
+    assert (
+        "Brad-Edwards/aces#363"
+        not in rows["scen.techvault.webapp-inventory"]["blocking_followup"]
+    )
+    assert (
+        "Brad-Edwards/aces#368"
+        not in rows["scen.techvault.webapp-inventory"]["blocking_followup"]
+    )
+    assert (
+        "docs/aces/inventory/webapp/"
+        in rows["scen.techvault.webapp-inventory"]["validation_evidence"]
+    )
 
     assert rows["compose.service.webapp"]["legacy_source"] == (
         "docker-compose.yml (service: webapp)"

@@ -1682,6 +1682,69 @@ nodes:
           members: []
           provenance: package
         sudo_rules: []
+      network:
+        description: Container network realization observed from Docker inspect and Docker network inspect evidence for aptl-webapp.
+        hostname: webapp
+        domainname: ''
+        endpoints:
+        - network: dmz-net
+          network_id: da8da844dbb2e771c0d77dd3a0a33392b53ef0547f5cab073acf3d7c8136b06b
+          network_id_stability: stable
+          endpoint_id: 601208e50783a00e3124c4c0797dfde773f89aeaf159b67791b1057f691be5e0
+          endpoint_id_stability: ephemeral
+          backend_generated: true
+          ip_address: 172.20.1.20
+          ip_prefix_length: 24
+          gateway: 172.20.1.1
+          mac_address: ea:76:a0:d9:0f:2c
+          aliases:
+          - aptl-webapp
+          - webapp
+          dns_names:
+          - aptl-webapp
+          - webapp
+          - dfcf66bdcb7b
+          generated_dns_names:
+          - dfcf66bdcb7b
+          backend:
+            driver: bridge
+            ipam_driver: default
+            driver_options: {}
+            ipam_options: {}
+            description: Docker bridge network aptl_aptl-dmz with IPAM subnet 172.20.1.0/24 and gateway 172.20.1.1.
+          description: Docker endpoint for aptl-webapp on aptl_aptl-dmz.
+        - network: internal-net
+          network_id: 13398d126254b7592401f00b79f8e80a4ff32fe680b7b3f999028fb6dbe8fb20
+          network_id_stability: stable
+          endpoint_id: 56ce35d9af612ec7a488a076b079cea14359481498f3fdd1826ae34b689dd5e8
+          endpoint_id_stability: ephemeral
+          backend_generated: true
+          ip_address: 172.20.2.25
+          ip_prefix_length: 24
+          gateway: 172.20.2.1
+          mac_address: 42:7a:3e:d1:8c:ed
+          aliases:
+          - aptl-webapp
+          - webapp
+          dns_names:
+          - aptl-webapp
+          - webapp
+          - dfcf66bdcb7b
+          generated_dns_names:
+          - dfcf66bdcb7b
+          backend:
+            driver: bridge
+            ipam_driver: default
+            driver_options: {}
+            ipam_options: {}
+            description: Docker bridge network aptl_aptl-internal with IPAM subnet 172.20.2.0/24 and gateway 172.20.2.1.
+          description: Docker endpoint for aptl-webapp on aptl_aptl-internal.
+        published_ports:
+        - container_port: 8080
+          protocol: tcp
+          host_ip: ''
+          host_port: 8080
+          description: Docker HostConfig publishes 8080/tcp to host port 8080 with an empty HostIp, meaning all host interfaces for this capture.
       process:
         name: supervisord
         pid: 1

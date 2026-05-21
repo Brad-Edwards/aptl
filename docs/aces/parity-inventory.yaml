@@ -74,9 +74,9 @@ rows:
     category: aces_schema_profile_gap
     aces_target: ACES nodes / infrastructure / runtime / content / accounts fields plus remaining ACES expressivity blockers
     runtime_owner: n/a
-    validation_evidence: "docs/aces/inventory/webapp/ + tests/test_webapp_inventory.py + ACES #363/#364/#365/#368 consumed + ACES #366/#367 blockers"
-    blocking_followup: "#330; Brad-Edwards/aces#366; Brad-Edwards/aces#367"
-    notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL consumes ACES #363, #364, #365, and #368 and blocks remaining observable parity on the cited ACES expressivity issues.
+    validation_evidence: "docs/aces/inventory/webapp/ + tests/test_webapp_inventory.py + ACES #363/#364/#365/#366/#368 consumed + ACES #367 blocker"
+    blocking_followup: "#330; Brad-Edwards/aces#367"
+    notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL consumes ACES #363, #364, #365, #366, and #368 and blocks remaining observable parity on the cited ACES expressivity issue.
 
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml

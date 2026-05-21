@@ -26,9 +26,10 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
 IMAGE_ID = "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0"
 IMAGE_DIGEST = f"aptl-webapp@{IMAGE_ID}"
-ACES_RUNTIME_GAP = 358
 APTL_PUBLIC_HANDOFF_GAP = 321
 APTL_GENERIC_REALIZER_GAP = 324
+FULL_RUNTIME_PACKAGE_COUNT = 223
+FULL_TRIVY_FINDING_COUNT = 469
 
 REQUIRED_EVIDENCE_FILES = {
     "captured-at-utc.txt",
@@ -117,11 +118,10 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     result = validate_mapping_ledger(WEBAPP_DIR)
     assert result.ok, result.errors
     assert result.fact_count == 17
-    assert result.encoded_count == 12
-    assert result.blocked_count == 5
+    assert result.encoded_count == 15
+    assert result.blocked_count == 2
     assert result.triage_count == 0
     assert result.gap_issues == [
-        f"ACES #{ACES_RUNTIME_GAP}",
         f"APTL #{APTL_PUBLIC_HANDOFF_GAP}",
         f"APTL #{APTL_GENERIC_REALIZER_GAP}",
     ]
@@ -132,31 +132,22 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     assert len(ledger["correspondence_checks"]) == 3
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
     assert dispositions["webapp.runtime.log-volume"] == "encoded"
-    assert dispositions["webapp.runtime.supervised-process-set"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.runtime.supervised-process-set"] == "encoded"
+    assert dispositions["webapp.runtime.environment-policy"] == "encoded"
+    assert dispositions["webapp.runtime.capability-restart-policy"] == "encoded"
     assert dispositions["webapp.aptl.public-start-handoff"] == "blocked_by_aptl_gap"
     assert dispositions["webapp.aptl.generic-realizer"] == "blocked_by_aptl_gap"
+    assert "blocked_by_aces_gap" not in dispositions.values()
 
 
 def test_webapp_gap_report_surfaces_aces_and_aptl_handoffs():
     report = gap_report(WEBAPP_DIR)
     gaps = {gap["fact_id"]: gap for gap in report["gaps"]}
     assert set(gaps) == {
-        "webapp.runtime.supervised-process-set",
-        "webapp.runtime.environment-policy",
-        "webapp.runtime.capability-restart-policy",
         "webapp.aptl.public-start-handoff",
         "webapp.aptl.generic-realizer",
     }
     assert not report["triage_needed"]
-    assert gaps["webapp.runtime.supervised-process-set"]["gap_issue"]["number"] == (
-        ACES_RUNTIME_GAP
-    )
-    assert gaps["webapp.runtime.environment-policy"]["gap_issue"]["number"] == (
-        ACES_RUNTIME_GAP
-    )
-    assert gaps["webapp.runtime.capability-restart-policy"]["gap_issue"]["number"] == (
-        ACES_RUNTIME_GAP
-    )
     assert gaps["webapp.aptl.public-start-handoff"]["gap_issue"]["number"] == (
         APTL_PUBLIC_HANDOFF_GAP
     )
@@ -325,11 +316,41 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
         "-c",
         "/etc/supervisor/supervisord.conf",
     ]
+    process_names = {process["name"] for process in runtime["processes"]}
+    assert {
+        "supervisord",
+        "gunicorn-master",
+        "gunicorn-worker-1",
+        "gunicorn-worker-2",
+        "rsyslogd",
+        "wazuh-agent-wrapper",
+        "wazuh-execd",
+        "wazuh-agentd",
+        "wazuh-syscheckd",
+        "wazuh-logcollector",
+        "wazuh-modulesd",
+    } <= process_names
+    environment = {item["name"]: item for item in runtime["environment"]}
+    assert environment["DB_PASSWORD"]["value"] == "techvault_db_pass"
+    assert environment["DB_PASSWORD"]["value_classification"] == "secret_fixture"
+    assert environment["WAZUH_MANAGER"]["value"] == "wazuh.manager"
+    assert environment["PYTHON_VERSION"]["provenance"] == "image"
+    assert runtime["linux_capabilities"]["required"] == ["CAP_NET_ADMIN"]
+    assert "CAP_NET_ADMIN" in runtime["linux_capabilities"]["effective"]
+    assert runtime["operational_policy"]["restart"] == "unless_stopped"
+    assert runtime["operational_policy"]["resource_limits"] == {
+        "memory": 536870912,
+        "memory_swap": 1073741824,
+    }
     package_names = {package["name"] for package in runtime["packages"]}
-    assert {"python3", "supervisor", "curl", "iptables"} <= package_names
+    assert len(runtime["packages"]) == FULL_RUNTIME_PACKAGE_COUNT
+    assert {"python3", "supervisor", "curl", "iptables", "Jinja2"} <= package_names
     manifest_paths = {manifest["path"] for manifest in runtime["dependency_manifests"]}
     assert "/app/requirements.txt" in manifest_paths
-    assert runtime["package_vulnerabilities"]
+    assert len(runtime["package_vulnerabilities"]) == FULL_TRIVY_FINDING_COUNT
+    assert {
+        item["severity"] for item in runtime["package_vulnerabilities"]
+    } == {"critical", "high", "medium", "low"}
 
     infrastructure = data["infrastructure"]
     assert infrastructure["webapp"]["links"] == ["dmz-net", "internal-net"]
@@ -338,6 +359,22 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
         {"internal-net": "172.20.2.25"},
     ]
     assert infrastructure["webapp"]["dependencies"] == ["db", "wazuh-manager"]
+
+
+def test_techvault_sdl_parses_and_compiles_with_aces_runtime_fields():
+    from aces_processor.compiler import compile_runtime_model
+    from aces_sdl import parse_sdl_file
+
+    scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
+    model = compile_runtime_model(scenario)
+    runtime = model.node_deployments["provision.node.webapp"].spec["node"]["runtime"]
+
+    assert len(runtime["processes"]) == 11
+    assert len(runtime["environment"]) == 21
+    assert len(runtime["packages"]) == FULL_RUNTIME_PACKAGE_COUNT
+    assert len(runtime["package_vulnerabilities"]) == FULL_TRIVY_FINDING_COUNT
+    assert runtime["linux_capabilities"]["add"] == ["CAP_NET_ADMIN"]
+    assert runtime["operational_policy"]["restart"] == "unless_stopped"
 
 
 def test_parity_inventory_cites_webapp_inventory_and_aces_sdl():

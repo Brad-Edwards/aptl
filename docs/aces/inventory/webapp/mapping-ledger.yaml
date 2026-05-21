@@ -47,34 +47,35 @@ correspondence_checks:
     ledger_fact_ids:
       - webapp.runtime.log-volume
       - webapp.runtime.primary-process
+      - webapp.runtime.supervised-process-set
+      - webapp.runtime.environment-policy
+      - webapp.runtime.capability-restart-policy
       - webapp.runtime.package-inventory
       - webapp.runtime.vulnerability-scan
     method: >
       After #321/#324 wire APTL startup through ACES runtime content, run the
       encoded scenario, recapture runtime evidence, and compare the mount,
-      process, package, and scanner surfaces against this ledger.
+      process, environment, capability, operational-policy, package, and
+      scanner surfaces against this ledger.
     limit: >
       Planned because this issue records the desired ACES content and evidence,
       not the backend interpreter.
   - id: webapp-gap-correspondence
     status: blocked
-    source: ACES #358 plus APTL #321/#324
+    source: APTL #321/#324
     realized_evidence:
       - path: evidence/docker-top.txt
       - path: evidence/runtime-baseline.txt
       - path: evidence/docker-inspect.container.json
     ledger_fact_ids:
-      - webapp.runtime.supervised-process-set
-      - webapp.runtime.environment-policy
-      - webapp.runtime.capability-restart-policy
       - webapp.aptl.public-start-handoff
       - webapp.aptl.generic-realizer
     method: >
-      Convert blocked ledger rows into implemented correspondence checks once
-      ACES exposes the missing runtime-operation fields and APTL consumes ACES
-      RuntimeModel content through the generic backend path.
+      Convert blocked APTL consumption rows into implemented correspondence
+      checks once APTL consumes ACES RuntimeModel content through the generic
+      backend path.
     limit: >
-      Blocked by the cited ACES/APTL issues.
+      Blocked by the cited APTL issues.
 notes:
   - >
     ACES #354 is closed and covers runtime mounts, primary process identity,
@@ -82,7 +83,8 @@ notes:
     findings.
   - >
     ACES #358 owns remaining container runtime env, capability, restart-policy,
-    and supervised-process-set expressivity.
+    and supervised-process-set expressivity; it is closed, and those fields are
+    now encoded in scenarios/techvault.sdl.yaml for the webapp asset.
   - >
     APTL #321 and #324 own consumption of the encoded ACES content by the
     public startup path and generic backend realizer.
@@ -297,17 +299,14 @@ facts:
       - path: evidence/runtime-baseline.txt
       - path: evidence/filesystem-tree.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - features
-      why_not_current_surfaces: >
-        ACES runtime.process records one process identity. Features can describe
-        authored software units, but not the observed supervised process tree.
-      gap_issue:
-        tracker: ACES
-        number: 358
-        url: https://github.com/Brad-Edwards/aces/issues/358
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.processes
+      rationale: >
+        ACES #358 added runtime process-set inventory, which preserves the
+        load-bearing supervisord, gunicorn, rsyslog, and Wazuh daemon process
+        set separately from the primary PID 1 process identity.
 
   - id: webapp.runtime.environment-policy
     category: runtime-configuration
@@ -320,19 +319,15 @@ facts:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - features
-        - variables
-      why_not_current_surfaces: >
-        Feature environment is authored deployment input, while this inventory
-        needs observed runtime env vars with secret-fixture/redaction
-        classification and container provenance.
-      gap_issue:
-        tracker: ACES
-        number: 358
-        url: https://github.com/Brad-Edwards/aces/issues/358
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.environment
+      rationale: >
+        ACES #358 added observed runtime environment variables with value
+        classification and provenance, so Compose, image, container, and runtime
+        variables no longer have to be collapsed into deployable feature
+        environment.
 
   - id: webapp.runtime.capability-restart-policy
     category: runtime-configuration
@@ -344,19 +339,15 @@ facts:
       - path: evidence/compose-service.webapp.json
       - path: evidence/runtime-baseline.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - infrastructure
-        - runtime_contract
-      why_not_current_surfaces: >
-        ACES can express resources but does not type effective Linux
-        capabilities, restart policy, or equivalent container operation policy
-        as observed runtime facts.
-      gap_issue:
-        tracker: ACES
-        number: 358
-        url: https://github.com/Brad-Edwards/aces/issues/358
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.linux_capabilities
+        - nodes.webapp.runtime.operational_policy
+        - nodes.webapp.runtime.operational_policy.resource_limits
+      rationale: >
+        ACES #358 added typed Linux capability policy plus restart and resource
+        limit inventory under runtime operational policy.
 
   - id: webapp.aptl.public-start-handoff
     category: aptl-backend-gap

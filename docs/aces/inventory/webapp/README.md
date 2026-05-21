@@ -72,15 +72,17 @@ observed lab instance, not as a clean-lab rebuild proof.
 
 ## ACES Mapping Result
 
-Current ACES SDL can encode the webapp's node identity, source image pin,
+Current ACES SDL encodes the webapp's node identity, source image pin,
 network links, service exposure, healthcheck, runtime log mount, primary
-process, package inventory subset, scanner finding subset, scenario weakness
-IDs, and relationships in `scenarios/techvault.sdl.yaml`.
+process, supervised process set, observed runtime environment, Linux
+capabilities, restart/resource policy, package inventory, scanner findings,
+scenario weakness IDs, and relationships in `scenarios/techvault.sdl.yaml`.
 
 ACES #354 is closed and covers the runtime fields for mounts, primary process,
-packages, dependency manifests, and scanner-derived package findings. The
-remaining ACES expressivity gap is ACES #358: container runtime environment
-classification, Linux capability/restart policy, and supervised process sets.
+packages, dependency manifests, and scanner-derived package findings. ACES #358
+is closed and covers container runtime environment classification, Linux
+capability/restart policy, resource limits, and supervised process sets; those
+fields are now used by the TechVault SDL.
 
 APTL consumption remains blocked by the existing SCN-010 implementation issues:
 APTL #321 for the public ACES RuntimeManager handoff and APTL #324 for the
@@ -100,8 +102,8 @@ aptl aces-inventory gaps docs/aces/inventory/webapp
 - The capture does not prove byte-identical rebuildability.
 - Vulnerability results are time-sensitive to the Trivy database and advisory
   feeds.
-- The ACES SDL records a representative package/finding subset plus evidence
-  references; the full package and scanner inventories live in this frozen
-  evidence bundle.
+- The ACES SDL records the captured package and scanner inventories from this
+  frozen evidence bundle. Vulnerability records remain time-sensitive to the
+  Trivy database and advisory feeds.
 - The capture does not assert attack-induced state changes, log-volume history,
   or operator-driven runtime modifications.

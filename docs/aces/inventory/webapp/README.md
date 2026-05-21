@@ -89,16 +89,16 @@ capability/restart policy, resource limits, and supervised process sets; those
 fields are now used by the TechVault SDL.
 
 ACES #363 is closed and covers runtime filesystem metadata, permissions,
-ownership, checksums, stability, and first-class digest fields. ACES #368 is
-closed and covers container HostConfig, namespace/security settings, health
-logs, and full mount filesystem facts. Those fields are now used by the
-TechVault SDL.
+ownership, checksums, stability, and first-class digest fields. ACES #364 is
+closed and covers container image build provenance: Dockerfile instructions,
+image history/layers, copied source mappings, source checksums, image-default
+configuration, and attestation status. ACES #368 is closed and covers container
+HostConfig, namespace/security settings, health logs, and full mount filesystem
+facts. Those fields are now used by the TechVault SDL.
 
 Full observable parity is still blocked on ACES expressivity gaps, not waived by
 the evidence bundle:
 
-- ACES #364: container image build recipe, Dockerfile/layer history, source
-  input mapping, image config, and attestation status.
 - ACES #365: local identity database UID/GID/group/sudo facts.
 - ACES #366: Docker network aliases, endpoint metadata, MACs, DNS names, and
   published host bindings.
@@ -122,5 +122,5 @@ aptl aces-inventory gaps docs/aces/inventory/webapp
   Trivy database and advisory feeds.
 - The capture does not assert attack-induced state changes or later
   operator-driven runtime modifications. Observable steady-state fields that
-  current ACES cannot express are explicitly blocked by ACES #364-#367 rather
+  current ACES cannot express are explicitly blocked by ACES #365-#367 rather
   than treated as out of scope.

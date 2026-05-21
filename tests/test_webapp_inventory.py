@@ -26,10 +26,11 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
 IMAGE_ID = "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0"
 IMAGE_DIGEST = f"aptl-webapp@{IMAGE_ID}"
-ACES_BUILD_PROVENANCE_GAP = 364
 ACES_IDENTITY_GAP = 365
 ACES_NETWORK_GAP = 366
 ACES_HTTP_SURFACE_GAP = 367
+BUILD_HISTORY_LAYER_COUNT = 31
+SOURCE_INPUT_COUNT = 18
 FULL_RUNTIME_PACKAGE_COUNT = 223
 FULL_TRIVY_FINDING_COUNT = 469
 
@@ -132,11 +133,10 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     result = validate_mapping_ledger(WEBAPP_DIR)
     assert result.ok, result.errors
     assert result.fact_count == 23
-    assert result.encoded_count == 19
-    assert result.blocked_count == 4
+    assert result.encoded_count == 20
+    assert result.blocked_count == 3
     assert result.triage_count == 0
     assert result.gap_issues == [
-        f"ACES #{ACES_BUILD_PROVENANCE_GAP}",
         f"ACES #{ACES_IDENTITY_GAP}",
         f"ACES #{ACES_NETWORK_GAP}",
         f"ACES #{ACES_HTTP_SURFACE_GAP}",
@@ -147,7 +147,7 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     assert ledger["provenance"]["attestation"]["status"] == "not_available"
     assert len(ledger["correspondence_checks"]) == 2
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
-    assert dispositions["webapp.build.recipe"] == "blocked_by_aces_gap"
+    assert dispositions["webapp.build.recipe"] == "encoded"
     assert dispositions["webapp.runtime.log-volume"] == "encoded"
     assert dispositions["webapp.runtime.mount-table"] == "encoded"
     assert dispositions["webapp.runtime.filesystem-content"] == "encoded"
@@ -166,13 +166,11 @@ def test_webapp_gap_report_surfaces_remaining_aces_gaps_only():
     report = gap_report(WEBAPP_DIR)
     gaps = {gap["fact_id"]: gap for gap in report["gaps"]}
     assert set(gaps) == {
-        "webapp.build.recipe",
         "webapp.runtime.local-identity-database",
         "webapp.network.realization-metadata",
         "webapp.application.http-surface",
     }
     assert not report["triage_needed"]
-    assert gaps["webapp.build.recipe"]["gap_issue"]["number"] == ACES_BUILD_PROVENANCE_GAP
     assert gaps["webapp.runtime.local-identity-database"]["gap_issue"]["number"] == (
         ACES_IDENTITY_GAP
     )
@@ -320,9 +318,40 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     data = _yaml_file(TECHVAULT_SDL_PATH)
     webapp = data["nodes"]["webapp"]
     runtime = webapp["runtime"]
+    build = webapp["source"]["build"]
 
     assert data["name"] == "techvault"
-    assert webapp["source"] == {"name": "aptl-webapp", "version": IMAGE_DIGEST}
+    assert webapp["source"]["name"] == "aptl-webapp"
+    assert webapp["source"]["version"] == IMAGE_DIGEST
+    assert build["base_image"] == "python:3.11-slim"
+    assert build["dockerfile_path"] == "containers/webapp/Dockerfile"
+    assert len(build["instructions"]) == 22
+    assert len(build["layers"]) == BUILD_HISTORY_LAYER_COUNT
+    assert len(build["source_inputs"]) == SOURCE_INPUT_COUNT
+    assert len(build["copied_sources"]) == 9
+    assert build["config"]["entrypoint"] == ["/entrypoint.sh"]
+    assert build["config"]["command"] == []
+    assert build["config"]["working_directory"] == "/app"
+    assert "8080/tcp" in build["config"]["exposed_ports"]
+    assert build["attestation"]["status"] == "absent"
+    assert build["attestation"]["verification"] == "not_applicable"
+    build_sources = {item["source_path"]: item for item in build["source_inputs"]}
+    assert build_sources["containers/webapp/app/app.py"]["destination_path"] == (
+        "/app/app.py"
+    )
+    assert build_sources["containers/webapp/app/app.py"]["checksum"] == (
+        "08beb9eec94aee668f19dc3d9302e465031ded519342205d1f1421d55b0814d6"
+    )
+    rootfs_layer_digests = {
+        layer["digest"] for layer in build["layers"] if layer.get("digest")
+    }
+    assert len(rootfs_layer_digests) == 20
+    assert "sha256:79dd1f4c855cd061f687a994426634cf5f84c8ecdbc66c7a7d118e828dd93c99" in (
+        rootfs_layer_digests
+    )
+    assert "sha256:622338701f7b3204a528003eb94e09d1f2e38f584835a6658b266a0f87ba8a91" in (
+        rootfs_layer_digests
+    )
     assert webapp["os"] == "linux"
     assert webapp["os_version"] == "Debian GNU/Linux 13 (trixie)"
     assert {"port": 8080, "protocol": "tcp", "name": "http"} in webapp["services"]
@@ -508,8 +537,14 @@ def test_techvault_sdl_parses_and_compiles_with_aces_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    runtime = model.node_deployments["provision.node.webapp"].spec["node"]["runtime"]
+    node = model.node_deployments["provision.node.webapp"].spec["node"]
+    runtime = node["runtime"]
+    build = node["source"]["build"]
 
+    assert len(build["instructions"]) == 22
+    assert len(build["layers"]) == BUILD_HISTORY_LAYER_COUNT
+    assert len(build["source_inputs"]) == SOURCE_INPUT_COUNT
+    assert build["attestation"]["status"] == "absent"
     assert len(runtime["mounts"]) == 26
     assert len(runtime["filesystem_inventory"]) == 24
     assert runtime["container"]["runtime_name"] == "runc"
@@ -533,8 +568,11 @@ def test_parity_inventory_cites_webapp_inventory_and_aces_sdl():
     assert rows["scen.techvault.webapp-inventory"]["category"] == (
         "aces_schema_profile_gap"
     )
-    assert "Brad-Edwards/aces#364" in rows["scen.techvault.webapp-inventory"][
+    assert "Brad-Edwards/aces#364" not in rows["scen.techvault.webapp-inventory"][
         "blocking_followup"
+    ]
+    assert "ACES #363/#364/#368 consumed" in rows["scen.techvault.webapp-inventory"][
+        "validation_evidence"
     ]
     assert "Brad-Edwards/aces#363" not in rows["scen.techvault.webapp-inventory"][
         "blocking_followup"

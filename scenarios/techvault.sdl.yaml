@@ -39,6 +39,358 @@ nodes:
     source:
       name: aptl-webapp
       version: aptl-webapp@sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0
+      build:
+        description: >
+          Observed local Docker build provenance for the TechVault webapp image.
+          The build used python:3.11-slim as a mutable base tag; an immutable
+          base-image digest was not available in the frozen local capture.
+        base_image: python:3.11-slim
+        dockerfile_path: containers/webapp/Dockerfile
+        instructions:
+        - instruction: from
+          arguments:
+          - python:3.11-slim
+        - instruction: env
+          arguments:
+          - DEBIAN_FRONTEND=noninteractive
+        - instruction: run
+          arguments:
+          - apt-get update && apt-get install -y iputils-ping net-tools curl rsyslog
+            iptables supervisor && rm -rf /var/lib/apt/lists/*
+        - instruction: copy
+          arguments:
+          - containers/_wazuh-agent/install.sh
+          - /tmp/install-wazuh.sh
+        - instruction: copy
+          arguments:
+          - containers/_wazuh-agent/aptl-firewall-drop.sh
+          - /tmp/aptl-firewall-drop.sh
+        - instruction: copy
+          arguments:
+          - config/wazuh_cluster/etc/lists/active-response-whitelist
+          - /tmp/active-response-whitelist
+        - instruction: run
+          arguments:
+          - /tmp/install-wazuh.sh && rm /tmp/install-wazuh.sh /tmp/aptl-firewall-drop.sh
+            /tmp/active-response-whitelist
+        - instruction: copy
+          arguments:
+          - containers/_wazuh-agent/ossec.conf.template
+          - /opt/aptl/wazuh/ossec.conf.template
+        - instruction: copy
+          arguments:
+          - containers/_wazuh-agent/wazuh-agent.sh
+          - /opt/aptl/wazuh/wazuh-agent.sh
+        - instruction: run
+          arguments:
+          - chmod +x /opt/aptl/wazuh/wazuh-agent.sh
+        - instruction: workdir
+          arguments:
+          - /app
+        - instruction: copy
+          arguments:
+          - containers/webapp/requirements.txt
+          - .
+        - instruction: run
+          arguments:
+          - pip install --no-cache-dir -r requirements.txt
+        - instruction: copy
+          arguments:
+          - containers/webapp/app/
+          - ./
+        - instruction: copy
+          arguments:
+          - containers/webapp/entrypoint.sh
+          - /entrypoint.sh
+        - instruction: copy
+          arguments:
+          - containers/webapp/supervisord.conf
+          - /etc/supervisor/conf.d/webapp.conf
+        - instruction: run
+          arguments:
+          - chmod +x /entrypoint.sh
+        - instruction: run
+          arguments:
+          - mkdir -p /var/log/gunicorn
+        - instruction: expose
+          arguments:
+          - "8080"
+        - instruction: env
+          arguments:
+          - FLASK_APP=app.py
+        - instruction: env
+          arguments:
+          - FLASK_ENV=production
+        - instruction: entrypoint
+          arguments:
+          - /entrypoint.sh
+        layers:
+        - created_by: "ENTRYPOINT [\"/entrypoint.sh\"]"
+          size: 0
+          empty: true
+        - created_by: ENV FLASK_ENV=production
+          size: 0
+          empty: true
+        - created_by: ENV FLASK_APP=app.py
+          size: 0
+          empty: true
+        - created_by: "EXPOSE [8080/tcp]"
+          size: 0
+          empty: true
+        - created_by: "RUN /bin/sh -c mkdir -p /var/log/gunicorn # buildkit"
+          digest: sha256:622338701f7b3204a528003eb94e09d1f2e38f584835a6658b266a0f87ba8a91
+          size: 16400
+          empty: false
+        - created_by: "RUN /bin/sh -c chmod +x /entrypoint.sh # buildkit"
+          digest: sha256:2c64f20c42f027931f3582894a72cf2a0e1380337946bb42ad4b3562e7d97ea8
+          size: 8190
+          empty: false
+        - created_by: "COPY containers/webapp/supervisord.conf /etc/supervisor/conf.d/webapp.conf # buildkit"
+          digest: sha256:b29949715cb939a7fb70f999a06faabd0a72bcf779e5b87013c64682714238e8
+          size: 20500
+          empty: false
+        - created_by: "COPY containers/webapp/entrypoint.sh /entrypoint.sh # buildkit"
+          digest: sha256:6bd72a573ab2259fdc2248f67522c37b5059e695431b55ba5431edbf24c24dcb
+          size: 8190
+          empty: false
+        - created_by: "COPY containers/webapp/app/ ./ # buildkit"
+          digest: sha256:6da34036d451d4d624f1f5118c6a2c9427da532478ff9df45818a0dd25e1676b
+          size: 61400
+          empty: false
+        - created_by: "RUN /bin/sh -c pip install --no-cache-dir -r requirements.txt # buildkit"
+          digest: sha256:82c77ca0cdf9fa6b64b52724c474dd25b3d67539cc139dab227da4c79160e6c5
+          size: 28100000
+          empty: false
+        - created_by: "COPY containers/webapp/requirements.txt . # buildkit"
+          digest: sha256:d8d4a58cd512dec90a272cc370e3ddd2c87cc4b800f712591e933c13b515468d
+          size: 12300
+          empty: false
+        - created_by: WORKDIR /app
+          digest: sha256:9fad9967e87cf37d6057e0e72d12331260bf52adcb2a38a32ca2e3c8bbc637c4
+          size: 8190
+          empty: false
+        - created_by: "RUN /bin/sh -c chmod +x /opt/aptl/wazuh/wazuh-agent.sh # buildkit"
+          digest: sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef
+          size: 4100
+          empty: false
+        - created_by: "COPY containers/_wazuh-agent/wazuh-agent.sh /opt/aptl/wazuh/wazuh-agent.sh # buildkit"
+          digest: sha256:f259288c477202a349aae8004ccec85ed063da63de50869cb036236c27bc8ac9
+          size: 24600
+          empty: false
+        - created_by: "COPY containers/_wazuh-agent/ossec.conf.template /opt/aptl/wazuh/ossec.conf.template # buildkit"
+          digest: sha256:d22a58c577184d5c42db5043f19f2cf858b97e070ae016a9972387aab46b9703
+          size: 20500
+          empty: false
+        - created_by: "RUN /bin/sh -c /tmp/install-wazuh.sh &&     rm /tmp/install-wazuh.sh /tmp/aptl-firewall-drop.sh /tmp/active-response-whitelist # buildkit"
+          digest: sha256:b827ec22799aea1efcaf26a7b9c3122075d2d5448d951806a4078122de2e4fa2
+          size: 38800000
+          empty: false
+        - created_by: "COPY config/wazuh_cluster/etc/lists/active-response-whitelist /tmp/active-response-whitelist # buildkit"
+          digest: sha256:dd3baf146995d5887248b4f0648d52974b3eddad4a2b041f433b73fca8369fa7
+          size: 12300
+          empty: false
+        - created_by: "COPY containers/_wazuh-agent/aptl-firewall-drop.sh /tmp/aptl-firewall-drop.sh # buildkit"
+          digest: sha256:e5cb98e67ace8314855201e3cb56d8b242567acb9a75a69e231c2b362e3bc59e
+          size: 16400
+          empty: false
+        - created_by: "COPY containers/_wazuh-agent/install.sh /tmp/install-wazuh.sh # buildkit"
+          digest: sha256:7715c6741d9dff0fc7118ed46acc81c61ea228c6e4d34eb0324681c4e8f0e1b5
+          size: 12300
+          empty: false
+        - created_by: "RUN /bin/sh -c apt-get update && apt-get install -y     iputils-ping     net-tools     curl     rsyslog     iptables     supervisor     && rm -rf /var/lib/apt/lists/* # buildkit"
+          digest: sha256:21957f40a26b23621dfbe2b494bef51909b82dd8b859f6da03d9d17d11b26315
+          size: 156000000
+          empty: false
+        - created_by: ENV DEBIAN_FRONTEND=noninteractive
+          size: 0
+          empty: true
+        - created_by: "CMD [\"python3\"]"
+          size: 0
+          empty: true
+        - created_by: "RUN /bin/sh -c set -eux;  for src in idle3 pip3 pydoc3 python3 python3-config; do   dst=\"$(echo \"$src\" | tr -d 3)\";   [ -s \"/usr/local/bin/$src\" ];   [ ! -e \"/usr/local/bin/$dst\" ];   ln -svT \"$src\" \"/usr/local/bin/$dst\";  done # buildkit"
+          digest: sha256:94e760ec30748f73d19bcb5d4da140b8dde956299eac18e3372d89236f56c995
+          size: 16400
+          empty: false
+        - created_by: "RUN /bin/sh -c set -eux;   savedAptMark=\"$(apt-mark showmanual)\";  apt-get update;  apt-get install -y --no-install-recommends   dpkg-dev   gcc   gnupg   libbluetooth-dev   libbz2-dev   libc6-dev   libdb-dev   libffi-dev   libgdbm-dev   liblzma-dev   libncursesw5-dev   libreadline-dev   libsqlite3-dev   libssl-dev   make   tk-dev   uuid-dev   wget   xz-utils   zlib1g-dev  ;   wget -O python.tar.xz \"https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz\";  echo \"$PYTHON_SHA256 *python.tar.xz\" | sha256sum -c -;  wget -O python.tar.xz.asc \"https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz.asc\";  GNUPGHOME=\"$(mktemp -d)\"; export GNUPGHOME;  gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys \"$GPG_KEY\";  gpg --batch --verify python.tar.xz.asc python.tar.xz;  gpgconf --kill all;  rm -rf \"$GNUPGHOME\" python.tar.xz.asc;  mkdir -p /usr/src/python;  tar --extract --directory /usr/src/python --strip-components=1 --file python.tar.xz;  rm python.tar.xz;   cd /usr/src/python;  gnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\";  ./configure   --build=\"$gnuArch\"   --enable-loadable-sqlite-extensions   --enable-optimizations   --enable-option-checking=fatal   --enable-shared   $(test \"${gnuArch%%-*}\" != 'riscv64' && echo '--with-lto')   --with-ensurepip  ;  nproc=\"$(nproc)\";  EXTRA_CFLAGS=\"$(dpkg-buildflags --get CFLAGS)\";  LDFLAGS=\"$(dpkg-buildflags --get LDFLAGS)\";  LDFLAGS=\"${LDFLAGS:-} -Wl,--strip-all\";  make -j \"$nproc\"   \"EXTRA_CFLAGS=${EXTRA_CFLAGS:-}\"   \"LDFLAGS=${LDFLAGS:-}\"  ;  rm python;  make -j \"$nproc\"   \"EXTRA_CFLAGS=${EXTRA_CFLAGS:-}\"   \"LDFLAGS=${LDFLAGS:-} -Wl,-rpath='\\$\\$ORIGIN/../lib'\"   python  ;  make install;   cd /;  rm -rf /usr/src/python;   find /usr/local -depth   \\(    \\( -type d -a \\( -name test -o -name tests -o -name idle_test \\) \\)    -o \\( -type f -a \\( -name '*.pyc' -o -name '*.pyo' -o -name 'libpython*.a' \\) \\)   \\) -exec rm -rf '{}' +  ;   ldconfig;   apt-mark auto '.*' > /dev/null;  apt-mark manual $savedAptMark;  find /usr/local -type f -executable -not \\( -name '*tkinter*' \\) -exec ldd '{}' ';'   | awk '/=>/ { so = $(NF-1); if (index(so, \"/usr/local/\") == 1) { next }; gsub(\"^/(usr/)?\", \"\", so); printf \"*%s\\n\", so }'   | sort -u   | xargs -rt dpkg-query --search   | awk 'sub(\":$\", \"\", $1) { print $1 }'   | sort -u   | xargs -r apt-mark manual  ;  apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false;  apt-get dist-clean;   export PYTHONDONTWRITEBYTECODE=1;  python3 --version;   pip3 install   --disable-pip-version-check   --no-cache-dir   --no-compile   'setuptools==79.0.1'   'wheel<0.46'  ;  pip3 --version # buildkit"
+          digest: sha256:799edc77eb3d21542943122b97c5ba1e80c2a1eb3d222e23196717126398ef61
+          size: 48400000
+          empty: false
+        - created_by: ENV PYTHON_SHA256=272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625
+          size: 0
+          empty: true
+        - created_by: ENV PYTHON_VERSION=3.11.15
+          size: 0
+          empty: true
+        - created_by: ENV GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D
+          size: 0
+          empty: true
+        - created_by: "RUN /bin/sh -c set -eux;  apt-get update;  apt-get install -y --no-install-recommends   ca-certificates   netbase   tzdata  ;  apt-get dist-clean # buildkit"
+          digest: sha256:2e53cb234c597e3f6a8f896df5efafd6ceca83645632661f2e32cd7144b43738
+          size: 4940000
+          empty: false
+        - created_by: ENV LANG=C.UTF-8
+          size: 0
+          empty: true
+        - created_by: ENV PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          size: 0
+          empty: true
+        - created_by: "# debian.sh --arch 'amd64' out/ 'trixie' '@1777939200'"
+          digest: sha256:79dd1f4c855cd061f687a994426634cf5f84c8ecdbc66c7a7d118e828dd93c99
+          size: 87400000
+          empty: false
+        build_args: []
+        copied_sources:
+        - source_path: containers/_wazuh-agent/install.sh
+          destination_path: /tmp/install-wazuh.sh
+        - source_path: containers/_wazuh-agent/aptl-firewall-drop.sh
+          destination_path: /tmp/aptl-firewall-drop.sh
+        - source_path: config/wazuh_cluster/etc/lists/active-response-whitelist
+          destination_path: /tmp/active-response-whitelist
+        - source_path: containers/_wazuh-agent/ossec.conf.template
+          destination_path: /opt/aptl/wazuh/ossec.conf.template
+        - source_path: containers/_wazuh-agent/wazuh-agent.sh
+          destination_path: /opt/aptl/wazuh/wazuh-agent.sh
+        - source_path: containers/webapp/requirements.txt
+          destination_path: /app/requirements.txt
+        - source_path: containers/webapp/app/
+          destination_path: /app/
+        - source_path: containers/webapp/entrypoint.sh
+          destination_path: /entrypoint.sh
+        - source_path: containers/webapp/supervisord.conf
+          destination_path: /etc/supervisor/conf.d/webapp.conf
+        config:
+          entrypoint:
+          - /entrypoint.sh
+          command: []
+          working_directory: /app
+          exposed_ports:
+          - 8080/tcp
+          labels:
+            com.docker.compose.project: aptl
+            com.docker.compose.service: webapp
+            com.docker.compose.version: 5.1.3
+          default_environment:
+          - name: PATH
+            value: /usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            value_classification: plain
+          - name: LANG
+            value: C.UTF-8
+            value_classification: plain
+          - name: GPG_KEY
+            value: A035C8C19219BA821ECEA86B64E628F8D684696D
+            value_classification: plain
+          - name: PYTHON_VERSION
+            value: 3.11.15
+            value_classification: plain
+          - name: PYTHON_SHA256
+            value: 272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625
+            value_classification: plain
+          - name: DEBIAN_FRONTEND
+            value: noninteractive
+            value_classification: plain
+          - name: FLASK_APP
+            value: app.py
+            value_classification: plain
+          - name: FLASK_ENV
+            value: production
+            value_classification: plain
+        source_inputs:
+        - identifier: containers-webapp-Dockerfile
+          source_path: containers/webapp/Dockerfile
+          checksum: 2a1d01bafb067e7ef9e63bcffdf870ffad56418bdf0a83a04cf7c88163412be9
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-entrypoint-sh
+          source_path: containers/webapp/entrypoint.sh
+          destination_path: /entrypoint.sh
+          checksum: dd191e81a760b9046e5cb011b229eccc690877c0a87556d91a94b927d0032957
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-supervisord-conf
+          source_path: containers/webapp/supervisord.conf
+          destination_path: /etc/supervisor/conf.d/webapp.conf
+          checksum: dcdab3319b81ee13ed1048a24415abf90867f790a5ada67d107cf712407b3c6a
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-requirements-txt
+          source_path: containers/webapp/requirements.txt
+          destination_path: /app/requirements.txt
+          checksum: 6e55730ccdc1cce6c4e09c2431a8d56d085c3c544a0bb5f42ff1af3918c04ec5
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-app-app-py
+          source_path: containers/webapp/app/app.py
+          destination_path: /app/app.py
+          checksum: 08beb9eec94aee668f19dc3d9302e465031ded519342205d1f1421d55b0814d6
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-app-static-style-css
+          source_path: containers/webapp/app/static/style.css
+          destination_path: /app/static/style.css
+          checksum: 34af32a9b1c0c538f4b2e5dd7df6e3e44ca976988d34f482c80b03ece662d53c
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-app-templates-admin-html
+          source_path: containers/webapp/app/templates/admin.html
+          destination_path: /app/templates/admin.html
+          checksum: 80ad82948ea5ed17a472f065b99d938acfba1b35d3869327f5cbe88d38558449
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-app-templates-base-html
+          source_path: containers/webapp/app/templates/base.html
+          destination_path: /app/templates/base.html
+          checksum: 7c28af474bb0bb9d75667a8acad4b2b87fede111780b6ee6960b1c80ed841629
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-app-templates-dashboard-html
+          source_path: containers/webapp/app/templates/dashboard.html
+          destination_path: /app/templates/dashboard.html
+          checksum: 2bb50cbd55b25a1d87def04201a9c3cac5794f8c98b1abedfdb2ab79340442f7
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-app-templates-login-html
+          source_path: containers/webapp/app/templates/login.html
+          destination_path: /app/templates/login.html
+          checksum: 945929a03b9f99fe99333cf1a0812c9f085ee9a83260b4dd3ca9a58690d66f2e
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-app-templates-search-html
+          source_path: containers/webapp/app/templates/search.html
+          destination_path: /app/templates/search.html
+          checksum: 2071771a5dd91c618fe2ce4356a7aab33e5b2314847bc06ac4c4c545fe1bc89b
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-app-templates-tools-html
+          source_path: containers/webapp/app/templates/tools.html
+          destination_path: /app/templates/tools.html
+          checksum: c9251a2d135de24cde145d82dc6f6b2b7505ab232ef5329c6cd8c4ab10bec184
+          checksum_algorithm: sha256
+        - identifier: containers-webapp-app-templates-upload-html
+          source_path: containers/webapp/app/templates/upload.html
+          destination_path: /app/templates/upload.html
+          checksum: 6a45749c307b1f11de109ba363155428f3a1bc1beb6cc0be3b857563d3b6dea8
+          checksum_algorithm: sha256
+        - identifier: containers-wazuh-agent-install-sh
+          source_path: containers/_wazuh-agent/install.sh
+          destination_path: /tmp/install-wazuh.sh
+          checksum: e033ab09b11f1995d426cbf28dced8e8cb9922d2cdae160bec4dcecc76ae74ec
+          checksum_algorithm: sha256
+        - identifier: containers-wazuh-agent-wazuh-agent-sh
+          source_path: containers/_wazuh-agent/wazuh-agent.sh
+          destination_path: /opt/aptl/wazuh/wazuh-agent.sh
+          checksum: 0b0b2b8ba176edeeb37594acd2c5b4fca062b5d20b906c6b8581be8fcf97ac84
+          checksum_algorithm: sha256
+        - identifier: containers-wazuh-agent-ossec-conf-template
+          source_path: containers/_wazuh-agent/ossec.conf.template
+          destination_path: /opt/aptl/wazuh/ossec.conf.template
+          checksum: 35579f1c69c77a4792da5bccb15dc9feb0d1c623ba9c7df14cb7922ec113c301
+          checksum_algorithm: sha256
+        - identifier: containers-wazuh-agent-aptl-firewall-drop-sh
+          source_path: containers/_wazuh-agent/aptl-firewall-drop.sh
+          destination_path: /tmp/aptl-firewall-drop.sh
+          checksum: d25a0037be06ed558588cabfccd7cac394dfad24f61893ab6b96e33e8cc21c79
+          checksum_algorithm: sha256
+        - identifier: config-wazuh-cluster-etc-lists-active-response-whitelist
+          source_path: config/wazuh_cluster/etc/lists/active-response-whitelist
+          destination_path: /tmp/active-response-whitelist
+          checksum: 7543254be8d7661122e886f99192e27c65165a4c2e634051abf030eb41c138ef
+          checksum_algorithm: sha256
+        attestation:
+          status: absent
+          verification: not_applicable
+          attestation_type: none
+          description: >
+            The mutable local image tag had no registry-visible OCI, in-toto,
+            or SLSA attestation available in the frozen local capture.
     resources: {ram: 536870912, cpu: 1}
     features:
       techvault-webapp-service: webapp-root

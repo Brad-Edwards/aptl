@@ -74,11 +74,11 @@ notes:
     and supervised-process-set expressivity; it is closed, and those fields are
     now encoded in scenarios/techvault.sdl.yaml for the webapp asset.
   - >
-    ACES #363 and #368 are closed and consumed by this SDL update. ACES #364,
+    ACES #363, #364, and #368 are closed and consumed by this SDL update. ACES
     #365, #366, and #367 remain blocking expressivity gaps for observable
-    webapp facts that remain outside current ACES SDL expressivity. Those
-    remaining gaps are blockers, not waivers; this asset is not complete until
-    ACES supports those facts and the SDL is updated to use the new surfaces.
+    webapp facts that remain outside current ACES SDL expressivity. Those gaps
+    are blockers, not waivers; this asset is not complete until ACES supports
+    those facts and the SDL is updated to use the new surfaces.
 facts:
   - id: webapp.image.identity
     category: provenance
@@ -108,20 +108,23 @@ facts:
       - path: evidence/docker-history.image.txt
       - path: evidence/source-checksums.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - features
-        - runtime_contract
-      why_not_current_surfaces: >
-        ACES source pins the built artifact, but current ACES cannot express
-        the detailed Dockerfile instruction stream, image history/layers,
-        build args, copied source inputs, image config fields, or attestation
-        absence as first-class SDL facts.
-      gap_issue:
-        tracker: ACES
-        number: 364
-        url: https://github.com/Brad-Edwards/aces/issues/364
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.source.build.base_image
+        - nodes.webapp.source.build.dockerfile_path
+        - nodes.webapp.source.build.instructions
+        - nodes.webapp.source.build.layers
+        - nodes.webapp.source.build.build_args
+        - nodes.webapp.source.build.copied_sources
+        - nodes.webapp.source.build.config
+        - nodes.webapp.source.build.source_inputs
+        - nodes.webapp.source.build.attestation
+      rationale: >
+        ACES #364 added the Source.build image provenance surface, so the
+        observed Dockerfile recipe, Docker history/layer chain, copied source
+        mappings, checksum-addressed source inputs, image-default config, and
+        absent-attestation fact are encoded directly.
 
   - id: webapp.os.version
     category: runtime-configuration

@@ -1,0 +1,16 @@
+[
+  {
+    "CreatedAt": "2026-05-19T23:45:37+02:00",
+    "Driver": "local",
+    "Labels": {
+      "com.docker.compose.config-hash": "eced206450cd463c98c17777693f0c85ff36c995670671403d91c811c76f2a05",
+      "com.docker.compose.project": "aptl",
+      "com.docker.compose.version": "5.1.3",
+      "com.docker.compose.volume": "webapp_logs"
+    },
+    "Mountpoint": "/var/lib/docker/volumes/aptl_webapp_logs/_data",
+    "Name": "aptl_webapp_logs",
+    "Options": null,
+    "Scope": "local"
+  }
+]

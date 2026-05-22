@@ -18,6 +18,7 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.33.0",
     "opentelemetry-semantic-conventions>=0.54b0",
     "cryptography>=42.0.0",
+    "aces-sdl @ git+https://github.com/Brad-Edwards/aces.git@dev#subdirectory=implementations/python",
 ]
 
 [project.scripts]
@@ -45,6 +46,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.ruff]
 # Lint only the Python control-plane source. Tests, generated files, and

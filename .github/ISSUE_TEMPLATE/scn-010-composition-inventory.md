@@ -16,13 +16,18 @@ ACES methodology issue.
 
 Inventory the assembly of TechVault from its per-asset inventories: how
 the 28 substantive containers compose into a single scenario at steady
-state. Captures all cross-asset state that no individual asset inventory
-owns: networks, DNS, dependency graph, mounts shared across containers,
-trust relationships, account-to-host mapping, content placement, and
-observation chains.
+state. Capture all cross-asset state that no individual asset inventory
+owns and encode every observable composition fact directly in
+`scenarios/techvault.sdl.yaml`: networks, DNS, dependency graph, mounts
+shared across containers, trust relationships, account-to-host mapping,
+content placement, and observation chains. Supporting artifacts are
+evidence/provenance only; they are not substitutes for SDL expression.
 
 **Snapshot point**: steady state *after* `aptl lab start` has fully
-completed. Time dynamics are out of scope.
+completed. Time dynamics and attack-induced changes may be owned by
+separate linked work, but every composition fact observable at the snapshot
+point is in scope here and must be encoded or blocked by a specific ACES
+expressivity issue.
 
 ## Identifying information
 
@@ -73,6 +78,68 @@ At minimum:
   `infrastructure`, `relationships`, `dependencies`), which are
   realized form, which are provenance.
 
+## Absolute Observable-Parity Gate
+
+This issue is not complete until the TechVault ACES SDL expresses every
+composition fact that a participant, adversary, defender, autonomous agent,
+tool, evaluator, or harness could observe from inside the realized range.
+
+Parity means full observable parity. It is not relevance-filtered. It is
+not limited to facts needed by APTL's current implementation, not limited
+to load-bearing behavior, and not satisfied by storing evidence outside
+the SDL.
+
+Evidence bundles, checksums, source trees, Docker/Compose files,
+screenshots, logs, inventories, comments, and mapping ledgers are proof
+inputs only. They are not substitutes for SDL expression. If an observable
+network, DNS record, route, mount, volume, trust relationship, account
+binding, content placement, dependency, workflow link, observer chain, API
+key flow, certificate path, service relationship, permission, log path, or
+scanner finding is within this issue's scope, then the SDL-backed spec must
+encode it directly using ACES.
+
+If ACES can express it, encode it in `scenarios/techvault.sdl.yaml` and
+add validation that proves it is present. If ACES cannot express it, file
+one or more blocking issues in `Brad-Edwards/aces`, link them here, and do
+not mark this issue complete. A filed ACES issue is a blocker, not a
+waiver. After ACES merges/releases the needed expressivity, this issue
+remains incomplete until the SDL is updated to use the new ACES surface and
+validation passes.
+
+APTL runtime consumption is separate. Lack of APTL support for consuming an
+SDL field may require a linked APTL issue, but it never excuses missing SDL
+parity and must not be used to close this issue.
+
+Forbidden completion claims:
+
+- "Captured in evidence" unless also encoded in SDL or blocked by a
+  specific ACES expressivity issue.
+- "Representative subset" for networks, DNS records, mounts, volumes,
+  trusts, accounts, content placement, dependencies, workflow links,
+  observer chains, permissions, logs, filesystem state, or scanner
+  findings.
+- "Relevant fields encoded", "load-bearing fields encoded", or
+  "implementation-important fields encoded".
+- "APTL cannot consume it yet" as a reason to omit SDL content.
+- "Out of scope" for any in-scope fact observable from inside the range
+  unless a separate linked issue owns that observable surface and blocks
+  final SCN-010 parity.
+
+Completion checklist:
+
+- [ ] Enumerated every participant/agent-observable composition fact.
+- [ ] Encoded every ACES-expressible fact in
+  `scenarios/techvault.sdl.yaml`.
+- [ ] Filed and linked ACES blocker issue(s) for every observable fact ACES
+  cannot express.
+- [ ] Verified no evidence-only observable facts remain without SDL
+  encoding or an ACES blocker.
+- [ ] Updated the mapping ledger so every row is `encoded` or blocked by a
+  specific ACES issue.
+- [ ] Did not mark this issue complete based on evidence capture,
+  representative samples, summaries, relevance judgments, or APTL
+  consumption status.
+
 ## Acceptance
 
 - Composition inventory captured under
@@ -80,10 +147,13 @@ At minimum:
   methodology's named artifact shape. Every claim cites observed
   reality (`docker network inspect`, `docker compose config`,
   `samba-tool` output, file checksums, etc.).
-- All composition surfaces ACES can express today are encoded in the
-  SDL (`infrastructure`, `relationships`, `dependencies`, network
-  ACLs, account `node` bindings, content `target` bindings, agent
-  `allowed_subnets` / `initial_knowledge`, workflow steps).
+- All composition surfaces ACES can express today are encoded directly in
+  `scenarios/techvault.sdl.yaml` (`infrastructure`, `relationships`,
+  `dependencies`, network ACLs, account `node` bindings, content `target`
+  bindings, agent `allowed_subnets` / `initial_knowledge`, workflow steps,
+  and any other applicable ACES fields). Evidence, external source files,
+  and mapping notes are proof inputs only, not substitutes for SDL
+  expression.
 - **ACES expressivity gaps** at the composition level (DNS records,
   workflow-chain wiring beyond `workflows:`, trust-graph primitives,
   observation-chain primitives, volume-sharing semantics, etc.) →
@@ -108,6 +178,7 @@ At minimum:
 - The composition inventory does NOT replace per-asset inventories;
   it depends on them. If any per-asset inventory is incomplete, the
   composition claims that build on it are correspondingly limited.
-- Out-of-scope surfaces (time dynamics, runtime workflow execution
-  traces, post-attack state) are documented as such in the inventory
-  artifact, not silently elided.
+- Time dynamics, runtime workflow execution traces, and post-attack state
+  may be covered by separate linked work, but observable composition facts
+  present at the steady-state snapshot must be encoded or blocked by a
+  specific ACES expressivity issue rather than silently excluded.

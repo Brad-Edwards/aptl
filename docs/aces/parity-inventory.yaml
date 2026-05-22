@@ -67,6 +67,17 @@ rows:
   # lateral-movement-data-theft, prime-enterprise, recon-nmap-scan,
   # webapp-compromise.
 
+  - id: scen.techvault.webapp-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.webapp + infrastructure.webapp + runtime + content + accounts
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime / content / accounts fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/webapp/ + tests/test_webapp_inventory.py + ACES #363/#364/#365/#366/#367/#368 consumed"
+    blocking_followup: n/a
+    notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL consumes ACES #363, #364, #365, #366, #367, and #368 with no known remaining ACES expressivity blocker for the catalogued webapp steady-state inventory. Full root filesystem cataloguing is deferred as capture scope, not blocked by ACES expressivity.
+
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml
     legacy_source: scenarios/ad-domain-compromise.yaml
@@ -486,9 +497,11 @@ rows:
     notes: Same shape.
 
   # ---- surface: docker_compose_topology ---------------------------------
-  # One row per Compose profile (11), per network (4), and one summary
-  # row for volume conventions (43 volumes; per-volume rows would dilute
-  # rather than aid mechanical review). All are aptl_backend_responsibility.
+  # One row per Compose profile (11), per network (4), selected service-level
+  # inventory handoffs, and one summary row for volume conventions (43 volumes;
+  # per-volume rows would dilute rather than aid mechanical review). Most are
+  # aptl_backend_responsibility until a per-asset inventory moves the surface
+  # into ACES SDL.
 
   - id: compose.profile.wazuh
     surface: docker_compose_topology
@@ -522,6 +535,17 @@ rows:
     validation_evidence: tests/test_consistency.py
     blocking_followup: "#320"
     notes: ad, db, webapp, workstation.
+
+  - id: compose.service.webapp
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (service: webapp)"
+    legacy_field: webapp
+    category: aces_sdl
+    aces_target: ACES nodes.webapp + infrastructure.webapp + conditions.webapp-http-ready + relationships.webapp-connects-db
+    runtime_owner: n/a
+    validation_evidence: docs/aces/inventory/webapp/ + scenarios/techvault.sdl.yaml + tests/test_webapp_inventory.py
+    blocking_followup: "#321 / #324"
+    notes: Runtime evidence and ACES-expressible fields captured by issue #330; APTL backend consumption remains with the cited follow-ups.
 
   - id: compose.profile.victim
     surface: docker_compose_topology

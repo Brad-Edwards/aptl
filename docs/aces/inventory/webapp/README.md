@@ -42,7 +42,7 @@ observed lab instance, not as a clean-lab rebuild proof.
 | Realized runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-dmz.json`, `evidence/docker-network.aptl-internal.json`, `evidence/docker-volume.webapp-logs.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt` |
 | OS packages and language manifests visible in the image are recorded. | `evidence/os-packages.txt`, `evidence/language-manifests.txt` |
 | Patch state is machine-readable. | `evidence/trivy-vulnerability-counts.json`, `evidence/trivy-vulnerability-list.json` |
-| Important filesystem paths are hashable. | `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt` |
+| Catalogued filesystem paths are hashable. | `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt` |
 | Evidence files have integrity checksums. | `evidence/evidence-sha256sums.txt` |
 | Captured facts are mapped to current ACES surfaces or gap issues. | `mapping-ledger.yaml` |
 
@@ -74,7 +74,7 @@ observed lab instance, not as a clean-lab rebuild proof.
 
 Current ACES SDL encodes the webapp's node identity, source image pin,
 network links, service exposure, healthcheck, full observed runtime mount table,
-focused runtime filesystem inventory with metadata and digests, container
+catalogued runtime filesystem inventory with metadata and digests, container
 host/security configuration, health observation logs, primary process,
 supervised process set, observed runtime environment, Linux capabilities,
 restart/resource policy, package inventory, scanner findings, scenario weakness
@@ -106,8 +106,9 @@ placement. ACES #368 is closed and covers container HostConfig,
 namespace/security settings, health logs, and full mount filesystem facts. Those
 fields are now used by the TechVault SDL.
 
-No ACES expressivity gap remains for the captured webapp steady-state inventory
-facts in this ledger.
+No known ACES expressivity gap remains for the catalogued webapp steady-state
+inventory facts in this ledger. Full root filesystem cataloguing is not blocked
+by ACES expressivity; it is a deferred capture/cataloguing scope decision.
 
 Run:
 
@@ -118,14 +119,21 @@ aptl aces-inventory gaps docs/aces/inventory/webapp
 
 ## Known Limits
 
-- The evidence came from a running lab, not a clean reset.
-- The capture does not prove byte-identical rebuildability.
+- The evidence came from a running lab, not a clean reset. It is a frozen
+  observation of that realized lab state, not proof that a destructive
+  `aptl lab stop -v && aptl lab start` reproduces the same state.
+- The capture does not prove byte-identical rebuildability or full root
+  filesystem equivalence.
+- The filesystem inventory intentionally catalogs the authored/custom and
+  scenario-relevant runtime paths needed for this high-specificity webapp host
+  spec. ACES can express a complete root filesystem inventory if a later issue
+  chooses to capture and encode it.
 - Vulnerability results are time-sensitive to the Trivy database and advisory
   feeds.
 - The ACES SDL records the captured package and scanner inventories from this
   frozen evidence bundle. Vulnerability records remain time-sensitive to the
   Trivy database and advisory feeds.
 - The capture does not assert attack-induced state changes or later
-  operator-driven runtime modifications. Observable steady-state fields that
-  current ACES could not express during this pass were tracked as blocking ACES
-  issues and have now been consumed in the SDL.
+  operator-driven runtime modifications.
+- Observable steady-state fields that ACES could not express during this pass
+  were tracked as blocking ACES issues and have now been consumed in the SDL.

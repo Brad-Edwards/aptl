@@ -76,7 +76,7 @@ rows:
     runtime_owner: n/a
     validation_evidence: "docs/aces/inventory/webapp/ + tests/test_webapp_inventory.py + ACES #363/#364/#365/#366/#367/#368 consumed"
     blocking_followup: n/a
-    notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL consumes ACES #363, #364, #365, #366, #367, and #368 with no remaining ACES expressivity blocker for the captured webapp steady-state inventory.
+    notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL consumes ACES #363, #364, #365, #366, #367, and #368 with no known remaining ACES expressivity blocker for the catalogued webapp steady-state inventory. Full root filesystem cataloguing is deferred as capture scope, not blocked by ACES expressivity.
 
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml

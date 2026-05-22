@@ -75,8 +75,13 @@ notes:
     now encoded in scenarios/techvault.sdl.yaml for the webapp asset.
   - >
     ACES #363, #364, #365, #366, #367, and #368 are closed and consumed by this
-    SDL update. No ACES expressivity gap remains for the captured webapp
-    steady-state inventory facts in this mapping ledger.
+    SDL update. No known ACES expressivity gap remains for the catalogued
+    webapp steady-state inventory facts in this mapping ledger.
+  - >
+    The webapp filesystem inventory is intentionally scoped to catalogued
+    authored/custom and scenario-relevant runtime paths. ACES can express a full
+    root filesystem inventory if captured later; full root filesystem parity is
+    deferred as capture/cataloguing scope, not blocked by ACES expressivity.
 facts:
   - id: webapp.image.identity
     category: provenance
@@ -299,7 +304,7 @@ facts:
         - content.webapp-dir-opt-aptl-wazuh
       rationale: >
         ACES #363 added first-class runtime filesystem inventory entries;
-        the SDL now encodes the focused observed file and directory set
+        the SDL now encodes the catalogued observed file and directory set
         with metadata and keeps content entries as source-placement references.
 
   - id: webapp.runtime.vulnerability-scan
@@ -477,10 +482,9 @@ facts:
   - id: webapp.runtime.filesystem-metadata
     category: filesystem-inventory
     summary: >
-      The focused filesystem inventory includes observable file types,
+      The catalogued filesystem inventory includes observable file types,
       owner/group names, permissions, sizes, checksums, generated/runtime
-      stability, and runtime/source correspondence that current ACES cannot
-      fully represent as first-class SDL fields.
+      stability, and runtime/source correspondence for the scoped path set.
     evidence:
       - path: evidence/filesystem-tree.txt
       - path: evidence/filesystem-checksums.txt

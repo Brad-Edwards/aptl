@@ -143,6 +143,9 @@ def test_webapp_inventory_note_declares_scope_and_evidence():
         "ACES #366",
         "ACES #367",
         "ACES #368",
+        "Full root filesystem cataloguing is not blocked",
+        "by ACES expressivity",
+        "not proof that a destructive",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Webapp inventory note missing scope markers: {missing}"

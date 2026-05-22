@@ -1,0 +1,45 @@
+Capture used the already-running local lab. The `kali` service image was
+rebuilt from current `containers/kali/` source and the `aptl-kali` container
+recreated from that image immediately before capture, so the realized
+container matches HEAD source. `aptl lab stop -v && aptl lab start` was NOT
+run; the rest of the lab kept its existing state. Treat this as a frozen
+steady-state observation of the rebuilt container, not a destructive clean-lab
+rebuild proof or a byte-identical rebuildability proof.
+
+The image aptl-kali:latest is a first-party local Docker build. The BuildKit
+build emitted SBOM and provenance attestation manifests into the local
+containerd image store, but the image is not registry-published and
+`docker buildx imagetools inspect` cannot read a local-only reference, so no
+registry-visible, independently verifiable attestation evidence was captured.
+The mutable `aptl-kali:latest` tag is paired with the observed image digest.
+The base image `kalilinux/kali-last-release:latest` is a mutable upstream tag.
+
+Trivy 0.70.0 detects the image as debian/kali-rolling and enumerates 947 OS
+packages but reports 0 OS-package vulnerabilities: Trivy has no advisory
+database for the rolling `kali-rolling` release. The patch-state inventory
+therefore uses Grype 0.112.0 as the primary scanner (CPE/GHSA/NVD matching),
+which reports 58 findings. Trivy's 0-finding result and 947-package
+enumeration are kept as cross-check evidence. Scanner output is time-sensitive
+to the scanner version and advisory feeds.
+
+auditd is installed and the entrypoint loads the APTL ruleset, but the
+container's readiness marker records `auditd=degraded`: the kernel audit
+netlink interface is not fully available to the container (the host owns the
+audit lock), so `auditctl -l` returns no rules at steady state. Process
+accounting (`procacct=ok`) is functional. This degraded-capture state is
+recorded as an observed runtime fact, not silently treated as fully armed.
+
+The `kali_captures` and `kali_operations` named volumes and the
+`/host-ssh-keys` operator bind mount are NOT enumerated or checksummed: per
+ADR-033 the capture volume can hold PTY input, raw pcap, and prior-experiment
+transcripts, and `/host-ssh-keys` holds operator key material. Their presence,
+mount points, and metadata are recorded; their contents are out of scope for
+this committed bundle.
+
+The generated `/home/kali/.ssh/id_rsa` private key is catalogued by metadata
+and one-way checksum only; no private key material is committed.
+
+The filesystem inventory catalogues the APTL-authored/custom and
+scenario-relevant runtime paths. It does not enumerate the full Kali tool root
+filesystem; that remains a deferred capture-scope decision, not an ACES
+expressivity limit.

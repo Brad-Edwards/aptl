@@ -1,0 +1,383 @@
+[
+    {
+        "Id": "111365985c4b298eee4c8a9fb0e8b69dab7b6e6579c55c8b01bb2a76681d9f9d",
+        "Created": "2026-05-22T05:48:18.208126838Z",
+        "Path": "/entrypoint.sh",
+        "Args": [],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 3323699,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-05-22T05:48:29.551560643Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {
+                "Status": "healthy",
+                "FailingStreak": 0,
+                "Log": [
+                    {
+                        "Start": "2026-05-22T07:49:20.083870592+02:00",
+                        "End": "2026-05-22T07:49:20.145898108+02:00",
+                        "ExitCode": 0,
+                        "Output": "[healthcheck] healthy (degraded capture subsystems: auditd)\n"
+                    },
+                    {
+                        "Start": "2026-05-22T07:49:35.147311457+02:00",
+                        "End": "2026-05-22T07:49:35.212793335+02:00",
+                        "ExitCode": 0,
+                        "Output": "[healthcheck] healthy (degraded capture subsystems: auditd)\n"
+                    },
+                    {
+                        "Start": "2026-05-22T07:49:50.21366347+02:00",
+                        "End": "2026-05-22T07:49:50.273626184+02:00",
+                        "ExitCode": 0,
+                        "Output": "[healthcheck] healthy (degraded capture subsystems: auditd)\n"
+                    },
+                    {
+                        "Start": "2026-05-22T07:50:05.274574988+02:00",
+                        "End": "2026-05-22T07:50:05.331407912+02:00",
+                        "ExitCode": 0,
+                        "Output": "[healthcheck] healthy (degraded capture subsystems: auditd)\n"
+                    },
+                    {
+                        "Start": "2026-05-22T07:50:20.331916943+02:00",
+                        "End": "2026-05-22T07:50:20.398164987+02:00",
+                        "ExitCode": 0,
+                        "Output": "[healthcheck] healthy (degraded capture subsystems: auditd)\n"
+                    }
+                ]
+            }
+        },
+        "Image": "sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9",
+        "ResolvConfPath": "/var/lib/docker/containers/111365985c4b298eee4c8a9fb0e8b69dab7b6e6579c55c8b01bb2a76681d9f9d/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/111365985c4b298eee4c8a9fb0e8b69dab7b6e6579c55c8b01bb2a76681d9f9d/hostname",
+        "HostsPath": "/var/lib/docker/containers/111365985c4b298eee4c8a9fb0e8b69dab7b6e6579c55c8b01bb2a76681d9f9d/hosts",
+        "LogPath": "/var/lib/docker/containers/111365985c4b298eee4c8a9fb0e8b69dab7b6e6579c55c8b01bb2a76681d9f9d/111365985c4b298eee4c8a9fb0e8b69dab7b6e6579c55c8b01bb2a76681d9f9d-json.log",
+        "Name": "/aptl-kali",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "docker-default",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "/home/atomik/src/aptl2/keys:/host-ssh-keys:ro",
+                "aptl_kali_operations:/home/kali/operations:rw",
+                "aptl_kali_captures:/var/log/aptl/captures:rw"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "aptl_aptl-dmz",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": [
+                "CAP_AUDIT_CONTROL",
+                "CAP_AUDIT_WRITE",
+                "CAP_NET_ADMIN",
+                "CAP_NET_RAW",
+                "CAP_SYS_PACCT"
+            ],
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [
+                "ws01.techvault.local:172.20.2.22",
+                "TECHVAULT.LOCAL:172.20.2.10",
+                "ns1.techvault.local:172.20.2.27",
+                "dc.techvault.local:172.20.2.10",
+                "files.techvault.local:172.20.2.12",
+                "mail.techvault.local:172.20.1.21",
+                "techvault.local:172.20.2.10",
+                "DC.TECHVAULT.LOCAL:172.20.2.10",
+                "db.techvault.local:172.20.2.11"
+            ],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": [
+                "seccomp:unconfined"
+            ],
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 1073741824,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 2147483648,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ],
+            "Init": true
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/home/atomik/src/aptl2/keys",
+                "Destination": "/host-ssh-keys",
+                "Mode": "ro",
+                "RW": false,
+                "Propagation": "rprivate"
+            },
+            {
+                "Type": "volume",
+                "Name": "aptl_kali_operations",
+                "Source": "/var/lib/docker/volumes/aptl_kali_operations/_data",
+                "Destination": "/home/kali/operations",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            },
+            {
+                "Type": "volume",
+                "Name": "aptl_kali_captures",
+                "Source": "/var/lib/docker/volumes/aptl_kali_captures/_data",
+                "Destination": "/var/log/aptl/captures",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "kali-redteam",
+            "Domainname": "",
+            "User": "root",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "22/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "VICTIM_IP=172.20.2.20",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "LANG=C.UTF-8",
+                "DEBIAN_FRONTEND=noninteractive",
+                "TZ=UTC"
+            ],
+            "Cmd": null,
+            "Healthcheck": {
+                "Test": [
+                    "CMD",
+                    "/usr/local/bin/aptl-healthcheck.sh"
+                ],
+                "Interval": 15000000000,
+                "Timeout": 5000000000,
+                "StartPeriod": 30000000000,
+                "Retries": 5
+            },
+            "Image": "aptl-kali",
+            "Volumes": null,
+            "WorkingDir": "/home/kali",
+            "Entrypoint": [
+                "/entrypoint.sh"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "d086eb5e89b846c51e0e45027b99250237e439ed46d8e6c6e27006f369bb746c",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "aptl",
+                "com.docker.compose.project.config_files": "/home/atomik/src/aptl2/docker-compose.yml",
+                "com.docker.compose.project.working_dir": "/home/atomik/src/aptl2",
+                "com.docker.compose.replace": "aptl-kali",
+                "com.docker.compose.service": "kali",
+                "com.docker.compose.version": "5.1.3",
+                "io.buildah.version": "1.43.1",
+                "org.opencontainers.image.authors": "Kali Developers <devel@kali.org>",
+                "org.opencontainers.image.created": "2026-05-17T04:04:52Z",
+                "org.opencontainers.image.description": "Official Kali Linux container image for 2026.1",
+                "org.opencontainers.image.revision": "4d1ddb93",
+                "org.opencontainers.image.source": "https://gitlab.com/kalilinux/build-scripts/kali-docker",
+                "org.opencontainers.image.title": "Kali Linux (2026.1 branch)",
+                "org.opencontainers.image.url": "https://www.kali.org/",
+                "org.opencontainers.image.vendor": "OffSec",
+                "org.opencontainers.image.version": "2026.1"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "466af4a8bc1bc287d716611bb08da3c2e0871cc99238a9da55b7c51b402b1259",
+            "SandboxKey": "/var/run/docker/netns/466af4a8bc1b",
+            "Ports": {
+                "22/tcp": null
+            },
+            "Networks": {
+                "aptl_aptl-dmz": {
+                    "IPAMConfig": {
+                        "IPv4Address": "172.20.1.30"
+                    },
+                    "Links": null,
+                    "Aliases": [
+                        "aptl-kali",
+                        "kali"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "9861420646de144eab6734cc90858b7013122bb1fb7ba69b6f0f99e6d3497ea2",
+                    "EndpointID": "4cb3675701cb14f9de8190668e627452d9f94cd40081a8c6a88f0e9c87eb0868",
+                    "Gateway": "",
+                    "IPAddress": "172.20.1.30",
+                    "MacAddress": "ee:ee:61:07:8f:8e",
+                    "IPPrefixLen": 24,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "aptl-kali",
+                        "kali",
+                        "111365985c4b",
+                        "kali-redteam"
+                    ]
+                },
+                "aptl_aptl-internal": {
+                    "IPAMConfig": {
+                        "IPv4Address": "172.20.2.35"
+                    },
+                    "Links": null,
+                    "Aliases": [
+                        "aptl-kali",
+                        "kali"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "f1dcf3d5653a138f564e5472f6307b23d4eb3ac2fd4f81dd76aae7dcae526c1a",
+                    "EndpointID": "ede9e0f50d106d7bea1f2ff2f71795e7b13db64d7c2dcb7cdb4e77c2fff111b5",
+                    "Gateway": "",
+                    "IPAddress": "172.20.2.35",
+                    "MacAddress": "62:f4:41:e2:e1:f7",
+                    "IPPrefixLen": 24,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "aptl-kali",
+                        "kali",
+                        "111365985c4b",
+                        "kali-redteam"
+                    ]
+                },
+                "aptl_aptl-redteam": {
+                    "IPAMConfig": {
+                        "IPv4Address": "172.20.4.30"
+                    },
+                    "Links": null,
+                    "Aliases": [
+                        "aptl-kali",
+                        "kali"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "5d24666017e1ac77d43210d73b7512807592a8c636854d77574d652e892a10dd",
+                    "EndpointID": "1d9c550e7c6cf3542c454e647cdcdc934a72f3908547514d9a33d0542bb12418",
+                    "Gateway": "",
+                    "IPAddress": "172.20.4.30",
+                    "MacAddress": "3a:95:72:b7:7a:92",
+                    "IPPrefixLen": 24,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "aptl-kali",
+                        "kali",
+                        "111365985c4b",
+                        "kali-redteam"
+                    ]
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:8a52df6ab789b402a1a7db1241ef7ed61dcec7b33df68d0ffd4bb3c1141c59e4",
+            "size": 3711,
+            "platform": {
+                "architecture": "amd64",
+                "os": "linux"
+            }
+        }
+    }
+]

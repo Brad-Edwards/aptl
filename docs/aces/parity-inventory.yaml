@@ -78,6 +78,17 @@ rows:
     blocking_followup: n/a
     notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL consumes ACES #363, #364, #365, #366, #367, and #368 with no known remaining ACES expressivity blocker for the catalogued webapp steady-state inventory. Full root filesystem cataloguing is deferred as capture scope, not blocked by ACES expressivity.
 
+  - id: scen.techvault.kali-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.kali + nodes.redteam-net + infrastructure.kali + runtime + content + accounts
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime / content / accounts fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/kali/ + tests/test_kali_inventory.py"
+    blocking_followup: "Brad-Edwards/aces#384 / #385 / #386 / #387"
+    notes: SCN-010 issue #339 kali attacker-container inventory pass. The SDL encodes every ACES-expressible catalogued steady-state fact; four facts (Docker init, seccomp/security_opt, per-process capability drop, SSH ForceCommand/AcceptEnv) are blocked on ACES expressivity issues #384-#387 and recorded as blocked_by_aces_gap in the mapping ledger. Grype is the primary vulnerability scanner because Trivy has no advisory database for the kali-rolling release. Full Kali tool root filesystem cataloguing is deferred as capture scope, not blocked by ACES expressivity.
+
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml
     legacy_source: scenarios/ad-domain-compromise.yaml
@@ -562,12 +573,12 @@ rows:
     surface: docker_compose_topology
     legacy_source: "docker-compose.yml (profile: kali)"
     legacy_field: kali
-    category: aptl_backend_responsibility
-    aces_target: ACES infrastructure realization (red-side node)
+    category: aces_sdl
+    aces_target: ACES nodes.kali + nodes.redteam-net + infrastructure.kali + conditions.kali-healthcheck
     runtime_owner: AptlConfig.containers.kali
-    validation_evidence: tests/test_consistency.py
-    blocking_followup: "#320"
-    notes: Attacker box with audit/capture surface (ADR-033).
+    validation_evidence: docs/aces/inventory/kali/ + scenarios/techvault.sdl.yaml + tests/test_kali_inventory.py
+    blocking_followup: "Brad-Edwards/aces#384 / #385 / #386 / #387"
+    notes: Attacker box with audit/capture surface (ADR-033); SCN-010 issue #339 inventory pass encodes the kali node in the ACES SDL. Four steady-state facts are blocked on ACES expressivity issues #384-#387.
 
   - id: compose.profile.reverse
     surface: docker_compose_topology

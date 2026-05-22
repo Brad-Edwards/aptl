@@ -615,7 +615,7 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert infrastructure["webapp"]["dependencies"] == ["db", "wazuh-manager"]
 
     content = data["content"]
-    assert len(content) == 24
+    assert len([k for k in content if k.startswith("webapp-")]) == 24
     assert content["webapp-file-app-app-py"]["path"] == "/app/app.py"
     assert content["webapp-file-app-app-py"]["source"] == {
         "name": "containers/webapp/app/app.py",

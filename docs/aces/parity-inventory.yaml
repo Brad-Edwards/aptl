@@ -78,6 +78,17 @@ rows:
     blocking_followup: n/a
     notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL consumes ACES #363, #364, #365, #366, #367, and #368 with no known remaining ACES expressivity blocker for the catalogued webapp steady-state inventory. Full root filesystem cataloguing is deferred as capture scope, not blocked by ACES expressivity.
 
+  - id: scen.techvault.db-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.db + infrastructure.db + runtime + content + accounts
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime.database_services / content / accounts / relationships fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/db/ + tests/test_db_inventory.py + scenarios/techvault.sdl.yaml"
+    blocking_followup: n/a
+    notes: Incremental ACES TechVault authoring target for the db inventory pass; current SDL consumes Brad-Edwards/aces#388 and encodes the catalogued PostgreSQL steady-state image, runtime, database logical state, filesystem, identity, package, CVE, and relationship facts with no known remaining ACES expressivity blocker. Full Alpine root filesystem cataloguing outside the PostgreSQL data volume and init bind mount is a capture boundary, not an ACES expressivity gap.
+
   - id: scen.techvault.kali-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
@@ -546,6 +557,18 @@ rows:
     validation_evidence: tests/test_consistency.py
     blocking_followup: "#320"
     notes: ad, db, webapp, workstation.
+
+
+  - id: compose.service.db
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (service: db)"
+    legacy_field: db
+    category: aces_sdl
+    aces_target: ACES nodes.db + nodes.db.runtime.database_services + infrastructure.db + conditions.db-postgres-ready + relationships.webapp-connects-db.database_access + relationships.db-logs-forwarded-wazuh
+    runtime_owner: n/a
+    validation_evidence: docs/aces/inventory/db/ + scenarios/techvault.sdl.yaml + tests/test_db_inventory.py
+    blocking_followup: n/a
+    notes: Runtime evidence and ACES-expressible fields captured by issue #331; APTL backend consumption remains outside this inventory pass.
 
   - id: compose.service.webapp
     surface: docker_compose_topology

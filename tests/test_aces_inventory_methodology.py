@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 
+import pytest
 from typer.testing import CliRunner
 
 from aptl.cli.main import app
@@ -16,6 +17,8 @@ from aptl.core.aces_inventory import (
     validate_mapping_ledger,
 )
 
+
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 METHODOLOGY_PATH = (

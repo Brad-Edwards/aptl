@@ -15,6 +15,8 @@ import pytest
 import yaml
 
 
+pytestmark = pytest.mark.integration
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INVENTORY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 

@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 
+import pytest
 import yaml
 
 from aptl.core.aces_inventory import (
@@ -14,6 +15,8 @@ from aptl.core.aces_inventory import (
     validate_mapping_ledger,
 )
 
+
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PREFLIGHT_PATH = PROJECT_ROOT / "docs" / "aces" / "inventory" / "webapp-preflight.md"
@@ -615,7 +618,7 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert infrastructure["webapp"]["dependencies"] == ["db", "wazuh-manager"]
 
     content = data["content"]
-    assert len([k for k in content if k.startswith("webapp-")]) == 24
+    assert len([name for name in content if name.startswith("webapp-")]) == 24
     assert content["webapp-file-app-app-py"]["path"] == "/app/app.py"
     assert content["webapp-file-app-app-py"]["source"] == {
         "name": "containers/webapp/app/app.py",

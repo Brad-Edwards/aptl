@@ -1,0 +1,460 @@
+--os-release--
+PRETTY_NAME="Kali GNU/Linux Rolling"
+NAME="Kali GNU/Linux"
+VERSION_ID="2026.1"
+VERSION="2026.1"
+VERSION_CODENAME=kali-rolling
+ID=kali
+ID_LIKE=debian
+HOME_URL="https://www.kali.org/"
+SUPPORT_URL="https://forums.kali.org/"
+BUG_REPORT_URL="https://bugs.kali.org/"
+ANSI_COLOR="1;31"
+--id--
+uid=0(root) gid=0(root) groups=0(root)
+--pwd--
+/home/kali
+--uname--
+Linux kali-redteam 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 GNU/Linux
+--environment--
+DEBIAN_FRONTEND=noninteractive
+HOME=/root
+HOSTNAME=kali-redteam
+LANG=C.UTF-8
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+TZ=UTC
+VICTIM_IP=172.20.2.20
+--listeners--
+Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+udp   UNCONN 0      0         127.0.0.11:52562      0.0.0.0:*
+tcp   LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:(("sshd",pid=27,fd=6))
+tcp   LISTEN 0      4096      127.0.0.11:44577      0.0.0.0:*
+tcp   LISTEN 0      128             [::]:22            [::]:*    users:(("sshd",pid=27,fd=7))
+--mounts--
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48337/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48336/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48335/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48334/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48333/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48332/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48331/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48330/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48329/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48328/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48327/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48326/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48325/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48324/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48323/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48322/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48321/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48320/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31539/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48338/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/48338/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /usr/sbin/docker-init type ext4 (ro,relatime)
+/dev/md2 on /host-ssh-keys type ext4 (ro,relatime)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+/dev/md2 on /home/kali/operations type ext4 (rw,relatime)
+/dev/md2 on /var/log/aptl/captures type ext4 (rw,relatime)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
+--users--
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+games:x:5:60:games:/usr/games:/usr/sbin/nologin
+man:x:6:12:man:/var/cache/man:/usr/sbin/nologin
+lp:x:7:7:lp:/var/spool/lpd:/usr/sbin/nologin
+mail:x:8:8:mail:/var/mail:/usr/sbin/nologin
+news:x:9:9:news:/var/spool/news:/usr/sbin/nologin
+uucp:x:10:10:uucp:/var/spool/uucp:/usr/sbin/nologin
+proxy:x:13:13:proxy:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+backup:x:34:34:backup:/var/backups:/usr/sbin/nologin
+list:x:38:38:Mailing List Manager:/var/list:/usr/sbin/nologin
+irc:x:39:39:ircd:/run/ircd:/usr/sbin/nologin
+_apt:x:42:65534::/nonexistent:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+systemd-network:x:998:998:systemd Network Management:/:/usr/sbin/nologin
+systemd-timesync:x:997:997:systemd Time Synchronization:/:/usr/sbin/nologin
+messagebus:x:996:996:System Message Bus:/nonexistent:/usr/sbin/nologin
+tcpdump:x:995:995:tcpdump:/nonexistent:/usr/sbin/nologin
+_rpc:x:100:65534::/run/rpcbind:/usr/sbin/nologin
+statd:x:101:65534::/var/lib/nfs:/usr/sbin/nologin
+sshd:x:993:65534:sshd user:/run/sshd:/usr/sbin/nologin
+postgres:x:102:102:PostgreSQL administrator:/var/lib/postgresql:/bin/bash
+kali:x:1000:1000::/home/kali:/bin/bash
+--groups--
+root:x:0:
+daemon:x:1:
+bin:x:2:
+sys:x:3:
+adm:x:4:
+tty:x:5:
+disk:x:6:
+lp:x:7:
+mail:x:8:
+news:x:9:
+uucp:x:10:
+man:x:12:
+proxy:x:13:
+kmem:x:15:
+dialout:x:20:
+fax:x:21:
+voice:x:22:
+cdrom:x:24:
+floppy:x:25:
+tape:x:26:
+sudo:x:27:kali
+audio:x:29:
+dip:x:30:
+www-data:x:33:
+backup:x:34:
+operator:x:37:
+list:x:38:
+irc:x:39:
+src:x:40:
+shadow:x:42:
+utmp:x:43:
+video:x:44:
+sasl:x:45:
+plugdev:x:46:
+staff:x:50:
+games:x:60:
+users:x:100:
+nogroup:x:65534:
+systemd-journal:x:999:
+systemd-network:x:998:
+systemd-timesync:x:997:
+messagebus:x:996:
+tcpdump:x:995:
+ssl-cert:x:101:postgres
+_ssh:x:994:
+postgres:x:102:
+sambashare:x:993:
+kali:x:1000:
+--sudoers--
+#
+# This file MUST be edited with the 'visudo' command as root.
+#
+# Please consider adding local content in /etc/sudoers.d/ instead of
+# directly modifying this file.
+#
+# See the man page for details on how to write a sudoers file.
+#
+Defaults	env_reset
+Defaults	secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# This fixes CVE-2005-4890 and possibly breaks some versions of kdesu
+# (#1011624, https://bugs.kde.org/show_bug.cgi?id=452532)
+Defaults	use_pty
+
+# This causes mail to be sent to the mailto user if the user running
+# sudo does not enter the correct password. This is off in Debian by
+# default since Debian 14.
+#Defaults	mail_badpass
+
+# This preserves proxy settings from user environments of root
+# equivalent users (group sudo)
+#Defaults:%sudo env_keep += "http_proxy https_proxy ftp_proxy all_proxy no_proxy"
+
+# This allows running arbitrary commands, but so does ALL, and it means
+# different sudoers have their choice of editor respected.
+#Defaults:%sudo env_keep += "EDITOR"
+
+# Completely harmless preservation of a user preference.
+#Defaults:%sudo env_keep += "GREP_COLOR"
+
+# While you shouldn't normally run git as root, you need to with etckeeper
+#Defaults:%sudo env_keep += "GIT_AUTHOR_* GIT_COMMITTER_*"
+
+# Per-user preferences; root won't have sensible values for them.
+#Defaults:%sudo env_keep += "EMAIL DEBEMAIL DEBFULLNAME"
+
+# "sudo scp" or "sudo rsync" should be able to use your SSH agent.
+#Defaults:%sudo env_keep += "SSH_AGENT_PID SSH_AUTH_SOCK"
+
+# Ditto for GPG agent
+#Defaults:%sudo env_keep += "GPG_AGENT_INFO"
+
+# Host alias specification
+
+# User alias specification
+
+# Cmnd alias specification
+
+# User privilege specification
+root	ALL=(ALL:ALL) ALL
+
+# Allow members of group sudo to execute any command
+%sudo	ALL=(ALL:ALL) ALL
+
+# See sudoers(5) for more information on "@include" directives:
+
+@includedir /etc/sudoers.d
+kali ALL=(ALL) NOPASSWD:ALL
+# --- sudoers.d ---
+--capabilities--
+CapInh:	0000000000000000
+CapPrm:	00000000e81435fb
+CapEff:	00000000e81435fb
+CapBnd:	00000000e81435fb
+CapAmb:	0000000000000000
+--sshd-config-global--
+acceptenv APTL_RUN_ID
+acceptenv APTL_SESSION_ID
+acceptenv APTL_TRACE_ID
+acceptenv COLORTERM
+acceptenv LANG
+acceptenv LC_*
+acceptenv NO_COLOR
+addressfamily any
+allowagentforwarding yes
+allowstreamlocalforwarding yes
+allowtcpforwarding yes
+allowusers kali
+authenticationmethods any
+authorizedkeyscommand /usr/bin/userdbctl ssh-authorized-keys %u
+authorizedkeyscommanduser root
+authorizedkeysfile .ssh/authorized_keys .ssh/authorized_keys2
+authorizedprincipalscommand none
+authorizedprincipalscommanduser none
+authorizedprincipalsfile none
+banner none
+casignaturealgorithms ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256
+channeltimeout none
+chrootdirectory none
+ciphers chacha20-poly1305@openssh.com,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr
+clientalivecountmax 3
+clientaliveinterval 0
+compression yes
+debianbanner yes
+disableforwarding no
+exposeauthinfo no
+fingerprinthash SHA256
+forcecommand none
+gatewayports no
+gssapiauthentication no
+gssapicleanupcredentials yes
+gssapikexalgorithms gss-group14-sha256-,gss-group16-sha512-,gss-nistp256-sha256-,gss-curve25519-sha256-,gss-group14-sha1-,gss-gex-sha1-
+gssapikeyexchange no
+gssapistorecredentialsonrekey no
+gssapistrictacceptorcheck yes
+hostbasedacceptedalgorithms ssh-ed25519-cert-v01@openssh.com,ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256
+hostbasedauthentication no
+hostbasedusesnamefrompacketonly no
+hostkey /etc/ssh/ssh_host_ecdsa_key
+hostkey /etc/ssh/ssh_host_ed25519_key
+hostkey /etc/ssh/ssh_host_rsa_key
+hostkeyagent none
+hostkeyalgorithms ssh-ed25519-cert-v01@openssh.com,ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256
+ignorerhosts yes
+ignoreuserknownhosts no
+ipqos ef cs0
+kbdinteractiveauthentication no
+kerberosauthentication no
+kerberosorlocalpasswd yes
+kerberosticketcleanup yes
+kexalgorithms mlkem768x25519-sha256,sntrup761x25519-sha512,sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521
+listenaddress 0.0.0.0:22
+listenaddress [::]:22
+logingracetime 120
+loglevel INFO
+macs umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1
+maxauthtries 6
+maxsessions 10
+maxstartups 10:30:100
+modulifile /etc/ssh/moduli
+pamservicename sshd
+passwordauthentication no
+permitemptypasswords no
+permitlisten any
+permitopen any
+permitrootlogin no
+permittty yes
+permittunnel no
+permituserenvironment no
+permituserrc yes
+persourcemaxstartups none
+persourcenetblocksize 32:128
+persourcepenalties crash:90 authfail:5 noauth:1 grace-exceeded:10 refuseconnection:10 max:600 min:15 max-sources4:65536 max-sources6:65536 overflow:permissive overflow6:permissive
+persourcepenaltyexemptlist none
+pidfile /run/sshd.pid
+port 22
+printlastlog yes
+printmotd no
+pubkeyacceptedalgorithms ssh-ed25519-cert-v01@openssh.com,ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256
+pubkeyauthentication yes
+pubkeyauthoptions none
+refuseconnection no
+rekeylimit 0 0
+requiredrsasize 1024
+revokedkeys none
+securitykeyprovider internal
+sshdauthpath /usr/lib/openssh/sshd-auth
+sshdsessionpath /usr/lib/openssh/sshd-session
+streamlocalbindmask 0177
+streamlocalbindunlink no
+strictmodes yes
+subsystem sftp /usr/lib/openssh/sftp-server
+syslogfacility AUTH
+tcpkeepalive yes
+trustedusercakeys none
+unusedconnectiontimeout none
+usedns no
+usepam yes
+versionaddendum none
+x11displayoffset 10
+x11forwarding yes
+x11uselocalhost yes
+xauthlocation /usr/bin/xauth
+--sshd-config-kali--
+acceptenv APTL_RUN_ID
+acceptenv APTL_SESSION_ID
+acceptenv APTL_TRACE_ID
+acceptenv COLORTERM
+acceptenv LANG
+acceptenv LC_*
+acceptenv NO_COLOR
+addressfamily any
+allowagentforwarding yes
+allowstreamlocalforwarding yes
+allowtcpforwarding yes
+allowusers kali
+authenticationmethods any
+authorizedkeyscommand /usr/bin/userdbctl ssh-authorized-keys %u
+authorizedkeyscommanduser root
+authorizedkeysfile .ssh/authorized_keys .ssh/authorized_keys2
+authorizedprincipalscommand none
+authorizedprincipalscommanduser none
+authorizedprincipalsfile none
+banner none
+casignaturealgorithms ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256
+channeltimeout none
+chrootdirectory none
+ciphers chacha20-poly1305@openssh.com,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr
+clientalivecountmax 3
+clientaliveinterval 0
+compression yes
+debianbanner yes
+disableforwarding no
+exposeauthinfo no
+fingerprinthash SHA256
+forcecommand /usr/local/bin/aptl-wrap-shell.sh
+gatewayports no
+gssapiauthentication no
+gssapicleanupcredentials yes
+gssapikexalgorithms gss-group14-sha256-,gss-group16-sha512-,gss-nistp256-sha256-,gss-curve25519-sha256-,gss-group14-sha1-,gss-gex-sha1-
+gssapikeyexchange no
+gssapistorecredentialsonrekey no
+gssapistrictacceptorcheck yes
+hostbasedacceptedalgorithms ssh-ed25519-cert-v01@openssh.com,ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256
+hostbasedauthentication no
+hostbasedusesnamefrompacketonly no
+hostkey /etc/ssh/ssh_host_ecdsa_key
+hostkey /etc/ssh/ssh_host_ed25519_key
+hostkey /etc/ssh/ssh_host_rsa_key
+hostkeyagent none
+hostkeyalgorithms ssh-ed25519-cert-v01@openssh.com,ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256
+ignorerhosts yes
+ignoreuserknownhosts no
+ipqos ef cs0
+kbdinteractiveauthentication no
+kerberosauthentication no
+kerberosorlocalpasswd yes
+kerberosticketcleanup yes
+kexalgorithms mlkem768x25519-sha256,sntrup761x25519-sha512,sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521
+listenaddress 0.0.0.0:22
+listenaddress [::]:22
+logingracetime 120
+loglevel INFO
+macs umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1
+maxauthtries 6
+maxsessions 10
+maxstartups 10:30:100
+modulifile /etc/ssh/moduli
+pamservicename sshd
+passwordauthentication no
+permitemptypasswords no
+permitlisten any
+permitopen any
+permitrootlogin no
+permittty yes
+permittunnel no
+permituserenvironment no
+permituserrc yes
+persourcemaxstartups none
+persourcenetblocksize 32:128
+persourcepenalties crash:90 authfail:5 noauth:1 grace-exceeded:10 refuseconnection:10 max:600 min:15 max-sources4:65536 max-sources6:65536 overflow:permissive overflow6:permissive
+persourcepenaltyexemptlist none
+pidfile /run/sshd.pid
+port 22
+printlastlog yes
+printmotd no
+pubkeyacceptedalgorithms ssh-ed25519-cert-v01@openssh.com,ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,sk-ssh-ed25519-cert-v01@openssh.com,sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,sk-ssh-ed25519@openssh.com,sk-ecdsa-sha2-nistp256@openssh.com,rsa-sha2-512,rsa-sha2-256
+pubkeyauthentication yes
+pubkeyauthoptions none
+refuseconnection no
+rekeylimit 0 0
+requiredrsasize 1024
+revokedkeys none
+securitykeyprovider internal
+sshdauthpath /usr/lib/openssh/sshd-auth
+sshdsessionpath /usr/lib/openssh/sshd-session
+streamlocalbindmask 0177
+streamlocalbindunlink no
+strictmodes yes
+subsystem sftp /usr/lib/openssh/sftp-server
+syslogfacility AUTH
+tcpkeepalive yes
+trustedusercakeys none
+unusedconnectiontimeout none
+usedns no
+usepam yes
+versionaddendum none
+x11displayoffset 10
+x11forwarding yes
+x11uselocalhost yes
+xauthlocation /usr/bin/xauth
+--readiness-marker--
+ready_at=2026-05-22T05:48:30Z
+sshd=ok
+wrapper=ok
+auditd=degraded
+procacct=ok
+--audit-status--
+# rules:
+--proc-acct--
+total 2200
+drwx------  2 root root    4096 May 19 21:45 .
+drwxrwx--x+ 4 root root    4096 May 19 21:45 ..
+-rw-------  1 root root 2238464 May 22 05:50 pacct
+--capture-dir--
+total 16
+drwxrwx--x+ 4 root root 4096 May 19 21:45 .
+drwxr-xr-x  3 root root 4096 May 22 05:48 ..
+drwx------  2 root root 4096 May 19 21:45 _audit
+drwx------  2 root root 4096 May 19 21:45 _proc-acct
+# file: /var/log/aptl/captures
+# owner: root
+# group: root
+user::rwx
+user:kali:rwx
+group::---
+mask::rwx
+other::--x
+
+--process-tree--
+    PID    PPID USER     STAT COMMAND
+    291       0 root     Ss   sh -c ps -eo pid,ppid,user,stat,args --forest 2>/dev/null
+    298     291 root     R     \_ ps -eo pid,ppid,user,stat,args --forest
+      1       0 root     Ss   /sbin/docker-init -- /entrypoint.sh
+      7       1 root     S    sleep infinity
+     27       1 root     Ss   sshd: /usr/sbin/sshd [listener] 0 of 10-100 startups
+--filecaps--
+/usr/bin/dumpcap cap_net_admin,cap_net_raw=eip
+/usr/bin/tcpdump cap_net_admin,cap_net_raw=eip

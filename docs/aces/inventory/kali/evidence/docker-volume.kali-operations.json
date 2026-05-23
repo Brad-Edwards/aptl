@@ -1,0 +1,16 @@
+[
+    {
+        "CreatedAt": "2026-05-19T23:45:37+02:00",
+        "Driver": "local",
+        "Labels": {
+            "com.docker.compose.config-hash": "32625f39f141b73026581f979f70eb351067d8c5af33e5f432763e11ff1d501a",
+            "com.docker.compose.project": "aptl",
+            "com.docker.compose.version": "5.1.3",
+            "com.docker.compose.volume": "kali_operations"
+        },
+        "Mountpoint": "/var/lib/docker/volumes/aptl_kali_operations/_data",
+        "Name": "aptl_kali_operations",
+        "Options": null,
+        "Scope": "local"
+    }
+]

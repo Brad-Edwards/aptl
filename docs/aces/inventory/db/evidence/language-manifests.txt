@@ -1,0 +1,5 @@
+postgres=postgres (PostgreSQL) 16.13
+psql=psql (PostgreSQL) 16.13
+pg_config=PostgreSQL 16.13
+language_specific_lockfiles=none-observed
+package_inventory=os-packages.txt

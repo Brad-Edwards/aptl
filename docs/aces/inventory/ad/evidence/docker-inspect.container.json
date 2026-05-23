@@ -1,0 +1,326 @@
+[
+  {
+    "Id": "a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099",
+    "Created": "2026-05-23T06:18:29.915397621Z",
+    "Path": "/opt/setup-ad.sh",
+    "Args": [],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2956004,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-23T06:18:34.745080669Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-05-23T08:20:42.416356194+02:00",
+            "End": "2026-05-23T08:20:42.598135793+02:00",
+            "ExitCode": 0,
+            "Output": "Forest           : techvault.local\nDomain           : techvault.local\nNetbios domain   : TECHVAULT\nDC name          : dc.techvault.local\nDC netbios name  : DC\nServer site      : Default-First-Site-Name\nClient site      : Default-First-Site-Name\n"
+          },
+          {
+            "Start": "2026-05-23T08:21:12.598582734+02:00",
+            "End": "2026-05-23T08:21:12.794352663+02:00",
+            "ExitCode": 0,
+            "Output": "Forest           : techvault.local\nDomain           : techvault.local\nNetbios domain   : TECHVAULT\nDC name          : dc.techvault.local\nDC netbios name  : DC\nServer site      : Default-First-Site-Name\nClient site      : Default-First-Site-Name\n"
+          },
+          {
+            "Start": "2026-05-23T08:21:42.795196614+02:00",
+            "End": "2026-05-23T08:21:43.015927708+02:00",
+            "ExitCode": 0,
+            "Output": "Forest           : techvault.local\nDomain           : techvault.local\nNetbios domain   : TECHVAULT\nDC name          : dc.techvault.local\nDC netbios name  : DC\nServer site      : Default-First-Site-Name\nClient site      : Default-First-Site-Name\n"
+          },
+          {
+            "Start": "2026-05-23T08:22:13.016637823+02:00",
+            "End": "2026-05-23T08:22:13.178799051+02:00",
+            "ExitCode": 0,
+            "Output": "Forest           : techvault.local\nDomain           : techvault.local\nNetbios domain   : TECHVAULT\nDC name          : dc.techvault.local\nDC netbios name  : DC\nServer site      : Default-First-Site-Name\nClient site      : Default-First-Site-Name\n"
+          },
+          {
+            "Start": "2026-05-23T08:22:43.180133616+02:00",
+            "End": "2026-05-23T08:22:43.347342535+02:00",
+            "ExitCode": 0,
+            "Output": "Forest           : techvault.local\nDomain           : techvault.local\nNetbios domain   : TECHVAULT\nDC name          : dc.techvault.local\nDC netbios name  : DC\nServer site      : Default-First-Site-Name\nClient site      : Default-First-Site-Name\n"
+          }
+        ]
+      }
+    },
+    "Image": "sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052",
+    "ResolvConfPath": "/var/lib/docker/containers/a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099/hostname",
+    "HostsPath": "/var/lib/docker/containers/a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099/hosts",
+    "LogPath": "/var/lib/docker/containers/a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099/a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099-json.log",
+    "Name": "/aptl-ad",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "aptl_ad_data:/var/lib/samba:rw",
+        "aptl_ad_logs:/var/log/samba:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-internal",
+      "PortBindings": {},
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": [
+        "CAP_NET_ADMIN",
+        "CAP_SYS_ADMIN"
+      ],
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 536870912,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 1073741824,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_ad_data",
+        "Source": "/var/lib/docker/volumes/aptl_ad_data/_data",
+        "Destination": "/var/lib/samba",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_ad_logs",
+        "Source": "/var/lib/docker/volumes/aptl_ad_logs/_data",
+        "Destination": "/var/log/samba",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "dc.techvault.local",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "135/tcp": {},
+        "139/tcp": {},
+        "3268/tcp": {},
+        "3269/tcp": {},
+        "389/tcp": {},
+        "389/udp": {},
+        "445/tcp": {},
+        "464/tcp": {},
+        "464/udp": {},
+        "53/tcp": {},
+        "53/udp": {},
+        "636/tcp": {},
+        "88/tcp": {},
+        "88/udp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "DNS_FORWARDER=172.20.1.22",
+        "LOG_FORMAT=syslog",
+        "SAMBA_DOMAIN=TECHVAULT",
+        "LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd",
+        "SIEM_IP=172.20.2.30",
+        "SAMBA_REALM=TECHVAULT.LOCAL",
+        "SAMBA_ADMIN_PASSWORD=<REDACTED-SCENARIO-FIXTURE>",
+        "AGENT_NAME=aptl-ad-agent",
+        "WAZUH_MANAGER=wazuh.manager",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEBIAN_FRONTEND=noninteractive"
+      ],
+      "Cmd": null,
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "samba-tool domain info 127.0.0.1 || exit 1"
+        ],
+        "Interval": 30000000000,
+        "Timeout": 10000000000,
+        "StartPeriod": 60000000000,
+        "Retries": 10
+      },
+      "Image": "aptl-ad",
+      "Volumes": null,
+      "WorkingDir": "",
+      "Entrypoint": [
+        "/opt/setup-ad.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "060e21aacc7dac7361aa9f984d69162040f3330cdb30daf17a123c8234f44378",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "",
+        "com.docker.compose.image": "sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "ad",
+        "com.docker.compose.version": "5.1.3",
+        "org.opencontainers.image.version": "22.04"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "c2b552eb10a3930055fd848ac6f9aab09d912d33d07effe10c728961d7b42dcb",
+      "SandboxKey": "/var/run/docker/netns/c2b552eb10a3",
+      "Ports": {
+        "135/tcp": null,
+        "139/tcp": null,
+        "3268/tcp": null,
+        "3269/tcp": null,
+        "389/tcp": null,
+        "389/udp": null,
+        "445/tcp": null,
+        "464/tcp": null,
+        "464/udp": null,
+        "53/tcp": null,
+        "53/udp": null,
+        "636/tcp": null,
+        "88/tcp": null,
+        "88/udp": null
+      },
+      "Networks": {
+        "aptl_aptl-internal": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.2.10"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-ad",
+            "ad"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
+          "EndpointID": "32b08283f847efb5a3f922194ab22b9bada1e00f368ed7e8c47b0db8a6252a24",
+          "Gateway": "",
+          "IPAddress": "172.20.2.10",
+          "MacAddress": "2a:94:5f:9a:c2:45",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-ad",
+            "ad",
+            "a8e5b007ae34",
+            "dc.techvault.local"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:16311cc46133dd8f5a3d82a2d156339e68e5276b11c8fe6490f8060c324133a4",
+      "size": 2754,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

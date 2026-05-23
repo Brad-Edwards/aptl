@@ -100,6 +100,17 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #339 kali attacker-container inventory pass. The SDL encodes every catalogued steady-state fact, including the four surfaces ACES landed during this issue (ADR-027 init_process, ADR-028 seccomp_profile/security_opt, ADR-030 RuntimeCapabilityPolicy.process_overrides for the capsh subtree drop, ADR-031 RuntimeConfiguration.ssh_servers for ForceCommand/AcceptEnv). No known remaining ACES expressivity blocker for the catalogued kali steady-state inventory. Grype is the primary vulnerability scanner because Trivy has no advisory database for the kali-rolling release. Full Kali tool root filesystem cataloguing is a scope-bounded capture decision, not blocked by ACES expressivity.
 
+  - id: scen.techvault.ad-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.ad + infrastructure.ad + runtime.domain_services + content + accounts + relationships
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime.domain_services / content / accounts / relationships fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/ad/ + tests/test_ad_inventory.py + scenarios/techvault.sdl.yaml"
+    blocking_followup: n/a
+    notes: Incremental ACES TechVault authoring target for the ad inventory pass; current SDL encodes the catalogued Samba AD steady-state image, runtime, domain logical state, filesystem, identity, package/CVE summary, declared weaknesses, and relationship facts with no known remaining ACES expressivity blocker. Raw credentials, generated flags, Wazuh keys, and Kerberos/Samba private material are redacted as secret material while path, metadata, and checksum shape remain captured.
+
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml
     legacy_source: scenarios/ad-domain-compromise.yaml

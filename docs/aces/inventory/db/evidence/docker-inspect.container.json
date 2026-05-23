@@ -1,0 +1,335 @@
+[
+  {
+    "Id": "cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00",
+    "Created": "2026-05-21T16:36:39.5542097Z",
+    "Path": "docker-entrypoint.sh",
+    "Args": [
+      "postgres",
+      "-c",
+      "logging_collector=on",
+      "-c",
+      "log_directory=pg_log",
+      "-c",
+      "log_filename=postgresql.log",
+      "-c",
+      "log_statement=all",
+      "-c",
+      "log_connections=on",
+      "-c",
+      "log_disconnections=on"
+    ],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 994219,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-21T16:36:43.01438334Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-05-22T05:55:28.751489776+02:00",
+            "End": "2026-05-22T05:55:28.796680733+02:00",
+            "ExitCode": 0,
+            "Output": "/var/run/postgresql:5432 - accepting connections\n"
+          },
+          {
+            "Start": "2026-05-22T05:55:38.79774512+02:00",
+            "End": "2026-05-22T05:55:38.838107804+02:00",
+            "ExitCode": 0,
+            "Output": "/var/run/postgresql:5432 - accepting connections\n"
+          },
+          {
+            "Start": "2026-05-22T05:55:48.838869082+02:00",
+            "End": "2026-05-22T05:55:48.883950022+02:00",
+            "ExitCode": 0,
+            "Output": "/var/run/postgresql:5432 - accepting connections\n"
+          },
+          {
+            "Start": "2026-05-22T05:55:58.884380789+02:00",
+            "End": "2026-05-22T05:55:58.926910289+02:00",
+            "ExitCode": 0,
+            "Output": "/var/run/postgresql:5432 - accepting connections\n"
+          },
+          {
+            "Start": "2026-05-22T05:56:08.927873113+02:00",
+            "End": "2026-05-22T05:56:08.974884431+02:00",
+            "ExitCode": 0,
+            "Output": "/var/run/postgresql:5432 - accepting connections\n"
+          }
+        ]
+      }
+    },
+    "Image": "sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50",
+    "ResolvConfPath": "/var/lib/docker/containers/cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00/hostname",
+    "HostsPath": "/var/lib/docker/containers/cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00/hosts",
+    "LogPath": "/var/lib/docker/containers/cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00/cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00-json.log",
+    "Name": "/aptl-db",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "aptl_db_data:/var/lib/postgresql/data:rw",
+        "/home/atomik/src/aptl/containers/db/init:/docker-entrypoint-initdb.d:ro"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-internal",
+      "PortBindings": {},
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 268435456,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 536870912,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_db_data",
+        "Source": "/var/lib/docker/volumes/aptl_db_data/_data",
+        "Destination": "/var/lib/postgresql/data",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/containers/db/init",
+        "Destination": "/docker-entrypoint-initdb.d",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      }
+    ],
+    "Config": {
+      "Hostname": "db.techvault.local",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "5432/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "POSTGRES_USER=techvault",
+        "POSTGRES_PASSWORD=<REDACTED-SCENARIO-FIXTURE>",
+        "POSTGRES_DB=techvault",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "GOSU_VERSION=1.19",
+        "LANG=en_US.utf8",
+        "PG_MAJOR=16",
+        "PG_VERSION=16.13",
+        "PG_SHA256=dc2ddbbd245c0265a689408e3d2f2f3f9ba2da96bd19318214b313cdd9797287",
+        "DOCKER_PG_LLVM_DEPS=llvm19-dev \t\tclang19",
+        "PGDATA=/var/lib/postgresql/data"
+      ],
+      "Cmd": [
+        "postgres",
+        "-c",
+        "logging_collector=on",
+        "-c",
+        "log_directory=pg_log",
+        "-c",
+        "log_filename=postgresql.log",
+        "-c",
+        "log_statement=all",
+        "-c",
+        "log_connections=on",
+        "-c",
+        "log_disconnections=on"
+      ],
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "pg_isready -U techvault -d techvault"
+        ],
+        "Interval": 10000000000,
+        "Timeout": 5000000000,
+        "StartPeriod": 15000000000,
+        "Retries": 5
+      },
+      "Image": "postgres:16-alpine",
+      "Volumes": {
+        "/var/lib/postgresql/data": {}
+      },
+      "WorkingDir": "/",
+      "Entrypoint": [
+        "docker-entrypoint.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "7e82d9a74c1f400e663a188b83bd16b28125aa6439582b5ffefcae002a2c8f2c",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "",
+        "com.docker.compose.image": "sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "db",
+        "com.docker.compose.version": "5.1.3"
+      },
+      "StopSignal": "SIGINT"
+    },
+    "NetworkSettings": {
+      "SandboxID": "6322a9ffb3936aafc922e19614f830efcf07992e50667766bfc0c622edb4b5aa",
+      "SandboxKey": "/var/run/docker/netns/6322a9ffb393",
+      "Ports": {
+        "5432/tcp": null
+      },
+      "Networks": {
+        "aptl_aptl-internal": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.2.11"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-db",
+            "db"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "f1dcf3d5653a138f564e5472f6307b23d4eb3ac2fd4f81dd76aae7dcae526c1a",
+          "EndpointID": "94c308a4ed106b2f9dbb50a3c4abc75b25263720758fdd0369187436fedb0878",
+          "Gateway": "",
+          "IPAddress": "172.20.2.11",
+          "MacAddress": "0a:0b:d2:e7:2f:52",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-db",
+            "db",
+            "cb08dbec2891",
+            "db.techvault.local"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:4941ef97aaa2633ce9808f7766f8b8d746dd039ce8c51ca6da185c3dc63ab579",
+      "size": 3054,
+      "annotations": {
+        "com.docker.official-images.bashbrew.arch": "amd64",
+        "org.opencontainers.image.base.digest": "sha256:4d889c14e7d5a73929ab00be2ef8ff22437e7cbc545931e52554a7b00e123d8b",
+        "org.opencontainers.image.base.name": "alpine:3.23",
+        "org.opencontainers.image.created": "2026-04-21T23:07:55Z",
+        "org.opencontainers.image.revision": "3b6b5fca9ca40c84b77540fc605ea8e8353b13b2",
+        "org.opencontainers.image.source": "https://github.com/docker-library/postgres.git#3b6b5fca9ca40c84b77540fc605ea8e8353b13b2:16/alpine3.23",
+        "org.opencontainers.image.url": "https://hub.docker.com/_/postgres",
+        "org.opencontainers.image.version": "16.13-alpine3.23"
+      },
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

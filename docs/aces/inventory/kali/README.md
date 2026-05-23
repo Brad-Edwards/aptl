@@ -92,24 +92,28 @@ provenance, OS, network attachment and Docker network realization, SSH service
 exposure, healthcheck condition, observed runtime mount table, catalogued
 runtime filesystem inventory with metadata and digests, primary process and
 process set, observed runtime environment, container-wide Linux capability
-policy, restart/resource policy, container host/security configuration
-including the nine static `extra_hosts` entries, full dpkg package inventory,
-Grype scanner findings, full local identity database, and local account
-records in `scenarios/techvault.sdl.yaml`. Kali is the scenario attacker node
-and carries no authored scenario weaknesses.
+policy with a subtree-scoped capsh override, restart/resource policy,
+container host/security configuration including the Docker `init` PID-1
+reaper, seccomp/security_opt posture, and the nine static `extra_hosts`
+entries, full dpkg package inventory, Grype scanner findings, full local
+identity database, local account records, and the OBS-003 sshd
+ForceCommand/AcceptEnv policy in `scenarios/techvault.sdl.yaml`. Kali is the
+scenario attacker node and carries no authored scenario weaknesses.
 
-Four catalogued steady-state facts cannot be expressed by current ACES grammar
-and are recorded as `blocked_by_aces_gap` in `mapping-ledger.yaml`, each with a
-filed `Brad-Edwards/aces` issue that cites this inventory as motivating
-consumer:
+The four ACES expressivity surfaces filed against this inventory landed on
+`Brad-Edwards/aces` dev and are now consumed by the kali node:
 
-- Docker `init: true` / tini PID-1 reaper — ACES #384
-- `seccomp:unconfined` / `security_opt` — ACES #385
-- Per-process (`capsh --drop`) Linux capability drop — ACES #386
-- SSH `ForceCommand` / `AcceptEnv` server configuration — ACES #387
+- ACES #384 / ADR-027 — `runtime.container.init_process` (Docker `init` /
+  PID-1 reaper).
+- ACES #385 / ADR-028 — `runtime.container.seccomp_profile` and
+  `runtime.container.security_opt` (seccomp posture).
+- ACES #386 / ADR-030 — `runtime.linux_capabilities.process_overrides`
+  (the capsh subtree-scoped `CAP_AUDIT_CONTROL` drop on sshd).
+- ACES #387 / ADR-031 — `runtime.ssh_servers` (typed sshd policy carrying
+  `ForceCommand`, `AcceptEnv`, `Match` rules, `AllowUsers`).
 
-Issue #339 stays open until those ACES surfaces land and the TechVault SDL is
-updated.
+No known ACES expressivity blocker remains for the catalogued kali
+steady-state inventory.
 
 Run:
 

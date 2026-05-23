@@ -27,19 +27,13 @@ IMAGE_ID = "sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f469597
 IMAGE_DIGEST = f"aptl-kali@{IMAGE_ID}"
 
 LEDGER_FACT_COUNT = 25
-LEDGER_ENCODED_COUNT = 21
-LEDGER_BLOCKED_COUNT = 4
-ACES_GAP_ISSUES = {
-    "Brad-Edwards/aces #384",
-    "Brad-Edwards/aces #385",
-    "Brad-Edwards/aces #386",
-    "Brad-Edwards/aces #387",
-}
-BLOCKED_FACT_IDS = {
-    "kali.gap.docker-init",
-    "kali.gap.seccomp",
-    "kali.gap.capability-drop",
-    "kali.gap.ssh-server-config",
+LEDGER_ENCODED_COUNT = 25
+LEDGER_BLOCKED_COUNT = 0
+CONSUMED_ACES_GAP_FACT_IDS = {
+    "kali.runtime.init-process",
+    "kali.runtime.seccomp",
+    "kali.runtime.capsh-subtree-drop",
+    "kali.runtime.ssh-server-config",
 }
 
 PACKAGE_COUNT = 947
@@ -125,6 +119,11 @@ def test_kali_inventory_note_declares_scope_and_evidence():
         "ACES #385",
         "ACES #386",
         "ACES #387",
+        "ADR-027",
+        "ADR-028",
+        "ADR-030",
+        "ADR-031",
+        "No known ACES expressivity",
         "byte-identical rebuildability",
         "full Kali tool root filesystem",
     )
@@ -138,14 +137,14 @@ def test_kali_preflight_artifact_is_present():
         assert needle in text, f"kali preflight missing {needle!r}"
 
 
-def test_kali_mapping_ledger_validates_and_tracks_gap_handoff():
+def test_kali_mapping_ledger_validates_with_all_facts_encoded():
     result = validate_mapping_ledger(KALI_DIR)
     assert result.ok, result.errors
     assert result.fact_count == LEDGER_FACT_COUNT
     assert result.encoded_count == LEDGER_ENCODED_COUNT
     assert result.blocked_count == LEDGER_BLOCKED_COUNT
     assert result.triage_count == 0
-    assert set(result.gap_issues) == ACES_GAP_ISSUES
+    assert result.gap_issues == []
 
     ledger = load_mapping_ledger(LEDGER_PATH)
     assert ledger["asset"]["id"] == "kali"
@@ -153,22 +152,17 @@ def test_kali_mapping_ledger_validates_and_tracks_gap_handoff():
     assert ledger["asset"]["source_class"] == "custom-build"
     assert ledger["provenance"]["image_digest"] == IMAGE_DIGEST
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
-    for fact_id in BLOCKED_FACT_IDS:
-        assert dispositions[fact_id] == "blocked_by_aces_gap"
+    for fact_id in CONSUMED_ACES_GAP_FACT_IDS:
+        assert dispositions[fact_id] == "encoded"
     assert dispositions["kali.runtime.vulnerability-scan"] == "encoded_with_caveat"
-    assert dispositions["kali.runtime.capability-policy"] == "encoded_with_caveat"
-    assert dispositions["kali.runtime.container-host-config"] == "encoded_with_caveat"
+    assert dispositions["kali.runtime.capability-policy"] == "encoded"
+    assert dispositions["kali.runtime.container-host-config"] == "encoded"
 
 
-def test_kali_gap_report_surfaces_four_aces_blockers():
+def test_kali_gap_report_surfaces_no_remaining_aces_gaps():
     report = gap_report(KALI_DIR)
-    gaps = {gap["fact_id"] for gap in report["gaps"]}
-    assert gaps == BLOCKED_FACT_IDS
+    assert report["gaps"] == []
     assert not report["triage_needed"]
-    gap_numbers = {gap["gap_issue"]["number"] for gap in report["gaps"]}
-    assert gap_numbers == {384, 385, 386, 387}
-    for gap in report["gaps"]:
-        assert gap["gap_issue"]["tracker"] == "Brad-Edwards/aces"
 
 
 def test_kali_evidence_bundle_files_are_present_and_non_empty():
@@ -348,6 +342,18 @@ def test_techvault_sdl_encodes_kali_inventory_surfaces():
     assert extra_hosts["techvault.local"] == "172.20.2.10"
     assert extra_hosts["db.techvault.local"] == "172.20.2.11"
 
+    # ACES #384 / ADR-027 — Docker init / PID-1 reaper.
+    init_process = container["init_process"]
+    assert init_process["enabled"] is True
+    assert init_process["implementation"] == "docker-init"
+    assert init_process["executable_path"] == "/sbin/docker-init"
+    assert init_process["reaps_children"] is True
+    assert init_process["argv"] == ["/sbin/docker-init", "--", "/entrypoint.sh"]
+
+    # ACES #385 / ADR-028 — seccomp + security_opt posture.
+    assert container["seccomp_profile"] == "unconfined"
+    assert container["security_opt"] == ["seccomp:unconfined"]
+
     assert runtime["process"]["name"] == "docker-init"
     assert runtime["process"]["pid"] == 1
     assert runtime["process"]["command"] == ["/sbin/docker-init", "--", "/entrypoint.sh"]
@@ -362,6 +368,34 @@ def test_techvault_sdl_encodes_kali_inventory_surfaces():
         "CAP_NET_RAW",
         "CAP_SYS_PACCT",
     }
+    # ACES #386 / ADR-030 — capsh per-subtree capability drop.
+    overrides = caps["process_overrides"]
+    assert len(overrides) == 1
+    sshd_override = overrides[0]
+    assert sshd_override["subject"]["name"] == "sshd"
+    assert sshd_override["scope"] == "subtree"
+    assert sshd_override["drop"] == ["CAP_AUDIT_CONTROL"]
+
+    # ACES #387 / ADR-031 — sshd policy surface.
+    ssh_servers = runtime["ssh_servers"]
+    assert len(ssh_servers) == 1
+    sshd = ssh_servers[0]
+    assert sshd["server_id"] == "kali-sshd"
+    assert sshd["service"] == "ssh"
+    assert "APTL_SESSION_ID" in sshd["accept_env"]
+    assert "APTL_RUN_ID" in sshd["accept_env"]
+    assert "APTL_TRACE_ID" in sshd["accept_env"]
+    assert sshd["allow_users"] == ["kali"]
+    assert sshd["password_authentication"] is False
+    assert sshd["pubkey_authentication"] is True
+    assert len(sshd["match_rules"]) == 1
+    match = sshd["match_rules"][0]
+    assert match["match_id"] == "kali-user-forcecommand"
+    assert match["criteria"][0]["kind"] == "user"
+    assert match["criteria"][0]["pattern"] == "kali"
+    assert match["forced_command"]["command_kind"] == "absolute_path"
+    assert match["forced_command"]["command"] == "/usr/local/bin/aptl-wrap-shell.sh"
+
     assert runtime["operational_policy"]["restart"] == "unless_stopped"
     assert runtime["operational_policy"]["resource_limits"]["memory"] == 1073741824
     assert runtime["health"]["status"] == "healthy"
@@ -452,6 +486,10 @@ def test_techvault_sdl_parses_and_compiles_with_kali_runtime_fields():
     assert len(runtime["local_identity"]["users"]) == LOCAL_IDENTITY_USER_COUNT
     assert len(runtime["local_identity"]["groups"]) == LOCAL_IDENTITY_GROUP_COUNT
     assert len(runtime["container"]["extra_hosts"]) == EXTRA_HOSTS_COUNT
+    assert runtime["container"]["init_process"]["enabled"] is True
+    assert runtime["container"]["seccomp_profile"] == "unconfined"
+    assert len(runtime["linux_capabilities"]["process_overrides"]) == 1
+    assert len(runtime["ssh_servers"]) == 1
 
 
 def test_parity_inventory_cites_kali_inventory_and_aces_sdl():
@@ -462,8 +500,10 @@ def test_parity_inventory_cites_kali_inventory_and_aces_sdl():
     assert kali_row["legacy_source"] == "scenarios/techvault.sdl.yaml"
     assert kali_row["category"] == "aces_sdl"
     assert "docs/aces/inventory/kali/" in kali_row["validation_evidence"]
+    assert kali_row["blocking_followup"] == "n/a"
     for issue in ("#384", "#385", "#386", "#387"):
-        assert issue in kali_row["blocking_followup"]
+        assert issue in kali_row["validation_evidence"]
 
     assert rows["compose.profile.kali"]["category"] == "aces_sdl"
     assert "nodes.kali" in rows["compose.profile.kali"]["aces_target"]
+    assert rows["compose.profile.kali"]["blocking_followup"] == "n/a"

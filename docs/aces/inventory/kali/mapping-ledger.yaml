@@ -56,11 +56,15 @@ correspondence_checks:
       - kali.runtime.primary-process
       - kali.runtime.environment
       - kali.runtime.capability-policy
+      - kali.runtime.capsh-subtree-drop
       - kali.runtime.operational-policy
       - kali.runtime.container-host-config
+      - kali.runtime.init-process
+      - kali.runtime.seccomp
       - kali.runtime.network-realization
       - kali.runtime.health
       - kali.runtime.extra-hosts
+      - kali.runtime.ssh-server-config
       - kali.runtime.package-inventory
       - kali.runtime.vulnerability-scan
       - kali.runtime.local-identity
@@ -85,11 +89,14 @@ notes:
     inventory uses Grype 0.112.0 as the primary scanner; Trivy evidence is
     retained as a cross-check.
   - >
-    Four catalogued steady-state facts cannot be expressed by current ACES
-    grammar and are blocked on Brad-Edwards/aces #384 (Docker init / PID-1
-    reaper), #385 (seccomp / security_opt), #386 (per-process capability
-    drop), and #387 (SSH ForceCommand / AcceptEnv server config). Issue #339
-    stays open until those ACES surfaces land and the TechVault SDL is updated.
+    The four ACES expressivity surfaces filed against this inventory have
+    landed on `Brad-Edwards/aces` dev: #384 / ADR-027 (init_process), #385 /
+    ADR-028 (seccomp_profile + security_opt), #386 / ADR-030
+    (RuntimeCapabilityPolicy.process_overrides), and #387 / ADR-031
+    (RuntimeConfiguration.ssh_servers). All four facts that were previously
+    blocked_by_aces_gap are now encoded directly in the kali node; no known
+    ACES expressivity blocker remains for the catalogued kali steady-state
+    inventory.
   - >
     Kali is the scenario attacker node, not a target host: it carries no
     authored scenario weaknesses. Scanner CVE findings are runtime package
@@ -299,18 +306,15 @@ facts:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: nodes
       fields:
         - nodes.kali.runtime.linux_capabilities
-      caveat: >
-        ACES linux_capabilities is a single container-wide policy. The
-        entrypoint's capsh per-process drop of CAP_AUDIT_CONTROL before sshd
-        (so the interactive kali user cannot disable auditing) cannot be
-        expressed and is tracked separately as kali.gap.capability-drop.
       rationale: >
-        ACES can express the container-wide required/effective/add/drop
-        capability sets, so those are encoded directly.
+        ACES linux_capabilities encodes the container-wide
+        required/effective/add/drop capability sets. The capsh per-process
+        drop on the sshd subtree is encoded under linux_capabilities.process_overrides
+        (see kali.runtime.capsh-subtree-drop).
   - id: kali.runtime.operational-policy
     category: runtime-configuration
     summary: >
@@ -337,18 +341,16 @@ facts:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: nodes
       fields:
         - nodes.kali.runtime.container
-      caveat: >
-        ACES RuntimeContainerConfiguration carries entrypoint, namespaces,
-        masked/read-only paths, runtime name, and extra_hosts, but has no field
-        for Docker init (PID-1 reaper) or seccomp/security_opt; those facts are
-        tracked separately as kali.gap.docker-init and kali.gap.seccomp.
       rationale: >
-        ACES encodes the container host/security fields it supports; the
-        unsupported init and seccomp fields are recorded as ACES gaps.
+        ACES RuntimeContainerConfiguration encodes entrypoint, namespaces,
+        privileged/read-only flags, masked/read-only paths, runtime name,
+        and extra_hosts directly. The Docker init / PID-1 reaper and the
+        seccomp / security_opt posture are encoded separately under
+        kali.runtime.init-process and kali.runtime.seccomp.
   - id: kali.runtime.network-realization
     category: network
     summary: >
@@ -513,92 +515,82 @@ facts:
         active connections, of which an idle attacker node has none at the
         steady-state snapshot. The kali SSH service itself is encoded under
         nodes.kali.services.
-  - id: kali.gap.docker-init
+  - id: kali.runtime.init-process
     category: runtime-configuration
     summary: >
       The container runs with Docker init: true; PID 1 is /sbin/docker-init
-      (tini), a backend-injected reaper. ACES has no field for it.
+      (tini), reaping orphaned descendants of /entrypoint.sh.
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-      why_not_current_surfaces: >
-        RuntimeContainerConfiguration carries runtime_name (the OCI runtime,
-        runc) and namespace/security flags, but no field models a
-        backend-injected init / PID-1 reaper. runtime.process records the
-        observed PID 1 but not the authored intent that an init is injected.
-      gap_issue:
-        tracker: Brad-Edwards/aces
-        number: 384
-        url: https://github.com/Brad-Edwards/aces/issues/384
-  - id: kali.gap.seccomp
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.kali.runtime.container.init_process.enabled
+        - nodes.kali.runtime.container.init_process.implementation
+        - nodes.kali.runtime.container.init_process.executable_path
+        - nodes.kali.runtime.container.init_process.reaps_children
+        - nodes.kali.runtime.container.init_process.argv
+      rationale: >
+        ACES ADR-027 / Brad-Edwards/aces#384 added
+        RuntimeContainerConfiguration.init_process to express a
+        backend-injected init / PID-1 reaper distinct from the observed PID 1
+        process inventory.
+  - id: kali.runtime.seccomp
     category: runtime-configuration
     summary: >
-      The container runs with security_opt seccomp:unconfined. ACES has no
-      field for the seccomp profile or security_opt options.
+      The container runs with security_opt seccomp:unconfined; the default
+      seccomp syscall filter is disabled.
     evidence:
       - path: evidence/docker-inspect.container.json
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-      why_not_current_surfaces: >
-        RuntimeContainerConfiguration carries privileged, namespaces, and
-        masked/read-only paths, but no field for the seccomp profile or
-        arbitrary security_opt options. seccomp posture is a first-class
-        container security fact distinct from privileged.
-      gap_issue:
-        tracker: Brad-Edwards/aces
-        number: 385
-        url: https://github.com/Brad-Edwards/aces/issues/385
-  - id: kali.gap.capability-drop
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.kali.runtime.container.seccomp_profile
+        - nodes.kali.runtime.container.security_opt
+      rationale: >
+        ACES ADR-028 / Brad-Edwards/aces#385 added
+        RuntimeContainerConfiguration.seccomp_profile and security_opt to
+        express the container seccomp profile and full security_opt list as
+        first-class facts distinct from privileged.
+  - id: kali.runtime.capsh-subtree-drop
     category: runtime-configuration
     summary: >
       The entrypoint spawns sshd via capsh --drop=cap_audit_control, so the
-      sshd subtree runs without CAP_AUDIT_CONTROL while the container holds it.
-      ACES capability policy is container-wide only.
+      sshd subtree (and the interactive kali user) runs without
+      CAP_AUDIT_CONTROL while the container holds it.
     evidence:
       - path: evidence/runtime-baseline.txt
       - path: evidence/docker-inspect.container.json
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-      why_not_current_surfaces: >
-        RuntimeCapabilityPolicy expresses a single container-wide
-        required/effective/add/drop set. It cannot express that a specific
-        process subtree (sshd and the interactive kali user) drops a
-        capability the container otherwise holds — exactly the security
-        property that the attacker shell cannot disable auditing.
-      gap_issue:
-        tracker: Brad-Edwards/aces
-        number: 386
-        url: https://github.com/Brad-Edwards/aces/issues/386
-  - id: kali.gap.ssh-server-config
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.kali.runtime.linux_capabilities.process_overrides
+      rationale: >
+        ACES ADR-030 / Brad-Edwards/aces#386 added
+        RuntimeCapabilityPolicy.process_overrides with subtree-scope deltas
+        so the sshd subtree's CAP_AUDIT_CONTROL drop is expressed alongside
+        the container-wide capability baseline.
+  - id: kali.runtime.ssh-server-config
     category: service-surface
     summary: >
       sshd for the kali user is configured with ForceCommand
-      (/usr/local/bin/aptl-wrap-shell.sh) and AcceptEnv (APTL_SESSION_ID,
-      APTL_RUN_ID, APTL_TRACE_ID). ACES has no SSH server configuration surface.
+      (/usr/local/bin/aptl-wrap-shell.sh) and AcceptEnv (APTL_RUN_ID,
+      APTL_SESSION_ID, APTL_TRACE_ID, plus OpenSSH-default locale and color
+      names), with AllowUsers narrowed to kali and password authentication
+      disabled.
     evidence:
       - path: evidence/runtime-baseline.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - nodes.services
-        - accounts
-      why_not_current_surfaces: >
-        ServicePort models only port/protocol/name; accounts model
-        auth_method/shell/home but no sshd directives; runtime.applications
-        models HTTP route surfaces, not SSH server config. ForceCommand
-        changes the participant login surface to a wrapped shell and AcceptEnv
-        defines which environment a participant may inject — neither is
-        expressible.
-      gap_issue:
-        tracker: Brad-Edwards/aces
-        number: 387
-        url: https://github.com/Brad-Edwards/aces/issues/387
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.kali.runtime.ssh_servers
+      rationale: >
+        ACES ADR-031 / Brad-Edwards/aces#387 added RuntimeConfiguration.ssh_servers
+        as a typed sshd policy surface (SshServerConfig + SshMatchRule +
+        SshForcedCommand) so ForceCommand, AcceptEnv, AllowUsers, and the
+        Match rule wiring the per-session capture wrapper are all expressible.

@@ -9328,8 +9328,26 @@ nodes:
         - /proc/sysrq-trigger
         cgroup_parent: ''
         runtime_name: runc
+        init_process:
+          enabled: true
+          implementation: docker-init
+          executable_path: /sbin/docker-init
+          reaps_children: true
+          argv:
+          - /sbin/docker-init
+          - --
+          - /entrypoint.sh
+          description: >
+            Docker Compose `init: true` injects docker-init (tini) as PID 1.
+            The entrypoint keepalive (`sleep infinity`) and sshd are children
+            of docker-init, which reaps orphaned descendants — a load-bearing
+            property for red-team agents that routinely background processes
+            (ADR-033 §2 / ACES ADR-027 / aces#384).
         devices: []
         device_cgroup_rules: []
+        seccomp_profile: unconfined
+        security_opt:
+        - seccomp:unconfined
         extra_hosts:
         - hostname: ws01.techvault.local
           address: 172.20.2.22
@@ -10072,6 +10090,26 @@ nodes:
         - CAP_NET_ADMIN
         - CAP_NET_RAW
         - CAP_SYS_PACCT
+        process_overrides:
+        - subject:
+            name: sshd
+            command:
+            - /usr/sbin/sshd
+            - -D
+            - -e
+            role: other
+            user: root
+          scope: subtree
+          drop:
+          - CAP_AUDIT_CONTROL
+          description: >
+            The entrypoint spawns sshd via `capsh --drop=cap_audit_control`,
+            so the sshd subtree — and therefore the interactive `kali` user
+            (passwordless sudo) — runs without CAP_AUDIT_CONTROL and cannot
+            run `auditctl -D` to disable the audit trail. The container-wide
+            effective set retains CAP_AUDIT_CONTROL because the entrypoint
+            itself loads the APTL audit ruleset at boot before dropping the
+            capability for sshd (ACES ADR-030 / aces#386).
         description: Observed effective set from CapEff bitmask 00000000e81435fb in runtime-baseline; CapAdd from docker inspect HostConfig.
       operational_policy:
         restart: unless_stopped
@@ -14450,6 +14488,43 @@ nodes:
         scan_time: '2026-05-22T05:50:31Z'
         fixed_version: 0.3.1
         advisory_url: https://github.com/advisories/GHSA-xh69-987w-hrp8
+      ssh_servers:
+      - server_id: kali-sshd
+        service: ssh
+        accept_env:
+        - APTL_RUN_ID
+        - APTL_SESSION_ID
+        - APTL_TRACE_ID
+        - COLORTERM
+        - LANG
+        - LC_*
+        - NO_COLOR
+        allow_users:
+        - kali
+        password_authentication: false
+        pubkey_authentication: true
+        permit_tty: true
+        match_rules:
+        - match_id: kali-user-forcecommand
+          criteria:
+          - kind: user
+            pattern: kali
+          forced_command:
+            command_kind: absolute_path
+            command: /usr/local/bin/aptl-wrap-shell.sh
+            description: >
+              Per-session OBS-003 capture wrapper. Every kali SSH login is
+              replaced by aptl-wrap-shell.sh, which starts script(1) + tcpdump
+              for the session under `/var/log/aptl/captures/<RUN_ID>/<SESSION_ID>/`.
+          description: >
+            The kali login user never gets a plain shell; the ForceCommand
+            substitutes the per-session capture wrapper (ADR-033).
+        description: >
+          OBS-003 sshd policy for the kali login user. AcceptEnv admits the
+          APTL scenario identifiers (RUN_ID / SESSION_ID / TRACE_ID) plus the
+          OpenSSH-default locale and color allowlist; AllowUsers narrows ssh
+          login to the kali account; the Match rule wires the per-session
+          capture ForceCommand (ACES ADR-031 / aces#387).
 
 infrastructure:
   dmz-net:

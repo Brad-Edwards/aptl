@@ -44,6 +44,10 @@ correspondence_checks:
       - path: evidence/runtime-baseline.txt
       - path: evidence/os-packages.txt
       - path: evidence/language-manifests.txt
+      - path: evidence/trivy-sbom.cyclonedx.json
+      - path: evidence/syft-sbom.cyclonedx.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-listening-ports.json
     ledger_fact_ids:
       - webapp.runtime.log-volume
       - webapp.runtime.mount-table
@@ -82,6 +86,12 @@ notes:
     authored/custom and scenario-relevant runtime paths. ACES can express a full
     root filesystem inventory if captured later; full root filesystem parity is
     deferred as capture/cataloguing scope, not blocked by ACES expressivity.
+  - >
+    APTL #368 added required Trivy CycloneDX SBOM evidence, useful-optional
+    Syft CycloneDX SBOM evidence, and osquery table attempts for the webapp
+    bundle. Unsupported Linux osquery tables are recorded in
+    capture-limits.txt and per-table JSON evidence instead of being treated as
+    successful empty inventories.
 facts:
   - id: webapp.image.identity
     category: provenance
@@ -253,13 +263,19 @@ facts:
     evidence:
       - path: evidence/os-packages.txt
       - path: evidence/language-manifests.txt
+      - path: evidence/trivy-sbom.cyclonedx.json
+      - path: evidence/syft-sbom.cyclonedx.json
     aces:
       disposition: encoded
       surface: nodes
       fields:
         - nodes.webapp.runtime.packages
         - nodes.webapp.runtime.dependency_manifests
-      rationale: ACES #354 added runtime package and dependency-manifest inventory.
+      rationale: >
+        ACES #354 added runtime package and dependency-manifest inventory. The
+        Trivy and Syft CycloneDX SBOMs added by APTL #368 provide standards
+        backed component-inventory evidence for the same runtime package and
+        dependency surfaces.
 
   - id: webapp.runtime.filesystem-content
     category: filesystem-inventory
@@ -314,6 +330,7 @@ facts:
       17 critical, 76 high, 209 medium, and 167 low.
     evidence:
       - path: evidence/trivy-version.txt
+      - path: evidence/trivy-sbom.cyclonedx.json
       - path: evidence/trivy-vulnerability-counts.json
       - path: evidence/trivy-vulnerability-list.json
     aces:
@@ -597,3 +614,46 @@ facts:
       rationale: >
         ACES #368 added container host/security configuration, runtime health
         observation, and full runtime mount fields.
+
+  - id: webapp.capture.toolchain-baseline
+    category: assurance
+    summary: >
+      APTL #368 refreshed the webapp bundle to include the methodology's
+      required Trivy CycloneDX SBOM and useful-optional Syft CycloneDX SBOM and
+      osquery table attempts, with unsupported Linux osquery tables recorded as
+      explicit limits.
+    evidence:
+      - path: evidence/capture-limits.txt
+      - path: evidence/captured-at-utc.txt
+      - path: evidence/docker-version.json
+      - path: evidence/docker-compose-version.json
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-sbom.cyclonedx.json
+      - path: evidence/syft-version.json
+      - path: evidence/syft-sbom.cyclonedx.json
+      - path: evidence/osquery-version.txt
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-programs.json
+      - path: evidence/evidence-sha256sums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.webapp.runtime.packages
+        - nodes.webapp.runtime.dependency_manifests
+        - nodes.webapp.runtime.processes
+        - nodes.webapp.runtime.network.published_ports
+        - nodes.webapp.runtime.container
+      rationale: >
+        The added toolchain outputs strengthen the existing encoded runtime
+        inventory surfaces rather than introducing a new ACES semantic gap:
+        Trivy and Syft provide component inventory evidence for packages and
+        dependency manifests, osquery process/listener rows corroborate runtime
+        process and published-port observations, and osquery Docker rows
+        corroborate container/image identity. Unsupported osquery tables are
+        represented as capture limits, not as ACES-mapped asset facts.

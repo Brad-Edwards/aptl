@@ -3,3 +3,15 @@ Capture used the already-running local lab on 2026-05-21 rather than a destructi
 Secret-shaped runtime environment values in Docker/Compose evidence are redacted. The webapp intentionally exposes some fixture credentials through checked-in source and runtime endpoints; this evidence bundle cites those sources without storing raw secret assignments in generated evidence.
 
 Vulnerability evidence is scanner state tied to the Trivy version/database available during capture. Treat package CVEs as time-sensitive observations, not permanent facts about the asset.
+
+APTL #368 added a non-destructive scanner/osquery refresh on 2026-05-25 against the already-running lab and the then-current local `aptl-webapp:latest` image (`sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a`). The refresh adds Trivy CycloneDX SBOM, Syft CycloneDX SBOM, and osquery evidence to close the methodology toolchain gap. It does not retroactively prove byte-identical equivalence with the original 2026-05-21 frozen runtime evidence image (`sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0`).
+
+Host `trivy`, `syft`, and `osqueryi` binaries were not present, so the refresh used containerized tools: `aquasec/trivy:0.70.0`, `anchore/syft:latest` (Syft 1.44.0), and `osquery/osquery:latest` (osqueryi 4.9.0). This keeps the capture non-destructive but means osquery package/source tables run from the scanner container context unless explicitly sharing the target container's PID or network namespace.
+
+The committed Trivy SBOM is minified JSON. The committed Syft CycloneDX JSON is a package/component-scope SBOM generated from Syft with package catalogers and without file-location properties so it stays below the repository's added-file size gate; the removed `syft:location:*` properties are file provenance detail, not component identity.
+
+osquery installed_applications and osquery programs were attempted but are not present in the Linux osquery registry exposed by `osquery/osquery:latest` 4.9.0. The files `osquery-installed-applications.json` and `osquery-programs.json` record those unavailable table results as first-class evidence.
+
+osquery processes and listening_ports were captured from a scanner container sharing the `aptl-webapp` PID and network namespaces. PIDs, sockets, DNS resolver ports, and transient helper processes such as the Wazuh wrapper's sleep loop are time-sensitive observations.
+
+osquery apt_sources returned a valid empty result from the scanner container context. It is evidence of the attempted optional table, not a substitute for the webapp root filesystem package inventory already captured in `os-packages.txt`, Trivy SBOM, and Syft SBOM.

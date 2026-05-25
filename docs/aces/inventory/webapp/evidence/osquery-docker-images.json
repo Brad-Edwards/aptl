@@ -1,0 +1,15 @@
+{
+  "query": "select id, created, size_bytes, tags from docker_images where tags like \"%aptl-webapp%\";",
+  "rows": [
+    {
+      "created": "1779517097",
+      "id": "4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a",
+      "size_bytes": "475310384",
+      "tags": "aptl-webapp:latest"
+    }
+  ],
+  "status": "captured",
+  "table": "docker_images",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view"
+}

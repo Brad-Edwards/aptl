@@ -1,0 +1,41 @@
+{
+  "query": "select distinct port, protocol, family, address, pid, socket from listening_ports where port > 0 order by port, protocol, address;",
+  "rows": [
+    {
+      "address": "0.0.0.0",
+      "family": "2",
+      "pid": "-1",
+      "port": "8080",
+      "protocol": "6",
+      "socket": "170242081"
+    },
+    {
+      "address": "127.0.0.11",
+      "family": "2",
+      "pid": "-1",
+      "port": "33569",
+      "protocol": "6",
+      "socket": "170233173"
+    },
+    {
+      "address": "0.0.0.0",
+      "family": "2",
+      "pid": "-1",
+      "port": "47201",
+      "protocol": "17",
+      "socket": "170236412"
+    },
+    {
+      "address": "127.0.0.11",
+      "family": "2",
+      "pid": "-1",
+      "port": "48043",
+      "protocol": "17",
+      "socket": "170233172"
+    }
+  ],
+  "status": "captured",
+  "table": "listening_ports",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-webapp network namespace"
+}

@@ -76,6 +76,17 @@ REQUIRED_EVIDENCE_FILES = {
     "os-packages.txt",
     "runtime-baseline.txt",
     "source-checksums.txt",
+    "syft-sbom.cyclonedx.json",
+    "syft-version.json",
+    "osquery-apt-sources.json",
+    "osquery-docker-containers.json",
+    "osquery-docker-images.json",
+    "osquery-installed-applications.json",
+    "osquery-listening-ports.json",
+    "osquery-processes.json",
+    "osquery-programs.json",
+    "osquery-version.txt",
+    "trivy-sbom.cyclonedx.json",
     "trivy-version.txt",
     "trivy-vulnerability-counts.json",
     "trivy-vulnerability-list.json",
@@ -157,8 +168,8 @@ def test_webapp_inventory_note_declares_scope_and_evidence():
 def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     result = validate_mapping_ledger(WEBAPP_DIR)
     assert result.ok, result.errors
-    assert result.fact_count == 23
-    assert result.encoded_count == 23
+    assert result.fact_count == 24
+    assert result.encoded_count == 24
     assert result.blocked_count == 0
     assert result.triage_count == 0
     assert result.gap_issues == []
@@ -181,6 +192,7 @@ def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
     assert dispositions["webapp.runtime.supervised-process-set"] == "encoded"
     assert dispositions["webapp.runtime.environment-policy"] == "encoded"
     assert dispositions["webapp.runtime.capability-restart-policy"] == "encoded"
+    assert dispositions["webapp.capture.toolchain-baseline"] == "encoded"
 
 
 def test_webapp_gap_report_surfaces_remaining_aces_gaps_only():
@@ -219,6 +231,26 @@ def test_webapp_evidence_sha256_manifest_matches_files():
         if path.is_file() and path.name != "evidence-sha256sums.txt"
     }
     assert evidence_files <= manifest_entries
+
+
+def test_webapp_mapping_ledger_references_every_evidence_file():
+    ledger = load_mapping_ledger(LEDGER_PATH)
+    refs = set()
+    refs.update(
+        ref["path"]
+        for ref in ledger["provenance"]["attestation"].get("evidence", [])
+    )
+    for check in ledger["correspondence_checks"]:
+        refs.update(ref["path"] for ref in check.get("realized_evidence", []))
+    for fact in ledger["facts"]:
+        refs.update(ref["path"] for ref in fact["evidence"])
+
+    evidence_files = {
+        f"evidence/{path.name}"
+        for path in EVIDENCE_DIR.iterdir()
+        if path.is_file()
+    }
+    assert evidence_files <= refs
 
 
 def test_webapp_evidence_does_not_contain_raw_secret_assignments():
@@ -320,6 +352,64 @@ def test_webapp_trivy_vulnerability_summary_matches_list():
     assert vulnerabilities
     assert all(item["id"] for item in vulnerabilities)
     assert all(item["package_name"] for item in vulnerabilities)
+
+
+def test_webapp_sbom_toolchain_evidence_is_cyclonedx():
+    trivy_sbom = _json_file("trivy-sbom.cyclonedx.json")
+    syft_sbom = _json_file("syft-sbom.cyclonedx.json")
+    syft_version = _json_file("syft-version.json")
+
+    assert trivy_sbom["bomFormat"] == "CycloneDX"
+    assert syft_sbom["bomFormat"] == "CycloneDX"
+    assert trivy_sbom["components"]
+    assert syft_sbom["components"]
+    assert trivy_sbom["metadata"]["component"]["name"].startswith("aptl-webapp")
+    assert syft_version["application"] == "syft"
+    assert syft_version["version"]
+
+
+def test_webapp_osquery_evidence_records_requested_tables_and_limits():
+    expected_tables = {
+        "apt_sources",
+        "docker_containers",
+        "docker_images",
+        "installed_applications",
+        "listening_ports",
+        "processes",
+        "programs",
+    }
+    table_files = {
+        path.name.removeprefix("osquery-").removesuffix(".json").replace("-", "_")
+        for path in EVIDENCE_DIR.glob("osquery-*.json")
+    }
+    assert expected_tables <= table_files
+
+    processes = _json_file("osquery-processes.json")
+    process_names = {row["name"] for row in processes["rows"]}
+    assert processes["status"] == "captured"
+    assert {"supervisord", "gunicorn", "rsyslogd", "wazuh-agent.sh"} <= process_names
+
+    listening_ports = _json_file("osquery-listening-ports.json")
+    assert listening_ports["status"] == "captured"
+    assert any(row["port"] == "8080" for row in listening_ports["rows"])
+
+    docker_containers = _json_file("osquery-docker-containers.json")
+    assert docker_containers["status"] == "captured"
+    assert docker_containers["rows"][0]["name"] == "/aptl-webapp"
+
+    docker_images = _json_file("osquery-docker-images.json")
+    assert docker_images["status"] == "captured"
+    assert any("aptl-webapp:latest" in row["tags"] for row in docker_images["rows"])
+
+    for name in ("installed-applications", "programs"):
+        payload = _json_file(f"osquery-{name}.json")
+        assert payload["status"] == "unavailable"
+        assert payload["rows"] == []
+        assert "not present" in payload["reason"]
+
+    limits = (EVIDENCE_DIR / "capture-limits.txt").read_text(encoding="utf-8")
+    assert "osquery installed_applications" in limits
+    assert "osquery programs" in limits
 
 
 def test_techvault_sdl_encodes_webapp_inventory_surfaces():

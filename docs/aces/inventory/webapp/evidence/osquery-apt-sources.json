@@ -1,0 +1,8 @@
+{
+  "query": "select * from apt_sources;",
+  "rows": [],
+  "status": "captured",
+  "table": "apt_sources",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side view; target rootfs apt source parsing is not supported by this capture"
+}

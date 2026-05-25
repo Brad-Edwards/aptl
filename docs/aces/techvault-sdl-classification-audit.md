@@ -48,9 +48,17 @@ and custom decoder/rule files mounted into the manager. `infrastructure` now
 attaches the manager to `security-net`, `dmz-net`, and `internal-net` with the
 Compose static addresses `172.20.0.10`, `172.20.1.10`, and `172.20.2.30`.
 
+The Compose healthcheck is intentionally encoded as a declarative condition,
+not as `runtime.health.status: unknown`. Runtime health status is an observed
+realization/capture result; the TechVault SDL contract is the command and
+timing policy that must exist.
+
 Generated credentials and host-side certificate material remain secret/control
 plane material; the SDL records the path, mount, and redaction shape without
 committing raw values.
+
+Follow-up on the broader SDL boundary between required runtime contract and
+observed realization evidence is tracked in `Brad-Edwards/aces#417`.
 
 ### SCA-003: Switch-node `internal` flags mismatched Compose
 

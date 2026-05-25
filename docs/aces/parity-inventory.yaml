@@ -131,7 +131,7 @@ rows:
     runtime_owner: n/a
     validation_evidence: "docker-compose.yml (service: wazuh.manager) + scenarios/techvault.sdl.yaml + tests/test_techvault_classification_audit.py"
     blocking_followup: n/a
-    notes: Classification-audit fix for issue #369; current SDL encodes the Wazuh API on 55000/tcp, security/dmz/internal network attachments, Compose healthcheck, environment policy, resource policy, persistent/config mounts, and custom decoder/rule content mounted into the manager.
+    notes: Classification-audit fix for issue #369; current SDL encodes the Wazuh API on 55000/tcp, security/dmz/internal network attachments, Compose healthcheck as conditions.wazuh-api-ready, environment policy, resource policy, persistent/config mounts, and custom decoder/rule content mounted into the manager.
 
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml
@@ -634,7 +634,7 @@ rows:
     runtime_owner: n/a
     validation_evidence: docker-compose.yml + scenarios/techvault.sdl.yaml + tests/test_techvault_classification_audit.py
     blocking_followup: n/a
-    notes: Wazuh manager service, API, three network attachments, Compose healthcheck, runtime environment policy, mounts, and custom decoder/rule files are now represented by the TechVault SDL.
+    notes: Wazuh manager service, API, three network attachments, Compose healthcheck via conditions.wazuh-api-ready, runtime environment policy, mounts, and custom decoder/rule files are now represented by the TechVault SDL.
 
   - id: compose.profile.victim
     surface: docker_compose_topology

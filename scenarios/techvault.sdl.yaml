@@ -21104,9 +21104,6 @@ nodes:
           - cp /tmp/filebeat-override.yml /etc/filebeat/filebeat.yml && chown root:root /etc/filebeat/filebeat.yml && python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init
         command: []
         runtime_name: runc
-      health:
-        status: unknown
-        description: 'Compose healthcheck: curl -ks https://localhost:55000 || exit 1 with interval 30s, timeout 10s, retries 5, start_period 120s.'
       network:
         hostname: wazuh.manager
         domainname: ''

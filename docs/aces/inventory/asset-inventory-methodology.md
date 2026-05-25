@@ -131,6 +131,13 @@ instead of pretending a local build recipe exists.
    spike because Trivy can emit it directly; SPDX is acceptable when a
    downstream consumer needs SPDX profiles. Also capture OS package-manager
    output and language manifests or lockfiles visible inside the container.
+   Any SBOM minification or normalization must be deterministic, scripted in
+   the bundle, and recorded in `capture-limits.txt`. For Syft CycloneDX output,
+   a repository-size-safe package/component SBOM may disable file catalogers and
+   strip `syft:location:*` component properties only when the package/component
+   identity fields remain intact and separate filesystem evidence is captured
+   or explicitly declined. The exact command and jq transform are part of the
+   reproducibility record, not an analyst-only cleanup step.
 
 7. Capture patch and vulnerability state.
 
@@ -201,10 +208,11 @@ instead of pretending a local build recipe exists.
 12. Publish a reproducibility bundle.
 
     The per-asset directory should include a README, `mapping-ledger.yaml`,
-    raw evidence, evidence checksums, focused tests that parse the evidence,
-    and explicit notes on skipped steps. This supports ACM-style artifact
-    review thinking: make the artifact available and evaluable, then be precise
-    about which result claims it validates.
+    raw evidence, the capture commands or script used to produce it, evidence
+    checksums, focused tests that parse the evidence, and explicit notes on
+    skipped or normalized steps. This supports ACM-style artifact review
+    thinking: make the artifact available and evaluable, then be precise about
+    which result claims it validates.
 
 13. Plan correspondence checks.
 
@@ -242,6 +250,8 @@ Useful optional tools:
 
 - Syft for SBOM generation and Grype for an independent vulnerability scan.
 - CycloneDX CLI or SPDX tooling for validating or converting SBOMs.
+- Digest-pinned scanner container images when host binaries are absent or when
+  a capture needs rerunnable tool identity independent of local package state.
 - Cosign, notation, Rekor, or registry-native signature tooling when upstream
   images publish verifiable signatures/attestations.
 - `osquery` for richer live asset inventory when containers include enough

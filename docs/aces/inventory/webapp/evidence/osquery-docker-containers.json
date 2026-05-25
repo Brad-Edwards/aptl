@@ -1,5 +1,9 @@
 {
+  "table": "docker_containers",
   "query": "select id, name, image, image_id, command, created, state, status, pid, path, config_entrypoint, started_at, finished_at, privileged, security_options, readonly_rootfs, cgroup_namespace, ipc_namespace, mnt_namespace, net_namespace, pid_namespace, user_namespace, uts_namespace from docker_containers where name=\"/aptl-webapp\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
   "rows": [
     {
       "cgroup_namespace": "",
@@ -26,9 +30,5 @@
       "user_namespace": "",
       "uts_namespace": ""
     }
-  ],
-  "status": "captured",
-  "table": "docker_containers",
-  "tool": "osqueryi version 4.9.0",
-  "vantage": "containerized osquery host-side Docker socket view"
+  ]
 }

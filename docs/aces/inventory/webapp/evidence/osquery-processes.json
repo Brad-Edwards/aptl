@@ -1,5 +1,9 @@
 {
+  "table": "processes",
   "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-webapp PID namespace",
+  "status": "captured",
   "rows": [
     {
       "cmdline": "/usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf",
@@ -114,13 +118,9 @@
       "gid": "0",
       "name": "sleep",
       "path": "",
-      "pid": "143597",
-      "start_time": "1779732303",
+      "pid": "147246",
+      "start_time": "1779737440",
       "uid": "0"
     }
-  ],
-  "status": "captured",
-  "table": "processes",
-  "tool": "osqueryi version 4.9.0",
-  "vantage": "containerized osquery sharing aptl-webapp PID namespace"
+  ]
 }

@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-webapp@sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0
+  image_digest: aptl-webapp@sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -66,8 +66,8 @@ correspondence_checks:
       process, environment, capability, operational-policy, package, and
       scanner surfaces against this ledger.
     limit: >
-      Planned because this issue records the frozen steady-state ACES spec and
-      evidence, not a fresh live equivalence run.
+      Planned because this issue records the current non-destructive
+      steady-state ACES spec and evidence, not a fresh live equivalence run.
 notes:
   - >
     ACES #354 is closed and covers runtime mounts, primary process identity,
@@ -87,17 +87,18 @@ notes:
     root filesystem inventory if captured later; full root filesystem parity is
     deferred as capture/cataloguing scope, not blocked by ACES expressivity.
   - >
-    APTL #368 added required Trivy CycloneDX SBOM evidence, useful-optional
-    Syft CycloneDX SBOM evidence, and osquery table attempts for the webapp
-    bundle. Unsupported Linux osquery tables are recorded in
-    capture-limits.txt and per-table JSON evidence instead of being treated as
-    successful empty inventories.
+    APTL #368 replaced the earlier webapp inventory bundle with a single
+    current-baseline capture that includes required Trivy CycloneDX SBOM
+    evidence, useful-optional Syft CycloneDX SBOM evidence, and osquery table
+    attempts for the webapp bundle. Unsupported Linux osquery tables are
+    recorded in capture-limits.txt and per-table JSON evidence instead of being
+    treated as successful empty inventories.
 facts:
   - id: webapp.image.identity
     category: provenance
     summary: >
       The asset uses first-party local image aptl-webapp:latest, captured as
-      aptl-webapp@sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0.
+      aptl-webapp@sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a.
     evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-inspect.container.json
@@ -326,8 +327,8 @@ facts:
   - id: webapp.runtime.vulnerability-scan
     category: vulnerability-inventory
     summary: >
-      Trivy reported 469 package vulnerability findings at capture time:
-      17 critical, 76 high, 209 medium, and 167 low.
+      Trivy reported 299 package vulnerability findings at capture time:
+      6 critical, 32 high, 99 medium, 158 low, and 4 unknown.
     evidence:
       - path: evidence/trivy-version.txt
       - path: evidence/trivy-sbom.cyclonedx.json
@@ -618,10 +619,10 @@ facts:
   - id: webapp.capture.toolchain-baseline
     category: assurance
     summary: >
-      APTL #368 refreshed the webapp bundle to include the methodology's
-      required Trivy CycloneDX SBOM and useful-optional Syft CycloneDX SBOM and
-      osquery table attempts, with unsupported Linux osquery tables recorded as
-      explicit limits.
+      APTL #368 replaced the webapp bundle with a reproducible current-baseline
+      capture that includes the methodology's required Trivy CycloneDX SBOM,
+      useful-optional Syft CycloneDX SBOM, and osquery table attempts, with
+      unsupported Linux osquery tables recorded as explicit limits.
     evidence:
       - path: evidence/capture-limits.txt
       - path: evidence/captured-at-utc.txt

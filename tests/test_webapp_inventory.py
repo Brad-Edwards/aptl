@@ -22,19 +22,20 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PREFLIGHT_PATH = PROJECT_ROOT / "docs" / "aces" / "inventory" / "webapp-preflight.md"
 WEBAPP_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "webapp"
 WEBAPP_DOC_PATH = WEBAPP_DIR / "README.md"
+CAPTURE_SCRIPT_PATH = WEBAPP_DIR / "capture-evidence.sh"
 LEDGER_PATH = WEBAPP_DIR / "mapping-ledger.yaml"
 EVIDENCE_DIR = WEBAPP_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0"
+IMAGE_ID = "sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a"
 IMAGE_DIGEST = f"aptl-webapp@{IMAGE_ID}"
 BUILD_HISTORY_LAYER_COUNT = 31
 SOURCE_INPUT_COUNT = 18
 LOCAL_IDENTITY_USER_COUNT = 23
 LOCAL_IDENTITY_GROUP_COUNT = 45
 FULL_RUNTIME_PACKAGE_COUNT = 223
-FULL_TRIVY_FINDING_COUNT = 469
+FULL_TRIVY_FINDING_COUNT = 299
 APPLICATION_ROUTE_COUNT = 19
 WEBAPP_SCENARIO_WEAKNESSES = {
     "webapp-admin-authz-bypass",
@@ -159,10 +160,27 @@ def test_webapp_inventory_note_declares_scope_and_evidence():
         "ACES #368",
         "Full root filesystem cataloguing is not blocked",
         "by ACES expressivity",
-        "not proof that a destructive",
+        "reproducible capture of the observed local lab",
+        "capture-evidence.sh",
+        "syft:location:*",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Webapp inventory note missing scope markers: {missing}"
+
+
+def test_webapp_capture_script_pins_reproducible_toolchain_and_normalization():
+    text = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
+    required = (
+        "aquasec/trivy@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e",
+        "anchore/syft@sha256:86fde6445b483d902fe011dd9f68c4987dd94e07da1e9edc004e3c2422650de6",
+        "osquery/osquery@sha256:f8ec3300048158292df2d4bb0d1d7804af358f530005828c3387553f23c796cd",
+        "--select-catalogers",
+        "syft:location:",
+        "evidence-sha256sums.txt",
+    )
+    missing = [needle for needle in required if needle not in text]
+    assert not missing, f"Capture script missing reproducibility markers: {missing}"
+    assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
 
 
 def test_webapp_mapping_ledger_validates_and_tracks_gap_handoff():
@@ -366,6 +384,13 @@ def test_webapp_sbom_toolchain_evidence_is_cyclonedx():
     assert trivy_sbom["metadata"]["component"]["name"].startswith("aptl-webapp")
     assert syft_version["application"] == "syft"
     assert syft_version["version"]
+    syft_location_properties = [
+        prop
+        for component in syft_sbom["components"]
+        for prop in component.get("properties", [])
+        if prop["name"].startswith("syft:location:")
+    ]
+    assert syft_location_properties == []
 
 
 def test_webapp_osquery_evidence_records_requested_tables_and_limits():
@@ -443,15 +468,8 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     rootfs_layer_digests = {
         layer["digest"] for layer in build["layers"] if layer.get("digest")
     }
-    assert len(rootfs_layer_digests) == 20
-    assert (
-        "sha256:79dd1f4c855cd061f687a994426634cf5f84c8ecdbc66c7a7d118e828dd93c99"
-        in (rootfs_layer_digests)
-    )
-    assert (
-        "sha256:622338701f7b3204a528003eb94e09d1f2e38f584835a6658b266a0f87ba8a91"
-        in (rootfs_layer_digests)
-    )
+    image = _json_file("docker-inspect.image.json")[0]
+    assert rootfs_layer_digests == set(image["RootFS"]["Layers"])
     assert webapp["os"] == "linux"
     assert webapp["os_version"] == "Debian GNU/Linux 13 (trixie)"
     assert {"port": 8080, "protocol": "tcp", "name": "http"} in webapp["services"]
@@ -535,53 +553,53 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
         "memory_swap": 1073741824,
     }
     network = runtime["network"]
+    container = _json_file("docker-inspect.container.json")[0]
+    docker_networks = container["NetworkSettings"]["Networks"]
     assert network["hostname"] == "webapp"
     assert network["domainname"] == ""
     assert len(network["endpoints"]) == 2
     endpoints = {endpoint["network"]: endpoint for endpoint in network["endpoints"]}
     dmz_endpoint = endpoints["dmz-net"]
-    assert dmz_endpoint["network_id"] == (
-        "da8da844dbb2e771c0d77dd3a0a33392b53ef0547f5cab073acf3d7c8136b06b"
-    )
+    dmz_observed = docker_networks["aptl_aptl-dmz"]
+    assert dmz_endpoint["network_id"] == dmz_observed["NetworkID"]
     assert dmz_endpoint["network_id_stability"] == "stable"
-    assert dmz_endpoint["endpoint_id"] == (
-        "601208e50783a00e3124c4c0797dfde773f89aeaf159b67791b1057f691be5e0"
-    )
+    assert dmz_endpoint["endpoint_id"] == dmz_observed["EndpointID"]
     assert dmz_endpoint["endpoint_id_stability"] == "ephemeral"
     assert dmz_endpoint["backend_generated"] is True
     assert dmz_endpoint["ip_address"] == "172.20.1.20"
     assert dmz_endpoint["ip_prefix_length"] == 24
     assert dmz_endpoint["gateway"] == "172.20.1.1"
-    assert dmz_endpoint["mac_address"] == "ea:76:a0:d9:0f:2c"
+    assert dmz_endpoint["mac_address"] == dmz_observed["MacAddress"]
     assert dmz_endpoint["aliases"] == ["aptl-webapp", "webapp"]
-    assert dmz_endpoint["dns_names"] == ["aptl-webapp", "webapp", "dfcf66bdcb7b"]
-    assert dmz_endpoint["generated_dns_names"] == ["dfcf66bdcb7b"]
+    assert dmz_endpoint["dns_names"] == dmz_observed["DNSNames"]
+    assert dmz_endpoint["generated_dns_names"] == [
+        name
+        for name in dmz_observed["DNSNames"]
+        if name not in {"aptl-webapp", "webapp"}
+    ]
     assert dmz_endpoint["backend"]["driver"] == "bridge"
     assert dmz_endpoint["backend"]["ipam_driver"] == "default"
     assert dmz_endpoint["backend"]["driver_options"] == {}
     assert dmz_endpoint["backend"]["ipam_options"] == {}
 
     internal_endpoint = endpoints["internal-net"]
-    assert internal_endpoint["network_id"] == (
-        "13398d126254b7592401f00b79f8e80a4ff32fe680b7b3f999028fb6dbe8fb20"
-    )
+    internal_observed = docker_networks["aptl_aptl-internal"]
+    assert internal_endpoint["network_id"] == internal_observed["NetworkID"]
     assert internal_endpoint["network_id_stability"] == "stable"
-    assert internal_endpoint["endpoint_id"] == (
-        "56ce35d9af612ec7a488a076b079cea14359481498f3fdd1826ae34b689dd5e8"
-    )
+    assert internal_endpoint["endpoint_id"] == internal_observed["EndpointID"]
     assert internal_endpoint["endpoint_id_stability"] == "ephemeral"
     assert internal_endpoint["backend_generated"] is True
     assert internal_endpoint["ip_address"] == "172.20.2.25"
     assert internal_endpoint["ip_prefix_length"] == 24
     assert internal_endpoint["gateway"] == "172.20.2.1"
-    assert internal_endpoint["mac_address"] == "42:7a:3e:d1:8c:ed"
+    assert internal_endpoint["mac_address"] == internal_observed["MacAddress"]
     assert internal_endpoint["aliases"] == ["aptl-webapp", "webapp"]
-    assert internal_endpoint["dns_names"] == [
-        "aptl-webapp",
-        "webapp",
-        "dfcf66bdcb7b",
+    assert internal_endpoint["dns_names"] == internal_observed["DNSNames"]
+    assert internal_endpoint["generated_dns_names"] == [
+        name
+        for name in internal_observed["DNSNames"]
+        if name not in {"aptl-webapp", "webapp"}
     ]
-    assert internal_endpoint["generated_dns_names"] == ["dfcf66bdcb7b"]
     assert internal_endpoint["backend"]["driver"] == "bridge"
     assert internal_endpoint["backend"]["ipam_driver"] == "default"
     assert internal_endpoint["backend"]["driver_options"] == {}
@@ -697,6 +715,7 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
         "high",
         "medium",
         "low",
+        "unknown",
     }
 
     infrastructure = data["infrastructure"]
@@ -868,7 +887,12 @@ def test_webapp_runtime_network_matches_docker_evidence():
         assert endpoint["mac_address"] == observed["MacAddress"]
         assert endpoint["aliases"] == observed["Aliases"]
         assert endpoint["dns_names"] == observed["DNSNames"]
-        assert endpoint["generated_dns_names"] == ["dfcf66bdcb7b"]
+        expected_generated_dns_names = [
+            name
+            for name in observed["DNSNames"]
+            if name not in {"aptl-webapp", "webapp"}
+        ]
+        assert endpoint["generated_dns_names"] == expected_generated_dns_names
         assert endpoint["gateway"] == docker_network["IPAM"]["Config"][0]["Gateway"]
         assert endpoint["backend"]["driver"] == docker_network["Driver"]
         assert endpoint["backend"]["ipam_driver"] == docker_network["IPAM"]["Driver"]

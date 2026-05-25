@@ -136,6 +136,24 @@ def _samba_user_details() -> dict[str, dict[str, str | list[str]]]:
     return details
 
 
+def _ad_listener_pairs() -> set[tuple[str, int]]:
+    pairs: set[tuple[str, int]] = set()
+    for line in _runtime_baseline_section("listeners"):
+        if "users:(" not in line:
+            continue
+        parts = line.split()
+        if line.startswith("tcp "):
+            transport = "tcp"
+            local_address = parts[4]
+        elif line.startswith("UNCONN "):
+            transport = "udp"
+            local_address = parts[3]
+        else:
+            continue
+        pairs.add((transport, int(local_address.rsplit(":", maxsplit=1)[1])))
+    return pairs
+
+
 def test_ad_preflight_artifact_records_local_guardrails():
     text = PREFLIGHT_PATH.read_text(encoding="utf-8")
     required = (
@@ -168,6 +186,7 @@ def test_ad_inventory_note_declares_scope_and_evidence():
         "Brad-Edwards/aces#401",
         "No known ACES expressivity gap remains",
         "full observed runtime mount table",
+        "realized steady-state runtime evidence",
         "schema secret-safety boundary",
         "claim-bounded AD steady-state inventory facts",
         "Raw credential, key, and flag contents are intentionally absent",
@@ -647,6 +666,25 @@ def test_ad_runtime_network_matches_docker_evidence():
     assert endpoint["backend"]["ipam_options"] == {}
 
 
+def test_ad_identity_authority_services_match_runtime_listeners():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    authority = data["nodes"]["ad"]["runtime"]["identity_authorities"][0]
+    encoded_pairs = set()
+    for service in authority["services"]:
+        service_id = service["service_id"]
+        service_name = service["service"]
+        if (
+            service_id.endswith("-udp-endpoint")
+            or service_name in {"cldap", "netbios-name", "netbios-datagram"}
+        ):
+            transport = "udp"
+        else:
+            transport = "tcp"
+        encoded_pairs.add((transport, service["port"]))
+
+    assert encoded_pairs == _ad_listener_pairs()
+
+
 def test_ad_identity_authority_memberships_match_samba_group_evidence():
     data = _yaml_file(TECHVAULT_SDL_PATH)
     authority = data["nodes"]["ad"]["runtime"]["identity_authorities"][0]
@@ -685,6 +723,15 @@ def test_ad_identity_subject_attributes_match_samba_user_details():
         "admin_count": "adminCount",
         "when_created": "whenCreated",
     }
+    subject_fields = {
+        "display_name": "displayName",
+        "principal_name": "userPrincipalName",
+        "distinguished_name": "distinguishedName",
+    }
+    profile_attributes = {
+        "department": "department",
+        "title": "title",
+    }
 
     for user_name, details in _samba_user_details().items():
         if not details:
@@ -694,7 +741,13 @@ def test_ad_identity_subject_attributes_match_samba_user_details():
             attribute["name"]: attribute["values"]
             for attribute in subject.get("attributes", [])
         }
+        for subject_field, evidence_key in subject_fields.items():
+            if evidence_key in details:
+                assert subject[subject_field] == details[evidence_key]
         for attribute_name, evidence_key in attribute_keys.items():
+            if evidence_key in details:
+                assert attributes[attribute_name] == [details[evidence_key]]
+        for attribute_name, evidence_key in profile_attributes.items():
             if evidence_key in details:
                 assert attributes[attribute_name] == [details[evidence_key]]
         # ACES rejects secret-bearing identity attribute names; keep pwdLastSet

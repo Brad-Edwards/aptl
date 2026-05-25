@@ -72,8 +72,11 @@ notes:
   - >
     The frozen evidence lists jessica.williams as a domain user but does not
     include a non-empty user-detail block or captured Sales, VPN-Users, or
-    Domain Users membership for that account. The SDL therefore keeps the
-    weak-password scenario hook while omitting unsupported membership claims.
+    Domain Users membership for that account. The provisioning script contains
+    intended add-member commands for jessica.williams, but realized runtime
+    evidence is authoritative for membership claims in this steady-state SDL.
+    The SDL therefore keeps the weak-password scenario hook while omitting
+    unsupported membership claims.
   - >
     pwdLastSet remains in the evidence bundle but is not encoded as an SDL
     identity attribute because ACES rejects secret-bearing attribute names.

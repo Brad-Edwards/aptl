@@ -76,8 +76,10 @@ rebuild proof.
 - The `jessica.williams` account is present in the captured user list and
   remains tied to the weak-password scenario account. The committed evidence
   does not include a non-empty `samba-tool user show` block for that user and
-  does not list Sales, VPN-Users, or Domain Users membership for that user, so
-  those memberships are not asserted in the SDL.
+  does not list Sales, VPN-Users, or Domain Users membership for that user.
+  Although the provisioning script contains intended add-member commands for
+  that account, the SDL follows the realized steady-state runtime evidence for
+  membership claims, so those memberships are not asserted.
 - Trivy 0.70.0 reported 140 package vulnerability findings at scan time:
   65 medium and 75 low.
 - Secret-shaped values in Docker/Compose evidence were redacted before

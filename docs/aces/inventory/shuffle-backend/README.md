@@ -1,8 +1,9 @@
 # Shuffle Backend Inventory Methodology Test
 
 This directory is the APTL #353 proof pass for the backend asset inventory
-methodology in `docs/aces/inventory/asset-inventory-methodology.md`. It is
-evidence for developing the methodology against TechVault's
+methodology now owned by ACES at
+<https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md>.
+It is evidence for validating the methodology against TechVault's
 `shuffle-backend`; it is not the final completion artifact for all SCN-010
 asset inventory acceptance criteria.
 
@@ -107,7 +108,7 @@ This pass supports the proposed issue sequencing:
 - Use APTL #353 as the upstream-image proof asset.
 - Use APTL #331 as the second upstream-image comparison asset.
 - Use APTL #330 and APTL #332 to validate custom-build source capture.
-- Keep ACES #353 as the canonical methodology owner.
+- Keep ACES docs as the canonical methodology owner.
 
 The main issue-breakdown risk is not the per-asset split; it is failing to
 attempt maximal ACES specification after discovery. The per-asset tickets

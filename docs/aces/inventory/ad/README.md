@@ -1,9 +1,10 @@
 # AD Steady-State Inventory
 
 This directory is the SCN-010 / issue #332 inventory bundle for the TechVault
-`ad` container. It applies the methodology in
-`docs/aces/inventory/asset-inventory-methodology.md` to the realized
-`aptl-ad` Samba Active Directory Domain Controller.
+`ad` container. It applies the ACES-owned asset inventory methodology
+documented in
+<https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md>
+to the realized `aptl-ad` Samba Active Directory Domain Controller.
 
 The capture used a fresh local lab on 2026-05-23 after
 `uv run aptl lab stop -v -y && uv run aptl lab start --skip-seed` completed and

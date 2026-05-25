@@ -1,7 +1,7 @@
 """ACES inventory mapping ledger validation.
 
-The ledger is a methodology handoff artifact: capture issues record facts and
-the later encoding issues can see which current ACES surface, caveat, or gap
+The ledger is an APTL downstream handoff artifact: capture issues record facts
+and later encoding issues can see which current ACES surface, caveat, or gap
 issue owns each fact.
 """
 

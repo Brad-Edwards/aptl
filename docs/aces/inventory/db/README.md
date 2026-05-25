@@ -1,9 +1,10 @@
 # DB Steady-State Inventory
 
 This directory is the SCN-010 / issue #331 inventory bundle for the TechVault
-`db` container. It applies the methodology in
-`docs/aces/inventory/asset-inventory-methodology.md` to the realized
-`aptl-db` PostgreSQL container.
+`db` container. It applies the ACES-owned asset inventory methodology
+documented in
+<https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md>
+to the realized `aptl-db` PostgreSQL container.
 
 The capture used an already-running local lab on 2026-05-22T03:56:16Z. It did not run
 `aptl lab stop -v && aptl lab start`, because that would destroy the user's

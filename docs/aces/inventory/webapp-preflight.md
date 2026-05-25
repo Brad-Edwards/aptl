@@ -28,8 +28,8 @@ replacement for ADR-035 or the ACES asset-inventorying methodology.
 
 ## Cross-Cutting Concerns To Reuse
 
-- Inventory methodology and ledger validator:
-  `docs/aces/inventory/asset-inventory-methodology.md`,
+- ACES-owned inventory methodology and APTL ledger validator:
+  <https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md>,
   `src/aptl/core/aces_inventory.py`, and
   `tests/test_aces_inventory_methodology.py`.
 - Existing evidence-bundle shape:

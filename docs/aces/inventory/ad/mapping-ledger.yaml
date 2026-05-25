@@ -67,8 +67,19 @@ notes:
     Brad-Edwards/aces#401 added the provider-neutral
     runtime.identity_authorities surface used by this bundle for the Samba AD
     domain authority, directory subjects, policy facts, SPNs, and memberships.
-    No known ACES expressivity gap remains for the catalogued AD steady-state
-    inventory facts in this mapping ledger.
+    No known ACES expressivity gap remains for the encoded, claim-bounded AD
+    steady-state inventory facts in this mapping ledger.
+  - >
+    The frozen evidence lists jessica.williams as a domain user but does not
+    include a non-empty user-detail block or captured Sales, VPN-Users, or
+    Domain Users membership for that account. The SDL therefore keeps the
+    weak-password scenario hook while omitting unsupported membership claims.
+  - >
+    pwdLastSet remains in the evidence bundle but is not encoded as an SDL
+    identity attribute because ACES rejects secret-bearing attribute names.
+    Non-secret AD-native identity fields such as objectGUID, objectSid,
+    userAccountControl, primaryGroupID, lastLogon, adminCount, and whenCreated
+    are encoded where captured.
 facts:
   - id: ad.image.identity
     category: provenance
@@ -103,6 +114,7 @@ facts:
         - nodes.ad.source.build.base_image
         - nodes.ad.source.build.dockerfile_path
         - nodes.ad.source.build.instructions
+        - nodes.ad.source.build.layers
         - nodes.ad.source.build.copied_sources
         - nodes.ad.source.build.source_inputs
         - nodes.ad.source.build.attestation
@@ -126,7 +138,8 @@ facts:
     category: network
     summary: >
       The service is attached to aptl_aptl-internal at 172.20.2.10 with aliases
-      aptl-ad and ad plus generated DNS names.
+      aptl-ad and ad plus generated DNS names, endpoint IDs, gateway, MAC
+      address, and bridge/IPAM backend metadata.
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/docker-network.aptl-internal.json
@@ -160,7 +173,8 @@ facts:
     category: runtime-configuration
     summary: >
       Compose declares a healthcheck using samba-tool domain info 127.0.0.1 with
-      30s interval, 10s timeout, 10 retries, and 60s start period.
+      30s interval, 10s timeout, 10 retries, and 60s start period; Docker
+      inspect records healthy status and five successful health log entries.
     evidence:
       - path: evidence/compose-service.ad.json
       - path: evidence/docker-inspect.container.json
@@ -170,13 +184,15 @@ facts:
       fields:
         - conditions.ad-domain-ready
         - nodes.ad.conditions
+        - nodes.ad.runtime.health
       rationale: ACES conditions represent health/readiness commands and timing.
 
   - id: ad.runtime.volumes
     category: runtime-configuration
     summary: >
-      Named volumes aptl_ad_data and aptl_ad_logs are mounted at /var/lib/samba
-      and /var/log/samba.
+      The full observed runtime mount table is encoded, including named volumes
+      aptl_ad_data and aptl_ad_logs at /var/lib/samba and /var/log/samba plus
+      container backend and pseudo-filesystem mounts.
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/docker-volume.ad-data.json
@@ -187,7 +203,7 @@ facts:
       surface: nodes
       fields:
         - nodes.ad.runtime.mounts
-      rationale: ACES typed runtime mount inventory encodes volume-backed paths.
+      rationale: ACES typed runtime mount inventory encodes observed mount targets, backing kinds, options, and stability.
 
   - id: ad.runtime.primary-process
     category: runtime-configuration
@@ -288,8 +304,9 @@ facts:
   - id: ad.runtime.filesystem-inventory
     category: runtime-inventory
     summary: >
-      Catalogued Samba, supervisor, Wazuh, flag, log, and generated state paths
-      are recorded with metadata and checksums.
+      All 134 unique catalogued Samba, supervisor, Wazuh, flag, log, and
+      generated state paths are recorded with metadata; checksum evidence
+      covers 57 file observations across 54 unique file paths.
     evidence:
       - path: evidence/filesystem-tree.txt
       - path: evidence/filesystem-checksums.txt
@@ -300,30 +317,31 @@ facts:
       fields:
         - nodes.ad.runtime.filesystem_inventory
         - content.ad-file-*
-      rationale: ACES content and runtime filesystem fields encode selected path metadata and digest facts.
+      rationale: ACES content and runtime filesystem fields encode catalogued path metadata and digest facts.
 
   - id: ad.runtime.local-identity
     category: identity
-    summary: Local Linux users, groups, and Wazuh service identity are captured from getent.
+    summary: >
+      The full observed local Linux passwd and group databases are captured from
+      getent and encoded, including the Wazuh service identity.
     evidence:
       - path: evidence/runtime-baseline.txt
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.runtime.local_identity
-        - accounts.ad-local-root
-        - accounts.ad-local-wazuh
-      caveat: >
-        The SDL encodes the high-value local identities used by this asset
-        directly and records full getent output in evidence.
+        - nodes.ad.runtime.local_identity.users
+        - nodes.ad.runtime.local_identity.groups
+        - nodes.ad.runtime.local_identity.sudo_rules
+        - accounts.ad-local-*
       rationale: ACES runtime local identity fields encode participant-observable host identity surfaces.
 
   - id: ad.runtime.domain-state
     category: identity
     summary: >
       Samba provisions the TECHVAULT domain, OUs, 15 users, 45 groups, SPNs,
-      group memberships, and password/lockout policy.
+      captured group memberships, AD-native account attributes, and
+      password/lockout policy.
     evidence:
       - path: evidence/runtime-baseline.txt
       - path: evidence/source-checksums.txt
@@ -336,13 +354,14 @@ facts:
         - nodes.ad.runtime.identity_authorities.techvault-domain.subjects
         - nodes.ad.runtime.identity_authorities.techvault-domain.policies
         - nodes.ad.runtime.identity_authorities.techvault-domain.relationships
-        - accounts.ad-domain-* (curated scenario/provisioning account refs)
+        - accounts.ad-domain-* (scenario/provisioning refs with evidence-bounded groups)
         - features.techvault-ad-domain-service
         - relationships.ad-provides-domain
       rationale: >
         ACES runtime.identity_authorities owns the observed directory/domain
-        state. Top-level accounts remain curated scenario/provisioning account
-        refs for known fixture credentials and weakness hooks.
+        state. Top-level accounts remain scenario/provisioning refs for known
+        fixture credentials and weakness hooks; unsupported memberships are not
+        asserted.
 
   - id: ad.vulnerability.inventory
     category: vulnerability

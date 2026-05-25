@@ -65,9 +65,19 @@ rebuild proof.
   Catalog, and dynamic RPC listener surfaces inside the internal network. No
   host ports are published.
 - The named volumes `aptl_ad_data` and `aptl_ad_logs` are mounted at
-  `/var/lib/samba` and `/var/log/samba`.
+  `/var/lib/samba` and `/var/log/samba`; the SDL also records the full
+  observed runtime mount table, including container backend and pseudo-filesystem
+  mounts.
 - PID 1 is `supervisord`, supervising Samba, rsyslog, and the in-process Wazuh
   agent. The Wazuh agent tails Samba logs and registers as `aptl-ad-agent`.
+- The SDL encodes the full committed `getent passwd` and `getent group`
+  local identity snapshot, all checksum-backed filesystem entries, and all
+  catalogued filesystem-tree paths for this frozen capture.
+- The `jessica.williams` account is present in the captured user list and
+  remains tied to the weak-password scenario account. The committed evidence
+  does not include a non-empty `samba-tool user show` block for that user and
+  does not list Sales, VPN-Users, or Domain Users membership for that user, so
+  those memberships are not asserted in the SDL.
 - Trivy 0.70.0 reported 140 package vulnerability findings at scan time:
   65 medium and 75 low.
 - Secret-shaped values in Docker/Compose evidence were redacted before
@@ -78,23 +88,29 @@ rebuild proof.
 ## ACES Mapping Result
 
 Current ACES SDL encodes the AD node identity, custom image pin, build recipe,
-source inputs, network attachment, service exposure, healthcheck, runtime
-mounts, selected filesystem inventory with metadata and digests, container
-host/security configuration, process set, runtime environment, capabilities,
-restart/resource policy, package and scanner inventory summaries, Samba domain
-logical state through the ACES `runtime.identity_authorities` surface, scenario
-weakness IDs, content entries, host-local account records, curated
-scenario/provisioning account refs, and relationships to DNS forwarding and
-Wazuh telemetry.
+source inputs, image layers, network attachment, service exposure, healthcheck
+status and health logs, full observed runtime mount table, committed filesystem
+inventory with metadata and digests, container host/security configuration,
+process set, runtime environment, capabilities, restart/resource policy,
+package and scanner inventory summaries, local Linux identity database, Samba
+domain logical state through the ACES `runtime.identity_authorities` surface,
+scenario weakness IDs, content entries, domain and host-local account records,
+and relationships to DNS forwarding and Wazuh telemetry.
 
 Brad-Edwards/aces#401 added the provider-neutral identity-authority surface
 that this bundle now uses for the TECHVAULT domain authority, directory users,
 groups, OUs, service accounts, service principals, password/lockout policy, and
-membership facts. No known ACES expressivity gap remains for the catalogued AD
-steady-state inventory facts in this ledger. Full raw Samba private database content,
-Kerberos key material, Wazuh `client.keys`, generated flags, and raw password
-values are redacted as secret material; their observable path/metadata/checksum
-shape is recorded where useful.
+membership facts. AD-native subject attributes captured in committed evidence
+are represented as first-class identity-authority attributes where they are
+non-secret facts, including object GUID/SID, account-control, primary-group,
+last-logon, admin-count, and creation-time values. `pwdLastSet` stays in the
+evidence bundle but is not encoded as an SDL attribute because ACES rejects
+secret-bearing identity attribute names; that is a schema secret-safety boundary,
+not an AD identity expressivity gap. No known ACES expressivity gap remains for
+the encoded, claim-bounded AD steady-state inventory facts in this ledger. Full
+raw Samba private database content, Kerberos key material, Wazuh `client.keys`,
+generated flags, and raw password values are redacted as secret material; their
+observable path/metadata/checksum shape is recorded where useful.
 
 Run:
 

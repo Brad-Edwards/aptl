@@ -34,6 +34,13 @@ FULL_TRIVY_FINDING_COUNT = 140
 FULL_RUNTIME_PACKAGE_COUNT = 257
 DOMAIN_USER_COUNT = 15
 DOMAIN_GROUP_COUNT = 45
+AD_BUILD_HISTORY_LAYER_COUNT = 23
+AD_RUNTIME_MOUNT_COUNT = 27
+AD_RUNTIME_FILESYSTEM_ENTRY_COUNT = 134
+AD_LOCAL_IDENTITY_USER_COUNT = 22
+AD_LOCAL_IDENTITY_GROUP_COUNT = 46
+AD_IDENTITY_AUTHORITY_SERVICE_COUNT = 19
+AD_IDENTITY_AUTHORITY_RELATIONSHIP_COUNT = 32
 
 REQUIRED_EVIDENCE_FILES = {
     "capture-limits.txt",
@@ -96,6 +103,39 @@ def _runtime_baseline_section(name: str) -> list[str]:
     return [line for line in section.strip().splitlines() if line]
 
 
+def _samba_group_members() -> dict[str, list[str]]:
+    groups: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in _runtime_baseline_section("samba-group-members"):
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1]
+            groups[current] = []
+        elif current:
+            groups[current].append(line)
+    return groups
+
+
+def _samba_user_details() -> dict[str, dict[str, str | list[str]]]:
+    details: dict[str, dict[str, str | list[str]]] = {}
+    current: str | None = None
+    for line in _runtime_baseline_section("samba-user-details"):
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1]
+            details[current] = {}
+            continue
+        if current is None or ": " not in line:
+            continue
+        key, value = line.split(": ", maxsplit=1)
+        existing = details[current].get(key)
+        if existing is None:
+            details[current][key] = value
+        elif isinstance(existing, list):
+            existing.append(value)
+        else:
+            details[current][key] = [existing, value]
+    return details
+
+
 def test_ad_preflight_artifact_records_local_guardrails():
     text = PREFLIGHT_PATH.read_text(encoding="utf-8")
     required = (
@@ -127,6 +167,9 @@ def test_ad_inventory_note_declares_scope_and_evidence():
         "runtime.identity_authorities",
         "Brad-Edwards/aces#401",
         "No known ACES expressivity gap remains",
+        "full observed runtime mount table",
+        "schema secret-safety boundary",
+        "claim-bounded AD steady-state inventory facts",
         "Raw credential, key, and flag contents are intentionally absent",
     )
     missing = [needle for needle in required if needle not in text]
@@ -148,6 +191,7 @@ def test_ad_mapping_ledger_validates_and_tracks_gap_handoff():
     assert len(ledger["correspondence_checks"]) == 2
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
     assert dispositions["ad.runtime.domain-state"] == "encoded"
+    assert dispositions["ad.runtime.local-identity"] == "encoded"
     assert dispositions["ad.runtime.package-inventory"] == "encoded_with_caveat"
     assert dispositions["ad.runtime.vulnerability-scan"] == "encoded_with_caveat"
     assert dispositions["ad.vulnerability.inventory"] == "encoded"
@@ -325,8 +369,14 @@ def test_techvault_sdl_encodes_ad_inventory_surfaces():
     ad = data["nodes"]["ad"]
     runtime = ad["runtime"]
     accounts = data["accounts"]
+    build = ad["source"]["build"]
 
     assert ad["source"]["version"] == IMAGE_DIGEST
+    assert build["base_image"] == "ubuntu:22.04"
+    assert build["dockerfile_path"] == "containers/ad/Dockerfile"
+    assert len(build["layers"]) == AD_BUILD_HISTORY_LAYER_COUNT
+    assert build["config"]["entrypoint"] == ["/opt/setup-ad.sh"]
+    assert build["attestation"]["status"] == "absent"
     assert ad["os_version"] == "Ubuntu 22.04.5 LTS"
     assert set(ad["vulnerabilities"]) == {
         "ad-weak-password-jessica",
@@ -357,6 +407,21 @@ def test_techvault_sdl_encodes_ad_inventory_surfaces():
         "CAP_SYS_ADMIN",
         "CAP_NET_ADMIN",
     }
+    assert len(runtime["mounts"]) == AD_RUNTIME_MOUNT_COUNT
+    assert len(runtime["filesystem_inventory"]) == AD_RUNTIME_FILESYSTEM_ENTRY_COUNT
+    assert len(runtime["local_identity"]["users"]) == AD_LOCAL_IDENTITY_USER_COUNT
+    assert len(runtime["local_identity"]["groups"]) == AD_LOCAL_IDENTITY_GROUP_COUNT
+    assert runtime["local_identity"]["sudo_rules"] == []
+    assert runtime["container"]["runtime_name"] == "runc"
+    assert runtime["container"]["autoremove"] is False
+    assert runtime["container"]["shm_size"] == 67108864
+    assert runtime["health"]["status"] == "healthy"
+    assert runtime["health"]["failing_streak"] == 0
+    assert len(runtime["health"]["log"]) == 5
+    assert runtime["operational_policy"]["resource_limits"] == {
+        "memory": 536870912,
+        "memory_swap": 1073741824,
+    }
     assert runtime["network"]["endpoints"][0]["ip_address"] == "172.20.2.10"
 
     authority = runtime["identity_authorities"][0]
@@ -365,7 +430,8 @@ def test_techvault_sdl_encodes_ad_inventory_surfaces():
     assert authority["domain_name"] == "TECHVAULT"
     assert authority["realm"] == "TECHVAULT.LOCAL"
     assert authority["base_dn"] == "DC=techvault,DC=local"
-    assert len(authority["services"]) == 14
+    assert len(authority["services"]) == AD_IDENTITY_AUTHORITY_SERVICE_COUNT
+    assert len(authority["relationships"]) == AD_IDENTITY_AUTHORITY_RELATIONSHIP_COUNT
     subjects = {subject["subject_id"]: subject for subject in authority["subjects"]}
     group_count = sum(
         1 for subject in subjects.values() if subject["kind"] == "group"
@@ -394,6 +460,7 @@ def test_techvault_sdl_encodes_ad_inventory_surfaces():
     assert "ad-domain-admin-svc-backup" in accounts["ad-domain-svc-backup"][
         "description"
     ]
+    assert accounts["ad-domain-jessica-williams"]["groups"] == []
     assert {
         "ad-domain-administrator",
         "ad-domain-emily-chen",
@@ -419,13 +486,244 @@ def test_techvault_sdl_encodes_ad_content_accounts_and_relationships():
     assert content["ad-file-opt-setup-ad-sh"]["source"]["version"].startswith("sha256:")
     assert content["ad-file-opt-flags-user-txt"]["sensitive"] is True
     assert accounts["ad-domain-jessica-williams"]["password_strength"] == "weak"
+    assert accounts["ad-domain-jessica-williams"]["groups"] == []
     assert "ad-kerberoast-svc-sql" in accounts["ad-domain-svc-sql"]["description"]
     assert authority_relationships[("emily-chen", "domain-admins")] == "member_of"
     assert authority_relationships[("svc-backup", "domain-admins")] == "member_of"
     assert authority_relationships[("contractor-temp", "remote-desktop")] == "member_of"
+    unsupported_jessica_memberships = {
+        ("jessica-williams", "sales"),
+        ("jessica-williams", "vpn-users"),
+        ("jessica-williams", "domain-users"),
+    }
+    assert unsupported_jessica_memberships.isdisjoint(authority_relationships)
     assert relationships["ad-forwards-wazuh"]["target"] == "wazuh-manager"
     assert relationships["ad-provides-domain"]["type"] == "connects_to"
     assert relationships["ad-provides-domain"]["properties"]["realm"] == "TECHVAULT.LOCAL"
+
+
+def test_ad_filesystem_checksum_paths_are_encoded_as_content():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    content_paths = {
+        item["path"]
+        for item in data["content"].values()
+        if item["type"] == "File" and item.get("target") == "ad"
+    }
+    checksum_paths = {
+        line.split("  ", maxsplit=1)[1]
+        for line in (EVIDENCE_DIR / "filesystem-checksums.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    }
+    assert checksum_paths <= content_paths
+
+
+def test_ad_filesystem_tree_is_encoded_as_runtime_inventory():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    filesystem = {
+        entry["path"]: entry
+        for entry in data["nodes"]["ad"]["runtime"]["filesystem_inventory"]
+    }
+    observed_paths = set()
+    for line in (EVIDENCE_DIR / "filesystem-tree.txt").read_text(
+        encoding="utf-8"
+    ).splitlines():
+        match = re.match(r"^\S+\s+\S+\s+\S+\s+\d+\s+\S+\s+(.+?)\s+->$", line)
+        assert match, f"Unexpected filesystem tree row: {line}"
+        observed_paths.add(match.group(1))
+
+    assert len(filesystem) == AD_RUNTIME_FILESYSTEM_ENTRY_COUNT
+    assert observed_paths <= filesystem.keys()
+    for digest_line in (
+        (EVIDENCE_DIR / "filesystem-checksums.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ):
+        expected_digest, path = digest_line.split("  ", maxsplit=1)
+        assert filesystem[path]["digest_algorithm"] == "sha256"
+        assert filesystem[path]["content_digest"] == expected_digest
+
+
+def test_ad_runtime_mount_targets_are_encoded():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    mount_targets = {
+        mount["target"] for mount in data["nodes"]["ad"]["runtime"]["mounts"]
+    }
+    observed_targets = set()
+    for line in _runtime_baseline_section("mounts"):
+        match = re.match(r".+? on (\S+) type \S+ \(", line)
+        if match:
+            observed_targets.add(match.group(1))
+
+    assert len(mount_targets) == AD_RUNTIME_MOUNT_COUNT
+    assert observed_targets <= mount_targets
+
+
+def test_ad_runtime_local_identity_matches_passwd_and_group_evidence():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    local_identity = data["nodes"]["ad"]["runtime"]["local_identity"]
+    encoded_users = {user["username"]: user for user in local_identity["users"]}
+    encoded_groups = {group["name"]: group for group in local_identity["groups"]}
+
+    group_rows = {}
+    gid_names = {}
+    for line in _runtime_baseline_section("local-group"):
+        name, _password, gid, members = line.split(":")
+        member_list = [member for member in members.split(",") if member]
+        group_rows[name] = {"gid": int(gid), "members": member_list}
+        gid_names[int(gid)] = name
+
+    assert len(encoded_groups) == AD_LOCAL_IDENTITY_GROUP_COUNT
+    assert set(encoded_groups) == set(group_rows)
+    for name, expected in group_rows.items():
+        assert encoded_groups[name]["gid"] == expected["gid"]
+        assert encoded_groups[name]["members"] == expected["members"]
+
+    passwd_rows = {}
+    for line in _runtime_baseline_section("local-passwd"):
+        username, _password, uid, gid, gecos, home, shell = line.split(":")
+        passwd_rows[username] = {
+            "uid": int(uid),
+            "primary_gid": int(gid),
+            "primary_group": gid_names[int(gid)],
+            "gecos": gecos,
+            "home": home,
+            "shell": shell,
+            "no_login": shell.endswith("nologin"),
+        }
+
+    assert len(encoded_users) == AD_LOCAL_IDENTITY_USER_COUNT
+    assert set(encoded_users) == set(passwd_rows)
+    for username, expected in passwd_rows.items():
+        encoded = encoded_users[username]
+        for field, value in expected.items():
+            if field == "gecos" and not value:
+                assert encoded.get(field, "") == ""
+            else:
+                assert encoded[field] == value
+
+    assert local_identity["sudo_rules"] == []
+
+
+def test_ad_passwd_users_are_encoded_as_accounts():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    account_usernames = {
+        account["username"]
+        for name, account in data["accounts"].items()
+        if name.startswith("ad-local-")
+    }
+    passwd_usernames = {
+        line.split(":", maxsplit=1)[0]
+        for line in _runtime_baseline_section("local-passwd")
+    }
+    assert passwd_usernames <= account_usernames
+
+
+def test_ad_runtime_network_matches_docker_evidence():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    network = data["nodes"]["ad"]["runtime"]["network"]
+    container = _json_file("docker-inspect.container.json")[0]
+    docker_network = _json_file("docker-network.aptl-internal.json")[0]
+
+    assert network["hostname"] == container["Config"]["Hostname"]
+    assert network["domainname"] == container["Config"]["Domainname"]
+    assert network["published_ports"] == []
+
+    endpoint = network["endpoints"][0]
+    observed = container["NetworkSettings"]["Networks"]["aptl_aptl-internal"]
+    assert endpoint["network"] == "internal-net"
+    assert endpoint["network_id"] == observed["NetworkID"] == docker_network["Id"]
+    assert endpoint["endpoint_id"] == observed["EndpointID"]
+    assert endpoint["ip_address"] == observed["IPAddress"] == "172.20.2.10"
+    assert endpoint["ip_prefix_length"] == observed["IPPrefixLen"]
+    assert endpoint["mac_address"] == observed["MacAddress"]
+    assert endpoint["aliases"] == observed["Aliases"]
+    assert endpoint["dns_names"] == observed["DNSNames"]
+    assert endpoint["generated_dns_names"] == ["a8e5b007ae34"]
+    assert endpoint["gateway"] == docker_network["IPAM"]["Config"][0]["Gateway"]
+    assert endpoint["backend"]["driver"] == docker_network["Driver"]
+    assert endpoint["backend"]["ipam_driver"] == docker_network["IPAM"]["Driver"]
+    assert endpoint["backend"]["driver_options"] == docker_network["Options"]
+    assert endpoint["backend"]["ipam_options"] == {}
+
+
+def test_ad_identity_authority_memberships_match_samba_group_evidence():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    authority = data["nodes"]["ad"]["runtime"]["identity_authorities"][0]
+    subjects_by_name = {subject["name"]: subject for subject in authority["subjects"]}
+    relationships = {
+        (rel["source_ref"], rel["target_ref"]): rel["relationship_type"]
+        for rel in authority["relationships"]
+    }
+
+    for group_name, members in _samba_group_members().items():
+        group_id = subjects_by_name[group_name]["subject_id"]
+        expected = {
+            (subjects_by_name[member]["subject_id"], group_id)
+            for member in members
+            if member in subjects_by_name
+        }
+        actual = {
+            (source_ref, target_ref)
+            for (source_ref, target_ref), relationship_type in relationships.items()
+            if target_ref == group_id and relationship_type == "member_of"
+        }
+        assert actual == expected
+
+
+def test_ad_identity_subject_attributes_match_samba_user_details():
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    authority = data["nodes"]["ad"]["runtime"]["identity_authorities"][0]
+    subjects_by_name = {subject["name"]: subject for subject in authority["subjects"]}
+    attribute_keys = {
+        "sam_account_name": "sAMAccountName",
+        "object_guid": "objectGUID",
+        "object_sid": "objectSid",
+        "user_account_control": "userAccountControl",
+        "primary_group_id": "primaryGroupID",
+        "last_logon": "lastLogon",
+        "admin_count": "adminCount",
+        "when_created": "whenCreated",
+    }
+
+    for user_name, details in _samba_user_details().items():
+        if not details:
+            continue
+        subject = subjects_by_name[user_name]
+        attributes = {
+            attribute["name"]: attribute["values"]
+            for attribute in subject.get("attributes", [])
+        }
+        for attribute_name, evidence_key in attribute_keys.items():
+            if evidence_key in details:
+                assert attributes[attribute_name] == [details[evidence_key]]
+        # ACES rejects secret-bearing identity attribute names; keep pwdLastSet
+        # in evidence, not in the SDL claim.
+        assert "pwd_last_set" not in attributes
+
+
+def test_techvault_sdl_parses_and_compiles_with_ad_runtime_fields():
+    from aces_processor.compiler import compile_runtime_model
+    from aces_sdl import parse_sdl_file
+
+    scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
+    model = compile_runtime_model(scenario)
+    node = model.node_deployments["provision.node.ad"].spec["node"]
+    runtime = node["runtime"]
+    authority = runtime["identity_authorities"][0]
+
+    assert node["source"]["version"] == IMAGE_DIGEST
+    assert len(node["source"]["build"]["layers"]) == AD_BUILD_HISTORY_LAYER_COUNT
+    assert len(runtime["mounts"]) == AD_RUNTIME_MOUNT_COUNT
+    assert len(runtime["filesystem_inventory"]) == AD_RUNTIME_FILESYSTEM_ENTRY_COUNT
+    assert len(runtime["local_identity"]["users"]) == AD_LOCAL_IDENTITY_USER_COUNT
+    assert len(runtime["local_identity"]["groups"]) == AD_LOCAL_IDENTITY_GROUP_COUNT
+    assert runtime["health"]["status"] == "healthy"
+    assert len(runtime["health"]["log"]) == 5
+    assert len(runtime["network"]["endpoints"]) == 1
+    assert runtime["network"]["published_ports"] == []
+    assert len(authority["services"]) == AD_IDENTITY_AUTHORITY_SERVICE_COUNT
+    assert len(authority["relationships"]) == AD_IDENTITY_AUTHORITY_RELATIONSHIP_COUNT
 
 
 def test_parity_inventory_records_ad_inventory_row():

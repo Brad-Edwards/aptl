@@ -34033,6 +34033,167 @@ nodes:
       - {port: 3268, protocol: tcp, name: global-catalog}
       - {port: 3269, protocol: tcp, name: global-catalog-ldaps}
     runtime:
+      identity_authorities:
+        - authority_id: techvault-domain
+          kind: domain
+          name: TechVault Active Directory domain
+          namespace: techvault.local
+          domain_name: TECHVAULT
+          realm: TECHVAULT.LOCAL
+          base_dn: DC=techvault,DC=local
+          description: >
+            Samba Active Directory Domain Controller runtime inventory for the
+            TechVault domain captured from samba-tool domain, user, group, SPN,
+            and password policy observations.
+          services:
+            - {service_id: dns-tcp-endpoint, service: dns-tcp, protocol: other, address: dc.techvault.local, port: 53}
+            - {service_id: dns-udp-endpoint, service: dns-udp, protocol: other, address: dc.techvault.local, port: 53}
+            - {service_id: kerberos-tcp-endpoint, service: kerberos-tcp, protocol: kerberos, address: dc.techvault.local, port: 88}
+            - {service_id: kerberos-udp-endpoint, service: kerberos-udp, protocol: kerberos, address: dc.techvault.local, port: 88}
+            - {service_id: msrpc-endpoint, service: msrpc, protocol: ad_ds_rpc, address: dc.techvault.local, port: 135}
+            - {service_id: netbios-session-endpoint, service: netbios-session, protocol: other, address: dc.techvault.local, port: 139}
+            - {service_id: ldap-endpoint, service: ldap, protocol: ldap, address: dc.techvault.local, port: 389}
+            - {service_id: cldap-endpoint, service: cldap, protocol: ldap, address: dc.techvault.local, port: 389}
+            - {service_id: smb-endpoint, service: smb, protocol: other, address: dc.techvault.local, port: 445}
+            - {service_id: kpasswd-tcp-endpoint, service: kpasswd-tcp, protocol: kerberos, address: dc.techvault.local, port: 464}
+            - {service_id: kpasswd-udp-endpoint, service: kpasswd-udp, protocol: kerberos, address: dc.techvault.local, port: 464}
+            - {service_id: ldaps-endpoint, service: ldaps, protocol: ldaps, address: dc.techvault.local, port: 636}
+            - {service_id: global-catalog-endpoint, service: global-catalog, protocol: ldap, address: dc.techvault.local, port: 3268}
+            - {service_id: global-catalog-ldaps-endpoint, service: global-catalog-ldaps, protocol: ldaps, address: dc.techvault.local, port: 3269}
+          subjects:
+            - {subject_id: dc-computer, kind: computer, name: DC, principal_name: DC$, domain: TECHVAULT, distinguished_name: "CN=DC,OU=Domain Controllers,DC=techvault,DC=local", origin: directory}
+            - {subject_id: ou-techvault, kind: organizational_unit, name: TechVault, distinguished_name: "OU=TechVault,DC=techvault,DC=local", origin: provisioned}
+            - {subject_id: ou-executives, kind: organizational_unit, name: Executives, distinguished_name: "OU=Executives,OU=TechVault,DC=techvault,DC=local", origin: provisioned}
+            - {subject_id: ou-engineering, kind: organizational_unit, name: Engineering, distinguished_name: "OU=Engineering,OU=TechVault,DC=techvault,DC=local", origin: provisioned}
+            - {subject_id: ou-sales, kind: organizational_unit, name: Sales, distinguished_name: "OU=Sales,OU=TechVault,DC=techvault,DC=local", origin: provisioned}
+            - {subject_id: ou-operations, kind: organizational_unit, name: Operations, distinguished_name: "OU=Operations,OU=TechVault,DC=techvault,DC=local", origin: provisioned}
+            - {subject_id: ou-serviceaccounts, kind: organizational_unit, name: ServiceAccounts, distinguished_name: "OU=ServiceAccounts,OU=TechVault,DC=techvault,DC=local", origin: provisioned}
+            - {subject_id: ou-domain-controllers, kind: organizational_unit, name: Domain Controllers, distinguished_name: "OU=Domain Controllers,DC=techvault,DC=local", origin: built_in}
+            - {subject_id: account-operators, kind: group, name: Account Operators, origin: built_in}
+            - {subject_id: administrators, kind: group, name: Administrators, origin: built_in}
+            - {subject_id: allowed-rodc-password-replication-group, kind: group, name: Allowed RODC Password Replication Group, origin: built_in}
+            - {subject_id: backup-operators, kind: group, name: Backup Operators, origin: built_in}
+            - {subject_id: cert-publishers, kind: group, name: Cert Publishers, origin: built_in}
+            - {subject_id: certificate-service-dcom-access, kind: group, name: Certificate Service DCOM Access, origin: built_in}
+            - {subject_id: cryptographic-operators, kind: group, name: Cryptographic Operators, origin: built_in}
+            - {subject_id: denied-rodc-password-replication-group, kind: group, name: Denied RODC Password Replication Group, origin: built_in}
+            - {subject_id: distributed-com-users, kind: group, name: Distributed COM Users, origin: built_in}
+            - {subject_id: dnsadmins, kind: group, name: DnsAdmins, origin: built_in}
+            - {subject_id: dnsupdateproxy, kind: group, name: DnsUpdateProxy, origin: built_in}
+            - {subject_id: domain-admins, kind: group, name: Domain Admins, origin: built_in}
+            - {subject_id: domain-computers, kind: group, name: Domain Computers, origin: built_in}
+            - {subject_id: domain-controllers, kind: group, name: Domain Controllers, origin: built_in}
+            - {subject_id: domain-guests, kind: group, name: Domain Guests, origin: built_in}
+            - {subject_id: domain-users, kind: group, name: Domain Users, origin: built_in}
+            - {subject_id: engineering, kind: group, name: Engineering, origin: provisioned}
+            - {subject_id: enterprise-admins, kind: group, name: Enterprise Admins, origin: built_in}
+            - {subject_id: enterprise-read-only-domain-controllers, kind: group, name: Enterprise Read-only Domain Controllers, origin: built_in}
+            - {subject_id: event-log-readers, kind: group, name: Event Log Readers, origin: built_in}
+            - {subject_id: executives, kind: group, name: Executives, origin: provisioned}
+            - {subject_id: finance, kind: group, name: Finance, origin: provisioned}
+            - {subject_id: group-policy-creator-owners, kind: group, name: Group Policy Creator Owners, origin: built_in}
+            - {subject_id: guests, kind: group, name: Guests, origin: built_in}
+            - {subject_id: hr, kind: group, name: HR, origin: provisioned}
+            - {subject_id: iis-iusrs, kind: group, name: IIS_IUSRS, origin: built_in}
+            - {subject_id: it-admins, kind: group, name: IT-Admins, origin: provisioned}
+            - {subject_id: incoming-forest-trust-builders, kind: group, name: Incoming Forest Trust Builders, origin: built_in}
+            - {subject_id: network-configuration-operators, kind: group, name: Network Configuration Operators, origin: built_in}
+            - {subject_id: performance-log-users, kind: group, name: Performance Log Users, origin: built_in}
+            - {subject_id: performance-monitor-users, kind: group, name: Performance Monitor Users, origin: built_in}
+            - {subject_id: pre-windows-2000-compatible-access, kind: group, name: Pre-Windows 2000 Compatible Access, origin: built_in}
+            - {subject_id: print-operators, kind: group, name: Print Operators, origin: built_in}
+            - {subject_id: ras-and-ias-servers, kind: group, name: RAS and IAS Servers, origin: built_in}
+            - {subject_id: read-only-domain-controllers, kind: group, name: Read-only Domain Controllers, origin: built_in}
+            - {subject_id: remote-desktop-users, kind: group, name: Remote Desktop Users, origin: built_in}
+            - {subject_id: remote-desktop, kind: group, name: Remote-Desktop, origin: provisioned}
+            - {subject_id: replicator, kind: group, name: Replicator, origin: built_in}
+            - {subject_id: sales, kind: group, name: Sales, origin: provisioned}
+            - {subject_id: schema-admins, kind: group, name: Schema Admins, origin: built_in}
+            - {subject_id: server-operators, kind: group, name: Server Operators, origin: built_in}
+            - {subject_id: terminal-server-license-servers, kind: group, name: Terminal Server License Servers, origin: built_in}
+            - {subject_id: users, kind: group, name: Users, origin: built_in}
+            - {subject_id: vpn-users, kind: group, name: VPN-Users, origin: provisioned}
+            - {subject_id: windows-authorization-access-group, kind: group, name: Windows Authorization Access Group, origin: built_in}
+            - {subject_id: administrator, kind: user, name: Administrator, display_name: Administrator, domain: TECHVAULT, enabled: true, origin: built_in, distinguished_name: "CN=Administrator,CN=Users,DC=techvault,DC=local", description: Built-in domain administrator fixture account; raw password redacted.}
+            - {subject_id: guest, kind: user, name: Guest, display_name: Guest, domain: TECHVAULT, enabled: false, origin: built_in, distinguished_name: "CN=Guest,CN=Users,DC=techvault,DC=local"}
+            - {subject_id: krbtgt, kind: service_account, name: krbtgt, display_name: krbtgt, domain: TECHVAULT, enabled: false, origin: built_in, distinguished_name: "CN=krbtgt,CN=Users,DC=techvault,DC=local", service_principal_names: [kadmin/changepw]}
+            - {subject_id: sarah-mitchell, kind: user, name: sarah.mitchell, display_name: Sarah Mitchell, principal_name: sarah.mitchell@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=Sarah Mitchell,CN=Users,DC=techvault,DC=local", attributes: [{name: department, values: [Executive], value_classification: plain}, {name: title, values: [CEO], value_classification: plain}]}
+            - {subject_id: james-rodriguez, kind: user, name: james.rodriguez, display_name: James Rodriguez, principal_name: james.rodriguez@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=James Rodriguez,CN=Users,DC=techvault,DC=local", attributes: [{name: department, values: [Executive], value_classification: plain}, {name: title, values: [CTO], value_classification: plain}]}
+            - {subject_id: lisa-chang, kind: user, name: lisa.chang, display_name: Lisa Chang, principal_name: lisa.chang@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=Lisa Chang,CN=Users,DC=techvault,DC=local", attributes: [{name: department, values: [Sales], value_classification: plain}, {name: title, values: [VP of Sales], value_classification: plain}]}
+            - {subject_id: emily-chen, kind: user, name: emily.chen, display_name: Emily Chen, principal_name: emily.chen@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=Emily Chen,CN=Users,DC=techvault,DC=local", attributes: [{name: department, values: [Engineering], value_classification: plain}, {name: title, values: [DevOps Lead], value_classification: plain}, {name: weakness_ref, values: [ad-domain-admin-devops], value_classification: plain}]}
+            - {subject_id: michael-thompson, kind: user, name: michael.thompson, display_name: Michael Thompson, principal_name: michael.thompson@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=Michael Thompson,CN=Users,DC=techvault,DC=local", attributes: [{name: department, values: [Engineering], value_classification: plain}, {name: title, values: [Senior Developer], value_classification: plain}, {name: weakness_ref, values: [ad-seasonal-password-michael], value_classification: plain}]}
+            - {subject_id: david-kim, kind: user, name: david.kim, display_name: David Kim, principal_name: david.kim@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=David Kim,CN=Users,DC=techvault,DC=local", attributes: [{name: department, values: [Engineering], value_classification: plain}, {name: title, values: [Security Engineer], value_classification: plain}]}
+            - {subject_id: jessica-williams, kind: user, name: jessica.williams, display_name: Jessica Williams, principal_name: jessica.williams@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=Jessica Williams,CN=Users,DC=techvault,DC=local", attributes: [{name: department, values: [Operations], value_classification: plain}, {name: title, values: [Customer Success Manager], value_classification: plain}, {name: weakness_ref, values: [ad-weak-password-jessica], value_classification: plain}]}
+            - {subject_id: robert-martinez, kind: user, name: robert.martinez, display_name: Robert Martinez, principal_name: robert.martinez@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=Robert Martinez,CN=Users,DC=techvault,DC=local", attributes: [{name: department, values: [Sales], value_classification: plain}, {name: title, values: [Marketing Manager], value_classification: plain}]}
+            - {subject_id: svc-sql, kind: service_account, name: svc-sql, display_name: SQL Service, principal_name: svc-sql@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=SQL Service,CN=Users,DC=techvault,DC=local", service_principal_names: [MSSQLSvc/db.techvault.local:1433, MSSQLSvc/db.techvault.local], attributes: [{name: weakness_ref, values: [ad-kerberoast-svc-sql], value_classification: plain}]}
+            - {subject_id: svc-web, kind: service_account, name: svc-web, display_name: Web Service, principal_name: svc-web@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=Web Service,CN=Users,DC=techvault,DC=local", service_principal_names: [HTTP/webapp.techvault.local], attributes: [{name: weakness_ref, values: [ad-kerberoast-svc-web], value_classification: plain}]}
+            - {subject_id: svc-backup, kind: service_account, name: svc-backup, display_name: Backup Service, principal_name: svc-backup@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=Backup Service,CN=Users,DC=techvault,DC=local", attributes: [{name: weakness_ref, values: [ad-domain-admin-svc-backup], value_classification: plain}]}
+            - {subject_id: contractor-temp, kind: user, name: contractor.temp, display_name: Temp Contractor, principal_name: contractor.temp@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=Temp Contractor,CN=Users,DC=techvault,DC=local", attributes: [{name: title, values: [External Contractor], value_classification: plain}, {name: weakness_ref, values: [ad-contractor-overprivileged], value_classification: plain}]}
+            - {subject_id: former-employee, kind: user, name: former.employee, display_name: Former Employee, principal_name: former.employee@techvault.local, domain: TECHVAULT, enabled: true, origin: provisioned, distinguished_name: "CN=Former Employee,CN=Users,DC=techvault,DC=local", attributes: [{name: title, values: [Former Employee], value_classification: plain}, {name: weakness_ref, values: [ad-former-employee-enabled], value_classification: plain}]}
+          policies:
+            - policy_id: default-domain-policy
+              policy_kind: password
+              name: Default domain password settings
+              applies_to_refs: [techvault-domain]
+              settings:
+                - {name: complexity, values: ['on'], value_classification: plain}
+                - {name: plaintext_storage, values: ['off'], value_classification: plain}
+                - {name: history_length, values: ['24'], value_classification: plain}
+                - {name: min_length, values: ['7'], value_classification: plain}
+                - {name: min_age_days, values: ['1'], value_classification: plain}
+                - {name: max_age_days, values: ['42'], value_classification: plain}
+            - policy_id: domain-lockout-policy
+              policy_kind: lockout
+              name: Domain account lockout settings
+              applies_to_refs: [techvault-domain]
+              settings:
+                - {name: threshold_attempts, values: ['10'], value_classification: plain}
+                - {name: duration_minutes, values: ['30'], value_classification: plain}
+                - {name: reset_after_minutes, values: ['15'], value_classification: plain}
+            - policy_id: domain-functional-level
+              policy_kind: other
+              name: Domain and forest functional level
+              applies_to_refs: [techvault-domain]
+              settings:
+                - {name: forest_function_level, values: [Windows 2008 R2], value_classification: plain}
+                - {name: domain_function_level, values: [Windows 2008 R2], value_classification: plain}
+                - {name: lowest_dc_function_level, values: [Windows 2008 R2], value_classification: plain}
+          relationships:
+            - {relationship_id: administrator-domain-admins, relationship_type: member_of, source_ref: administrator, target_ref: domain-admins}
+            - {relationship_id: administrator-domain-users, relationship_type: member_of, source_ref: administrator, target_ref: domain-users}
+            - {relationship_id: guest-domain-guests, relationship_type: member_of, source_ref: guest, target_ref: domain-guests}
+            - {relationship_id: krbtgt-domain-users, relationship_type: member_of, source_ref: krbtgt, target_ref: domain-users}
+            - {relationship_id: sarah-mitchell-executives, relationship_type: member_of, source_ref: sarah-mitchell, target_ref: executives}
+            - {relationship_id: sarah-mitchell-domain-users, relationship_type: member_of, source_ref: sarah-mitchell, target_ref: domain-users}
+            - {relationship_id: james-rodriguez-executives, relationship_type: member_of, source_ref: james-rodriguez, target_ref: executives}
+            - {relationship_id: james-rodriguez-it-admins, relationship_type: member_of, source_ref: james-rodriguez, target_ref: it-admins}
+            - {relationship_id: james-rodriguez-domain-users, relationship_type: member_of, source_ref: james-rodriguez, target_ref: domain-users}
+            - {relationship_id: lisa-chang-executives, relationship_type: member_of, source_ref: lisa-chang, target_ref: executives}
+            - {relationship_id: lisa-chang-sales, relationship_type: member_of, source_ref: lisa-chang, target_ref: sales}
+            - {relationship_id: lisa-chang-domain-users, relationship_type: member_of, source_ref: lisa-chang, target_ref: domain-users}
+            - {relationship_id: emily-chen-engineering, relationship_type: member_of, source_ref: emily-chen, target_ref: engineering}
+            - {relationship_id: emily-chen-it-admins, relationship_type: member_of, source_ref: emily-chen, target_ref: it-admins}
+            - {relationship_id: emily-chen-domain-admins, relationship_type: member_of, source_ref: emily-chen, target_ref: domain-admins}
+            - {relationship_id: emily-chen-domain-users, relationship_type: member_of, source_ref: emily-chen, target_ref: domain-users}
+            - {relationship_id: michael-thompson-engineering, relationship_type: member_of, source_ref: michael-thompson, target_ref: engineering}
+            - {relationship_id: michael-thompson-domain-users, relationship_type: member_of, source_ref: michael-thompson, target_ref: domain-users}
+            - {relationship_id: david-kim-engineering, relationship_type: member_of, source_ref: david-kim, target_ref: engineering}
+            - {relationship_id: david-kim-it-admins, relationship_type: member_of, source_ref: david-kim, target_ref: it-admins}
+            - {relationship_id: david-kim-domain-users, relationship_type: member_of, source_ref: david-kim, target_ref: domain-users}
+            - {relationship_id: jessica-williams-sales, relationship_type: member_of, source_ref: jessica-williams, target_ref: sales}
+            - {relationship_id: jessica-williams-vpn-users, relationship_type: member_of, source_ref: jessica-williams, target_ref: vpn-users}
+            - {relationship_id: jessica-williams-domain-users, relationship_type: member_of, source_ref: jessica-williams, target_ref: domain-users}
+            - {relationship_id: robert-martinez-sales, relationship_type: member_of, source_ref: robert-martinez, target_ref: sales}
+            - {relationship_id: robert-martinez-domain-users, relationship_type: member_of, source_ref: robert-martinez, target_ref: domain-users}
+            - {relationship_id: svc-sql-domain-users, relationship_type: member_of, source_ref: svc-sql, target_ref: domain-users}
+            - {relationship_id: svc-web-domain-users, relationship_type: member_of, source_ref: svc-web, target_ref: domain-users}
+            - {relationship_id: svc-backup-domain-admins, relationship_type: member_of, source_ref: svc-backup, target_ref: domain-admins}
+            - {relationship_id: svc-backup-domain-users, relationship_type: member_of, source_ref: svc-backup, target_ref: domain-users}
+            - {relationship_id: contractor-temp-vpn-users, relationship_type: member_of, source_ref: contractor-temp, target_ref: vpn-users}
+            - {relationship_id: contractor-temp-remote-desktop, relationship_type: member_of, source_ref: contractor-temp, target_ref: remote-desktop}
+            - {relationship_id: contractor-temp-engineering, relationship_type: member_of, source_ref: contractor-temp, target_ref: engineering}
+            - {relationship_id: contractor-temp-domain-users, relationship_type: member_of, source_ref: contractor-temp, target_ref: domain-users}
+            - {relationship_id: former-employee-domain-users, relationship_type: member_of, source_ref: former-employee, target_ref: domain-users}
       mounts:
         - {target: /var/lib/samba, source: aptl_ad_data, source_kind: volume, filesystem_type: local, read_only: false, stability: volume_backed, description: Samba AD private database and provisioned domain data volume.}
         - {target: /var/log/samba, source: aptl_ad_logs, source_kind: volume, filesystem_type: local, read_only: false, stability: volume_backed, description: Samba log volume tailed by the Wazuh agent.}

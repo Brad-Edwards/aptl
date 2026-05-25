@@ -103,13 +103,13 @@ rows:
   - id: scen.techvault.ad-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.ad + infrastructure.ad + runtime.domain_services + content + accounts + relationships
+    legacy_field: nodes.ad + infrastructure.ad + runtime.identity_authorities + content + accounts + relationships
     category: aces_sdl
-    aces_target: ACES nodes / infrastructure / runtime.domain_services / content / accounts / relationships fields
+    aces_target: ACES nodes / infrastructure / runtime.identity_authorities / content / accounts / relationships fields
     runtime_owner: n/a
-    validation_evidence: "docs/aces/inventory/ad/ + tests/test_ad_inventory.py + scenarios/techvault.sdl.yaml"
+    validation_evidence: "docs/aces/inventory/ad/ + tests/test_ad_inventory.py + scenarios/techvault.sdl.yaml + Brad-Edwards/aces#401 consumed"
     blocking_followup: n/a
-    notes: Incremental ACES TechVault authoring target for the ad inventory pass; current SDL encodes the catalogued Samba AD steady-state image, runtime, domain logical state, filesystem, identity, package/CVE summary, declared weaknesses, and relationship facts with no known remaining ACES expressivity blocker. Raw credentials, generated flags, Wazuh keys, and Kerberos/Samba private material are redacted as secret material while path, metadata, and checksum shape remain captured.
+    notes: Incremental ACES TechVault authoring target for the ad inventory pass; current SDL consumes Brad-Edwards/aces#401 and encodes the catalogued Samba AD steady-state image, runtime, identity-authority logical state, filesystem, host-local identity, package/CVE summary, declared weaknesses, curated scenario/provisioning account refs, and relationship facts with no known remaining ACES expressivity blocker. Raw credentials, generated flags, Wazuh keys, and Kerberos/Samba private material are redacted as secret material while path, metadata, and checksum shape remain captured.
 
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml

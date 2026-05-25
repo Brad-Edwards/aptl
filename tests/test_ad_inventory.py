@@ -124,6 +124,8 @@ def test_ad_inventory_note_declares_scope_and_evidence():
         "CAP_NET_ADMIN",
         "mapping-ledger.yaml",
         "aptl aces-inventory validate",
+        "runtime.identity_authorities",
+        "Brad-Edwards/aces#401",
         "No known ACES expressivity gap remains",
         "Raw credential, key, and flag contents are intentionally absent",
     )
@@ -149,6 +151,13 @@ def test_ad_mapping_ledger_validates_and_tracks_gap_handoff():
     assert dispositions["ad.runtime.package-inventory"] == "encoded_with_caveat"
     assert dispositions["ad.runtime.vulnerability-scan"] == "encoded_with_caveat"
     assert dispositions["ad.vulnerability.inventory"] == "encoded"
+    domain_state = next(
+        fact for fact in ledger["facts"] if fact["id"] == "ad.runtime.domain-state"
+    )
+    assert (
+        "nodes.ad.runtime.identity_authorities.techvault-domain"
+        in domain_state["aces"]["fields"]
+    )
 
 
 def test_ad_gap_report_surfaces_remaining_aces_gaps_only():
@@ -350,6 +359,35 @@ def test_techvault_sdl_encodes_ad_inventory_surfaces():
     }
     assert runtime["network"]["endpoints"][0]["ip_address"] == "172.20.2.10"
 
+    authority = runtime["identity_authorities"][0]
+    assert authority["authority_id"] == "techvault-domain"
+    assert authority["kind"] == "domain"
+    assert authority["domain_name"] == "TECHVAULT"
+    assert authority["realm"] == "TECHVAULT.LOCAL"
+    assert authority["base_dn"] == "DC=techvault,DC=local"
+    assert len(authority["services"]) == 14
+    subjects = {subject["subject_id"]: subject for subject in authority["subjects"]}
+    group_count = sum(
+        1 for subject in subjects.values() if subject["kind"] == "group"
+    )
+    assert group_count == DOMAIN_GROUP_COUNT
+    assert {"domain-admins", "domain-users", "it-admins", "vpn-users"} <= set(subjects)
+    assert subjects["svc-sql"]["service_principal_names"] == [
+        "MSSQLSvc/db.techvault.local:1433",
+        "MSSQLSvc/db.techvault.local",
+    ]
+    assert subjects["svc-web"]["service_principal_names"] == [
+        "HTTP/webapp.techvault.local",
+    ]
+    assert subjects["former-employee"]["enabled"] is True
+    policy_settings = {
+        setting["name"]: setting["values"]
+        for policy in authority["policies"]
+        for setting in policy["settings"]
+    }
+    assert policy_settings["threshold_attempts"] == ["10"]
+    assert policy_settings["duration_minutes"] == ["30"]
+
     assert accounts["ad-domain-svc-sql"]["spn"] == "MSSQLSvc/db.techvault.local:1433"
     assert "MSSQLSvc/db.techvault.local" in accounts["ad-domain-svc-sql"]["description"]
     assert accounts["ad-domain-svc-web"]["spn"] == "HTTP/webapp.techvault.local"
@@ -372,11 +410,19 @@ def test_techvault_sdl_encodes_ad_content_accounts_and_relationships():
     content = data["content"]
     accounts = data["accounts"]
     relationships = data["relationships"]
+    authority = data["nodes"]["ad"]["runtime"]["identity_authorities"][0]
+    authority_relationships = {
+        (rel["source_ref"], rel["target_ref"]): rel["relationship_type"]
+        for rel in authority["relationships"]
+    }
 
     assert content["ad-file-opt-setup-ad-sh"]["source"]["version"].startswith("sha256:")
     assert content["ad-file-opt-flags-user-txt"]["sensitive"] is True
     assert accounts["ad-domain-jessica-williams"]["password_strength"] == "weak"
     assert "ad-kerberoast-svc-sql" in accounts["ad-domain-svc-sql"]["description"]
+    assert authority_relationships[("emily-chen", "domain-admins")] == "member_of"
+    assert authority_relationships[("svc-backup", "domain-admins")] == "member_of"
+    assert authority_relationships[("contractor-temp", "remote-desktop")] == "member_of"
     assert relationships["ad-forwards-wazuh"]["target"] == "wazuh-manager"
     assert relationships["ad-provides-domain"]["type"] == "connects_to"
     assert relationships["ad-provides-domain"]["properties"]["realm"] == "TECHVAULT.LOCAL"

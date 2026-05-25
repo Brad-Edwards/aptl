@@ -59,8 +59,8 @@ rebuild proof.
   and reset-after 15 minutes.
 - The domain contains 15 users and 45 groups at capture time. Scenario users,
   service accounts, SPNs, high-risk group memberships, and password policy are
-  recorded in the runtime baseline and encoded in the SDL without raw
-  passwords.
+  recorded in the runtime baseline and encoded in the SDL under
+  `nodes.ad.runtime.identity_authorities` without raw passwords.
 - The service exposes DNS, Kerberos, RPC, NetBIOS, LDAP, SMB, LDAPS, Global
   Catalog, and dynamic RPC listener surfaces inside the internal network. No
   host ports are published.
@@ -82,11 +82,16 @@ source inputs, network attachment, service exposure, healthcheck, runtime
 mounts, selected filesystem inventory with metadata and digests, container
 host/security configuration, process set, runtime environment, capabilities,
 restart/resource policy, package and scanner inventory summaries, Samba domain
-logical state, scenario weakness IDs, content entries, local/domain account
-records, and relationships to DNS forwarding and Wazuh telemetry.
+logical state through the ACES `runtime.identity_authorities` surface, scenario
+weakness IDs, content entries, host-local account records, curated
+scenario/provisioning account refs, and relationships to DNS forwarding and
+Wazuh telemetry.
 
-No known ACES expressivity gap remains for the catalogued AD steady-state
-inventory facts in this ledger. Full raw Samba private database content,
+Brad-Edwards/aces#401 added the provider-neutral identity-authority surface
+that this bundle now uses for the TECHVAULT domain authority, directory users,
+groups, OUs, service accounts, service principals, password/lockout policy, and
+membership facts. No known ACES expressivity gap remains for the catalogued AD
+steady-state inventory facts in this ledger. Full raw Samba private database content,
 Kerberos key material, Wazuh `client.keys`, generated flags, and raw password
 values are redacted as secret material; their observable path/metadata/checksum
 shape is recorded where useful.

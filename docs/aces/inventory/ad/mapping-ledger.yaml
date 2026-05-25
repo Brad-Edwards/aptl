@@ -64,6 +64,9 @@ notes:
     Raw AD passwords, generated flags, Wazuh client keys, Kerberos key material,
     and Samba private database contents are redacted as secret material.
   - >
+    Brad-Edwards/aces#401 added the provider-neutral
+    runtime.identity_authorities surface used by this bundle for the Samba AD
+    domain authority, directory subjects, policy facts, SPNs, and memberships.
     No known ACES expressivity gap remains for the catalogued AD steady-state
     inventory facts in this mapping ledger.
 facts:
@@ -328,10 +331,18 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - accounts.ad-domain-*
+        - nodes.ad.runtime.identity_authorities.techvault-domain
+        - nodes.ad.runtime.identity_authorities.techvault-domain.services
+        - nodes.ad.runtime.identity_authorities.techvault-domain.subjects
+        - nodes.ad.runtime.identity_authorities.techvault-domain.policies
+        - nodes.ad.runtime.identity_authorities.techvault-domain.relationships
+        - accounts.ad-domain-* (curated scenario/provisioning account refs)
         - features.techvault-ad-domain-service
         - relationships.ad-provides-domain
-      rationale: ACES account, feature, vulnerability, and relationship fields encode domain users, groups, SPNs, and policies.
+      rationale: >
+        ACES runtime.identity_authorities owns the observed directory/domain
+        state. Top-level accounts remain curated scenario/provisioning account
+        refs for known fixture credentials and weakness hooks.
 
   - id: ad.vulnerability.inventory
     category: vulnerability

@@ -1,5 +1,17 @@
-Capture used the already-running local lab on 2026-05-21 rather than a destructive clean reset. `aptl lab stop -v && aptl lab start` was not run because it would remove the user's current lab state.
+Capture used the already-running local lab on 2026-05-25 rather than a destructive clean reset. `aptl lab stop -v && aptl lab start` was not run because it would remove the user's current lab state.
 
 Secret-shaped runtime environment values in Docker/Compose evidence are redacted. The webapp intentionally exposes some fixture credentials through checked-in source and runtime endpoints; this evidence bundle cites those sources without storing raw secret assignments in generated evidence.
 
 Vulnerability evidence is scanner state tied to the Trivy version/database available during capture. Treat package CVEs as time-sensitive observations, not permanent facts about the asset.
+
+APTL #368 replaces the earlier webapp inventory bundle with a non-destructive current-baseline capture against the already-running lab and local `aptl-webapp:latest` image (`sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a`). The capture includes Docker/Compose/runtime evidence, Trivy CycloneDX SBOM, Syft CycloneDX SBOM, Trivy vulnerability evidence, and osquery evidence. It does not prove byte-identical clean-lab rebuildability.
+
+Host `trivy`, `syft`, and `osqueryi` binaries were not present, so the capture used digest-pinned containerized tools through `capture-evidence.sh`: `aquasec/trivy@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e` (Trivy 0.70.0), `anchore/syft@sha256:86fde6445b483d902fe011dd9f68c4987dd94e07da1e9edc004e3c2422650de6` (Syft 1.44.0), and `osquery/osquery@sha256:f8ec3300048158292df2d4bb0d1d7804af358f530005828c3387553f23c796cd` (osqueryi 4.9.0). This keeps the capture non-destructive but means osquery package/source tables run from the scanner container context unless explicitly sharing the target container's PID or network namespace.
+
+The committed Trivy SBOM is minified JSON. The committed Syft CycloneDX JSON is a package/component-scope SBOM generated from Syft with file catalogers disabled and `syft:location:*` component properties stripped by the jq transform in `capture-evidence.sh` so it stays below the repository's added-file size gate. The removed properties are file-location provenance detail, not component identity; filesystem provenance remains covered by `filesystem-tree.txt` and `filesystem-checksums.txt`.
+
+osquery installed_applications and osquery programs were attempted but are not present in the Linux osquery registry exposed by the digest-pinned osquery 4.9.0 scanner image. The files `osquery-installed-applications.json` and `osquery-programs.json` record those unavailable table results as first-class evidence.
+
+osquery processes and listening_ports were captured from a scanner container sharing the `aptl-webapp` PID and network namespaces. PIDs, sockets, DNS resolver ports, and transient helper processes such as the Wazuh wrapper's sleep loop are time-sensitive observations.
+
+osquery apt_sources returned a valid empty result from the scanner container context. It is evidence of the attempted optional table, not a substitute for the webapp root filesystem package inventory already captured in `os-packages.txt`, Trivy SBOM, and Syft SBOM.

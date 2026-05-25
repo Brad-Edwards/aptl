@@ -5,11 +5,12 @@ This directory is the SCN-010 / issue #330 inventory bundle for the TechVault
 `docs/aces/inventory/asset-inventory-methodology.md` to the realized
 `aptl-webapp` container.
 
-The capture used an already-running local lab on 2026-05-21. It did not run
-`aptl lab stop -v && aptl lab start`; in other words, this bundle does
-not run `aptl lab stop -v && aptl lab start`, because that would destroy the
-user's current lab state. Treat this as a frozen steady-state artifact for the
-observed lab instance, not as a clean-lab rebuild proof.
+APTL #368 replaces the earlier webapp inventory bundle with a single
+non-destructive current-baseline capture from the already-running local lab on
+2026-05-25. It did not run `aptl lab stop -v && aptl lab start`; in other
+words, this bundle does not destroy the user's current lab state. Treat this as
+a reproducible capture of the observed local lab, not as a clean-lab rebuild
+proof.
 
 ## Asset Summary
 
@@ -21,7 +22,7 @@ observed lab instance, not as a clean-lab rebuild proof.
 | Source class | `custom-build` |
 | Source package | `containers/webapp/` plus `containers/_wazuh-agent/` |
 | Image tag | `aptl-webapp:latest` |
-| Image digest | `aptl-webapp@sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0` |
+| Image digest | `aptl-webapp@sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a` |
 | Runtime OS | Debian GNU/Linux 13 (trixie) |
 | Runtime command | `/usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf` |
 | Working directory | `/app` |
@@ -35,13 +36,15 @@ observed lab instance, not as a clean-lab rebuild proof.
 
 | Claim | Evidence |
 | --- | --- |
-| Capture time, tool versions, and limits are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt` |
+| Capture commands are reproducible. | `capture-evidence.sh` |
+| Capture time, tool versions, and limits are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt`, `evidence/syft-version.json`, `evidence/osquery-version.txt` |
 | Docker Compose service intent is represented by the redacted Compose service slice. | `evidence/compose-service.webapp.json` |
 | Custom image identity, config, and layers are recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-history.image.txt` |
 | Source package inputs are checksum-addressable. | `evidence/source-checksums.txt` |
 | Realized runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-dmz.json`, `evidence/docker-network.aptl-internal.json`, `evidence/docker-volume.webapp-logs.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt` |
-| OS packages and language manifests visible in the image are recorded. | `evidence/os-packages.txt`, `evidence/language-manifests.txt` |
+| OS packages, language manifests, and SBOM component inventories visible in the image are recorded. | `evidence/os-packages.txt`, `evidence/language-manifests.txt`, `evidence/trivy-sbom.cyclonedx.json`, `evidence/syft-sbom.cyclonedx.json` |
 | Patch state is machine-readable. | `evidence/trivy-vulnerability-counts.json`, `evidence/trivy-vulnerability-list.json` |
+| osquery table attempts are recorded. | `evidence/osquery-apt-sources.json`, `evidence/osquery-docker-containers.json`, `evidence/osquery-docker-images.json`, `evidence/osquery-installed-applications.json`, `evidence/osquery-listening-ports.json`, `evidence/osquery-processes.json`, `evidence/osquery-programs.json` |
 | Catalogued filesystem paths are hashable. | `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt` |
 | Evidence files have integrity checksums. | `evidence/evidence-sha256sums.txt` |
 | Captured facts are mapped to current ACES surfaces or gap issues. | `mapping-ledger.yaml` |
@@ -63,8 +66,20 @@ observed lab instance, not as a clean-lab rebuild proof.
 - `CAP_NET_ADMIN` is present because the in-process Wazuh agent's
   `firewall-drop` active response needs to manipulate iptables in the webapp
   namespace.
-- The Trivy evidence captured 469 package vulnerability findings at scan time:
-  17 critical, 76 high, 209 medium, and 167 low.
+- The Trivy evidence captured 299 package vulnerability findings at scan time:
+  6 critical, 32 high, 99 medium, 158 low, and 4 unknown.
+- The APTL #368 capture includes Trivy and Syft CycloneDX SBOMs against the
+  current local `aptl-webapp:latest` image. The Syft file is a
+  package/component-scope CycloneDX JSON SBOM with `syft:location:*`
+  properties stripped by `capture-evidence.sh` so it stays within the
+  repository's evidence size gate. The stripped properties are file-location
+  provenance, not component identity; filesystem provenance remains covered by
+  `evidence/filesystem-tree.txt` and `evidence/filesystem-checksums.txt`.
+- osquery process and listener tables were captured from a scanner container
+  sharing the webapp PID and network namespaces. Docker container and image
+  tables were captured through the host Docker socket. Linux osquery 4.9.0 does
+  not expose `installed_applications` or `programs`; those table attempts are
+  recorded as unavailable in per-table evidence and `capture-limits.txt`.
 - Secret-shaped env-var values in Docker/Compose evidence were redacted before
   committing the bundle. The webapp intentionally contains participant-visible
   fixture secrets in checked-in source and runtime endpoints; those are scenario
@@ -119,8 +134,8 @@ aptl aces-inventory gaps docs/aces/inventory/webapp
 
 ## Known Limits
 
-- The evidence came from a running lab, not a clean reset. It is a frozen
-  observation of that realized lab state, not proof that a destructive
+- The evidence came from a running lab, not a clean reset. It is an observation
+  of that realized lab state, not proof that a destructive
   `aptl lab stop -v && aptl lab start` reproduces the same state.
 - The capture does not prove byte-identical rebuildability or full root
   filesystem equivalence.
@@ -131,8 +146,13 @@ aptl aces-inventory gaps docs/aces/inventory/webapp
 - Vulnerability results are time-sensitive to the Trivy database and advisory
   feeds.
 - The ACES SDL records the captured package and scanner inventories from this
-  frozen evidence bundle. Vulnerability records remain time-sensitive to the
-  Trivy database and advisory feeds.
+  evidence bundle. Vulnerability records remain time-sensitive to the Trivy
+  database and advisory feeds.
+- The APTL #368 capture is a non-destructive methodology baseline capture, not
+  a byte-identical rebuild proof.
+- osquery `installed_applications` and `programs` were unavailable in the
+  Linux osquery table registry used by the digest-pinned osquery 4.9.0 scanner
+  image.
 - The capture does not assert attack-induced state changes or later
   operator-driven runtime modifications.
 - Observable steady-state fields that ACES could not express during this pass

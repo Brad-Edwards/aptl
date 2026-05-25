@@ -1,7 +1,7 @@
 [
   {
-    "Id": "dfcf66bdcb7b28e6fd20b00554cc178599e52a59019c0cebfc01b652ccafbad8",
-    "Created": "2026-05-19T21:45:43.125630438Z",
+    "Id": "a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d",
+    "Created": "2026-05-23T06:18:32.004050981Z",
     "Path": "/entrypoint.sh",
     "Args": [],
     "State": {
@@ -11,53 +11,53 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 42607,
+      "Pid": 2958276,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-19T21:46:01.660518255Z",
+      "StartedAt": "2026-05-23T06:18:45.133745984Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-05-21T06:46:26.465117511+02:00",
-            "End": "2026-05-21T06:46:26.517180351+02:00",
+            "Start": "2026-05-25T21:29:09.034492381+02:00",
+            "End": "2026-05-25T21:29:09.092892356+02:00",
             "ExitCode": 0,
             "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\" href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n        <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\" id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\" name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
           },
           {
-            "Start": "2026-05-21T06:46:41.518543481+02:00",
-            "End": "2026-05-21T06:46:41.575976219+02:00",
+            "Start": "2026-05-25T21:29:24.094404597+02:00",
+            "End": "2026-05-25T21:29:24.14637939+02:00",
             "ExitCode": 0,
             "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\" href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n        <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\" id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\" name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
           },
           {
-            "Start": "2026-05-21T06:46:56.577074285+02:00",
-            "End": "2026-05-21T06:46:56.638506636+02:00",
+            "Start": "2026-05-25T21:29:39.147372792+02:00",
+            "End": "2026-05-25T21:29:39.194184252+02:00",
             "ExitCode": 0,
             "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\" href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n        <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\" id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\" name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
           },
           {
-            "Start": "2026-05-21T06:47:11.639670965+02:00",
-            "End": "2026-05-21T06:47:11.69074508+02:00",
+            "Start": "2026-05-25T21:29:54.195471779+02:00",
+            "End": "2026-05-25T21:29:54.248260228+02:00",
             "ExitCode": 0,
             "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\" href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n        <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\" id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\" name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
           },
           {
-            "Start": "2026-05-21T06:47:26.691406992+02:00",
-            "End": "2026-05-21T06:47:26.741569157+02:00",
+            "Start": "2026-05-25T21:30:09.249361445+02:00",
+            "End": "2026-05-25T21:30:09.297577746+02:00",
             "ExitCode": 0,
             "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\" href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n        <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\" id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\" name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
           }
         ]
       }
     },
-    "Image": "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0",
-    "ResolvConfPath": "/var/lib/docker/containers/dfcf66bdcb7b28e6fd20b00554cc178599e52a59019c0cebfc01b652ccafbad8/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/dfcf66bdcb7b28e6fd20b00554cc178599e52a59019c0cebfc01b652ccafbad8/hostname",
-    "HostsPath": "/var/lib/docker/containers/dfcf66bdcb7b28e6fd20b00554cc178599e52a59019c0cebfc01b652ccafbad8/hosts",
-    "LogPath": "/var/lib/docker/containers/dfcf66bdcb7b28e6fd20b00554cc178599e52a59019c0cebfc01b652ccafbad8/dfcf66bdcb7b28e6fd20b00554cc178599e52a59019c0cebfc01b652ccafbad8-json.log",
+    "Image": "sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a",
+    "ResolvConfPath": "/var/lib/docker/containers/a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d/hostname",
+    "HostsPath": "/var/lib/docker/containers/a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d/hosts",
+    "LogPath": "/var/lib/docker/containers/a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d/a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d-json.log",
     "Name": "/aptl-webapp",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -203,17 +203,17 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "DB_USER=techvault",
-        "DB_PORT=5432",
         "AGENT_NAME=aptl-webapp-agent",
-        "FLASK_ENV=production",
-        "DB_HOST=172.20.2.11",
-        "DB_NAME=techvault",
-        "WAZUH_MANAGER=wazuh.manager",
-        "LOG_PATHS=/var/log/gunicorn/access.log",
         "DB_PASSWORD=<REDACTED-DB-PASSWORD>",
         "SIEM_IP=172.20.2.30",
+        "DB_USER=techvault",
         "LOG_FORMAT=syslog",
+        "DB_HOST=172.20.2.11",
+        "DB_PORT=5432",
+        "FLASK_ENV=production",
+        "WAZUH_MANAGER=wazuh.manager",
+        "DB_NAME=techvault",
+        "LOG_PATHS=/var/log/gunicorn/access.log",
         "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "LANG=C.UTF-8",
         "GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D",
@@ -243,7 +243,7 @@
         "com.docker.compose.config-hash": "f1402ceeb8cb72124b95472af3771d9a4e8acfe770a36bf4453415a0bd35be75",
         "com.docker.compose.container-number": "1",
         "com.docker.compose.depends_on": "db:service_healthy:false",
-        "com.docker.compose.image": "sha256:7f2c715f953094ae36c10d15fbb038f0fdc6b855fd052236a95ad040410a25e0",
+        "com.docker.compose.image": "sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
         "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
@@ -253,8 +253,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "0cb93edb078f04e681e8141fbb97aeea34bdec7c7327e5e9b7eba0289d7c3cf3",
-      "SandboxKey": "/var/run/docker/netns/0cb93edb078f",
+      "SandboxID": "605b0320e3e93a0355ff95016483ef3f6db284dca75f35c6b3cd02c28640b4a5",
+      "SandboxKey": "/var/run/docker/netns/605b0320e3e9",
       "Ports": {
         "8080/tcp": null
       },
@@ -270,11 +270,11 @@
           ],
           "DriverOpts": null,
           "GwPriority": 0,
-          "NetworkID": "da8da844dbb2e771c0d77dd3a0a33392b53ef0547f5cab073acf3d7c8136b06b",
-          "EndpointID": "601208e50783a00e3124c4c0797dfde773f89aeaf159b67791b1057f691be5e0",
+          "NetworkID": "3b7c4e642d7ebef4866bf953ff0b04bd39affb9639881b4938cdcb8a9dc09c16",
+          "EndpointID": "6b81cde8f5594cb393a381b1d44bcdb5cb9003030006fee7b71fbc5a448a6115",
           "Gateway": "",
           "IPAddress": "172.20.1.20",
-          "MacAddress": "ea:76:a0:d9:0f:2c",
+          "MacAddress": "52:22:28:53:33:ca",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -282,7 +282,7 @@
           "DNSNames": [
             "aptl-webapp",
             "webapp",
-            "dfcf66bdcb7b"
+            "a44db23d6b83"
           ]
         },
         "aptl_aptl-internal": {
@@ -296,11 +296,11 @@
           ],
           "DriverOpts": null,
           "GwPriority": 0,
-          "NetworkID": "13398d126254b7592401f00b79f8e80a4ff32fe680b7b3f999028fb6dbe8fb20",
-          "EndpointID": "56ce35d9af612ec7a488a076b079cea14359481498f3fdd1826ae34b689dd5e8",
+          "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
+          "EndpointID": "421aab27768dc6c78437c1b0de55e1940646b1c722111453771cb40c4c2fe17a",
           "Gateway": "",
           "IPAddress": "172.20.2.25",
-          "MacAddress": "42:7a:3e:d1:8c:ed",
+          "MacAddress": "82:52:09:8b:9d:79",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -308,15 +308,15 @@
           "DNSNames": [
             "aptl-webapp",
             "webapp",
-            "dfcf66bdcb7b"
+            "a44db23d6b83"
           ]
         }
       }
     },
     "ImageManifestDescriptor": {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:84eb8e8431147b7d81a691be99d227d257f8030a0e94e869a0f47347bd09672b",
-      "size": 4081,
+      "digest": "sha256:787ef35d2547887c17ff3c914f6592ec002164216c24e002feb5287473b429a9",
+      "size": 4082,
       "platform": {
         "architecture": "amd64",
         "os": "linux"

@@ -92,11 +92,17 @@ facts that need ACES mapping attempts:
 Facts that ACES cannot express become ACES issues immediately after checking
 for an existing issue that covers the gap.
 
-The first filed gap is ACES #354: typed runtime configuration surfaces for
-mounts, local sockets, process identity, and package inventory.
+The first filed gap was ACES #354: typed runtime configuration surfaces for
+mounts, local sockets, process identity, and package inventory. The APTL #369
+classification-audit follow-up now encodes those captured Shuffle facts in
+`scenarios/techvault.sdl.yaml` using the runtime mount, local control
+interface, process, package, dependency-manifest, and package-vulnerability
+fields that landed after this methodology smoke pass. ACES #354 no longer
+appears as a blocking disposition in `mapping-ledger.yaml`.
+
 Run `aptl aces-inventory validate docs/aces/inventory/shuffle-backend` and
 `aptl aces-inventory gaps docs/aces/inventory/shuffle-backend` to verify the
-handoff ledger that later per-asset issues should expand before encoding.
+handoff ledger; the gap report should show `blocked=0 triage=0`.
 Run `aptl aces-inventory schema` to inspect the current JSON Schema generated
 from the Pydantic ledger model.
 

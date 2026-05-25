@@ -184,10 +184,10 @@ def test_mapping_ledger_validates_and_tracks_gap_handoff():
     result = validate_mapping_ledger(SHUFFLE_DIR)
     assert result.ok, result.errors
     assert result.fact_count == 9
-    assert result.encoded_count == 4
-    assert result.blocked_count == 5
+    assert result.encoded_count == 9
+    assert result.blocked_count == 0
     assert result.triage_count == 0
-    assert result.gap_issues == ["ACES #354"]
+    assert result.gap_issues == []
     assert result.warnings == ["supply-chain attestations captured but not verified"]
 
     ledger = load_mapping_ledger(LEDGER_PATH)
@@ -199,25 +199,16 @@ def test_mapping_ledger_validates_and_tracks_gap_handoff():
     assert len(ledger["correspondence_checks"]) == 2
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
     assert dispositions["shuffle-backend.image.identity"] == "encoded"
-    assert dispositions["shuffle-backend.network.identity"] == "encoded_with_caveat"
-    assert dispositions["shuffle-backend.docker.socket"] == "blocked_by_aces_gap"
+    assert dispositions["shuffle-backend.network.identity"] == "encoded"
+    assert dispositions["shuffle-backend.docker.socket"] == "encoded"
+    assert set(dispositions.values()) == {"encoded"}
     assert all(fact["evidence"] for fact in ledger["facts"])
 
 
-def test_gap_report_surfaces_aces_354_without_semantic_misuse():
+def test_gap_report_has_no_remaining_shuffle_backend_aces_gaps():
     report = gap_report(SHUFFLE_DIR)
-    gap_ids = {gap["fact_id"] for gap in report["gaps"]}
-    assert gap_ids == {
-        "shuffle-backend.data.mount",
-        "shuffle-backend.docker.socket",
-        "shuffle-backend.process.identity",
-        "shuffle-backend.package.inventory",
-        "shuffle-backend.vulnerability.scan-state",
-    }
+    assert report["gaps"] == []
     assert not report["triage_needed"]
-    for gap in report["gaps"]:
-        assert gap["gap_issue"]["number"] == 354
-        assert "why_not_current_surfaces" in gap
 
 
 def test_mapping_ledger_schema_is_formalized_for_iteration():
@@ -237,7 +228,7 @@ def test_aces_inventory_cli_validates_and_lists_gaps():
     )
     assert validate_result.exit_code == 0
     assert "Inventory ledger OK" in validate_result.stdout
-    assert "facts=9 encoded=4 blocked=5 triage=0" in validate_result.stdout
+    assert "facts=9 encoded=9 blocked=0 triage=0" in validate_result.stdout
     assert "warning: supply-chain attestations captured but not verified" in (
         validate_result.stdout
     )
@@ -245,7 +236,8 @@ def test_aces_inventory_cli_validates_and_lists_gaps():
     gaps_result = runner.invoke(app, ["aces-inventory", "gaps", str(SHUFFLE_DIR)])
     assert gaps_result.exit_code == 0
     assert "Inventory gaps for shuffle-backend" in gaps_result.stdout
-    assert "ACES #354" in gaps_result.stdout
+    assert "blocked=0 triage=0" in gaps_result.stdout
+    assert "ACES #354" not in gaps_result.stdout
 
     schema_result = runner.invoke(app, ["aces-inventory", "schema"])
     assert schema_result.exit_code == 0

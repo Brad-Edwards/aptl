@@ -49,6 +49,27 @@ superseded by Ground Control PR #792. Other repo-local skills under
 `wave-issue-coverage`) remain in place because they are aptl-specific
 or not yet promoted to the agent-neutral set.
 
+## ACES Asset Inventory Capture Skill
+
+The asset inventory capture methodology and reusable capture tooling are
+maintained in the ACES repo. Agents working APTL inventory issues should
+install the ACES skill at the user level from an ACES checkout:
+
+```bash
+bin/install-aces-inventory-skill.sh --aces-repo ../aces
+```
+
+Set `ACES_REPO=../aces2` or pass `--aces-repo <path>` when the local ACES
+checkout uses a different directory name. The installer symlinks the ACES
+skill into:
+
+- `~/.claude/skills/aces-asset-inventory-capture`
+- `~/.codex/skills/aces-asset-inventory-capture`
+- `~/.codex/prompts/aces-asset-inventory-capture.md`
+
+Use that installed skill together with the ACES inventory docs when
+capturing evidence or encoding inventory results for APTL.
+
 ## Ground Control Overview
 
 Ground Control is the requirements / traceability / workflow system this

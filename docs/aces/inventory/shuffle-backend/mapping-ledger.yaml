@@ -30,7 +30,7 @@ provenance:
         should emit first-party SBOM/provenance attestations at build time.
 correspondence_checks:
   - id: shuffle-backend.node-source-correspondence
-    status: planned
+    status: implemented
     source: nodes.shuffle-backend.source
     realized_evidence:
       - path: evidence/docker-inspect.image.json
@@ -38,16 +38,15 @@ correspondence_checks:
     ledger_fact_ids:
       - shuffle-backend.image.identity
     method: >
-      Compare the ACES source name/version selected by later encoding work
-      against the realized OCI image digest and manifest digest captured here.
-      The check passes only when the encoded digest resolves to the same image
-      index and platform manifest used by the running container.
+      Compare nodes.shuffle-backend.source in scenarios/techvault.sdl.yaml
+      against captured Docker inspect image identity and registry manifest
+      evidence.
     limit: >
-      Planned because this issue is proving methodology/tooling, not
-      producing the final TechVault ACES SDL.
+      The correspondence is documentary/static; this smoke pass still did not
+      perform a clean-lab rebuild.
   - id: shuffle-backend-runtime-correspondence
-    status: planned
-    source: "nodes.shuffle-backend plus current ACES #354 successor surfaces"
+    status: implemented
+    source: nodes.shuffle-backend.runtime and infrastructure.shuffle-backend
     realized_evidence:
       - path: evidence/runtime-baseline.txt
       - path: evidence/docker-inspect.container.json
@@ -57,20 +56,23 @@ correspondence_checks:
       - shuffle-backend.data.mount
       - shuffle-backend.docker.socket
       - shuffle-backend.process.identity
+      - shuffle-backend.package.inventory
+      - shuffle-backend.vulnerability.scan-state
     method: >
-      After later issues encode the supported ACES fields and consume the #354
-      successor surface, run the encoded scenario, recapture runtime evidence,
-      and compare OS/version, listener, mount/socket, and process identity
-      against this ledger with explicit tolerances for clean-lab drift.
+      Compare encoded Shuffle runtime, network, mount, process, package, and
+      scanner-state fields against the committed evidence bundle and focused
+      regression tests.
     limit: >
-      Planned because #354 blocks semantically correct encoding of the
-      runtime configuration surfaces today.
+      The evidence was captured from an already-running local lab; live
+      clean-lab recapture remains outside this issue.
 notes:
-  - This ledger is a methodology artifact, not the final SCN-010 asset spec.
+  - This ledger began as a methodology smoke artifact and now records the
+    TechVault SDL fields that encode the captured Shuffle backend facts.
   - The participant-discoverable rule defines this proof pass's capture boundary,
     not the semantic reason ACES may need new SDL surfaces.
-  - Later per-asset issues should expand this ledger to full coverage before
-    producing or updating SDL/source-package encodings.
+  - Runtime mounts, local control interfaces, process identity, package
+    inventory, and package vulnerability scanner state are now encoded in
+    scenarios/techvault.sdl.yaml.
   - The ledger is validated by the Pydantic schema exposed through
     `aptl aces-inventory schema`; schema violations fail `aptl aces-inventory
     validate`.
@@ -93,7 +95,6 @@ facts:
       rationale: >
         ACES node source is a provider-neutral artifact reference and can carry
         the immutable image digest as the version/pin used by later encoders.
-
   - id: shuffle-backend.os.version
     category: runtime-configuration
     summary: The realized runtime OS is Alpine Linux 3.22.2.
@@ -107,7 +108,6 @@ facts:
         - nodes.shuffle-backend.os
         - nodes.shuffle-backend.os_version
       rationale: ACES nodes have explicit OS family and version fields.
-
   - id: shuffle-backend.network.identity
     category: network
     summary: >
@@ -118,17 +118,16 @@ facts:
       - path: evidence/docker-network.aptl-security.json
       - path: evidence/compose-service.shuffle-backend.json
     aces:
-      disposition: encoded_with_caveat
-      surface: infrastructure
+      disposition: encoded
+      surface: nodes
       fields:
+        - nodes.shuffle-backend.runtime.network
         - infrastructure.shuffle-backend.links
         - infrastructure.shuffle-backend.properties
-      caveat: >
-        ACES can encode network attachment and static IP. Service/container DNS
-        aliases may need a naming convention or source-package support in later
-        encoding work.
-      rationale: Infrastructure properties support per-link IP assignments.
-
+      rationale: >
+        ACES node runtime network and infrastructure fields encode the static
+        IP, aliases, DNS names, and backend realization metadata captured for
+        this node.
   - id: shuffle-backend.api.listener
     category: service-surface
     summary: >
@@ -143,55 +142,42 @@ facts:
       fields:
         - nodes.shuffle-backend.services
       rationale: ACES node service bindings model exposed network services by port.
-
   - id: shuffle-backend.data.mount
     category: runtime-configuration
-    summary: The named volume aptl_shuffle_data is mounted at /shuffle-database.
+    summary: >
+      The named volume aptl_shuffle_data is mounted at /shuffle-database and
+      encoded as a typed runtime mount.
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/docker-volume.shuffle-data.json
       - path: evidence/runtime-baseline.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - content
-        - features
-        - infrastructure
-      why_not_current_surfaces: >
-        Content can describe files or directories placed into a node, but a
-        runtime mount with persistence/backing-volume semantics is not merely
-        placed content. Features are authored deployable units, and
-        infrastructure does not type node-local mounts.
-      gap_issue:
-        tracker: ACES
-        number: 354
-        url: https://github.com/Brad-Edwards/aces/issues/354
-
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.shuffle-backend.runtime.mounts
+      rationale: >
+        Current ACES runtime mount fields encode volume-backed node-local
+        persistence directly.
   - id: shuffle-backend.docker.socket
     category: runtime-configuration
     summary: >
-      The container has a writable Docker socket bind recorded by Docker as
-      /var/run/docker.sock:/var/run/docker.sock:rw and visible in-container at
-      /run/docker.sock.
+      The container has a writable Docker socket bind recorded as
+      /var/run/docker.sock:/var/run/docker.sock:rw and encoded as both a
+      runtime mount and local control interface.
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
       - path: evidence/compose-service.shuffle-backend.json
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes.services
-        - content
-        - relationships
-      why_not_current_surfaces: >
-        Node services model network ports, content models placed files/data, and
-        relationships can express trust edges only after endpoints exist. None
-        typed a path-local runtime control interface mounted into the asset.
-      gap_issue:
-        tracker: ACES
-        number: 354
-        url: https://github.com/Brad-Edwards/aces/issues/354
-
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.shuffle-backend.runtime.mounts
+        - nodes.shuffle-backend.runtime.local_control_interfaces
+      rationale: >
+        Current ACES runtime mount and local control interface fields encode
+        path-local control sockets without treating them as backend-only detail.
   - id: shuffle-backend.process.identity
     category: runtime-configuration
     summary: PID 1 runs ./shufflebackend as root with working directory /app.
@@ -200,18 +186,14 @@ facts:
       - path: evidence/docker-top.txt
       - path: evidence/docker-inspect.image.json
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - features
-      why_not_current_surfaces: >
-        Nodes and features can identify the asset and deployed software but do
-        not type process command, effective user, or working directory.
-      gap_issue:
-        tracker: ACES
-        number: 354
-        url: https://github.com/Brad-Edwards/aces/issues/354
-
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.shuffle-backend.runtime.process
+        - nodes.shuffle-backend.runtime.processes
+      rationale: >
+        Current ACES runtime process fields encode PID, command, user, role,
+        and working directory for PID 1.
   - id: shuffle-backend.package.inventory
     category: runtime-inventory
     summary: >
@@ -222,18 +204,14 @@ facts:
       - path: evidence/language-manifests.txt
       - path: evidence/trivy-sbom.cyclonedx.json
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - features
-      why_not_current_surfaces: >
-        Features are authored deployable service/configuration/artifact units
-        with dependency semantics. A full observed package/SBOM inventory is
-        runtime inventory and should not be misrepresented as authored features.
-      gap_issue:
-        tracker: ACES
-        number: 354
-        url: https://github.com/Brad-Edwards/aces/issues/354
-
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.shuffle-backend.runtime.packages
+        - nodes.shuffle-backend.runtime.dependency_manifests
+      rationale: >
+        Current ACES runtime package and dependency manifest fields encode the
+        observed Alpine packages and Go module manifest.
   - id: shuffle-backend.vulnerability.scan-state
     category: vulnerability-inventory
     summary: >
@@ -245,15 +223,11 @@ facts:
       - path: evidence/trivy-vulnerability-counts.json
       - path: evidence/trivy-vulnerability-list.json
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - vulnerabilities
-      why_not_current_surfaces: >
-        ACES vulnerabilities are named CWE-classified scenario weaknesses.
-        Trivy output is package/CVE/advisory scanner state tied to an image
-        digest and scan time, so encoding it as CWE-only vulnerabilities would
-        lose the evidence semantics.
-      gap_issue:
-        tracker: ACES
-        number: 354
-        url: https://github.com/Brad-Edwards/aces/issues/354
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.shuffle-backend.runtime.package_vulnerabilities
+      rationale: >
+        Current ACES package vulnerability scanner-state fields preserve
+        package, version, advisory, severity, scanner, image digest, and scan
+        time semantics.

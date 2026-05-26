@@ -19383,14 +19383,1771 @@ nodes:
           value: '5432'
           value_classification: plain
           provenance: introspection
+  shuffle-backend:
+    type: VM
+    description: Shuffle SOAR backend container steady-state inventory.
+    os: linux
+    os_version: Alpine Linux 3.22.2
+    source:
+      name: ghcr.io/shuffle/shuffle-backend
+      version: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+      build:
+        description: Observed upstream Shuffle backend image provenance from local Docker inspect and registry attestation evidence.
+        base_image: alpine:3.22.2
+        dockerfile_path: upstream:ghcr.io/shuffle/shuffle-backend
+        instructions:
+          - instruction: add
+            arguments:
+              - 'alpine-minirootfs-3.22.2-x86_64.tar.gz / # buildkit'
+          - instruction: run
+            arguments:
+              - apk add --no-cache libc6-compat
+          - instruction: run
+            arguments:
+              - apk add --no-cache libstdc++
+          - instruction: copy
+            arguments:
+              - '/app/ /app # buildkit'
+          - instruction: workdir
+            arguments:
+              - /app
+          - instruction: expose
+            arguments:
+              - 5001/tcp
+          - instruction: cmd
+            arguments:
+              - '["./shufflebackend"]'
+        layers:
+          - digest: sha256:256f393e029fa2063d8c93720da36a74a032bed3355a2bc3e313ad12f8bde9d1
+            created_by: captured OCI rootfs layer
+          - digest: sha256:43f52a81a1381311676d192bdc9e7cfd6afaefe07bdb0c2be8b5064f9a1fb9a9
+            created_by: captured OCI rootfs layer
+          - digest: sha256:23a29a4fb02977bdf4574c0da335cbef7a38387ed4aef09e16877d929fbb2836
+            created_by: captured OCI rootfs layer
+          - digest: sha256:875a7c76cf11852430ac2dab6c5bb1e1ede0c28805d39fe0bc9f39ebb88271a6
+            created_by: captured OCI rootfs layer
+          - digest: sha256:9db110fcb57df7947175883780c2fccebba272cdaf0b46a2b11ae935ccdad325
+            created_by: captured OCI rootfs layer
+          - digest: sha256:4e0b98ece3b042c2d530a8c919f160aa841828d4553fce6af8ee76cf3a888640
+            created_by: captured OCI rootfs layer
+          - digest: sha256:6a10118af4c24cebc988731df8a6990e9d69ab7af9c100942a3b5ed76b990ddc
+            created_by: captured OCI rootfs layer
+          - digest: sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef
+            created_by: captured OCI rootfs layer
+        build_args: []
+        copied_sources: []
+        config:
+          entrypoint: []
+          command:
+            - ./shufflebackend
+          working_directory: /app
+          exposed_ports:
+            - 5001/tcp
+          default_environment:
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+              value_classification: plain
+        attestation:
+          status: present
+          verification: unverified
+          attestation_type: slsa
+          predicate_type: https://slsa.dev/provenance/v0.2
+          evidence_reference: docs/aces/inventory/shuffle-backend/evidence/docker-buildx-imagetools.attestation-amd64.raw.json
+          description: Registry-visible OCI/in-toto/SLSA provenance attestation manifests were captured; signatures, transparency-log inclusion, and builder identity were not cryptographically verified in this smoke pass.
+    resources:
+      ram: 1073741824
+      cpu: 1
+    roles:
+      shuffle-root:
+        username: root
+    services:
+      - port: 5001
+        protocol: tcp
+        name: shuffle-api
+    runtime:
+      mounts:
+        - target: /shuffle-database
+          source: aptl_shuffle_data
+          source_kind: volume
+          filesystem_type: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Docker named volume backing Shuffle persistent state.
+        - target: /var/run/docker.sock
+          source: /var/run/docker.sock
+          source_kind: bind
+          filesystem_type: bind
+          read_only: false
+          options:
+            - rw
+          propagation: rprivate
+          stability: stable
+          backend_generated: false
+          description: Writable host Docker socket bind mounted into the Shuffle backend container.
+      local_control_interfaces:
+        - path: /var/run/docker.sock
+          kind: unix_socket
+          bind_source: /var/run/docker.sock
+          access: read_write
+          description: Writable Docker engine control socket exposed inside the Shuffle backend container.
+      process:
+        name: shufflebackend
+        pid: 1
+        command:
+          - ./shufflebackend
+        role: primary
+        user: root
+        group: root
+        working_directory: /app
+      processes:
+        - name: shufflebackend
+          pid: 1
+          command:
+            - ./shufflebackend
+          role: primary
+          user: root
+          group: root
+          working_directory: /app
+      environment:
+        - name: SHUFFLE_DEFAULT_APIKEY
+          provenance: compose
+          value_classification: redacted
+        - name: SHUFFLE_OPENSEARCH_URL
+          provenance: compose
+          value: https://shuffle-opensearch:9200
+          value_classification: plain
+        - name: SHUFFLE_DEFAULT_USERNAME
+          provenance: compose
+          value: admin
+          value_classification: plain
+        - name: SHUFFLE_APP_SDK_TIMEOUT
+          provenance: compose
+          value: '120'
+          value_classification: plain
+        - name: SHUFFLE_DEFAULT_PASSWORD
+          provenance: compose
+          value_classification: redacted
+        - name: SHUFFLE_OPENSEARCH_USERNAME
+          provenance: compose
+          value: admin
+          value_classification: plain
+        - name: SHUFFLE_OPENSEARCH_PASSWORD
+          provenance: compose
+          value_classification: redacted
+        - name: SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY
+          provenance: compose
+          value: 'true'
+          value_classification: plain
+        - name: PATH
+          provenance: image
+          value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          value_classification: plain
+      linux_capabilities:
+        add: []
+        required: []
+        effective: []
+        description: No explicit Compose capability additions were present for the captured Shuffle backend container.
+      operational_policy:
+        restart: unless_stopped
+        resource_limits:
+          memory: 1073741824
+          memory_swap: 2147483648
+      container:
+        entrypoint: []
+        command:
+          - ./shufflebackend
+        log_driver: json-file
+        namespaces:
+          cgroup: private
+          ipc: private
+          pid: ''
+          userns: ''
+          uts: ''
+        privileged: false
+        read_only_rootfs: false
+        publish_all_ports: false
+        autoremove: false
+        shm_size: 67108864
+        masked_paths:
+          - /proc/acpi
+          - /proc/asound
+          - /proc/interrupts
+          - /proc/kcore
+          - /proc/keys
+          - /proc/latency_stats
+          - /proc/sched_debug
+          - /proc/scsi
+          - /proc/timer_list
+          - /proc/timer_stats
+          - /sys/devices/virtual/powercap
+          - /sys/firmware
+        read_only_paths:
+          - /proc/bus
+          - /proc/fs
+          - /proc/irq
+          - /proc/sys
+          - /proc/sysrq-trigger
+        runtime_name: runc
+      network:
+        hostname: shuffle-backend
+        domainname: ''
+        endpoints:
+          - network: security-net
+            network_id: 4fa4515432a4e517e928bb7a7c71b3ebf2c4e6c740084654cbd1d84b8e76bf09
+            network_id_stability: stable
+            endpoint_id: 5e4a8a5d486fedc17596e86d50ba86839fd5c0c127e5f563acc1ad3e2fe4341e
+            endpoint_id_stability: ephemeral
+            backend_generated: true
+            ip_address: 172.20.0.20
+            ip_prefix_length: 24
+            gateway: 172.20.0.1
+            mac_address: 46:d3:60:5f:b8:79
+            aliases:
+              - aptl-shuffle-backend
+              - shuffle-backend
+            dns_names:
+              - aptl-shuffle-backend
+              - shuffle-backend
+              - ca1a6f1b480b
+            generated_dns_names:
+              - ca1a6f1b480b
+            backend:
+              driver: bridge
+              ipam_driver: default
+              driver_options: {}
+              ipam_options: {}
+        published_ports: []
+      packages:
+        - manager: apk
+          name: alpine-baselayout
+          version: 3.7.0-r0
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: alpine-baselayout-data
+          version: 3.7.0-r0
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: alpine-keys
+          version: 2.5-r0
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: alpine-release
+          version: 3.22.2-r0
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: apk-tools
+          version: 2.14.9-r3
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: busybox
+          version: 1.37.0-r19
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: busybox-binsh
+          version: 1.37.0-r19
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: ca-certificates-bundle
+          version: 20250911-r0
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: gcompat
+          version: 1.1.0-r4
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: libapk2
+          version: 2.14.9-r3
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: libcrypto3
+          version: 3.5.4-r0
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: libgcc
+          version: 14.2.0-r6
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: libssl3
+          version: 3.5.4-r0
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: libstdc++
+          version: 14.2.0-r6
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: libucontext
+          version: 1.3.2-r0
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: musl
+          version: 1.2.5-r10
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: musl-obstack
+          version: 1.2.3-r2
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: musl-utils
+          version: 1.2.5-r10
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: scanelf
+          version: 1.3.8-r1
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: ssl_client
+          version: 1.37.0-r19
+          architecture: x86_64
+          source: image
+        - manager: apk
+          name: zlib
+          version: 1.3.1-r2
+          architecture: x86_64
+          source: image
+      dependency_manifests:
+        - ecosystem: go
+          path: /app/go.mod
+          format: go.mod
+          name: shuffle
+          version: go 1.24.0; toolchain go1.24.3
+      package_vulnerabilities:
+        - id: CVE-2025-15467
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: critical
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-15467
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-15467
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: critical
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-15467
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-31789
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: critical
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-31789
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-31789
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: critical
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-31789
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-33186
+          package_name: google.golang.org/grpc
+          installed_version: v1.72.2
+          fixed_version: 1.79.3
+          severity: critical
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-33186
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-69419
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-69419
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-69419
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-69419
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-69421
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-69421
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-69421
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-69421
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-22184
+          package_name: zlib
+          installed_version: 1.3.1-r2
+          fixed_version: 1.3.2-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-22184
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-24051
+          package_name: go.opentelemetry.io/otel/sdk
+          installed_version: v1.36.0
+          fixed_version: 1.40.0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-24051
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-25679
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.8, 1.26.1
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-25679
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-28387
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-28387
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-28387
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-28387
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-28388
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-28388
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-28388
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-28388
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-28389
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-28389
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-28389
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-28389
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-28390
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-28390
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-28390
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-28390
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-29181
+          package_name: go.opentelemetry.io/otel
+          installed_version: v1.36.0
+          fixed_version: 1.41.0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-29181
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-32280
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.9, 1.26.2
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-32280
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-32281
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.9, 1.26.2
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-32281
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-32283
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.9, 1.26.2
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-32283
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-33811
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.10, 1.26.3
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-33811
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-33814
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.10, 1.26.3
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-33814
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-34040
+          package_name: github.com/docker/docker
+          installed_version: v28.3.3+incompatible
+          fixed_version: 29.3.1
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-34040
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-34986
+          package_name: github.com/go-jose/go-jose/v4
+          installed_version: v4.1.3
+          fixed_version: 4.1.4
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-34986
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-39820
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.10, 1.26.3
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-39820
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-39836
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.10, 1.26.3
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-39836
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-39883
+          package_name: go.opentelemetry.io/otel/sdk
+          installed_version: v1.36.0
+          fixed_version: 1.43.0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-39883
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-40200
+          package_name: musl
+          installed_version: 1.2.5-r10
+          fixed_version: 1.2.5-r12
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-40200
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-40200
+          package_name: musl-utils
+          installed_version: 1.2.5-r10
+          fixed_version: 1.2.5-r12
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-40200
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-41567
+          package_name: github.com/docker/docker
+          installed_version: v28.3.3+incompatible
+          fixed_version: ''
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-41567
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-42306
+          package_name: github.com/docker/docker
+          installed_version: v28.3.3+incompatible
+          fixed_version: ''
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-42306
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-42499
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.10, 1.26.3
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-42499
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-44973
+          package_name: github.com/go-git/go-billy/v5
+          installed_version: v5.6.2
+          fixed_version: 5.9.0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-44973
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-45022
+          package_name: github.com/go-git/go-git/v5
+          installed_version: v5.16.5
+          fixed_version: 5.19.0
+          severity: high
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-45022
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-46394
+          package_name: busybox
+          installed_version: 1.37.0-r19
+          fixed_version: 1.37.0-r20
+          severity: low
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-46394
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-46394
+          package_name: busybox-binsh
+          installed_version: 1.37.0-r19
+          fixed_version: 1.37.0-r20
+          severity: low
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-46394
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-46394
+          package_name: ssl_client
+          installed_version: 1.37.0-r19
+          fixed_version: 1.37.0-r20
+          severity: low
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-46394
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-1229
+          package_name: github.com/cloudflare/circl
+          installed_version: v1.6.1
+          fixed_version: 1.6.3
+          severity: low
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-1229
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-27139
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.8, 1.26.1
+          severity: low
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-27139
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-33762
+          package_name: github.com/go-git/go-git/v5
+          installed_version: v5.16.5
+          fixed_version: 5.17.1
+          severity: low
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-33762
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-45570
+          package_name: github.com/go-git/go-git/v5
+          installed_version: v5.16.5
+          fixed_version: 5.19.1
+          severity: low
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-45570
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2024-58251
+          package_name: busybox
+          installed_version: 1.37.0-r19
+          fixed_version: 1.37.0-r20
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2024-58251
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2024-58251
+          package_name: busybox-binsh
+          installed_version: 1.37.0-r19
+          fixed_version: 1.37.0-r20
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2024-58251
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2024-58251
+          package_name: ssl_client
+          installed_version: 1.37.0-r19
+          fixed_version: 1.37.0-r20
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2024-58251
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-11187
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-11187
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-11187
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-11187
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-15468
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-15468
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-15468
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-15468
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-15469
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-15469
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-15469
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-15469
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-66199
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-66199
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-66199
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-66199
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-68160
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-68160
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-68160
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-68160
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-69418
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-69418
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-69418
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-69418
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-69420
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-69420
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2025-69420
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2025-69420
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-22795
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-22795
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-22795
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-22795
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-22796
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-22796
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-22796
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.5-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-22796
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-2673
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-2673
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-2673
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-2673
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-27142
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.8, 1.26.1
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-27142
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-27171
+          package_name: zlib
+          installed_version: 1.3.1-r2
+          fixed_version: 1.3.2-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-27171
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-31790
+          package_name: libcrypto3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-31790
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-31790
+          package_name: libssl3
+          installed_version: 3.5.4-r0
+          fixed_version: 3.5.6-r0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-31790
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-32282
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.9, 1.26.2
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-32282
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-32288
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.9, 1.26.2
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-32288
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-32289
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.9, 1.26.2
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-32289
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-33997
+          package_name: github.com/docker/docker
+          installed_version: v28.3.3+incompatible
+          fixed_version: 29.3.1
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-33997
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-34165
+          package_name: github.com/go-git/go-git/v5
+          installed_version: v5.16.5
+          fixed_version: 5.17.1
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-34165
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-39823
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.10, 1.26.3
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-39823
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-39825
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.10, 1.26.3
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-39825
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-39826
+          package_name: stdlib
+          installed_version: v1.24.13
+          fixed_version: 1.25.10, 1.26.3
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-39826
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-41506
+          package_name: github.com/go-git/go-git/v5
+          installed_version: v5.16.5
+          fixed_version: 5.18.0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-41506
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-41568
+          package_name: github.com/docker/docker
+          installed_version: v28.3.3+incompatible
+          fixed_version: ''
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-41568
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-44740
+          package_name: github.com/go-git/go-billy/v5
+          installed_version: v5.6.2
+          fixed_version: 5.9.0
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-44740
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-45571
+          package_name: github.com/go-git/go-git/v5
+          installed_version: v5.16.5
+          fixed_version: 5.19.1
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-45571
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-6042
+          package_name: musl
+          installed_version: 1.2.5-r10
+          fixed_version: 1.2.5-r11
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-6042
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+        - id: CVE-2026-6042
+          package_name: musl-utils
+          installed_version: 1.2.5-r10
+          fixed_version: 1.2.5-r11
+          severity: medium
+          advisory_url: https://avd.aquasec.com/nvd/cve-2026-6042
+          scanner: trivy
+          image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+          scan_time: '2026-05-20T20:17:01Z'
+          scanner_version: 0.70.0
+          scanner_database: trivy-db
+
   wazuh-manager:
     type: VM
+    description: Wazuh manager container and participant-visible SOC control plane inventory.
     os: linux
-    source: wazuh-manager-4.12
+    source:
+      name: wazuh/wazuh-manager
+      version: 4.12.0
+    resources:
+      ram: 1073741824
+      cpu: 1
+    roles:
+      wazuh-root:
+        username: root
+    conditions:
+      wazuh-api-ready: wazuh-root
     services:
-      - {port: 1514, protocol: tcp, name: wazuh-agent-events}
-      - {port: 1515, protocol: tcp, name: wazuh-agent-registration}
-      - {port: 514, protocol: udp, name: syslog}
+      - port: 1514
+        protocol: tcp
+        name: wazuh-agent-events
+      - port: 1515
+        protocol: tcp
+        name: wazuh-agent-registration
+      - port: 514
+        protocol: udp
+        name: syslog
+      - port: 55000
+        protocol: tcp
+        name: wazuh-api
+    runtime:
+      mounts:
+        - target: /var/ossec/api/configuration
+          source: wazuh_api_configuration
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/etc
+          source: wazuh_etc
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/logs
+          source: wazuh_logs
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/queue
+          source: wazuh_queue
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/var/multigroups
+          source: wazuh_var_multigroups
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/integrations
+          source: wazuh_integrations
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/integrations/custom-shuffle
+          source: ./config/wazuh_cluster/custom-shuffle
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/active-response/bin
+          source: wazuh_active_response
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/agentless
+          source: wazuh_agentless
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/wodles
+          source: wazuh_wodles
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /etc/filebeat
+          source: filebeat_etc
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/lib/filebeat
+          source: filebeat_var
+          source_kind: volume
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: volume_backed
+          backend_generated: true
+          description: Compose-declared Wazuh manager mount.
+        - target: /tmp/filebeat-override.yml
+          source: ./config/wazuh_cluster/filebeat_wazuh_module.yml
+          source_kind: bind
+          read_only: true
+          options:
+            - ro
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /etc/ssl/root-ca.pem
+          source: ./config/wazuh_indexer_ssl_certs/root-ca-manager.pem
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /etc/ssl/filebeat.pem
+          source: ./config/wazuh_indexer_ssl_certs/wazuh.manager.pem
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /etc/ssl/filebeat.key
+          source: ./config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /wazuh-config-mount/etc/ossec.conf
+          source: ./.aptl/config/wazuh_cluster/wazuh_manager.conf
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: generated
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/etc/rules/falco_rules.xml
+          source: ./config/wazuh_cluster/falco_rules.xml
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/etc/decoders/samba_decoders.xml
+          source: ./config/wazuh_cluster/samba_decoders.xml
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/etc/decoders/postgresql_decoders.xml
+          source: ./config/wazuh_cluster/postgresql_decoders.xml
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/etc/rules/ad_rules.xml
+          source: ./config/wazuh_cluster/ad_rules.xml
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/etc/rules/webapp_rules.xml
+          source: ./config/wazuh_cluster/webapp_rules.xml
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/etc/rules/suricata_rules.xml
+          source: ./config/wazuh_cluster/suricata_rules.xml
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /var/ossec/etc/rules/database_rules.xml
+          source: ./config/wazuh_cluster/database_rules.xml
+          source_kind: bind
+          read_only: false
+          options:
+            - rw
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+        - target: /docker-entrypoint-initdb.d/patch-rule-path.py
+          source: ./config/wazuh_cluster/patch-rule-path.py
+          source_kind: bind
+          read_only: true
+          options:
+            - ro
+          propagation: unknown
+          stability: stable
+          backend_generated: false
+          description: Compose-declared Wazuh manager mount.
+      filesystem_inventory:
+        - path: /var/ossec/integrations/custom-shuffle
+          entry_type: file
+          source_path: config/wazuh_cluster/custom-shuffle
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /tmp/filebeat-override.yml
+          entry_type: file
+          source_path: config/wazuh_cluster/filebeat_wazuh_module.yml
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /etc/ssl/root-ca.pem
+          entry_type: file
+          source_path: config/wazuh_indexer_ssl_certs/root-ca-manager.pem
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /etc/ssl/filebeat.pem
+          entry_type: file
+          source_path: config/wazuh_indexer_ssl_certs/wazuh.manager.pem
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /etc/ssl/filebeat.key
+          entry_type: file
+          source_path: config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem
+          provenance: compose-bind
+          stability: stable
+          sensitivity: operator_secret
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /wazuh-config-mount/etc/ossec.conf
+          entry_type: file
+          source_path: .aptl/config/wazuh_cluster/wazuh_manager.conf
+          provenance: compose-bind
+          stability: generated
+          sensitivity: operator_secret
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /var/ossec/etc/rules/falco_rules.xml
+          entry_type: file
+          source_path: config/wazuh_cluster/falco_rules.xml
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /var/ossec/etc/decoders/samba_decoders.xml
+          entry_type: file
+          source_path: config/wazuh_cluster/samba_decoders.xml
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /var/ossec/etc/decoders/postgresql_decoders.xml
+          entry_type: file
+          source_path: config/wazuh_cluster/postgresql_decoders.xml
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /var/ossec/etc/rules/ad_rules.xml
+          entry_type: file
+          source_path: config/wazuh_cluster/ad_rules.xml
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /var/ossec/etc/rules/webapp_rules.xml
+          entry_type: file
+          source_path: config/wazuh_cluster/webapp_rules.xml
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /var/ossec/etc/rules/suricata_rules.xml
+          entry_type: file
+          source_path: config/wazuh_cluster/suricata_rules.xml
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /var/ossec/etc/rules/database_rules.xml
+          entry_type: file
+          source_path: config/wazuh_cluster/database_rules.xml
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+        - path: /docker-entrypoint-initdb.d/patch-rule-path.py
+          entry_type: file
+          source_path: config/wazuh_cluster/patch-rule-path.py
+          provenance: compose-bind
+          stability: stable
+          sensitivity: plain
+          description: Compose-mounted Wazuh manager configuration or detection content.
+      environment:
+        - name: INDEXER_URL
+          provenance: compose
+          value: https://wazuh.indexer:9200
+          value_classification: plain
+        - name: INDEXER_USERNAME
+          provenance: compose
+          value_classification: redacted
+        - name: INDEXER_PASSWORD
+          provenance: compose
+          value_classification: redacted
+        - name: FILEBEAT_SSL_VERIFICATION_MODE
+          provenance: compose
+          value: full
+          value_classification: plain
+        - name: SSL_CERTIFICATE_AUTHORITIES
+          provenance: compose
+          value: /etc/ssl/root-ca.pem
+          value_classification: plain
+        - name: SSL_CERTIFICATE
+          provenance: compose
+          value: /etc/ssl/filebeat.pem
+          value_classification: plain
+        - name: SSL_KEY
+          provenance: compose
+          value: /etc/ssl/filebeat.key
+          value_classification: plain
+        - name: API_USERNAME
+          provenance: compose
+          value_classification: redacted
+        - name: API_PASSWORD
+          provenance: compose
+          value_classification: redacted
+      operational_policy:
+        restart: always
+        resource_limits:
+          memory: 1073741824
+      container:
+        entrypoint:
+          - /bin/bash
+          - -c
+          - cp /tmp/filebeat-override.yml /etc/filebeat/filebeat.yml && chown root:root /etc/filebeat/filebeat.yml && python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init
+        command: []
+        runtime_name: runc
+      network:
+        hostname: wazuh.manager
+        domainname: ''
+        endpoints:
+          - network: security-net
+            ip_address: 172.20.0.10
+            ip_prefix_length: 24
+            gateway: 172.20.0.1
+            backend:
+              driver: bridge
+              ipam_driver: default
+              driver_options: {}
+              ipam_options: {}
+          - network: dmz-net
+            ip_address: 172.20.1.10
+            ip_prefix_length: 24
+            gateway: 172.20.1.1
+            backend:
+              driver: bridge
+              ipam_driver: default
+              driver_options: {}
+              ipam_options: {}
+          - network: internal-net
+            ip_address: 172.20.2.30
+            ip_prefix_length: 24
+            gateway: 172.20.2.1
+            backend:
+              driver: bridge
+              ipam_driver: default
+              driver_options: {}
+              ipam_options: {}
+        published_ports:
+          - container_port: 1514
+            protocol: tcp
+            host_port: 1514
+          - container_port: 1515
+            protocol: tcp
+            host_port: 1515
+          - container_port: 514
+            protocol: udp
+            host_port: 514
+          - container_port: 55000
+            protocol: tcp
+            host_port: 55000
 
   webapp:
     type: VM
@@ -38423,22 +40180,31 @@ nodes:
 infrastructure:
   dmz-net:
     count: 1
-    properties: {cidr: 172.20.1.0/24, gateway: 172.20.1.1}
+    properties: {cidr: 172.20.1.0/24, gateway: 172.20.1.1, internal: true}
   internal-net:
     count: 1
     properties: {cidr: 172.20.2.0/24, gateway: 172.20.2.1, internal: true}
   security-net:
     count: 1
-    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: true}
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1}
   db:
     count: 1
     links:
     - internal-net
     properties:
     - internal-net: 172.20.2.11
-  wazuh-manager:
+  shuffle-backend:
     count: 1
     links: [security-net]
+    properties:
+      - {security-net: 172.20.0.20}
+  wazuh-manager:
+    count: 1
+    links: [security-net, dmz-net, internal-net]
+    properties:
+      - {security-net: 172.20.0.10}
+      - {dmz-net: 172.20.1.10}
+      - {internal-net: 172.20.2.30}
   webapp:
     count: 1
     links: [dmz-net, internal-net]
@@ -38449,7 +40215,7 @@ infrastructure:
 
   redteam-net:
     count: 1
-    properties: {cidr: 172.20.4.0/24, gateway: 172.20.4.1}
+    properties: {cidr: 172.20.4.0/24, gateway: 172.20.4.1, internal: true}
   kali:
     count: 1
     links: [redteam-net, dmz-net, internal-net]
@@ -38528,6 +40294,13 @@ conditions:
     timeout: 5
     retries: 5
     start_period: 15
+  wazuh-api-ready:
+    command: curl -ks https://localhost:55000 || exit 1
+    interval: 30
+    timeout: 10
+    retries: 5
+    start_period: 120
+
   webapp-http-ready:
     command: curl -sf http://localhost:8080/ || exit 1
     interval: 15

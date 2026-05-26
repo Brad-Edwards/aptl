@@ -111,6 +111,28 @@ rows:
     blocking_followup: n/a
     notes: Incremental ACES TechVault authoring target for the ad inventory pass; current SDL consumes Brad-Edwards/aces#401 and encodes the catalogued Samba AD steady-state image, runtime, identity-authority logical state, filesystem, host-local identity, package/CVE summary, declared weaknesses, curated scenario/provisioning account refs, and relationship facts with no known remaining ACES expressivity blocker. Raw credentials, generated flags, Wazuh keys, and Kerberos/Samba private material are redacted as secret material while path, metadata, and checksum shape remain captured.
 
+  - id: scen.techvault.shuffle-backend-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.shuffle-backend + infrastructure.shuffle-backend + runtime
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/shuffle-backend/ + tests/test_techvault_classification_audit.py + tests/test_aces_inventory_methodology.py"
+    blocking_followup: n/a
+    notes: Classification-audit fix for issue #369; current SDL encodes the captured Shuffle backend image identity, OS, security-network identity, API listener, persistent mount, Docker socket control interface, process identity, packages, Go manifest, and Trivy scanner state with no remaining ACES #354 gap marker.
+
+  - id: scen.techvault.wazuh-manager-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.wazuh-manager + infrastructure.wazuh-manager + runtime
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime / conditions fields
+    runtime_owner: n/a
+    validation_evidence: "docker-compose.yml (service: wazuh.manager) + scenarios/techvault.sdl.yaml + tests/test_techvault_classification_audit.py"
+    blocking_followup: n/a
+    notes: Classification-audit fix for issue #369; current SDL encodes the Wazuh API on 55000/tcp, security/dmz/internal network attachments, Compose healthcheck as conditions.wazuh-api-ready, environment policy, resource policy, persistent/config mounts, and custom decoder/rule content mounted into the manager.
+
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml
     legacy_source: scenarios/ad-domain-compromise.yaml
@@ -552,22 +574,22 @@ rows:
     legacy_source: "docker-compose.yml (profile: soc)"
     legacy_field: soc
     category: aptl_backend_responsibility
-    aces_target: ACES backend manifest capability claim
+    aces_target: ACES backend profile toggle; node-local SOC facts are routed through node-specific ACES SDL rows
     runtime_owner: AptlConfig.containers.soc -> ContainerSettings.enabled_profiles()
-    validation_evidence: tests/test_consistency.py
-    blocking_followup: "#320"
-    notes: Suricata + MISP + TheHive + Cortex + Shuffle + Wazuh sidecars.
+    validation_evidence: tests/test_consistency.py + tests/test_techvault_classification_audit.py
+    blocking_followup: n/a
+    notes: Profile enablement remains a delivery toggle. Participant-visible Shuffle backend state is encoded by scen.techvault.shuffle-backend-inventory; other SOC service inventories need their own node rows when brought into TechVault scope.
 
   - id: compose.profile.enterprise
     surface: docker_compose_topology
     legacy_source: "docker-compose.yml (profile: enterprise)"
     legacy_field: enterprise
     category: aptl_backend_responsibility
-    aces_target: ACES infrastructure realization
+    aces_target: ACES backend profile toggle; scenario node membership is routed through node-specific ACES SDL rows
     runtime_owner: AptlConfig.containers.enterprise -> ContainerSettings.enabled_profiles()
-    validation_evidence: tests/test_consistency.py
-    blocking_followup: "#320"
-    notes: ad, db, webapp, workstation.
+    validation_evidence: tests/test_consistency.py + tests/test_techvault_classification_audit.py
+    blocking_followup: n/a
+    notes: Profile enablement remains a delivery toggle. The TechVault AD, DB, webapp, and other participant-visible enterprise node facts belong in nodes.* and infrastructure.* rows rather than this Compose profile row.
 
 
   - id: compose.service.db
@@ -589,8 +611,30 @@ rows:
     aces_target: ACES nodes.webapp + infrastructure.webapp + conditions.webapp-http-ready + relationships.webapp-connects-db
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/webapp/ + scenarios/techvault.sdl.yaml + tests/test_webapp_inventory.py
-    blocking_followup: "#321 / #324"
-    notes: Runtime evidence and ACES-expressible fields captured by issue #330; APTL backend consumption remains with the cited follow-ups.
+    blocking_followup: n/a
+    notes: Runtime evidence and ACES-expressible fields captured by issue #330 and later ACES runtime-profile landings; no known remaining expressivity blocker for the catalogued webapp steady-state inventory.
+
+  - id: compose.service.shuffle-backend
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (service: shuffle-backend)"
+    legacy_field: shuffle-backend
+    category: aces_sdl
+    aces_target: ACES nodes.shuffle-backend + infrastructure.shuffle-backend + runtime
+    runtime_owner: n/a
+    validation_evidence: docs/aces/inventory/shuffle-backend/ + scenarios/techvault.sdl.yaml + tests/test_techvault_classification_audit.py
+    blocking_followup: n/a
+    notes: Shuffle backend service identity, network attachment, 5001/tcp API listener, persistent state volume, Docker socket bind, package inventory, and Trivy scanner state are now represented by the TechVault SDL.
+
+  - id: compose.service.wazuh-manager
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (service: wazuh.manager)"
+    legacy_field: wazuh.manager
+    category: aces_sdl
+    aces_target: ACES nodes.wazuh-manager + infrastructure.wazuh-manager + runtime + conditions.wazuh-api-ready
+    runtime_owner: n/a
+    validation_evidence: docker-compose.yml + scenarios/techvault.sdl.yaml + tests/test_techvault_classification_audit.py
+    blocking_followup: n/a
+    notes: Wazuh manager service, API, three network attachments, Compose healthcheck via conditions.wazuh-api-ready, runtime environment policy, mounts, and custom decoder/rule files are now represented by the TechVault SDL.
 
   - id: compose.profile.victim
     surface: docker_compose_topology
@@ -684,56 +728,56 @@ rows:
     surface: docker_compose_topology
     legacy_source: docker-compose.yml (networks)
     legacy_field: aptl-security
-    category: aptl_backend_responsibility
-    aces_target: ACES network topology surface
-    runtime_owner: docker-compose networks
-    validation_evidence: tests/test_consistency.py (network presence)
-    blocking_followup: "#320"
-    notes: SOC + Wazuh segment.
+    category: aces_sdl
+    aces_target: ACES nodes.security-net + infrastructure.security-net properties
+    runtime_owner: n/a
+    validation_evidence: tests/test_consistency.py (network presence) + tests/test_techvault_classification_audit.py
+    blocking_followup: n/a
+    notes: Scenario segment CIDR/gateway/isolation metadata is encoded in TechVault SDL; Compose remains the backend bridge/IPAM realization.
 
   - id: compose.network.aptl-dmz
     surface: docker_compose_topology
     legacy_source: docker-compose.yml (networks)
     legacy_field: aptl-dmz
-    category: aptl_backend_responsibility
-    aces_target: ACES network topology surface
-    runtime_owner: docker-compose networks
-    validation_evidence: tests/test_consistency.py
-    blocking_followup: "#320"
-    notes: DMZ segment for external-facing services.
+    category: aces_sdl
+    aces_target: ACES nodes.dmz-net + infrastructure.dmz-net properties
+    runtime_owner: n/a
+    validation_evidence: tests/test_consistency.py + tests/test_techvault_classification_audit.py
+    blocking_followup: n/a
+    notes: Scenario segment CIDR/gateway/internal metadata is encoded in TechVault SDL; Compose remains the backend bridge/IPAM realization.
 
   - id: compose.network.aptl-internal
     surface: docker_compose_topology
     legacy_source: docker-compose.yml (networks)
     legacy_field: aptl-internal
-    category: aptl_backend_responsibility
-    aces_target: ACES network topology surface
-    runtime_owner: docker-compose networks
-    validation_evidence: tests/test_consistency.py
-    blocking_followup: "#320"
-    notes: Enterprise internal segment (ADR-006).
+    category: aces_sdl
+    aces_target: ACES nodes.internal-net + infrastructure.internal-net properties
+    runtime_owner: n/a
+    validation_evidence: tests/test_consistency.py + tests/test_techvault_classification_audit.py
+    blocking_followup: n/a
+    notes: Scenario segment CIDR/gateway/internal metadata is encoded in TechVault SDL; Compose remains the backend bridge/IPAM realization.
 
   - id: compose.network.aptl-redteam
     surface: docker_compose_topology
     legacy_source: docker-compose.yml (networks)
     legacy_field: aptl-redteam
-    category: aptl_backend_responsibility
-    aces_target: ACES network topology surface
-    runtime_owner: docker-compose networks
-    validation_evidence: tests/test_consistency.py
-    blocking_followup: "#320"
-    notes: Red-team segment isolating Kali (ADR-006).
+    category: aces_sdl
+    aces_target: ACES nodes.redteam-net + infrastructure.redteam-net properties
+    runtime_owner: n/a
+    validation_evidence: tests/test_consistency.py + tests/test_techvault_classification_audit.py
+    blocking_followup: n/a
+    notes: Scenario segment CIDR/gateway/internal metadata is encoded in TechVault SDL; Compose remains the backend bridge/IPAM realization.
 
   - id: compose.volumes.summary
     surface: docker_compose_topology
     legacy_source: docker-compose.yml (volumes)
     legacy_field: named-volume conventions (43 volumes)
-    category: aptl_backend_responsibility
-    aces_target: n/a (backend realization detail)
-    runtime_owner: docker-compose volume declarations
-    validation_evidence: tests/test_consistency.py (volume references close over services)
+    category: validation_gate
+    aces_target: Per-node ACES runtime.mounts for participant-visible mounts; n/a for bare backend-only volume declarations
+    runtime_owner: docker-compose volume declarations + node runtime inventories
+    validation_evidence: tests/test_consistency.py (volume references close over services) + tests/test_techvault_classification_audit.py
     blocking_followup: n/a
-    notes: 43 named volumes split into data / config / logs by component; per-volume rows would dilute review without adding signal.
+    notes: This summary row gates the split rather than classifying every volume as backend-only. Participant-visible mounts are encoded on webapp, db, kali, ad, shuffle-backend, and wazuh-manager runtime.mounts; remaining bare declarations stay with Compose realization.
 
   # ---- surface: aptl_config ---------------------------------------------
   # ContainerSettings toggles + LabSettings core fields. Survives cutover

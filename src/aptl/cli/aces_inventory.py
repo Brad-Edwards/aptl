@@ -1,4 +1,4 @@
-"""CLI commands for ACES inventory methodology artifacts."""
+"""CLI commands for APTL's downstream ACES inventory ledger artifacts."""
 
 from __future__ import annotations
 

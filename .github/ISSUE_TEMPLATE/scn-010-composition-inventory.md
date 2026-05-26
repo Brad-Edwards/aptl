@@ -9,7 +9,8 @@ assignees: []
 <!--
 Use this template when inventorying the cross-asset state that no single
 per-asset issue owns. This issue depends on every per-asset issue plus the
-ACES methodology issue.
+ACES-owned methodology:
+https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md
 -->
 
 ## Summary
@@ -33,13 +34,14 @@ expressivity issue.
 
 - **Parent tracker**: #317
 - **Requirement**: SCN-010
-- **Depends on**: ACES methodology issue Brad-Edwards/aces#<METHODOLOGY-ISSUE>;
+- **Depends on**: ACES methodology or expressivity issue Brad-Edwards/aces#<ISSUE>;
   every per-asset inventory issue (SCN-010 inventory: <asset>) — list
   them here as they get filed.
 
 ## Scope
 
-Apply the ACES asset-inventorying methodology to the inter-asset surface.
+Apply the ACES asset-inventorying methodology to the inter-asset surface:
+<https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md>.
 At minimum:
 
 - **Network topology**: every Docker network at steady state (CIDR,

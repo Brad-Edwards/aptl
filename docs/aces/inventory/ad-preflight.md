@@ -12,7 +12,8 @@ the issue phase marker, but the tool did not create a repo-local note file.
   `scenarios/techvault.sdl.yaml`.
 - Do not create an APTL-local schema, parser, validator, Pydantic model, or
   runtime exception hierarchy for AD inventory facts.
-- Reuse `docs/aces/inventory/asset-inventory-methodology.md`,
+- Reuse the ACES-owned inventory methodology at
+  <https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md>,
   `src/aptl/core/aces_inventory.py`, `src/aptl/cli/aces_inventory.py`, the
   existing webapp and db inventory bundles, and `docs/aces/parity-inventory.yaml`.
 - Redact AD administrator credentials, generated flags, Kerberos/Samba secret

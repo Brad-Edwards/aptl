@@ -1,10 +1,11 @@
 # Kali Container Steady-State Inventory
 
 This directory is the SCN-010 / issue #339 inventory bundle for the TechVault
-`kali` red-team container. It applies the methodology in
-`docs/aces/inventory/asset-inventory-methodology.md` to the realized
-`aptl-kali` container and is bound by the architecture preflight in
-`docs/aces/inventory/kali-preflight.md`.
+`kali` red-team container. It applies the ACES-owned asset inventory
+methodology documented in
+<https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md>
+to the realized `aptl-kali` container and is bound by the architecture
+preflight in `docs/aces/inventory/kali-preflight.md`.
 
 The `kali` service image was rebuilt from current `containers/kali/` source
 and the `aptl-kali` container recreated from that image immediately before

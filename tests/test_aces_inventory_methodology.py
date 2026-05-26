@@ -1,4 +1,4 @@
-"""Checks for the ACES backend asset inventory methodology proof pass."""
+"""Checks for APTL's downstream ACES inventory ledger proof pass."""
 
 from collections import Counter
 from pathlib import Path
@@ -31,6 +31,18 @@ SHUFFLE_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "shuffle-backend"
 SHUFFLE_DOC_PATH = SHUFFLE_DIR / "README.md"
 LEDGER_PATH = SHUFFLE_DIR / "mapping-ledger.yaml"
 EVIDENCE_DIR = SHUFFLE_DIR / "evidence"
+ACES_INVENTORY_DOC_URL = (
+    "https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/"
+    "asset-inventory-methodology.md"
+)
+ACES_ASSURANCE_REPORT_URL = (
+    "https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/"
+    "methodology-assurance-report.md"
+)
+ACES_CAPTURE_SKILL_URL = (
+    "https://github.com/Brad-Edwards/aces/tree/dev/.codex-skills/"
+    "aces-asset-inventory-capture"
+)
 
 IMAGE_DIGEST = (
     "ghcr.io/shuffle/shuffle-backend@"
@@ -76,54 +88,32 @@ def _json_file(name: str):
         return json.load(fh)
 
 
-def test_methodology_doc_exists_and_names_grounding():
+def test_methodology_doc_rehomes_authority_to_aces():
     text = METHODOLOGY_PATH.read_text(encoding="utf-8")
     required = (
-        "ACES #353",
-        "#330",
-        "#331",
-        "#332",
-        "APTL #353",
-        "TechVault",
-        "participant or agent could discover",
-        "attempt to specify it in ACES",
-        "no relevance filter",
-        "no accidental-versus-deliberate",
-        "not the semantic frame for extending the SDL",
-        "Attempt maximal ACES specification",
-        "Handle ACES gaps immediately",
-        "search the ACES issue tracker",
-        "create a new ACES issue",
-        "stop for discussion",
-        "Scope and Claim Boundary",
-        "Capture and Specification Recipe",
+        "APTL no longer owns or republishes",
+        "The canonical methodology now lives in ACES",
+        ACES_INVENTORY_DOC_URL,
+        ACES_ASSURANCE_REPORT_URL,
+        ACES_CAPTURE_SKILL_URL,
+        "APTL remains a downstream implementation and validation target",
+        "TechVault evidence bundles",
         "mapping-ledger.yaml",
-        "blocked_by_aces_gap",
-        "blocked_by_aptl_gap",
+        "current reference ledger CLI",
         "aptl aces-inventory validate",
         "aptl aces-inventory gaps",
         "aptl aces-inventory schema",
-        "Plan correspondence checks",
-        "SLSA",
-        "in-toto",
-        "Tooling Baseline",
-        "Issue Breakdown Implication",
-        "10.1016/j.cose.2019.101636",
-        "10.1126/science.1213847",
-        "10.1145/2723872.2723882",
-        "10.1007/978-3-319-38756-7_4",
     )
     missing = [needle for needle in required if needle not in text]
-    assert not missing, f"Methodology doc missing expected anchors: {missing}"
+    assert not missing, f"Methodology redirect missing expected anchors: {missing}"
     forbidden = (
-        "Do not force every observed field into ACES SDL",
-        "Backend realization details, host inventory, generated configs, and runtime proof usually belong",
-        "participant-world inventory",
+        "APTL-local methodology spike",
+        "APTL is the reference reality",
+        "Capture and Specification Recipe",
+        "Issue Breakdown Implication",
     )
     offenders = [needle for needle in forbidden if needle in text]
-    assert not offenders, (
-        f"Methodology doc still contains old filtering rule: {offenders}"
-    )
+    assert not offenders, f"APTL still carries methodology authority: {offenders}"
 
 
 def test_shuffle_backend_note_declares_proof_scope():
@@ -147,37 +137,30 @@ def test_shuffle_backend_note_declares_proof_scope():
         "APTL #331",
         "APTL #332",
         "APTL #353",
-        "ACES #353",
+        "ACES docs as the canonical methodology owner",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Shuffle inventory note missing scope markers: {missing}"
     assert "No ACES SDL encoding or gap issues were filed" not in text
 
 
-def test_methodology_assurance_report_cites_best_practice_and_literature():
+def test_methodology_assurance_report_rehomes_authority_to_aces():
     text = ASSURANCE_REPORT_PATH.read_text(encoding="utf-8")
     required = (
-        "NIST SP 800-128",
-        "NIST SP 800-190",
-        "NTIA",
-        "CISA",
-        "CycloneDX",
-        "SPDX",
-        "Docker Build attestations",
-        "SLSA",
-        "in-toto",
-        "W3C PROV-DM",
-        "ACM Artifact Review",
-        "10.1126/science.1213847",
-        "10.1126/scitranslmed.aaf5027",
-        "10.1145/2723872.2723882",
-        "10.1016/j.cose.2019.101636",
-        "NASA-STD-7009",
-        "Remaining Limits",
-        "Required Bar For Later Asset Issues",
+        "APTL no longer owns or republishes",
+        "canonical ACES report",
+        ACES_ASSURANCE_REPORT_URL,
+        "APTL-specific assurance claims",
+        "per-asset evidence bundles",
+        "ledger records",
+        "aptl aces-inventory",
+        "downstream reference tooling",
+        "methodology and assurance rationale are ACES-owned",
     )
     missing = [needle for needle in required if needle not in text]
-    assert not missing, f"Assurance report missing citations/claims: {missing}"
+    assert not missing, f"Assurance report redirect missing anchors: {missing}"
+    assert "NIST SP 800-128" not in text
+    assert "This report reviews the APTL #353" not in text
 
 
 def test_mapping_ledger_validates_and_tracks_gap_handoff():

@@ -14,8 +14,12 @@ placeholder before opening the issue.
 Family is one of: target | attacker | defensive-wazuh-core |
 defensive-wazuh-sidecar | defensive-soc-app | defensive-soc-backing-store.
 
-The ACES methodology issue this depends on (Brad-Edwards/aces#<METHODOLOGY-ISSUE>)
-MUST already exist and be linked. If it doesn't, file that first.
+Use the ACES-owned methodology at:
+https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md
+
+The ACES methodology or expressivity issue this depends on
+(Brad-Edwards/aces#<ISSUE>) MUST already exist and be linked. If it doesn't,
+file that first.
 -->
 
 ## Summary
@@ -46,13 +50,14 @@ specific ACES expressivity issue.
 - **Family**: `<FAMILY>` (see template comment)
 - **Parent tracker**: #317
 - **Requirement**: SCN-010
-- **Depends on**: ACES methodology issue Brad-Edwards/aces#<METHODOLOGY-ISSUE>
+- **Depends on**: ACES methodology or expressivity issue Brad-Edwards/aces#<ISSUE>
   (and any other in-flight gap issues this asset surfaces)
 
 ## Scope
 
-Apply every dimension named by the ACES asset-inventorying methodology
-([link to methodology spec when it lands]). At minimum:
+Apply every dimension named by the ACES asset-inventorying methodology:
+<https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md>.
+At minimum:
 
 - **Image identity**: base image registry + digest, all parent layers,
   build args used at build time.

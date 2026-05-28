@@ -1,0 +1,108 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-dns PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "/usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf",
+      "gid": "0",
+      "name": "supervisord",
+      "path": "",
+      "pid": "1",
+      "start_time": "1779517113",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/named -g -c /etc/bind/named.conf -u bind",
+      "gid": "103",
+      "name": "named",
+      "path": "",
+      "pid": "7",
+      "start_time": "1779517116",
+      "uid": "102"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-execd",
+      "gid": "104",
+      "name": "wazuh-execd",
+      "path": "",
+      "pid": "387",
+      "start_time": "1779517169",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/bin/bash /opt/aptl/wazuh/wazuh-agent.sh",
+      "gid": "0",
+      "name": "wazuh-agent.sh",
+      "path": "",
+      "pid": "391",
+      "start_time": "1779517170",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-execd",
+      "gid": "104",
+      "name": "wazuh-execd",
+      "path": "",
+      "pid": "884",
+      "start_time": "1779517229",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-agentd",
+      "gid": "104",
+      "name": "wazuh-agentd",
+      "path": "",
+      "pid": "895",
+      "start_time": "1779517230",
+      "uid": "103"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-syscheckd",
+      "gid": "104",
+      "name": "wazuh-syscheckd",
+      "path": "",
+      "pid": "910",
+      "start_time": "1779517231",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-logcollector",
+      "gid": "104",
+      "name": "wazuh-logcollec",
+      "path": "",
+      "pid": "922",
+      "start_time": "1779517232",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-modulesd",
+      "gid": "0",
+      "name": "wazuh-modulesd",
+      "path": "",
+      "pid": "936",
+      "start_time": "1779517232",
+      "uid": "0"
+    },
+    {
+      "cmdline": "tail -F /var/ossec/logs/ossec.log",
+      "gid": "0",
+      "name": "tail",
+      "path": "",
+      "pid": "954",
+      "start_time": "1779517235",
+      "uid": "0"
+    },
+    {
+      "cmdline": "sleep 5",
+      "gid": "0",
+      "name": "sleep",
+      "path": "",
+      "pid": "339687",
+      "start_time": "1779941364",
+      "uid": "0"
+    }
+  ]
+}

@@ -77665,6 +77665,3673 @@ nodes:
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27139
         scanner_version: 0.70.0
 
+  dns:
+    type: VM
+    description: TechVault BIND DNS container steady-state inventory.
+    os: linux
+    os_version: Ubuntu 22.04.5 LTS
+    source:
+      name: aptl-dns
+      version: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+      build:
+        description: First-party custom DNS image built from containers/dns/Dockerfile plus shared in-process Wazuh agent sources.
+        base_image: ubuntu:22.04
+        dockerfile_path: containers/dns/Dockerfile
+        instructions:
+        - instruction: from
+          arguments:
+          - ubuntu:22.04
+        - instruction: env
+          arguments:
+          - DEBIAN_FRONTEND=noninteractive
+        - instruction: run
+          arguments:
+          - apt-get update && apt-get install -y bind9 bind9-utils dnsutils rsyslog iptables supervisor && rm -rf /var/lib/apt/lists/*
+        - instruction: run
+          arguments:
+          - mkdir -p /var/log/named && chown bind:bind /var/log/named
+        - instruction: copy
+          arguments:
+          - containers/_wazuh-agent/install.sh
+          - /tmp/install-wazuh.sh
+        - instruction: copy
+          arguments:
+          - containers/_wazuh-agent/aptl-firewall-drop.sh
+          - /tmp/aptl-firewall-drop.sh
+        - instruction: copy
+          arguments:
+          - config/wazuh_cluster/etc/lists/active-response-whitelist
+          - /tmp/active-response-whitelist
+        - instruction: run
+          arguments:
+          - /tmp/install-wazuh.sh && rm /tmp/install-wazuh.sh /tmp/aptl-firewall-drop.sh /tmp/active-response-whitelist
+        - instruction: copy
+          arguments:
+          - containers/_wazuh-agent/ossec.conf.template
+          - /opt/aptl/wazuh/ossec.conf.template
+        - instruction: copy
+          arguments:
+          - containers/_wazuh-agent/wazuh-agent.sh
+          - /opt/aptl/wazuh/wazuh-agent.sh
+        - instruction: run
+          arguments:
+          - chmod +x /opt/aptl/wazuh/wazuh-agent.sh
+        - instruction: copy
+          arguments:
+          - containers/dns/named.conf
+          - /etc/bind/named.conf
+        - instruction: copy
+          arguments:
+          - containers/dns/zones/
+          - /etc/bind/zones/
+        - instruction: copy
+          arguments:
+          - containers/dns/supervisord.conf
+          - /etc/supervisor/conf.d/dns.conf
+        - instruction: expose
+          arguments:
+          - 53/tcp
+          - 53/udp
+        - instruction: cmd
+          arguments:
+          - /usr/bin/supervisord
+          - -n
+          - -c
+          - /etc/supervisor/supervisord.conf
+        layers:
+        - created_by: CMD ["/usr/bin/supervisord" "-n" "-c" "/etc/supervisor/supervisord.conf"]
+          size: 0
+          empty: true
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: EXPOSE [53/tcp 53/udp]
+          size: 0
+          empty: true
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: 'COPY containers/dns/supervisord.conf /etc/supervisor/conf.d/dns.conf # buildkit'
+          size: 20500
+          empty: false
+          digest: sha256:61e95484bdf0f744d9c1a488a00939926909a34f88bfb39e47b39ab9bcc31634
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: 'COPY containers/dns/zones/ /etc/bind/zones/ # buildkit'
+          size: 24600
+          empty: false
+          digest: sha256:b628e05b623ecc15f96fbedb7e7ed0bff6ff22ba7afe28b221313b88f107d6de
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: 'COPY containers/dns/named.conf /etc/bind/named.conf # buildkit'
+          size: 16400
+          empty: false
+          digest: sha256:ee295546b5a638f6c391a704ff7a933c017e935f3233b4ecadcec220529d963f
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: 'RUN /bin/sh -c chmod +x /opt/aptl/wazuh/wazuh-agent.sh # buildkit'
+          size: 4100
+          empty: false
+          digest: sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: 'COPY containers/_wazuh-agent/wazuh-agent.sh /opt/aptl/wazuh/wazuh-agent.sh # buildkit'
+          size: 24600
+          empty: false
+          digest: sha256:761e5cd42d45668ad3dda45fc9c9578eb1cc2680d5f35e684b5d445bfe50fa87
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: 'COPY containers/_wazuh-agent/ossec.conf.template /opt/aptl/wazuh/ossec.conf.template # buildkit'
+          size: 20500
+          empty: false
+          digest: sha256:c275a75051edd63110bb0a6235a691a3d08531bec605794dd4e6b9a054366595
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: RUN /bin/sh -c /tmp/install-wazuh.sh &&
+          size: 0
+          empty: true
+          description: 'Docker history comment: 39.9MB    buildkit.dockerfile.v0.'
+        - created_by: 'COPY config/wazuh_cluster/etc/lists/active-response-whitelist /tmp/active-response-whitelist # buildkit'
+          size: 12300
+          empty: false
+          digest: sha256:3efddbd8233094cb2ce79b6eb191145b273553a6310c3e1a8bb78d290cdce7b6
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: 'COPY containers/_wazuh-agent/aptl-firewall-drop.sh /tmp/aptl-firewall-drop.sh # buildkit'
+          size: 16400
+          empty: false
+          digest: sha256:75db965d84e9b7d971d4555ba8bc782f95b76efafa67ff1b6ddbd2802dccab42
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: 'COPY containers/_wazuh-agent/install.sh /tmp/install-wazuh.sh # buildkit'
+          size: 12300
+          empty: false
+          digest: sha256:ee8dc45fbba6e691eaeca84dbadff2b605ec5b180761c09521e8ba5a64fb0fff
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: 'RUN /bin/sh -c mkdir -p /var/log/named && chown bind:bind /var/log/named # buildkit'
+          size: 16400
+          empty: false
+          digest: sha256:b84e8e457dc0fee3212005de2e43d49386f0aac5528b869fcefefe93e51cec4f
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: RUN /bin/sh -c apt-get update && apt-get install -y
+          size: 0
+          empty: true
+          description: 'Docker history comment: bind9-utils     dnsutils     rsyslog     iptables     supervisor     && rm -rf /var/lib/apt/lists/* # buildkit   93MB      buildkit.dockerfile.v0.'
+        - created_by: ENV DEBIAN_FRONTEND=noninteractive
+          size: 0
+          empty: true
+          description: 'Docker history comment: buildkit.dockerfile.v0.'
+        - created_by: '/bin/sh -c #(nop)'
+          size: 0
+          empty: true
+          description: 'Docker history comment: 0B.'
+        - created_by: '/bin/sh -c #(nop) ADD file:14c8897ef5107db11b35f5a0c05bdcb883c0a6daa83d07d4439865541f08514c in /'
+          size: 87700000
+          empty: false
+          digest: sha256:cd4af7f9f6439e1b8ae474dd5300b9895297c3eaf0b5fdbcc7577366da2689e7
+        - created_by: '/bin/sh -c #(nop)'
+          size: 0
+          empty: true
+          description: 'Docker history comment: 0B.'
+        - created_by: '/bin/sh -c #(nop)'
+          size: 0
+          empty: true
+          description: 'Docker history comment: 0B.'
+        - created_by: '/bin/sh -c #(nop)'
+          size: 0
+          empty: true
+          description: 'Docker history comment: 0B.'
+        build_args: []
+        copied_sources:
+        - source_path: containers/_wazuh-agent/install.sh
+          destination_path: /tmp/install-wazuh.sh
+        - source_path: containers/_wazuh-agent/aptl-firewall-drop.sh
+          destination_path: /tmp/aptl-firewall-drop.sh
+        - source_path: config/wazuh_cluster/etc/lists/active-response-whitelist
+          destination_path: /tmp/active-response-whitelist
+        - source_path: containers/_wazuh-agent/ossec.conf.template
+          destination_path: /opt/aptl/wazuh/ossec.conf.template
+        - source_path: containers/_wazuh-agent/wazuh-agent.sh
+          destination_path: /opt/aptl/wazuh/wazuh-agent.sh
+        - source_path: containers/dns/named.conf
+          destination_path: /etc/bind/named.conf
+        - source_path: containers/dns/zones/
+          destination_path: /etc/bind/zones/
+        - source_path: containers/dns/supervisord.conf
+          destination_path: /etc/supervisor/conf.d/dns.conf
+        config:
+          entrypoint: []
+          command:
+          - /usr/bin/supervisord
+          - -n
+          - -c
+          - /etc/supervisor/supervisord.conf
+          working_directory: ''
+          exposed_ports:
+          - 53/tcp
+          - 53/udp
+          labels:
+            com.docker.compose.project: aptl
+            com.docker.compose.service: dns
+            com.docker.compose.version: 5.1.3
+            org.opencontainers.image.version: '22.04'
+          default_environment:
+          - name: PATH
+            value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            value_classification: plain
+          - name: DEBIAN_FRONTEND
+            value: noninteractive
+            value_classification: plain
+        source_inputs:
+        - identifier: containers-dns-dockerfile
+          source_path: containers/dns/Dockerfile
+          checksum: e2dd7678edd6aa934ca5e9a686de5cc6786f6d7f463d31af88406a8cd1d7ce6c
+          checksum_algorithm: sha256
+        - identifier: containers-dns-named-conf
+          source_path: containers/dns/named.conf
+          destination_path: /etc/bind/named.conf
+          checksum: 3df85c5e388295b0e321598c9932a78bfb18e47315263c6990e9e36cb1b62ee7
+          checksum_algorithm: sha256
+        - identifier: containers-dns-supervisord-conf
+          source_path: containers/dns/supervisord.conf
+          destination_path: /etc/supervisor/conf.d/dns.conf
+          checksum: d4c6e0336d0816f16f68608a2e8114b4872b42960c318b0708b14ec684e5d24a
+          checksum_algorithm: sha256
+        - identifier: containers-dns-zones-172-20-rev
+          source_path: containers/dns/zones/172.20.rev
+          destination_path: /etc/bind/zones/172.20.rev
+          checksum: ceb577f74bf3841ee10dae1a35e07afb921f9136bd4f9dbbd60d4afd1a4f0a02
+          checksum_algorithm: sha256
+        - identifier: containers-dns-zones-techvault-local-zone
+          source_path: containers/dns/zones/techvault.local.zone
+          destination_path: /etc/bind/zones/techvault.local.zone
+          checksum: d12de977f09275e342454a58ca004f7909ff808c29143b4c6d4ecb14db611a82
+          checksum_algorithm: sha256
+        - identifier: containers-wazuh-agent-install-sh
+          source_path: containers/_wazuh-agent/install.sh
+          destination_path: /tmp/install-wazuh.sh
+          checksum: e033ab09b11f1995d426cbf28dced8e8cb9922d2cdae160bec4dcecc76ae74ec
+          checksum_algorithm: sha256
+        - identifier: containers-wazuh-agent-wazuh-agent-sh
+          source_path: containers/_wazuh-agent/wazuh-agent.sh
+          destination_path: /opt/aptl/wazuh/wazuh-agent.sh
+          checksum: 0b0b2b8ba176edeeb37594acd2c5b4fca062b5d20b906c6b8581be8fcf97ac84
+          checksum_algorithm: sha256
+        - identifier: containers-wazuh-agent-ossec-conf-template
+          source_path: containers/_wazuh-agent/ossec.conf.template
+          destination_path: /opt/aptl/wazuh/ossec.conf.template
+          checksum: 35579f1c69c77a4792da5bccb15dc9feb0d1c623ba9c7df14cb7922ec113c301
+          checksum_algorithm: sha256
+        - identifier: containers-wazuh-agent-aptl-firewall-drop-sh
+          source_path: containers/_wazuh-agent/aptl-firewall-drop.sh
+          destination_path: /tmp/aptl-firewall-drop.sh
+          checksum: d25a0037be06ed558588cabfccd7cac394dfad24f61893ab6b96e33e8cc21c79
+          checksum_algorithm: sha256
+        - identifier: config-wazuh-cluster-etc-lists-active-response-whitelist
+          source_path: config/wazuh_cluster/etc/lists/active-response-whitelist
+          destination_path: /tmp/active-response-whitelist
+          checksum: 7543254be8d7661122e886f99192e27c65165a4c2e634051abf030eb41c138ef
+          checksum_algorithm: sha256
+        attestation:
+          status: absent
+          verification: not_applicable
+          evidence_reference: docs/aces/inventory/dns/mapping-ledger.yaml
+          attestation_type: none
+    resources:
+      ram: 536870912
+      cpu: 1
+    features:
+      techvault-dns-service: dns-root
+      dns-wazuh-agent: dns-root
+    conditions:
+      dns-soa-ready: dns-root
+    roles:
+      dns-root:
+        username: root
+      dns-bind:
+        username: bind
+      dns-wazuh:
+        username: wazuh
+    services:
+    - port: 53
+      protocol: tcp
+      name: dns-tcp
+    - port: 53
+      protocol: udp
+      name: dns-udp
+    runtime:
+      mounts:
+      - target: /
+        source: overlay
+        source_kind: other
+        filesystem_type: overlay
+        read_only: false
+        options:
+        - rw
+        - relatime
+        - lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51141/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31591/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31590/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31589/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31588/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31587/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31586/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31585/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31584/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31583/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31582/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31581/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31580/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31540/fs
+        - upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51149/fs
+        - workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51149/work
+        - nouserxattr
+        backend_generated: true
+        stability: generated
+        propagation: unknown
+      - target: /proc
+        source: proc
+        source_kind: other
+        filesystem_type: proc
+        read_only: false
+        options:
+        - rw
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /dev
+        source: tmpfs
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: false
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /dev/pts
+        source: devpts
+        source_kind: other
+        filesystem_type: devpts
+        read_only: false
+        options:
+        - rw
+        - nosuid
+        - noexec
+        - relatime
+        - gid=5
+        - mode=620
+        - ptmxmode=666
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /sys
+        source: sysfs
+        source_kind: other
+        filesystem_type: sysfs
+        read_only: true
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /sys/fs/cgroup
+        source: cgroup
+        source_kind: other
+        filesystem_type: cgroup2
+        read_only: true
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        - nsdelegate
+        - memory_recursiveprot
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /dev/mqueue
+        source: mqueue
+        source_kind: other
+        filesystem_type: mqueue
+        read_only: false
+        options:
+        - rw
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /dev/shm
+        source: shm
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: false
+        options:
+        - rw
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        - size=65536k
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /etc/resolv.conf
+        source: /dev/md2
+        source_kind: bind
+        filesystem_type: ext4
+        read_only: false
+        options:
+        - rw
+        - relatime
+        backend_generated: true
+        stability: generated
+        propagation: unknown
+      - target: /etc/hostname
+        source: /dev/md2
+        source_kind: bind
+        filesystem_type: ext4
+        read_only: false
+        options:
+        - rw
+        - relatime
+        backend_generated: true
+        stability: generated
+        propagation: unknown
+      - target: /etc/hosts
+        source: /dev/md2
+        source_kind: bind
+        filesystem_type: ext4
+        read_only: false
+        options:
+        - rw
+        - relatime
+        backend_generated: true
+        stability: generated
+        propagation: unknown
+      - target: /var/log/named
+        source: aptl_dns_logs
+        source_kind: volume
+        filesystem_type: ext4
+        read_only: false
+        options:
+        - rw
+        - relatime
+        backend_generated: false
+        stability: volume_backed
+        propagation: unknown
+      - target: /proc/bus
+        source: proc
+        source_kind: other
+        filesystem_type: proc
+        read_only: true
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/fs
+        source: proc
+        source_kind: other
+        filesystem_type: proc
+        read_only: true
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/irq
+        source: proc
+        source_kind: other
+        filesystem_type: proc
+        read_only: true
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/sys
+        source: proc
+        source_kind: other
+        filesystem_type: proc
+        read_only: true
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/sysrq-trigger
+        source: proc
+        source_kind: other
+        filesystem_type: proc
+        read_only: true
+        options:
+        - ro
+        - nosuid
+        - nodev
+        - noexec
+        - relatime
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/acpi
+        source: tmpfs
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: true
+        options:
+        - ro
+        - relatime
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/interrupts
+        source: tmpfs
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: false
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/kcore
+        source: tmpfs
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: false
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/keys
+        source: tmpfs
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: false
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/latency_stats
+        source: tmpfs
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: false
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/scsi
+        source: tmpfs
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: true
+        options:
+        - ro
+        - relatime
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /proc/timer_list
+        source: tmpfs
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: false
+        options:
+        - rw
+        - nosuid
+        - size=65536k
+        - mode=755
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /sys/devices/virtual/powercap
+        source: tmpfs
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: true
+        options:
+        - ro
+        - relatime
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      - target: /sys/firmware
+        source: tmpfs
+        source_kind: tmpfs
+        filesystem_type: tmpfs
+        read_only: true
+        options:
+        - ro
+        - relatime
+        - inode64
+        backend_generated: true
+        stability: runtime_created
+        propagation: unknown
+      filesystem_inventory:
+      - path: /etc/bind
+        entry_type: directory
+        owner_user: root
+        owner_group: bind
+        mode: '2755'
+        size: 4096
+        source_path: runtime-observed:/etc/bind
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+      - path: /etc/bind/named.conf
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        mode: '0644'
+        size: 877
+        source_path: containers/dns/named.conf
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 3df85c5e388295b0e321598c9932a78bfb18e47315263c6990e9e36cb1b62ee7
+        digest_algorithm: sha256
+      - path: /etc/bind/named.conf.default-zones
+        entry_type: file
+        owner_user: root
+        owner_group: bind
+        mode: '0644'
+        size: 498
+        source_path: runtime-observed:/etc/bind/named.conf.default-zones
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: cdbd74d58a310d0162b2c126f91829120059880209c7b26506d7a765d24137e8
+        digest_algorithm: sha256
+      - path: /etc/bind/named.conf.local
+        entry_type: file
+        owner_user: root
+        owner_group: bind
+        mode: '0644'
+        size: 165
+        source_path: runtime-observed:/etc/bind/named.conf.local
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 5fe2c6067a8c80f0972e21d91fb1773260b7825d569a3c3eb728038f246c6ba7
+        digest_algorithm: sha256
+      - path: /etc/bind/named.conf.options
+        entry_type: file
+        owner_user: root
+        owner_group: bind
+        mode: '0644'
+        size: 846
+        source_path: runtime-observed:/etc/bind/named.conf.options
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 5b22f8bff7d5e45bc49dc82b0901d363368d0dae527b094990fc69e28397ecf7
+        digest_algorithm: sha256
+      - path: /etc/bind/zones
+        entry_type: directory
+        owner_user: root
+        owner_group: bind
+        mode: '2755'
+        size: 4096
+        source_path: runtime-observed:/etc/bind/zones
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+      - path: /etc/bind/zones/172.20.rev
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        mode: '0644'
+        size: 883
+        source_path: containers/dns/zones/172.20.rev
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: ceb577f74bf3841ee10dae1a35e07afb921f9136bd4f9dbbd60d4afd1a4f0a02
+        digest_algorithm: sha256
+      - path: /etc/bind/zones/techvault.local.zone
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        mode: '0644'
+        size: 1539
+        source_path: containers/dns/zones/techvault.local.zone
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: d12de977f09275e342454a58ca004f7909ff808c29143b4c6d4ecb14db611a82
+        digest_algorithm: sha256
+      - path: /etc/supervisor/conf.d/dns.conf
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        mode: '0664'
+        size: 1100
+        source_path: containers/dns/supervisord.conf
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: d4c6e0336d0816f16f68608a2e8114b4872b42960c318b0708b14ec684e5d24a
+        digest_algorithm: sha256
+      - path: /opt/aptl/wazuh/ossec.conf.template
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        mode: '0664'
+        size: 670
+        source_path: containers/_wazuh-agent/ossec.conf.template
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 35579f1c69c77a4792da5bccb15dc9feb0d1c623ba9c7df14cb7922ec113c301
+        digest_algorithm: sha256
+      - path: /opt/aptl/wazuh/wazuh-agent.sh
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        mode: '0775'
+        size: 6902
+        source_path: containers/_wazuh-agent/wazuh-agent.sh
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: 0b0b2b8ba176edeeb37594acd2c5b4fca062b5d20b906c6b8581be8fcf97ac84
+        digest_algorithm: sha256
+      - path: /var/log/named
+        entry_type: directory
+        owner_user: bind
+        owner_group: bind
+        mode: '0755'
+        size: 4096
+        source_path: runtime-observed:/var/log/named
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: volume_backed
+        sensitivity: plain
+      - path: /var/log/named/default.log
+        entry_type: file
+        owner_user: bind
+        owner_group: bind
+        mode: '0644'
+        size: 0
+        source_path: runtime-observed:/var/log/named/default.log
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: log
+        sensitivity: plain
+        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        digest_algorithm: sha256
+      - path: /var/log/named/query.log
+        entry_type: file
+        owner_user: bind
+        owner_group: bind
+        mode: '0644'
+        size: 0
+        source_path: runtime-observed:/var/log/named/query.log
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: log
+        sensitivity: plain
+        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        digest_algorithm: sha256
+      - path: /var/ossec/etc/ossec.conf
+        entry_type: file
+        owner_user: root
+        owner_group: wazuh
+        mode: '0640'
+        size: 876
+        source_path: runtime-observed:/var/ossec/etc/ossec.conf
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+        content_digest: a162f0cea123be804c450506b6ff91bc22a6899f61dee7758d65ef1b2ec71ba8
+        digest_algorithm: sha256
+      - path: /etc/supervisor/conf.d
+        entry_type: directory
+        owner_user: root
+        owner_group: root
+        mode: '0755'
+        size: 4096
+        source_path: runtime-observed:/etc/supervisor/conf.d
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+      - path: /opt/aptl/wazuh
+        entry_type: directory
+        owner_user: root
+        owner_group: root
+        mode: '0755'
+        size: 4096
+        source_path: runtime-observed:/opt/aptl/wazuh
+        provenance: docs/aces/inventory/dns/evidence/filesystem-tree.txt; docs/aces/inventory/dns/evidence/filesystem-checksums.txt
+        stability: stable
+        sensitivity: plain
+      process:
+        pid: 1
+        user: root
+        command:
+        - /usr/bin/python3
+        - /usr/bin/supervisord
+        - -n
+        - -c
+        - /etc/supervisor/supervisord.conf
+        working_directory: /
+        name: supervisord
+        role: primary
+        description: PID 1 runs supervisord as observed in runtime-baseline.txt and docker top.
+      processes:
+      - name: named
+        pid: 7
+        parent_pid: 1
+        command:
+        - /usr/sbin/named
+        - -g
+        - -c
+        - /etc/bind/named.conf
+        - -u
+        - bind
+        role: worker
+        user: bind
+        description: Supervisor-managed BIND daemon.
+      - name: wazuh-execd
+        pid: 387
+        parent_pid: 1
+        command:
+        - /var/ossec/bin/wazuh-execd
+        role: agent
+        user: root
+        description: Wazuh active-response executor process observed in the process tree.
+      - name: wazuh-agent
+        pid: 391
+        parent_pid: 1
+        command:
+        - /bin/bash
+        - /opt/aptl/wazuh/wazuh-agent.sh
+        role: agent
+        user: root
+        description: In-process Wazuh bootstrap wrapper supervised alongside named.
+      - name: wazuh-agentd
+        pid: 895
+        parent_pid: 1
+        command:
+        - /var/ossec/bin/wazuh-agentd
+        role: agent
+        user: wazuh
+        description: Wazuh agent daemon.
+      - name: wazuh-syscheckd
+        pid: 910
+        parent_pid: 1
+        command:
+        - /var/ossec/bin/wazuh-syscheckd
+        role: agent
+        user: root
+        description: Wazuh syscheck daemon.
+      - name: wazuh-logcollector
+        pid: 922
+        parent_pid: 1
+        command:
+        - /var/ossec/bin/wazuh-logcollector
+        role: agent
+        user: root
+        description: Wazuh log collector daemon.
+      - name: wazuh-modulesd
+        pid: 936
+        parent_pid: 1
+        command:
+        - /var/ossec/bin/wazuh-modulesd
+        role: agent
+        user: root
+        description: Wazuh modules daemon.
+      - name: wazuh-log-tail
+        pid: 954
+        parent_pid: 391
+        command:
+        - tail
+        - -F
+        - /var/ossec/logs/ossec.log
+        role: agent
+        user: root
+        description: Tail process retained by the Wazuh wrapper so supervisord can track lifecycle.
+      environment:
+      - name: AGENT_NAME
+        value: aptl-dns-agent
+        value_classification: plain
+      - name: DEBIAN_FRONTEND
+        value: noninteractive
+        value_classification: plain
+      - name: HOME
+        value: /root
+        value_classification: plain
+      - name: HOSTNAME
+        value: ns1.techvault.local
+        value_classification: plain
+      - name: LOG_FORMAT
+        value: syslog
+        value_classification: plain
+      - name: LOG_PATHS
+        value: /var/log/named/query.log,/var/log/named/default.log
+        value_classification: plain
+      - name: PATH
+        value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        value_classification: plain
+      - name: PWD
+        value: /
+        value_classification: plain
+      - name: WAZUH_MANAGER
+        value: wazuh.manager
+        value_classification: plain
+      linux_capabilities:
+        required:
+        - CAP_NET_ADMIN
+        effective:
+        - CAP_CHOWN
+        - CAP_DAC_OVERRIDE
+        - CAP_FOWNER
+        - CAP_FSETID
+        - CAP_KILL
+        - CAP_SETGID
+        - CAP_SETUID
+        - CAP_SETPCAP
+        - CAP_NET_BIND_SERVICE
+        - CAP_NET_ADMIN
+        - CAP_NET_RAW
+        - CAP_SYS_CHROOT
+        - CAP_MKNOD
+        - CAP_AUDIT_WRITE
+        - CAP_SETFCAP
+        add:
+        - CAP_NET_ADMIN
+        description: Compose grants CAP_NET_ADMIN; PID 1 CapEff observed as 00000000a80435fb.
+      operational_policy:
+        restart: unless_stopped
+        resource_limits:
+          memory: 536870912
+          memory_swap: 1073741824
+        description: Compose restart policy unless-stopped and 512 MiB memory limit; Docker HostConfig MaximumRetryCount=0.
+      container:
+        entrypoint: []
+        command:
+        - /usr/bin/supervisord
+        - -n
+        - -c
+        - /etc/supervisor/supervisord.conf
+        log_driver: json-file
+        log_options: {}
+        namespaces:
+          cgroup: private
+          ipc: private
+          pid: ''
+          userns: ''
+          uts: ''
+        privileged: false
+        read_only_rootfs: false
+        publish_all_ports: false
+        autoremove: false
+        shm_size: 67108864
+        masked_paths:
+        - /proc/acpi
+        - /proc/asound
+        - /proc/interrupts
+        - /proc/kcore
+        - /proc/keys
+        - /proc/latency_stats
+        - /proc/sched_debug
+        - /proc/scsi
+        - /proc/timer_list
+        - /proc/timer_stats
+        - /sys/devices/virtual/powercap
+        - /sys/firmware
+        read_only_paths:
+        - /proc/bus
+        - /proc/fs
+        - /proc/irq
+        - /proc/sys
+        - /proc/sysrq-trigger
+        runtime_name: runc
+        devices: []
+        extra_hosts: []
+        dns: []
+        dns_options: []
+        dns_search: []
+        group_add: []
+        description: Observed Docker Config and HostConfig host/security fields for aptl-dns.
+      health:
+        status: healthy
+        failing_streak: 0
+        log:
+        - start: '2026-05-28T06:07:52.150450117+02:00'
+          end: '2026-05-28T06:07:52.204965225+02:00'
+          exit_code: 0
+          output: 'ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400
+
+            '
+          output_redacted: false
+        - start: '2026-05-28T06:08:07.20658587+02:00'
+          end: '2026-05-28T06:08:07.277442424+02:00'
+          exit_code: 0
+          output: 'ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400
+
+            '
+          output_redacted: false
+        - start: '2026-05-28T06:08:22.278372957+02:00'
+          end: '2026-05-28T06:08:22.34684695+02:00'
+          exit_code: 0
+          output: 'ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400
+
+            '
+          output_redacted: false
+        - start: '2026-05-28T06:08:37.348215957+02:00'
+          end: '2026-05-28T06:08:37.405165405+02:00'
+          exit_code: 0
+          output: 'ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400
+
+            '
+          output_redacted: false
+        - start: '2026-05-28T06:08:52.405722042+02:00'
+          end: '2026-05-28T06:08:52.469729194+02:00'
+          exit_code: 0
+          output: 'ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400
+
+            '
+          output_redacted: false
+        description: Observed Docker health status and dig SOA healthcheck output from docker inspect.
+      local_identity:
+        description: Full local identity database observed via getent passwd/group inside aptl-dns; no sudoers section was present in the captured baseline.
+        users:
+        - username: root
+          uid: 0
+          primary_gid: 0
+          primary_group: root
+          gecos: root
+          home: /root
+          shell: /bin/bash
+          disabled: false
+          no_login: false
+          provenance: image
+          stability: stable
+        - username: daemon
+          uid: 1
+          primary_gid: 1
+          primary_group: daemon
+          gecos: daemon
+          home: /usr/sbin
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: bin
+          uid: 2
+          primary_gid: 2
+          primary_group: bin
+          gecos: bin
+          home: /bin
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: sys
+          uid: 3
+          primary_gid: 3
+          primary_group: sys
+          gecos: sys
+          home: /dev
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: sync
+          uid: 4
+          primary_gid: 65534
+          primary_group: nogroup
+          gecos: sync
+          home: /bin
+          shell: /bin/sync
+          disabled: false
+          no_login: false
+          provenance: image
+          stability: stable
+        - username: games
+          uid: 5
+          primary_gid: 60
+          primary_group: games
+          gecos: games
+          home: /usr/games
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: man
+          uid: 6
+          primary_gid: 12
+          primary_group: man
+          gecos: man
+          home: /var/cache/man
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: lp
+          uid: 7
+          primary_gid: 7
+          primary_group: lp
+          gecos: lp
+          home: /var/spool/lpd
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: mail
+          uid: 8
+          primary_gid: 8
+          primary_group: mail
+          gecos: mail
+          home: /var/mail
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: news
+          uid: 9
+          primary_gid: 9
+          primary_group: news
+          gecos: news
+          home: /var/spool/news
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: uucp
+          uid: 10
+          primary_gid: 10
+          primary_group: uucp
+          gecos: uucp
+          home: /var/spool/uucp
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: proxy
+          uid: 13
+          primary_gid: 13
+          primary_group: proxy
+          gecos: proxy
+          home: /bin
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: www-data
+          uid: 33
+          primary_gid: 33
+          primary_group: www-data
+          gecos: www-data
+          home: /var/www
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: backup
+          uid: 34
+          primary_gid: 34
+          primary_group: backup
+          gecos: backup
+          home: /var/backups
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: list
+          uid: 38
+          primary_gid: 38
+          primary_group: list
+          gecos: Mailing List Manager
+          home: /var/list
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: irc
+          uid: 39
+          primary_gid: 39
+          primary_group: irc
+          gecos: ircd
+          home: /run/ircd
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: gnats
+          uid: 41
+          primary_gid: 41
+          primary_group: gnats
+          gecos: Gnats Bug-Reporting System (admin)
+          home: /var/lib/gnats
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: nobody
+          uid: 65534
+          primary_gid: 65534
+          primary_group: nogroup
+          gecos: nobody
+          home: /nonexistent
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: _apt
+          uid: 100
+          primary_gid: 65534
+          primary_group: nogroup
+          gecos: ''
+          home: /nonexistent
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: syslog
+          uid: 101
+          primary_gid: 102
+          primary_group: syslog
+          gecos: ''
+          home: /home/syslog
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: bind
+          uid: 102
+          primary_gid: 103
+          primary_group: bind
+          gecos: ''
+          home: /var/cache/bind
+          shell: /usr/sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        - username: wazuh
+          uid: 103
+          primary_gid: 104
+          primary_group: wazuh
+          gecos: ''
+          home: /var/ossec
+          shell: /sbin/nologin
+          disabled: true
+          no_login: true
+          provenance: image
+          stability: stable
+        groups:
+        - name: root
+          gid: 0
+          members: []
+          provenance: image
+        - name: daemon
+          gid: 1
+          members: []
+          provenance: image
+        - name: bin
+          gid: 2
+          members: []
+          provenance: image
+        - name: sys
+          gid: 3
+          members: []
+          provenance: image
+        - name: adm
+          gid: 4
+          members:
+          - syslog
+          provenance: image
+        - name: tty
+          gid: 5
+          members: []
+          provenance: image
+        - name: disk
+          gid: 6
+          members: []
+          provenance: image
+        - name: lp
+          gid: 7
+          members: []
+          provenance: image
+        - name: mail
+          gid: 8
+          members: []
+          provenance: image
+        - name: news
+          gid: 9
+          members: []
+          provenance: image
+        - name: uucp
+          gid: 10
+          members: []
+          provenance: image
+        - name: man
+          gid: 12
+          members: []
+          provenance: image
+        - name: proxy
+          gid: 13
+          members: []
+          provenance: image
+        - name: kmem
+          gid: 15
+          members: []
+          provenance: image
+        - name: dialout
+          gid: 20
+          members: []
+          provenance: image
+        - name: fax
+          gid: 21
+          members: []
+          provenance: image
+        - name: voice
+          gid: 22
+          members: []
+          provenance: image
+        - name: cdrom
+          gid: 24
+          members: []
+          provenance: image
+        - name: floppy
+          gid: 25
+          members: []
+          provenance: image
+        - name: tape
+          gid: 26
+          members: []
+          provenance: image
+        - name: sudo
+          gid: 27
+          members: []
+          provenance: image
+        - name: audio
+          gid: 29
+          members: []
+          provenance: image
+        - name: dip
+          gid: 30
+          members: []
+          provenance: image
+        - name: www-data
+          gid: 33
+          members: []
+          provenance: image
+        - name: backup
+          gid: 34
+          members: []
+          provenance: image
+        - name: operator
+          gid: 37
+          members: []
+          provenance: image
+        - name: list
+          gid: 38
+          members: []
+          provenance: image
+        - name: irc
+          gid: 39
+          members: []
+          provenance: image
+        - name: src
+          gid: 40
+          members: []
+          provenance: image
+        - name: gnats
+          gid: 41
+          members: []
+          provenance: image
+        - name: shadow
+          gid: 42
+          members: []
+          provenance: image
+        - name: utmp
+          gid: 43
+          members: []
+          provenance: image
+        - name: video
+          gid: 44
+          members: []
+          provenance: image
+        - name: sasl
+          gid: 45
+          members: []
+          provenance: image
+        - name: plugdev
+          gid: 46
+          members: []
+          provenance: image
+        - name: staff
+          gid: 50
+          members: []
+          provenance: image
+        - name: games
+          gid: 60
+          members: []
+          provenance: image
+        - name: users
+          gid: 100
+          members: []
+          provenance: image
+        - name: nogroup
+          gid: 65534
+          members: []
+          provenance: image
+        - name: crontab
+          gid: 101
+          members: []
+          provenance: image
+        - name: syslog
+          gid: 102
+          members: []
+          provenance: image
+        - name: bind
+          gid: 103
+          members: []
+          provenance: image
+        - name: wazuh
+          gid: 104
+          members: []
+          provenance: image
+        sudo_rules: []
+      network:
+        description: Container network realization observed from Docker inspect and Docker network inspect evidence for aptl-dns.
+        hostname: ns1.techvault.local
+        domainname: ''
+        endpoints:
+        - network: dmz-net
+          network_id: 3b7c4e642d7ebef4866bf953ff0b04bd39affb9639881b4938cdcb8a9dc09c16
+          network_id_stability: stable
+          endpoint_id: eb2e45bb214120473221dc4d67404506498050a22542a3d7731d31620cdea687
+          endpoint_id_stability: ephemeral
+          backend_generated: true
+          ip_address: 172.20.1.22
+          ip_prefix_length: 24
+          gateway: ''
+          mac_address: d6:91:1f:4c:ff:c7
+          aliases:
+          - aptl-dns
+          - dns
+          dns_names:
+          - aptl-dns
+          - dns
+          - ceed7fcfb8cf
+          - ns1.techvault.local
+          generated_dns_names:
+          - ceed7fcfb8cf
+          backend:
+            driver: bridge
+            ipam_driver: default
+            driver_options: {}
+            ipam_options: {}
+            description: Docker bridge network aptl_aptl-dmz with IPAM subnet 172.20.1.0/24 and gateway 172.20.1.1.
+          description: Docker endpoint for aptl-dns on aptl_aptl-dmz.
+        - network: internal-net
+          network_id: 5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f
+          network_id_stability: stable
+          endpoint_id: 43843734713a7c1cc6e230a499bd0c7cf020f058452e8c83920286e83a84913a
+          endpoint_id_stability: ephemeral
+          backend_generated: true
+          ip_address: 172.20.2.27
+          ip_prefix_length: 24
+          gateway: ''
+          mac_address: 7e:58:a5:13:f6:34
+          aliases:
+          - aptl-dns
+          - dns
+          dns_names:
+          - aptl-dns
+          - dns
+          - ceed7fcfb8cf
+          - ns1.techvault.local
+          generated_dns_names:
+          - ceed7fcfb8cf
+          backend:
+            driver: bridge
+            ipam_driver: default
+            driver_options: {}
+            ipam_options: {}
+            description: Docker bridge network aptl_aptl-internal with IPAM subnet 172.20.2.0/24 and gateway 172.20.2.1.
+          description: Docker endpoint for aptl-dns on aptl_aptl-internal.
+        - network: security-net
+          network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
+          network_id_stability: stable
+          endpoint_id: 5d23550a01131bf2d9bdae8c31002c3848de46d7851ff4303660343979103cc9
+          endpoint_id_stability: ephemeral
+          backend_generated: true
+          ip_address: 172.20.0.25
+          ip_prefix_length: 24
+          gateway: 172.20.0.1
+          mac_address: 36:a4:19:0b:50:e3
+          aliases:
+          - aptl-dns
+          - dns
+          dns_names:
+          - aptl-dns
+          - dns
+          - ceed7fcfb8cf
+          - ns1.techvault.local
+          generated_dns_names:
+          - ceed7fcfb8cf
+          backend:
+            driver: bridge
+            ipam_driver: default
+            driver_options: {}
+            ipam_options: {}
+            description: Docker bridge network aptl_aptl-security with IPAM subnet 172.20.0.0/24 and gateway 172.20.0.1.
+          description: Docker endpoint for aptl-dns on aptl_aptl-security.
+        published_ports:
+        - container_port: 53
+          protocol: tcp
+          host_ip: 0.0.0.0
+          host_port: 5353
+          description: Docker-published TCP DNS port 53 to host port 5353.
+        - container_port: 53
+          protocol: tcp
+          host_ip: '::'
+          host_port: 5353
+          description: Docker-published TCP DNS port 53 to host port 5353.
+        - container_port: 53
+          protocol: udp
+          host_ip: 0.0.0.0
+          host_port: 5353
+          description: Docker-published UDP DNS port 53 to host port 5353.
+        - container_port: 53
+          protocol: udp
+          host_ip: '::'
+          host_port: 5353
+          description: Docker-published UDP DNS port 53 to host port 5353.
+      dns_services:
+      - dns_service_id: techvault-bind
+        service: dns-tcp
+        implementation: bind
+        version: BIND 9.18.39-0ubuntu0.22.04.3-Ubuntu
+        name: TechVault authoritative and recursive DNS service
+        roles:
+        - authoritative
+        - recursive_resolver
+        - forwarding_resolver
+        configuration_file_refs:
+        - /etc/bind/named.conf
+        - /etc/bind/named.conf.default-zones
+        - /etc/bind/named.conf.local
+        - /etc/bind/named.conf.options
+        log_file_refs:
+        - /var/log/named/query.log
+        - /var/log/named/default.log
+        resolver_policy:
+          recursion_enabled: true
+          allow_recursion:
+          - 172.20.0.0/16
+          forwarders:
+          - address: 8.8.8.8
+            port: 53
+            transport: udp
+          - address: 8.8.4.4
+            port: 53
+            transport: udp
+          forwarding_policy: first
+          dnssec_validation: disabled
+          query_logging: true
+          default_logging: true
+          description: 'Observed from named.conf: recursion yes, allow-recursion 172.20.0.0/16, Google public resolvers as forwarders, querylog yes, dnssec-validation no.'
+        dynamic_update:
+          enabled: false
+          allowed_clients: []
+          key_names: []
+          policy: allow-update { none; }
+          description: Both authored zones declare allow-update none.
+        zones:
+        - zone_id: techvault-local
+          name: techvault.local.
+          kind: primary
+          purpose: forward
+          provenance: axfr
+          zone_file_refs:
+          - /etc/bind/zones/techvault.local.zone
+          transfer:
+            axfr_enabled: true
+            allowed_clients:
+            - 127.0.0.1
+            primary_servers:
+            - ns1.techvault.local.
+            description: AXFR succeeded from localhost during capture; wider zone-transfer ACL was not separately probed.
+          rrsets:
+          - rrset_id: forward-root-soa
+            owner: techvault.local.
+            record_type: soa
+            ttl: 86400
+            records:
+            - soa:
+                mname: ns1.techvault.local.
+                rname: admin.techvault.local.
+                serial: 2024010101
+                refresh: 3600
+                retry: 900
+                expire: 604800
+                minimum: 86400
+            provenance: axfr
+          - rrset_id: forward-root-mx
+            owner: techvault.local.
+            record_type: mx
+            ttl: 86400
+            records:
+            - mx:
+                preference: 10
+                exchange: mail.techvault.local.
+            provenance: axfr
+          - rrset_id: forward-root-ns
+            owner: techvault.local.
+            record_type: ns
+            ttl: 86400
+            records:
+            - target: ns1.techvault.local.
+            provenance: axfr
+          - rrset_id: srv-kerberos-tcp
+            owner: _kerberos._tcp.techvault.local.
+            record_type: srv
+            ttl: 86400
+            records:
+            - srv:
+                priority: 0
+                weight: 100
+                port: 88
+                target: dc.techvault.local.
+            provenance: axfr
+          - rrset_id: srv-kpasswd-tcp
+            owner: _kpasswd._tcp.techvault.local.
+            record_type: srv
+            ttl: 86400
+            records:
+            - srv:
+                priority: 0
+                weight: 100
+                port: 464
+                target: dc.techvault.local.
+            provenance: axfr
+          - rrset_id: srv-ldap-tcp
+            owner: _ldap._tcp.techvault.local.
+            record_type: srv
+            ttl: 86400
+            records:
+            - srv:
+                priority: 0
+                weight: 100
+                port: 389
+                target: dc.techvault.local.
+            provenance: axfr
+          - rrset_id: srv-kerberos-udp
+            owner: _kerberos._udp.techvault.local.
+            record_type: srv
+            ttl: 86400
+            records:
+            - srv:
+                priority: 0
+                weight: 100
+                port: 88
+                target: dc.techvault.local.
+            provenance: axfr
+          - rrset_id: srv-kpasswd-udp
+            owner: _kpasswd._udp.techvault.local.
+            record_type: srv
+            ttl: 86400
+            records:
+            - srv:
+                priority: 0
+                weight: 100
+                port: 464
+                target: dc.techvault.local.
+            provenance: axfr
+          - rrset_id: a-ad
+            owner: ad.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.2.10
+            provenance: axfr
+          - rrset_id: a-app
+            owner: app.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.2.20
+            provenance: axfr
+          - rrset_id: a-casemgmt
+            owner: casemgmt.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.18
+            provenance: axfr
+          - rrset_id: a-dashboard
+            owner: dashboard.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.11
+            provenance: axfr
+          - rrset_id: a-db
+            owner: db.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.2.11
+            provenance: axfr
+          - rrset_id: a-dc
+            owner: dc.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.2.10
+            provenance: axfr
+          - rrset_id: a-files
+            owner: files.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.2.12
+            provenance: axfr
+          - rrset_id: a-fileshare
+            owner: fileshare.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.2.12
+            provenance: axfr
+          - rrset_id: a-ids
+            owner: ids.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.15
+            provenance: axfr
+          - rrset_id: a-indexer
+            owner: indexer.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.12
+            provenance: axfr
+          - rrset_id: a-ldap
+            owner: ldap.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.2.10
+            provenance: axfr
+          - rrset_id: a-mail
+            owner: mail.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.1.21
+            provenance: axfr
+          - rrset_id: a-misp
+            owner: misp.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.16
+            provenance: axfr
+          - rrset_id: a-ns1
+            owner: ns1.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.1.22
+            provenance: axfr
+          - rrset_id: a-portal
+            owner: portal.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.1.20
+            provenance: axfr
+          - rrset_id: a-postgres
+            owner: postgres.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.2.11
+            provenance: axfr
+          - rrset_id: a-shuffle
+            owner: shuffle.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.20
+            provenance: axfr
+          - rrset_id: a-siem
+            owner: siem.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.10
+            provenance: axfr
+          - rrset_id: a-smtp
+            owner: smtp.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.1.21
+            provenance: axfr
+          - rrset_id: a-soar
+            owner: soar.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.20
+            provenance: axfr
+          - rrset_id: a-suricata
+            owner: suricata.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.15
+            provenance: axfr
+          - rrset_id: a-thehive
+            owner: thehive.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.18
+            provenance: axfr
+          - rrset_id: a-threatintel
+            owner: threatintel.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.16
+            provenance: axfr
+          - rrset_id: a-wazuh
+            owner: wazuh.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.0.10
+            provenance: axfr
+          - rrset_id: a-webapp
+            owner: webapp.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.1.20
+            provenance: axfr
+          - rrset_id: a-www
+            owner: www.techvault.local.
+            record_type: a
+            ttl: 86400
+            records:
+            - address: 172.20.1.20
+            provenance: axfr
+          description: Forward zone observed via AXFR and backed by /etc/bind/zones/techvault.local.zone.
+        - zone_id: reverse-20-172
+          name: 20.172.in-addr.arpa.
+          kind: primary
+          purpose: reverse
+          provenance: axfr
+          zone_file_refs:
+          - /etc/bind/zones/172.20.rev
+          transfer:
+            axfr_enabled: true
+            allowed_clients:
+            - 127.0.0.1
+            primary_servers:
+            - ns1.techvault.local.
+            description: AXFR succeeded from localhost during capture; wider zone-transfer ACL was not separately probed.
+          rrsets:
+          - rrset_id: reverse-root-soa
+            owner: 20.172.in-addr.arpa.
+            record_type: soa
+            ttl: 86400
+            records:
+            - soa:
+                mname: ns1.techvault.local.
+                rname: admin.techvault.local.
+                serial: 2024010101
+                refresh: 3600
+                retry: 900
+                expire: 604800
+                minimum: 86400
+            provenance: axfr
+          - rrset_id: reverse-root-ns
+            owner: 20.172.in-addr.arpa.
+            record_type: ns
+            ttl: 86400
+            records:
+            - target: ns1.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-10-0-20-172-in-addr-arpa
+            owner: 10.0.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: wazuh.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-11-0-20-172-in-addr-arpa
+            owner: 11.0.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: dashboard.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-12-0-20-172-in-addr-arpa
+            owner: 12.0.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: indexer.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-15-0-20-172-in-addr-arpa
+            owner: 15.0.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: suricata.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-16-0-20-172-in-addr-arpa
+            owner: 16.0.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: misp.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-18-0-20-172-in-addr-arpa
+            owner: 18.0.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: thehive.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-20-0-20-172-in-addr-arpa
+            owner: 20.0.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: shuffle.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-20-1-20-172-in-addr-arpa
+            owner: 20.1.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: webapp.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-21-1-20-172-in-addr-arpa
+            owner: 21.1.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: mail.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-22-1-20-172-in-addr-arpa
+            owner: 22.1.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: ns1.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-10-2-20-172-in-addr-arpa
+            owner: 10.2.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: dc.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-11-2-20-172-in-addr-arpa
+            owner: 11.2.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: db.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-12-2-20-172-in-addr-arpa
+            owner: 12.2.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: files.techvault.local.
+            provenance: axfr
+          - rrset_id: ptr-20-2-20-172-in-addr-arpa
+            owner: 20.2.20.172.in-addr.arpa.
+            record_type: ptr
+            ttl: 86400
+            records:
+            - target: app.techvault.local.
+            provenance: axfr
+          description: Reverse zone observed via AXFR and backed by /etc/bind/zones/172.20.rev.
+        settings:
+        - name: directory
+          value: /var/cache/bind
+          value_classification: plain
+          provenance: configuration_file
+        - name: listen-on
+          value: any
+          value_classification: plain
+          provenance: configuration_file
+        - name: listen-on-v6
+          value: none
+          value_classification: plain
+          provenance: configuration_file
+        - name: recursion
+          value: 'yes'
+          value_classification: plain
+          provenance: configuration_file
+        - name: allow-recursion
+          value: 172.20.0.0/16
+          value_classification: plain
+          provenance: configuration_file
+        - name: forwarders
+          value: 8.8.8.8,8.8.4.4
+          value_classification: plain
+          provenance: configuration_file
+        - name: querylog
+          value: 'yes'
+          value_classification: plain
+          provenance: configuration_file
+        - name: dnssec-validation
+          value: 'no'
+          value_classification: plain
+          provenance: configuration_file
+        - name: query-log-file
+          value: /var/log/named/query.log
+          value_classification: plain
+          provenance: configuration_file
+        - name: default-log-file
+          value: /var/log/named/default.log
+          value_classification: plain
+          provenance: configuration_file
+        - name: rndc-control-listeners
+          value: 127.0.0.1:953,[::1]:953
+          value_classification: plain
+          provenance: introspection
+          description: Loopback RNDC listener observed in ss output; no in-range network listener was observed for RNDC.
+        - name: local-axfr-observed
+          value: techvault.local,20.172.in-addr.arpa
+          value_classification: plain
+          provenance: introspection
+        description: BIND DNS daemon observed in aptl-dns, including authored zones, recursive forwarding policy, logging, dynamic-update posture, and localhost AXFR evidence.
+      packages:
+      - name: adduser
+        version: 3.118ubuntu5
+        architecture: all
+        manager: dpkg
+      - name: apt
+        version: 2.4.14
+        architecture: amd64
+        manager: dpkg
+      - name: base-files
+        version: 12ubuntu4.7
+        architecture: amd64
+        manager: dpkg
+      - name: base-passwd
+        version: 3.5.52build1
+        architecture: amd64
+        manager: dpkg
+      - name: bash
+        version: 5.1-6ubuntu1.1
+        architecture: amd64
+        manager: dpkg
+      - name: bind9
+        version: 1:9.18.39-0ubuntu0.22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: bind9-dnsutils
+        version: 1:9.18.39-0ubuntu0.22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: bind9-host
+        version: 1:9.18.39-0ubuntu0.22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: bind9-libs:amd64
+        version: 1:9.18.39-0ubuntu0.22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: bind9-utils
+        version: 1:9.18.39-0ubuntu0.22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: bsdutils
+        version: 1:2.37.2-4ubuntu3.5
+        architecture: amd64
+        manager: dpkg
+      - name: ca-certificates
+        version: 20240203~22.04.1
+        architecture: all
+        manager: dpkg
+      - name: coreutils
+        version: 8.32-4.1ubuntu1.3
+        architecture: amd64
+        manager: dpkg
+      - name: cron
+        version: 3.0pl1-137ubuntu3
+        architecture: amd64
+        manager: dpkg
+      - name: curl
+        version: 7.81.0-1ubuntu1.24
+        architecture: amd64
+        manager: dpkg
+      - name: dash
+        version: 0.5.11+git20210903+057cd650a4ed-3build1
+        architecture: amd64
+        manager: dpkg
+      - name: debconf
+        version: 1.5.79ubuntu1
+        architecture: all
+        manager: dpkg
+      - name: debianutils
+        version: 5.5-1ubuntu2
+        architecture: amd64
+        manager: dpkg
+      - name: diffutils
+        version: 1:3.8-0ubuntu2
+        architecture: amd64
+        manager: dpkg
+      - name: dirmngr
+        version: 2.2.27-3ubuntu2.5
+        architecture: amd64
+        manager: dpkg
+      - name: distro-info-data
+        version: 0.52ubuntu0.12
+        architecture: all
+        manager: dpkg
+      - name: dns-root-data
+        version: 2024071801~ubuntu0.22.04.1
+        architecture: all
+        manager: dpkg
+      - name: dnsutils
+        version: 1:9.18.39-0ubuntu0.22.04.3
+        architecture: all
+        manager: dpkg
+      - name: dpkg
+        version: 1.21.1ubuntu2.6
+        architecture: amd64
+        manager: dpkg
+      - name: e2fsprogs
+        version: 1.46.5-2ubuntu1.2
+        architecture: amd64
+        manager: dpkg
+      - name: findutils
+        version: 4.8.0-1ubuntu3
+        architecture: amd64
+        manager: dpkg
+      - name: gcc-12-base:amd64
+        version: 12.3.0-1ubuntu1~22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: gnupg
+        version: 2.2.27-3ubuntu2.5
+        architecture: all
+        manager: dpkg
+      - name: gnupg-l10n
+        version: 2.2.27-3ubuntu2.5
+        architecture: all
+        manager: dpkg
+      - name: gnupg-utils
+        version: 2.2.27-3ubuntu2.5
+        architecture: amd64
+        manager: dpkg
+      - name: gpg
+        version: 2.2.27-3ubuntu2.5
+        architecture: amd64
+        manager: dpkg
+      - name: gpg-agent
+        version: 2.2.27-3ubuntu2.5
+        architecture: amd64
+        manager: dpkg
+      - name: gpg-wks-client
+        version: 2.2.27-3ubuntu2.5
+        architecture: amd64
+        manager: dpkg
+      - name: gpg-wks-server
+        version: 2.2.27-3ubuntu2.5
+        architecture: amd64
+        manager: dpkg
+      - name: gpgconf
+        version: 2.2.27-3ubuntu2.5
+        architecture: amd64
+        manager: dpkg
+      - name: gpgsm
+        version: 2.2.27-3ubuntu2.5
+        architecture: amd64
+        manager: dpkg
+      - name: gpgv
+        version: 2.2.27-3ubuntu2.5
+        architecture: amd64
+        manager: dpkg
+      - name: grep
+        version: 3.7-1build1
+        architecture: amd64
+        manager: dpkg
+      - name: gzip
+        version: 1.10-4ubuntu4.1
+        architecture: amd64
+        manager: dpkg
+      - name: hostname
+        version: 3.23ubuntu2
+        architecture: amd64
+        manager: dpkg
+      - name: init-system-helpers
+        version: '1.62'
+        architecture: all
+        manager: dpkg
+      - name: iproute2
+        version: 5.15.0-1ubuntu2.1
+        architecture: amd64
+        manager: dpkg
+      - name: iptables
+        version: 1.8.7-1ubuntu5.2
+        architecture: amd64
+        manager: dpkg
+      - name: jq
+        version: 1.6-2.1ubuntu3.2
+        architecture: amd64
+        manager: dpkg
+      - name: libacl1:amd64
+        version: 2.3.1-1
+        architecture: amd64
+        manager: dpkg
+      - name: libapt-pkg6.0:amd64
+        version: 2.4.14
+        architecture: amd64
+        manager: dpkg
+      - name: libassuan0:amd64
+        version: 2.5.5-1build1
+        architecture: amd64
+        manager: dpkg
+      - name: libatm1:amd64
+        version: 1:2.5.1-4build2
+        architecture: amd64
+        manager: dpkg
+      - name: libattr1:amd64
+        version: 1:2.5.1-1build1
+        architecture: amd64
+        manager: dpkg
+      - name: libaudit-common
+        version: 1:3.0.7-1build1
+        architecture: all
+        manager: dpkg
+      - name: libaudit1:amd64
+        version: 1:3.0.7-1build1
+        architecture: amd64
+        manager: dpkg
+      - name: libblkid1:amd64
+        version: 2.37.2-4ubuntu3.5
+        architecture: amd64
+        manager: dpkg
+      - name: libbpf0:amd64
+        version: 1:0.5.0-1ubuntu22.04.1
+        architecture: amd64
+        manager: dpkg
+      - name: libbrotli1:amd64
+        version: 1.0.9-2build6
+        architecture: amd64
+        manager: dpkg
+      - name: libbsd0:amd64
+        version: 0.11.5-1
+        architecture: amd64
+        manager: dpkg
+      - name: libbz2-1.0:amd64
+        version: 1.0.8-5build1
+        architecture: amd64
+        manager: dpkg
+      - name: libc-bin
+        version: 2.35-0ubuntu3.13
+        architecture: amd64
+        manager: dpkg
+      - name: libc6:amd64
+        version: 2.35-0ubuntu3.13
+        architecture: amd64
+        manager: dpkg
+      - name: libcap-ng0:amd64
+        version: 0.7.9-2.2build3
+        architecture: amd64
+        manager: dpkg
+      - name: libcap2-bin
+        version: 1:2.44-1ubuntu0.22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: libcap2:amd64
+        version: 1:2.44-1ubuntu0.22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: libcom-err2:amd64
+        version: 1.46.5-2ubuntu1.2
+        architecture: amd64
+        manager: dpkg
+      - name: libcrypt1:amd64
+        version: 1:4.4.27-1
+        architecture: amd64
+        manager: dpkg
+      - name: libcurl4:amd64
+        version: 7.81.0-1ubuntu1.24
+        architecture: amd64
+        manager: dpkg
+      - name: libdb5.3:amd64
+        version: 5.3.28+dfsg1-0.8ubuntu3
+        architecture: amd64
+        manager: dpkg
+      - name: libdebconfclient0:amd64
+        version: 0.261ubuntu1
+        architecture: amd64
+        manager: dpkg
+      - name: libedit2:amd64
+        version: 3.1-20210910-1build1
+        architecture: amd64
+        manager: dpkg
+      - name: libelf1:amd64
+        version: 0.186-1ubuntu0.1
+        architecture: amd64
+        manager: dpkg
+      - name: libestr0:amd64
+        version: 0.1.10-2.1build3
+        architecture: amd64
+        manager: dpkg
+      - name: libexpat1:amd64
+        version: 2.4.7-1ubuntu0.7
+        architecture: amd64
+        manager: dpkg
+      - name: libext2fs2:amd64
+        version: 1.46.5-2ubuntu1.2
+        architecture: amd64
+        manager: dpkg
+      - name: libfastjson4:amd64
+        version: 0.99.9-1build2
+        architecture: amd64
+        manager: dpkg
+      - name: libffi8:amd64
+        version: 3.4.2-4
+        architecture: amd64
+        manager: dpkg
+      - name: libgcc-s1:amd64
+        version: 12.3.0-1ubuntu1~22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: libgcrypt20:amd64
+        version: 1.9.4-3ubuntu3
+        architecture: amd64
+        manager: dpkg
+      - name: libgmp10:amd64
+        version: 2:6.2.1+dfsg-3ubuntu1
+        architecture: amd64
+        manager: dpkg
+      - name: libgnutls30:amd64
+        version: 3.7.3-4ubuntu1.8
+        architecture: amd64
+        manager: dpkg
+      - name: libgpg-error0:amd64
+        version: 1.43-3
+        architecture: amd64
+        manager: dpkg
+      - name: libgssapi-krb5-2:amd64
+        version: 1.19.2-2ubuntu0.7
+        architecture: amd64
+        manager: dpkg
+      - name: libhogweed6:amd64
+        version: 3.7.3-1build2
+        architecture: amd64
+        manager: dpkg
+      - name: libicu70:amd64
+        version: 70.1-2
+        architecture: amd64
+        manager: dpkg
+      - name: libidn2-0:amd64
+        version: 2.3.2-2build1
+        architecture: amd64
+        manager: dpkg
+      - name: libip4tc2:amd64
+        version: 1.8.7-1ubuntu5.2
+        architecture: amd64
+        manager: dpkg
+      - name: libip6tc2:amd64
+        version: 1.8.7-1ubuntu5.2
+        architecture: amd64
+        manager: dpkg
+      - name: libjq1:amd64
+        version: 1.6-2.1ubuntu3.2
+        architecture: amd64
+        manager: dpkg
+      - name: libjson-c5:amd64
+        version: 0.15-3~ubuntu1.22.04.2
+        architecture: amd64
+        manager: dpkg
+      - name: libk5crypto3:amd64
+        version: 1.19.2-2ubuntu0.7
+        architecture: amd64
+        manager: dpkg
+      - name: libkeyutils1:amd64
+        version: 1.6.1-2ubuntu3
+        architecture: amd64
+        manager: dpkg
+      - name: libkrb5-3:amd64
+        version: 1.19.2-2ubuntu0.7
+        architecture: amd64
+        manager: dpkg
+      - name: libkrb5support0:amd64
+        version: 1.19.2-2ubuntu0.7
+        architecture: amd64
+        manager: dpkg
+      - name: libksba8:amd64
+        version: 1.6.0-2ubuntu0.2
+        architecture: amd64
+        manager: dpkg
+      - name: libldap-2.5-0:amd64
+        version: 2.5.20+dfsg-0ubuntu0.22.04.1
+        architecture: amd64
+        manager: dpkg
+      - name: liblmdb0:amd64
+        version: 0.9.24-1build2
+        architecture: amd64
+        manager: dpkg
+      - name: liblz4-1:amd64
+        version: 1.9.3-2build2
+        architecture: amd64
+        manager: dpkg
+      - name: liblzma5:amd64
+        version: 5.2.5-2ubuntu1
+        architecture: amd64
+        manager: dpkg
+      - name: libmaxminddb0:amd64
+        version: 1.5.2-1build2
+        architecture: amd64
+        manager: dpkg
+      - name: libmd0:amd64
+        version: 1.0.4-1build1
+        architecture: amd64
+        manager: dpkg
+      - name: libmnl0:amd64
+        version: 1.0.4-3build2
+        architecture: amd64
+        manager: dpkg
+      - name: libmount1:amd64
+        version: 2.37.2-4ubuntu3.5
+        architecture: amd64
+        manager: dpkg
+      - name: libmpdec3:amd64
+        version: 2.5.1-2build2
+        architecture: amd64
+        manager: dpkg
+      - name: libncurses6:amd64
+        version: 6.3-2ubuntu0.1
+        architecture: amd64
+        manager: dpkg
+      - name: libncursesw6:amd64
+        version: 6.3-2ubuntu0.1
+        architecture: amd64
+        manager: dpkg
+      - name: libnetfilter-conntrack3:amd64
+        version: 1.0.9-1
+        architecture: amd64
+        manager: dpkg
+      - name: libnettle8:amd64
+        version: 3.7.3-1build2
+        architecture: amd64
+        manager: dpkg
+      - name: libnfnetlink0:amd64
+        version: 1.0.1-3build3
+        architecture: amd64
+        manager: dpkg
+      - name: libnftnl11:amd64
+        version: 1.2.1-1build1
+        architecture: amd64
+        manager: dpkg
+      - name: libnghttp2-14:amd64
+        version: 1.43.0-1ubuntu0.3
+        architecture: amd64
+        manager: dpkg
+      - name: libnpth0:amd64
+        version: 1.6-3build2
+        architecture: amd64
+        manager: dpkg
+      - name: libnsl2:amd64
+        version: 1.3.0-2build2
+        architecture: amd64
+        manager: dpkg
+      - name: libonig5:amd64
+        version: 6.9.7.1-2build1
+        architecture: amd64
+        manager: dpkg
+      - name: libp11-kit0:amd64
+        version: 0.24.0-6build1
+        architecture: amd64
+        manager: dpkg
+      - name: libpam-cap:amd64
+        version: 1:2.44-1ubuntu0.22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: libpam-modules-bin
+        version: 1.4.0-11ubuntu2.6
+        architecture: amd64
+        manager: dpkg
+      - name: libpam-modules:amd64
+        version: 1.4.0-11ubuntu2.6
+        architecture: amd64
+        manager: dpkg
+      - name: libpam-runtime
+        version: 1.4.0-11ubuntu2.6
+        architecture: all
+        manager: dpkg
+      - name: libpam0g:amd64
+        version: 1.4.0-11ubuntu2.6
+        architecture: amd64
+        manager: dpkg
+      - name: libpcre2-8-0:amd64
+        version: 10.39-3ubuntu0.1
+        architecture: amd64
+        manager: dpkg
+      - name: libpcre3:amd64
+        version: 2:8.39-13ubuntu0.22.04.1
+        architecture: amd64
+        manager: dpkg
+      - name: libpopt0:amd64
+        version: 1.18-3build1
+        architecture: amd64
+        manager: dpkg
+      - name: libprocps8:amd64
+        version: 2:3.3.17-6ubuntu2.1
+        architecture: amd64
+        manager: dpkg
+      - name: libpsl5:amd64
+        version: 0.21.0-1.2build2
+        architecture: amd64
+        manager: dpkg
+      - name: libpython3-stdlib:amd64
+        version: 3.10.6-1~22.04.1
+        architecture: amd64
+        manager: dpkg
+      - name: libpython3.10-minimal:amd64
+        version: 3.10.12-1~22.04.15
+        architecture: amd64
+        manager: dpkg
+      - name: libpython3.10-stdlib:amd64
+        version: 3.10.12-1~22.04.15
+        architecture: amd64
+        manager: dpkg
+      - name: libreadline8:amd64
+        version: 8.1.2-1
+        architecture: amd64
+        manager: dpkg
+      - name: librtmp1:amd64
+        version: 2.4+20151223.gitfa8646d.1-2build4
+        architecture: amd64
+        manager: dpkg
+      - name: libsasl2-2:amd64
+        version: 2.1.27+dfsg2-3ubuntu1.2
+        architecture: amd64
+        manager: dpkg
+      - name: libsasl2-modules-db:amd64
+        version: 2.1.27+dfsg2-3ubuntu1.2
+        architecture: amd64
+        manager: dpkg
+      - name: libseccomp2:amd64
+        version: 2.5.3-2ubuntu3~22.04.1
+        architecture: amd64
+        manager: dpkg
+      - name: libselinux1:amd64
+        version: 3.3-1build2
+        architecture: amd64
+        manager: dpkg
+      - name: libsemanage-common
+        version: 3.3-1build2
+        architecture: all
+        manager: dpkg
+      - name: libsemanage2:amd64
+        version: 3.3-1build2
+        architecture: amd64
+        manager: dpkg
+      - name: libsepol2:amd64
+        version: 3.3-1build1
+        architecture: amd64
+        manager: dpkg
+      - name: libsmartcols1:amd64
+        version: 2.37.2-4ubuntu3.5
+        architecture: amd64
+        manager: dpkg
+      - name: libsqlite3-0:amd64
+        version: 3.37.2-2ubuntu0.5
+        architecture: amd64
+        manager: dpkg
+      - name: libss2:amd64
+        version: 1.46.5-2ubuntu1.2
+        architecture: amd64
+        manager: dpkg
+      - name: libssh-4:amd64
+        version: 0.9.6-2ubuntu0.22.04.7
+        architecture: amd64
+        manager: dpkg
+      - name: libssl3:amd64
+        version: 3.0.2-0ubuntu1.23
+        architecture: amd64
+        manager: dpkg
+      - name: libstdc++6:amd64
+        version: 12.3.0-1ubuntu1~22.04.3
+        architecture: amd64
+        manager: dpkg
+      - name: libsystemd0:amd64
+        version: 249.11-0ubuntu3.20
+        architecture: amd64
+        manager: dpkg
+      - name: libtasn1-6:amd64
+        version: 4.18.0-4ubuntu0.2
+        architecture: amd64
+        manager: dpkg
+      - name: libtinfo6:amd64
+        version: 6.3-2ubuntu0.1
+        architecture: amd64
+        manager: dpkg
+      - name: libtirpc-common
+        version: 1.3.2-2ubuntu0.1
+        architecture: all
+        manager: dpkg
+      - name: libtirpc3:amd64
+        version: 1.3.2-2ubuntu0.1
+        architecture: amd64
+        manager: dpkg
+      - name: libudev1:amd64
+        version: 249.11-0ubuntu3.20
+        architecture: amd64
+        manager: dpkg
+      - name: libunistring2:amd64
+        version: 1.0-1
+        architecture: amd64
+        manager: dpkg
+      - name: libuuid1:amd64
+        version: 2.37.2-4ubuntu3.5
+        architecture: amd64
+        manager: dpkg
+      - name: libuv1:amd64
+        version: 1.43.0-1ubuntu0.1
+        architecture: amd64
+        manager: dpkg
+      - name: libxml2:amd64
+        version: 2.9.13+dfsg-1ubuntu0.11
+        architecture: amd64
+        manager: dpkg
+      - name: libxtables12:amd64
+        version: 1.8.7-1ubuntu5.2
+        architecture: amd64
+        manager: dpkg
+      - name: libxxhash0:amd64
+        version: 0.8.1-1
+        architecture: amd64
+        manager: dpkg
+      - name: libzstd1:amd64
+        version: 1.4.8+dfsg-3build1
+        architecture: amd64
+        manager: dpkg
+      - name: login
+        version: 1:4.8.1-2ubuntu2.2
+        architecture: amd64
+        manager: dpkg
+      - name: logrotate
+        version: 3.19.0-1ubuntu1.1
+        architecture: amd64
+        manager: dpkg
+      - name: logsave
+        version: 1.46.5-2ubuntu1.2
+        architecture: amd64
+        manager: dpkg
+      - name: lsb-base
+        version: 11.1.0ubuntu4
+        architecture: all
+        manager: dpkg
+      - name: lsb-release
+        version: 11.1.0ubuntu4
+        architecture: all
+        manager: dpkg
+      - name: mawk
+        version: 1.3.4.20200120-3
+        architecture: amd64
+        manager: dpkg
+      - name: media-types
+        version: 7.0.0
+        architecture: all
+        manager: dpkg
+      - name: mount
+        version: 2.37.2-4ubuntu3.5
+        architecture: amd64
+        manager: dpkg
+      - name: ncurses-base
+        version: 6.3-2ubuntu0.1
+        architecture: all
+        manager: dpkg
+      - name: ncurses-bin
+        version: 6.3-2ubuntu0.1
+        architecture: amd64
+        manager: dpkg
+      - name: netbase
+        version: '6.3'
+        architecture: all
+        manager: dpkg
+      - name: netcat-openbsd
+        version: 1.218-4ubuntu1
+        architecture: amd64
+        manager: dpkg
+      - name: openssl
+        version: 3.0.2-0ubuntu1.23
+        architecture: amd64
+        manager: dpkg
+      - name: passwd
+        version: 1:4.8.1-2ubuntu2.2
+        architecture: amd64
+        manager: dpkg
+      - name: perl-base
+        version: 5.34.0-3ubuntu1.5
+        architecture: amd64
+        manager: dpkg
+      - name: pinentry-curses
+        version: 1.1.1-1build2
+        architecture: amd64
+        manager: dpkg
+      - name: procps
+        version: 2:3.3.17-6ubuntu2.1
+        architecture: amd64
+        manager: dpkg
+      - name: python3
+        version: 3.10.6-1~22.04.1
+        architecture: amd64
+        manager: dpkg
+      - name: python3-minimal
+        version: 3.10.6-1~22.04.1
+        architecture: amd64
+        manager: dpkg
+      - name: python3-pkg-resources
+        version: 59.6.0-1.2ubuntu0.22.04.3
+        architecture: all
+        manager: dpkg
+      - name: python3.10
+        version: 3.10.12-1~22.04.15
+        architecture: amd64
+        manager: dpkg
+      - name: python3.10-minimal
+        version: 3.10.12-1~22.04.15
+        architecture: amd64
+        manager: dpkg
+      - name: readline-common
+        version: 8.1.2-1
+        architecture: all
+        manager: dpkg
+      - name: rsyslog
+        version: 8.2112.0-2ubuntu2.2
+        architecture: amd64
+        manager: dpkg
+      - name: sed
+        version: 4.8-1ubuntu2.1
+        architecture: amd64
+        manager: dpkg
+      - name: sensible-utils
+        version: 0.0.17
+        architecture: all
+        manager: dpkg
+      - name: supervisor
+        version: 4.2.1-1ubuntu1
+        architecture: all
+        manager: dpkg
+      - name: sysvinit-utils
+        version: 3.01-1ubuntu1
+        architecture: amd64
+        manager: dpkg
+      - name: tar
+        version: 1.34+dfsg-1ubuntu0.1.22.04.2
+        architecture: amd64
+        manager: dpkg
+      - name: ubuntu-keyring
+        version: 2021.03.26
+        architecture: all
+        manager: dpkg
+      - name: ucf
+        version: '3.0043'
+        architecture: all
+        manager: dpkg
+      - name: usrmerge
+        version: 25ubuntu2
+        architecture: all
+        manager: dpkg
+      - name: util-linux
+        version: 2.37.2-4ubuntu3.5
+        architecture: amd64
+        manager: dpkg
+      - name: wazuh-agent
+        version: 4.12.0-1
+        architecture: amd64
+        manager: dpkg
+      - name: zlib1g:amd64
+        version: 1:1.2.11.dfsg-2ubuntu9.2
+        architecture: amd64
+        manager: dpkg
+      dependency_manifests:
+      - ecosystem: dpkg
+        path: /var/lib/dpkg/status
+        format: dpkg-query --show
+        name: ubuntu-system-packages
+        version: Ubuntu 22.04.5 LTS (Jammy Jellyfish)
+      - ecosystem: bind
+        path: /usr/sbin/named
+        format: named -v
+        name: bind9
+        version: BIND 9.18.39-0ubuntu0.22.04.3-Ubuntu
+      - ecosystem: bind-tools
+        path: /usr/bin/dig
+        format: dig -v
+        name: dig
+        version: DiG 9.18.39-0ubuntu0.22.04.3-Ubuntu
+      - ecosystem: python
+        path: /usr/bin/supervisord
+        format: dpkg-query supervisor
+        name: supervisor
+        version: 4.2.1-1ubuntu1
+      package_vulnerabilities:
+      - id: CVE-2026-3039
+        package_name: bind9
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3592
+        package_name: bind9
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5946
+        package_name: bind9
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5950
+        package_name: bind9
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3039
+        package_name: bind9-dnsutils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3592
+        package_name: bind9-dnsutils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5946
+        package_name: bind9-dnsutils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5950
+        package_name: bind9-dnsutils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3039
+        package_name: bind9-host
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3592
+        package_name: bind9-host
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5946
+        package_name: bind9-host
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5950
+        package_name: bind9-host
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3039
+        package_name: bind9-libs
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3592
+        package_name: bind9-libs
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5946
+        package_name: bind9-libs
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5950
+        package_name: bind9-libs
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3039
+        package_name: bind9-utils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3592
+        package_name: bind9-utils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5946
+        package_name: bind9-utils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5950
+        package_name: bind9-utils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-27456
+        package_name: bsdutils
+        installed_version: 1:2.37.2-4ubuntu3.5
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3039
+        package_name: dnsutils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3592
+        package_name: dnsutils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5946
+        package_name: dnsutils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5950
+        package_name: dnsutils
+        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2022-27943
+        package_name: gcc-12-base
+        installed_version: 12.3.0-1ubuntu1~22.04.3
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-27456
+        package_name: libblkid1
+        installed_version: 2.37.2-4ubuntu3.5
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2025-29481
+        package_name: libbpf0
+        installed_version: 1:0.5.0-1ubuntu22.04.1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-29481
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-4046
+        package_name: libc-bin
+        installed_version: 2.35-0ubuntu3.13
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4046
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-4437
+        package_name: libc-bin
+        installed_version: 2.35-0ubuntu3.13
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4437
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-4438
+        package_name: libc-bin
+        installed_version: 2.35-0ubuntu3.13
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4438
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-4046
+        package_name: libc6
+        installed_version: 2.35-0ubuntu3.13
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4046
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-4437
+        package_name: libc6
+        installed_version: 2.35-0ubuntu3.13
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4437
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-4438
+        package_name: libc6
+        installed_version: 2.35-0ubuntu3.13
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4438
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2025-1352
+        package_name: libelf1
+        installed_version: 0.186-1ubuntu0.1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-1352
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2025-1376
+        package_name: libelf1
+        installed_version: 0.186-1ubuntu0.1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-1376
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2025-66382
+        package_name: libexpat1
+        installed_version: 2.4.7-1ubuntu0.7
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-66382
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2022-27943
+        package_name: libgcc-s1
+        installed_version: 12.3.0-1ubuntu1~22.04.3
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-41989
+        package_name: libgcrypt20
+        installed_version: 1.9.4-3ubuntu3
+        fixed_version: 1.9.4-3ubuntu3.2
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-41989
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2024-2236
+        package_name: libgcrypt20
+        installed_version: 1.9.4-3ubuntu3
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-2236
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-33845
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-33845
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-33846
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-33846
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3832
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3832
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-3833
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3833
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-42009
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42009
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-42010
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42010
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-42011
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42011
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-42012
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42012
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-42013
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42013
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-42014
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42014
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-42015
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42015
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5260
+        package_name: libgnutls30
+        installed_version: 3.7.3-4ubuntu1.8
+        fixed_version: 3.7.3-4ubuntu1.9
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5260
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2025-5222
+        package_name: libicu70
+        installed_version: 70.1-2
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-5222
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-22185
+        package_name: liblmdb0
+        installed_version: 0.9.24-1build2
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-22185
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-27456
+        package_name: libmount1
+        installed_version: 2.37.2-4ubuntu3.5
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2023-50495
+        package_name: libncurses6
+        installed_version: 6.3-2ubuntu0.1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2023-50495
+        package_name: libncursesw6
+        installed_version: 6.3-2ubuntu0.1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2022-41409
+        package_name: libpcre2-8-0
+        installed_version: 10.39-3ubuntu0.1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41409
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2017-11164
+        package_name: libpcre3
+        installed_version: 2:8.39-13ubuntu0.22.04.1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2017-11164
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-2297
+        package_name: libpython3.10-minimal
+        installed_version: 3.10.12-1~22.04.15
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-2297
+        package_name: libpython3.10-stdlib
+        installed_version: 3.10.12-1~22.04.15
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-27456
+        package_name: libsmartcols1
+        installed_version: 2.37.2-4ubuntu3.5
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2022-27943
+        package_name: libstdc++6
+        installed_version: 12.3.0-1ubuntu1~22.04.3
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2023-7008
+        package_name: libsystemd0
+        installed_version: 249.11-0ubuntu3.20
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-7008
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2023-50495
+        package_name: libtinfo6
+        installed_version: 6.3-2ubuntu0.1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2023-7008
+        package_name: libudev1
+        installed_version: 249.11-0ubuntu3.20
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-7008
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-27456
+        package_name: libuuid1
+        installed_version: 2.37.2-4ubuntu3.5
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2022-4899
+        package_name: libzstd1
+        installed_version: 1.4.8+dfsg-3build1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-4899
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2023-29383
+        package_name: login
+        installed_version: 1:4.8.1-2ubuntu2.2
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29383
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2024-56433
+        package_name: login
+        installed_version: 1:4.8.1-2ubuntu2.2
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-27456
+        package_name: mount
+        installed_version: 2.37.2-4ubuntu3.5
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2023-50495
+        package_name: ncurses-base
+        installed_version: 6.3-2ubuntu0.1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2023-50495
+        package_name: ncurses-bin
+        installed_version: 6.3-2ubuntu0.1
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2023-29383
+        package_name: passwd
+        installed_version: 1:4.8.1-2ubuntu2.2
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29383
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2024-56433
+        package_name: passwd
+        installed_version: 1:4.8.1-2ubuntu2.2
+        fixed_version: ''
+        severity: low
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-2297
+        package_name: python3.10
+        installed_version: 3.10.12-1~22.04.15
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-2297
+        package_name: python3.10-minimal
+        installed_version: 3.10.12-1~22.04.15
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2025-45582
+        package_name: tar
+        installed_version: 1.34+dfsg-1ubuntu0.1.22.04.2
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-45582
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-5704
+        package_name: tar
+        installed_version: 1.34+dfsg-1ubuntu0.1.22.04.2
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5704
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
+      - id: CVE-2026-27456
+        package_name: util-linux
+        installed_version: 2.37.2-4ubuntu3.5
+        fixed_version: ''
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scan_time: '2026-05-28T04:09:14.803193569Z'
+        scanner_version: 0.70.0
 infrastructure:
   dmz-net:
     count: 1
@@ -77755,6 +81422,19 @@ infrastructure:
     description: Victim is attached only to the internal TechVault network with no host-published ports.
 
 
+  dns:
+    count: 1
+    links:
+    - dmz-net
+    - internal-net
+    - security-net
+    dependencies:
+    - wazuh-manager
+    properties:
+    - dmz-net: 172.20.1.22
+    - internal-net: 172.20.2.27
+    - security-net: 172.20.0.25
+    description: DNS is attached to DMZ, internal, and security networks with static IPs; host-published 5353 mappings are encoded under nodes.dns.runtime.network.
 features:
   techvault-postgres-service:
     type: Service
@@ -77879,6 +81559,22 @@ features:
     description: Falco package/configuration is present; observed service-manager state records Falco units disabled/inactive.
 
 
+  techvault-dns-service:
+    type: Service
+    source:
+      name: bind9
+      version: 9.18.39-0ubuntu0.22.04.3
+    environment:
+    - LOG_PATHS=/var/log/named/query.log,/var/log/named/default.log
+    - LOG_FORMAT=syslog
+    - WAZUH_MANAGER=wazuh.manager
+    - AGENT_NAME=aptl-dns-agent
+    dependencies:
+    - dns-wazuh-agent
+  dns-wazuh-agent:
+    type: Artifact
+    source: containers/_wazuh-agent
+    destination: /opt/aptl/wazuh
 conditions:
   db-postgres-ready:
     command: pg_isready -U techvault -d techvault
@@ -77941,6 +81637,12 @@ conditions:
     start_period: 30
 
 
+  dns-soa-ready:
+    command: dig @localhost techvault.local SOA +short || exit 1
+    interval: 15
+    timeout: 5
+    retries: 5
+    start_period: 30
 vulnerabilities:
   webapp-sqli-login:
     name: SQL injection in login
@@ -81696,6 +85398,110 @@ content:
     path: /etc/systemd/system/multi-user.target.wants/systemd-user-sessions.service
     sensitive: false
 
+  dns-dir-etc-bind:
+    type: Directory
+    target: dns
+    destination: /etc/bind
+  dns-file-etc-bind-named-conf:
+    type: File
+    target: dns
+    path: /etc/bind/named.conf
+    source:
+      name: containers/dns/named.conf
+      version: sha256:3df85c5e388295b0e321598c9932a78bfb18e47315263c6990e9e36cb1b62ee7
+  dns-file-etc-bind-named-conf-default-zones:
+    type: File
+    target: dns
+    path: /etc/bind/named.conf.default-zones
+    source:
+      name: runtime-observed:/etc/bind/named.conf.default-zones
+      version: sha256:cdbd74d58a310d0162b2c126f91829120059880209c7b26506d7a765d24137e8
+  dns-file-etc-bind-named-conf-local:
+    type: File
+    target: dns
+    path: /etc/bind/named.conf.local
+    source:
+      name: runtime-observed:/etc/bind/named.conf.local
+      version: sha256:5fe2c6067a8c80f0972e21d91fb1773260b7825d569a3c3eb728038f246c6ba7
+  dns-file-etc-bind-named-conf-options:
+    type: File
+    target: dns
+    path: /etc/bind/named.conf.options
+    source:
+      name: runtime-observed:/etc/bind/named.conf.options
+      version: sha256:5b22f8bff7d5e45bc49dc82b0901d363368d0dae527b094990fc69e28397ecf7
+  dns-dir-etc-bind-zones:
+    type: Directory
+    target: dns
+    destination: /etc/bind/zones
+  dns-file-etc-bind-zones-172-20-rev:
+    type: File
+    target: dns
+    path: /etc/bind/zones/172.20.rev
+    source:
+      name: containers/dns/zones/172.20.rev
+      version: sha256:ceb577f74bf3841ee10dae1a35e07afb921f9136bd4f9dbbd60d4afd1a4f0a02
+  dns-file-etc-bind-zones-techvault-local-zone:
+    type: File
+    target: dns
+    path: /etc/bind/zones/techvault.local.zone
+    source:
+      name: containers/dns/zones/techvault.local.zone
+      version: sha256:d12de977f09275e342454a58ca004f7909ff808c29143b4c6d4ecb14db611a82
+  dns-file-etc-supervisor-conf-d-dns-conf:
+    type: File
+    target: dns
+    path: /etc/supervisor/conf.d/dns.conf
+    source:
+      name: containers/dns/supervisord.conf
+      version: sha256:d4c6e0336d0816f16f68608a2e8114b4872b42960c318b0708b14ec684e5d24a
+  dns-file-opt-aptl-wazuh-ossec-conf-template:
+    type: File
+    target: dns
+    path: /opt/aptl/wazuh/ossec.conf.template
+    source:
+      name: containers/_wazuh-agent/ossec.conf.template
+      version: sha256:35579f1c69c77a4792da5bccb15dc9feb0d1c623ba9c7df14cb7922ec113c301
+  dns-file-opt-aptl-wazuh-wazuh-agent-sh:
+    type: File
+    target: dns
+    path: /opt/aptl/wazuh/wazuh-agent.sh
+    source:
+      name: containers/_wazuh-agent/wazuh-agent.sh
+      version: sha256:0b0b2b8ba176edeeb37594acd2c5b4fca062b5d20b906c6b8581be8fcf97ac84
+  dns-dir-var-log-named:
+    type: Directory
+    target: dns
+    destination: /var/log/named
+  dns-file-var-log-named-default-log:
+    type: File
+    target: dns
+    path: /var/log/named/default.log
+    source:
+      name: runtime-observed:/var/log/named/default.log
+      version: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  dns-file-var-log-named-query-log:
+    type: File
+    target: dns
+    path: /var/log/named/query.log
+    source:
+      name: runtime-observed:/var/log/named/query.log
+      version: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  dns-file-var-ossec-etc-ossec-conf:
+    type: File
+    target: dns
+    path: /var/ossec/etc/ossec.conf
+    source:
+      name: runtime-observed:/var/ossec/etc/ossec.conf
+      version: sha256:a162f0cea123be804c450506b6ff91bc22a6899f61dee7758d65ef1b2ec71ba8
+  dns-dir-etc-supervisor-conf-d:
+    type: Directory
+    target: dns
+    destination: /etc/supervisor/conf.d
+  dns-dir-opt-aptl-wazuh:
+    type: Directory
+    target: dns
+    destination: /opt/aptl/wazuh
 accounts:
   db-local-root:
     username: root
@@ -83232,6 +87038,24 @@ accounts:
     disabled: true
 
 
+  dns-local-bind:
+    username: bind
+    node: dns
+    auth_method: local-file
+    password_strength: none
+    shell: /usr/sbin/nologin
+    home: /var/cache/bind
+    disabled: true
+    description: BIND service account created by package installation and used by named.
+  dns-local-wazuh:
+    username: wazuh
+    node: dns
+    auth_method: local-file
+    password_strength: none
+    shell: /sbin/nologin
+    home: /var/ossec
+    disabled: true
+    description: In-process Wazuh agent service account.
 relationships:
   db-logs-forwarded-wazuh:
     type: connects_to
@@ -83292,8 +87116,8 @@ relationships:
   ad-forwards-dns:
     type: connects_to
     source: ad
-    target: internal-net
-    description: Samba internal DNS forwards unresolved queries to the configured DNS forwarder at 172.20.1.22.
+    target: dns
+    description: Samba internal DNS forwards unresolved queries to the TechVault DNS forwarder at 172.20.1.22.
     properties: {protocol: dns, port: "53", auth_method: none, forwarder: "172.20.1.22"}
   ad-forwards-wazuh:
     type: connects_to
@@ -83353,3 +87177,11 @@ relationships:
       protocol: syslog-and-wazuh-agent
       configured_manager: 172.20.2.30
       log_config: /etc/rsyslog.d/90-forward.conf
+  dns-forwards-wazuh:
+    type: connects_to
+    source: dns
+    target: wazuh-manager
+    description: DNS forwards BIND logs and Wazuh agent telemetry to the SOC stack.
+    properties:
+      protocol: syslog-and-wazuh-agent
+      log_paths: /var/log/named/query.log,/var/log/named/default.log

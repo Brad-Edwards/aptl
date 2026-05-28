@@ -1,0 +1,4 @@
+- Capture uses the already-running local lab and did not run aptl lab stop -v && aptl lab start; this is a steady-state observation, not clean-reset rebuild proof.
+- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; filesystem provenance is recorded in filesystem-tree.txt and filesystem-checksums.txt.
+- osquery installed_applications was unavailable in the digest-pinned Linux osquery scanner image.
+- osquery programs was unavailable in the digest-pinned Linux osquery scanner image.

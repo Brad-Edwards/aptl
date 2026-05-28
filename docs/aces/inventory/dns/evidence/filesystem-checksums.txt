@@ -1,0 +1,12 @@
+3df85c5e388295b0e321598c9932a78bfb18e47315263c6990e9e36cb1b62ee7  /etc/bind/named.conf
+cdbd74d58a310d0162b2c126f91829120059880209c7b26506d7a765d24137e8  /etc/bind/named.conf.default-zones
+5fe2c6067a8c80f0972e21d91fb1773260b7825d569a3c3eb728038f246c6ba7  /etc/bind/named.conf.local
+5b22f8bff7d5e45bc49dc82b0901d363368d0dae527b094990fc69e28397ecf7  /etc/bind/named.conf.options
+ceb577f74bf3841ee10dae1a35e07afb921f9136bd4f9dbbd60d4afd1a4f0a02  /etc/bind/zones/172.20.rev
+d12de977f09275e342454a58ca004f7909ff808c29143b4c6d4ecb14db611a82  /etc/bind/zones/techvault.local.zone
+d4c6e0336d0816f16f68608a2e8114b4872b42960c318b0708b14ec684e5d24a  /etc/supervisor/conf.d/dns.conf
+35579f1c69c77a4792da5bccb15dc9feb0d1c623ba9c7df14cb7922ec113c301  /opt/aptl/wazuh/ossec.conf.template
+0b0b2b8ba176edeeb37594acd2c5b4fca062b5d20b906c6b8581be8fcf97ac84  /opt/aptl/wazuh/wazuh-agent.sh
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /var/log/named/default.log
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /var/log/named/query.log
+a162f0cea123be804c450506b6ff91bc22a6899f61dee7758d65ef1b2ec71ba8  /var/ossec/etc/ossec.conf

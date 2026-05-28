@@ -1,0 +1,15 @@
+{
+  "table": "docker_images",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%aptl-victim%\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "created": "1778392971",
+      "id": "6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310",
+      "size_bytes": "882269299",
+      "tags": "aptl-victim:latest"
+    }
+  ]
+}

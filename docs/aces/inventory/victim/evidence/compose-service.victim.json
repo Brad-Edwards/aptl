@@ -1,0 +1,81 @@
+{
+  "profiles": [
+    "victim"
+  ],
+  "build": {
+    "context": "/home/atomik/src/aptl2/containers",
+    "dockerfile": "victim/Dockerfile"
+  },
+  "cap_add": [
+    "SYS_NICE",
+    "SYS_ADMIN",
+    "SYS_RESOURCE"
+  ],
+  "cgroup": "host",
+  "command": null,
+  "container_name": "aptl-victim",
+  "depends_on": {
+    "wazuh.manager": {
+      "condition": "service_healthy",
+      "required": true
+    }
+  },
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "536870912"
+      }
+    },
+    "placement": {}
+  },
+  "entrypoint": null,
+  "environment": {
+    "LABADMIN_SSH_KEY_FILE": "/keys/aptl_lab_key.pub",
+    "SIEM_IP": "172.20.2.30"
+  },
+  "hostname": "app.techvault.local",
+  "healthcheck": {
+    "test": [
+      "CMD-SHELL",
+      "ss -tlnp | grep ':22' || exit 1"
+    ],
+    "timeout": "5s",
+    "interval": "15s",
+    "retries": 5,
+    "start_period": "30s"
+  },
+  "networks": {
+    "aptl-internal": {
+      "ipv4_address": "172.20.2.20"
+    }
+  },
+  "restart": "unless-stopped",
+  "security_opt": [
+    "seccomp:unconfined"
+  ],
+  "tmpfs": [
+    "/run",
+    "/tmp"
+  ],
+  "volumes": [
+    {
+      "type": "bind",
+      "source": "/sys/fs/cgroup",
+      "target": "/sys/fs/cgroup",
+      "bind": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl2/keys",
+      "target": "/keys",
+      "read_only": true,
+      "bind": {}
+    },
+    {
+      "type": "volume",
+      "source": "victim_logs",
+      "target": "/var/log",
+      "volume": {}
+    }
+  ]
+}

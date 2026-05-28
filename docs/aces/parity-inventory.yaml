@@ -89,6 +89,17 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #334 workstation inventory pass. The SDL encodes the catalogued workstation image, build, runtime, filesystem, identity, package/CVE, SSH, credential-fixture weakness, relationship, and systemd service-manager unit-state facts. Brad-Edwards/aces#418 is consumed through nodes.workstation.runtime.service_manager_units, with no known remaining ACES expressivity blocker for the catalogued workstation steady-state inventory.
 
+  - id: scen.techvault.victim-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.victim + infrastructure.victim + runtime + content + accounts + relationships
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime / content / accounts / relationships fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/victim/ + tests/test_victim_inventory.py + scenarios/techvault.sdl.yaml"
+    blocking_followup: n/a
+    notes: SCN-010 issue #337 victim inventory pass. The SDL encodes the catalogued generic victim image, build, runtime, filesystem, identity, package/CVE, SSH, sudo-policy weakness, Wazuh relationship, and systemd service-manager unit-state facts. No known remaining ACES expressivity blocker for the catalogued victim steady-state inventory.
+
   - id: scen.techvault.fileshare-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
@@ -673,12 +684,12 @@ rows:
     surface: docker_compose_topology
     legacy_source: "docker-compose.yml (profile: victim)"
     legacy_field: victim
-    category: aptl_backend_responsibility
-    aces_target: ACES infrastructure realization
+    category: aces_sdl
+    aces_target: ACES nodes.victim + infrastructure.victim + conditions.victim-ssh-ready
     runtime_owner: AptlConfig.containers.victim
-    validation_evidence: tests/test_consistency.py
-    blocking_followup: "#320"
-    notes: Generic victim host.
+    validation_evidence: docs/aces/inventory/victim/ + scenarios/techvault.sdl.yaml + tests/test_victim_inventory.py
+    blocking_followup: n/a
+    notes: Generic victim host is encoded by SCN-010 issue #337; the profile row remains a delivery toggle while participant-visible service facts now live in ACES SDL rows.
 
   - id: compose.profile.kali
     surface: docker_compose_topology

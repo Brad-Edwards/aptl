@@ -1,0 +1,411 @@
+schema_version: 1
+asset:
+  id: victim
+  scenario: TechVault
+  aptl_issue: 337
+  aces_methodology_issue: 353
+  source_class: custom-build
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence: []
+    limits:
+    - This first-party local image was captured from the local Docker daemon. No registry-visible OCI, in-toto, or SLSA attestation
+      was available for the mutable local tag at capture time.
+correspondence_checks:
+- id: victim-node-source-correspondence
+  status: planned
+  source: nodes.victim.source
+  realized_evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/source-checksums.txt
+  ledger_fact_ids:
+  - victim.image.identity
+  - victim.build.recipe
+  method: Compare the ACES source name/version and source.build provenance in scenarios/techvault.sdl.yaml against the realized
+    local image digest, Docker build history, and source-package checksums captured in this bundle.
+  limit: 'Planned because issue #337 records a frozen non-destructive steady-state asset spec and evidence, not a fresh live
+    equivalence run.'
+- id: victim-runtime-correspondence
+  status: planned
+  source: nodes.victim.runtime
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/systemd-units.txt
+  - path: evidence/filesystem-tree.txt
+  - path: evidence/filesystem-checksums.txt
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  ledger_fact_ids:
+  - victim.runtime.mount-table
+  - victim.runtime.container-host-config
+  - victim.runtime.process-set
+  - victim.runtime.environment-policy
+  - victim.runtime.filesystem-inventory
+  - victim.runtime.local-identity
+  - victim.runtime.package-inventory
+  - victim.runtime.vulnerability-scan
+  - victim.runtime.service-manager-state
+  method: Re-run the encoded scenario from ACES SDL, recapture runtime evidence, and compare mount, container host/security,
+    process, environment, filesystem, local identity, package, scanner, and service-manager surfaces against this ledger.
+  limit: Planned because this issue records the current steady-state ACES spec and evidence, not a fresh clean-lab realization
+    proof.
+notes:
+- The capture used the already-running local lab and did not run `aptl lab stop -v && aptl lab start`; this is a non-destructive
+  frozen observation of the realized victim container.
+- Raw generated flags, private-key material, and the operator private key at /keys/aptl_lab_key are intentionally absent from
+  committed evidence. Path metadata and checksums are retained where the redaction boundary permits them.
+- No known ACES expressivity blocker or needs_gap_triage disposition remains in this ledger.
+facts:
+- id: victim.image.identity
+  category: provenance
+  summary: The asset uses first-party local image aptl-victim:latest, captured as aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310.
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.victim.source.name
+    - nodes.victim.source.version
+    rationale: ACES node source identifies the first-party artifact and immutable observed image digest used by later backend
+      realization.
+- id: victim.build.recipe
+  category: provenance
+  summary: The image is a custom build from containers/victim/Dockerfile on rockylinux:9 with copied inputs from containers/victim/,
+    containers/base/, and the public lab key material.
+  evidence:
+  - path: evidence/compose-service.victim.json
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.victim.source.build.base_image
+    - nodes.victim.source.build.dockerfile_path
+    - nodes.victim.source.build.instructions
+    - nodes.victim.source.build.layers
+    - nodes.victim.source.build.build_args
+    - nodes.victim.source.build.copied_sources
+    - nodes.victim.source.build.config
+    - nodes.victim.source.build.source_inputs
+    - nodes.victim.source.build.attestation
+    rationale: ACES Source.build encodes the observed Dockerfile recipe, Docker history/layer chain, copied source mappings,
+      checksum-addressed source inputs, image-default config, and absent-attestation fact directly.
+- id: victim.os.version
+  category: runtime-configuration
+  summary: The realized runtime OS is Rocky Linux 9.7 (Blue Onyx).
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-inspect.image.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.victim.os
+    - nodes.victim.os_version
+    rationale: ACES nodes have explicit OS family and version fields.
+- id: victim.network.identity
+  category: network
+  summary: The container is attached to aptl_aptl-internal at 172.20.2.20 with aliases aptl-victim and victim and DNS name
+    app.techvault.local.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-network.aptl-internal.json
+  - path: evidence/compose-service.victim.json
+  aces:
+    disposition: encoded
+    surface: infrastructure
+    fields:
+    - infrastructure.victim.links
+    - infrastructure.victim.properties
+    - nodes.victim.runtime.network.endpoints
+    rationale: ACES infrastructure and runtime.network fields encode the authored network link, static IP, aliases, DNS names,
+      endpoint IDs, MAC address, and Docker bridge/IPAM realization metadata.
+- id: victim.ssh.service
+  category: service-surface
+  summary: OpenSSH is exposed on TCP 22 inside the internal network, Docker reports the SSH listener healthcheck healthy,
+    and sshd -T shows password authentication disabled and public-key authentication enabled with root login disabled.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/compose-service.victim.json
+  - path: evidence/osquery-listening-ports.json
+  aces:
+    disposition: encoded
+    surface: nodes.services
+    fields:
+    - nodes.victim.services
+    - nodes.victim.conditions
+    - nodes.victim.runtime.health
+    - nodes.victim.runtime.ssh_servers
+    - conditions.victim-ssh-ready
+    rationale: ACES node service bindings, conditions, health logs, and ssh_servers encode the observed SSH surface and authentication
+      policy.
+- id: victim.runtime.mount-table
+  category: runtime-configuration
+  summary: The observed runtime mount table includes 30 mount targets, including overlay root, proc/sys/tmpfs pseudo-filesystems,
+    /run and /tmp tmpfs mounts, /sys/fs/cgroup bind mount, /keys bind mount, /var/log named volume, and anonymous /home volume.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-volume.victim-logs.json
+  - path: evidence/docker-volume.victim-home.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.victim.runtime.mounts
+    rationale: ACES runtime.mounts carries observed mount type, source, target, options, read-only state, propagation, backend-generated
+      status, and persistence/stability classification.
+- id: victim.runtime.container-host-config
+  category: runtime-configuration
+  summary: Docker HostConfig grants CAP_SYS_ADMIN, CAP_SYS_NICE, CAP_SYS_RESOURCE, unconfined seccomp, host cgroup namespace,
+    512 MiB memory, 1 GiB swap, tmpfs mounts at /run and /tmp, and unless-stopped restart policy.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.victim.runtime.container
+    - nodes.victim.runtime.linux_capabilities
+    - nodes.victim.runtime.operational_policy
+    rationale: ACES runtime.container, runtime.linux_capabilities, and runtime.operational_policy encode Docker host/security,
+      namespace, capability, restart, and resource-limit facts.
+- id: victim.runtime.process-set
+  category: runtime-configuration
+  summary: PID 1 runs /usr/sbin/init as root, with systemd-journald, rsyslogd, and sshd as the observed steady-state child
+    services.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-top.txt
+  - path: evidence/osquery-processes.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.victim.runtime.process
+    - nodes.victim.runtime.processes
+    rationale: ACES runtime.process and runtime.processes encode the primary process and supervised/steady-state process set
+      observed by Docker, ps, and osquery.
+- id: victim.runtime.environment-policy
+  category: runtime-configuration
+  summary: The runtime environment includes SIEM_IP, LABADMIN_SSH_KEY_FILE, PATH, and install toggles for Wazuh, Falco, and
+    XSIAM.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/compose-service.victim.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.victim.runtime.environment
+    - nodes.victim.source.build.config.default_environment
+    rationale: ACES runtime.environment and source.build.config.default_environment carry observed runtime env vars and image-default
+      environment values with value classifications.
+- id: victim.runtime.filesystem-inventory
+  category: filesystem-inventory
+  summary: The committed runtime filesystem inventory includes 173 catalogued paths and 119 checksum-backed files across /home,
+    /root, /keys, /etc, /opt, /var/ossec, and /var/log, with sensitive paths tagged by redaction boundary.
+  evidence:
+  - path: evidence/filesystem-tree.txt
+  - path: evidence/filesystem-checksums.txt
+  - path: evidence/filesystem-sensitive-paths.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - nodes.victim.runtime.filesystem_inventory
+    - content.victim-*
+    rationale: ACES runtime.filesystem_inventory and content entries encode path, entry type, permissions, owner/group, size,
+      stability, sensitivity, and SHA-256 digest fields for the catalogued scope.
+    caveat: The encoded inventory covers the captured authored/custom and scenario-relevant runtime paths, not byte-identical
+      enumeration of every Rocky Linux base-image root filesystem path.
+- id: victim.runtime.local-identity
+  category: identity
+  summary: The observed /etc/passwd and /etc/group snapshot contains 19 local users, 38 local groups, and a NOPASSWD sudo
+    rule for labadmin.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: accounts
+    fields:
+    - nodes.victim.runtime.local_identity
+    - accounts.victim-local-*
+    rationale: ACES local identity and account surfaces encode users, UID/GID values, primary groups, GECOS/home/shell fields,
+      group membership, and sudo rule inventory.
+- id: victim.runtime.package-inventory
+  category: runtime-inventory
+  summary: The observed RPM inventory contains 190 packages, plus repository and language/tool manifests for Rocky, Wazuh,
+    Falco, and Python runtime facts.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/rpm-repositories.txt
+  - path: evidence/language-manifests.txt
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - nodes.victim.runtime.packages
+    - nodes.victim.runtime.dependency_manifests
+    rationale: ACES runtime.packages and dependency_manifests encode package manager, package name, installed version, architecture,
+      and observed tool manifests.
+    caveat: RPM repository file contents and scanner SBOM component records are retained as evidence; current ACES package
+      fields encode package identity and manifest references rather than a first-class RPM repository policy model.
+- id: victim.runtime.vulnerability-scan
+  category: patch-state
+  summary: 'Trivy 0.70.0 reported 61 package vulnerability findings at scan time: 2 critical, 40 high, 18 medium, and 1 low.'
+  evidence:
+  - path: evidence/trivy-version.txt
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - nodes.victim.runtime.package_vulnerabilities
+    rationale: ACES runtime.package_vulnerabilities encodes scanner-derived package finding IDs, affected packages, installed/fixed
+      versions, severities, advisory URLs, scanner identity, image digest, and scan time.
+    caveat: Vulnerability records are time-sensitive to the Trivy database and advisory feeds available at capture time.
+- id: victim.runtime.osquery-baseline
+  category: runtime-inventory
+  summary: osquery captured victim process/listener rows from container namespaces and Docker container/image rows through
+    the host Docker socket, while apt_sources was not applicable and installed_applications and programs were unavailable
+    in the Linux osquery registry.
+  evidence:
+  - path: evidence/osquery-version.txt
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - nodes.victim.runtime.processes
+    - nodes.victim.runtime.ssh_servers
+    - nodes.victim.runtime.network
+    - nodes.victim.runtime.container
+    rationale: The successful osquery observations cross-check runtime processes, listeners, Docker container metadata, Docker
+      image identity, and network surfaces already encoded in ACES runtime fields.
+    caveat: osquery unavailable/not-applicable table attempts are retained as evidence and capture limits; they do not imply
+      empty package, application, or repository inventories.
+- id: victim.provisioning.first-boot
+  category: provisioning
+  summary: The image config enables lab-install.service for first boot and includes Wazuh/Falco install scripts; the realized
+    service failed while enabling Wazuh because systemd-sysv-install was absent.
+  evidence:
+  - path: evidence/docker-history.image.txt
+  - path: evidence/source-checksums.txt
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/systemd-units.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - nodes.victim.source.build.instructions
+    - nodes.victim.source.build.source_inputs
+    - nodes.victim.runtime.filesystem_inventory
+    - nodes.victim.runtime.service_manager_units
+    rationale: ACES source.build and runtime.filesystem_inventory encode the authored install scripts, unit file, image enablement
+      commands, and realized script/config file placement; runtime.service_manager_units encodes the first-boot unit result.
+    caveat: Build-time provisioning recipe and filesystem placement are encoded; realized service-manager unit outcome is
+      encoded as observed runtime state rather than as provisioning intent.
+- id: victim.access-policy
+  category: scenario-weakness
+  summary: Victim participant-visible access policy includes public-key SSH for labadmin and a NOPASSWD sudo grant; raw operator
+    private-key material and generated flag values are absent from committed evidence.
+  evidence:
+  - path: evidence/filesystem-sensitive-paths.txt
+  - path: evidence/filesystem-tree.txt
+  - path: evidence/filesystem-checksums.txt
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: vulnerabilities
+    fields:
+    - vulnerabilities.victim-nopasswd-sudo
+    - nodes.victim.vulnerabilities
+    - content.victim-*
+    rationale: ACES vulnerabilities and content encode the scenario weakness ID, CWE class, sensitive fixture files, and checksum/metadata-only
+      redaction boundary without committing raw secret values.
+- id: victim.relationships
+  category: topology
+  summary: Victim runtime environment points log forwarding and Wazuh agent configuration at the Wazuh manager.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/compose-service.victim.json
+  - path: evidence/filesystem-sensitive-paths.txt
+  aces:
+    disposition: encoded
+    surface: relationships
+    fields:
+    - relationships.victim-forwards-wazuh
+    rationale: ACES relationships encode topology edges from the victim node to related SOC assets.
+- id: victim.runtime.service-manager-state
+  category: runtime-configuration
+  summary: The observed systemd unit state includes sshd, rsyslog, and systemd-journald active/running, lab-install failed,
+    tmpfiles services failed, Wazuh inactive, and Falco unit files disabled/inactive.
+  evidence:
+  - path: evidence/systemd-units.txt
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-top.txt
+  - path: evidence/osquery-processes.json
+  - path: evidence/filesystem-tree.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.victim.runtime.service_manager_units
+    rationale: ACES Node.runtime.service_manager_units carries the captured unit-file enable states, load/active/sub/result
+      states, exit codes, bounded status text, main PIDs, unit-file path evidence, and same-node SSH service reference directly.
+- id: victim.capture.toolchain-baseline
+  category: evidence-quality
+  summary: The capture records Docker, Docker Compose, Trivy, Syft, osquery, capture limits, evidence integrity checksums,
+    and Syft CycloneDX normalization.
+  evidence:
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/capture-limits.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-compose-version.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/syft-version.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/evidence-sha256sums.txt
+  - path: normalize-syft-cyclonedx.jq
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - nodes.victim.source.build.attestation
+    - nodes.victim.runtime.package_vulnerabilities
+    - nodes.victim.runtime.packages
+    rationale: The SDL encodes derived build, package, and vulnerability facts while the ledger and evidence-sha256sums.txt
+      preserve the audit surface for capture reproducibility.
+    caveat: Capture toolchain and evidence-integrity metadata are preserved in the inventory bundle and ledger; ACES SDL carries
+      the relevant derived asset facts, not a first-class evidence-bundle manifest.

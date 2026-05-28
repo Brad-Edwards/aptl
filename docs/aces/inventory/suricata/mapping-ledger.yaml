@@ -1,0 +1,366 @@
+schema_version: 1
+asset:
+  id: suricata
+  scenario: TechVault
+  aptl_issue: 345
+  aces_methodology_issue: 353
+  source_class: upstream-image-plus-mounted-config
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence: []
+    limits:
+    - The upstream jasonish/suricata:7.0 image exposes a registry manifest, but no registry-visible in-toto/SLSA attestation was captured for this tag.
+correspondence_checks:
+- id: suricata-node-source-correspondence
+  status: planned
+  source: nodes.suricata.source
+  realized_evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/source-checksums.txt
+  ledger_fact_ids:
+  - suricata.image.identity
+  - suricata.image.history
+  - suricata.compose.service
+  method: Compare the ACES source name/version/build provenance and APTL source inputs against the upstream image inspect/history and source checksums captured in this bundle.
+  limit: 'Planned because issue #345 records a frozen steady-state asset spec rather than a destructive live equivalence proof.'
+- id: suricata-runtime-correspondence
+  status: planned
+  source: nodes.suricata.runtime
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/suricata-state.txt
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/filesystem-tree.txt
+  ledger_fact_ids:
+  - suricata.runtime.mount-table
+  - suricata.runtime.container-policy
+  - suricata.runtime.command-socket
+  - suricata.runtime.processes
+  - suricata.runtime.local-identity
+  - suricata.runtime.filesystem-inventory
+  - suricata.runtime.package-inventory
+  - suricata.runtime.vulnerability-scan
+  method: Re-run the encoded scenario, recapture suricata runtime evidence, and compare network, mount, capability, filesystem, package, vulnerability, local-identity, and command-socket state against this ledger.
+  limit: Planned because this issue records the frozen steady-state ACES spec and evidence, not a destructive clean-lab equivalence run.
+notes:
+- Capture used the already-running local aptl lab (soc profile) non-destructively; no aptl lab stop -v && aptl lab start clean reset was run.
+- Suricata is the first passive network-sensor asset inventoried in TechVault; its monitoring posture (Brad-Edwards/aces#429) and typed IDS/NDR detection-engine semantics (Brad-Edwards/aces#430) are blocked on ACES expressivity gaps and recorded as blocked_by_aces_gap facts.
+- eve.json and fast.log are unbounded transient sensor telemetry, recorded as filesystem metadata only.
+facts:
+- id: suricata.image.identity
+  category: provenance
+  summary: The asset uses upstream image jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d (Suricata 7.0.15, jasonish/suricata:7.0).
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-buildx-imagetools.image.txt
+  - path: evidence/docker-buildx-imagetools.image.raw.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.source.name
+    - nodes.suricata.source.version
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.image.history
+  category: provenance
+  summary: Docker history records 17 upstream image layer/instruction records for jasonish/suricata:7.0.
+  evidence:
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.source.build.instructions
+    - nodes.suricata.source.build.layers
+    - nodes.suricata.source.build.config
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.compose.service
+  category: runtime-configuration
+  summary: Compose profile soc realizes the service with upstream image, command --pcap, cap_add, bind/volume mounts, memory limit, and three network attachments.
+  evidence:
+  - path: evidence/compose-service.suricata.json
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.source.build.source_inputs
+    - nodes.suricata.runtime.container
+    - nodes.suricata.runtime.network
+    - infrastructure.suricata
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.os.version
+  category: runtime-configuration
+  summary: The realized runtime OS is AlmaLinux 9.7 (Moss Jungle Cat).
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-inspect.image.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.os
+    - nodes.suricata.os_version
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.network.identity
+  category: network
+  summary: The sensor is attached to dmz-net 172.20.1.50, internal-net 172.20.2.50, and security-net 172.20.0.50 with Docker aliases aptl-suricata and suricata, and publishes no host ports.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-network.aptl-dmz.json
+  - path: evidence/docker-network.aptl-internal.json
+  - path: evidence/docker-network.aptl-security.json
+  aces:
+    disposition: encoded
+    surface: infrastructure
+    fields:
+    - infrastructure.suricata
+    - nodes.suricata.runtime.network.endpoints
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.runtime.mount-table
+  category: runtime-configuration
+  summary: The container mounts the authored suricata.yaml and local.rules binds, the lab-seeded MISP rules bind, named volumes for logs and the command socket, and anonymous image volumes at /etc/suricata and /var/lib/suricata.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-volume.suricata-logs.json
+  - path: evidence/docker-volume.suricata-command-socket.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.mounts
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.runtime.container-policy
+  category: runtime-configuration
+  summary: Docker inspect records entrypoint/command, restart and 1 GiB memory policy, NET_ADMIN/NET_RAW/SYS_NICE capabilities, namespace/security posture, logging, and default path masks.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/compose-service.suricata.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.container
+    - nodes.suricata.runtime.operational_policy
+    - nodes.suricata.runtime.linux_capabilities
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.runtime.command-socket
+  category: runtime-configuration
+  summary: Suricata exposes a unix-domain command socket at /var/run/suricata/suricata-command.socket (suricata.yaml unix-command enabled), shared with aptl-misp-suricata-sync for rule reloads.
+  evidence:
+  - path: evidence/suricata-state.txt
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-volume.suricata-command-socket.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.local_control_interfaces
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.runtime.processes
+  category: runtime-configuration
+  summary: PID 1 is /usr/bin/suricata in --pcap capture mode, dropped to the suricata user/group; it is the single steady-state process.
+  evidence:
+  - path: evidence/docker-top.txt
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/suricata-state.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.process
+    - nodes.suricata.runtime.processes
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.runtime.environment
+  category: runtime-configuration
+  summary: Runtime environment is the image default PATH and LANG; the compose service injects no environment.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/compose-service.suricata.json
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.environment
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.runtime.local-identity
+  category: identity
+  summary: getent captured 18 local users and 36 local groups, including the suricata service user/group that PID 1 drops to.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.local_identity
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.runtime.filesystem-inventory
+  category: filesystem
+  summary: The scoped filesystem inventory records 29 entries under the Suricata config, ruleset, run, and log paths with metadata and checksums where stable.
+  evidence:
+  - path: evidence/filesystem-tree.txt
+  - path: evidence/filesystem-checksums.txt
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.filesystem_inventory
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+    caveat: eve.json and fast.log are unbounded transient sensor telemetry, recorded as filesystem metadata (size/owner/stability=log) only and not content-checksummed; the command socket is recorded as a socket entry.
+- id: suricata.runtime.package-inventory
+  category: software
+  summary: rpm captured 191 runtime packages; Trivy and Syft CycloneDX SBOMs are retained as scanner evidence.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/language-manifests.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.packages
+    - nodes.suricata.source.build.config.default_environment
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.runtime.vulnerability-scan
+  category: vulnerabilities
+  summary: Trivy captured 18 vulnerability findings at snapshot time (8 high, 10 medium).
+  evidence:
+  - path: evidence/trivy-version.txt
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-vulnerability-list.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.package_vulnerabilities
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.runtime.software-identity
+  category: software
+  summary: The running detection engine is Suricata 7.0.15 RELEASE (suricata --build-info), recorded as an application software component.
+  evidence:
+  - path: evidence/suricata-state.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.software_components
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.relationships.log-forwarding
+  category: topology
+  summary: aptl-wazuh-sidecar-suricata tails eve.json from the suricata_logs volume (read-only) and forwards alert telemetry to the SOC Wazuh manager.
+  evidence:
+  - path: evidence/docker-volume.suricata-logs.json
+  - path: evidence/suricata-state.txt
+  aces:
+    disposition: encoded
+    surface: relationships
+    fields:
+    - relationships.suricata-logs-forwarded-wazuh
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.sensor.monitoring-posture
+  category: observability
+  summary: 'Suricata passively captures traffic (--pcap, interface: any) across the three networks it is attached to and emits cross-network detections (fast.log ET/CINS/Spamhaus alerts); it has no listening service of its own.'
+  evidence:
+  - path: evidence/compose-service.suricata.json
+  - path: evidence/suricata-state.txt
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/participant-discovery.kali.txt
+  - path: evidence/docker-network.aptl-dmz.json
+  - path: evidence/docker-network.aptl-internal.json
+  - path: evidence/docker-network.aptl-security.json
+  aces:
+    disposition: blocked_by_aces_gap
+    checked_surfaces:
+    - relationships
+    - infrastructure
+    - nodes
+    why_not_current_surfaces: No relationship type means observes/monitors/taps; connects_to asserts an initiated connection a passive sensor never makes, and carrying the posture in properties smuggles a missing typed concept. Node attachment (infrastructure links + runtime.network.endpoints) records attachment, not monitoring; Node.roles is login-role only; runtime.network has no promiscuous/capture posture field. limitations.md already lists Scenario-native observability as a known gap.
+    gap_issue:
+      tracker: Brad-Edwards/aces
+      number: 429
+      url: https://github.com/Brad-Edwards/aces/issues/429
+- id: suricata.ids.detection-engine
+  category: service-surface
+  summary: 'Suricata''s observable detection semantics: app-layer parsers (http/tls/dns/ssh/smtp/ftp/smb), rule sources (suricata.rules 65814, local.rules 46, misp/misp-iocs.rules 6), HOME_NET/EXTERNAL_NET zoning, and eve.json/fast.log alert streams.'
+  evidence:
+  - path: evidence/suricata-state.txt
+  - path: evidence/filesystem-checksums.txt
+  - path: evidence/filesystem-tree.txt
+  aces:
+    disposition: blocked_by_aces_gap
+    checked_surfaces:
+    - nodes
+    - nodes.services
+    why_not_current_surfaces: No typed IDS/NDR service family exists (mail/db/file/ssh/identity do). runtime.applications is strictly HTTP/WS route-shaped, so encoding a rule engine as URL routes is the prohibited force-fit. software_components records only that Suricata is present; filesystem_inventory records the config/rule files as bytes (encoded) but not typed detection semantics; Node.services/runtime.network cannot represent a passive sensor with a unix-socket control channel.
+    gap_issue:
+      tracker: Brad-Edwards/aces
+      number: 430
+      url: https://github.com/Brad-Edwards/aces/issues/430
+- id: suricata.capture.toolchain-baseline
+  category: capture-methodology
+  summary: The bundle records Trivy, Syft, osquery, Docker, filesystem manifest, redaction, and capture-limit evidence for rerunnable methodology review.
+  evidence:
+  - path: evidence/capture-limits.txt
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/compose-service.suricata.json
+  - path: evidence/docker-buildx-imagetools.image.raw.json
+  - path: evidence/docker-buildx-imagetools.image.txt
+  - path: evidence/docker-compose-version.json
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-logs.suricata.txt
+  - path: evidence/docker-network.aptl-dmz.json
+  - path: evidence/docker-network.aptl-internal.json
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-volume.suricata-command-socket.json
+  - path: evidence/docker-volume.suricata-logs.json
+  - path: evidence/filesystem-checksums.txt
+  - path: evidence/filesystem-tree.txt
+  - path: evidence/language-manifests.txt
+  - path: evidence/os-packages.txt
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-programs.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/participant-discovery.kali.txt
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/source-checksums.txt
+  - path: evidence/suricata-state.txt
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/syft-version.json
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/trivy-version.txt
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/evidence-sha256sums.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - docs.aces.inventory.suricata
+    - docs.aces.inventory.suricata.mapping-ledger
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+    caveat: Toolchain and capture-limit facts are encoded as inventory bundle and SDL provenance/check fields rather than a single first-class SDL object.

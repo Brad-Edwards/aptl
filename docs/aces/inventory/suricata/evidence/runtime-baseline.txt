@@ -1,0 +1,149 @@
+--os-release--
+NAME="AlmaLinux"
+VERSION="9.7 (Moss Jungle Cat)"
+ID="almalinux"
+ID_LIKE="rhel centos fedora"
+VERSION_ID="9.7"
+PLATFORM_ID="platform:el9"
+PRETTY_NAME="AlmaLinux 9.7 (Moss Jungle Cat)"
+ANSI_COLOR="0;34"
+LOGO="fedora-logo-icon"
+CPE_NAME="cpe:/o:almalinux:almalinux:9::baseos"
+HOME_URL="https://almalinux.org/"
+DOCUMENTATION_URL="https://wiki.almalinux.org/"
+BUG_REPORT_URL="https://bugs.almalinux.org/"
+
+ALMALINUX_MANTISBT_PROJECT="AlmaLinux-9"
+ALMALINUX_MANTISBT_PROJECT_VERSION="9.7"
+REDHAT_SUPPORT_PRODUCT="AlmaLinux"
+REDHAT_SUPPORT_PRODUCT_VERSION="9.7"
+SUPPORT_END=2032-06-01
+--id--
+uid=0(root) gid=0(root) groups=0(root)
+--pwd--
+/
+--uname--
+Linux suricata 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+--pid1-cmdline--
+/usr/bin/suricata --user suricata --group suricata -c /etc/suricata/suricata.yaml --pcap
+--capabilities-pid1--
+CapInh:	0000000000000000
+CapPrm:	0000000000803000
+CapEff:	0000000000803000
+CapBnd:	0000000000000000
+CapAmb:	0000000000000000
+--environment--
+ eval ${which_declare} ) | /usr/bin/which --tty-only --read-alias --read-functions --show-tilde --show-dot $@
+BASH_FUNC_which%%=() {  ( alias;
+HISTCONTROL=ignoredups
+HISTSIZE=1000
+HOME=/root
+HOSTNAME=suricata
+LANG=C.utf8
+LOGNAME=root
+MAIL=/var/spool/mail/root
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PWD=/
+SHLVL=1
+USER=root
+_=/usr/bin/env
+which_declare=declare -f
+}
+--listeners--
+Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+udp   UNCONN 0      0         127.0.0.11:58130      0.0.0.0:*
+tcp   LISTEN 0      4096      127.0.0.11:42817      0.0.0.0:*
+--mounts--
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51138/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/169/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/168/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/160/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/156/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/150/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/148/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/138/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/114/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/94/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/59/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51148/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51148/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /etc/suricata type ext4 (rw,relatime)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+/dev/md2 on /var/log/suricata type ext4 (rw,relatime)
+/dev/md2 on /run/suricata type ext4 (rw,relatime)
+/dev/md2 on /var/lib/suricata type ext4 (rw,relatime)
+/dev/md2 on /etc/suricata/suricata.yaml type ext4 (rw,relatime)
+/dev/md2 on /etc/suricata/rules/local.rules type ext4 (rw,relatime)
+/dev/md2 on /var/lib/suricata/rules/misp type ext4 (rw,relatime)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
+--users--
+root:x:0:0:root:/root:/bin/bash
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+adm:x:3:4:adm:/var/adm:/sbin/nologin
+lp:x:4:7:lp:/var/spool/lpd:/sbin/nologin
+sync:x:5:0:sync:/sbin:/bin/sync
+shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+halt:x:7:0:halt:/sbin:/sbin/halt
+mail:x:8:12:mail:/var/spool/mail:/sbin/nologin
+operator:x:11:0:operator:/root:/sbin/nologin
+games:x:12:100:games:/usr/games:/sbin/nologin
+ftp:x:14:50:FTP User:/var/ftp:/sbin/nologin
+nobody:x:65534:65534:Kernel Overflow User:/:/sbin/nologin
+tss:x:59:59:Account used for TPM access:/:/usr/sbin/nologin
+systemd-coredump:x:999:999:systemd Core Dumper:/:/sbin/nologin
+dbus:x:81:81:System message bus:/:/sbin/nologin
+tcpdump:x:72:72::/:/sbin/nologin
+suricata:x:998:998::/home/suricata:/bin/bash
+--groups--
+root:x:0:
+bin:x:1:
+daemon:x:2:
+sys:x:3:
+adm:x:4:
+tty:x:5:
+disk:x:6:
+lp:x:7:
+mem:x:8:
+kmem:x:9:
+wheel:x:10:
+cdrom:x:11:
+mail:x:12:
+man:x:15:
+dialout:x:18:
+floppy:x:19:
+games:x:20:
+tape:x:33:
+video:x:39:
+ftp:x:50:
+lock:x:54:
+audio:x:63:
+users:x:100:
+nobody:x:65534:
+utmp:x:22:
+utempter:x:35:
+tss:x:59:
+input:x:104:
+kvm:x:36:
+render:x:105:
+sgx:x:106:
+systemd-journal:x:190:
+systemd-coredump:x:999:
+dbus:x:81:
+tcpdump:x:72:
+suricata:x:998:
+--process-tree--
+    PID    PPID USER     COMMAND
+      1       0 suricata /usr/bin/suricata --user suricata --group suricata -c /etc/suricata/suricata.yaml --pcap
+    411       0 root     sh -lc    set -eu   echo --os-release--   cat /etc/os-release 2>/dev/null || true   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --pid1-cmdline--   tr "\0" " " < /proc/1/cmdline; echo   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   echo --environment--   env | sort   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --mounts--   mount | sed -n "1,200p"   echo --users--   getent passwd 2>/dev/null | sed -n "1,300p" || cat /etc/passwd   echo --groups--   getent group 2>/dev/null | sed -n "1,300p" || cat /etc/group   echo --process-tree--   ps -eo pid,ppid,user,args 2>/dev/null || ps aux
+    447     411 root     ps -eo pid,ppid,user,args

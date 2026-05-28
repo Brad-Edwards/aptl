@@ -713,6 +713,39 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #335 inventory pass encodes the docker-mailserver steady-state image, runtime, mail-service logical state, filesystem, local identity, package/CVE summary, and participant probe facts with no known remaining ACES expressivity blocker. TCP/993 is host-published but refused at the participant vantage; TCP/465 is reachable but not working implicit TLS in this capture.
 
+  - id: scen.techvault.suricata-inventory
+    surface: scenarios_yaml
+    legacy_source: "docker-compose.yml service suricata + docs/aces/inventory/suricata/"
+    legacy_field: suricata steady-state participant-observable asset spec
+    category: aces_sdl
+    aces_target: ACES nodes.suricata (source/runtime mounts, container, linux_capabilities, operational_policy, network endpoints, local_control_interfaces, process, environment, filesystem_inventory, local_identity, software_components, packages, package_vulnerabilities) + infrastructure.suricata + relationships.suricata-logs-forwarded-wazuh
+    runtime_owner: scenarios/techvault.sdl.yaml
+    validation_evidence: docs/aces/inventory/suricata/ + scenarios/techvault.sdl.yaml + tests/test_suricata_inventory.py
+    blocking_followup: n/a
+    notes: SCN-010 issue #345 inventory pass. First passive network-sensor archetype in TechVault. Encodes the upstream jasonish/suricata:7.0 image, runtime/container/capability posture, network attachment to dmz/internal/security, the unix command socket, filesystem/ruleset config files, local identity, 191 rpm packages, 18 Trivy findings, Suricata 7.0.15 software identity, and the eve.json log-forwarding relationship to wazuh-manager. Two catalogued observables are blocked (see suricata-sensor-posture and suricata-ids-engine rows).
+
+  - id: scen.techvault.suricata-sensor-posture
+    surface: scenarios_yaml
+    legacy_source: "docker-compose.yml service suricata (--pcap, interface: any, 3 networks) + docs/aces/inventory/suricata/"
+    legacy_field: passive network-sensor monitoring posture
+    category: aces_schema_profile_gap
+    aces_target: ACES scenario-native observability / network-sensor monitoring surface (none today)
+    runtime_owner: n/a
+    validation_evidence: docs/aces/inventory/suricata/mapping-ledger.yaml fact suricata.sensor.monitoring-posture (blocked until Brad-Edwards/aces#429)
+    blocking_followup: "Brad-Edwards/aces#429"
+    notes: SCN-010 issue #345. Suricata passively captures traffic across the networks it is attached to; no ACES relationship type, node role, or runtime surface expresses monitoring posture. limitations.md already lists "Scenario-native observability" as a known gap. Moves to aces_sdl once #429 lands.
+
+  - id: scen.techvault.suricata-ids-engine
+    surface: scenarios_yaml
+    legacy_source: "config/suricata/suricata.yaml + /var/lib/suricata/rules + docs/aces/inventory/suricata/"
+    legacy_field: IDS/NDR detection-engine semantics (app-layer parsers, rule sources, zoning, alert streams)
+    category: aces_schema_profile_gap
+    aces_target: ACES typed IDS/NDR detection-engine runtime service family (none today)
+    runtime_owner: n/a
+    validation_evidence: docs/aces/inventory/suricata/mapping-ledger.yaml fact suricata.ids.detection-engine (blocked until Brad-Edwards/aces#430)
+    blocking_followup: "Brad-Edwards/aces#430"
+    notes: SCN-010 issue #345. No typed IDS/NDR service family exists (mail/db/file/ssh/identity do); runtime.applications is HTTP/WS-only. Config/rule files are encoded as filesystem_inventory bytes, but the typed detection semantics are blocked. Moves to aces_sdl once #430 lands.
+
   - id: compose.profile.reverse
     surface: docker_compose_topology
     legacy_source: "docker-compose.yml (profile: reverse)"

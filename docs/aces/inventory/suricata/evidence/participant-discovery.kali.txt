@@ -1,0 +1,14 @@
+--dns--
+172.20.1.50     suricata
+172.20.1.50     aptl-suricata
+--ports-dmz-172.20.1.50--
+aptl-suricata.aptl_aptl-dmz [172.20.1.50] 22 (ssh) : Connection refused
+aptl-suricata.aptl_aptl-dmz [172.20.1.50] 80 (http) : Connection refused
+aptl-suricata.aptl_aptl-dmz [172.20.1.50] 443 (https) : Connection refused
+aptl-suricata.aptl_aptl-dmz [172.20.1.50] 4789 (?) : Connection refused
+--ports-internal-172.20.2.50--
+aptl-suricata.aptl_aptl-internal [172.20.2.50] 22 (ssh) : Connection refused
+aptl-suricata.aptl_aptl-internal [172.20.2.50] 80 (http) : Connection refused
+aptl-suricata.aptl_aptl-internal [172.20.2.50] 443 (https) : Connection refused
+--note--
+suricata is a passive IDS sensor: no participant-reachable TCP listener is expected on any attached network

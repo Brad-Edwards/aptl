@@ -1,0 +1,34 @@
+{
+  "table": "docker_containers",
+  "query": "select id, name, image, image_id, command, created, state, status, pid, path, config_entrypoint, started_at, finished_at, privileged, security_options, readonly_rootfs, cgroup_namespace, ipc_namespace, mnt_namespace, net_namespace, pid_namespace, user_namespace, uts_namespace from docker_containers where name=\"/aptl-dns\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "cgroup_namespace": "",
+      "command": "/usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf",
+      "config_entrypoint": "",
+      "created": "1779517109",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "id": "ceed7fcfb8cfb21a8c5b8d18d801946bf8057dcaa1dc9f4507319ae33aad323d",
+      "image": "aptl-dns",
+      "image_id": "98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75",
+      "ipc_namespace": "",
+      "mnt_namespace": "",
+      "name": "/aptl-dns",
+      "net_namespace": "",
+      "path": "/usr/bin/supervisord",
+      "pid": "2955876",
+      "pid_namespace": "",
+      "privileged": "0",
+      "readonly_rootfs": "0",
+      "security_options": "",
+      "started_at": "2026-05-23T06:18:34.677724256Z",
+      "state": "running",
+      "status": "Up 4 days (healthy)",
+      "user_namespace": "",
+      "uts_namespace": ""
+    }
+  ]
+}

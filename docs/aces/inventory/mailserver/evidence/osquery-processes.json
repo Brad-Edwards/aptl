@@ -1,0 +1,297 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-mailserver PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "/usr/bin/dumb-init -- supervisord -c /etc/supervisor/supervisord.conf",
+      "gid": "0",
+      "name": "dumb-init",
+      "path": "/usr/bin/dumb-init",
+      "pid": "1",
+      "start_time": "1779948103",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/bin/python3 /usr/bin/supervisord -c /etc/supervisor/supervisord.conf",
+      "gid": "0",
+      "name": "supervisord",
+      "path": "/usr/bin/python3.11",
+      "pid": "7",
+      "start_time": "1779948104",
+      "uid": "0"
+    },
+    {
+      "cmdline": "tail -Fn +1 /var/log/mail/mail.log",
+      "gid": "0",
+      "name": "tail",
+      "path": "/usr/bin/tail",
+      "pid": "8",
+      "start_time": "1779948105",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/cron -f",
+      "gid": "0",
+      "name": "cron",
+      "path": "/usr/sbin/cron",
+      "pid": "1263",
+      "start_time": "1779948136",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/rsyslogd -n",
+      "gid": "0",
+      "name": "rsyslogd",
+      "path": "/usr/sbin/rsyslogd",
+      "pid": "1267",
+      "start_time": "1779948136",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/dovecot -F -c /etc/dovecot/dovecot.conf",
+      "gid": "0",
+      "name": "dovecot",
+      "path": "/usr/sbin/dovecot",
+      "pid": "1273",
+      "start_time": "1779948136",
+      "uid": "0"
+    },
+    {
+      "cmdline": "dovecot/anvil",
+      "gid": "112",
+      "name": "anvil",
+      "path": "",
+      "pid": "1278",
+      "start_time": "1779948136",
+      "uid": "109"
+    },
+    {
+      "cmdline": "dovecot/log",
+      "gid": "0",
+      "name": "log",
+      "path": "",
+      "pid": "1279",
+      "start_time": "1779948136",
+      "uid": "0"
+    },
+    {
+      "cmdline": "dovecot/config",
+      "gid": "0",
+      "name": "config",
+      "path": "",
+      "pid": "1280",
+      "start_time": "1779948136",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/bin/bash /usr/local/bin/update-check.sh",
+      "gid": "0",
+      "name": "update-check.sh",
+      "path": "/usr/bin/bash",
+      "pid": "1282",
+      "start_time": "1779948137",
+      "uid": "0"
+    },
+    {
+      "cmdline": "sleep 1d",
+      "gid": "0",
+      "name": "sleep",
+      "path": "/usr/bin/sleep",
+      "pid": "1311",
+      "start_time": "1779948137",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/opendkim -f",
+      "gid": "104",
+      "name": "opendkim",
+      "path": "",
+      "pid": "1312",
+      "start_time": "1779948137",
+      "uid": "102"
+    },
+    {
+      "cmdline": "/usr/sbin/opendkim -f",
+      "gid": "104",
+      "name": "opendkim",
+      "path": "",
+      "pid": "1313",
+      "start_time": "1779948137",
+      "uid": "102"
+    },
+    {
+      "cmdline": "/usr/sbin/opendmarc -f -p inet:8893@localhost -P /var/run/opendmarc/opendmarc.pid",
+      "gid": "105",
+      "name": "opendmarc",
+      "path": "",
+      "pid": "1322",
+      "start_time": "1779948137",
+      "uid": "103"
+    },
+    {
+      "cmdline": "/usr/bin/python3 /usr/bin/pidproxy /var/spool/postfix/pid/master.pid /usr/sbin/postfix start-fg",
+      "gid": "0",
+      "name": "pidproxy",
+      "path": "/usr/bin/python3.11",
+      "pid": "1334",
+      "start_time": "1779948137",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/bin/sh /usr/lib/postfix/sbin/postfix-script start-fg",
+      "gid": "0",
+      "name": "postfix-script",
+      "path": "/usr/bin/dash",
+      "pid": "1338",
+      "start_time": "1779948137",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/amavisd (master)",
+      "gid": "999",
+      "name": "/usr/sbin/amavi",
+      "path": "",
+      "pid": "1369",
+      "start_time": "1779948137",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/usr/lib/postfix/sbin/master -s",
+      "gid": "0",
+      "name": "master",
+      "path": "",
+      "pid": "1421",
+      "start_time": "1779948137",
+      "uid": "0"
+    },
+    {
+      "cmdline": "pickup -l -t fifo -u -o content_filter= -o receive_override_options=no_header_body_checks",
+      "gid": "107",
+      "name": "pickup",
+      "path": "",
+      "pid": "1422",
+      "start_time": "1779948137",
+      "uid": "105"
+    },
+    {
+      "cmdline": "qmgr -l -t unix -u",
+      "gid": "107",
+      "name": "qmgr",
+      "path": "",
+      "pid": "1423",
+      "start_time": "1779948137",
+      "uid": "105"
+    },
+    {
+      "cmdline": "/bin/bash /usr/local/bin/check-for-changes.sh",
+      "gid": "0",
+      "name": "check-for-chang",
+      "path": "/usr/bin/bash",
+      "pid": "1424",
+      "start_time": "1779948137",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/amavisd (virgin child)",
+      "gid": "999",
+      "name": "/usr/sbin/amavi",
+      "path": "",
+      "pid": "1470",
+      "start_time": "1779948138",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/usr/sbin/amavisd (virgin child)",
+      "gid": "999",
+      "name": "/usr/sbin/amavi",
+      "path": "",
+      "pid": "1471",
+      "start_time": "1779948138",
+      "uid": "999"
+    },
+    {
+      "cmdline": "dovecot/auth",
+      "gid": "112",
+      "name": "auth",
+      "path": "",
+      "pid": "4165",
+      "start_time": "1779948481",
+      "uid": "109"
+    },
+    {
+      "cmdline": "showq -t unix -u",
+      "gid": "107",
+      "name": "showq",
+      "path": "",
+      "pid": "4365",
+      "start_time": "1779948482",
+      "uid": "105"
+    },
+    {
+      "cmdline": "postscreen -l -n smtp -t inet -u -s 2",
+      "gid": "107",
+      "name": "postscreen",
+      "path": "",
+      "pid": "4368",
+      "start_time": "1779948482",
+      "uid": "105"
+    },
+    {
+      "cmdline": "smtpd -t pass -u -o stress=",
+      "gid": "107",
+      "name": "smtpd",
+      "path": "",
+      "pid": "4370",
+      "start_time": "1779948482",
+      "uid": "105"
+    },
+    {
+      "cmdline": "smtpd -n submissions -t inet -u -o stress= -s 2 -o syslog_name=postfix/submissions -o smtpd_tls_wrappermode=no -o smtpd_sasl_auth_enable=yes -o smtpd_sasl_type=dovecot -o smtpd_reject_unlisted_recipient=no -o smtpd_sasl_authenticated_header=yes -o smtpd_client_restrictions=permit_sasl_authenticated,reject -o smtpd_relay_restrictions=permit_sasl_authenticated,reject -o smtpd_sender_restrictions=$mua_sender_restrictions -o smtpd_discard_ehlo_keywords= -o milter_macro_daemon_name=ORIGINATING -o cleanup_service_name=sender-cleanup",
+      "gid": "107",
+      "name": "smtpd",
+      "path": "",
+      "pid": "4371",
+      "start_time": "1779948482",
+      "uid": "105"
+    },
+    {
+      "cmdline": "smtpd -n submission -t inet -u -o stress= -s 2 -o syslog_name=postfix/submission -o smtpd_tls_security_level=none -o smtpd_sasl_auth_enable=yes -o smtpd_sasl_type=dovecot -o smtpd_reject_unlisted_recipient=no -o smtpd_sasl_authenticated_header=yes -o smtpd_client_restrictions=permit_sasl_authenticated,reject -o smtpd_relay_restrictions=permit_sasl_authenticated,reject -o smtpd_sender_restrictions=$mua_sender_restrictions -o smtpd_discard_ehlo_keywords= -o milter_macro_daemon_name=ORIGINATING -o cleanup_service_name=sender-cleanup",
+      "gid": "107",
+      "name": "smtpd",
+      "path": "",
+      "pid": "4372",
+      "start_time": "1779948482",
+      "uid": "105"
+    },
+    {
+      "cmdline": "proxymap -t unix -u",
+      "gid": "107",
+      "name": "proxymap",
+      "path": "",
+      "pid": "4373",
+      "start_time": "1779948482",
+      "uid": "105"
+    },
+    {
+      "cmdline": "smtpd -t pass -u -o stress=",
+      "gid": "107",
+      "name": "smtpd",
+      "path": "",
+      "pid": "4374",
+      "start_time": "1779948482",
+      "uid": "105"
+    },
+    {
+      "cmdline": "sleep 2",
+      "gid": "0",
+      "name": "sleep",
+      "path": "/usr/bin/sleep",
+      "pid": "4460",
+      "start_time": "1779948536",
+      "uid": "0"
+    }
+  ]
+}

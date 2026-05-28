@@ -1,0 +1,46 @@
+--dns--
+172.20.1.21     mail.techvault.local
+172.20.1.21     mailserver
+172.20.1.21     aptl-mailserver
+--ports--
+mail.techvault.local [172.20.1.21] 25 (smtp) open
+mail.techvault.local [172.20.1.21] 143 (imap2) open
+mail.techvault.local [172.20.1.21] 465 (submissions) open
+mail.techvault.local [172.20.1.21] 587 (submission) open
+mail.techvault.local [172.20.1.21] 993 (imaps) : Connection refused
+--smtp-banner--
+220 mail.techvault.local ESMTP
+250-mail.techvault.local
+250-PIPELINING
+250-SIZE 10240000
+250-ETRN
+250-ENHANCEDSTATUSCODES
+250-8BITMIME
+250 CHUNKING
+221 2.0.0 Bye
+--submission-banner--
+220 mail.techvault.local ESMTP
+250-mail.techvault.local
+250-PIPELINING
+250-SIZE 10240000
+250-ETRN
+250-AUTH PLAIN LOGIN
+250-AUTH=PLAIN LOGIN
+250-ENHANCEDSTATUSCODES
+250-8BITMIME
+250-DSN
+250 CHUNKING
+221 2.0.0 Bye
+--imap-banner--
+* OK [CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE LITERAL+ AUTH=PLAIN AUTH=LOGIN] Dovecot (Debian) ready.
+* CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE LITERAL+ AUTH=PLAIN AUTH=LOGIN
+a001 OK Pre-login capabilities listed, post-login capabilities have more.
+* BYE Logging out
+a002 OK Logout completed.
+--smtps-probe--
+Connecting to 172.20.1.21
+40675DE2727B0000:error:0A00010B:SSL routines:tls_validate_record_header:wrong version number:../ssl/record/methods/tlsany_meth.c:77:
+--imaps-probe--
+4057F7360B770000:error:8000006F:system library:BIO_connect:Connection refused:../crypto/bio/bio_sock2.c:183:calling connect()
+4057F7360B770000:error:10000067:BIO routines:BIO_connect:connect error:../crypto/bio/bio_sock2.c:185:
+connect:errno=111

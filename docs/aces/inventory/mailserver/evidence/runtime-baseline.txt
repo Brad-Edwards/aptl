@@ -1,0 +1,218 @@
+--os-release--
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+NAME="Debian GNU/Linux"
+VERSION_ID="12"
+VERSION="12 (bookworm)"
+VERSION_CODENAME=bookworm
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+--id--
+uid=0(root) gid=0(root) groups=0(root)
+--pwd--
+/
+--uname--
+Linux mail.techvault.local 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 GNU/Linux
+--capabilities-pid1--
+CapInh:	0000000000000000
+CapPrm:	00000000a80425fb
+CapEff:	00000000a80425fb
+CapBnd:	00000000a80425fb
+CapAmb:	0000000000000000
+--environment--
+DMS_DEBUG=0
+DMS_RELEASE=v15.1.0
+ENABLE_CLAMAV=0
+ENABLE_FAIL2BAN=0
+ENABLE_POSTGREY=0
+ENABLE_SASLAUTHD=0
+ENABLE_SPAMASSASSIN=0
+FETCHMAIL_POLL=300
+HOME=/root
+HOSTNAME=mail.techvault.local
+ONE_DIR=1
+OVERRIDE_HOSTNAME=mail.techvault.local
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PERMIT_DOCKER=network
+POSTGREY_AUTO_WHITELIST_CLIENTS=5
+POSTGREY_DELAY=300
+POSTGREY_MAX_AGE=35
+POSTGREY_TEXT=Delayed by Postgrey
+PWD=/
+SASLAUTHD_MECH_OPTIONS=
+SIEM_IP=172.20.0.10
+SSL_TYPE=
+--listeners--
+Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+udp   UNCONN 0      0         127.0.0.11:38942      0.0.0.0:*
+tcp   LISTEN 0      4096      127.0.0.11:45967      0.0.0.0:*
+tcp   LISTEN 0      100        127.0.0.1:10025      0.0.0.0:*
+tcp   LISTEN 0      4096       127.0.0.1:10024      0.0.0.0:*
+tcp   LISTEN 0      4096       127.0.0.1:8893       0.0.0.0:*
+tcp   LISTEN 0      4096       127.0.0.1:8891       0.0.0.0:*
+tcp   LISTEN 0      100        127.0.0.1:65265      0.0.0.0:*    users:(("dovecot",pid=1273,fd=55))
+tcp   LISTEN 0      100          0.0.0.0:587        0.0.0.0:*
+tcp   LISTEN 0      100          0.0.0.0:465        0.0.0.0:*
+tcp   LISTEN 0      100          0.0.0.0:25         0.0.0.0:*
+tcp   LISTEN 0      100          0.0.0.0:143        0.0.0.0:*    users:(("dovecot",pid=1273,fd=33))
+tcp   LISTEN 0      100             [::]:587           [::]:*
+tcp   LISTEN 0      100             [::]:465           [::]:*
+tcp   LISTEN 0      100             [::]:25            [::]:*
+tcp   LISTEN 0      100             [::]:143           [::]:*    users:(("dovecot",pid=1273,fd=34))
+--mounts--
+overlay on / type overlay (rw,relatime,lowerdir=65245/fs:65244/fs:65243/fs:65242/fs:65241/fs:65240/fs:65239/fs:65238/fs:65237/fs:65236/fs:65235/fs:65234/fs:65233/fs:65232/fs:65231/fs:65230/fs:65229/fs:65228/fs:65227/fs:65226/fs:65225/fs:65224/fs:65223/fs:65222/fs:65221/fs:65220/fs:65219/fs:65218/fs:65217/fs:65216/fs:65215/fs:65214/fs:65213/fs:65212/fs:65211/fs:65210/fs:65209/fs:65208/fs:65207/fs:65206/fs:65205/fs:65204/fs:65203/fs:65202/fs:65201/fs:65200/fs:65199/fs:65198/fs:65197/fs:65196/fs:65195/fs:65194/fs:65193/fs:65192/fs:65190/fs:65189/fs:65187/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/65246/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/65246/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /tmp/setup.sh type ext4 (ro,relatime)
+/dev/md2 on /var/mail type ext4 (rw,relatime)
+/dev/md2 on /var/mail-state type ext4 (rw,relatime)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+/dev/md2 on /var/log/mail type ext4 (rw,relatime)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
+--users--
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+games:x:5:60:games:/usr/games:/usr/sbin/nologin
+man:x:6:12:man:/var/cache/man:/usr/sbin/nologin
+lp:x:7:7:lp:/var/spool/lpd:/usr/sbin/nologin
+mail:x:8:8:mail:/var/mail:/usr/sbin/nologin
+news:x:9:9:news:/var/spool/news:/usr/sbin/nologin
+uucp:x:10:10:uucp:/var/spool/uucp:/usr/sbin/nologin
+proxy:x:13:13:proxy:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+backup:x:34:34:backup:/var/backups:/usr/sbin/nologin
+list:x:38:38:Mailing List Manager:/var/list:/usr/sbin/nologin
+irc:x:39:39:ircd:/run/ircd:/usr/sbin/nologin
+_apt:x:42:65534::/nonexistent:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+clamav:x:200:200::/var/lib/clamav:/usr/sbin/nologin
+fetchmail:x:100:65534::/var/lib/fetchmail:/bin/false
+postsrsd:x:101:102::/var/lib/postsrsd:/usr/sbin/nologin
+opendkim:x:102:104::/run/opendkim:/usr/sbin/nologin
+opendmarc:x:103:105::/run/opendmarc:/usr/sbin/nologin
+postgrey:x:104:106::/var/lib/postgrey:/usr/sbin/nologin
+postfix:x:105:107::/var/spool/postfix:/usr/sbin/nologin
+policyd-spf:x:106:109::/nonexistent:/usr/sbin/nologin
+amavis:x:999:999:AMaViS system user:/var/lib/amavis:/bin/sh
+debian-spamd:x:107:110::/var/lib/spamassassin:/usr/sbin/nologin
+_mta-sts:x:108:111::/var/lib/mta-sts/:/usr/sbin/nologin
+dovecot:x:109:112:Dovecot mail server,,,:/usr/lib/dovecot:/usr/sbin/nologin
+dovenull:x:110:113:Dovecot login user,,,:/nonexistent:/usr/sbin/nologin
+_rspamd:x:111:114:rspamd spam filtering system,,,:/var/lib/rspamd:/usr/sbin/nologin
+redis:x:112:115::/var/lib/redis:/usr/sbin/nologin
+syslog:x:113:65534::/nonexistent:/usr/sbin/nologin
+docker:x:5000:5000::/home/docker:/bin/bash
+--groups--
+root:x:0:
+daemon:x:1:
+bin:x:2:
+sys:x:3:
+adm:x:4:
+tty:x:5:
+disk:x:6:
+lp:x:7:
+mail:x:8:
+news:x:9:
+uucp:x:10:
+man:x:12:
+proxy:x:13:
+kmem:x:15:
+dialout:x:20:
+fax:x:21:
+voice:x:22:
+cdrom:x:24:
+floppy:x:25:
+tape:x:26:
+sudo:x:27:
+audio:x:29:
+dip:x:30:
+www-data:x:33:
+backup:x:34:
+operator:x:37:
+list:x:38:
+irc:x:39:
+src:x:40:
+shadow:x:42:
+utmp:x:43:
+video:x:44:
+sasl:x:45:
+plugdev:x:46:
+staff:x:50:
+games:x:60:
+users:x:100:
+nogroup:x:65534:
+clamav:x:200:amavis
+crontab:x:101:
+postsrsd:x:102:
+ssl-cert:x:103:
+opendkim:x:104:
+opendmarc:x:105:
+postgrey:x:106:
+postfix:x:107:
+postdrop:x:108:
+policyd-spf:x:109:
+amavis:x:999:clamav
+debian-spamd:x:110:
+_mta-sts:x:111:
+dovecot:x:112:
+dovenull:x:113:
+_rspamd:x:114:
+redis:x:115:
+docker:x:5000:
+--process-tree--
+    PID    PPID USER     COMMAND
+      1       0 root     /usr/bin/dumb-init -- supervisord -c /etc/supervisor/supervisord.conf
+      7       1 root     /usr/bin/python3 /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
+      8       7 root     tail -Fn +1 /var/log/mail/mail.log
+   1263       7 root     /usr/sbin/cron -f
+   1267       7 root     /usr/sbin/rsyslogd -n
+   1273       7 root     /usr/sbin/dovecot -F -c /etc/dovecot/dovecot.conf
+   1278    1273 dovecot  dovecot/anvil
+   1279    1273 root     dovecot/log
+   1280    1273 root     dovecot/config
+   1282       7 root     /bin/bash /usr/local/bin/update-check.sh
+   1311    1282 root     sleep 1d
+   1312       7 opendkim /usr/sbin/opendkim -f
+   1313    1312 opendkim /usr/sbin/opendkim -f
+   1322       7 opendma+ /usr/sbin/opendmarc -f -p inet:8893@localhost -P /var/run/opendmarc/opendmarc.pid
+   1334       7 root     /usr/bin/python3 /usr/bin/pidproxy /var/spool/postfix/pid/master.pid /usr/sbin/postfix start-fg
+   1338    1334 root     /bin/sh /usr/lib/postfix/sbin/postfix-script start-fg
+   1369       7 amavis   /usr/sbin/amavisd (master)
+   1421    1338 root     /usr/lib/postfix/sbin/master -s
+   1422    1421 postfix  pickup -l -t fifo -u -o content_filter= -o receive_override_options=no_header_body_checks
+   1423    1421 postfix  qmgr -l -t unix -u
+   1424       7 root     /bin/bash /usr/local/bin/check-for-changes.sh
+   1470    1369 amavis   /usr/sbin/amavisd (virgin child)
+   1471    1369 amavis   /usr/sbin/amavisd (virgin child)
+   3827    1424 root     sleep 2
+   4071       0 root     sh -lc    set -eu   echo --os-release--   cat /etc/os-release 2>/dev/null || true   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   echo --environment--   env | sort   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --mounts--   mount | sed -n "1,180p"   echo --users--   getent passwd | sed -n "1,240p" || true   echo --groups--   getent group | sed -n "1,240p" || true   echo --process-tree--   ps -eo pid,ppid,user,args || true   echo --mail-versions--   (postconf mail_version || true) 2>&1   (dovecot --version || true) 2>&1   (amavis -V || true) 2>&1   (rspamadm --version || true) 2>&1
+   4094    4071 root     ps -eo pid,ppid,user,args
+--mail-versions--
+mail_version = 3.7.11
+2.3.19.1 (9b53102964)
+sh: 28: amavis: not found
+Rspamadm 3.12.1

@@ -1,0 +1,217 @@
+{
+  "table": "listening_ports",
+  "query": "select port, protocol, address, pid, socket, path from listening_ports order by port, protocol, pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-workstation network namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "address": "",
+      "path": "/run/systemd/journal/stdout",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/notify",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/private",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/userdb/io.systemd.DynamicUser",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/io.system.ManagedOOM",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/dev-log",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/socket",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/stdout",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/io.systemd.journal",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/stdout",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/notify",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/private",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/userdb/io.systemd.DynamicUser",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/io.system.ManagedOOM",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/dev-log",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/socket",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/stdout",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/io.systemd.journal",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "-1",
+      "port": "22",
+      "protocol": "6",
+      "socket": "170278552"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "22",
+      "protocol": "6",
+      "socket": "170278554"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "-1",
+      "port": "22",
+      "protocol": "6",
+      "socket": "170278552"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "22",
+      "protocol": "6",
+      "socket": "170278554"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "34321",
+      "protocol": "17",
+      "socket": "170277284"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "34321",
+      "protocol": "17",
+      "socket": "170277284"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "36733",
+      "protocol": "6",
+      "socket": "170277285"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "36733",
+      "protocol": "6",
+      "socket": "170277285"
+    }
+  ]
+}

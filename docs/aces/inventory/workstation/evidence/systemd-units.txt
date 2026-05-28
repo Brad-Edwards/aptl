@@ -1,0 +1,210 @@
+UNIT FILE                              STATE           PRESET
+arp-ethers.service                     disabled        disabled
+autovt@.service                        alias           -
+console-getty.service                  enabled-runtime disabled
+container-getty@.service               static          -
+dbus-broker.service                    enabled         enabled
+dbus-org.freedesktop.hostname1.service alias           -
+dbus-org.freedesktop.locale1.service   alias           -
+dbus-org.freedesktop.login1.service    alias           -
+dbus-org.freedesktop.timedate1.service alias           -
+dbus.service                           alias           -
+debug-shell.service                    disabled        disabled
+dnf-makecache.service                  static          -
+dnf-system-upgrade-cleanup.service     static          -
+dnf-system-upgrade.service             disabled        disabled
+emergency.service                      static          -
+falco-bpf.service                      disabled        disabled
+falco-custom.service                   disabled        disabled
+falco-kmod-inject.service              static          -
+falco-kmod.service                     disabled        disabled
+falco-modern-bpf.service               disabled        disabled
+falcoctl-artifact-follow.service       disabled        disabled
+fstrim.service                         static          -
+getty@.service                         disabled        enabled
+lab-install.service                    enabled         disabled
+ldconfig.service                       static          -
+logrotate.service                      static          -
+modprobe@.service                      static          -
+nis-domainname.service                 disabled        enabled
+pam_namespace.service                  static          -
+rc-local.service                       static          -
+rescue.service                         static          -
+rpmdb-rebuild.service                  disabled        disabled
+rsyslog.service                        enabled         enabled
+serial-getty@.service                  disabled        disabled
+sshd-keygen@.service                   disabled        disabled
+sshd.service                           enabled         enabled
+sshd@.service                          static          -
+system-update-cleanup.service          static          -
+systemd-ask-password-console.service   static          -
+systemd-ask-password-wall.service      static          -
+systemd-boot-check-no-failures.service disabled        disabled
+systemd-exit.service                   static          -
+systemd-firstboot.service              static          -
+systemd-halt.service                   static          -
+systemd-hostnamed.service              static          -
+systemd-initctl.service                static          -
+systemd-journal-catalog-update.service static          -
+systemd-journal-flush.service          static          -
+systemd-journald.service               static          -
+systemd-journald@.service              static          -
+systemd-kexec.service                  static          -
+systemd-localed.service                static          -
+systemd-logind.service                 static          -
+systemd-machine-id-commit.service      static          -
+systemd-network-generator.service      disabled        enabled
+systemd-pcrfs-root.service             static          -
+systemd-pcrfs@.service                 static          -
+systemd-pcrmachine.service             static          -
+systemd-poweroff.service               static          -
+systemd-reboot.service                 static          -
+systemd-sysext.service                 disabled        disabled
+systemd-sysupdate-reboot.service       indirect        disabled
+systemd-sysupdate.service              indirect        disabled
+systemd-sysusers.service               static          -
+systemd-timedated.service              static          -
+systemd-tmpfiles-clean.service         static          -
+systemd-tmpfiles-setup.service         static          -
+systemd-update-done.service            static          -
+systemd-update-utmp-runlevel.service   static          -
+systemd-update-utmp.service            static          -
+systemd-user-sessions.service          enabled         disabled
+user-runtime-dir@.service              static          -
+user@.service                          static          -
+wazuh-agent.service                    disabled        disabled
+
+74 unit files listed.
+--service-status--
+× lab-install.service - Install Purple Team Lab Services on First Boot
+     Loaded: loaded (/etc/systemd/system/lab-install.service; enabled; preset: disabled)
+     Active: failed (Result: exit-code) since Sat 2026-05-23 06:19:19 UTC; 2 days ago
+    Process: 57 ExecStart=/opt/purple-team/scripts/install-all.sh (code=exited, status=1/FAILURE)
+   Main PID: 57 (code=exited, status=1/FAILURE)
+        CPU: 46ms
+
+May 23 06:19:19 ws01.techvault.local install-all.sh[60]: Cleaning up any orphaned wazuh processes...
+May 23 06:19:19 ws01.techvault.local install-all.sh[60]: No wazuh processes to kill
+May 23 06:19:19 ws01.techvault.local install-all.sh[60]: Cleaning PID files...
+May 23 06:19:19 ws01.techvault.local install-all.sh[60]: Enabling and starting Wazuh agent service...
+May 23 06:19:19 ws01.techvault.local systemctl[71]: Synchronizing state of wazuh-agent.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+May 23 06:19:19 ws01.techvault.local systemctl[71]: Executing: /usr/lib/systemd/systemd-sysv-install enable wazuh-agent
+May 23 06:19:19 ws01.techvault.local (sysv-ins[72]: Failed to execute /usr/lib/systemd/systemd-sysv-install: No such file or directory
+May 23 06:19:19 ws01.techvault.local systemd[1]: lab-install.service: Main process exited, code=exited, status=1/FAILURE
+May 23 06:19:19 ws01.techvault.local systemd[1]: lab-install.service: Failed with result 'exit-code'.
+May 23 06:19:19 ws01.techvault.local systemd[1]: Failed to start Install Purple Team Lab Services on First Boot.
+
+× rsyslog.service - System Logging Service
+     Loaded: loaded (/usr/lib/systemd/system/rsyslog.service; enabled; preset: enabled)
+     Active: failed (Result: exit-code) since Sat 2026-05-23 06:19:20 UTC; 2 days ago
+       Docs: man:rsyslogd(8)
+             https://www.rsyslog.com/doc/
+    Process: 74 ExecStart=/usr/sbin/rsyslogd -n $SYSLOGD_OPTIONS (code=exited, status=226/NAMESPACE)
+   Main PID: 74 (code=exited, status=226/NAMESPACE)
+        CPU: 1ms
+
+May 23 06:19:19 ws01.techvault.local systemd[1]: Failed to start System Logging Service.
+May 23 06:19:20 ws01.techvault.local systemd[1]: rsyslog.service: Scheduled restart job, restart counter is at 5.
+May 23 06:19:20 ws01.techvault.local systemd[1]: Stopped System Logging Service.
+May 23 06:19:20 ws01.techvault.local systemd[1]: rsyslog.service: Start request repeated too quickly.
+May 23 06:19:20 ws01.techvault.local systemd[1]: rsyslog.service: Failed with result 'exit-code'.
+May 23 06:19:20 ws01.techvault.local systemd[1]: Failed to start System Logging Service.
+
+● sshd.service - OpenSSH server daemon
+     Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; preset: enabled)
+     Active: active (running) since Sat 2026-05-23 06:19:18 UTC; 2 days ago
+       Docs: man:sshd(8)
+             man:sshd_config(5)
+   Main PID: 55 (sshd)
+      Tasks: 1 (limit: 123488)
+     Memory: 2.1M (peak: 2.4M)
+        CPU: 11ms
+     CGroup: /system.slice/docker-bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7.scope/system.slice/sshd.service
+             └─55 "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"
+
+May 23 06:19:18 ws01.techvault.local systemd[1]: Starting OpenSSH server daemon...
+May 23 06:19:18 ws01.techvault.local sshd[55]: Server listening on 0.0.0.0 port 22.
+May 23 06:19:18 ws01.techvault.local sshd[55]: Server listening on :: port 22.
+May 23 06:19:18 ws01.techvault.local systemd[1]: Started OpenSSH server daemon.
+
+● systemd-journald.service - Journal Service
+     Loaded: loaded (/usr/lib/systemd/system/systemd-journald.service; static)
+     Active: active (running) since Sat 2026-05-23 06:19:18 UTC; 2 days ago
+TriggeredBy: ● systemd-journald.socket
+             ● systemd-journald-dev-log.socket
+       Docs: man:systemd-journald.service(8)
+             man:journald.conf(5)
+   Main PID: 53 (systemd-journal)
+     Status: "Processing requests..."
+      Tasks: 1 (limit: 123488)
+     Memory: 6.7M (peak: 10.2M)
+        CPU: 363ms
+     CGroup: /system.slice/docker-bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7.scope/system.slice/systemd-journald.service
+             └─53 /usr/lib/systemd/systemd-journald
+
+May 23 06:19:18 ws01.techvault.local systemd-journald[53]: Journal started
+May 23 06:19:18 ws01.techvault.local systemd-journald[53]: Runtime Journal (/run/log/journal/fb06e5862cfa4df29051f81a6beff512) is 8.0M, max 4.0G, 3.9G free.
+Notice: journal has been rotated since unit was started, output may be incomplete.
+
+× systemd-tmpfiles-clean.service - Cleanup of Temporary Directories
+     Loaded: loaded (/usr/lib/systemd/system/systemd-tmpfiles-clean.service; static)
+     Active: failed (Result: exit-code) since Mon 2026-05-25 06:36:49 UTC; 20h ago
+TriggeredBy: ● systemd-tmpfiles-clean.timer
+       Docs: man:tmpfiles.d(5)
+             man:systemd-tmpfiles(8)
+    Process: 92443 ExecStart=systemd-tmpfiles --clean (code=exited, status=243/CREDENTIALS)
+   Main PID: 92443 (code=exited, status=243/CREDENTIALS)
+        CPU: 2ms
+
+May 25 06:36:49 ws01.techvault.local systemd[1]: Starting Cleanup of Temporary Directories...
+May 25 06:36:49 ws01.techvault.local systemd[92443]: systemd-tmpfiles-clean.service: Failed to set up credentials: Protocol error
+May 25 06:36:49 ws01.techvault.local systemd[92443]: systemd-tmpfiles-clean.service: Failed at step CREDENTIALS spawning systemd-tmpfiles: Protocol error
+May 25 06:36:49 ws01.techvault.local systemd[1]: systemd-tmpfiles-clean.service: Main process exited, code=exited, status=243/CREDENTIALS
+May 25 06:36:49 ws01.techvault.local systemd[1]: systemd-tmpfiles-clean.service: Failed with result 'exit-code'.
+May 25 06:36:49 ws01.techvault.local systemd[1]: Failed to start Cleanup of Temporary Directories.
+
+× systemd-tmpfiles-setup.service - Create Volatile Files and Directories
+     Loaded: loaded (/usr/lib/systemd/system/systemd-tmpfiles-setup.service; static)
+     Active: failed (Result: exit-code) since Sat 2026-05-23 06:19:18 UTC; 2 days ago
+       Docs: man:tmpfiles.d(5)
+             man:systemd-tmpfiles(8)
+    Process: 51 ExecStart=systemd-tmpfiles --create --remove --boot --exclude-prefix=/dev (code=exited, status=243/CREDENTIALS)
+   Main PID: 51 (code=exited, status=243/CREDENTIALS)
+        CPU: 2ms
+
+Notice: journal has been rotated since unit was started, output may be incomplete.
+
+● systemd-user-sessions.service - Permit User Sessions
+     Loaded: loaded (/usr/lib/systemd/system/systemd-user-sessions.service; enabled; preset: disabled)
+     Active: active (exited) since Sat 2026-05-23 06:19:18 UTC; 2 days ago
+       Docs: man:systemd-user-sessions.service(8)
+    Process: 56 ExecStart=/usr/lib/systemd/systemd-user-sessions start (code=exited, status=0/SUCCESS)
+   Main PID: 56 (code=exited, status=0/SUCCESS)
+        CPU: 5ms
+
+May 23 06:19:18 ws01.techvault.local systemd[1]: Starting Permit User Sessions...
+May 23 06:19:18 ws01.techvault.local systemd[1]: Finished Permit User Sessions.
+
+○ wazuh-agent.service - Wazuh agent
+     Loaded: loaded (/usr/lib/systemd/system/wazuh-agent.service; disabled; preset: disabled)
+     Active: inactive (dead)
+
+○ falco-modern-bpf.service - Falco: Container Native Runtime Security with modern ebpf
+     Loaded: loaded (/usr/lib/systemd/system/falco-modern-bpf.service; disabled; preset: disabled)
+     Active: inactive (dead)
+       Docs: https://falco.org/docs/
+
+○ falco-bpf.service - Falco: Container Native Runtime Security with ebpf
+     Loaded: loaded (/usr/lib/systemd/system/falco-bpf.service; disabled; preset: disabled)
+     Active: inactive (dead)
+       Docs: https://falco.org/docs/
+
+○ falco-kmod.service - Falco: Container Native Runtime Security with kmod
+     Loaded: loaded (/usr/lib/systemd/system/falco-kmod.service; disabled; preset: disabled)
+     Active: inactive (dead)
+       Docs: https://falco.org/docs/
+
+○ falco-custom.service - Falco: Container Native Runtime Security with custom configuration
+     Loaded: loaded (/usr/lib/systemd/system/falco-custom.service; disabled; preset: disabled)
+     Active: inactive (dead)
+       Docs: https://falco.org/docs/

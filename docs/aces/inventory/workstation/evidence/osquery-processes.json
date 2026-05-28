@@ -1,0 +1,36 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-workstation PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "/usr/sbin/init",
+      "gid": "0",
+      "name": "systemd",
+      "path": "",
+      "pid": "1",
+      "start_time": "1779517156",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/lib/systemd/systemd-journald",
+      "gid": "0",
+      "name": "systemd-journal",
+      "path": "",
+      "pid": "53",
+      "start_time": "1779517157",
+      "uid": "0"
+    },
+    {
+      "cmdline": "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups",
+      "gid": "0",
+      "name": "sshd",
+      "path": "",
+      "pid": "55",
+      "start_time": "1779517157",
+      "uid": "0"
+    }
+  ]
+}

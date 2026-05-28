@@ -1,0 +1,325 @@
+[
+  {
+    "Id": "bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7",
+    "Created": "2026-05-23T06:18:32.82276284Z",
+    "Path": "/usr/local/bin/entrypoint.sh",
+    "Args": [
+      "/usr/sbin/init"
+    ],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2966060,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-23T06:19:17.813717549Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-05-26T05:00:07.803190847+02:00",
+            "End": "2026-05-26T05:00:07.8529087+02:00",
+            "ExitCode": 0,
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+          },
+          {
+            "Start": "2026-05-26T05:00:22.853716393+02:00",
+            "End": "2026-05-26T05:00:22.905175539+02:00",
+            "ExitCode": 0,
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+          },
+          {
+            "Start": "2026-05-26T05:00:37.906475619+02:00",
+            "End": "2026-05-26T05:00:37.961758174+02:00",
+            "ExitCode": 0,
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+          },
+          {
+            "Start": "2026-05-26T05:00:52.962763784+02:00",
+            "End": "2026-05-26T05:00:53.010564473+02:00",
+            "ExitCode": 0,
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+          },
+          {
+            "Start": "2026-05-26T05:01:08.011133223+02:00",
+            "End": "2026-05-26T05:01:08.065646819+02:00",
+            "ExitCode": 0,
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+          }
+        ]
+      }
+    },
+    "Image": "sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f",
+    "ResolvConfPath": "/var/lib/docker/containers/bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7/hostname",
+    "HostsPath": "/var/lib/docker/containers/bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7/hosts",
+    "LogPath": "/var/lib/docker/containers/bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7/bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7-json.log",
+    "Name": "/aptl-workstation",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "/sys/fs/cgroup:/sys/fs/cgroup:rw",
+        "/home/atomik/src/aptl/keys:/keys:ro",
+        "aptl_workstation_logs:/var/log:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-internal",
+      "PortBindings": {},
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": [
+        "CAP_SYS_ADMIN",
+        "CAP_SYS_NICE",
+        "CAP_SYS_RESOURCE"
+      ],
+      "CapDrop": null,
+      "CgroupnsMode": "host",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": [
+        "seccomp:unconfined"
+      ],
+      "Tmpfs": {
+        "/run": "",
+        "/tmp": ""
+      },
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 268435456,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 536870912,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/sys/fs/cgroup",
+        "Destination": "/sys/fs/cgroup",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/keys",
+        "Destination": "/keys",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_workstation_logs",
+        "Source": "/var/lib/docker/volumes/aptl_workstation_logs/_data",
+        "Destination": "/var/log",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "4e24e6ea836958417b1881d7f18939e5abfd3bc5e83d0e746347e32deb1efe09",
+        "Source": "/var/lib/docker/volumes/4e24e6ea836958417b1881d7f18939e5abfd3bc5e83d0e746347e32deb1efe09/_data",
+        "Destination": "/home",
+        "Driver": "local",
+        "Mode": "",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "ws01.techvault.local",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "22/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "SIEM_IP=172.20.2.30",
+        "LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "INSTALL_WAZUH=true",
+        "INSTALL_FALCO=true",
+        "INSTALL_XSIAM=false"
+      ],
+      "Cmd": [
+        "/usr/sbin/init"
+      ],
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "ss -tlnp | grep ':22' || exit 1"
+        ],
+        "Interval": 15000000000,
+        "Timeout": 5000000000,
+        "StartPeriod": 30000000000,
+        "Retries": 5
+      },
+      "Image": "aptl-workstation",
+      "Volumes": {
+        "/home": {},
+        "/var/log": {}
+      },
+      "WorkingDir": "/",
+      "Entrypoint": [
+        "/usr/local/bin/entrypoint.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "a45f0346f533410281dbebb1aa502b7ce847a34a227a5a24a3e1fb1823fe6765",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "wazuh.manager:service_healthy:false",
+        "com.docker.compose.image": "sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "workstation",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "4d3c100784aa6bb571f06ce88defbc931786327c2713ee7fbb6bd9bb7d263cc5",
+      "SandboxKey": "/var/run/docker/netns/4d3c100784aa",
+      "Ports": {
+        "22/tcp": null
+      },
+      "Networks": {
+        "aptl_aptl-internal": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.2.40"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-workstation",
+            "workstation"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
+          "EndpointID": "fa4d83bf827a98b9cdaee7bb41d99529c381a4cd3e3beb397671e0ab2df4d953",
+          "Gateway": "",
+          "IPAddress": "172.20.2.40",
+          "MacAddress": "6a:9b:77:93:b3:7a",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-workstation",
+            "workstation",
+            "bee68cc7d455",
+            "ws01.techvault.local"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:5e22aefe62cfc32fcd785260a05b6dd60b5b875db92aafc60f7a73feffda86c6",
+      "size": 5962,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

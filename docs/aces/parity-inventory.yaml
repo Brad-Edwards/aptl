@@ -78,6 +78,17 @@ rows:
     blocking_followup: n/a
     notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL consumes ACES #363, #364, #365, #366, #367, and #368 with no known remaining ACES expressivity blocker for the catalogued webapp steady-state inventory. Full root filesystem cataloguing is deferred as capture scope, not blocked by ACES expressivity.
 
+  - id: scen.techvault.workstation-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.workstation + infrastructure.workstation + runtime + content + accounts + relationships
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime / content / accounts / relationships fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/workstation/ + tests/test_workstation_inventory.py + scenarios/techvault.sdl.yaml + Brad-Edwards/aces#418 consumed"
+    blocking_followup: n/a
+    notes: SCN-010 issue #334 workstation inventory pass. The SDL encodes the catalogued workstation image, build, runtime, filesystem, identity, package/CVE, SSH, credential-fixture weakness, relationship, and systemd service-manager unit-state facts. Brad-Edwards/aces#418 is consumed through nodes.workstation.runtime.service_manager_units, with no known remaining ACES expressivity blocker for the catalogued workstation steady-state inventory.
+
   - id: scen.techvault.db-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml

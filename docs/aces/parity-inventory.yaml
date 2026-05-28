@@ -702,6 +702,17 @@ rows:
     blocking_followup: n/a
     notes: Attacker box with audit/capture surface (ADR-033); SCN-010 issue #339 inventory pass encodes the kali node in the ACES SDL with init_process, seccomp_profile/security_opt, process-scoped capability overrides, and ssh_servers. No remaining ACES expressivity blocker.
 
+  - id: scen.techvault.mailserver-inventory
+    surface: scenarios_yaml
+    legacy_source: "docker-compose.yml service mailserver + docs/aces/inventory/mailserver/"
+    legacy_field: mailserver steady-state participant-observable asset spec
+    category: aces_sdl
+    aces_target: ACES nodes.mailserver + nodes.mailserver.runtime.mail_services + infrastructure.mailserver + conditions.mailserver-smtp-ready + relationships.kali-probes-mailserver-smtp/kali-probes-mailserver-imap
+    runtime_owner: scenarios/techvault.sdl.yaml
+    validation_evidence: docs/aces/inventory/mailserver/ + scenarios/techvault.sdl.yaml + tests/test_mailserver_inventory.py + ACES ADR-038 consumed
+    blocking_followup: n/a
+    notes: SCN-010 issue #335 inventory pass encodes the docker-mailserver steady-state image, runtime, mail-service logical state, filesystem, local identity, package/CVE summary, and participant probe facts with no known remaining ACES expressivity blocker. TCP/993 is host-published but refused at the participant vantage; TCP/465 is reachable but not working implicit TLS in this capture.
+
   - id: compose.profile.reverse
     surface: docker_compose_topology
     legacy_source: "docker-compose.yml (profile: reverse)"

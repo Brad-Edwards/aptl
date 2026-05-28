@@ -1,0 +1,94 @@
+{
+  "profiles": [
+    "mail"
+  ],
+  "command": null,
+  "container_name": "aptl-mailserver",
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "536870912"
+      }
+    },
+    "placement": {}
+  },
+  "domainname": "techvault.local",
+  "entrypoint": null,
+  "environment": {
+    "DMS_DEBUG": "0",
+    "ENABLE_CLAMAV": "0",
+    "ENABLE_FAIL2BAN": "0",
+    "ENABLE_POSTGREY": "0",
+    "ENABLE_SASLAUTHD": "0",
+    "ENABLE_SPAMASSASSIN": "0",
+    "ONE_DIR": "1",
+    "OVERRIDE_HOSTNAME": "mail.techvault.local",
+    "PERMIT_DOCKER": "network",
+    "SIEM_IP": "172.20.0.10",
+    "SSL_TYPE": ""
+  },
+  "hostname": "mail.techvault.local",
+  "image": "ghcr.io/docker-mailserver/docker-mailserver:latest",
+  "networks": {
+    "aptl-dmz": {
+      "ipv4_address": "172.20.1.21"
+    },
+    "aptl-internal": {
+      "ipv4_address": "172.20.2.26"
+    }
+  },
+  "ports": [
+    {
+      "mode": "ingress",
+      "target": 25,
+      "published": "25",
+      "protocol": "tcp"
+    },
+    {
+      "mode": "ingress",
+      "target": 143,
+      "published": "143",
+      "protocol": "tcp"
+    },
+    {
+      "mode": "ingress",
+      "target": 587,
+      "published": "587",
+      "protocol": "tcp"
+    },
+    {
+      "mode": "ingress",
+      "target": 993,
+      "published": "993",
+      "protocol": "tcp"
+    }
+  ],
+  "restart": "unless-stopped",
+  "volumes": [
+    {
+      "type": "volume",
+      "source": "mailserver_data",
+      "target": "/var/mail",
+      "volume": {}
+    },
+    {
+      "type": "volume",
+      "source": "mailserver_state",
+      "target": "/var/mail-state",
+      "volume": {}
+    },
+    {
+      "type": "volume",
+      "source": "mailserver_logs",
+      "target": "/var/log/mail",
+      "volume": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl3/containers/mailserver/setup.sh",
+      "target": "/tmp/setup.sh",
+      "read_only": true,
+      "bind": {}
+    }
+  ]
+}

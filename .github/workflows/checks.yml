@@ -238,8 +238,9 @@ jobs:
     # Advisory image scan per locally-built Dockerfile. Matrix is bounded
     # to images defined in `web/` and `containers/`; upstream-image-only
     # services (wazuh/, misp/, etc.) are out of scope. ADR-026 calls out
-    # the cost of one-image-per-job — buildx GHA layer cache (scoped per
-    # matrix entry) keeps repeat-runs cheap.
+    # the cost of one-image-per-job. These advisory builds intentionally
+    # avoid buildx GHA layer cache because expired cache blob URLs can fail
+    # the job before Trivy runs.
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -331,8 +332,6 @@ jobs:
           tags: aptl-scan/${{ matrix.name }}:ci
           load: true
           push: false
-          cache-from: type=gha,scope=trivy-${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=trivy-${{ matrix.name }}
       - uses: aquasecurity/trivy-action@v0.36.0
         if: steps.image-scope.outputs.scan == 'true'
         with:

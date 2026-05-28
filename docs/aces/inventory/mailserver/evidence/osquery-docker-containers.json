@@ -1,0 +1,34 @@
+{
+  "table": "docker_containers",
+  "query": "select id, name, image, image_id, command, created, state, status, pid, path, config_entrypoint, started_at, finished_at, privileged, security_options, readonly_rootfs, cgroup_namespace, ipc_namespace, mnt_namespace, net_namespace, pid_namespace, user_namespace, uts_namespace from docker_containers where name=\"/aptl-mailserver\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "cgroup_namespace": "",
+      "command": "/usr/bin/dumb-init -- supervisord -c /etc/supervisor/supervisord.conf",
+      "config_entrypoint": "/usr/bin/dumb-init, --",
+      "created": "1779948101",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "id": "d195b7bed1a9642033f18d1b411a567e9c31bfddd3dc55ce2b4afc76c8425e52",
+      "image": "ghcr.io/docker-mailserver/docker-mailserver:latest",
+      "image_id": "af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a",
+      "ipc_namespace": "",
+      "mnt_namespace": "",
+      "name": "/aptl-mailserver",
+      "net_namespace": "",
+      "path": "/usr/bin/dumb-init",
+      "pid": "2272961",
+      "pid_namespace": "",
+      "privileged": "0",
+      "readonly_rootfs": "0",
+      "security_options": "",
+      "started_at": "2026-05-28T06:01:43.934976649Z",
+      "state": "running",
+      "status": "Up 7 minutes",
+      "user_namespace": "",
+      "uts_namespace": ""
+    }
+  ]
+}

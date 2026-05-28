@@ -1,0 +1,573 @@
+schema_version: 1
+asset:
+  id: fileshare
+  scenario: TechVault
+  aptl_issue: 333
+  aces_methodology_issue: 353
+  source_class: custom-build
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence: []
+    limits:
+      - >
+        This first-party local image was captured from the local Docker daemon.
+        No registry-visible OCI, in-toto, or SLSA attestation was available for
+        the mutable local tag at capture time.
+correspondence_checks:
+  - id: fileshare-node-source-correspondence
+    status: planned
+    source: nodes.fileshare.source
+    realized_evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/source-checksums.txt
+      - path: evidence/docker-history.image.txt
+      - path: evidence/docker-history.image.jsonl
+    ledger_fact_ids:
+      - fileshare.image.identity
+      - fileshare.build.recipe
+    method: >
+      Compare the ACES source name/version and source.build provenance in
+      scenarios/techvault.sdl.yaml against the realized local image digest,
+      Docker build history, and containers/fileshare/ source-package checksums
+      captured in this bundle.
+    limit: >
+      Planned because issue #333 records the current steady-state asset spec;
+      this branch does not rerun the lab for a live equivalence proof.
+  - id: fileshare-runtime-correspondence
+    status: planned
+    source: nodes.fileshare.runtime
+    realized_evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/os-packages.txt
+      - path: evidence/trivy-vulnerability-list.json
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/share-tree.txt
+      - path: evidence/smbclient-anonymous-probes.txt
+      - path: evidence/smbclient-svc-fileshare-probes.txt
+    ledger_fact_ids:
+      - fileshare.runtime.mount-table
+      - fileshare.runtime.filesystem-content
+      - fileshare.runtime.filesystem-metadata
+      - fileshare.runtime.primary-process
+      - fileshare.runtime.supervised-process-set
+      - fileshare.runtime.environment-policy
+      - fileshare.runtime.capability-restart-policy
+      - fileshare.runtime.container-host-config
+      - fileshare.runtime.health
+      - fileshare.runtime.package-inventory
+      - fileshare.runtime.vulnerability-scan
+      - fileshare.samba.configuration
+      - fileshare.samba.share-access
+      - fileshare.runtime.local-identity-database
+      - fileshare.samba.accounts
+    method: >
+      Re-run the encoded scenario from ACES SDL, recapture runtime evidence,
+      and compare the mount, filesystem, Samba, container host/security,
+      health, process, environment, capability, operational-policy, package,
+      scanner, and identity surfaces against this ledger.
+    limit: >
+      Planned because this issue records the frozen steady-state ACES spec and
+      evidence, not a destructive fresh live equivalence run.
+notes:
+  - >
+    Capture used the already-running local aptl-fileshare container created on
+    2026-05-23. `aptl lab stop -v && aptl lab start` was not run, so this is a
+    non-destructive current-baseline capture rather than clean-lab rebuild
+    proof.
+  - >
+    Generated CTF flag contents and generated SSH private-key material are not
+    committed. The bundle records metadata, checksums, and the observed absence
+    of deploy_key/deploy_key.pub instead.
+  - >
+    No known ACES expressivity blocker remains for the catalogued fileshare
+    steady-state inventory facts. Full root filesystem cataloguing is deferred
+    capture scope, not an ACES expressivity limit.
+facts:
+  - id: fileshare.image.identity
+    category: provenance
+    summary: >
+      The asset uses first-party local image aptl-fileshare:latest, captured as
+      aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59.
+    evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.source.name
+        - nodes.fileshare.source.version
+      rationale: >
+        ACES node source identifies the provider-neutral artifact and the
+        observed immutable image digest used by later backend realization.
+
+  - id: fileshare.build.recipe
+    category: provenance
+    summary: >
+      The image is a custom build from containers/fileshare/Dockerfile on base
+      ubuntu:22.04, with copied source inputs from containers/fileshare/,
+      containers/_wazuh-agent/, and the Wazuh active-response whitelist.
+    evidence:
+      - path: evidence/compose-service.fileshare.json
+      - path: evidence/docker-history.image.txt
+      - path: evidence/docker-history.image.jsonl
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.source.build.base_image
+        - nodes.fileshare.source.build.dockerfile_path
+        - nodes.fileshare.source.build.instructions
+        - nodes.fileshare.source.build.layers
+        - nodes.fileshare.source.build.copied_sources
+        - nodes.fileshare.source.build.config
+        - nodes.fileshare.source.build.source_inputs
+        - nodes.fileshare.source.build.attestation
+      rationale: >
+        ACES Source.build encodes the observed Dockerfile recipe, Docker
+        history/layer chain, copied source mappings, checksum-addressed source
+        inputs, image-default config, and absent-attestation fact directly.
+
+  - id: fileshare.os.version
+    category: runtime-configuration
+    summary: The realized runtime OS is Ubuntu 22.04.5 LTS (Jammy Jellyfish).
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.os
+        - nodes.fileshare.os_version
+      rationale: ACES nodes have explicit OS family and version fields.
+
+  - id: fileshare.network.identity
+    category: network
+    summary: >
+      The service is attached to aptl_aptl-internal at 172.20.2.12, with
+      aliases aptl-fileshare and fileshare and DNS names including
+      files.techvault.local.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-network.aptl-internal.json
+      - path: evidence/compose-service.fileshare.json
+    aces:
+      disposition: encoded
+      surface: infrastructure
+      fields:
+        - infrastructure.fileshare.links
+        - infrastructure.fileshare.properties
+        - nodes.fileshare.runtime.network.endpoints
+      rationale: >
+        ACES infrastructure properties encode authored network attachment and
+        static IP assignment; runtime.network encodes Docker aliases, DNS
+        names, endpoint IDs, MAC address, and backend bridge metadata.
+
+  - id: fileshare.smb.service
+    category: service-surface
+    summary: >
+      The fileshare exposes SMB/NetBIOS on TCP 139 and 445 inside the
+      container, with no host-published ports.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/compose-service.fileshare.json
+    aces:
+      disposition: encoded
+      surface: nodes.services
+      fields:
+        - nodes.fileshare.services
+      rationale: ACES node service bindings model exposed network services by port.
+
+  - id: fileshare.healthcheck
+    category: runtime-configuration
+    summary: >
+      Compose declares a healthcheck using smbclient -L localhost -N with 15s
+      interval, 5s timeout, 5 retries, and 30s start period.
+    evidence:
+      - path: evidence/compose-service.fileshare.json
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: conditions
+      fields:
+        - conditions.fileshare-smb-ready
+        - nodes.fileshare.conditions
+      rationale: ACES conditions represent health/readiness commands and timing.
+
+  - id: fileshare.runtime.mount-table
+    category: runtime-configuration
+    summary: >
+      The realized container exposes overlay root, proc/sys/tmpfs
+      pseudo-filesystems, Docker-managed resolver/hostname/hosts files, and
+      named volumes at /srv/shares and /var/log/samba.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-volume.fileshare-data.json
+      - path: evidence/docker-volume.fileshare-logs.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.mounts
+      rationale: >
+        ACES typed runtime mounts encode filesystem type, options, propagation,
+        stability, and backend-generated fields for the full observed mount
+        table.
+
+  - id: fileshare.runtime.primary-process
+    category: runtime-configuration
+    summary: >
+      PID 1 runs supervisord as root with command
+      /usr/bin/python3 /usr/bin/supervisord -n -c
+      /etc/supervisor/supervisord.conf.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-top.txt
+      - path: evidence/osquery-processes.json
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.process
+      rationale: ACES runtime.process records primary runtime process identity.
+
+  - id: fileshare.runtime.supervised-process-set
+    category: runtime-configuration
+    summary: >
+      Supervisord manages rsyslog, smbd/Samba helpers, and the in-process Wazuh
+      agent process family.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/osquery-processes.json
+      - path: evidence/docker-top.txt
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.supervised_processes
+        - nodes.fileshare.runtime.processes
+      rationale: >
+        ACES runtime supervised-process and process inventories encode daemon
+        ownership, command lines, and runtime process identity.
+
+  - id: fileshare.runtime.environment-policy
+    category: runtime-configuration
+    summary: >
+      The runtime environment declares WAZUH_MANAGER, AGENT_NAME, LOG_PATHS,
+      LOG_FORMAT, SIEM_IP, PATH, and DEBIAN_FRONTEND; no raw operator secret
+      environment values are present in the captured container evidence.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/compose-service.fileshare.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.environment
+      rationale: ACES runtime.environment carries observed env names, values, and classification.
+
+  - id: fileshare.runtime.capability-restart-policy
+    category: runtime-configuration
+    summary: >
+      The service adds CAP_NET_ADMIN, uses restart policy unless-stopped, and
+      has a 512 MiB Compose memory limit.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/compose-service.fileshare.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.capabilities
+        - nodes.fileshare.runtime.restart_policy
+        - nodes.fileshare.runtime.resource_limits
+      rationale: ACES runtime policy fields encode Linux capabilities, restart policy, and resource limits.
+
+  - id: fileshare.runtime.container-host-config
+    category: runtime-configuration
+    summary: >
+      Docker HostConfig records unprivileged, writable-rootfs, json-file
+      logging, private namespaces, masked paths, read-only proc paths, and no
+      host-published ports.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/compose-service.fileshare.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.container
+      rationale: ACES runtime.container carries observed Docker Config and HostConfig fields.
+
+  - id: fileshare.runtime.health
+    category: runtime-configuration
+    summary: >
+      Docker reports healthy state with five recent successful smbclient
+      healthcheck logs.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.health
+      rationale: ACES runtime.health captures observed container health state and log entries.
+
+  - id: fileshare.runtime.package-inventory
+    category: runtime-inventory
+    summary: >
+      The runtime image contains 235 dpkg packages, Trivy CycloneDX SBOM
+      component evidence, and Syft CycloneDX SBOM component evidence.
+    evidence:
+      - path: evidence/os-packages.txt
+      - path: evidence/language-manifests.txt
+      - path: evidence/trivy-sbom.cyclonedx.json
+      - path: evidence/syft-sbom.cyclonedx.json
+      - path: evidence/syft-version.json
+      - path: evidence/trivy-version.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.packages
+        - nodes.fileshare.runtime.dependency_manifests
+      rationale: >
+        ACES runtime package and dependency-manifest inventory can encode the
+        package/component identity and tool provenance captured here.
+
+  - id: fileshare.runtime.vulnerability-scan
+    category: runtime-inventory
+    summary: >
+      Trivy captured 120 package vulnerability findings at scan time: 52
+      medium and 68 low.
+    evidence:
+      - path: evidence/trivy-vulnerability-list.json
+      - path: evidence/trivy-vulnerability-counts.json
+      - path: evidence/trivy-version.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.package_vulnerabilities
+      rationale: >
+        ACES scanner-derived package finding inventory records advisory ID,
+        package, installed/fixed version, severity, target, scanner, and
+        time-sensitive evidence provenance.
+
+  - id: fileshare.runtime.filesystem-content
+    category: filesystem-inventory
+    summary: >
+      The observed fileshare runtime paths under /opt, /etc/samba,
+      /etc/supervisor/conf.d, /etc/rsyslog.d, /var/ossec/etc, /srv/shares,
+      /var/log/samba, and generated flag locations are represented with
+      checksum-addressed source or runtime references.
+    evidence:
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/share-tree.txt
+      - path: evidence/share-checksums.txt
+      - path: evidence/source-checksums.txt
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded
+      surface: content
+      fields:
+        - nodes.fileshare.runtime.filesystem_inventory
+        - content
+      rationale: >
+        ACES runtime filesystem inventory carries path type, owner/group,
+        UID/GID, mode, size, digest, source, stability, and sensitivity, and
+        ACES content entries carry checksum-addressed source placement for the
+        catalogued path set.
+
+  - id: fileshare.runtime.filesystem-metadata
+    category: filesystem-inventory
+    summary: >
+      The capture records share permissions, ownership, sizes, checksums, the
+      absence of deploy_key/deploy_key.pub, and redaction boundaries for
+      generated flags and generated private-key material.
+    evidence:
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/share-tree.txt
+      - path: evidence/share-checksums.txt
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.filesystem_inventory
+      rationale: >
+        ACES runtime filesystem inventory encodes metadata,
+        expected-absent path observations, generated stability, and
+        sensitivity classifications directly.
+
+  - id: fileshare.samba.configuration
+    category: service-surface
+    summary: >
+      Samba is configured as a standalone TECHVAULT workgroup server with
+      Public, Engineering, Finance, HR, IT-Backups, Shared, and IPC$ share
+      surfaces.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.file_services.fileshare-smb
+        - nodes.fileshare.runtime.filesystem_inventory
+      rationale: >
+        ACES file-service inventory and filesystem inventory can encode the
+        Samba server identity, share definitions, paths, access rules, and
+        source-backed configuration file.
+
+  - id: fileshare.samba.share-access
+    category: service-surface
+    summary: >
+      Anonymous access lists Public and Shared while Engineering, Finance, HR,
+      and IT-Backups deny anonymous tree connections. The svc-fileshare fixture
+      account lists Public and Shared but is denied Engineering.
+    evidence:
+      - path: evidence/smbclient-anonymous-probes.txt
+      - path: evidence/smbclient-svc-fileshare-probes.txt
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.file_services.fileshare-smb.shares
+        - nodes.fileshare.runtime.file_services.fileshare-smb.access_rules
+        - nodes.fileshare.runtime.file_services.fileshare-smb.access_observations
+      rationale: >
+        ACES file-service inventory can encode share auth boundaries, guest
+        access, visibility, configured access rules, and observed access-probe
+        outcomes.
+
+  - id: fileshare.runtime.local-identity-database
+    category: identity
+    summary: >
+      The local identity database includes system accounts plus wazuh and the
+      generated svc-fileshare local account; sudo rules are absent from this
+      capture.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: accounts
+      fields:
+        - nodes.fileshare.runtime.local_identity
+        - accounts
+      rationale: >
+        ACES local identity and accounts surfaces encode users, UIDs/GIDs,
+        home directories, shells, groups, membership, and local account status.
+
+  - id: fileshare.samba.accounts
+    category: identity
+    summary: >
+      Samba passdb contains nobody and svc-fileshare accounts. The
+      svc-fileshare fixture credential is participant-visible authored fixture
+      state and was used only for an access-behavior probe.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/smbclient-svc-fileshare-probes.txt
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.file_services.fileshare-smb.principals.nobody
+        - nodes.fileshare.runtime.file_services.fileshare-smb.principals.svc-fileshare
+      rationale: >
+        ACES file-service principals encode service-local Samba identities,
+        account status, service-local RID evidence, credential classification,
+        and optional local-user bindings without promoting passdb rows into
+        top-level scenario accounts.
+
+  - id: fileshare.relationships
+    category: relationships
+    summary: >
+      The fileshare forwards logs and Wazuh agent telemetry to the SOC stack
+      using SIEM_IP=172.20.0.10 and WAZUH_MANAGER=wazuh.manager.
+    evidence:
+      - path: evidence/compose-service.fileshare.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: relationships
+      fields:
+        - relationships.fileshare-forwards-wazuh
+        - features.fileshare-rsyslog-forwarding
+        - features.fileshare-wazuh-agent
+      rationale: ACES relationships and features encode log forwarding and in-process Wazuh agent dependencies.
+
+  - id: fileshare.capture.toolchain-baseline
+    category: provenance
+    summary: >
+      Capture time, Docker/Compose versions, scanner versions, osquery table
+      attempts, Syft normalization, evidence checksums, and capture limits are
+      recorded as reproducibility evidence.
+    evidence:
+      - path: evidence/captured-at-utc.txt
+      - path: evidence/capture-limits.txt
+      - path: evidence/docker-version.json
+      - path: evidence/docker-compose-version.json
+      - path: evidence/trivy-version.txt
+      - path: evidence/syft-version.json
+      - path: evidence/osquery-version.txt
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-programs.json
+      - path: evidence/evidence-sha256sums.txt
+      - path: evidence/compose-service.fileshare.json
+      - path: evidence/docker-history.image.txt
+      - path: evidence/docker-history.image.jsonl
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-network.aptl-internal.json
+      - path: evidence/docker-top.txt
+      - path: evidence/docker-volume.fileshare-data.json
+      - path: evidence/docker-volume.fileshare-logs.json
+      - path: evidence/language-manifests.txt
+      - path: evidence/os-packages.txt
+      - path: evidence/source-checksums.txt
+      - path: evidence/syft-sbom.cyclonedx.json
+      - path: evidence/trivy-sbom.cyclonedx.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      fields:
+        - nodes.fileshare.runtime.capture
+        - nodes.fileshare.runtime.scanner_evidence
+      caveat: >
+        Capture metadata is provenance for the encoded asset spec. It is not a
+        claim of byte-identical rebuildability or live equivalence.
+      rationale: >
+        ACES runtime capture/scanner evidence fields and ledger provenance
+        record the evidence-producing activity, tool identities, table limits,
+        normalization, and integrity manifest.

@@ -89,6 +89,17 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #334 workstation inventory pass. The SDL encodes the catalogued workstation image, build, runtime, filesystem, identity, package/CVE, SSH, credential-fixture weakness, relationship, and systemd service-manager unit-state facts. Brad-Edwards/aces#418 is consumed through nodes.workstation.runtime.service_manager_units, with no known remaining ACES expressivity blocker for the catalogued workstation steady-state inventory.
 
+  - id: scen.techvault.fileshare-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.fileshare + infrastructure.fileshare + runtime + content + accounts + relationships
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime / content / accounts / relationships fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/fileshare/ + tests/test_fileshare_inventory.py + scenarios/techvault.sdl.yaml"
+    blocking_followup: n/a
+    notes: SCN-010 issue #333 fileshare inventory pass. The SDL encodes the catalogued steady-state Samba service, share access behavior, generated fixture filesystem, local and Samba identity records, package/CVE inventory, Wazuh/logging relationships, and runtime Docker realization facts with no known remaining ACES expressivity blocker. The capture is a non-destructive current-baseline observation, not clean-lab rebuild proof.
+
   - id: scen.techvault.db-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
@@ -624,6 +635,17 @@ rows:
     validation_evidence: docs/aces/inventory/webapp/ + scenarios/techvault.sdl.yaml + tests/test_webapp_inventory.py
     blocking_followup: n/a
     notes: Runtime evidence and ACES-expressible fields captured by issue #330 and later ACES runtime-profile landings; no known remaining expressivity blocker for the catalogued webapp steady-state inventory.
+
+  - id: compose.service.fileshare
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (service: fileshare)"
+    legacy_field: fileshare
+    category: aces_sdl
+    aces_target: ACES nodes.fileshare + infrastructure.fileshare + conditions.fileshare-smb-ready + relationships.fileshare-forwards-wazuh
+    runtime_owner: n/a
+    validation_evidence: docs/aces/inventory/fileshare/ + scenarios/techvault.sdl.yaml + tests/test_fileshare_inventory.py
+    blocking_followup: n/a
+    notes: Runtime evidence and ACES-expressible fields captured by issue #333; no known remaining expressivity blocker for the catalogued fileshare steady-state inventory. The fileshare profile row remains a delivery-toggle responsibility, while the participant-visible service facts now live in ACES SDL rows.
 
   - id: compose.service.shuffle-backend
     surface: docker_compose_topology

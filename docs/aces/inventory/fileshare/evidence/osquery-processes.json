@@ -1,0 +1,135 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-fileshare PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "/usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf",
+      "gid": "0",
+      "name": "supervisord",
+      "path": "",
+      "pid": "1",
+      "start_time": "1779517113",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/rsyslogd -n",
+      "gid": "103",
+      "name": "rsyslogd",
+      "path": "",
+      "pid": "60",
+      "start_time": "1779517116",
+      "uid": "102"
+    },
+    {
+      "cmdline": "/usr/sbin/smbd --foreground --no-process-group --debug-stdout",
+      "gid": "0",
+      "name": "smbd",
+      "path": "",
+      "pid": "61",
+      "start_time": "1779517116",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/smbd --foreground --no-process-group --debug-stdout",
+      "gid": "0",
+      "name": "smbd-notifyd",
+      "path": "",
+      "pid": "70",
+      "start_time": "1779517116",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/smbd --foreground --no-process-group --debug-stdout",
+      "gid": "0",
+      "name": "cleanupd",
+      "path": "",
+      "pid": "71",
+      "start_time": "1779517116",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/lib/x86_64-linux-gnu/samba/samba-bgqd --ready-signal-fd=43 --parent-watch-fd=9 --debuglevel=0 -F",
+      "gid": "0",
+      "name": "samba-bgqd",
+      "path": "",
+      "pid": "72",
+      "start_time": "1779517117",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/bin/bash /opt/aptl/wazuh/wazuh-agent.sh",
+      "gid": "0",
+      "name": "wazuh-agent.sh",
+      "path": "",
+      "pid": "423",
+      "start_time": "1779517170",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-execd",
+      "gid": "106",
+      "name": "wazuh-execd",
+      "path": "",
+      "pid": "469",
+      "start_time": "1779517171",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-agentd",
+      "gid": "106",
+      "name": "wazuh-agentd",
+      "path": "",
+      "pid": "484",
+      "start_time": "1779517172",
+      "uid": "103"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-syscheckd",
+      "gid": "106",
+      "name": "wazuh-syscheckd",
+      "path": "",
+      "pid": "506",
+      "start_time": "1779517173",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-logcollector",
+      "gid": "106",
+      "name": "wazuh-logcollec",
+      "path": "",
+      "pid": "516",
+      "start_time": "1779517173",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-modulesd",
+      "gid": "106",
+      "name": "wazuh-modulesd",
+      "path": "",
+      "pid": "537",
+      "start_time": "1779517174",
+      "uid": "0"
+    },
+    {
+      "cmdline": "tail -F /var/ossec/logs/ossec.log",
+      "gid": "0",
+      "name": "tail",
+      "path": "",
+      "pid": "607",
+      "start_time": "1779517180",
+      "uid": "0"
+    },
+    {
+      "cmdline": "sleep 5",
+      "gid": "0",
+      "name": "sleep",
+      "path": "",
+      "pid": "198739",
+      "start_time": "1779763923",
+      "uid": "0"
+    }
+  ]
+}

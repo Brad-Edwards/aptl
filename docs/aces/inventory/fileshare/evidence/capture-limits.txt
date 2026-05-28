@@ -1,0 +1,6 @@
+- Generated flag contents and generated SSH private-key material are represented by path metadata and SHA-256 digests only; raw values are intentionally not committed under ADR-029.
+- The authored setup-shares.sh attempts to generate /srv/shares/it-backups/keys/deploy_key, but the observed steady-state container does not contain deploy_key or deploy_key.pub; filesystem-tree.txt and filesystem-checksums.txt record those paths as MISSING.
+- smbclient-svc-fileshare-probes.txt uses the participant-visible fixture credential svc-fileshare/FileShare2024! to prove auth behavior; the value is already authored in containers/fileshare/setup-shares.sh.
+- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; filesystem provenance is captured in filesystem-tree.txt, filesystem-checksums.txt, share-tree.txt, and share-checksums.txt.
+- osquery installed_applications and programs tables were unavailable in the Linux osquery 4.9.0 scanner image.
+- Capture used the already-running aptl-fileshare container created on 2026-05-23, not a destructive fresh aptl lab stop -v && aptl lab start reset.

@@ -7,7 +7,7 @@ asset:
   source_class: upstream-image-plus-mounted-config
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+  image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -58,7 +58,7 @@ notes:
 facts:
 - id: suricata.image.identity
   category: provenance
-  summary: The asset uses upstream image jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d (Suricata 7.0.15, jasonish/suricata:7.0).
+  summary: The asset uses upstream image jasonish/suricata:7.0 at canonical registry manifest-list digest jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe (Suricata 7.0.15). Realized linux/amd64 platform manifest sha256:ec2c37d988f0b69fc2dc6cb6ffb4df1d8ae3fe7af63f4f22129df076ae272b9c; local image config ID sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d.
   evidence:
   - path: evidence/docker-inspect.image.json
   - path: evidence/docker-buildx-imagetools.image.txt

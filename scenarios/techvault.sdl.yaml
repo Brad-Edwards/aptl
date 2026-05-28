@@ -81339,9 +81339,9 @@ nodes:
     os_version: AlmaLinux 9.7 (Moss Jungle Cat)
     source:
       name: jasonish/suricata
-      version: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+      version: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
       build:
-        description: Observed upstream image history for jasonish/suricata:7.0. APTL does not own this upstream Dockerfile; image history is captured as provenance, and the authored suricata.yaml / local.rules bind mounts are recorded as source_inputs.
+        description: Observed upstream image history for jasonish/suricata:7.0. APTL does not own this upstream Dockerfile; image history is captured as provenance, and the authored suricata.yaml / local.rules bind mounts are recorded as source_inputs. source.version is the canonical multi-arch registry manifest-list digest (sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe, per docker buildx imagetools inspect); the realized linux/amd64 platform manifest is sha256:ec2c37d988f0b69fc2dc6cb6ffb4df1d8ae3fe7af63f4f22129df076ae272b9c and the local image config ID is sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d.
         base_image: ''
         base_image_digest: ''
         dockerfile_path: upstream:jasonish/suricata
@@ -81416,7 +81416,7 @@ nodes:
           description: Docker history CreatedAt=2026-04-25T12:30:58+02:00; Comment=buildkit.dockerfile.v0
         layers:
         - created_by: 'RUN /bin/sh -c /usr/bin/suricata --build-info # buildkit'
-          size: 0
+          size: 4100
           empty: false
           description: Docker history CreatedAt=2026-04-28T23:36:25+02:00; Comment=buildkit.dockerfile.v0
         - created_by: ENTRYPOINT ["/docker-entrypoint.sh"]
@@ -81424,7 +81424,7 @@ nodes:
           empty: true
           description: Docker history CreatedAt=2026-04-28T23:36:25+02:00; Comment=buildkit.dockerfile.v0
         - created_by: 'COPY /docker-entrypoint.sh / # buildkit'
-          size: 0
+          size: 8190
           empty: false
           description: Docker history CreatedAt=2026-04-28T23:36:25+02:00; Comment=buildkit.dockerfile.v0
         - created_by: VOLUME [/etc/suricata]
@@ -81444,31 +81444,31 @@ nodes:
           empty: true
           description: Docker history CreatedAt=2026-04-28T23:36:25+02:00; Comment=buildkit.dockerfile.v0
         - created_by: 'RUN /bin/sh -c useradd --system --create-home suricata &&         chown -R suricata:suricata /etc/suricata &&         chown -R suricata:suricata /var/log/suricata &&         chown -R suricata:suricata /var/lib/suricata &&         chown -R suricata:suricata /var/run/suricata &&         cp -a /etc/suricata /etc/suricata.dist &&         chmod 600 /etc/logrotate.d/suricata # buildkit'
-          size: 0
+          size: 49300000
           empty: false
           description: Docker history CreatedAt=2026-04-28T23:36:25+02:00; Comment=buildkit.dockerfile.v0
         - created_by: 'RUN /bin/sh -c suricata-update update-sources &&         suricata-update enable-source oisf/trafficid &&         suricata-update --no-test --no-reload &&         /usr/bin/suricata -V # buildkit'
-          size: 0
+          size: 49200000
           empty: false
           description: Docker history CreatedAt=2026-04-28T23:36:24+02:00; Comment=buildkit.dockerfile.v0
         - created_by: 'COPY /suricata.logrotate /etc/logrotate.d/suricata # buildkit'
-          size: 0
+          size: 16400
           empty: false
           description: Docker history CreatedAt=2026-04-28T23:36:18+02:00; Comment=buildkit.dockerfile.v0
         - created_by: 'COPY /update.yaml /etc/suricata/update.yaml # buildkit'
-          size: 0
+          size: 16400
           empty: false
           description: Docker history CreatedAt=2026-04-28T23:36:18+02:00; Comment=buildkit.dockerfile.v0
         - created_by: 'RUN /bin/sh -c mkdir -p /var/log/suricata /var/run/suricata /var/lib/suricata # buildkit'
-          size: 0
+          size: 32800
           empty: false
           description: Docker history CreatedAt=2026-04-28T23:36:18+02:00; Comment=buildkit.dockerfile.v0
         - created_by: 'COPY /fakeroot / # buildkit'
-          size: 0
+          size: 99300000
           empty: false
           description: Docker history CreatedAt=2026-04-28T23:36:18+02:00; Comment=buildkit.dockerfile.v0
         - created_by: 'RUN /bin/sh -c dnf -y update &&         dnf -y install epel-release &&         dnf -y install         cronie         dpdk         elfutils-libelf         file         findutils         hiredis         iproute         jansson         lua-libs         libbpf         libyaml         libnfnetlink         libnetfilter_queue         libnet         libcap-ng         libevent         libmaxminddb         libpcap         libprelude         logrotate         lz4         net-tools         numactl         pcre2         procps-ng         python3         python3-yaml         tcpdump         which         zlib &&         if [ "$(arch)" = "x86_64" ]; then dnf -y install hyperscan; fi &&         dnf clean all &&         find /etc/logrotate.d -type f -not -name suricata -delete # buildkit'
-          size: 0
+          size: 57800000
           empty: false
           description: Docker history CreatedAt=2026-04-28T23:32:33+02:00; Comment=buildkit.dockerfile.v0
         - created_by: CMD ["/bin/bash"]
@@ -81480,7 +81480,7 @@ nodes:
           empty: true
           description: Docker history CreatedAt=2026-04-25T12:30:58+02:00; Comment=buildkit.dockerfile.v0
         - created_by: 'COPY / / # buildkit'
-          size: 0
+          size: 201000000
           empty: false
           description: Docker history CreatedAt=2026-04-25T12:30:58+02:00; Comment=buildkit.dockerfile.v0
         build_args: []
@@ -82947,7 +82947,7 @@ nodes:
         severity: medium
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14087
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2025-14512
@@ -82957,7 +82957,7 @@ nodes:
         severity: medium
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14512
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-40355
@@ -82967,7 +82967,7 @@ nodes:
         severity: high
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40355
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-40356
@@ -82977,7 +82977,7 @@ nodes:
         severity: high
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40356
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-4878
@@ -82987,7 +82987,7 @@ nodes:
         severity: high
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4878
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-31790
@@ -82997,7 +82997,7 @@ nodes:
         severity: medium
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-31790
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-31790
@@ -83007,7 +83007,7 @@ nodes:
         severity: medium
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-31790
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-2100
@@ -83017,7 +83017,7 @@ nodes:
         severity: medium
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2100
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-2100
@@ -83027,7 +83027,7 @@ nodes:
         severity: medium
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2100
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-4786
@@ -83037,7 +83037,7 @@ nodes:
         severity: high
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4786
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-6100
@@ -83047,7 +83047,7 @@ nodes:
         severity: high
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6100
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-4786
@@ -83057,7 +83057,7 @@ nodes:
         severity: high
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4786
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-6100
@@ -83067,7 +83067,7 @@ nodes:
         severity: high
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6100
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-29111
@@ -83077,7 +83077,7 @@ nodes:
         severity: medium
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-29111
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-29111
@@ -83087,7 +83087,7 @@ nodes:
         severity: medium
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-29111
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-29111
@@ -83097,7 +83097,7 @@ nodes:
         severity: medium
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-29111
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-29111
@@ -83107,7 +83107,7 @@ nodes:
         severity: medium
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-29111
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       - id: CVE-2026-34982
@@ -83117,7 +83117,7 @@ nodes:
         severity: high
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34982
         scanner: trivy
-        image_digest: jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d
+        image_digest: jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe
         scan_time: '2026-05-28T23:08:20Z'
         scanner_version: 0.70.0
       local_identity:

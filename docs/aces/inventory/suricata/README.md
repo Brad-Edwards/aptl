@@ -25,7 +25,9 @@ of that local steady state, not as clean-lab rebuild proof.
 | TechVault profile | `soc` |
 | Source class | `upstream-image-plus-mounted-config` |
 | Image | `jasonish/suricata:7.0` |
-| Image digest | `jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d` |
+| Image digest (registry manifest list) | `jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe` |
+| Realized linux/amd64 platform manifest | `sha256:ec2c37d988f0b69fc2dc6cb6ffb4df1d8ae3fe7af63f4f22129df076ae272b9c` |
+| Local image config ID | `sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d` |
 | Runtime OS | AlmaLinux 9.7 (Moss Jungle Cat) |
 | Engine | Suricata 7.0.15 RELEASE |
 | Capture mode | `--pcap` on `interface: any` |
@@ -57,8 +59,13 @@ of that local steady state, not as clean-lab rebuild proof.
 
 ## Capture Findings
 
-- The runtime image is the upstream `jasonish/suricata:7.0` image at
-  `jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d`.
+- The runtime image is the upstream `jasonish/suricata:7.0` image. Its canonical
+  registry digest (the multi-arch manifest-list digest from
+  `docker buildx imagetools inspect`) is
+  `sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe`; the
+  realized linux/amd64 platform manifest is `sha256:ec2c37d988…` and the local
+  image config ID is `sha256:66cbeff9c0db…` (these are distinct identities — the
+  config ID is not the upstream registry digest).
   The APTL repo contributes the Compose service and the bind-mounted
   `config/suricata/suricata.yaml` + `config/suricata/rules/local.rules`, not the
   upstream Dockerfile.

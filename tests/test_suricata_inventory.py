@@ -29,8 +29,12 @@ EVIDENCE_DIR = SURICATA_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d"
-IMAGE_DIGEST = "jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d"
+# Local image config ID (docker inspect .Id) — distinct from the upstream digest.
+IMAGE_CONFIG_ID = "sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d"
+# Canonical upstream registry manifest-list digest for the jasonish/suricata:7.0
+# tag (docker buildx imagetools inspect) — what source.version pins to.
+IMAGE_DIGEST = "jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe"
+IMAGE_MANIFEST_LIST_DIGEST = "sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe"
 RUNTIME_PACKAGE_COUNT = 191
 TRIVY_FINDING_COUNT = 18
 FILESYSTEM_ENTRY_COUNT = 29
@@ -193,8 +197,11 @@ def test_suricata_evidence_does_not_commit_raw_secret_values():
 
 def test_suricata_runtime_evidence_counts_and_passive_posture():
     image = _json_file("docker-inspect.image.json")[0]
-    assert image["Id"] == IMAGE_ID
-    assert IMAGE_DIGEST in image["RepoDigests"]
+    assert image["Id"] == IMAGE_CONFIG_ID
+    # The canonical upstream digest is the registry manifest-list digest from
+    # buildx imagetools — NOT the local config ID that docker mirrors into RepoDigests.
+    buildx = (EVIDENCE_DIR / "docker-buildx-imagetools.image.txt").read_text(encoding="utf-8")
+    assert IMAGE_MANIFEST_LIST_DIGEST in buildx
 
     assert len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()) == RUNTIME_PACKAGE_COUNT
     assert len(_json_file("trivy-vulnerability-list.json")) == TRIVY_FINDING_COUNT
@@ -269,6 +276,10 @@ def test_techvault_sdl_compiles_with_suricata_runtime_fields():
     assert node["source"]["version"] == IMAGE_DIGEST
     assert len(build["instructions"]) == BUILD_HISTORY_LAYER_COUNT
     assert len(build["layers"]) == BUILD_HISTORY_LAYER_COUNT
+    # non-empty layers carry their real byte sizes (not all zeroed)
+    assert any(layer["size"] > 0 for layer in build["layers"])
+    assert all((layer["size"] == 0) == layer["empty"] for layer in build["layers"])
+    assert node["source"]["version"] == IMAGE_DIGEST
     assert len(build["source_inputs"]) == SOURCE_INPUT_COUNT
     assert build["attestation"]["status"] == "absent"
     assert len(runtime["packages"]) == RUNTIME_PACKAGE_COUNT

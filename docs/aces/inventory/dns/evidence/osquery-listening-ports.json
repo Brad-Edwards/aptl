@@ -1,0 +1,2793 @@
+{
+  "table": "listening_ports",
+  "query": "select port, protocol, address, pid, socket, path from listening_ports order by port, protocol, pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-dns network namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "address": "",
+      "path": "/var/run/supervisor.sock.1",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/alerts/execq",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/logcollector",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/upgrade",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/wmodules",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/control",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/alerts/execq",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/queue",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/syscheck",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/run/supervisor.sock.1",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/alerts/execq",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/logcollector",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/upgrade",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/wmodules",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/control",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/alerts/execq",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/queue",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/syscheck",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170235001"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234995"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234992"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170235004"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170235003"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170235002"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234990"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170235000"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234991"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234999"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234994"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234998"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234997"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234996"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234989"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234993"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232991"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232994"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232989"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232988"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233000"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232999"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233001"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232995"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232998"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232997"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232996"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232993"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232992"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232987"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232990"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232986"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233063"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233057"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233060"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233061"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233059"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233065"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233064"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233053"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233062"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233058"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233056"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233054"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233055"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233052"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233050"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233051"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233025"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233033"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233024"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233032"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233031"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233029"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233028"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233030"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233027"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233026"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233023"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233022"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233021"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233020"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233019"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233018"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170235001"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234995"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234992"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170235004"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170235003"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170235002"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234990"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170235000"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234991"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234999"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234994"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234998"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234997"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234996"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234989"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170234993"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232991"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232994"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232989"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232988"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233000"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232999"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233001"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232995"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232998"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232997"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232996"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232993"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232992"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232987"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232990"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170232986"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233063"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233057"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233060"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233061"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233059"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233065"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233064"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233053"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233062"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233058"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233056"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233054"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233055"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233052"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233050"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233051"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233025"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233033"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233024"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233032"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233031"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233029"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233028"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233030"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233027"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233026"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233023"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233022"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233021"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233020"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233019"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "6",
+      "socket": "170233018"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233078"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233081"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233080"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233079"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233077"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233076"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233075"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233071"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233070"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233069"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233067"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233074"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233073"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233066"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233068"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233072"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233041"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233034"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233036"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233049"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233048"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233040"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233047"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233046"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233045"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233044"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233043"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233042"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233037"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233039"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233035"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233038"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233017"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233016"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233015"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233014"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233013"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233012"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233011"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233010"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233009"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233008"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233007"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233002"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233006"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233005"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233004"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233003"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234974"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234977"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234983"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234982"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234981"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234973"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234984"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234985"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234975"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234976"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234988"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234987"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234986"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234980"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234979"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234978"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233078"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233081"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233080"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233079"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233077"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233076"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233075"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233071"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233070"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233069"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233067"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233074"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233073"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233066"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233068"
+    },
+    {
+      "address": "172.20.2.27",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233072"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233041"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233034"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233036"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233049"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233048"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233040"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233047"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233046"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233045"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233044"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233043"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233042"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233037"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233039"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233035"
+    },
+    {
+      "address": "172.20.1.22",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233038"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233017"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233016"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233015"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233014"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233013"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233012"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233011"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233010"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233009"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233008"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233007"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233002"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233006"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233005"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233004"
+    },
+    {
+      "address": "172.20.0.25",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170233003"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234974"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234977"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234983"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234982"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234981"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234973"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234984"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234985"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234975"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234976"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234988"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234987"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234986"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234980"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234979"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "53",
+      "protocol": "17",
+      "socket": "170234978"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235019"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235018"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235021"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235020"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235014"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235013"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235017"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235016"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235015"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235012"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235010"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235011"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235006"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235009"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235008"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235007"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231901"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231900"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231899"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231902"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231897"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231903"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231904"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231905"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231906"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231898"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231907"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231908"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231910"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231896"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231911"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231909"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235019"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235018"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235021"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235020"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235014"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235013"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235017"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235016"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235015"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235012"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235010"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235011"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235006"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235009"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235008"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170235007"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231901"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231900"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231899"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231902"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231897"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231903"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231904"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231905"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231906"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231898"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231907"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231908"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231910"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231896"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231911"
+    },
+    {
+      "address": "::1",
+      "path": "",
+      "pid": "-1",
+      "port": "953",
+      "protocol": "6",
+      "socket": "170231909"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "34517",
+      "protocol": "6",
+      "socket": "170221566"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "34517",
+      "protocol": "6",
+      "socket": "170221566"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "34817",
+      "protocol": "17",
+      "socket": "170221565"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "34817",
+      "protocol": "17",
+      "socket": "170221565"
+    }
+  ]
+}

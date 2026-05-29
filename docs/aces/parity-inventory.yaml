@@ -729,11 +729,11 @@ rows:
     legacy_source: "docker-compose.yml service suricata + docs/aces/inventory/suricata/"
     legacy_field: suricata steady-state participant-observable asset spec
     category: aces_sdl
-    aces_target: ACES nodes.suricata (source/runtime mounts, container, linux_capabilities, operational_policy, network endpoints, local_control_interfaces, network_sensors, network_detection_engines, process, environment, filesystem_inventory, local_identity, software_components, packages, package_vulnerabilities) + infrastructure.suricata + relationships.suricata-logs-forwarded-wazuh
+    aces_target: ACES nodes.suricata (source/runtime mounts, container, linux_capabilities, operational_policy, network endpoints, local_control_interfaces, network_sensors, network_detection_engines, process, environment, filesystem_inventory, local_identity, software_components, packages, package_vulnerabilities) + infrastructure.suricata + content.suricata-* (6 authored config/ruleset files) + relationships.suricata-logs-forwarded-wazuh
     runtime_owner: scenarios/techvault.sdl.yaml
     validation_evidence: docs/aces/inventory/suricata/ + scenarios/techvault.sdl.yaml + tests/test_suricata_inventory.py
     blocking_followup: n/a
-    notes: SCN-010 issue #345 inventory pass. First passive network-sensor archetype in TechVault. Encodes the upstream jasonish/suricata:7.0 image, runtime/container/capability posture, network attachment to dmz/internal/security, the unix command socket, filesystem/ruleset config files, local identity, 191 rpm packages, 18 Trivy findings, Suricata 7.0.15 software identity, the passive sensor posture, the IDS detection engine, and the eve.json log-forwarding relationship to wazuh-manager. No remaining ACES expressivity blocker.
+    notes: SCN-010 issue #345 inventory pass. First passive network-sensor archetype in TechVault. Encodes the upstream jasonish/suricata:7.0 image, runtime/container/capability posture, network attachment to dmz/internal/security, the unix command socket, filesystem/ruleset config files, the six APTL-authored config files (suricata.yaml, local.rules, four MISP baselines) as content entries, local identity, 191 rpm packages, 18 Trivy findings, Suricata 7.0.15 software identity, the passive sensor posture, the IDS detection engine, and the eve.json log-forwarding relationship to wazuh-manager. No authored accounts (the suricata user is image-provided, captured in local_identity). No remaining ACES expressivity blocker.
 
   - id: scen.techvault.suricata-sensor-posture
     surface: scenarios_yaml

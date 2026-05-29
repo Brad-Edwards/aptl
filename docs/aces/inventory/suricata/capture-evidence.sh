@@ -121,6 +121,10 @@ sha256sum \
   "$ROOT/docker-compose.yml" \
   "$ROOT/config/suricata/suricata.yaml" \
   "$ROOT/config/suricata/rules/local.rules" \
+  "$ROOT/config/suricata/rules/misp/misp-iocs.rules" \
+  "$ROOT/config/suricata/rules/misp/misp-md5.list" \
+  "$ROOT/config/suricata/rules/misp/misp-sha1.list" \
+  "$ROOT/config/suricata/rules/misp/misp-sha256.list" \
   | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
 
 docker exec "$CONTAINER" sh -lc '

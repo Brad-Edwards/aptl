@@ -260,6 +260,25 @@ facts:
     fields:
     - nodes.suricata.runtime.software_components
     rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+- id: suricata.content.authored-config
+  category: content
+  summary: 'APTL authors six files placed on the node: suricata.yaml and local.rules (bind-mounted), plus four MISP baselines under config/suricata/rules/misp. Five are placed verbatim (on-node checksums match the repo source exactly); misp-iocs.rules is a seeded baseline the misp-suricata-sync service rewrites at runtime.'
+  evidence:
+  - path: evidence/source-checksums.txt
+  - path: evidence/filesystem-checksums.txt
+  - path: evidence/filesystem-tree.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: content
+    fields:
+    - content.suricata-file-etc-suricata-yaml
+    - content.suricata-file-local-rules
+    - content.suricata-file-misp-iocs-rules
+    - content.suricata-file-misp-md5-list
+    - content.suricata-file-misp-sha1-list
+    - content.suricata-file-misp-sha256-list
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+    caveat: misp-iocs.rules is encoded as the authored seed (source.version); the realized on-node copy differs because aptl-misp-suricata-sync rewrites it from live MISP IOCs at runtime (authored-vs-realized split).
 - id: suricata.relationships.log-forwarding
   category: topology
   summary: aptl-wazuh-sidecar-suricata tails eve.json from the suricata_logs volume (read-only) and forwards alert telemetry to the SOC Wazuh manager.

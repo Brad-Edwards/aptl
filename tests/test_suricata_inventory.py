@@ -40,9 +40,10 @@ TRIVY_FINDING_COUNT = 18
 FILESYSTEM_ENTRY_COUNT = 29
 LOCAL_IDENTITY_USER_COUNT = 18
 LOCAL_IDENTITY_GROUP_COUNT = 36
-LEDGER_FACT_COUNT = 19
-LEDGER_ENCODED_COUNT = 19
+LEDGER_FACT_COUNT = 20
+LEDGER_ENCODED_COUNT = 20
 LEDGER_BLOCKED_COUNT = 0
+AUTHORED_CONTENT_FILES = 6
 BUILD_HISTORY_LAYER_COUNT = 17
 SOURCE_INPUT_COUNT = 2
 GAP_ISSUES = []  # ACES #429/#430 landed; both formerly-blocked facts are now encoded
@@ -89,6 +90,8 @@ def test_suricata_inventory_note_declares_scope_and_gap_caveats():
         "Brad-Edwards/aces#430",
         "runtime.network_sensors",
         "runtime.network_detection_engines",
+        "content.suricata-*",
+        "no `accounts` entries",
         "no remaining blocker",
         "not as clean-lab rebuild proof",
     )
@@ -128,6 +131,7 @@ def test_suricata_mapping_ledger_validates_with_no_remaining_gaps():
     assert ledger["provenance"]["image_digest"] == IMAGE_DIGEST
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
     assert dispositions["suricata.runtime.command-socket"] == "encoded"
+    assert dispositions["suricata.content.authored-config"] == "encoded_with_caveat"
     # ACES #429/#430 landed — both formerly-blocked facts are now encoded (with caveat)
     assert dispositions["suricata.sensor.monitoring-posture"] == "encoded_with_caveat"
     assert dispositions["suricata.ids.detection-engine"] == "encoded_with_caveat"
@@ -276,6 +280,31 @@ def test_techvault_sdl_encodes_suricata_inventory_surfaces():
     relationship = scenario.relationships["suricata-logs-forwarded-wazuh"]
     assert relationship.source == "suricata"
     assert relationship.target == "wazuh-manager"
+
+
+def test_techvault_sdl_encodes_suricata_authored_content_and_no_accounts():
+    """The six APTL-authored config/ruleset files are content entries placed on
+    the node; the suricata user is image-provided so there are no authored accounts.
+    """
+    from aces_sdl import parse_sdl_file
+
+    scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
+    content = {k: v for k, v in scenario.content.items() if k.startswith("suricata-")}
+    assert len(content) == AUTHORED_CONTENT_FILES
+    # every authored content file targets the suricata node, is a File, and cites a repo source + sha256
+    for entry in content.values():
+        assert entry.target == "suricata"
+        assert entry.type.value == "file"
+        assert entry.source.name.startswith("config/suricata/")
+        assert entry.source.version.startswith("sha256:")
+    # the two direct binds and the three verbatim MISP hash-list sidecars are present
+    paths = {e.path for e in content.values()}
+    assert "/etc/suricata/suricata.yaml" in paths
+    assert "/etc/suricata/rules/local.rules" in paths
+    assert "/var/lib/suricata/rules/misp/misp-sha256.list" in paths
+
+    # no authored accounts on this node — the suricata user is image-provided
+    assert [k for k in scenario.accounts if "suricata" in k] == []
 
 
 def test_techvault_sdl_compiles_with_suricata_runtime_fields():

@@ -101,8 +101,19 @@ capability posture, operational policy, process set, environment, filesystem
 inventory (config + ruleset files, with the telemetry logs as metadata-only),
 local identity database, package and vulnerability inventory, the Suricata
 software-component identity, the **unix command socket** (as
-`runtime.local_control_interfaces`), and the eve.json log-forwarding
-relationship to the SOC Wazuh manager.
+`runtime.local_control_interfaces`), the **six APTL-authored config/ruleset
+files** placed on the node (`suricata.yaml`, `local.rules`, and the four MISP
+baselines under `config/suricata/rules/misp`) as `content.suricata-*` File
+entries, and the eve.json log-forwarding relationship to the SOC Wazuh manager.
+
+There are **no `accounts` entries**: APTL authors no account on this node. The
+`suricata` service user (uid 998) is created by the upstream image build
+(`useradd --system … suricata`), so it is captured as observed
+`runtime.local_identity`, not as an authored account placement. Of the six
+authored content files, five are placed verbatim (on-node checksums match the
+repo source exactly); `misp-iocs.rules` is an authored seed that the
+`aptl-misp-suricata-sync` service rewrites at runtime, so its content entry
+records the authored seed and the realized on-node copy differs.
 
 Two catalogued in-scope observables initially had **no ACES surface** and were
 filed as expressivity gaps; both have since landed in ACES dev and are now

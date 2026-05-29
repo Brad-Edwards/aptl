@@ -41,11 +41,11 @@ FILESYSTEM_ENTRY_COUNT = 29
 LOCAL_IDENTITY_USER_COUNT = 18
 LOCAL_IDENTITY_GROUP_COUNT = 36
 LEDGER_FACT_COUNT = 19
-LEDGER_ENCODED_COUNT = 17
-LEDGER_BLOCKED_COUNT = 2
+LEDGER_ENCODED_COUNT = 19
+LEDGER_BLOCKED_COUNT = 0
 BUILD_HISTORY_LAYER_COUNT = 17
 SOURCE_INPUT_COUNT = 2
-GAP_ISSUES = ["Brad-Edwards/aces #429", "Brad-Edwards/aces #430"]
+GAP_ISSUES = []  # ACES #429/#430 landed; both formerly-blocked facts are now encoded
 
 REQUIRED_EVIDENCE_FILES = {'docker-logs.suricata.txt', 'docker-volume.suricata-logs.json', 'docker-network.aptl-dmz.json', 'osquery-version.txt', 'participant-discovery.kali.txt', 'docker-inspect.container.json', 'docker-buildx-imagetools.image.txt', 'docker-buildx-imagetools.image.raw.json', 'docker-history.image.jsonl', 'osquery-processes.json', 'suricata-state.txt', 'docker-network.aptl-internal.json', 'captured-at-utc.txt', 'osquery-programs.json', 'os-packages.txt', 'docker-history.image.txt', 'source-checksums.txt', 'docker-top.txt', 'osquery-docker-images.json', 'osquery-installed-applications.json', 'trivy-vulnerability-counts.json', 'osquery-docker-containers.json', 'docker-inspect.image.json', 'docker-network.aptl-security.json', 'osquery-listening-ports.json', 'osquery-apt-sources.json', 'syft-version.json', 'trivy-sbom.cyclonedx.json.gz', 'trivy-vulnerability-list.json', 'filesystem-tree.txt', 'capture-limits.txt', 'docker-volume.suricata-command-socket.json', 'trivy-version.txt', 'language-manifests.txt', 'syft-sbom.cyclonedx.json.gz', 'compose-service.suricata.json', 'docker-compose-version.json', 'filesystem-checksums.txt', 'evidence-sha256sums.txt', 'runtime-baseline.txt', 'docker-version.json'}
 
@@ -87,8 +87,10 @@ def test_suricata_inventory_note_declares_scope_and_gap_caveats():
         "unix command socket",
         "Brad-Edwards/aces#429",
         "Brad-Edwards/aces#430",
+        "runtime.network_sensors",
+        "runtime.network_detection_engines",
+        "no remaining blocker",
         "not as clean-lab rebuild proof",
-        "stays open per its stop-condition",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Suricata inventory note missing scope markers: {missing}"
@@ -111,7 +113,7 @@ def test_suricata_capture_script_pins_reproducible_toolchain_and_passive_probe()
     assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
 
 
-def test_suricata_mapping_ledger_validates_with_two_blocked_gaps():
+def test_suricata_mapping_ledger_validates_with_no_remaining_gaps():
     result = validate_mapping_ledger(SURICATA_DIR)
     assert result.ok, result.errors
     assert result.fact_count == LEDGER_FACT_COUNT
@@ -126,21 +128,16 @@ def test_suricata_mapping_ledger_validates_with_two_blocked_gaps():
     assert ledger["provenance"]["image_digest"] == IMAGE_DIGEST
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
     assert dispositions["suricata.runtime.command-socket"] == "encoded"
-    assert dispositions["suricata.sensor.monitoring-posture"] == "blocked_by_aces_gap"
-    assert dispositions["suricata.ids.detection-engine"] == "blocked_by_aces_gap"
+    # ACES #429/#430 landed — both formerly-blocked facts are now encoded (with caveat)
+    assert dispositions["suricata.sensor.monitoring-posture"] == "encoded_with_caveat"
+    assert dispositions["suricata.ids.detection-engine"] == "encoded_with_caveat"
     assert dispositions["suricata.capture.toolchain-baseline"] == "encoded_with_caveat"
 
 
-def test_suricata_gap_report_lists_the_two_aces_gaps():
+def test_suricata_gap_report_has_no_remaining_aces_gaps():
     report = gap_report(SURICATA_DIR)
     assert report["triage_needed"] == []
-    gap_ids = {g["fact_id"] for g in report["gaps"]}
-    assert gap_ids == {"suricata.sensor.monitoring-posture", "suricata.ids.detection-engine"}
-    gap_urls = {g["gap_issue"]["url"] for g in report["gaps"]}
-    assert gap_urls == {
-        "https://github.com/Brad-Edwards/aces/issues/429",
-        "https://github.com/Brad-Edwards/aces/issues/430",
-    }
+    assert report["gaps"] == []
 
 
 def test_suricata_evidence_bundle_files_are_present_and_non_empty():
@@ -258,6 +255,24 @@ def test_techvault_sdl_encodes_suricata_inventory_surfaces():
 
     assert runtime.software_components[0].version == "7.0.15"
 
+    # passive network sensor posture (ACES #429 surface)
+    assert len(runtime.network_sensors) == 1
+    sensor = runtime.network_sensors[0]
+    assert sensor.implementation.value == "suricata"
+    assert sensor.monitoring_posture.value == "passive"
+    assert sensor.capture_mode.value == "pcap"
+    assert set(sensor.monitored_network_refs) == {"dmz-net", "internal-net", "security-net"}
+
+    # IDS/NDR detection engine (ACES #430 surface)
+    assert len(runtime.network_detection_engines) == 1
+    engine = runtime.network_detection_engines[0]
+    assert engine.implementation.value == "suricata"
+    assert {p.value for p in engine.app_layer_protocols} == {"http", "tls", "dns", "ssh", "smtp", "ftp", "smb"}
+    assert {rs.source_id for rs in engine.rule_sources} == {"suricata-rules", "local-rules", "misp-iocs"}
+    assert {o.format.value for o in engine.output_streams} == {"eve_json", "fast_log"}
+    assert engine.control_channels[0].kind.value == "unix_socket"
+    assert "rule_reload" in [c.value for c in engine.control_channels[0].capabilities]
+
     relationship = scenario.relationships["suricata-logs-forwarded-wazuh"]
     assert relationship.source == "suricata"
     assert relationship.target == "wazuh-manager"
@@ -299,10 +314,13 @@ def test_parity_inventory_cites_suricata_inventory_and_gaps():
     assert "tests/test_suricata_inventory.py" in encoded["validation_evidence"]
     assert encoded["blocking_followup"] == "n/a"
 
+    # ACES #429/#430 landed — both gap rows are now aces_sdl with no blocking followup
     posture = rows["scen.techvault.suricata-sensor-posture"]
-    assert posture["category"] == "aces_schema_profile_gap"
-    assert posture["blocking_followup"] == "Brad-Edwards/aces#429"
+    assert posture["category"] == "aces_sdl"
+    assert posture["blocking_followup"] == "n/a"
+    assert "runtime.network_sensors" in posture["aces_target"]
 
     engine = rows["scen.techvault.suricata-ids-engine"]
-    assert engine["category"] == "aces_schema_profile_gap"
-    assert engine["blocking_followup"] == "Brad-Edwards/aces#430"
+    assert engine["category"] == "aces_sdl"
+    assert engine["blocking_followup"] == "n/a"
+    assert "runtime.network_detection_engines" in engine["aces_target"]

@@ -6,10 +6,12 @@ the realized `aptl-suricata` container and uses the completed victim and
 mailserver inventories as the granularity bar.
 
 `suricata` is the **first passive network-sensor archetype** inventoried in
-TechVault. Unlike the victim/mailserver/webapp hosts (typed ACES service
-families, zero gaps), its defining behavior hits two ACES expressivity gaps,
-filed and linked below. Every cleanly-expressible runtime fact is still encoded
-in `scenarios/techvault.sdl.yaml` to the same depth as the other inventories.
+TechVault. Its defining behavior originally had no ACES surface and drove two
+expressivity gaps (Brad-Edwards/aces#429, #430); both have since landed in ACES
+dev (`runtime.network_sensors`, `runtime.network_detection_engines`), so every
+catalogued observable — including the sensor posture and the IDS detection
+engine — is now encoded in `scenarios/techvault.sdl.yaml` to the same depth as
+the other inventories, with no remaining blocker.
 
 This capture is non-destructive. It used the already-running local `aptl`
 project (soc profile) on 2026-05-28 and did not run
@@ -102,24 +104,28 @@ software-component identity, the **unix command socket** (as
 `runtime.local_control_interfaces`), and the eve.json log-forwarding
 relationship to the SOC Wazuh manager.
 
-Two catalogued in-scope observables are **blocked on ACES expressivity gaps** and
-recorded as `blocked_by_aces_gap` facts in the ledger:
+Two catalogued in-scope observables initially had **no ACES surface** and were
+filed as expressivity gaps; both have since landed in ACES dev and are now
+**encoded**:
 
 - **Scenario-native network-sensor monitoring posture** — Suricata's passive
-  `--pcap` capture across the networks it is attached to has no relationship
-  type, node role, or runtime surface; ACES `limitations.md` already lists
-  "Scenario-native observability" as a known gap. Filed:
-  [Brad-Edwards/aces#429](https://github.com/Brad-Edwards/aces/issues/429).
+  `--pcap` capture across the networks it is attached to.
+  [Brad-Edwards/aces#429](https://github.com/Brad-Edwards/aces/issues/429)
+  (PR #435) added `runtime.network_sensors`; encoded as
+  `nodes.suricata.runtime.network_sensors` (implementation `suricata`,
+  monitoring_posture `passive`, capture_mode `pcap`, monitored_network_refs
+  dmz/internal/security).
 - **Typed IDS/NDR detection-engine service family** — the enabled app-layer
-  parsers, rule sources, network zoning, and alert output streams have no typed
-  home; `runtime.applications` is HTTP/WS-only, so a rule engine would be a
-  force-fit. Filed:
-  [Brad-Edwards/aces#430](https://github.com/Brad-Edwards/aces/issues/430).
+  parsers, rule sources, network zoning, and alert output streams.
+  [Brad-Edwards/aces#430](https://github.com/Brad-Edwards/aces/issues/430)
+  (PR #437/#438) added `runtime.network_detection_engines`; encoded as
+  `nodes.suricata.runtime.network_detection_engines` (app_layer_protocols,
+  rule_sources, network_sets, output_streams, unix-socket control channel).
 
-Issue #345 stays open per its stop-condition until those ACES surfaces land and
-the SDL is updated. The capture does not assert a full root filesystem
-catalogue, byte-identical rebuildability, attack-induced state changes, or a
-destructive clean-lab reset.
+No ACES expressivity blocker remains for the catalogued suricata steady-state
+inventory. The capture does not assert a full root filesystem catalogue,
+byte-identical rebuildability, attack-induced state changes, or a destructive
+clean-lab reset.
 
 Run:
 
@@ -143,5 +149,6 @@ uv run aptl aces-inventory gaps docs/aces/inventory/suricata
   table registry used by the digest-pinned osquery 4.9.0 scanner image.
 - The capture does not assert attack-induced state changes or later
   operator-driven runtime modifications.
-- Two catalogued observables (sensor monitoring posture; typed IDS/NDR engine)
-  are blocked on ACES #429 and #430 and are not yet encoded in SDL.
+- The sensor monitoring posture and typed IDS/NDR detection engine were
+  initially blocked on ACES #429/#430; both surfaces landed in ACES dev and are
+  now encoded, so no ACES expressivity blocker remains.

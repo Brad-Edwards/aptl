@@ -83431,6 +83431,174 @@ nodes:
           provenance: image
         sudo_rules: []
         description: Local /etc/passwd users and /etc/group groups observed in the AlmaLinux 9 base image.
+      network_sensors:
+      - sensor_id: suricata-sensor
+        implementation: suricata
+        sensor_kind: ids
+        monitoring_posture: passive
+        capture_mode: pcap
+        capture_interfaces:
+        - any
+        monitored_network_refs:
+        - dmz-net
+        - internal-net
+        - security-net
+        process_ref: nodes.suricata.runtime.process
+        version: 7.0.15
+        name: Suricata network sensor
+        configuration_file_refs:
+        - /etc/suricata/suricata.yaml
+        log_file_refs:
+        - /var/log/suricata/eve.json
+        - /var/log/suricata/fast.log
+        description: 'Passive packet-capture sensor: suricata --pcap on interface ''any'' observing the dmz, internal, and security TechVault networks; no listening service of its own.'
+      network_detection_engines:
+      - engine_id: suricata-engine
+        implementation: suricata
+        engine_kind: ids
+        version: 7.0.15
+        name: Suricata detection engine
+        process_ref: nodes.suricata.runtime.process
+        sensor_ref: suricata-sensor
+        configuration_file_refs:
+        - /etc/suricata/suricata.yaml
+        log_file_refs:
+        - /var/log/suricata/eve.json
+        - /var/log/suricata/fast.log
+        app_layer_protocols:
+        - http
+        - tls
+        - dns
+        - ssh
+        - smtp
+        - ftp
+        - smb
+        rule_sources:
+        - source_id: suricata-rules
+          kind: managed
+          format: suricata_rule
+          name: suricata-update managed ruleset
+          rule_count: 65814
+          file_refs:
+          - /var/lib/suricata/rules/suricata.rules
+          generated_by: suricata-update
+          loaded: true
+          description: Emerging Threats / suricata-update managed ruleset.
+        - source_id: local-rules
+          kind: local
+          format: suricata_rule
+          name: authored local rules
+          rule_count: 46
+          file_refs:
+          - /etc/suricata/rules/local.rules
+          generated_by: aptl repo
+          loaded: true
+          description: Authored TechVault local rules bind-mounted from config/suricata/rules/local.rules.
+        - source_id: misp-iocs
+          kind: ioc
+          format: suricata_rule
+          name: MISP-driven IOC rules
+          rule_count: 6
+          file_refs:
+          - /var/lib/suricata/rules/misp/misp-iocs.rules
+          generated_by: aptl-misp-suricata-sync
+          loaded: true
+          description: MISP threat-intel IOC rules written by the misp-suricata-sync service (ADR-028).
+        network_sets:
+        - set_id: home-net
+          kind: home_net
+          name: HOME_NET
+          selector_values:
+          - 172.20.0.0/16
+          network_refs:
+          - dmz-net
+          - internal-net
+          - security-net
+          description: Monitored TechVault address space.
+        - set_id: external-net
+          kind: external_net
+          name: EXTERNAL_NET
+          selector_values:
+          - '!$HOME_NET'
+          network_refs: []
+          description: Everything outside HOME_NET.
+        - set_id: dmz-net
+          kind: dmz_net
+          name: DMZ_NET
+          selector_values:
+          - 172.20.1.0/24
+          network_refs:
+          - dmz-net
+          description: DMZ segment.
+        - set_id: internal-net
+          kind: internal_net
+          name: INTERNAL_NET
+          selector_values:
+          - 172.20.2.0/24
+          network_refs:
+          - internal-net
+          description: Internal segment.
+        - set_id: dns-servers
+          kind: service_group
+          name: DNS_SERVERS
+          selector_values:
+          - 172.20.1.22
+          network_refs: []
+          description: DNS server address group.
+        - set_id: http-servers
+          kind: service_group
+          name: HTTP_SERVERS
+          selector_values:
+          - 172.20.1.20
+          network_refs: []
+          description: HTTP server address group.
+        - set_id: sql-servers
+          kind: service_group
+          name: SQL_SERVERS
+          selector_values:
+          - 172.20.2.11
+          network_refs: []
+          description: SQL server address group.
+        - set_id: dc-servers
+          kind: service_group
+          name: DC_SERVERS
+          selector_values:
+          - 172.20.2.10
+          network_refs: []
+          description: Domain-controller address group.
+        output_streams:
+        - stream_id: eve-json
+          format: eve_json
+          path: /var/log/suricata/eve.json
+          enabled: true
+          event_types:
+          - alert
+          - http
+          - dns
+          - tls
+          - ssh
+          - flow
+          - netflow
+          - stats
+          description: Primary typed EVE JSON event stream; ingested by aptl-wazuh-sidecar-suricata.
+        - stream_id: fast-log
+          format: fast_log
+          path: /var/log/suricata/fast.log
+          enabled: true
+          event_types:
+          - alert
+          description: Fast single-line alert log.
+        control_channels:
+        - channel_id: suricata-command
+          kind: unix_socket
+          path: /var/run/suricata/suricata-command.socket
+          capabilities:
+          - rule_reload
+          - ruleset_update
+          - stats_query
+          auth_required: false
+          description: Unix command socket used by aptl-misp-suricata-sync to trigger rule reloads.
+        description: 'Suricata 7.0.15 IDS detection engine: app-layer parsers, managed/local/IOC rule sources, HOME_NET zoning, and eve.json/fast.log alert output.'
 
 infrastructure:
   suricata:
@@ -83441,7 +83609,7 @@ infrastructure:
       - {dmz-net: 172.20.1.50}
       - {internal-net: 172.20.2.50}
       - {security-net: 172.20.0.50}
-    description: Suricata IDS sensor is attached to the DMZ, internal, and security TechVault networks and publishes no host ports; its passive cross-network monitoring posture is blocked on ACES Brad-Edwards/aces#429.
+    description: Suricata IDS sensor is attached to the DMZ, internal, and security TechVault networks and publishes no host ports; its passive cross-network monitoring posture is encoded under nodes.suricata.runtime.network_sensors.
   dmz-net:
     count: 1
     properties: {cidr: 172.20.1.0/24, gateway: 172.20.1.1, internal: true}

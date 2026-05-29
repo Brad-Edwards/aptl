@@ -53,7 +53,7 @@ correspondence_checks:
   limit: Planned because this issue records the frozen steady-state ACES spec and evidence, not a destructive clean-lab equivalence run.
 notes:
 - Capture used the already-running local aptl lab (soc profile) non-destructively; no aptl lab stop -v && aptl lab start clean reset was run.
-- Suricata is the first passive network-sensor asset inventoried in TechVault; its monitoring posture (Brad-Edwards/aces#429) and typed IDS/NDR detection-engine semantics (Brad-Edwards/aces#430) are blocked on ACES expressivity gaps and recorded as blocked_by_aces_gap facts.
+- 'Suricata is the first passive network-sensor asset inventoried in TechVault. Its monitoring posture and typed IDS/NDR detection-engine semantics initially had no ACES surface and were filed as Brad-Edwards/aces#429 and #430; both landed in ACES dev (PR #435 runtime.network_sensors, PR #437/#438 runtime.network_detection_engines), so they are now encoded and no ACES expressivity blocker remains for the catalogued suricata steady-state inventory.'
 - eve.json and fast.log are unbounded transient sensor telemetry, recorded as filesystem metadata only.
 facts:
 - id: suricata.image.identity
@@ -284,16 +284,12 @@ facts:
   - path: evidence/docker-network.aptl-internal.json
   - path: evidence/docker-network.aptl-security.json
   aces:
-    disposition: blocked_by_aces_gap
-    checked_surfaces:
-    - relationships
-    - infrastructure
-    - nodes
-    why_not_current_surfaces: No relationship type means observes/monitors/taps; connects_to asserts an initiated connection a passive sensor never makes, and carrying the posture in properties smuggles a missing typed concept. Node attachment (infrastructure links + runtime.network.endpoints) records attachment, not monitoring; Node.roles is login-role only; runtime.network has no promiscuous/capture posture field. limitations.md already lists Scenario-native observability as a known gap.
-    gap_issue:
-      tracker: Brad-Edwards/aces
-      number: 429
-      url: https://github.com/Brad-Edwards/aces/issues/429
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.network_sensors
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+    caveat: 'Previously blocked on ACES Brad-Edwards/aces#429; encoded after PR #435 landed runtime.network_sensors (implementation=suricata, monitoring_posture=passive, capture_mode=pcap, capture_interfaces=[any], monitored_network_refs=dmz/internal/security).'
 - id: suricata.ids.detection-engine
   category: service-surface
   summary: 'Suricata''s observable detection semantics: app-layer parsers (http/tls/dns/ssh/smtp/ftp/smb), rule sources (suricata.rules 65814, local.rules 46, misp/misp-iocs.rules 6), HOME_NET/EXTERNAL_NET zoning, and eve.json/fast.log alert streams.'
@@ -302,15 +298,12 @@ facts:
   - path: evidence/filesystem-checksums.txt
   - path: evidence/filesystem-tree.txt
   aces:
-    disposition: blocked_by_aces_gap
-    checked_surfaces:
-    - nodes
-    - nodes.services
-    why_not_current_surfaces: No typed IDS/NDR service family exists (mail/db/file/ssh/identity do). runtime.applications is strictly HTTP/WS route-shaped, so encoding a rule engine as URL routes is the prohibited force-fit. software_components records only that Suricata is present; filesystem_inventory records the config/rule files as bytes (encoded) but not typed detection semantics; Node.services/runtime.network cannot represent a passive sensor with a unix-socket control channel.
-    gap_issue:
-      tracker: Brad-Edwards/aces
-      number: 430
-      url: https://github.com/Brad-Edwards/aces/issues/430
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - nodes.suricata.runtime.network_detection_engines
+    rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
+    caveat: 'Previously blocked on ACES Brad-Edwards/aces#430; encoded after PR #437/#438 landed runtime.network_detection_engines (app_layer_protocols, rule_sources managed/local/ioc, network_sets HOME_NET zoning, output_streams eve_json/fast_log, unix-socket control channel with rule_reload capability).'
 - id: suricata.capture.toolchain-baseline
   category: capture-methodology
   summary: The bundle records Trivy, Syft, osquery, Docker, filesystem manifest, redaction, and capture-limit evidence for rerunnable methodology review.

@@ -78,6 +78,17 @@ rows:
     blocking_followup: n/a
     notes: Incremental ACES TechVault authoring target for the webapp inventory pass; current SDL consumes ACES #363, #364, #365, #366, #367, and #368 with no known remaining ACES expressivity blocker for the catalogued webapp steady-state inventory. Full root filesystem cataloguing is deferred as capture scope, not blocked by ACES expressivity.
 
+  - id: scen.techvault.misp-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.misp + infrastructure.misp + runtime + content + relationships
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime.service_listeners / runtime.applications / runtime.identity_authorities / content / relationships fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/misp/ + tests/test_misp_inventory.py + scenarios/techvault.sdl.yaml + Brad-Edwards/aces#431 consumed"
+    blocking_followup: "#347/#348/#349 for companion service full inventories"
+    notes: SCN-010 issue #346 MISP inventory pass. The SDL encodes the catalogued MISP image, build provenance, runtime, full filesystem manifest, listeners, local and application identity, package/CVE inventory, API routes, content-count state, and MISP-to-database/Redis/Suricata-sync relationship facts. Brad-Edwards/aces#431 is consumed through runtime.service_listeners with no known remaining ACES expressivity blocker for the catalogued MISP steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
   - id: scen.techvault.workstation-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml

@@ -1,0 +1,450 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-misp PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "/usr/bin/tini -- /usr/local/bin/supervisord -c /etc/supervisor/supervisord.conf",
+      "gid": "0",
+      "name": "tini",
+      "path": "/usr/bin/tini",
+      "pid": "1",
+      "start_time": "1779517129",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/local/bin/python3.12 /usr/local/bin/supervisord -c /etc/supervisor/supervisord.conf",
+      "gid": "0",
+      "name": "supervisord",
+      "path": "/usr/local/bin/python3.12",
+      "pid": "8",
+      "start_time": "1779517129",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/bin/bash /entrypoint_nginx.sh",
+      "gid": "0",
+      "name": "entrypoint_ngin",
+      "path": "/usr/bin/bash",
+      "pid": "9",
+      "start_time": "1779517131",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/rsyslogd -n",
+      "gid": "0",
+      "name": "rsyslogd",
+      "path": "/usr/sbin/rsyslogd",
+      "pid": "11",
+      "start_time": "1779517131",
+      "uid": "0"
+    },
+    {
+      "cmdline": "nginx: master process nginx -g daemon off;",
+      "gid": "0",
+      "name": "nginx",
+      "path": "/usr/sbin/nginx",
+      "pid": "96",
+      "start_time": "1779517146",
+      "uid": "0"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "163",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "164",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "165",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "166",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "167",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "168",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "169",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "170",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "171",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "172",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "173",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "174",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "175",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "176",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "177",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "33",
+      "name": "nginx",
+      "path": "",
+      "pid": "179",
+      "start_time": "1779517147",
+      "uid": "33"
+    },
+    {
+      "cmdline": "/usr/local/bin/python3 /var/www/MISP/app/files/scripts/mispzmq/mispzmq.py",
+      "gid": "33",
+      "name": "python3",
+      "path": "",
+      "pid": "1467",
+      "start_time": "1779517154",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app scheduler_worker",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "2712",
+      "start_time": "1779517167",
+      "uid": "33"
+    },
+    {
+      "cmdline": "gpg-agent --homedir /var/www/MISP/.gnupg --use-standard-socket --daemon",
+      "gid": "0",
+      "name": "gpg-agent",
+      "path": "",
+      "pid": "2775",
+      "start_time": "1779517168",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/bin/bash /entrypoint_fpm.sh",
+      "gid": "0",
+      "name": "entrypoint_fpm.",
+      "path": "/usr/bin/bash",
+      "pid": "3782",
+      "start_time": "1779517311",
+      "uid": "0"
+    },
+    {
+      "cmdline": "php-fpm: master process (/etc/php/8.4/fpm/php-fpm.conf)",
+      "gid": "0",
+      "name": "php-fpm8.4",
+      "path": "/usr/sbin/php-fpm8.4",
+      "pid": "3810",
+      "start_time": "1779517311",
+      "uid": "0"
+    },
+    {
+      "cmdline": "php-fpm: pool www",
+      "gid": "33",
+      "name": "php-fpm8.4",
+      "path": "",
+      "pid": "3811",
+      "start_time": "1779517312",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php-fpm: pool www",
+      "gid": "33",
+      "name": "php-fpm8.4",
+      "path": "",
+      "pid": "3812",
+      "start_time": "1779517312",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105543",
+      "start_time": "1779949233",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105544",
+      "start_time": "1779949233",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105559",
+      "start_time": "1779949233",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105567",
+      "start_time": "1779949234",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105575",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105576",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105577",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105580",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105584",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105587",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105608",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105619",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105626",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105630",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105635",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105639",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105650",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105657",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105660",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker update",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105666",
+      "start_time": "1779949251",
+      "uid": "33"
+    },
+    {
+      "cmdline": "php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default",
+      "gid": "33",
+      "name": "php",
+      "path": "",
+      "pid": "105710",
+      "start_time": "1779949264",
+      "uid": "33"
+    }
+  ]
+}

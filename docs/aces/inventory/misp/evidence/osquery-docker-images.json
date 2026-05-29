@@ -1,0 +1,15 @@
+{
+  "table": "docker_images",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%misp-core%\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "created": "1775294628",
+      "id": "992fd95b8d9698a18e1acdd7dbf5e8d03b32a03fd80e4bcbcff77bc7f17768cd",
+      "size_bytes": "1862113260",
+      "tags": "ghcr.io/misp/misp-docker/misp-core:latest"
+    }
+  ]
+}

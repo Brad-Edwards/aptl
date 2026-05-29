@@ -1,0 +1,212 @@
+--os-release--
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+NAME="Debian GNU/Linux"
+VERSION_ID="13"
+VERSION="13 (trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_FULL=13.4
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+--id--
+uid=0(root) gid=0(root) groups=0(root)
+--pwd--
+/var/www/MISP
+--uname--
+Linux misp 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 GNU/Linux
+--capabilities-pid1--
+CapInh:	0000000000000000
+CapPrm:	00000000a80425fb
+CapEff:	00000000a80425fb
+CapBnd:	00000000a80425fb
+CapAmb:	0000000000000000
+--environment--
+ADMIN_EMAIL=admin@admin.test
+ADMIN_KEY=<REDACTED>
+ADMIN_PASSWORD=<REDACTED>
+BASE_URL=https://localhost
+DEBIAN_FRONTEND=noninteractive
+GPG_KEY=<REDACTED>
+HOME=/root
+HOSTNAME=misp
+LANG=C.UTF-8
+MYSQL_DATABASE=misp
+MYSQL_HOST=misp-db
+MYSQL_PASSWORD=<REDACTED>
+MYSQL_USER=misp
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PWD=/var/www/MISP
+PYTHON_SHA256=c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684
+PYTHON_VERSION=3.12.13
+REDIS_HOST=misp-redis
+--listeners--
+Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+udp   UNCONN 0      0         127.0.0.11:52950      0.0.0.0:*
+tcp   LISTEN 0      4096      127.0.0.11:34143      0.0.0.0:*
+tcp   LISTEN 0      511          0.0.0.0:80         0.0.0.0:*    users:(("nginx",pid=96,fd=8))
+tcp   LISTEN 0      511          0.0.0.0:443        0.0.0.0:*    users:(("nginx",pid=96,fd=6))
+tcp   LISTEN 0      100        127.0.0.1:50000      0.0.0.0:*
+tcp   LISTEN 0      1024       127.0.0.1:9001       0.0.0.0:*    users:(("supervisord",pid=8,fd=4))
+tcp   LISTEN 0      511             [::]:80            [::]:*    users:(("nginx",pid=96,fd=9))
+tcp   LISTEN 0      511             [::]:443           [::]:*    users:(("nginx",pid=96,fd=7))
+--mounts--
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51161/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/345/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/344/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/343/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/342/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/341/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/340/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/339/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/338/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/337/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/331/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/329/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/325/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/324/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/323/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/322/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/321/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/268/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/267/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/264/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/263/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/57/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51167/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51167/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+/dev/md2 on /etc/nginx/certs/cert.pem type ext4 (ro,relatime)
+/dev/md2 on /etc/nginx/certs/key.pem type ext4 (ro,relatime)
+/dev/md2 on /var/www/MISP/app/files type ext4 (rw,relatime)
+/dev/md2 on /var/www/MISP/app/Config type ext4 (rw,relatime)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
+--users--
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+games:x:5:60:games:/usr/games:/usr/sbin/nologin
+man:x:6:12:man:/var/cache/man:/usr/sbin/nologin
+lp:x:7:7:lp:/var/spool/lpd:/usr/sbin/nologin
+mail:x:8:8:mail:/var/mail:/usr/sbin/nologin
+news:x:9:9:news:/var/spool/news:/usr/sbin/nologin
+uucp:x:10:10:uucp:/var/spool/uucp:/usr/sbin/nologin
+proxy:x:13:13:proxy:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+backup:x:34:34:backup:/var/backups:/usr/sbin/nologin
+list:x:38:38:Mailing List Manager:/var/list:/usr/sbin/nologin
+irc:x:39:39:ircd:/run/ircd:/usr/sbin/nologin
+_apt:x:42:65534::/nonexistent:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+systemd-network:x:998:998:systemd Network Management:/:/usr/sbin/nologin
+uuidd:x:100:101::/run/uuidd:/usr/sbin/nologin
+stunnel4:x:997:997:stunnel service system account:/var/run/stunnel4:/usr/sbin/nologin
+--groups--
+root:x:0:
+daemon:x:1:
+bin:x:2:
+sys:x:3:
+adm:x:4:
+tty:x:5:
+disk:x:6:
+lp:x:7:
+mail:x:8:
+news:x:9:
+uucp:x:10:
+man:x:12:
+proxy:x:13:
+kmem:x:15:
+dialout:x:20:
+fax:x:21:
+voice:x:22:
+cdrom:x:24:
+floppy:x:25:
+tape:x:26:
+sudo:x:27:
+audio:x:29:
+dip:x:30:
+www-data:x:33:
+backup:x:34:
+operator:x:37:
+list:x:38:
+irc:x:39:
+src:x:40:
+shadow:x:42:
+utmp:x:43:
+video:x:44:
+sasl:x:45:
+plugdev:x:46:
+staff:x:50:
+games:x:60:
+users:x:100:
+nogroup:x:65534:
+systemd-journal:x:999:
+systemd-network:x:998:
+uuidd:x:101:
+stunnel4:x:997:stunnel4
+--process-tree--
+    PID    PPID USER     COMMAND
+      1       0 root     /usr/bin/tini -- /usr/local/bin/supervisord -c /etc/supervisor/supervisord.conf
+      8       1 root     /usr/local/bin/python3.12 /usr/local/bin/supervisord -c /etc/supervisor/supervisord.conf
+      9       8 root     /bin/bash /entrypoint_nginx.sh
+     11       8 root     /usr/sbin/rsyslogd -n
+     96       9 root     nginx: master process nginx -g daemon off;
+    163      96 www-data nginx: worker process
+    164      96 www-data nginx: worker process
+    165      96 www-data nginx: worker process
+    166      96 www-data nginx: worker process
+    167      96 www-data nginx: worker process
+    168      96 www-data nginx: worker process
+    169      96 www-data nginx: worker process
+    170      96 www-data nginx: worker process
+    171      96 www-data nginx: worker process
+    172      96 www-data nginx: worker process
+    173      96 www-data nginx: worker process
+    174      96 www-data nginx: worker process
+    175      96 www-data nginx: worker process
+    176      96 www-data nginx: worker process
+    177      96 www-data nginx: worker process
+    179      96 www-data nginx: worker process
+   1467       1 www-data /usr/local/bin/python3 /var/www/MISP/app/files/scripts/mispzmq/mispzmq.py
+   2712       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app scheduler_worker
+   2775       1 root     gpg-agent --homedir /var/www/MISP/.gnupg --use-standard-socket --daemon
+   3782       8 root     /bin/bash /entrypoint_fpm.sh
+   3810    3782 root     php-fpm: master process (/etc/php/8.4/fpm/php-fpm.conf)
+   3811    3810 www-data php-fpm: pool www
+   3812    3810 www-data php-fpm: pool www
+ 105543       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
+ 105544       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
+ 105559       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
+ 105567       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
+ 105575       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
+ 105576       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
+ 105577       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
+ 105580       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
+ 105584       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
+ 105587       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
+ 105608       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
+ 105619       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
+ 105626       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
+ 105630       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
+ 105635       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
+ 105639       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
+ 105650       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
+ 105657       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
+ 105660       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
+ 105666       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker update
+ 105710       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
+ 156124       0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --capabilities-pid1--   grep "^Cap" /proc/1/status || true   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --process-tree--   ps -eo pid,ppid,user,args || true   printf "%s\n" --service-versions--   php -v | sed -n "1,4p" || true   nginx -v 2>&1 || true   python3 --version 2>&1 || true   mysql --version 2>&1 || true   redis-cli --version 2>&1 || true   printf "%s\n" --supervisor--   supervisorctl status 2>&1 || true
+ 156147  156124 root     ps -eo pid,ppid,user,args
+--service-versions--
+PHP 8.4.16 (cli) (built: Dec 18 2025 21:19:25) (NTS)
+Copyright (c) The PHP Group
+Built by Debian
+Zend Engine v4.4.16, Copyright (c) Zend Technologies
+nginx version: nginx/1.26.3
+Python 3.12.13
+mysql from 11.8.6-MariaDB, client 15.2 for debian-linux-gnu (x86_64) using  EditLine wrapper
+sh: 30: redis-cli: not found
+--supervisor--
+Error: Format string '%(ENV_SUPERVISOR_USERNAME)s' for 'supervisorctl.username' contains names ('ENV_SUPERVISOR_USERNAME') which cannot be expanded. Available names: ENV_ADMIN_EMAIL, ENV_ADMIN_KEY, ENV_ADMIN_PASSWORD, ENV_BASE_URL, ENV_DEBIAN_FRONTEND, ENV_GPG_KEY, ENV_HOME, ENV_HOSTNAME, ENV_LANG, ENV_MYSQL_DATABASE, ENV_MYSQL_HOST, ENV_MYSQL_PASSWORD, ENV_MYSQL_USER, ENV_PATH, ENV_PWD, ENV_PYTHON_SHA256, ENV_PYTHON_VERSION, ENV_REDIS_HOST
+For help, use /usr/local/bin/supervisorctl -h

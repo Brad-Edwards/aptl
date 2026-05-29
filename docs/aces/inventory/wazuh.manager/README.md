@@ -60,6 +60,12 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
   scripts, and CDB lists. File references that came from Wazuh introspection
   but not `filesystem-tree.txt` are represented as Wazuh-state-observed
   filesystem entries without invented stat metadata.
+- ACES #434 is consumed through
+  `runtime.security_monitoring_managers[].detection_definitions`. The SDL
+  encodes 6,121 parsed Wazuh detection definitions: 4,542 rule/correlation-rule
+  definitions and 1,579 decoder definitions. The manifest has zero parse errors,
+  zero unresolved correlation/parent references, and corpus digest
+  `14a7f5a403c4f1546715fa665aa5d026cd0cba2cac37256bce8c28d6edf1e509`.
 - Runtime package state is encoded from the normalized Syft CycloneDX SBOM
   (322 components) and RPM package list (118 packages). Trivy captured 368
   vulnerability findings at scan time.

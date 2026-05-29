@@ -44,6 +44,9 @@ correspondence_checks:
       - path: evidence/syft-sbom.cyclonedx.json.gz
       - path: evidence/trivy-vulnerability-list.json
       - path: evidence/filesystem-tree.txt
+      - path: evidence/wazuh-detection-definitions.summary.json
+      - path: evidence/wazuh-detection-definitions.rules.json.gz
+      - path: evidence/wazuh-detection-definitions.decoders.json.gz
     ledger_fact_ids:
       - wazuh-manager.transport.listeners
       - wazuh-manager.host-published-ports
@@ -59,12 +62,13 @@ correspondence_checks:
       - wazuh-manager.security-monitoring.manager-state
       - wazuh-manager.security-monitoring.agent-enrollment
       - wazuh-manager.security-monitoring.content-sets
+      - wazuh-manager.security-monitoring.detection-definitions
       - wazuh-manager.security-monitoring.settings
     method: Re-run the encoded scenario from ACES SDL, recapture Wazuh manager runtime evidence, and compare network, filesystem, package, vulnerability, local identity, and typed Wazuh manager logical state against this ledger.
     limit: Planned because this issue records the frozen steady-state ACES spec and evidence, not a destructive clean-lab equivalence run.
 notes:
   - Capture used the existing running local aptl project as authorized on 2026-05-29 and did not reset the lab.
-  - ACES issue #428 is consumed; no known remaining ACES expressivity blocker remains for the catalogued Wazuh manager steady-state inventory facts.
+  - ACES issues #428 and #434 are consumed; no known remaining ACES expressivity blocker remains for the catalogued Wazuh manager steady-state inventory facts.
   - The SDL build-history strings normalize braced shell parameter syntax to shell-equivalent unbraced syntax because ACES reserves ${...} for scenario variables; raw history remains in evidence.
 facts:
   - id: wazuh-manager.image.identity
@@ -337,6 +341,20 @@ facts:
         - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.content_sets
         - nodes.wazuh-manager.runtime.filesystem_inventory
       rationale: ACES #428 adds typed content-set semantics for security-monitoring rules, decoders, policies, active response, and lists.
+  - id: wazuh-manager.security-monitoring.detection-definitions
+    category: security-monitoring
+    summary: ACES #434-backed parsing recorded 6,121 loaded Wazuh detection definitions: 4,542 rule/correlation-rule definitions and 1,579 decoder definitions, with zero parse errors and zero unresolved correlation or parent references.
+    evidence:
+      - path: evidence/wazuh-detection-definitions.summary.json
+      - path: evidence/wazuh-detection-definitions.rules.json.gz
+      - path: evidence/wazuh-detection-definitions.decoders.json.gz
+      - path: evidence/wazuh-manager-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.detection_definitions
+      rationale: ACES #434 adds typed detection-definition semantics for manager-loaded rules, correlation rules, decoders, predicates, source spans, canonical digests, and local correlation references.
   - id: wazuh-manager.security-monitoring.settings
     category: security-monitoring
     summary: Manager settings encode indexer URL, Filebeat TLS verification, API auth posture, default group size, and loaded rule/decoder counts with provenance and redaction classification.

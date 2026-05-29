@@ -82,6 +82,9 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-counts.json",
     "trivy-vulnerability-list.json",
     "wazuh-api-probe.json",
+    "wazuh-detection-definitions.decoders.json.gz",
+    "wazuh-detection-definitions.rules.json.gz",
+    "wazuh-detection-definitions.summary.json",
     "wazuh-manager-state.txt",
 }
 
@@ -120,6 +123,30 @@ def _runtime_baseline_section(name: str) -> list[str]:
     next_marker = re.search(r"\n--[a-z0-9-]+--\n", rest)
     section = rest[: next_marker.start()] if next_marker else rest
     return [line for line in section.strip().splitlines() if line]
+
+
+def _wazuh_state_section(name: str) -> list[str]:
+    text = (EVIDENCE_DIR / "wazuh-manager-state.txt").read_text(encoding="utf-8")
+    marker = f"--{name}--\n"
+    _, rest = text.split(marker, maxsplit=1)
+    next_marker = re.search(r"\n--[a-z0-9-]+--\n", rest)
+    section = rest[: next_marker.start()] if next_marker else rest
+    return [line for line in section.strip().splitlines() if line]
+
+
+def _detection_definition_manifest() -> tuple[dict, list[dict]]:
+    summary = _json_file("wazuh-detection-definitions.summary.json")
+    rule_manifest = _json_file("wazuh-detection-definitions.rules.json.gz")
+    decoder_manifest = _json_file("wazuh-detection-definitions.decoders.json.gz")
+    return summary, rule_manifest["definitions"] + decoder_manifest["definitions"]
+
+
+def _manifest_corpus_digest(definitions: list[dict]) -> str:
+    lines = [
+        f"{definition['definition_id']} {definition['canonical_digest']}"
+        for definition in definitions
+    ]
+    return hashlib.sha256(("\n".join(lines) + "\n").encode("utf-8")).hexdigest()
 
 
 def _redact_with_capture_script(text: str) -> str:
@@ -164,6 +191,7 @@ def test_wazuh_manager_capture_script_pins_toolchain_and_redaction():
         "osquery/osquery@sha256:f8ec3300048158292df2d4bb0d1d7804af358f530005828c3387553f23c796cd",
         "wazuh-manager-state.txt",
         "wazuh-api-probe.json",
+        "wazuh-detection-definitions",
         "evidence-sha256sums.txt",
         "syft:location:",
     )
@@ -213,6 +241,7 @@ def test_wazuh_manager_mapping_ledger_validates_without_gap_triage():
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
     assert dispositions["wazuh-manager.security-monitoring.manager-state"] == "encoded"
     assert dispositions["wazuh-manager.security-monitoring.content-sets"] == "encoded"
+    assert dispositions["wazuh-manager.security-monitoring.detection-definitions"] == "encoded"
     assert dispositions["wazuh-manager.capture.toolchain-baseline"] == "encoded_with_caveat"
     assert len(ledger["facts"]) >= 18
 
@@ -321,6 +350,48 @@ def test_wazuh_manager_runtime_evidence_and_security_monitoring_counts():
     assert "--decoders-count--\n123" in state
 
 
+def test_wazuh_manager_detection_definition_manifest_is_complete():
+    summary, definitions = _detection_definition_manifest()
+    definition_ids = [definition["definition_id"] for definition in definitions]
+    by_native_id = {definition["native_id"]: definition for definition in definitions}
+
+    assert summary["definition_count"] == 6121
+    assert summary["rule_definition_count"] == 4542
+    assert summary["decoder_definition_count"] == 1579
+    assert summary["parse_error_count"] == 0
+    assert summary["unresolved_reference_count"] == 0
+    assert len(definitions) == summary["definition_count"]
+    assert len(definition_ids) == len(set(definition_ids))
+    assert summary["corpus_digest"] == _manifest_corpus_digest(definitions)
+
+    rule_files = _wazuh_state_section("rules-files")
+    decoder_files = _wazuh_state_section("decoders-files")
+    manifest_rule_files = {
+        definition["source_file_ref"]
+        for definition in definitions
+        if definition["definition_kind"] != "decoder"
+    }
+    manifest_decoder_files = {
+        definition["source_file_ref"]
+        for definition in definitions
+        if definition["definition_kind"] == "decoder"
+    }
+    assert set(rule_files) == manifest_rule_files
+    assert set(decoder_files) == manifest_decoder_files
+
+    tgs_rule = by_native_id["301010"]
+    assert tgs_rule["definition_id"] == "wazuh-rule-301010"
+    assert tgs_rule["match_strings"] == ["TGS-REQ"]
+    assert tgs_rule["groups"] == ["ad", "kerberos"]
+
+    correlation_rule = by_native_id["301011"]
+    assert correlation_rule["definition_kind"] == "correlation_rule"
+    assert correlation_rule["if_matched_sid_refs"] == ["wazuh-rule-301010"]
+    assert correlation_rule["frequency"] == 5
+    assert correlation_rule["timeframe_seconds"] == 60
+    assert "kerberoasting" in correlation_rule["groups"]
+
+
 def test_techvault_sdl_encodes_wazuh_manager_security_monitoring_surface():
     from aces_sdl import parse_sdl_file
 
@@ -347,6 +418,7 @@ def test_techvault_sdl_encodes_wazuh_manager_security_monitoring_surface():
     assert len(manager.agents) == 7
     assert len(manager.agent_groups) == 1
     assert len(manager.content_sets) >= 4
+    assert len(manager.detection_definitions) == 6121
 
     listener_roles = {listener.listener_id: listener.role for listener in manager.listeners}
     assert listener_roles["agent-events-1514"] == "agent_event_ingestion"
@@ -364,6 +436,22 @@ def test_techvault_sdl_encodes_wazuh_manager_security_monitoring_surface():
     content_sets = {content.content_id: content for content in manager.content_sets}
     assert content_sets["wazuh-rule-corpus"].file_count == 173
     assert content_sets["wazuh-decoder-corpus"].file_count == 123
+
+    _, manifest_definitions = _detection_definition_manifest()
+    manifest_by_id = {
+        definition["definition_id"]: definition for definition in manifest_definitions
+    }
+    sdl_by_id = {
+        definition.definition_id: definition for definition in manager.detection_definitions
+    }
+    assert set(sdl_by_id) == set(manifest_by_id)
+    for definition_id, expected in manifest_by_id.items():
+        actual = sdl_by_id[definition_id]
+        assert actual.native_id == expected["native_id"]
+        assert actual.definition_kind == expected["definition_kind"]
+        assert actual.content_set_ref == expected["content_set_ref"]
+        assert actual.source_file_ref == expected["source_file_ref"]
+        assert actual.canonical_digest == expected["canonical_digest"]
 
 
 def test_techvault_sdl_compiles_with_wazuh_security_monitoring_refs():

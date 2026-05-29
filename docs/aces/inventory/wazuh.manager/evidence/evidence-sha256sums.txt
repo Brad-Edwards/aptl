@@ -45,4 +45,7 @@ a1acfe5710e25be9ba076b4a9c9ed8d66041ee23e6b389fbbb9f7b8f7ddeb178  docs/aces/inve
 a5cab5f4648acbbe8942012a734f1370625bb9783a4497d1f66ddef2175fbc2a  docs/aces/inventory/wazuh.manager/evidence/trivy-vulnerability-counts.json
 233b4c7d7b1d1ed8eba03d98f631242d741873503ca3360f5115e6dbaae89357  docs/aces/inventory/wazuh.manager/evidence/trivy-vulnerability-list.json
 18ddc880e1a6fa2c96541a8b66566261a1567062e6e3599698e9fbdc75328e17  docs/aces/inventory/wazuh.manager/evidence/wazuh-api-probe.json
+c0bc447a4e6693d576c714e9b3676f2a235bd849b354276ceef747668628fec5  docs/aces/inventory/wazuh.manager/evidence/wazuh-detection-definitions.decoders.json.gz
+c82440ed19b8d4a0052a2a3a9edd4f6faba90d705ed51be8549d2e88e76c2479  docs/aces/inventory/wazuh.manager/evidence/wazuh-detection-definitions.rules.json.gz
+449f760ea7ce3dbab863aa617c1e86468112db0d2402a55f6920637bf5bd09db  docs/aces/inventory/wazuh.manager/evidence/wazuh-detection-definitions.summary.json
 5785a10ce131fecb890366ccad49172f81187a06087abe41727e324917c0dd34  docs/aces/inventory/wazuh.manager/evidence/wazuh-manager-state.txt

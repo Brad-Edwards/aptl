@@ -110,7 +110,9 @@ write_osquery_json() {
 require docker
 require gzip
 require jq
+require python3
 require sha256sum
+require tar
 
 mkdir -p "$OUT"
 : > "$OUT/capture-limits.txt"
@@ -285,6 +287,20 @@ docker exec "$CONTAINER" bash -lc '
 ' | redact_stream \
   | jq -Rs '{vantage: "container localhost", command: "curl -ks -i https://localhost:55000", output: .}' \
   > "$OUT/wazuh-api-probe.json"
+
+tmp_rules="$(mktemp -d)"
+docker exec "$CONTAINER" tar -C / -cf - \
+  var/ossec/ruleset/rules \
+  var/ossec/etc/rules \
+  var/ossec/ruleset/decoders \
+  var/ossec/etc/decoders \
+  | tar -C "$tmp_rules" -xf -
+python3 "$ASSET_DIR/extract-wazuh-detection-definitions.py" \
+  --root "$tmp_rules" \
+  --rules-output "$OUT/wazuh-detection-definitions.rules.json.gz" \
+  --decoders-output "$OUT/wazuh-detection-definitions.decoders.json.gz" \
+  --summary-output "$OUT/wazuh-detection-definitions.summary.json"
+rm -rf "$tmp_rules"
 
 docker exec "$CONTAINER" bash -lc '
   set -euo pipefail

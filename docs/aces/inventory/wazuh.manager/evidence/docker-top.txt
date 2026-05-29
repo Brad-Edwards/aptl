@@ -1,0 +1,23 @@
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+root                2960197             2960142             0                   May23               ?                   00:00:00            s6-svscan -t0 /var/run/s6/services
+root                2960574             2960197             0                   May23               ?                   00:00:00            s6-supervise s6-fdholderd
+caddy               2964033             2960197             0                   May23               ?                   00:11:08            /var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh_apid.py
+caddy               2964034             2964033             0                   May23               ?                   00:01:22            /var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh_apid.py
+caddy               2964035             2964033             0                   May23               ?                   00:01:22            /var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh_apid.py
+caddy               2964038             2964033             0                   May23               ?                   00:00:08            /var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh_apid.py
+caddy               2964041             2964033             0                   May23               ?                   00:00:00            /var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh_apid.py
+caddy               2964088             2960197             0                   May23               ?                   00:00:18            /var/ossec/bin/wazuh-integratord
+root                2964109             2960197             0                   May23               ?                   00:05:20            /var/ossec/bin/wazuh-authd
+caddy               2964126             2960197             0                   May23               ?                   00:05:02            /var/ossec/bin/wazuh-db
+root                2964359             2960197             0                   May23               ?                   00:00:00            /var/ossec/bin/wazuh-execd
+caddy               2964617             2960197             0                   May23               ?                   00:10:57            /var/ossec/bin/wazuh-analysisd
+root                2964870             2960197             0                   May23               ?                   00:01:21            /var/ossec/bin/wazuh-syscheckd
+caddy               2964884             2960197             0                   May23               ?                   00:17:03            /var/ossec/bin/wazuh-remoted
+caddy               2964885             2960197             0                   May23               ?                   00:00:02            /var/ossec/bin/wazuh-remoted
+root                2965335             2960197             0                   May23               ?                   00:00:34            /var/ossec/bin/wazuh-logcollector
+caddy               2965363             2960197             0                   May23               ?                   00:01:03            /var/ossec/bin/wazuh-monitord
+root                2965379             2960197             2                   May23               ?                   03:11:29            /var/ossec/bin/wazuh-modulesd
+root                2967352             2960197             0                   May23               ?                   00:00:00            s6-supervise ossec-logs
+root                2967354             2960197             0                   May23               ?                   00:00:00            s6-supervise filebeat
+root                2967356             2967352             0                   May23               ?                   00:03:24            /usr/bin/coreutils --coreutils-prog-shebang=tail /usr/bin/tail -F /var/ossec/logs/ossec.log
+root                2967357             2967354             0                   May23               ?                   00:05:40            /usr/share/filebeat/bin/filebeat -e -c /etc/filebeat/filebeat.yml -path.home /usr/share/filebeat -path.config /etc/filebeat -path.data /var/lib/filebeat -path.logs /var/log/filebeat

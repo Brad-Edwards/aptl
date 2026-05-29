@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 [[package]]
 name = "aces-sdl"
 version = "0.2.0"
-source = { git = "https://github.com/Brad-Edwards/aces.git?subdirectory=implementations%2Fpython&rev=dev#cbac17f82d8b1c17174c0be2e64a097860e7ae10" }
+source = { git = "https://github.com/Brad-Edwards/aces.git?subdirectory=implementations%2Fpython&rev=dev#dcdab5c2bead960cea4f6e7028c86c155e5ccbc3" }
 dependencies = [
     { name = "asyncssh" },
     { name = "cryptography" },

@@ -658,6 +658,17 @@ rows:
     blocking_followup: n/a
     notes: Runtime evidence and ACES-expressible fields captured by issue #333; no known remaining expressivity blocker for the catalogued fileshare steady-state inventory. The fileshare profile row remains a delivery-toggle responsibility, while the participant-visible service facts now live in ACES SDL rows.
 
+  - id: compose.service.dns
+    surface: docker_compose_topology
+    legacy_source: "docker-compose.yml (service: dns)"
+    legacy_field: dns
+    category: aces_sdl
+    aces_target: ACES nodes.dns + nodes.dns.runtime.dns_services + infrastructure.dns + conditions.dns-soa-ready + relationships.dns-forwards-wazuh
+    runtime_owner: n/a
+    validation_evidence: docs/aces/inventory/dns/ + scenarios/techvault.sdl.yaml + tests/test_dns_inventory.py + Brad-Edwards/aces#426/#427 consumed
+    blocking_followup: n/a
+    notes: Runtime evidence and ACES-expressible fields captured by issue #336; no known remaining expressivity blocker for the catalogued BIND DNS steady-state inventory. The dns profile row remains a delivery-toggle responsibility, while participant-visible DNS service facts now live in ACES SDL rows.
+
   - id: compose.service.shuffle-backend
     surface: docker_compose_topology
     legacy_source: "docker-compose.yml (service: shuffle-backend)"
@@ -712,6 +723,17 @@ rows:
     validation_evidence: docs/aces/inventory/mailserver/ + scenarios/techvault.sdl.yaml + tests/test_mailserver_inventory.py + ACES ADR-038 consumed
     blocking_followup: n/a
     notes: SCN-010 issue #335 inventory pass encodes the docker-mailserver steady-state image, runtime, mail-service logical state, filesystem, local identity, package/CVE summary, and participant probe facts with no known remaining ACES expressivity blocker. TCP/993 is host-published but refused at the participant vantage; TCP/465 is reachable but not working implicit TLS in this capture.
+
+  - id: scen.techvault.dns-inventory
+    surface: scenarios_yaml
+    legacy_source: "docker-compose.yml service dns + docs/aces/inventory/dns/"
+    legacy_field: dns steady-state participant-observable asset spec
+    category: aces_sdl
+    aces_target: ACES nodes.dns + nodes.dns.runtime.dns_services + infrastructure.dns + conditions.dns-soa-ready + relationships.dns-forwards-wazuh
+    runtime_owner: scenarios/techvault.sdl.yaml
+    validation_evidence: docs/aces/inventory/dns/ + scenarios/techvault.sdl.yaml + tests/test_dns_inventory.py + Brad-Edwards/aces#426/#427 consumed
+    blocking_followup: n/a
+    notes: SCN-010 issue #336 inventory pass encodes the BIND DNS steady-state image, runtime, resolver policy, authoritative forward/reverse zones, typed RRsets, filesystem, local identity, package/CVE summary, Wazuh/logging relationship, and Docker realization facts with no known remaining ACES expressivity blocker. Localhost AXFR was observed; broader transfer ACL proof remains a correspondence caveat.
 
   - id: compose.profile.reverse
     surface: docker_compose_topology

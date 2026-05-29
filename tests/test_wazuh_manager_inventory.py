@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import json
 import re
+import subprocess
 
 import pytest
 import yaml
@@ -121,6 +122,20 @@ def _runtime_baseline_section(name: str) -> list[str]:
     return [line for line in section.strip().splitlines() if line]
 
 
+def _redact_with_capture_script(text: str) -> str:
+    script = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
+    match = re.search(r"redact_stream\(\) \{\n.*?\n\}", script, re.DOTALL)
+    assert match, "capture script must define redact_stream"
+    result = subprocess.run(
+        ["bash", "-c", f"{match.group(0)}\nredact_stream"],
+        input=text,
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return result.stdout
+
+
 def test_wazuh_manager_inventory_note_declares_scope_and_evidence():
     text = WAZUH_DOC_PATH.read_text(encoding="utf-8")
     required = (
@@ -155,6 +170,34 @@ def test_wazuh_manager_capture_script_pins_toolchain_and_redaction():
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Capture script missing reproducibility markers: {missing}"
     assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
+
+
+def test_wazuh_manager_capture_stream_redaction_is_key_aware():
+    secret_value = "zulu-4279-mica-1836"
+    public_value = "public-observation-2026"
+    redacted = _redact_with_capture_script(
+        "\n".join(
+            [
+                f"PASSWORD={secret_value}",
+                f"password: {secret_value}",
+                f"api_key = {secret_value}",
+                f"cluster_key: {secret_value}",
+                f"indexer_key: {secret_value}",
+                f"x-api-key: {secret_value}",
+                f"ssl.key = {secret_value}",
+                f"<password>{secret_value}</password>",
+                f"<api_key>{secret_value}</api_key>",
+                f"<api-key>{secret_value}</api-key>",
+                f"<private-key>{secret_value}</private-key>",
+                f"Authorization: Bearer {secret_value}",
+                f"regular_field: {public_value}",
+            ]
+        )
+    )
+
+    assert secret_value not in redacted
+    assert public_value in redacted
+    assert "<REDACTED" in redacted
 
 
 def test_wazuh_manager_mapping_ledger_validates_without_gap_triage():

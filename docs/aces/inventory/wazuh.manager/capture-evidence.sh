@@ -31,10 +31,11 @@ record_limit() {
 
 redact_stream() {
   sed -E \
+    -e 's#(^|[^[:alnum:]_./-])(([-[:alnum:]_.]*(token|secret|password|passwd|credential|cookie|session|private_key|api_key|jwt|flag_key|access_key|shared_key|enrollment_key|client_key|cluster_key|ssl_key)[-[:alnum:]_.]*|[-[:alnum:]_.]*key)[[:space:]]*[:=][[:space:]]*)("[^"]*"|[^[:space:],;]+)#\1\2<REDACTED-SECRET>#Ig' \
+    -e 's#(<([-[:alnum:]_.:]*(token|secret|password|passwd|credential|cookie|session|private_key|api_key|jwt|flag_key|access_key|shared_key|enrollment_key|client_key|cluster_key|ssl_key)[-[:alnum:]_.:]*|[-[:alnum:]_.:]*key)[^>]*>)[^<]*(</\2>)#\1<REDACTED-SECRET>\4#Ig' \
     -e 's/(PASSWORD|PASS|SECRET|TOKEN|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|ACCESS_KEY|SHARED_KEY|ENROLLMENT_KEY|CLIENT_KEY|CLUSTER_KEY|SSL_KEY)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
     -e 's#(<key>)[^<]+(</key>)#\1<REDACTED-CLUSTER-KEY>\2#Ig' \
-    -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1<REDACTED-BEARER-TOKEN>#Ig' \
-        -e 's/[[:alnum:]_.-]*[Pp]ass(word)?[[:alnum:]_!@#%+=.-]*/<REDACTED-OPERATOR-SECRET>/g'
+    -e 's#(Authorization:[[:space:]]*)[^[:space:]]+([[:space:]]+[^[:space:]]+)?#\1<REDACTED-AUTHORIZATION>#Ig'
 }
 
 redact_env_jq='

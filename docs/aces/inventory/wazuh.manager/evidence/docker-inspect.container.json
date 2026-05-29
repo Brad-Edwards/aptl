@@ -1,0 +1,656 @@
+[
+  {
+    "Id": "7a0689d6ee54b643fba6d88e1fe2419a9de0833d79bebba12ccdc102f20b12e9",
+    "Created": "2026-05-23T06:18:32.009312216Z",
+    "Path": "/bin/bash",
+    "Args": [
+      "-c",
+      "cp /tmp/filebeat-override.yml /etc/filebeat/filebeat.yml && chown root:root /etc/filebeat/filebeat.yml && python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init"
+    ],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2960197,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-23T06:18:56.197755054Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-05-29T02:50:23.480584965+02:00",
+            "End": "2026-05-29T02:50:23.557563391+02:00",
+            "ExitCode": 0,
+            "Output": "{\"title\": \"Unauthorized\", \"detail\": \"No authorization token provided\"}"
+          },
+          {
+            "Start": "2026-05-29T02:50:53.559352472+02:00",
+            "End": "2026-05-29T02:50:53.612959835+02:00",
+            "ExitCode": 0,
+            "Output": "{\"title\": \"Unauthorized\", \"detail\": \"No authorization token provided\"}"
+          },
+          {
+            "Start": "2026-05-29T02:51:23.613734085+02:00",
+            "End": "2026-05-29T02:51:23.690860531+02:00",
+            "ExitCode": 0,
+            "Output": "{\"title\": \"Unauthorized\", \"detail\": \"No authorization token provided\"}"
+          },
+          {
+            "Start": "2026-05-29T02:51:53.69150066+02:00",
+            "End": "2026-05-29T02:51:53.750194396+02:00",
+            "ExitCode": 0,
+            "Output": "{\"title\": \"Unauthorized\", \"detail\": \"No authorization token provided\"}"
+          },
+          {
+            "Start": "2026-05-29T02:52:23.750729527+02:00",
+            "End": "2026-05-29T02:52:23.817611084+02:00",
+            "ExitCode": 0,
+            "Output": "{\"title\": \"Unauthorized\", \"detail\": \"No authorization token provided\"}"
+          }
+        ]
+      }
+    },
+    "Image": "sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561",
+    "ResolvConfPath": "/var/lib/docker/containers/7a0689d6ee54b643fba6d88e1fe2419a9de0833d79bebba12ccdc102f20b12e9/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/7a0689d6ee54b643fba6d88e1fe2419a9de0833d79bebba12ccdc102f20b12e9/hostname",
+    "HostsPath": "/var/lib/docker/containers/7a0689d6ee54b643fba6d88e1fe2419a9de0833d79bebba12ccdc102f20b12e9/hosts",
+    "LogPath": "/var/lib/docker/containers/7a0689d6ee54b643fba6d88e1fe2419a9de0833d79bebba12ccdc102f20b12e9/7a0689d6ee54b643fba6d88e1fe2419a9de0833d79bebba12ccdc102f20b12e9-json.log",
+    "Name": "/aptl-wazuh-manager",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "/home/atomik/src/aptl/config/wazuh_cluster/suricata_rules.xml:/var/ossec/etc/rules/suricata_rules.xml:rw",
+        "/home/atomik/src/aptl/config/wazuh_cluster/database_rules.xml:/var/ossec/etc/rules/database_rules.xml:rw",
+        "/home/atomik/src/aptl/config/wazuh_cluster/patch-rule-path.py:/docker-entrypoint-initdb.d/patch-rule-path.py:ro",
+        "aptl_wazuh_integrations:/var/ossec/integrations:rw",
+        "aptl_filebeat_etc:/etc/filebeat:rw",
+        "aptl_filebeat_var:/var/lib/filebeat:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem:rw",
+        "/home/atomik/src/aptl/config/wazuh_cluster/falco_rules.xml:/var/ossec/etc/rules/falco_rules.xml:rw",
+        "/home/atomik/src/aptl/config/wazuh_cluster/samba_decoders.xml:/var/ossec/etc/decoders/samba_decoders.xml:rw",
+        "aptl_wazuh_etc:/var/ossec/etc:rw",
+        "aptl_wazuh_queue:/var/ossec/queue:rw",
+        "aptl_wazuh_agentless:/var/ossec/agentless:rw",
+        "aptl_wazuh_wodles:/var/ossec/wodles:rw",
+        "/home/atomik/src/aptl/.aptl/config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf:rw",
+        "/home/atomik/src/aptl/config/wazuh_cluster/postgresql_decoders.xml:/var/ossec/etc/decoders/postgresql_decoders.xml:rw",
+        "/home/atomik/src/aptl/config/wazuh_cluster/webapp_rules.xml:/var/ossec/etc/rules/webapp_rules.xml:rw",
+        "aptl_wazuh_api_configuration:/var/ossec/api/configuration:rw",
+        "aptl_wazuh_logs:/var/ossec/logs:rw",
+        "/home/atomik/src/aptl/config/wazuh_cluster/filebeat_wazuh_module.yml:/tmp/filebeat-override.yml:ro",
+        "/home/atomik/src/aptl/config/wazuh_cluster/ad_rules.xml:/var/ossec/etc/rules/ad_rules.xml:rw",
+        "aptl_wazuh_var_multigroups:/var/ossec/var/multigroups:rw",
+        "/home/atomik/src/aptl/config/wazuh_cluster/custom-shuffle:/var/ossec/integrations/custom-shuffle:rw",
+        "aptl_wazuh_active_response:/var/ossec/active-response/bin:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/filebeat.pem:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-dmz",
+      "PortBindings": {
+        "1514/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "1514"
+          }
+        ],
+        "1515/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "1515"
+          }
+        ],
+        "514/udp": [
+          {
+            "HostIp": "",
+            "HostPort": "514"
+          }
+        ],
+        "55000/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "55000"
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "always",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 1073741824,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 2147483648,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": [
+        {
+          "Name": "nofile",
+          "Hard": 655360,
+          "Soft": 655360
+        },
+        {
+          "Name": "memlock",
+          "Hard": -1,
+          "Soft": -1
+        }
+      ],
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh_etc",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh_etc/_data",
+        "Destination": "/var/ossec/etc",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh_queue",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh_queue/_data",
+        "Destination": "/var/ossec/queue",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh_logs",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh_logs/_data",
+        "Destination": "/var/ossec/logs",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh_var_multigroups",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh_var_multigroups/_data",
+        "Destination": "/var/ossec/var/multigroups",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem",
+        "Destination": "/etc/ssl/filebeat.key",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_cluster/suricata_rules.xml",
+        "Destination": "/var/ossec/etc/rules/suricata_rules.xml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_filebeat_var",
+        "Source": "/var/lib/docker/volumes/aptl_filebeat_var/_data",
+        "Destination": "/var/lib/filebeat",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca-manager.pem",
+        "Destination": "/etc/ssl/root-ca.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_cluster/filebeat_wazuh_module.yml",
+        "Destination": "/tmp/filebeat-override.yml",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_cluster/custom-shuffle",
+        "Destination": "/var/ossec/integrations/custom-shuffle",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_cluster/patch-rule-path.py",
+        "Destination": "/docker-entrypoint-initdb.d/patch-rule-path.py",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_cluster/falco_rules.xml",
+        "Destination": "/var/ossec/etc/rules/falco_rules.xml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_cluster/samba_decoders.xml",
+        "Destination": "/var/ossec/etc/decoders/samba_decoders.xml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh_agentless",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh_agentless/_data",
+        "Destination": "/var/ossec/agentless",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_cluster/postgresql_decoders.xml",
+        "Destination": "/var/ossec/etc/decoders/postgresql_decoders.xml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh_api_configuration",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh_api_configuration/_data",
+        "Destination": "/var/ossec/api/configuration",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_cluster/ad_rules.xml",
+        "Destination": "/var/ossec/etc/rules/ad_rules.xml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh_active_response",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh_active_response/_data",
+        "Destination": "/var/ossec/active-response/bin",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_cluster/database_rules.xml",
+        "Destination": "/var/ossec/etc/rules/database_rules.xml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh_wodles",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh_wodles/_data",
+        "Destination": "/var/ossec/wodles",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_cluster/webapp_rules.xml",
+        "Destination": "/var/ossec/etc/rules/webapp_rules.xml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.manager.pem",
+        "Destination": "/etc/ssl/filebeat.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/.aptl/config/wazuh_cluster/wazuh_manager.conf",
+        "Destination": "/wazuh-config-mount/etc/ossec.conf",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh_integrations",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh_integrations/_data",
+        "Destination": "/var/ossec/integrations",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_filebeat_etc",
+        "Source": "/var/lib/docker/volumes/aptl_filebeat_etc/_data",
+        "Destination": "/etc/filebeat",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "wazuh.manager",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "1514/tcp": {},
+        "1515/tcp": {},
+        "1516/tcp": {},
+        "514/udp": {},
+        "55000/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "INDEXER_URL=https://wazuh.indexer:9200",
+        "API_PASSWORD=<REDACTED-API-PASSWORD>",
+        "FILEBEAT_SSL_VERIFICATION_MODE=full",
+        "INDEXER_PASSWORD=<REDACTED-INDEXER-PASSWORD>",
+        "API_USERNAME=wazuh-wui",
+        "SSL_CERTIFICATE=/etc/ssl/filebeat.pem",
+        "SSL_KEY=<REDACTED-SSL-KEY>",
+        "INDEXER_USERNAME=admin",
+        "SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      ],
+      "Cmd": null,
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "curl -ks https://localhost:55000 || exit 1"
+        ],
+        "Interval": 30000000000,
+        "Timeout": 10000000000,
+        "StartPeriod": 120000000000,
+        "Retries": 5
+      },
+      "Image": "wazuh/wazuh-manager:4.12.0",
+      "Volumes": null,
+      "WorkingDir": "/",
+      "Entrypoint": [
+        "/bin/bash",
+        "-c",
+        "cp /tmp/filebeat-override.yml /etc/filebeat/filebeat.yml && chown root:root /etc/filebeat/filebeat.yml && python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "27bbdab4d8aa9b36ab50c589c68de5eab7ea55881d8e3c81cbc3a68286ef461e",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "wazuh.indexer:service_healthy:false",
+        "com.docker.compose.image": "sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "wazuh.manager",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "0aeb481e3e370f882d74a1990e71c89ae1d291c8b389c35ce28ac1f5ace193bd",
+      "SandboxKey": "<REDACTED>",
+      "Ports": {
+        "1514/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "1514"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "1514"
+          }
+        ],
+        "1515/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "1515"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "1515"
+          }
+        ],
+        "1516/tcp": null,
+        "514/udp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "514"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "514"
+          }
+        ],
+        "55000/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "55000"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "55000"
+          }
+        ]
+      },
+      "Networks": {
+        "aptl_aptl-dmz": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.1.10"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-wazuh-manager",
+            "wazuh.manager"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "3b7c4e642d7ebef4866bf953ff0b04bd39affb9639881b4938cdcb8a9dc09c16",
+          "EndpointID": "2675e9783a626c797e01d8e20b71b949a9f97381f1960b2def4372aaa23560fb",
+          "Gateway": "",
+          "IPAddress": "172.20.1.10",
+          "MacAddress": "d2:a3:1d:df:b8:63",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-wazuh-manager",
+            "wazuh.manager",
+            "7a0689d6ee54"
+          ]
+        },
+        "aptl_aptl-internal": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.2.30"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-wazuh-manager",
+            "wazuh.manager"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
+          "EndpointID": "5ac23437333211555e355738803b17bd898630a1e5036a1f5bd48bb014c4fcb0",
+          "Gateway": "",
+          "IPAddress": "172.20.2.30",
+          "MacAddress": "0e:dd:8d:cc:5f:7d",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-wazuh-manager",
+            "wazuh.manager",
+            "7a0689d6ee54"
+          ]
+        },
+        "aptl_aptl-security": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.0.10"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-wazuh-manager",
+            "wazuh.manager"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "0c62d4d57a01c10d77ee0c7b66417375c74d8ef03e7a989ab3c57b66c38cd518",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.10",
+          "MacAddress": "9e:fe:e4:f4:76:54",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-wazuh-manager",
+            "wazuh.manager",
+            "7a0689d6ee54"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561",
+      "size": 3860,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

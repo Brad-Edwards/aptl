@@ -1,0 +1,16 @@
+[
+  {
+    "CreatedAt": "2026-05-23T08:18:29+02:00",
+    "Driver": "local",
+    "Labels": {
+      "com.docker.compose.config-hash": "d9a4d41826d361c215942b6a1f80b2dcd46974a9e48440ba5fa2c1e853c72ec3",
+      "com.docker.compose.project": "aptl",
+      "com.docker.compose.version": "5.1.3",
+      "com.docker.compose.volume": "wazuh_queue"
+    },
+    "Mountpoint": "/var/lib/docker/volumes/aptl_wazuh_queue/_data",
+    "Name": "aptl_wazuh_queue",
+    "Options": null,
+    "Scope": "local"
+  }
+]

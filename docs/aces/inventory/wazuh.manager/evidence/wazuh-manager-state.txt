@@ -1,0 +1,663 @@
+--wazuh-info--
+WAZUH_VERSION="v4.12.0"
+WAZUH_REVISION="rc1"
+WAZUH_TYPE="server"
+--wazuh-status--
+wazuh-clusterd not running...
+wazuh-modulesd is running...
+wazuh-monitord is running...
+wazuh-logcollector is running...
+wazuh-remoted is running...
+wazuh-syscheckd is running...
+wazuh-analysisd is running...
+wazuh-maild not running...
+wazuh-execd is running...
+wazuh-db is running...
+wazuh-authd is running...
+wazuh-agentlessd not running...
+wazuh-integratord is running...
+wazuh-dbd not running...
+wazuh-csyslogd not running...
+wazuh-apid is running...
+--agent-groups--
+Groups (1):
+  default (7)
+Unassigned agents: 0.
+--agent-list--
+
+Available agents:
+   ID: 001, Name: aptl-dns-agent, IP: any
+   ID: 002, Name: aptl-webapp-agent, IP: any
+   ID: 003, Name: aptl-fileshare-agent, IP: any
+   ID: 004, Name: aptl-ad-agent, IP: any
+   ID: 005, Name: aptl-db-agent, IP: any
+   ID: 006, Name: aptl-suricata-agent, IP: any
+   ID: 007, Name: dc.techvault.local, IP: any
+
+--rules-count--
+173
+--rules-files--
+/var/ossec/etc/rules/ad_rules.xml
+/var/ossec/etc/rules/database_rules.xml
+/var/ossec/etc/rules/falco_rules.xml
+/var/ossec/etc/rules/local_rules.xml
+/var/ossec/etc/rules/suricata_rules.xml
+/var/ossec/etc/rules/webapp_rules.xml
+/var/ossec/ruleset/rules/0010-rules_config.xml
+/var/ossec/ruleset/rules/0015-ossec_rules.xml
+/var/ossec/ruleset/rules/0016-wazuh_rules.xml
+/var/ossec/ruleset/rules/0017-wazuh-api_rules.xml
+/var/ossec/ruleset/rules/0020-syslog_rules.xml
+/var/ossec/ruleset/rules/0025-sendmail_rules.xml
+/var/ossec/ruleset/rules/0030-postfix_rules.xml
+/var/ossec/ruleset/rules/0035-spamd_rules.xml
+/var/ossec/ruleset/rules/0040-imapd_rules.xml
+/var/ossec/ruleset/rules/0045-mailscanner_rules.xml
+/var/ossec/ruleset/rules/0050-ms-exchange_rules.xml
+/var/ossec/ruleset/rules/0055-courier_rules.xml
+/var/ossec/ruleset/rules/0065-pix_rules.xml
+/var/ossec/ruleset/rules/0070-netscreenfw_rules.xml
+/var/ossec/ruleset/rules/0075-cisco-ios_rules.xml
+/var/ossec/ruleset/rules/0080-sonicwall_rules.xml
+/var/ossec/ruleset/rules/0085-pam_rules.xml
+/var/ossec/ruleset/rules/0090-telnetd_rules.xml
+/var/ossec/ruleset/rules/0095-sshd_rules.xml
+/var/ossec/ruleset/rules/0100-solaris_bsm_rules.xml
+/var/ossec/ruleset/rules/0105-asterisk_rules.xml
+/var/ossec/ruleset/rules/0110-ms_dhcp_rules.xml
+/var/ossec/ruleset/rules/0115-arpwatch_rules.xml
+/var/ossec/ruleset/rules/0120-symantec-av_rules.xml
+/var/ossec/ruleset/rules/0125-symantec-ws_rules.xml
+/var/ossec/ruleset/rules/0130-trend-osce_rules.xml
+/var/ossec/ruleset/rules/0135-hordeimp_rules.xml
+/var/ossec/ruleset/rules/0140-roundcube_rules.xml
+/var/ossec/ruleset/rules/0145-wordpress_rules.xml
+/var/ossec/ruleset/rules/0150-cimserver_rules.xml
+/var/ossec/ruleset/rules/0155-dovecot_rules.xml
+/var/ossec/ruleset/rules/0160-vmpop3d_rules.xml
+/var/ossec/ruleset/rules/0165-vpopmail_rules.xml
+/var/ossec/ruleset/rules/0170-ftpd_rules.xml
+/var/ossec/ruleset/rules/0175-proftpd_rules.xml
+/var/ossec/ruleset/rules/0180-pure-ftpd_rules.xml
+/var/ossec/ruleset/rules/0185-vsftpd_rules.xml
+/var/ossec/ruleset/rules/0190-ms_ftpd_rules.xml
+/var/ossec/ruleset/rules/0195-named_rules.xml
+/var/ossec/ruleset/rules/0200-smbd_rules.xml
+/var/ossec/ruleset/rules/0205-racoon_rules.xml
+/var/ossec/ruleset/rules/0210-vpn_concentrator_rules.xml
+/var/ossec/ruleset/rules/0215-policy_rules.xml
+/var/ossec/ruleset/rules/0220-msauth_rules.xml
+/var/ossec/ruleset/rules/0225-mcafee_av_rules.xml
+/var/ossec/ruleset/rules/0230-ms-se_rules.xml
+/var/ossec/ruleset/rules/0235-vmware_rules.xml
+/var/ossec/ruleset/rules/0240-ids_rules.xml
+/var/ossec/ruleset/rules/0245-web_rules.xml
+/var/ossec/ruleset/rules/0250-apache_rules.xml
+/var/ossec/ruleset/rules/0255-zeus_rules.xml
+/var/ossec/ruleset/rules/0260-nginx_rules.xml
+/var/ossec/ruleset/rules/0265-php_rules.xml
+/var/ossec/ruleset/rules/0270-web_appsec_rules.xml
+/var/ossec/ruleset/rules/0275-squid_rules.xml
+/var/ossec/ruleset/rules/0280-attack_rules.xml
+/var/ossec/ruleset/rules/0285-systemd_rules.xml
+/var/ossec/ruleset/rules/0290-firewalld_rules.xml
+/var/ossec/ruleset/rules/0295-mysql_rules.xml
+/var/ossec/ruleset/rules/0300-postgresql_rules.xml
+/var/ossec/ruleset/rules/0305-dropbear_rules.xml
+/var/ossec/ruleset/rules/0310-openbsd_rules.xml
+/var/ossec/ruleset/rules/0315-apparmor_rules.xml
+/var/ossec/ruleset/rules/0320-clam_av_rules.xml
+/var/ossec/ruleset/rules/0325-opensmtpd_rules.xml
+/var/ossec/ruleset/rules/0330-sysmon_rules.xml
+/var/ossec/ruleset/rules/0335-unbound_rules.xml
+/var/ossec/ruleset/rules/0340-puppet_rules.xml
+/var/ossec/ruleset/rules/0345-netscaler_rules.xml
+/var/ossec/ruleset/rules/0350-amazon_rules.xml
+/var/ossec/ruleset/rules/0360-serv-u_rules.xml
+/var/ossec/ruleset/rules/0365-auditd_rules.xml
+/var/ossec/ruleset/rules/0375-usb_rules.xml
+/var/ossec/ruleset/rules/0380-redis_rules.xml
+/var/ossec/ruleset/rules/0385-oscap_rules.xml
+/var/ossec/ruleset/rules/0390-fortiddos_rules.xml
+/var/ossec/ruleset/rules/0391-fortigate_rules.xml
+/var/ossec/ruleset/rules/0392-fortimail_rules.xml
+/var/ossec/ruleset/rules/0393-fortiauth_rules.xml
+/var/ossec/ruleset/rules/0395-hp_rules.xml
+/var/ossec/ruleset/rules/0400-openvpn_rules.xml
+/var/ossec/ruleset/rules/0405-rsa-auth-manager_rules.xml
+/var/ossec/ruleset/rules/0410-imperva_rules.xml
+/var/ossec/ruleset/rules/0415-sophos_rules.xml
+/var/ossec/ruleset/rules/0420-freeipa_rules.xml
+/var/ossec/ruleset/rules/0425-cisco-estreamer_rules.xml
+/var/ossec/ruleset/rules/0430-ms_wdefender_rules.xml
+/var/ossec/ruleset/rules/0435-ms_logs_rules.xml
+/var/ossec/ruleset/rules/0440-ms_sqlserver_rules.xml
+/var/ossec/ruleset/rules/0445-identity_guard_rules.xml
+/var/ossec/ruleset/rules/0450-mongodb_rules.xml
+/var/ossec/ruleset/rules/0455-docker_rules.xml
+/var/ossec/ruleset/rules/0460-jenkins_rules.xml
+/var/ossec/ruleset/rules/0470-vshell_rules.xml
+/var/ossec/ruleset/rules/0475-suricata_rules.xml
+/var/ossec/ruleset/rules/0480-qualysguard_rules.xml
+/var/ossec/ruleset/rules/0485-cylance_rules.xml
+/var/ossec/ruleset/rules/0490-virustotal_rules.xml
+/var/ossec/ruleset/rules/0495-proxmox-ve_rules.xml
+/var/ossec/ruleset/rules/0500-owncloud_rules.xml
+/var/ossec/ruleset/rules/0505-vuls_rules.xml
+/var/ossec/ruleset/rules/0510-ciscat_rules.xml
+/var/ossec/ruleset/rules/0515-exim_rules.xml
+/var/ossec/ruleset/rules/0520-vulnerability-detector_rules.xml
+/var/ossec/ruleset/rules/0525-openvas_rules.xml
+/var/ossec/ruleset/rules/0530-mysql_audit_rules.xml
+/var/ossec/ruleset/rules/0535-mariadb_rules.xml
+/var/ossec/ruleset/rules/0540-pfsense_rules.xml
+/var/ossec/ruleset/rules/0545-osquery_rules.xml
+/var/ossec/ruleset/rules/0550-kaspersky_rules.xml
+/var/ossec/ruleset/rules/0555-azure_rules.xml
+/var/ossec/ruleset/rules/0560-docker_integration_rules.xml
+/var/ossec/ruleset/rules/0565-ms_ipsec_rules.xml
+/var/ossec/ruleset/rules/0570-sca_rules.xml
+/var/ossec/ruleset/rules/0575-win-base_rules.xml
+/var/ossec/ruleset/rules/0580-win-security_rules.xml
+/var/ossec/ruleset/rules/0585-win-application_rules.xml
+/var/ossec/ruleset/rules/0590-win-system_rules.xml
+/var/ossec/ruleset/rules/0595-win-sysmon_rules.xml
+/var/ossec/ruleset/rules/0600-win-wdefender_rules.xml
+/var/ossec/ruleset/rules/0601-win-vipre_rules.xml
+/var/ossec/ruleset/rules/0602-win-wfirewall_rules.xml
+/var/ossec/ruleset/rules/0605-win-mcafee_rules.xml
+/var/ossec/ruleset/rules/0610-win-ms_logs_rules.xml
+/var/ossec/ruleset/rules/0615-win-ms-se_rules.xml
+/var/ossec/ruleset/rules/0620-win-generic_rules.xml
+/var/ossec/ruleset/rules/0625-cisco-asa_rules.xml
+/var/ossec/ruleset/rules/0625-mcafee_epo_rules.xml
+/var/ossec/ruleset/rules/0630-nextcloud_rules.xml
+/var/ossec/ruleset/rules/0635-owlh-zeek_rules.xml
+/var/ossec/ruleset/rules/0640-junos_rules.xml
+/var/ossec/ruleset/rules/0675-panda-paps_rules.xml
+/var/ossec/ruleset/rules/0680-checkpoint-smart1_rules.xml
+/var/ossec/ruleset/rules/0690-gcp_rules.xml
+/var/ossec/ruleset/rules/0695-f5_bigip_rules.xml
+/var/ossec/ruleset/rules/0700-paloalto_rules.xml
+/var/ossec/ruleset/rules/0705-sophos_fw_rules.xml
+/var/ossec/ruleset/rules/0715-freepbx_rules.xml
+/var/ossec/ruleset/rules/0750-github_rules.xml
+/var/ossec/ruleset/rules/0755-office365_rules.xml
+/var/ossec/ruleset/rules/0770-gitlab_rules.xml
+/var/ossec/ruleset/rules/0775-arbor_rules.xml
+/var/ossec/ruleset/rules/0780-fireeye_rules.xml
+/var/ossec/ruleset/rules/0785-huawei-usg_rules.xml
+/var/ossec/ruleset/rules/0800-sysmon_id_1.xml
+/var/ossec/ruleset/rules/0810-sysmon_id_3.xml
+/var/ossec/ruleset/rules/0820-sysmon_id_7.xml
+/var/ossec/ruleset/rules/0830-sysmon_id_11.xml
+/var/ossec/ruleset/rules/0840-win_event_channel.xml
+/var/ossec/ruleset/rules/0850-audit_rules.xml
+/var/ossec/ruleset/rules/0860-sysmon_id_13.xml
+/var/ossec/ruleset/rules/0870-sysmon_id_8.xml
+/var/ossec/ruleset/rules/0900-firewall_rules.xml
+/var/ossec/ruleset/rules/0905-cisco-ftd_rules.xml
+/var/ossec/ruleset/rules/0910-ms-exchange-proxylogon_rules.xml
+/var/ossec/ruleset/rules/0915-win-powershell_rules.xml
+/var/ossec/ruleset/rules/0920-oracledb_rules.xml
+/var/ossec/ruleset/rules/0925-eset-remote_rules.xml
+/var/ossec/ruleset/rules/0935-cloudflare-waf_rules.xml
+/var/ossec/ruleset/rules/0945-sysmon_id_10.xml
+/var/ossec/ruleset/rules/0950-sysmon_id_20.xml
+/var/ossec/ruleset/rules/0955-WEF-baseline_rules.xml
+/var/ossec/ruleset/rules/0960-macos_rules.xml
+/var/ossec/ruleset/rules/0990-amazon-security-lake_rules.xml
+/var/ossec/ruleset/rules/0995-microsoft-graph_rules.xml
+/var/ossec/ruleset/rules/0997-maltiverse_rules.xml
+/var/ossec/ruleset/rules/0998-aws-security-hub-rules.xml
+--decoders-count--
+123
+--decoders-files--
+/var/ossec/etc/decoders/local_decoder.xml
+/var/ossec/etc/decoders/postgresql_decoders.xml
+/var/ossec/etc/decoders/samba_decoders.xml
+/var/ossec/ruleset/decoders/0005-wazuh_decoders.xml
+/var/ossec/ruleset/decoders/0006-json_decoders.xml
+/var/ossec/ruleset/decoders/0007-wazuh-api_decoders.xml
+/var/ossec/ruleset/decoders/0010-active-response_decoders.xml
+/var/ossec/ruleset/decoders/0015-aix-ipsec_decoders.xml
+/var/ossec/ruleset/decoders/0025-apache_decoders.xml
+/var/ossec/ruleset/decoders/0030-arpwatch_decoders.xml
+/var/ossec/ruleset/decoders/0035-asterisk_decoders.xml
+/var/ossec/ruleset/decoders/0040-auditd_decoders.xml
+/var/ossec/ruleset/decoders/0045-barracuda_decoders.xml
+/var/ossec/ruleset/decoders/0050-checkpoint_decoders.xml
+/var/ossec/ruleset/decoders/0051-checkpoint-smart1_decoders.xml
+/var/ossec/ruleset/decoders/0055-cimserver_decoders.xml
+/var/ossec/ruleset/decoders/0060-cisco-estreamer_decoders.xml
+/var/ossec/ruleset/decoders/0062-cisco-ftd_decoders.xml
+/var/ossec/ruleset/decoders/0063-pix_decoders.xml
+/var/ossec/ruleset/decoders/0064-cisco-asa_decoders.xml
+/var/ossec/ruleset/decoders/0065-cisco-ios_decoders.xml
+/var/ossec/ruleset/decoders/0070-cisco-vpn_decoders.xml
+/var/ossec/ruleset/decoders/0075-clamav_decoders.xml
+/var/ossec/ruleset/decoders/0080-courier_decoders.xml
+/var/ossec/ruleset/decoders/0085-dovecot_decoders.xml
+/var/ossec/ruleset/decoders/0090-dragon-nids_decoders.xml
+/var/ossec/ruleset/decoders/0095-dropbear_decoders.xml
+/var/ossec/ruleset/decoders/0100-fortigate_decoders.xml
+/var/ossec/ruleset/decoders/0101-fortiddos_decoders.xml
+/var/ossec/ruleset/decoders/0102-fortimail_decoders.xml
+/var/ossec/ruleset/decoders/0103-fortiauth_decoders.xml
+/var/ossec/ruleset/decoders/0105-freeipa_decoders.xml
+/var/ossec/ruleset/decoders/0110-ftpd_decoders.xml
+/var/ossec/ruleset/decoders/0115-grandstream_decoders.xml
+/var/ossec/ruleset/decoders/0120-horde_decoders.xml
+/var/ossec/ruleset/decoders/0125-hp_decoders.xml
+/var/ossec/ruleset/decoders/0130-imapd_decoders.xml
+/var/ossec/ruleset/decoders/0135-imperva_decoders.xml
+/var/ossec/ruleset/decoders/0140-kernel_decoders.xml
+/var/ossec/ruleset/decoders/0145-mailscanner_decoders.xml
+/var/ossec/ruleset/decoders/0150-mysql_decoders.xml
+/var/ossec/ruleset/decoders/0155-named_decoders.xml
+/var/ossec/ruleset/decoders/0160-netscaler_decoders.xml
+/var/ossec/ruleset/decoders/0165-netscreen_decoders.xml
+/var/ossec/ruleset/decoders/0170-nginx_decoders.xml
+/var/ossec/ruleset/decoders/0175-ntpd_decoders.xml
+/var/ossec/ruleset/decoders/0180-openbsd_decoders.xml
+/var/ossec/ruleset/decoders/0185-openldap_decoders.xml
+/var/ossec/ruleset/decoders/0190-openvpn_decoders.xml
+/var/ossec/ruleset/decoders/0195-oscap_decoders.xml
+/var/ossec/ruleset/decoders/0200-ossec_decoders.xml
+/var/ossec/ruleset/decoders/0205-pam_decoders.xml
+/var/ossec/ruleset/decoders/0215-portsentry_decoders.xml
+/var/ossec/ruleset/decoders/0220-postfix_decoders.xml
+/var/ossec/ruleset/decoders/0225-postgresql_decoders.xml
+/var/ossec/ruleset/decoders/0230-proftpd_decoders.xml
+/var/ossec/ruleset/decoders/0235-puppet_decoders.xml
+/var/ossec/ruleset/decoders/0240-pure-ftpd_decoders.xml
+/var/ossec/ruleset/decoders/0245-racoon_decoders.xml
+/var/ossec/ruleset/decoders/0250-redis_decoders.xml
+/var/ossec/ruleset/decoders/0255-roundcube_decoders.xml
+/var/ossec/ruleset/decoders/0260-rsa-auth-manager_decoders.xml
+/var/ossec/ruleset/decoders/0265-rshd_decoders.xml
+/var/ossec/ruleset/decoders/0270-samba_decoders.xml
+/var/ossec/ruleset/decoders/0275-sendmail_decoders.xml
+/var/ossec/ruleset/decoders/0280-serv-u_decoders.xml
+/var/ossec/ruleset/decoders/0285-snort_decoders.xml
+/var/ossec/ruleset/decoders/0290-solaris_decoders.xml
+/var/ossec/ruleset/decoders/0295-sonicwall_decoders.xml
+/var/ossec/ruleset/decoders/0300-sophos_decoders.xml
+/var/ossec/ruleset/decoders/0305-squid_decoders.xml
+/var/ossec/ruleset/decoders/0310-ssh_decoders.xml
+/var/ossec/ruleset/decoders/0315-su_decoders.xml
+/var/ossec/ruleset/decoders/0320-sudo_decoders.xml
+/var/ossec/ruleset/decoders/0325-suhosin_decoders.xml
+/var/ossec/ruleset/decoders/0330-symantec_decoders.xml
+/var/ossec/ruleset/decoders/0335-telnet_decoders.xml
+/var/ossec/ruleset/decoders/0340-trend-osce_decoders.xml
+/var/ossec/ruleset/decoders/0345-unbound_decoders.xml
+/var/ossec/ruleset/decoders/0350-unix_decoders.xml
+/var/ossec/ruleset/decoders/0355-vm-pop3_decoders.xml
+/var/ossec/ruleset/decoders/0360-vmware_decoders.xml
+/var/ossec/ruleset/decoders/0365-vpopmail_decoders.xml
+/var/ossec/ruleset/decoders/0370-vsftpd_decoders.xml
+/var/ossec/ruleset/decoders/0375-web-accesslog_decoders.xml
+/var/ossec/ruleset/decoders/0377-huawei-usg_decoders.xml
+/var/ossec/ruleset/decoders/0378-mariadb_decoders.xml
+/var/ossec/ruleset/decoders/0379-dpkg_decoders.xml
+/var/ossec/ruleset/decoders/0380-windows_decoders.xml
+/var/ossec/ruleset/decoders/0385-wordpress_decoders.xml
+/var/ossec/ruleset/decoders/0390-zeus_decoders.xml
+/var/ossec/ruleset/decoders/0395-sqlserver_decoders.xml
+/var/ossec/ruleset/decoders/0400-identity_guard_decoders.xml
+/var/ossec/ruleset/decoders/0405-mongodb_decoders.xml
+/var/ossec/ruleset/decoders/0410-docker_decoders.xml
+/var/ossec/ruleset/decoders/0415-jenkins_decoders.xml
+/var/ossec/ruleset/decoders/0420-vshell_decoders.xml
+/var/ossec/ruleset/decoders/0425-qualysguard_decoders.xml
+/var/ossec/ruleset/decoders/0430-cylance_decoders.xml
+/var/ossec/ruleset/decoders/0435-owncloud_decoders.xml
+/var/ossec/ruleset/decoders/0440-proxmox-ve_decoders.xml
+/var/ossec/ruleset/decoders/0445-exim_decoders.xml
+/var/ossec/ruleset/decoders/0450-openvas_decoders.xml
+/var/ossec/ruleset/decoders/0455-pfsense_decoders.xml
+/var/ossec/ruleset/decoders/0460-kaspersky_decoders.xml
+/var/ossec/ruleset/decoders/0465-azure_decoders.xml
+/var/ossec/ruleset/decoders/0470-panda-paps_decoders.xml
+/var/ossec/ruleset/decoders/0475-mcafee_decoders.xml
+/var/ossec/ruleset/decoders/0480-perdition_decoders.xml
+/var/ossec/ruleset/decoders/0485-nextcloud_decoders.xml
+/var/ossec/ruleset/decoders/0490-junos_decoders.xml
+/var/ossec/ruleset/decoders/0495-freepbs_decoders.xml
+/var/ossec/ruleset/decoders/0505-paloalto_decoders.xml
+/var/ossec/ruleset/decoders/0510-sophos_fw_decoders.xml
+/var/ossec/ruleset/decoders/0520-msexchange-log-decoders.xml
+/var/ossec/ruleset/decoders/0525-f5_bigip_decoders.xml
+/var/ossec/ruleset/decoders/0540-gitlab_decoders.xml
+/var/ossec/ruleset/decoders/0550-arbor_decoders.xml
+/var/ossec/ruleset/decoders/0555-fireeye_decoders.xml
+/var/ossec/ruleset/decoders/0560-oracledb_decoders.xml
+/var/ossec/ruleset/decoders/0565-aws-eks-authenticator_decoders.xml
+/var/ossec/ruleset/decoders/0575-eset-remote_decoders.xml
+/var/ossec/ruleset/decoders/0580-macos_decoders.xml
+--active-response-files--
+/var/ossec/active-response/bin/default-firewall-drop
+/var/ossec/active-response/bin/disable-account
+/var/ossec/active-response/bin/firewall-drop
+/var/ossec/active-response/bin/firewalld-drop
+/var/ossec/active-response/bin/host-deny
+/var/ossec/active-response/bin/ip-customblock
+/var/ossec/active-response/bin/ipfw
+/var/ossec/active-response/bin/kaspersky
+/var/ossec/active-response/bin/kaspersky.py
+/var/ossec/active-response/bin/npf
+/var/ossec/active-response/bin/pf
+/var/ossec/active-response/bin/restart-wazuh
+/var/ossec/active-response/bin/restart.sh
+/var/ossec/active-response/bin/route-null
+/var/ossec/active-response/bin/wazuh-slack
+--integrations-files--
+/var/ossec/integrations/custom-shuffle
+/var/ossec/integrations/maltiverse
+/var/ossec/integrations/maltiverse.py
+/var/ossec/integrations/pagerduty
+/var/ossec/integrations/pagerduty.py
+/var/ossec/integrations/shuffle
+/var/ossec/integrations/shuffle.py
+/var/ossec/integrations/slack
+/var/ossec/integrations/slack.py
+/var/ossec/integrations/virustotal
+/var/ossec/integrations/virustotal.py
+--ossec-config--
+<ossec_config>
+  <global>
+    <jsonout_output>yes</jsonout_output>
+    <alerts_log>yes</alerts_log>
+    <logall>yes</logall>
+    <logall_json>yes</logall_json>
+    <email_notification>no</email_notification>
+    <smtp_server>smtp.example.wazuh.com</smtp_server>
+    <email_from>wazuh@example.wazuh.com</email_from>
+    <email_to>recipient@example.wazuh.com</email_to>
+    <email_maxperhour>12</email_maxperhour>
+    <email_log_source>alerts.log</email_log_source>
+    <agents_disconnection_time>10m</agents_disconnection_time>
+    <agents_disconnection_alert_time>0</agents_disconnection_alert_time>
+  </global>
+
+  <alerts>
+    <log_alert_level>3</log_alert_level>
+    <email_alert_level>12</email_alert_level>
+  </alerts>
+
+  <!-- Choose between "plain", "json", or "plain,json" for the format of internal logs -->
+  <logging>
+    <log_format>plain</log_format>
+  </logging>
+
+  <remote>
+    <connection>secure</connection>
+    <port>1514</port>
+    <protocol>tcp</protocol>
+    <queue_size>131072</queue_size>
+  </remote>
+
+  <!-- Policy monitoring -->
+  <rootcheck>
+    <disabled>no</disabled>
+    <check_files>yes</check_files>
+    <check_trojans>yes</check_trojans>
+    <check_dev>yes</check_dev>
+    <check_sys>yes</check_sys>
+    <check_pids>yes</check_pids>
+    <check_ports>yes</check_ports>
+    <check_if>yes</check_if>
+
+    <!-- Frequency that rootcheck is executed - every 12 hours -->
+    <frequency>43200</frequency>
+
+    <rootkit_files>etc/rootcheck/rootkit_files.txt</rootkit_files>
+    <rootkit_trojans>etc/rootcheck/rootkit_trojans.txt</rootkit_trojans>
+
+    <skip_nfs>yes</skip_nfs>
+  </rootcheck>
+
+  <wodle name="cis-cat">
+    <disabled>yes</disabled>
+    <timeout>1800</timeout>
+    <interval>1d</interval>
+    <scan-on-start>yes</scan-on-start>
+
+    <java_path>wodles/java</java_path>
+    <ciscat_path>wodles/ciscat</ciscat_path>
+  </wodle>
+
+  <!-- Osquery integration -->
+  <wodle name="osquery">
+    <disabled>yes</disabled>
+    <run_daemon>yes</run_daemon>
+    <log_path>/var/log/osquery/osqueryd.results.log</log_path>
+    <config_path>/etc/osquery/osquery.conf</config_path>
+    <add_labels>yes</add_labels>
+  </wodle>
+
+  <!-- System inventory -->
+  <wodle name="syscollector">
+    <disabled>no</disabled>
+    <interval>1h</interval>
+    <scan_on_start>yes</scan_on_start>
+    <hardware>yes</hardware>
+    <os>yes</os>
+    <network>yes</network>
+    <packages>yes</packages>
+    <ports all="no">yes</ports>
+    <processes>yes</processes>
+
+    <!-- Database synchronization settings -->
+    <synchronization>
+      <max_eps>10</max_eps>
+    </synchronization>
+  </wodle>
+
+  <sca>
+    <enabled>yes</enabled>
+    <scan_on_start>yes</scan_on_start>
+    <interval>12h</interval>
+    <skip_nfs>yes</skip_nfs>
+  </sca>
+
+  <vulnerability-detection>
+    <enabled>yes</enabled>
+    <index-status>yes</index-status>
+    <feed-update-interval>60m</feed-update-interval>
+  </vulnerability-detection>
+
+  <indexer>
+    <enabled>yes</enabled>
+    <hosts>
+      <host>https://wazuh.indexer:9200</host>
+    </hosts>
+    <ssl>
+      <certificate_authorities>
+        <ca>/etc/ssl/root-ca.pem</ca>
+      </certificate_authorities>
+      <certificate>/etc/ssl/filebeat.pem</certificate>
+      <key><REDACTED-CLUSTER-KEY></key>
+    </ssl>
+  </indexer>
+
+  <!-- File integrity monitoring -->
+  <syscheck>
+    <disabled>no</disabled>
+
+    <!-- Frequency that syscheck is executed default every 12 hours -->
+    <frequency>43200</frequency>
+
+    <scan_on_start>yes</scan_on_start>
+
+    <!-- Generate alert when new file detected -->
+    <alert_new_files>yes</alert_new_files>
+
+    <!-- Don't ignore files that change more than 'frequency' times -->
+    <auto_ignore frequency="10" timeframe="3600">no</auto_ignore>
+
+    <!-- Directories to check  (perform all possible verifications) -->
+    <directories>/etc,/usr/bin,/usr/sbin</directories>
+    <directories>/bin,/sbin,/boot</directories>
+
+    <!-- Files/directories to ignore -->
+    <ignore>/etc/mtab</ignore>
+    <ignore>/etc/hosts.deny</ignore>
+    <ignore>/etc/mail/statistics</ignore>
+    <ignore>/etc/random-seed</ignore>
+    <ignore>/etc/random.seed</ignore>
+    <ignore>/etc/adjtime</ignore>
+    <ignore>/etc/httpd/logs</ignore>
+    <ignore>/etc/utmpx</ignore>
+    <ignore>/etc/wtmpx</ignore>
+    <ignore>/etc/cups/certs</ignore>
+    <ignore>/etc/dumpdates</ignore>
+    <ignore>/etc/svc/volatile</ignore>
+
+    <!-- File types to ignore -->
+    <ignore type="sregex">.log$|.swp$</ignore>
+
+    <!-- Check the file, but never compute the diff -->
+    <nodiff>/etc/ssl/private.key</nodiff>
+
+    <skip_nfs>yes</skip_nfs>
+    <skip_dev>yes</skip_dev>
+    <skip_proc>yes</skip_proc>
+    <skip_sys>yes</skip_sys>
+
+    <!-- Nice value for Syscheck process -->
+    <process_priority>10</process_priority>
+
+    <!-- Maximum output throughput -->
+    <max_eps>100</max_eps>
+
+    <!-- Database synchronization settings -->
+    <synchronization>
+      <enabled>yes</enabled>
+      <interval>5m</interval>
+      <max_interval>1h</max_interval>
+      <max_eps>10</max_eps>
+    </synchronization>
+  </syscheck>
+
+  <!-- Active response -->
+  <global>
+    <white_list>127.0.0.1</white_list>
+    <white_list>^localhost.localdomain$</white_list>
+  </global>
+
+  <command>
+    <name>disable-account</name>
+    <executable>disable-account</executable>
+    <timeout_allowed>yes</timeout_allowed>
+  </command>
+
+  <command>
+    <name>restart-wazuh</name>
+    <executable>restart-wazuh</executable>
+  </command>
+
+  <command>
+    <name>firewall-drop</name>
+    <executable>firewall-drop</executable>
+    <timeout_allowed>yes</timeout_allowed>
+  </command>
+
+  <command>
+    <name>host-deny</name>
+    <executable>host-deny</executable>
+    <timeout_allowed>yes</timeout_allowed>
+  </command>
+
+  <command>
+    <name>route-null</name>
+    <executable>route-null</executable>
+    <timeout_allowed>yes</timeout_allowed>
+  </command>
+
+  <command>
+    <name>win_route-null</name>
+    <executable>route-null.exe</executable>
+    <timeout_allowed>yes</timeout_allowed>
+  </command>
+
+  <command>
+    <name>netsh</name>
+    <executable>netsh.exe</executable>
+    <timeout_allowed>yes</timeout_allowed>
+  </command>
+
+  <!-- Active-response wrapper that consults the kali source-IP
+       whitelist before forwarding to the upstream `firewall-drop`
+       (issue #249, ADR-021). Every <active-response> block referencing
+       firewall-drop semantics MUST use this command, not bare
+       `firewall-drop` — otherwise the carve-out is bypassed. -->
+  <command>
+    <name>aptl-firewall-drop</name>
+    <executable>aptl-firewall-drop</executable>
+    <expect>srcip</expect>
+    <timeout_allowed>yes</timeout_allowed>
+  </command>
+
+  <!-- Active-response framework (issue #249).
+
+       Every block ships <disabled>yes</disabled> by default — blue
+       removes the disabled tag per iteration once the rule is tuned
+       to a specific pattern/payload (not coarse source-IP).
+
+       The severity gate is implicit: each <rules_id> below references
+       a rule that's already authored at level >= 10 in the lab's
+       custom rule files (webapp_rules.xml / ad_rules.xml / etc.).
+       Wazuh AR's matchers (<rules_id>, <rules_group>, <level>) are
+       OR'd, not AND'd — adding <level>10</level> to a block that
+       already has <rules_id> would BROADEN the block to fire on every
+       level-10+ alert, defeating the per-rule scoping. So the level
+       gate is enforced by selecting only level-10+ rules in
+       <rules_id>; blue authoring a new low-severity rule and pointing
+       AR at it is the gap, and is documented in
+       docs/components/wazuh-active-response.md.
+
+       Timeouts are bounded to 60-300s so any drop auto-rolls back.
+       See ADR-021 for design rationale. -->
+
+  <!-- Auto-block SSH brute force on agents (rule 5763, level 10).
+       Pre-#249 this block was enabled and used bare `firewall-drop`
+       with a 600s timeout. Converted to the wrapper-driven, default-
+       disabled posture; behavior is preserved and re-enable-able by
+--filebeat-config--
+# Wazuh - Filebeat configuration file
+# Override of the default filebeat.yml to enable archives indexing.
+# The default image ships with archives: enabled: false.
+#
+# Archives require logall_json=yes in ossec.conf (already configured).
+# See: https://documentation.wazuh.com/current/user-manual/manager/wazuh-archives.html
+filebeat.modules:
+  - module: wazuh
+    alerts:
+      enabled: true
+    archives:
+      enabled: true
+
+setup.template.json.enabled: true
+setup.template.overwrite: true
+setup.template.json.path: '/etc/filebeat/wazuh-template.json'
+setup.template.json.name: 'wazuh'
+setup.ilm.enabled: false
+output.elasticsearch:
+  hosts: ['https://wazuh.indexer:9200']
+  username: 'admin'
+  password: '<REDACTED-OPERATOR-SECRET>'
+  ssl.verification_mode: 'full'
+  ssl.certificate_authorities: ['/etc/ssl/root-ca.pem']
+  ssl.certificate: '/etc/ssl/filebeat.pem'
+  ssl.key: '/etc/ssl/filebeat.key'
+
+logging.metrics.enabled: false
+
+seccomp:
+  default_action: allow
+  syscalls:
+  - action: allow
+    names:
+    - rseq

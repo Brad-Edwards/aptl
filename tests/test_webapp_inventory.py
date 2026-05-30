@@ -541,7 +541,7 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
         "wazuh-modulesd",
     } <= process_names
     environment = {item["name"]: item for item in runtime["environment"]}
-    assert environment["DB_PASSWORD"]["value"] == "techvault_db_pass"
+    assert "value" not in environment["DB_PASSWORD"]
     assert environment["DB_PASSWORD"]["value_classification"] == "secret_fixture"
     assert environment["WAZUH_MANAGER"]["value"] == "wazuh.manager"
     assert environment["PYTHON_VERSION"]["provenance"] == "image"

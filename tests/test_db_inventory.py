@@ -291,7 +291,7 @@ def test_techvault_sdl_encodes_db_inventory_surfaces():
     assert "logging_collector=on" in " ".join(runtime["process"]["command"])
     assert {process["name"] for process in runtime["processes"]} >= {"postgres-postmaster", "postgres-logger"}
     environment = {item["name"]: item for item in runtime["environment"]}
-    assert environment["POSTGRES_PASSWORD"]["value"] == "<scenario-fixture-secret>"
+    assert "value" not in environment["POSTGRES_PASSWORD"]
     assert environment["POSTGRES_PASSWORD"]["value_classification"] == "secret_fixture"
     assert runtime["linux_capabilities"]["effective"] == []
     assert runtime["operational_policy"]["restart"] == "unless_stopped"

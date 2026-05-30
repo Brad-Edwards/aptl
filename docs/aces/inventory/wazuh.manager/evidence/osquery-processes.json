@@ -1,0 +1,207 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-wazuh-manager PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "s6-svscan -t0 /var/run/s6/services",
+      "gid": "0",
+      "name": "s6-svscan",
+      "path": "/usr/bin/s6-svscan",
+      "pid": "1",
+      "start_time": "1779517135",
+      "uid": "0"
+    },
+    {
+      "cmdline": "s6-supervise s6-fdholderd",
+      "gid": "0",
+      "name": "s6-supervise",
+      "path": "/usr/bin/s6-supervise",
+      "pid": "38",
+      "start_time": "1779517136",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh_apid.py",
+      "gid": "999",
+      "name": "python3",
+      "path": "",
+      "pid": "568",
+      "start_time": "1779517151",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh_apid.py",
+      "gid": "999",
+      "name": "python3",
+      "path": "",
+      "pid": "569",
+      "start_time": "1779517151",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh_apid.py",
+      "gid": "999",
+      "name": "python3",
+      "path": "",
+      "pid": "570",
+      "start_time": "1779517151",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh_apid.py",
+      "gid": "999",
+      "name": "python3",
+      "path": "",
+      "pid": "573",
+      "start_time": "1779517151",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh_apid.py",
+      "gid": "999",
+      "name": "python3",
+      "path": "",
+      "pid": "576",
+      "start_time": "1779517151",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-integratord",
+      "gid": "999",
+      "name": "wazuh-integrato",
+      "path": "",
+      "pid": "600",
+      "start_time": "1779517151",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-authd",
+      "gid": "999",
+      "name": "wazuh-authd",
+      "path": "",
+      "pid": "621",
+      "start_time": "1779517151",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-db",
+      "gid": "999",
+      "name": "wazuh-db",
+      "path": "",
+      "pid": "635",
+      "start_time": "1779517151",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-execd",
+      "gid": "999",
+      "name": "wazuh-execd",
+      "path": "",
+      "pid": "649",
+      "start_time": "1779517152",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-analysisd",
+      "gid": "999",
+      "name": "wazuh-analysisd",
+      "path": "",
+      "pid": "664",
+      "start_time": "1779517153",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-syscheckd",
+      "gid": "999",
+      "name": "wazuh-syscheckd",
+      "path": "",
+      "pid": "690",
+      "start_time": "1779517154",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-remoted",
+      "gid": "999",
+      "name": "wazuh-remoted",
+      "path": "",
+      "pid": "704",
+      "start_time": "1779517154",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-remoted",
+      "gid": "999",
+      "name": "wazuh-remoted",
+      "path": "",
+      "pid": "705",
+      "start_time": "1779517154",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-logcollector",
+      "gid": "999",
+      "name": "wazuh-logcollec",
+      "path": "",
+      "pid": "926",
+      "start_time": "1779517155",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-monitord",
+      "gid": "999",
+      "name": "wazuh-monitord",
+      "path": "",
+      "pid": "945",
+      "start_time": "1779517155",
+      "uid": "999"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-modulesd",
+      "gid": "0",
+      "name": "wazuh-modulesd",
+      "path": "/var/ossec/bin/wazuh-modulesd",
+      "pid": "955",
+      "start_time": "1779517155",
+      "uid": "0"
+    },
+    {
+      "cmdline": "s6-supervise ossec-logs",
+      "gid": "0",
+      "name": "s6-supervise",
+      "path": "/usr/bin/s6-supervise",
+      "pid": "1603",
+      "start_time": "1779517159",
+      "uid": "0"
+    },
+    {
+      "cmdline": "s6-supervise filebeat",
+      "gid": "0",
+      "name": "s6-supervise",
+      "path": "/usr/bin/s6-supervise",
+      "pid": "1605",
+      "start_time": "1779517159",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/bin/coreutils --coreutils-prog-shebang=tail /usr/bin/tail -F /var/ossec/logs/ossec.log",
+      "gid": "0",
+      "name": "tail",
+      "path": "/usr/bin/coreutils",
+      "pid": "1607",
+      "start_time": "1779517159",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/share/filebeat/bin/filebeat -e -c /etc/filebeat/filebeat.yml -path.home /usr/share/filebeat -path.config /etc/filebeat -path.data /var/lib/filebeat -path.logs /var/log/filebeat",
+      "gid": "0",
+      "name": "filebeat",
+      "path": "/usr/share/filebeat/bin/filebeat",
+      "pid": "1608",
+      "start_time": "1779517159",
+      "uid": "0"
+    }
+  ]
+}

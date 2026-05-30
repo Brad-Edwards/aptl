@@ -171,11 +171,11 @@ rows:
     legacy_source: scenarios/techvault.sdl.yaml
     legacy_field: nodes.wazuh-manager + infrastructure.wazuh-manager + runtime
     category: aces_sdl
-    aces_target: ACES nodes / infrastructure / runtime / conditions fields
+    aces_target: ACES nodes / infrastructure / runtime / runtime.security_monitoring_managers / runtime.security_monitoring_managers.detection_definitions / conditions fields
     runtime_owner: n/a
-    validation_evidence: "docker-compose.yml (service: wazuh.manager) + scenarios/techvault.sdl.yaml + tests/test_techvault_classification_audit.py"
+    validation_evidence: "docs/aces/inventory/wazuh.manager/ + scenarios/techvault.sdl.yaml + tests/test_wazuh_manager_inventory.py + tests/test_techvault_classification_audit.py + Brad-Edwards/aces#428 + Brad-Edwards/aces#434"
     blocking_followup: n/a
-    notes: Classification-audit fix for issue #369; current SDL encodes the Wazuh API on 55000/tcp, security/dmz/internal network attachments, Compose healthcheck as conditions.wazuh-api-ready, environment policy, resource policy, persistent/config mounts, and custom decoder/rule content mounted into the manager.
+    notes: Issue #340 inventory; current SDL encodes Wazuh manager image provenance, Amazon Linux runtime identity, container/network/health state, process/capability/environment/local-identity state, filesystem inventory, package and vulnerability inventories, ACES #428 security-monitoring manager listeners, components, agents, groups, content sets, and settings, plus ACES #434 parsed detection definitions for 4,542 rules/correlation rules and 1,579 decoders.
 
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml
@@ -696,11 +696,11 @@ rows:
     legacy_source: "docker-compose.yml (service: wazuh.manager)"
     legacy_field: wazuh.manager
     category: aces_sdl
-    aces_target: ACES nodes.wazuh-manager + infrastructure.wazuh-manager + runtime + conditions.wazuh-api-ready
+    aces_target: ACES nodes.wazuh-manager + infrastructure.wazuh-manager + runtime + runtime.security_monitoring_managers + runtime.security_monitoring_managers.detection_definitions + conditions.wazuh-api-ready
     runtime_owner: n/a
-    validation_evidence: docker-compose.yml + scenarios/techvault.sdl.yaml + tests/test_techvault_classification_audit.py
+    validation_evidence: docker-compose.yml + docs/aces/inventory/wazuh.manager/ + scenarios/techvault.sdl.yaml + tests/test_wazuh_manager_inventory.py + tests/test_techvault_classification_audit.py + Brad-Edwards/aces#428 + Brad-Edwards/aces#434
     blocking_followup: n/a
-    notes: Wazuh manager service, API, three network attachments, Compose healthcheck via conditions.wazuh-api-ready, runtime environment policy, mounts, and custom decoder/rule files are now represented by the TechVault SDL.
+    notes: Wazuh manager service, API, three network attachments, Compose healthcheck, runtime environment/policy/mounts, custom content, package/vulnerability state, typed ACES #428 Wazuh manager security-monitoring state, and ACES #434 detection-definition semantics are represented by the TechVault SDL.
 
   - id: compose.profile.victim
     surface: docker_compose_topology
@@ -1736,12 +1736,12 @@ rows:
     surface: defensive_stack_configs
     legacy_source: config/wazuh_cluster/
     legacy_field: wazuh_manager.conf + custom rule XML
-    category: aptl_backend_responsibility
-    aces_target: n/a (defensive-stack realization)
-    runtime_owner: config/wazuh_cluster + docker-compose `wazuh`
-    validation_evidence: tests/test_detection.py + lab health
-    blocking_followup: "#322"
-    notes: Wazuh manager + custom decoders/rules per component.
+    category: aces_sdl
+    aces_target: ACES nodes.wazuh-manager.runtime.security_monitoring_managers.settings + nodes.wazuh-manager.runtime.security_monitoring_managers.detection_definitions
+    runtime_owner: n/a
+    validation_evidence: docs/aces/inventory/wazuh.manager/ + scenarios/techvault.sdl.yaml + tests/test_wazuh_manager_inventory.py + Brad-Edwards/aces#428 + Brad-Edwards/aces#434
+    blocking_followup: n/a
+    notes: Wazuh manager configuration and custom decoders/rules are represented by the Wazuh manager inventory through typed manager settings, content sets, and parsed detection definitions; APTL backend tests still exercise runtime detection behavior separately.
 
   - id: defconf.wazuh_dashboard
     surface: defensive_stack_configs

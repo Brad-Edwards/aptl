@@ -95,7 +95,7 @@ def test_wazuh_manager_sdl_matches_compose_visible_surfaces():
     assert sdl["conditions"]["wazuh-api-ready"]["command"] == (
         "curl -ks https://localhost:55000 || exit 1"
     )
-    assert "health" not in runtime
+    assert runtime["health"]["status"] == "healthy"
 
     infra = sdl["infrastructure"]["wazuh-manager"]
     assert infra["links"] == ["security-net", "dmz-net", "internal-net"]

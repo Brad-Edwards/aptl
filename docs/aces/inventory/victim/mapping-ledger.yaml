@@ -200,10 +200,13 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.victim.runtime.process
     - nodes.victim.runtime.processes
-    rationale: ACES runtime.process and runtime.processes encode the primary process and supervised/steady-state process set
-      observed by Docker, ps, and osquery.
+    rationale: >
+      ACES PR #458 removed the singular runtime.process field. The PID 1
+      systemd identity (role: primary, user: root, command: /usr/sbin/init)
+      continues as processes[0]; the supervised/steady-state process set
+      observed by Docker, ps, and osquery (systemd-journal, rsyslogd, sshd)
+      continues under the same runtime.processes field.
 - id: victim.runtime.environment-policy
   category: runtime-configuration
   summary: The runtime environment includes SIEM_IP, LABADMIN_SSH_KEY_FILE, PATH, and install toggles for Wazuh, Falco, and

@@ -601,8 +601,18 @@ def test_techvault_sdl_parses_and_compiles_with_victim_runtime_fields():
     assert len(runtime["mounts"]) == 30
     assert len(runtime["filesystem_inventory"]) == FILESYSTEM_ENTRY_COUNT
     assert len(runtime["processes"]) == PROCESS_COUNT
+    assert "process" not in runtime, (
+        "ACES PR #458 removed runtime.process; PID 1 systemd identity is "
+        "carried as processes[0]."
+    )
+    assert runtime["processes"][0]["name"] == "systemd"
+    assert runtime["processes"][0]["pid"] == 1
     assert len(runtime["environment"]) == 6
     assert len(runtime["ssh_servers"]) == 1
+    assert runtime["ssh_servers"][0]["ssh_server_id"] == "victim-sshd", (
+        "ACES PR #458 renamed server_id -> ssh_server_id under the <noun>_id "
+        "primary-id convention."
+    )
     assert len(runtime["service_manager_units"]) == SERVICE_MANAGER_UNIT_COUNT
     assert len(runtime["packages"]) == RUNTIME_PACKAGE_COUNT
     assert len(runtime["package_vulnerabilities"]) == TRIVY_FINDING_COUNT

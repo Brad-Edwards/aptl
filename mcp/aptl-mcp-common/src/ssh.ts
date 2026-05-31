@@ -5,6 +5,16 @@ import { EventEmitter } from 'events';
 import { randomBytes } from 'node:crypto';
 import { ShellFormatter, ShellType, createShellFormatter } from './shells.js';
 import { createPtyTeeWriter, loadActiveTraceId } from './runs.js';
+import { redact } from './redaction.js';
+
+// Mask embedded credentials before putting a command into an error message.
+// Command-timeout / failure SSHError strings can reach stderr (console.error)
+// or a raw rejection ahead of the MCP serialization boundary's redaction, so
+// `hydra -p hunter2 …` would otherwise leak the password (ARCH-386-08 /
+// sec-02). `redact` leaves credential-free commands intact for debugging.
+function redactCommand(command: string): string {
+  return redact(command) as string;
+}
 
 /**
  * OBS-003: env vars passed to the SSH shell via `SendEnv`/`shell({env})`
@@ -439,7 +449,7 @@ export class PersistentSession extends EventEmitter {
         this.commandTimeout = setTimeout(() => {
           if (this.currentCommand?.id === commandId) {
             this.commandTimeout = null;
-            this.currentCommand!.reject(new SSHError(`Command timeout: ${this.currentCommand!.command}`));
+            this.currentCommand!.reject(new SSHError(`Command timeout: ${redactCommand(this.currentCommand!.command)}`));
             this.currentCommand = null;
             this.processNextCommand();
           }
@@ -760,7 +770,7 @@ export class SSHConnectionManager {
 
       const timeoutId = setTimeout(() => {
         hasTimedOut = true;
-        reject(new SSHError(`Command timeout after ${timeout}ms: ${command}`));
+        reject(new SSHError(`Command timeout after ${timeout}ms: ${redactCommand(command)}`));
       }, timeout);
 
       client.exec(command, { env: shellEnv }, (err, stream) => {

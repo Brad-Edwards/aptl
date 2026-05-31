@@ -25,6 +25,25 @@ from typing import Any
 
 REDACTED = "[REDACTED]"
 
+# Defense-in-depth bounds for the redactor itself (issue #386, ARCH-386-01).
+# These cap worst-case work at the secret boundary so a hostile or
+# pathological artifact cannot turn redaction into a denial-of-service or a
+# fail-open crash. Both bounds fail CLOSED (over-redact, never leak), matching
+# the ADR-012 guardrail. Mirror any change in ``redaction.ts``.
+#
+# ``_MAX_SCAN_LEN`` bounds the polynomial-backtracking command-flag passes:
+# the ``--<word>*<sensitive>`` flag matcher and the per-segment shell scanners
+# backtrack ~O(n^2) on long flag-like tokens. Strings longer than this skip
+# those passes (the linear key/value/header/PEM/bearer/URL passes still run),
+# so CPU stays bounded. 64 KiB is far above any real command line while keeping
+# the worst case trivial.
+_MAX_SCAN_LEN = 64 * 1024
+# ``_MAX_DEPTH`` bounds recursion through nested dicts / lists / JSON-in-strings
+# so a deeply nested artifact collapses to a bounded marker instead of raising
+# ``RecursionError`` (a fail-OPEN crash at the serialization boundary). Kept
+# well under ``sys.getrecursionlimit()`` accounting for ~3 frames per level.
+_MAX_DEPTH = 100
+
 # OBS-003 experimenter opt-out. The toggle is NOT consulted by the
 # shared :func:`redact` primitive — that would disable redaction at
 # every serialization boundary in the project (OTel/Tempo spans,
@@ -451,14 +470,26 @@ _BASIC_AUTH_USER_ATTACHED_UNQUOTED = re.compile(
 # bare form can't contain a literal `@`; users with `@`/whitespace in the
 # password MUST quote. `(?=\s|$|[;|&])` requires a token boundary after the
 # host so we don't eat into the rest of the command line.
+# A leading token-boundary lookbehind eliminates the O(n^2) ReDoS these
+# patterns exhibited (ARCH-386-01 / redact-01). Without it, `re.sub` re-tried
+# the match at *every* offset inside a long flag-like token (`hydra --aaaa…`
+# or `aaaa:bbbb` with no `@`), and each attempt scanned the rest of the token
+# — quadratic. `(?<![\w\\/.:@-])` forbids starting a match in the middle of a
+# target token, so attempts collapse from O(n) offsets to O(tokens); the
+# match can still begin after whitespace, `;`/`|`/`&`, `=`, or a quote, which
+# is exactly where an impacket positional target legitimately starts. The
+# lookbehind is zero-width and non-capturing, so groups 1/2/3 stay
+# user/value/host. Portable to the TS mirror (JS supports lookbehind); parity
+# is verified by the shared golden corpus.
+_IMPACKET_LEAD = r"(?<![\w\\/.:@-])"
 _IMPACKET_POSITIONAL_DQUOTE = re.compile(
-    r'([\w\\/.-]+):"([^"\\]*(?:\\.[^"\\]*)*)"@([\w.-]+)(?=\s|$|[;|&])'
+    rf'{_IMPACKET_LEAD}([\w\\/.-]+):"([^"\\]*(?:\\.[^"\\]*)*)"@([\w.-]+)(?=\s|$|[;|&])'
 )
 _IMPACKET_POSITIONAL_SQUOTE = re.compile(
-    r"([\w\\/.-]+):'([^'\\]*(?:\\.[^'\\]*)*)'@([\w.-]+)(?=\s|$|[;|&])"
+    rf"{_IMPACKET_LEAD}([\w\\/.-]+):'([^'\\]*(?:\\.[^'\\]*)*)'@([\w.-]+)(?=\s|$|[;|&])"
 )
 _IMPACKET_POSITIONAL_BARE = re.compile(
-    r"([\w\\/.-]+):((?:\\.|[^\\@\s])+)@([\w.-]+)(?=\s|$|[;|&])"
+    rf"{_IMPACKET_LEAD}([\w\\/.-]+):((?:\\.|[^\\@\s])+)@([\w.-]+)(?=\s|$|[;|&])"
 )
 
 _URL_PREFIX_RE = re.compile(r"^(?:https?|ftp|ldap|ldaps|smb|smbs)://", re.IGNORECASE)
@@ -786,7 +817,7 @@ def _redact_command_flags(value: str) -> str:
     return out
 
 
-def _redact_string(value: str) -> str:
+def _redact_string(value: str, depth: int = 0) -> str:
     # Try JSON.parse first — payloads like '{"password":"x"}' and the MCP
     # `content[].text` envelope (which wraps the real result in a JSON
     # string) need to be parsed, recursively redacted, and re-serialized.
@@ -797,7 +828,8 @@ def _redact_string(value: str) -> str:
         except ValueError:  # JSONDecodeError is a ValueError subclass
             parsed = None
         if isinstance(parsed, (dict, list)):
-            return json.dumps(redact(parsed), separators=(",", ":"))
+            return json.dumps(_redact(parsed, depth + 1), separators=(",", ":"))
+    # Linear, single-quantifier passes — ReDoS-safe at any input length.
     # PEM blocks first so the markers stay verbatim (the inner key bytes
     # contain `=`/`/` characters that other patterns would otherwise see
     # as `key=value`). The quote-strip pre-pass that USED to live here
@@ -811,11 +843,17 @@ def _redact_string(value: str) -> str:
     out = _COOKIE_HEADER_RE.sub(rf"\1{REDACTED}\3", out)
     out = _SENSITIVE_KV_RE.sub(rf"\1{REDACTED}\3", out)
     out = _BARE_BEARER_RE.sub(rf"\1{REDACTED}", out)
-    out = _CLI_FLAG_RE.sub(rf"\1{REDACTED}", out)
     out = _URL_USERINFO_RE.sub(rf"\1{REDACTED}\2", out)
-    # Tool-context-aware short flags last so the simpler kv/flag patterns
-    # above have first claim on overlapping shapes.
-    return _redact_command_flags(out)
+    # Polynomial-backtracking passes (the `--<word>*<sensitive>` long-flag
+    # matcher and the tool-context-aware short-flag chain) are bounded by
+    # length to cap worst-case CPU at the secret boundary (ARCH-386-01).
+    # Oversized strings skip them; the linear passes above already masked the
+    # key/value/header/PEM/bearer/URL secret shapes. Run last so the simpler
+    # kv/flag patterns have first claim on overlapping shapes.
+    if len(out) <= _MAX_SCAN_LEN:
+        out = _CLI_FLAG_RE.sub(rf"\1{REDACTED}", out)
+        out = _redact_command_flags(out)
+    return out
 
 
 def _argv_credential_modes(leading: str) -> dict[str, bool]:
@@ -878,7 +916,7 @@ def _argv_short_flag_skip_indices(items: list, modes: dict[str, bool]) -> set[in
     return skip
 
 
-def _redact_list(items: list | tuple) -> list:
+def _redact_list(items: list | tuple, depth: int = 0) -> list:
     out: list = []
     skip_next = False
     # Argv-shape detection: when the leading token is a credential-family
@@ -901,7 +939,7 @@ def _redact_list(items: list | tuple) -> list:
         if idx in short_flag_skip:
             out.append(REDACTED)
             continue
-        out.append(redact(item))
+        out.append(_redact(item, depth + 1))
         # Pair-form CLI args: ["--password", "hunter2"]. If this string is
         # a long-flag whose name is sensitive AND the next element is a
         # plain string, redact the next element as the value-of-flag.
@@ -940,14 +978,37 @@ def redact(value: Any) -> Any:
     before invoking ``redact``. This keeps OTel/Tempo, runstore,
     snapshot, and stderr boundaries redacted at all times regardless
     of the toggle.
+
+    Bounded against pathological input (ARCH-386-01): recursion is depth-
+    capped (``_MAX_DEPTH``) and fails CLOSED — a structure deeper than the
+    bound collapses to ``[REDACTED]`` rather than raising ``RecursionError``.
     """
+    return _redact(value, 0)
+
+
+def _redact(value: Any, depth: int) -> Any:
+    """Depth-bounded recursive core of :func:`redact`.
+
+    ``depth`` counts container/JSON nesting levels. At ``_MAX_DEPTH`` the
+    subtree is replaced by the marker (fail-closed) instead of recursing
+    into a ``RecursionError``.
+    """
+    if depth >= _MAX_DEPTH:
+        return REDACTED
     if isinstance(value, dict):
         return {
-            k: REDACTED if _is_sensitive_key(str(k)) else redact(v)
+            k: REDACTED if _is_sensitive_key(str(k)) else _redact(v, depth + 1)
             for k, v in value.items()
         }
     if isinstance(value, (list, tuple)):
-        return _redact_list(value)
+        return _redact_list(value, depth)
+    if isinstance(value, (bytes, bytearray)):
+        # ``bytes`` are not JSON-serializable and may carry secret material;
+        # decode and scan as a string so embedded credentials are masked and
+        # the result is JSON-safe (ARCH-386-01 / redact-03). Previously such
+        # values fell through to the ``return value`` passthrough below,
+        # silently bypassing redaction.
+        return _redact_string(bytes(value).decode("utf-8", "replace"), depth)
     if isinstance(value, str):
-        return _redact_string(value)
+        return _redact_string(value, depth)
     return value

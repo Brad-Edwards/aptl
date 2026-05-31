@@ -1148,6 +1148,38 @@ class TestSyncLoop:
         run_loop(cfg, stop=stop, client=client, reloader=reloader)
         client.fetch_tagged_attributes.assert_not_called()
 
+    def test_run_loop_survives_a_raising_tick(self, tmp_path: Path, caplog):
+        """A tick that raises (e.g. a disk-full write failure) must be caught
+        and logged, not propagate out of run_loop and kill the daemon
+        (ARCH-386-07 / mispsync-01)."""
+        import logging as _logging
+
+        from aptl.services.misp_suricata_sync.main import run_loop
+
+        cfg = self._cfg(tmp_path)
+        stop = threading.Event()
+
+        client = MagicMock()
+        client.wait_for_ready.return_value = True
+
+        def boom():
+            # Set stop first so the post-tick wait returns immediately and the
+            # loop exits after this single failing tick (no real interval wait).
+            stop.set()
+            raise RuntimeError("disk full while writing rules")
+
+        client.fetch_tagged_attributes.side_effect = boom
+        reloader = MagicMock()
+
+        with caplog.at_level(_logging.ERROR):
+            # The assertion is that this returns at all — without the guard the
+            # RuntimeError would propagate and crash the service.
+            run_loop(cfg, stop=stop, client=client, reloader=reloader)
+
+        client.fetch_tagged_attributes.assert_called_once()
+        assert "Unhandled error during sync tick" in caplog.text
+        assert "disk full while writing rules" in caplog.text
+
     def test_main_fails_fast_on_missing_api_key(self, monkeypatch):
         from aptl.services.misp_suricata_sync.main import main
 

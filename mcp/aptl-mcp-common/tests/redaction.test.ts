@@ -824,3 +824,85 @@ describe('APTL_EXPERIMENT_NO_REDACT scoped opt-out (cycle 3 finding-9)', () => {
     expect(experimentNoRedactActive({ [ENV_KEY]: '1' })).toBe(true);
   });
 });
+
+describe('redactor defense-in-depth bounds (issue #386, ARCH-386-01)', () => {
+  // Cleanly separates the linear path (ms) from a reintroduced O(n^2)
+  // backtracking regression (seconds at these sizes) without flaking on CI.
+  const BUDGET_MS = 3000;
+
+  function elapsedMs(fn: () => void): number {
+    const start = performance.now();
+    fn();
+    return performance.now() - start;
+  }
+
+  it('impacket positional with no terminating @ is linear, not ReDoS', () => {
+    const payload = 'impacket-psexec ' + 'a'.repeat(20000) + ':' + 'b'.repeat(20000);
+    expect(elapsedMs(() => redact(payload))).toBeLessThan(BUDGET_MS);
+  });
+
+  it('a long flag-like token is bounded, not ReDoS', () => {
+    const payload = 'hydra --' + 'a'.repeat(40000) + ' target';
+    expect(elapsedMs(() => redact(payload))).toBeLessThan(BUDGET_MS);
+  });
+
+  it('still redacts a valid impacket positional target', () => {
+    expect(redact('psexec.py corp/alice:S3cr3t@dc01.lab.local x')).toBe(
+      'psexec.py corp/alice:[REDACTED]@dc01.lab.local x',
+    );
+    expect(redact('echo hello:world@notatool')).toBe('echo hello:world@notatool');
+  });
+
+  it('oversized input is bounded and still redacts linear key/value secrets', () => {
+    const payload =
+      'psexec.py ' + 'a'.repeat(90000) + ':' + 'b'.repeat(90000) + ' password=hunter2';
+    let out = '';
+    const ms = elapsedMs(() => {
+      out = redact(payload) as string;
+    });
+    expect(ms).toBeLessThan(BUDGET_MS);
+    expect(out).not.toContain('password=hunter2');
+    expect(out).toContain(`password=${REDACTED}`);
+  });
+
+  it('deeply nested object fails closed without a stack overflow', () => {
+    const root: Record<string, unknown> = {};
+    let node = root;
+    for (let i = 0; i < 250; i++) {
+      const next: Record<string, unknown> = {};
+      node.n = next;
+      node = next;
+    }
+    node.password = 'should-never-survive';
+    const serialized = JSON.stringify(redact(root));
+    // Fail closed: the subtree past the depth cap collapses to the marker.
+    expect(serialized).not.toContain('should-never-survive');
+    expect(serialized).toContain(REDACTED);
+  });
+
+  it('deeply nested array fails closed without a stack overflow', () => {
+    let root: unknown[] = [];
+    let cur = root;
+    for (let i = 0; i < 250; i++) {
+      const next: unknown[] = [];
+      cur.push(next);
+      cur = next;
+    }
+    cur.push('token=should-never-survive');
+    expect(JSON.stringify(redact(root))).not.toContain('should-never-survive');
+  });
+
+  it('shallow nesting below the cap is unaffected', () => {
+    expect(redact({ a: { b: { c: { password: 'hunter2', host: 'dc01' } } } })).toEqual({
+      a: { b: { c: { password: REDACTED, host: 'dc01' } } },
+    });
+  });
+
+  it('binary (Buffer / Uint8Array) values are redacted, not bypassed', () => {
+    expect(redact(Buffer.from('password=hunter2'))).toBe(`password=${REDACTED}`);
+    expect(redact(new TextEncoder().encode('token: abc'))).toBe(`token: ${REDACTED}`);
+    expect(redact({ blob: Buffer.from('api_key=AKIA1234567890') })).toEqual({
+      blob: `api_key=${REDACTED}`,
+    });
+  });
+});

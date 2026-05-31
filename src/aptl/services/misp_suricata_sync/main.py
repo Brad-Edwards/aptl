@@ -133,7 +133,19 @@ def run_loop(
 
     runner = SyncRunner(cfg, client=client, reloader=reloader)
     while not stop.is_set():
-        runner.run_once()
+        try:
+            runner.run_once()
+        except Exception:  # noqa: BLE001 - one tick's failure must not kill the daemon
+            # A single tick raising (disk full on a rule/list write, a malformed
+            # MISP payload that slips past the None-check, a reloader that
+            # throws) previously propagated out of run_loop -> main and killed
+            # the long-running service, silently stopping IOC enforcement
+            # (ARCH-386-07 / mispsync-01). Log with traceback and retry on the
+            # next interval; reload-retry state on the runner is preserved.
+            log.exception(
+                "Unhandled error during sync tick; the service will retry on "
+                "the next interval"
+            )
         stop.wait(cfg.sync_interval_seconds)
 
 

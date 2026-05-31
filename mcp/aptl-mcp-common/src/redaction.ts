@@ -13,6 +13,22 @@
 
 export const REDACTED = '[REDACTED]';
 
+// Defense-in-depth bounds for the redactor itself (issue #386, ARCH-386-01).
+// These cap worst-case work at the secret boundary so a hostile or
+// pathological artifact cannot turn redaction into a denial-of-service or a
+// fail-open crash. Both bounds fail CLOSED (over-redact, never leak), matching
+// the ADR-012 guardrail. Mirror any change in `redaction.py`.
+//
+// MAX_SCAN_LEN bounds the polynomial-backtracking command-flag passes (the
+// `--<word>*<sensitive>` flag matcher and the per-segment shell scanners).
+// Strings longer than this skip those passes (the linear key/value/header/
+// PEM/bearer/URL passes still run), keeping CPU bounded.
+const MAX_SCAN_LEN = 64 * 1024;
+// MAX_DEPTH bounds recursion through nested objects/arrays/JSON-in-strings so
+// a deeply nested artifact collapses to a bounded marker instead of
+// overflowing the call stack. Matches the Python bound.
+const MAX_DEPTH = 100;
+
 // OBS-003 experimenter opt-out. The toggle is NOT consulted by the
 // shared `redact()` primitive — that would disable redaction at
 // every serialization boundary in the project (OTel/Tempo spans
@@ -705,7 +721,10 @@ type ReplaceEntry = [RegExp, string | ((...args: unknown[]) => string)];
 // hunter2`, which then triggered `redactShortPasswordFlag`); it now
 // lives inside `redactString` behind a segment-scoped tool gate. See
 // `unquoteOptionsInCredentialSegments`.
-const STATIC_REDACTION_TABLE: ReplaceEntry[] = [
+// Linear, single-quantifier passes — ReDoS-safe at any input length and so
+// run unconditionally. The polynomial-backtracking passes (CLI_FLAG_PATTERN
+// and the per-segment command-flag chain) are length-gated in `redactString`.
+const LINEAR_REDACTION_TABLE: ReplaceEntry[] = [
   // PEM blocks first so the surrounding markers stay verbatim.
   [PEM_BLOCK_PATTERN, `$1${REDACTED}$2`],
   // Authorization next so it wins over the more general patterns.
@@ -713,17 +732,16 @@ const STATIC_REDACTION_TABLE: ReplaceEntry[] = [
   [COOKIE_HEADER_PATTERN, `$1${REDACTED}$3`],
   [SENSITIVE_KV_PATTERN, `$1${REDACTED}$3`],
   [BARE_BEARER_PATTERN, `$1${REDACTED}`],
-  [CLI_FLAG_PATTERN, `$1${REDACTED}`],
   [URL_USERINFO_PATTERN, `$1${REDACTED}$2`],
 ];
 
-function tryRedactJsonString(value: string): string | null {
+function tryRedactJsonString(value: string, depth: number): string | null {
   const trimmed = value.trim();
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
   try {
     const parsed: unknown = JSON.parse(value);
     if (parsed !== null && typeof parsed === 'object') {
-      return JSON.stringify(redact(parsed));
+      return JSON.stringify(redactInner(parsed, depth + 1));
     }
   } catch {
     // Fall through to inline-pattern scanning.
@@ -731,28 +749,33 @@ function tryRedactJsonString(value: string): string | null {
   return null;
 }
 
-function redactString(value: string): string {
-  const jsonRedacted = tryRedactJsonString(value);
+function redactString(value: string, depth: number): string {
+  const jsonRedacted = tryRedactJsonString(value, depth);
   if (jsonRedacted !== null) return jsonRedacted;
   let out = value;
-  for (const [pattern, replacement] of STATIC_REDACTION_TABLE) {
+  for (const [pattern, replacement] of LINEAR_REDACTION_TABLE) {
     out = out.replaceAll(
       pattern,
       replacement as Parameters<typeof out.replaceAll>[1],
     );
   }
-  // Tool-context-aware short flags run last so the simpler kv/flag
-  // patterns above have first claim on overlapping shapes. The
-  // segment-scoped quote-strip (replaces the old global one) unquotes
-  // `'-X'`/`"-X"` option tokens *only* within credential-bearing
-  // segments so `hydra '-p' hunter2` triggers the per-flag matcher
-  // while `echo '-p' hunter2` is preserved verbatim.
-  out = unquoteOptionsInCredentialSegments(out);
-  out = redactShortPasswordFlag(out);
-  out = redactNtlmHashFlag(out);
-  out = redactLdapPasswordFlag(out);
-  out = redactBasicAuthUser(out);
-  out = redactImpacketPositionalAuth(out);
+  // Polynomial-backtracking passes are length-gated to cap worst-case CPU at
+  // the secret boundary (ARCH-386-01). Oversized strings skip them; the
+  // linear passes above already masked the key/value/header/PEM/bearer/URL
+  // secret shapes. Tool-context-aware short flags run last so the simpler
+  // kv/flag patterns have first claim on overlapping shapes. The
+  // segment-scoped quote-strip unquotes `'-X'`/`"-X"` option tokens *only*
+  // within credential-bearing segments so `hydra '-p' hunter2` triggers the
+  // per-flag matcher while `echo '-p' hunter2` is preserved verbatim.
+  if (out.length <= MAX_SCAN_LEN) {
+    out = out.replaceAll(CLI_FLAG_PATTERN, `$1${REDACTED}`);
+    out = unquoteOptionsInCredentialSegments(out);
+    out = redactShortPasswordFlag(out);
+    out = redactNtlmHashFlag(out);
+    out = redactLdapPasswordFlag(out);
+    out = redactBasicAuthUser(out);
+    out = redactImpacketPositionalAuth(out);
+  }
   return out;
 }
 
@@ -789,9 +812,20 @@ function redactString(value: string): string {
 // backslash so the alternatives are mutually exclusive. `@` is also
 // excluded so the pattern stops at the host separator without needing
 // laziness, which removes another backtracking source.
-const IMPACKET_POSITIONAL_DQUOTE = /([\w\\/.-]+):"([^"\\]*(?:\\.[^"\\]*)*)"@([\w.-]+)(?=\s|$|[;|&])/g;
-const IMPACKET_POSITIONAL_SQUOTE = /([\w\\/.-]+):'([^'\\]*(?:\\.[^'\\]*)*)'@([\w.-]+)(?=\s|$|[;|&])/g;
-const IMPACKET_POSITIONAL_BARE = /([\w\\/.-]+):((?:\\.|[^\\@\s])+)@([\w.-]+)(?=\s|$|[;|&])/g;
+// A leading token-boundary lookbehind `(?<![\w\\/.:@-])` eliminates the
+// O(n^2) ReDoS these patterns exhibited (ARCH-386-01 / redact-01): without
+// it the engine re-tried the match at every offset inside a long flag-like
+// token (`hydra --aaaa…` or `aaaa:bbbb` with no `@`), each attempt scanning
+// the rest of the token. The lookbehind forbids starting a match in the
+// middle of a target token, collapsing attempts from O(n) offsets to
+// O(tokens), while still allowing a match to begin after whitespace,
+// `;`/`|`/`&`, `=`, or a quote — exactly where an impacket positional target
+// legitimately starts. Zero-width and non-capturing, so groups 1/2/3 stay
+// user/value/host. Mirrors `redaction.py`; parity is verified by the shared
+// golden corpus.
+const IMPACKET_POSITIONAL_DQUOTE = /(?<![\w\\/.:@-])([\w\\/.-]+):"([^"\\]*(?:\\.[^"\\]*)*)"@([\w.-]+)(?=\s|$|[;|&])/g;
+const IMPACKET_POSITIONAL_SQUOTE = /(?<![\w\\/.:@-])([\w\\/.-]+):'([^'\\]*(?:\\.[^'\\]*)*)'@([\w.-]+)(?=\s|$|[;|&])/g;
+const IMPACKET_POSITIONAL_BARE = /(?<![\w\\/.:@-])([\w\\/.-]+):((?:\\.|[^\\@\s])+)@([\w.-]+)(?=\s|$|[;|&])/g;
 
 const IMPACKET_TOOL_REGEXES: readonly RegExp[] = [
   /(^|[\s|;&])(?:[\w./-]+\/)?(impacket-[\w-]+)(?:\s|$)/i,
@@ -879,7 +913,7 @@ function argvShortFlagSkipIndices(
   return skip;
 }
 
-function redactArray(items: unknown[]): unknown[] {
+function redactArray(items: unknown[], depth: number): unknown[] {
   // Argv-shape detection: when the leading token is a credential-family
   // tool, mark indices whose values should be redacted as short-flag
   // credentials (-p/-H/-w/-u/-U). Without this, a structured
@@ -902,7 +936,7 @@ function redactArray(items: unknown[]): unknown[] {
       out.push(REDACTED);
       continue;
     }
-    out.push(redact(items[i]));
+    out.push(redactInner(items[i], depth + 1));
     // Pair-form CLI args: ["--password", "hunter2"]. If this string is a
     // long-flag whose name is sensitive AND the next element is a string,
     // redact the next element as the value-of-flag.
@@ -938,18 +972,35 @@ export function redact(value: unknown): unknown {
   // themselves before invoking `redact`. This keeps OTel/Tempo,
   // runstore, snapshot, and stderr boundaries redacted at all
   // times regardless of the toggle.
+  //
+  // Recursion is depth-bounded and fails CLOSED — a structure deeper than
+  // MAX_DEPTH collapses to `[REDACTED]` rather than overflowing the stack
+  // (ARCH-386-01).
+  return redactInner(value, 0);
+}
+
+function redactInner(value: unknown, depth: number): unknown {
+  if (depth >= MAX_DEPTH) return REDACTED;
   if (Array.isArray(value)) {
-    return redactArray(value);
+    return redactArray(value, depth);
+  }
+  // Binary payloads (Buffer / typed arrays) are not JSON-serializable and may
+  // carry secret material; decode and scan as a string so embedded
+  // credentials are masked and the result is JSON-safe (mirrors the Python
+  // bytes handling, ARCH-386-01 / redact-03). Checked before the generic
+  // object branch, which would otherwise spread the bytes into an index map.
+  if (value instanceof Uint8Array) {
+    return redactString(Buffer.from(value).toString('utf-8'), depth);
   }
   if (value !== null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = isSensitiveKey(k) ? REDACTED : redact(v);
+      out[k] = isSensitiveKey(k) ? REDACTED : redactInner(v, depth + 1);
     }
     return out;
   }
   if (typeof value === 'string') {
-    return redactString(value);
+    return redactString(value, depth);
   }
   return value;
 }

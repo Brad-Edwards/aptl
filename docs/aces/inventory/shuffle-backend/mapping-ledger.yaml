@@ -174,10 +174,13 @@ facts:
       surface: nodes
       fields:
         - nodes.shuffle-backend.runtime.mounts
-        - nodes.shuffle-backend.runtime.local_control_interfaces
+        - nodes.shuffle-backend.runtime.local_control_interfaces.shuffle-backend-docker-socket
       rationale: >
-        Current ACES runtime mount and local control interface fields encode
-        path-local control sockets without treating them as backend-only detail.
+        ACES PR #458 added the <noun>_id primary-id convention to typed runtime
+        families. The writable Docker socket exposed to the Shuffle backend is
+        now carried as the local_control_interface with
+        control_interface_id: shuffle-backend-docker-socket; the runtime mount
+        view of the same bind continues under runtime.mounts.
   - id: shuffle-backend.process.identity
     category: runtime-configuration
     summary: PID 1 runs ./shufflebackend as root with working directory /app.
@@ -189,11 +192,12 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.shuffle-backend.runtime.process
         - nodes.shuffle-backend.runtime.processes
       rationale: >
-        Current ACES runtime process fields encode PID, command, user, role,
-        and working directory for PID 1.
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        shufflebackend identity (role: primary, user: root,
+        working_directory: /app, command: ./shufflebackend) is now expressed
+        as the first entry of runtime.processes.
   - id: shuffle-backend.package.inventory
     category: runtime-inventory
     summary: >

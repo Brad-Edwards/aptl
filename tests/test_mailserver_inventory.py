@@ -248,7 +248,11 @@ def test_techvault_sdl_encodes_mailserver_inventory_surfaces():
         "value_classification 'redacted' or 'operator_secret' and omit the raw "
         "value."
     )
-    assert ssl_key_settings[0].value is None
+    assert not ssl_key_settings[0].value, (
+        "Raw value must be omitted under the secret-name redaction rule; "
+        "pydantic may surface a missing YAML field as either None or '' "
+        "depending on the model's annotation default."
+    )
     assert mail_service.aliases == []
     assert mail_service.queues[0].message_count == 0
 

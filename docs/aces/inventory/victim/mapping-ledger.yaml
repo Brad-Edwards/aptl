@@ -359,7 +359,11 @@ facts:
       redaction boundary without committing raw secret values.
 - id: victim.relationships
   category: topology
-  summary: Victim runtime environment points log forwarding and Wazuh agent configuration at the Wazuh manager.
+  summary: >
+    Victim's in-process rsyslog forwarder (NOT a Wazuh agent — none observed
+    in victim's process inventory) ships log surfaces toward the
+    wazuh-manager, expressed through a typed forwarding_edge payload
+    referencing the new node-scoped runtime.forwarding_agents row.
   evidence:
   - path: evidence/runtime-baseline.txt
   - path: evidence/compose-service.victim.json
@@ -369,7 +373,16 @@ facts:
     surface: relationships
     fields:
     - relationships.victim-forwards-wazuh
-    rationale: ACES relationships encode topology edges from the victim node to related SOC assets.
+    - relationships.victim-forwards-wazuh.forwarding_edge
+    - nodes.victim.runtime.forwarding_agents
+    rationale: >
+      ACES PR #458 introduced typed relationship payloads alongside the new
+      node-scoped runtime.forwarding_agents family. The victim→wazuh-manager
+      relationship now carries a forwarding_edge.forwarder_ref pointing at
+      the in-process victim-rsyslog-forwarder (implementation: rsyslog —
+      victim does not run a Wazuh agent, per the supervised-process-set
+      evidence). The legacy properties.protocol="syslog-and-wazuh-agent" +
+      configured_manager + log_config prose is retired.
 - id: victim.runtime.service-manager-state
   category: runtime-configuration
   summary: The observed systemd unit state includes sshd, rsyslog, and systemd-journald active/running, lab-install failed,

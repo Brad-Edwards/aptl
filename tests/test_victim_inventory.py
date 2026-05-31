@@ -637,3 +637,35 @@ def test_parity_inventory_cites_victim_inventory_and_profile_cutover():
     assert profile["category"] == "aces_sdl"
     assert profile["blocking_followup"] == "n/a"
     assert "nodes.victim" in profile["aces_target"]
+
+
+def test_techvault_sdl_victim_uses_aces_pr458_runtime_forwarding_surfaces():
+    """ACES PR #458 (#388 reconciliation): victim's log forwarder is rsyslog,
+    NOT a Wazuh agent (victim's process inventory carries systemd-journal +
+    rsyslogd + sshd; no wazuh-* daemons). The typed forwarding_edge payload
+    on victim-forwards-wazuh must resolve to a forwarding_agents entry on
+    nodes.victim.runtime, with implementation: rsyslog (not wazuh_agent).
+    """
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    victim_runtime = data["nodes"]["victim"]["runtime"]
+    forwarding_agents = {
+        agent["forwarding_agent_id"]: agent
+        for agent in victim_runtime.get("forwarding_agents", [])
+    }
+    assert "victim-rsyslog-forwarder" in forwarding_agents, (
+        "victim's in-process rsyslogd is the evidenced forwarder."
+    )
+    agent = forwarding_agents["victim-rsyslog-forwarder"]
+    assert agent["implementation"] == "rsyslog", (
+        "victim runs NO wazuh daemons in its process inventory; the forwarder "
+        "must be encoded as rsyslog to stay faithful to evidence."
+    )
+    assert agent["agent_kind"] == "log_forwarder"
+    assert 1514 in {target["ingestion_port"] for target in agent["ship_targets"]}
+
+    forward = data["relationships"]["victim-forwards-wazuh"]
+    assert "properties" not in forward, (
+        "PR #458: the typed forwarding_edge payload replaces the legacy "
+        "properties.protocol/configured_manager/log_config prose."
+    )
+    assert forward["forwarding_edge"]["forwarder_ref"] == "victim-rsyslog-forwarder"

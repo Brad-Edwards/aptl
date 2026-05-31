@@ -110,9 +110,9 @@
     "expected": "smbclient -U [REDACTED] //host/share"
   },
   {
-    "name": "basic_auth_curl_userpass",
-    "input": "curl -u admin:s3cret https://api.host/v1",
-    "expected": "curl -u [REDACTED] https://api.host/v1"
+    "name": "nxc_basic_auth_userpass",
+    "input": "nxc smb host -u admin:Adm1nValue",
+    "expected": "nxc smb host -u [REDACTED]"
   },
   {
     "name": "url_userinfo",

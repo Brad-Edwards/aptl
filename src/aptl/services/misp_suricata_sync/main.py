@@ -39,6 +39,7 @@ WriteFn = Callable[[Path, str], bool]
 
 
 def _hash_list_path(rules_out_path: Path, hash_type: str) -> Path:
+    """Path of the per-hash-type sidecar list beside the rules file."""
     return rules_out_path.parent / f"misp-{hash_type}.list"
 
 
@@ -160,11 +161,11 @@ def main() -> int:
     """Service entrypoint. Returns process exit code."""
     try:
         cfg = ServiceConfig.from_env()
-    except Exception as exc:  # noqa: BLE001 - explicit fail-fast on bad env
+    except Exception:  # noqa: BLE001 - explicit fail-fast on bad env
         # Use a one-shot logger init at WARNING so the failure is visible
         # without committing to the (potentially-bogus) configured level.
         setup_logging(level=logging.WARNING)
-        log.error("misp-suricata-sync failed to start: %s", exc)
+        log.exception("misp-suricata-sync failed to start")
         return 2
 
     setup_logging(level=getattr(logging, cfg.log_level.upper(), logging.INFO))

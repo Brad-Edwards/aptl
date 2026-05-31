@@ -818,6 +818,13 @@ def _redact_command_flags(value: str) -> str:
 
 
 def _redact_string(value: str, depth: int = 0) -> str:
+    """Redact inline credentials from a plain string.
+
+    A JSON-encoded payload is parsed and recursively redacted (carrying
+    ``depth`` so the recursion stays bounded); otherwise the string is scanned
+    by the linear key/value/header passes plus the length-gated command-flag
+    passes.
+    """
     # Try JSON.parse first — payloads like '{"password":"x"}' and the MCP
     # `content[].text` envelope (which wraps the real result in a JSON
     # string) need to be parsed, recursively redacted, and re-serialized.
@@ -916,20 +923,40 @@ def _argv_short_flag_skip_indices(items: list, modes: dict[str, bool]) -> set[in
     return skip
 
 
-def _redact_list(items: list | tuple, depth: int = 0) -> list:
-    out: list = []
-    skip_next = False
+def _argv_leading_modes(items_list: list[Any]) -> dict[str, bool]:
+    """Credential-flag modes implied by the argv's leading token.
+
+    When the first element names a credential-family tool, the short-flag
+    redactors apply to the array's values; otherwise all modes are off.
+    """
+    leading = items_list[0] if items_list and isinstance(items_list[0], str) else ""
+    if not leading:
+        return {"cred": False, "hash": False, "ldap": False, "basic": False}
+    return _argv_credential_modes(leading)
+
+
+def _is_long_flag_value_pair(item: Any, idx: int, items_list: list[Any]) -> bool:
+    """True when ``item`` is a sensitive long flag (``--password``) whose
+    following element is a string value that should be redacted as its value."""
+    return (
+        isinstance(item, str)
+        and bool(_CLI_FLAG_TOKEN_RE.match(item))
+        and idx + 1 < len(items_list)
+        and isinstance(items_list[idx + 1], str)
+    )
+
+
+def _redact_list(items: list[Any] | tuple[Any, ...], depth: int = 0) -> list[Any]:
     # Argv-shape detection: when the leading token is a credential-family
     # tool, mark indices whose values should be redacted as short-flag
     # credentials (`-p`/`-H`/`-w`/`-u`/`-U`). Without this, a structured
     # ``args = ["hydra", "-p", "hunter2", ...]`` payload bypasses the
     # short-flag redactors that only run on scalar command strings
     # (ADR-029 / codex review cycle 3, finding 2).
+    out: list[Any] = []
+    skip_next = False
     items_list = list(items)
-    leading = items_list[0] if items_list and isinstance(items_list[0], str) else ""
-    modes = _argv_credential_modes(leading) if leading else {
-        "cred": False, "hash": False, "ldap": False, "basic": False,
-    }
+    modes = _argv_leading_modes(items_list)
     short_flag_skip = _argv_short_flag_skip_indices(items_list, modes)
     for idx, item in enumerate(items_list):
         if skip_next:
@@ -940,15 +967,10 @@ def _redact_list(items: list | tuple, depth: int = 0) -> list:
             out.append(REDACTED)
             continue
         out.append(_redact(item, depth + 1))
-        # Pair-form CLI args: ["--password", "hunter2"]. If this string is
-        # a long-flag whose name is sensitive AND the next element is a
-        # plain string, redact the next element as the value-of-flag.
-        if (
-            isinstance(item, str)
-            and _CLI_FLAG_TOKEN_RE.match(item)
-            and idx + 1 < len(items_list)
-            and isinstance(items_list[idx + 1], str)
-        ):
+        # Pair-form CLI args: ["--password", "hunter2"]. If this string is a
+        # long-flag whose name is sensitive AND the next element is a plain
+        # string, redact the next element as the value-of-flag.
+        if _is_long_flag_value_pair(item, idx, items_list):
             skip_next = True
     return out
 
@@ -986,12 +1008,27 @@ def redact(value: Any) -> Any:
     return _redact(value, 0)
 
 
-def _redact(value: Any, depth: int) -> Any:
+def _redact_scalar(value: object, depth: int) -> object:
+    """Redact a non-container value.
+
+    ``bytes``/``bytearray`` are not JSON-serializable and may carry secret
+    material, so they are decoded and scanned as strings (ARCH-386-01 /
+    redact-03) — previously they fell through unredacted. Strings are scanned
+    for inline credentials; every other scalar passes through unchanged.
+    """
+    if isinstance(value, (bytes, bytearray)):
+        return _redact_string(bytes(value).decode("utf-8", "replace"), depth)
+    if isinstance(value, str):
+        return _redact_string(value, depth)
+    return value
+
+
+def _redact(value: object, depth: int) -> object:
     """Depth-bounded recursive core of :func:`redact`.
 
     ``depth`` counts container/JSON nesting levels. At ``_MAX_DEPTH`` the
-    subtree is replaced by the marker (fail-closed) instead of recursing
-    into a ``RecursionError``.
+    subtree is replaced by the marker (fail-closed) instead of recursing into
+    a ``RecursionError``.
     """
     if depth >= _MAX_DEPTH:
         return REDACTED
@@ -1000,15 +1037,8 @@ def _redact(value: Any, depth: int) -> Any:
             k: REDACTED if _is_sensitive_key(str(k)) else _redact(v, depth + 1)
             for k, v in value.items()
         }
-    if isinstance(value, (list, tuple)):
-        return _redact_list(value, depth)
-    if isinstance(value, (bytes, bytearray)):
-        # ``bytes`` are not JSON-serializable and may carry secret material;
-        # decode and scan as a string so embedded credentials are masked and
-        # the result is JSON-safe (ARCH-386-01 / redact-03). Previously such
-        # values fell through to the ``return value`` passthrough below,
-        # silently bypassing redaction.
-        return _redact_string(bytes(value).decode("utf-8", "replace"), depth)
-    if isinstance(value, str):
-        return _redact_string(value, depth)
-    return value
+    return (
+        _redact_list(value, depth)
+        if isinstance(value, (list, tuple))
+        else _redact_scalar(value, depth)
+    )

@@ -233,10 +233,22 @@ def test_techvault_sdl_encodes_mailserver_inventory_surfaces():
     assert published == {25: 25, 143: 143, 587: 587, 993: 993}
 
     mail_service = runtime.mail_services[0]
-    assert mail_service.service_id == "techvault-mail"
+    assert mail_service.mail_service_id == "techvault-mail", (
+        "ACES PR #458 renamed service_id -> mail_service_id under the <noun>_id "
+        "primary-id convention."
+    )
     assert mail_service.engine == "docker-mailserver"
     assert len(mail_service.mailboxes) == MAILBOX_COUNT
     assert len(mail_service.settings) == MAIL_SETTING_COUNT
+    ssl_key_settings = [s for s in mail_service.settings if s.name == "ssl_key"]
+    assert ssl_key_settings, "ssl_key setting must remain encoded under mail_services.settings"
+    assert ssl_key_settings[0].value_classification == "redacted", (
+        "ACES PR #458 unified secret-name redaction: settings whose name carries "
+        "a secret-bearing pattern (per name_indicates_secret) must use "
+        "value_classification 'redacted' or 'operator_secret' and omit the raw "
+        "value."
+    )
+    assert ssl_key_settings[0].value is None
     assert mail_service.aliases == []
     assert mail_service.queues[0].message_count == 0
 
@@ -277,7 +289,10 @@ def test_techvault_sdl_parses_and_compiles_with_mailserver_runtime_fields():
     assert len(runtime["network"]["endpoints"]) == 2
     assert len(runtime["network"]["published_ports"]) == 4
     assert runtime["container"]["runtime_name"] == "runc"
-    assert mail_service["service_id"] == "techvault-mail"
+    assert mail_service["mail_service_id"] == "techvault-mail", (
+        "ACES PR #458 renamed service_id -> mail_service_id under the <noun>_id "
+        "primary-id convention."
+    )
     assert mail_service["engine"] == "docker-mailserver"
     assert len(mail_service["listeners"]) == 4
     assert len(mail_service["mailboxes"]) == MAILBOX_COUNT

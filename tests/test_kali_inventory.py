@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 
+import pytest
 import yaml
 
 from aptl.core.aces_inventory import (
@@ -13,6 +14,9 @@ from aptl.core.aces_inventory import (
     load_mapping_ledger,
     validate_mapping_ledger,
 )
+
+
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 KALI_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "kali"

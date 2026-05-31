@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 
+import pytest
 import yaml
 
 from aptl.core.aces_inventory import (
@@ -14,6 +15,8 @@ from aptl.core.aces_inventory import (
     validate_mapping_ledger,
 )
 
+
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FILESHARE_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "fileshare"
@@ -209,7 +212,7 @@ def test_fileshare_mapping_ledger_references_every_evidence_file():
 
 
 def test_fileshare_evidence_does_not_commit_generated_secret_material():
-    forbidden = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----|APTL\\{|^Token:", re.MULTILINE)
+    forbidden = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----|APTL\{|^Token:", re.MULTILINE)
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()

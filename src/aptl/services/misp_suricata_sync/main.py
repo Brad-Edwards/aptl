@@ -39,7 +39,6 @@ WriteFn = Callable[[Path, str], bool]
 
 
 def _hash_list_path(rules_out_path: Path, hash_type: str) -> Path:
-    """Path of the per-hash-type sidecar list beside the rules file."""
     return rules_out_path.parent / f"misp-{hash_type}.list"
 
 
@@ -136,7 +135,7 @@ def run_loop(
     while not stop.is_set():
         try:
             runner.run_once()
-        except Exception:  # noqa: BLE001 - one tick's failure must not kill the daemon
+        except Exception:  # broad by design: one tick's failure must not kill the daemon
             # A single tick raising (disk full on a rule/list write, a malformed
             # MISP payload that slips past the None-check, a reloader that
             # throws) previously propagated out of run_loop -> main and killed
@@ -161,7 +160,7 @@ def main() -> int:
     """Service entrypoint. Returns process exit code."""
     try:
         cfg = ServiceConfig.from_env()
-    except Exception:  # noqa: BLE001 - explicit fail-fast on bad env
+    except Exception:  # broad by design: fail fast on any bad-config error
         # Use a one-shot logger init at WARNING so the failure is visible
         # without committing to the (potentially-bogus) configured level.
         setup_logging(level=logging.WARNING)

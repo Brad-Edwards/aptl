@@ -935,7 +935,7 @@ def _argv_leading_modes(items_list: list[Any]) -> dict[str, bool]:
     return _argv_credential_modes(leading)
 
 
-def _is_long_flag_value_pair(item: Any, idx: int, items_list: list[Any]) -> bool:
+def _is_long_flag_value_pair(item: object, idx: int, items_list: list[Any]) -> bool:
     """True when ``item`` is a sensitive long flag (``--password``) whose
     following element is a string value that should be redacted as its value."""
     return (
@@ -947,6 +947,7 @@ def _is_long_flag_value_pair(item: Any, idx: int, items_list: list[Any]) -> bool
 
 
 def _redact_list(items: list[Any] | tuple[Any, ...], depth: int = 0) -> list[Any]:
+    """Redact each element of a list/tuple, with argv-aware short-flag handling."""
     # Argv-shape detection: when the leading token is a credential-family
     # tool, mark indices whose values should be redacted as short-flag
     # credentials (`-p`/`-H`/`-w`/`-u`/`-U`). Without this, a structured

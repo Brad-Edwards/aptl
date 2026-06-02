@@ -14,6 +14,7 @@ ENV INSTALL_XSIAM=${INSTALL_XSIAM}
 
 RUN dnf install -y epel-release && \
     dnf update -y && \
+    dnf module enable -y postgresql:13 && \
     dnf install -y \
     rsyslog \
     openssh-server \

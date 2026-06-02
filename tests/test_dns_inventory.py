@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 
+import pytest
 import yaml
 
 from aptl.core.aces_inventory import (
@@ -15,6 +16,8 @@ from aptl.core.aces_inventory import (
     validate_mapping_ledger,
 )
 
+
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DNS_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "dns"
@@ -366,8 +369,24 @@ def test_techvault_sdl_encodes_dns_inventory_surfaces():
     assert len(runtime["local_identity"]["users"]) == LOCAL_IDENTITY_USER_COUNT
     assert len(runtime["local_identity"]["groups"]) == LOCAL_IDENTITY_GROUP_COUNT
     assert len(runtime["environment"]) == 9
-    assert len(runtime["processes"]) == 8
-    assert runtime["process"]["name"] == "supervisord"
+    assert len(runtime["processes"]) == 9, (
+        "9 = the original 8 wazuh+named processes + the PID 1 supervisord entry "
+        "added when ACES PR #458 retired the singular runtime.process field "
+        "(the supervisord identity had previously lived ONLY in runtime.process "
+        "for dns; the migration must move it into runtime.processes or it is "
+        "silently dropped)."
+    )
+    assert "process" not in runtime, (
+        "ACES PR #458 removed runtime.process; PID 1 supervisord identity now "
+        "lives inside runtime.processes (looked up by name, not index — the dns "
+        "list is not PID-sorted)."
+    )
+    supervisord_processes = [p for p in runtime["processes"] if p["name"] == "supervisord"]
+    assert len(supervisord_processes) == 1, "supervisord must appear exactly once in runtime.processes"
+    supervisord = supervisord_processes[0]
+    assert supervisord["pid"] == 1
+    assert supervisord["role"] == "primary"
+    assert supervisord["user"] == "root"
     assert runtime["linux_capabilities"]["add"] == ["CAP_NET_ADMIN"]
     assert runtime["operational_policy"]["restart"] == "unless_stopped"
     assert runtime["health"]["status"] == "healthy"
@@ -488,7 +507,29 @@ def test_techvault_sdl_dns_content_accounts_relationships_and_parity():
     assert content["dns-file-var-log-named-query-log"]["source"]["version"].startswith("sha256:")
     assert accounts["dns-local-bind"]["disabled"] is True
     assert accounts["dns-local-wazuh"]["home"] == "/var/ossec"
-    assert relationships["dns-forwards-wazuh"]["target"] == "wazuh-manager"
+    forward = relationships["dns-forwards-wazuh"]
+    assert forward["target"] == "wazuh-manager"
+    assert "properties" not in forward, (
+        "PR #458: the typed forwarding_edge payload replaces the legacy "
+        "properties.protocol/log_paths prose."
+    )
+    assert forward["forwarding_edge"]["forwarder_ref"] == "dns-wazuh-agent"
+
+    dns_runtime = data["nodes"]["dns"]["runtime"]
+    forwarding_agents = {
+        agent["forwarding_agent_id"]: agent
+        for agent in dns_runtime.get("forwarding_agents", [])
+    }
+    assert "dns-wazuh-agent" in forwarding_agents, (
+        "PR #458: dns runs the Wazuh agent in-process (ADR-020), so the "
+        "forwarder must be encoded under nodes.dns.runtime.forwarding_agents."
+    )
+    agent = forwarding_agents["dns-wazuh-agent"]
+    assert agent["implementation"] == "wazuh_agent"
+    assert agent["agent_kind"] == "log_forwarder"
+    assert agent["buffer_policy"]["buffer_policy_id"] == "dns-wazuh-agent-buffer"
+    assert 1514 in {target["ingestion_port"] for target in agent["ship_targets"]}
+
     assert relationships["ad-forwards-dns"]["target"] == "dns"
     assert rows["scen.techvault.dns-inventory"]["category"] == "aces_sdl"
     assert "nodes.dns.runtime.dns_services" in rows["scen.techvault.dns-inventory"]["aces_target"]

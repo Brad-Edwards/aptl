@@ -52,8 +52,13 @@ def test_shuffle_backend_runtime_inventory_is_encoded_from_evidence():
 
     controls = {item["path"]: item for item in runtime["local_control_interfaces"]}
     assert controls["/var/run/docker.sock"]["access"] == "read_write"
-    assert runtime["process"]["command"] == ["./shufflebackend"]
-    assert runtime["process"]["user"] == "root"
+    assert "process" not in runtime, (
+        "ACES PR #458 removed runtime.process; PID 1 shufflebackend identity is "
+        "carried as processes[0]."
+    )
+    assert runtime["processes"][0]["command"] == ["./shufflebackend"]
+    assert runtime["processes"][0]["user"] == "root"
+    assert runtime["processes"][0]["pid"] == 1
     assert len(runtime["packages"]) == 21
     assert len(runtime["package_vulnerabilities"]) == len(findings) == 86
     assert {finding["severity"] for finding in runtime["package_vulnerabilities"]} == {

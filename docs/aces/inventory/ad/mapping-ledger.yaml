@@ -221,9 +221,15 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.runtime.process
         - nodes.ad.runtime.processes
-      rationale: ACES runtime process fields encode primary and supervised processes.
+      rationale: >
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        supervisord identity is now carried as the first entry of
+        runtime.processes (enriched with pid: 1, working_directory: /, and the
+        full command list previously held by the singular field — the existing
+        plural entry had supervisord by name only, without those fields).
+        The samba + rsyslog + in-process Wazuh agent process set continues
+        under the same runtime.processes field.
 
   - id: ad.runtime.environment-policy
     category: runtime-configuration
@@ -403,5 +409,15 @@ facts:
       fields:
         - relationships.ad-forwards-dns
         - relationships.ad-forwards-wazuh
+        - relationships.ad-forwards-wazuh.forwarding_edge
+        - nodes.ad.runtime.forwarding_agents
         - relationships.ad-provides-domain
-      rationale: ACES relationships encode host-originating service dependencies and trust services.
+      rationale: >
+        ACES PR #458 introduced typed relationship payloads alongside the new
+        node-scoped runtime.forwarding_agents family. The ad→wazuh-manager
+        relationship now carries a forwarding_edge.forwarder_ref pointing at
+        the in-process ad-wazuh-agent (per ADR-020); the legacy
+        properties.protocol="syslog-and-wazuh-agent" + log_paths prose is
+        retired. The ad-forwards-dns and ad-provides-domain edges remain
+        verb-typed (connects_to) because they describe trust/dependency
+        rather than a typed forwarding flow.

@@ -253,8 +253,13 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.process
-      rationale: ACES #354 added primary runtime process identity.
+        - nodes.webapp.runtime.processes
+      rationale: >
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        supervisord identity is now expressed as the first entry of the
+        runtime.processes list (role: supervisor); the supervised process set
+        fact continues to cover the full process inventory under the same
+        runtime.processes field.
 
   - id: webapp.runtime.package-inventory
     category: runtime-inventory
@@ -424,8 +429,11 @@ facts:
   - id: webapp.relationships
     category: relationship
     summary: >
-      The webapp connects to the database at 172.20.2.11:5432 and forwards
-      telemetry/logs toward Wazuh manager/syslog surfaces.
+      The webapp connects to the database at 172.20.2.11:5432 (typed
+      database_access payload) and forwards telemetry/logs toward Wazuh
+      manager/syslog surfaces through the in-process Wazuh agent (typed
+      forwarding_edge payload referencing the new
+      nodes.webapp.runtime.forwarding_agents entry).
     evidence:
       - path: evidence/compose-service.webapp.json
       - path: evidence/runtime-baseline.txt
@@ -434,8 +442,20 @@ facts:
       surface: relationships
       fields:
         - relationships.webapp-connects-db
+        - relationships.webapp-connects-db.database_access
         - relationships.webapp-forwards-wazuh
-      rationale: ACES relationships model typed dependency and connectivity edges.
+        - relationships.webapp-forwards-wazuh.forwarding_edge
+        - nodes.webapp.runtime.forwarding_agents
+      rationale: >
+        ACES PR #458 introduced typed relationship payloads (forwarding_edge,
+        service_integration, proxy_upstream) alongside the existing
+        database_access / mail_access blocks, and a node-scoped
+        runtime.forwarding_agents family. The webapp→db edge keeps its
+        connects_to verb plus its database_access payload; the
+        webapp→wazuh-manager edge replaces the legacy
+        properties.protocol="syslog-and-wazuh-agent" prose with a typed
+        forwarding_edge.forwarder_ref pointing at the webapp-wazuh-agent
+        forwarding agent row.
 
   - id: webapp.runtime.supervised-process-set
     category: runtime-configuration

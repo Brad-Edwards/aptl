@@ -524,14 +524,19 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert runtime["health"]["failing_streak"] == 0
     assert len(runtime["health"]["log"]) == 5
     assert "TechVault Solutions" in runtime["health"]["log"][0]["output"]
-    supervisor_process = next(process for process in runtime["processes"] if process["role"] == "supervisor")
-    assert supervisor_process["command"] == [
+    assert "process" not in runtime, (
+        "ACES PR #458 removed runtime.process; the PID 1 identity now lives as "
+        "processes[0]."
+    )
+    assert runtime["processes"][0]["command"] == [
         "/usr/bin/python3",
         "/usr/bin/supervisord",
         "-n",
         "-c",
         "/etc/supervisor/supervisord.conf",
     ]
+    assert runtime["processes"][0]["role"] == "supervisor"
+    assert runtime["processes"][0]["pid"] == 1
     process_names = {process["name"] for process in runtime["processes"]}
     assert {
         "supervisord",
@@ -547,7 +552,7 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
         "wazuh-modulesd",
     } <= process_names
     environment = {item["name"]: item for item in runtime["environment"]}
-    assert environment["DB_PASSWORD"]["value"] == ""
+    assert environment["DB_PASSWORD"]["value"] == "techvault_db_pass"
     assert environment["DB_PASSWORD"]["value_classification"] == "secret_fixture"
     assert environment["WAZUH_MANAGER"]["value"] == "wazuh.manager"
     assert environment["PYTHON_VERSION"]["provenance"] == "image"
@@ -762,11 +767,45 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert local_users["wazuh"]["shell"] == "/sbin/nologin"
     assert local_users["wazuh"]["no_login"] is True
     local_groups = {group["name"]: group for group in local_identity["groups"]}
-    assert local_groups["wazuh"]["name"] == "wazuh"
     assert local_groups["wazuh"]["gid"] == 102
     assert local_groups["wazuh"]["members"] == []
     assert local_groups["wazuh"]["provenance"] == "package"
     assert local_groups["sudo"]["gid"] == 27
+
+
+def test_techvault_sdl_webapp_uses_aces_pr458_runtime_forwarding_surfaces():
+    """ACES PR #458 (#388 reconciliation): the webapp→wazuh-manager forwarding
+    edge must use the typed forwarding_edge payload and resolve to a row in
+    the new node-scoped runtime.forwarding_agents family.
+    """
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+    webapp_runtime = data["nodes"]["webapp"]["runtime"]
+
+    forwarding_agents = webapp_runtime.get("forwarding_agents") or []
+    by_id = {agent["forwarding_agent_id"]: agent for agent in forwarding_agents}
+    assert "webapp-wazuh-agent" in by_id, (
+        "PR #458: webapp must declare its in-process Wazuh agent under "
+        "runtime.forwarding_agents."
+    )
+    agent = by_id["webapp-wazuh-agent"]
+    assert agent["implementation"] == "wazuh_agent"
+    assert agent["agent_kind"] == "log_forwarder"
+    assert agent["buffer_policy"]["buffer_policy_id"] == "webapp-wazuh-agent-buffer"
+    ship_target_ports = {target["ingestion_port"] for target in agent["ship_targets"]}
+    assert 1514 in ship_target_ports, (
+        "Wazuh agent must ship to the agent_event_ingestion listener on "
+        "wazuh-manager TCP/1514."
+    )
+    ship_target_nodes = {target["target_node_ref"] for target in agent["ship_targets"]}
+    assert ship_target_nodes == {"wazuh-manager"}
+
+    relationships = data["relationships"]
+    forward = relationships["webapp-forwards-wazuh"]
+    assert forward["properties"] == {}, (
+        "PR #458: the typed forwarding_edge payload replaces the legacy "
+        "properties.protocol prose."
+    )
+    assert forward["forwarding_edge"]["forwarder_ref"] == "webapp-wazuh-agent"
 
 
 def test_webapp_filesystem_checksum_paths_are_encoded_as_content():

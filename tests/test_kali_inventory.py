@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 
+import pytest
 import yaml
 
 from tests.techvault_sdl import load_legacy_techvault_sdl
@@ -15,6 +16,9 @@ from aptl.core.aces_inventory import (
     load_mapping_ledger,
     validate_mapping_ledger,
 )
+
+
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 KALI_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "kali"
@@ -359,10 +363,13 @@ def test_techvault_sdl_encodes_kali_inventory_surfaces():
     assert container["seccomp_profile"] == "unconfined"
     assert container["security_opt"] == ["seccomp:unconfined"]
 
-    primary_process = next(process for process in runtime["processes"] if process["role"] == "primary")
-    assert primary_process["name"] == "docker-init"
-    assert primary_process["pid"] == 1
-    assert primary_process["command"] == ["/sbin/docker-init", "--", "/entrypoint.sh"]
+    assert "process" not in runtime, (
+        "ACES PR #458 removed runtime.process; PID 1 docker-init identity is "
+        "carried as processes[0]."
+    )
+    assert runtime["processes"][0]["name"] == "docker-init"
+    assert runtime["processes"][0]["pid"] == 1
+    assert runtime["processes"][0]["command"] == ["/sbin/docker-init", "--", "/entrypoint.sh"]
     process_names = {process["name"] for process in runtime["processes"]}
     assert {"docker-init", "sshd"} <= process_names
 
@@ -386,7 +393,10 @@ def test_techvault_sdl_encodes_kali_inventory_surfaces():
     ssh_servers = runtime["ssh_servers"]
     assert len(ssh_servers) == 1
     sshd = ssh_servers[0]
-    assert sshd["ssh_server_id"] == "kali-sshd"
+    assert sshd["ssh_server_id"] == "kali-sshd", (
+        "ACES PR #458 renamed server_id -> ssh_server_id under the <noun>_id "
+        "primary-id convention."
+    )
     assert sshd["service"] == "ssh"
     assert "APTL_SESSION_ID" in sshd["accept_env"]
     assert "APTL_RUN_ID" in sshd["accept_env"]

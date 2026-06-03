@@ -210,7 +210,18 @@ facts:
     surface: nodes
     fields:
     - nodes.techvault.dns.runtime.processes
-    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+    rationale: >
+      ACES PR #458 removed the singular runtime.process field. The PID 1
+      supervisord identity (role: primary, user: root, command:
+      /usr/bin/python3 /usr/bin/supervisord -n -c
+      /etc/supervisor/supervisord.conf) is now carried as an entry in
+      runtime.processes. NOTE: dns is one of the inventories whose
+      processes[] list previously omitted PID 1 entirely (the singular
+      runtime.process field was the only encoding), so the migration
+      explicitly adds the supervisord entry rather than relying on it
+      already being there. The full BIND + in-process Wazuh agent process
+      set continues under the same field on the supervised-process-set
+      fact (now 9 entries: named + 7 wazuh daemons + supervisord).
 - id: dns.runtime.supervised-process-set
   category: runtime-configuration
   summary: Supervisord manages named and the in-process Wazuh process family including wazuh-execd, wazuh-agentd, wazuh-syscheckd, wazuh-logcollector, wazuh-modulesd, and the wrapper tail process.
@@ -380,9 +391,19 @@ facts:
     surface: relationships
     fields:
     - relationships.dns-forwards-wazuh
+    - relationships.dns-forwards-wazuh.forwarding_edge
+    - nodes.techvault.dns.runtime.forwarding_agents
     - features.dns-wazuh-agent
     - nodes.techvault.dns.runtime.dns_services.techvault-bind.log_file_refs
-    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+    rationale: >
+      ACES PR #458 introduced typed relationship payloads alongside the new
+      node-scoped runtime.forwarding_agents family. The dns→wazuh-manager
+      relationship now carries a forwarding_edge.forwarder_ref pointing at
+      the in-process dns-wazuh-agent (per ADR-020); the legacy
+      properties.protocol="syslog-and-wazuh-agent" + log_paths prose is
+      retired. The named query/default log_file_refs on the BIND
+      dns_services entry continue to anchor the source-log evidence side
+      of the relationship.
 - id: dns.runtime.osquery-baseline
   category: assurance
   summary: 'The capture attempted the optional osquery baseline: processes, listening_ports, docker_containers, docker_images, and apt_sources were captured; installed_applications and programs were unavailable in the pinned Linux osquery scanner image.'

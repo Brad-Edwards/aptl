@@ -245,8 +245,13 @@ facts:
       fields:
         - nodes.techvault.mailserver.runtime.processes
         - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.components
-      rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
-        for the SDL encoding.
+      rationale: >
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        dumb-init/supervisord identity (role: primary, user: root) is now
+        expressed as the first entry of runtime.processes. The components
+        facts on mail_services continue under the same mail_service_id-keyed
+        entry (renamed from service_id per the <noun>_id primary-id
+        convention).
   - id: mailserver.runtime.environment
     category: runtime-configuration
     summary: Runtime environment records docker-mailserver feature toggles, hostname, ONE_DIR, PERMIT_DOCKER, SSL_TYPE, and

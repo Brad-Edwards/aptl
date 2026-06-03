@@ -251,9 +251,14 @@ facts:
       fields:
         - nodes.techvault.workstation.runtime.processes
       rationale: >
-        ACES runtime.processes encode the primary process
-        and the supervised/steady-state process set observed by Docker, ps, and
-        osquery.
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        systemd-init identity (role: primary, user: root, command:
+        /usr/sbin/init) continues as processes[0]; the YAML anchor that
+        previously shared the command list across the singular and plural
+        encodings was inlined when the singular was retired. The
+        supervised/steady-state process set observed by Docker, ps, and
+        osquery (systemd-journald, sshd) continues under the same
+        runtime.processes field.
 
   - id: workstation.runtime.environment-policy
     category: runtime-configuration

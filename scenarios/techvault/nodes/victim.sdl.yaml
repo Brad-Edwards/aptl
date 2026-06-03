@@ -4599,7 +4599,43 @@ nodes:
         match_rules: []
       datastore_services: []
       platform_applications: []
-      forwarding_agents: []
+      forwarding_agents:
+      - forwarding_agent_id: victim-rsyslog-forwarder
+        implementation: rsyslog
+        agent_kind: log_forwarder
+        version: ''
+        name: rsyslogd
+        sources: []
+        transforms: []
+        ship_targets:
+        - target_id: victim-rsyslog-forwarder-events-1514
+          target_node_ref: techvault.wazuh-manager
+          target_service_ref: ''
+          ingestion_port: 1514
+          enrollment_port: null
+          protocol: tcp
+          enrollment_identity_classification: none
+          description: 'rsyslog ships events toward the wazuh-manager agent_event_ingestion listener on TCP/1514 (the relationship''s
+            previous configured_manager prose 172.20.2.30 corresponds to the same wazuh-manager node).
+
+            '
+        buffer_policy:
+          buffer_policy_id: victim-rsyslog-forwarder-buffer
+          queue_capacity: null
+          eps: null
+          crypto: unknown
+          reconnect_seconds: null
+          description: 'rsyslog buffer/queue policy lives as hashed file content inside /etc/rsyslog.d/90-forward.conf; queue_capacity,
+            eps, crypto, and reconnect_seconds are intentionally left unset.
+
+            '
+        reload_channels: []
+        settings: []
+        description: "In-process rsyslog forwarder (PID 54 in runtime.processes, observed by Docker/ps/osquery). victim does\
+          \ not run a Wazuh agent in-process \u2014 instead rsyslogd ships its observed log surfaces to the SOC stack using\
+          \ the configuration evidenced under /etc/rsyslog.d/90-forward.conf and the runtime.environment SIEM_IP setting.\
+          \ Source, transform, and full ship_target specifics beyond the SIEM ingestion target are not enumerated as parsed\
+          \ facts and are left unset.\n"
       orchestration_authorities: []
       app_authorizations: []
       scheduled_jobs: []

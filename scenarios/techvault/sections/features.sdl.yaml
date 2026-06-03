@@ -1,23 +1,5 @@
 name: techvault-features
 features:
-  techvault-misp-service:
-    name: ''
-    type: service
-    source:
-      name: ghcr.io/misp/misp-docker/misp-core
-      version: 2.5.36
-      build: null
-    dependencies: []
-    vulnerabilities: []
-    destination: ''
-    description: ''
-    environment:
-    - MYSQL_HOST=misp-db
-    - MYSQL_DATABASE=misp
-    - MYSQL_USER=misp
-    - MYSQL_PASSWORD=<redacted>
-    - REDIS_HOST=misp-redis
-    - ADMIN_KEY=<redacted>
   techvault-postgres-service:
     name: ''
     type: service
@@ -270,3 +252,21 @@ features:
     destination: /opt/aptl/wazuh
     description: ''
     environment: []
+  techvault-misp-service:
+    name: ''
+    type: service
+    source:
+      name: ghcr.io/misp/misp-docker/misp-core
+      version: 2.5.36
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - MYSQL_HOST=misp-db
+    - MYSQL_DATABASE=misp
+    - MYSQL_USER=misp
+    - MYSQL_PASSWORD=<redacted>
+    - REDIS_HOST=misp-redis
+    - ADMIN_KEY=<redacted>

@@ -292,12 +292,19 @@ def test_techvault_sdl_encodes_db_inventory_surfaces():
     assert runtime["container"]["runtime_name"] == "runc"
     assert runtime["health"]["status"] == "healthy"
     assert len(runtime["health"]["log"]) == 5
-    primary_process = next(process for process in runtime["processes"] if process["role"] == "primary")
-    assert primary_process["user"] == "postgres"
-    assert "logging_collector=on" in " ".join(primary_process["command"])
+    assert "process" not in runtime, (
+        "ACES PR #458 removed runtime.process; PID 1 identity now lives as "
+        "processes[0]."
+    )
+    primary = runtime["processes"][0]
+    assert primary["name"] == "postgres-postmaster"
+    assert primary["pid"] == 1
+    assert primary["role"] == "primary"
+    assert primary["user"] == "postgres"
+    assert "logging_collector=on" in " ".join(primary["command"])
     assert {process["name"] for process in runtime["processes"]} >= {"postgres-postmaster", "postgres-logger"}
     environment = {item["name"]: item for item in runtime["environment"]}
-    assert environment["POSTGRES_PASSWORD"]["value"] == ""
+    assert environment["POSTGRES_PASSWORD"]["value"] == "<scenario-fixture-secret>"
     assert environment["POSTGRES_PASSWORD"]["value_classification"] == "secret_fixture"
     assert runtime["linux_capabilities"]["effective"] == []
     assert runtime["operational_policy"]["restart"] == "unless_stopped"
@@ -429,6 +436,50 @@ def test_db_passwd_users_are_encoded_as_accounts():
     }
     assert passwd_usernames <= account_usernames
     assert data["accounts"]["db-postgres-role-techvault"]["password_strength"] == "weak"
+
+
+def test_techvault_sdl_db_uses_aces_pr458_and_460_forwarding_surfaces():
+    """ACES PR #458 + #460 (#388 reconciliation): db's PostgreSQL-log forwarder
+    is the off-node `wazuh-sidecar-db` container (ADR-020 carve-out;
+    postgres:16-alpine has no first-party Wazuh package). #460 added the
+    scenario-level `forwarding_agents:` registry so the sidecar can host the
+    forwarder without mis-typing it as a node-hosted agent on db itself.
+    """
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+
+    scenario_agents = {
+        agent["forwarding_agent_id"]: agent
+        for agent in data.get("forwarding_agents", [])
+    }
+    assert "aptl-db-wazuh-agent" in scenario_agents, (
+        "PR #460: db's off-node Wazuh sidecar must be registered under the "
+        "scenario-level forwarding_agents registry, not under db's own "
+        "runtime.forwarding_agents (which would mis-type where the agent runs)."
+    )
+    agent = scenario_agents["aptl-db-wazuh-agent"]
+    assert agent["implementation"] == "wazuh_agent"
+    assert agent["agent_kind"] == "log_forwarder"
+    assert agent["name"] == "aptl-db-agent", (
+        "Sidecar AGENT_NAME on compose service wazuh-sidecar-db is aptl-db-agent."
+    )
+    assert agent["buffer_policy"]["buffer_policy_id"] == "aptl-db-wazuh-agent-buffer"
+    ship_target_nodes = {target["target_node_ref"] for target in agent["ship_targets"]}
+    assert ship_target_nodes == {"wazuh-manager"}
+    ship_target_ports = {target["ingestion_port"] for target in agent["ship_targets"]}
+    assert ship_target_ports == {1514}
+
+    db_runtime = data["nodes"]["db"]["runtime"]
+    assert not db_runtime.get("forwarding_agents"), (
+        "ADR-020: db itself runs no Wazuh daemons; its forwarder lives off-node "
+        "on the wazuh-sidecar-db container, registered at scenario scope."
+    )
+
+    forward_rel = data["relationships"]["db-logs-forwarded-wazuh"]
+    assert forward_rel["properties"] == {}, (
+        "PR #458: the typed forwarding_edge payload replaces the legacy "
+        "properties.protocol/source_log prose."
+    )
+    assert forward_rel["forwarding_edge"]["forwarder_ref"] == "aptl-db-wazuh-agent"
 
 
 def test_db_runtime_network_matches_docker_evidence():

@@ -50,6 +50,8 @@ HASHMAP_SECTIONS = (
     "workflows",
 )
 
+ROOT_LIST_SECTIONS = ("forwarding_agents",)
+
 GROUPED_SECTIONS = (
     "infrastructure",
     "features",
@@ -121,6 +123,9 @@ def _canonical_namespaced_payload(flat_data: dict[str, Any]) -> dict[str, Any]:
         )
         root_data = _load_normalized_data(root_path.read_text(encoding="utf-8"), path=root_path)
         expanded, _, _, _ = expand_sdl_modules(root_data, path=root_path)
+    for section in ROOT_LIST_SECTIONS:
+        if flat_data.get(section):
+            expanded[section] = flat_data[section]
     _rewrite_composition_gaps(expanded)
     return Scenario.model_validate(expanded).model_dump(mode="json", by_alias=True)
 
@@ -128,10 +133,28 @@ def _canonical_namespaced_payload(flat_data: dict[str, Any]) -> dict[str, Any]:
 def _rewrite_composition_gaps(data: dict[str, Any]) -> None:
     """Patch nested refs that ACES PR #465 composition does not rewrite yet."""
 
+    nodes = data.get("nodes", {})
     infrastructure = data.get("infrastructure", {})
     vulnerabilities = data.get("vulnerabilities", {})
-    if not isinstance(infrastructure, Mapping) or not isinstance(vulnerabilities, Mapping):
+    if (
+        not isinstance(nodes, Mapping)
+        or not isinstance(infrastructure, Mapping)
+        or not isinstance(vulnerabilities, Mapping)
+    ):
         return
+
+    def rewrite_node_ref(value: object) -> object:
+        prefixed = f"{NAMESPACE}.{value}"
+        if isinstance(value, str) and prefixed in nodes:
+            return prefixed
+        return value
+
+    for agent in data.get("forwarding_agents", []):
+        if not isinstance(agent, dict):
+            continue
+        for target in agent.get("ship_targets", []):
+            if isinstance(target, dict):
+                target["target_node_ref"] = rewrite_node_ref(target.get("target_node_ref"))
 
     for node in (data.get("nodes") or {}).values():
         if not isinstance(node, dict):
@@ -160,6 +183,13 @@ def _rewrite_composition_gaps(data: dict[str, Any]) -> None:
                     f"{NAMESPACE}.{ref}" if isinstance(ref, str) and f"{NAMESPACE}.{ref}" in vulnerabilities else ref
                     for ref in route.get("vulnerability_refs", [])
                 ]
+
+        for agent in runtime.get("forwarding_agents", []):
+            if not isinstance(agent, dict):
+                continue
+            for target in agent.get("ship_targets", []):
+                if isinstance(target, dict):
+                    target["target_node_ref"] = rewrite_node_ref(target.get("target_node_ref"))
 
 
 def _fragment_for_section(
@@ -228,6 +258,11 @@ def _write_modules(expected: dict[str, Any]) -> list[str]:
 def _write_root(flat_data: Mapping[str, Any], imports: list[str]) -> None:
     root = {
         **_metadata(flat_data),
+        **{
+            section: flat_data[section]
+            for section in ROOT_LIST_SECTIONS
+            if section in flat_data
+        },
         "imports": [
             {
                 "source": f"local:{rel_path}",
@@ -243,7 +278,7 @@ def _assert_equivalent(expected: dict[str, Any]) -> None:
     from aces_sdl import parse_sdl_file
 
     actual = parse_sdl_file(SCENARIO_PATH).model_dump(mode="json", by_alias=True)
-    comparable_keys = ("name", "version", "description", *HASHMAP_SECTIONS)
+    comparable_keys = ("name", "version", "description", *ROOT_LIST_SECTIONS, *HASHMAP_SECTIONS)
     differences = [
         key
         for key in comparable_keys

@@ -274,8 +274,11 @@ facts:
       fields:
         - nodes.techvault.kali.runtime.processes
       rationale: >
-        ACES runtime process identity and process-set inventory preserve PID 1
-        and the load-bearing process set.
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        docker-init identity (role: primary, user: root, command:
+        /sbin/docker-init -- /entrypoint.sh) continues as processes[0]; the
+        load-bearing process set (docker-init, sleep, sshd) continues under
+        the same runtime.processes field.
   - id: kali.runtime.environment
     category: runtime-configuration
     summary: >

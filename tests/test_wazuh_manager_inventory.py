@@ -412,7 +412,10 @@ def test_techvault_sdl_encodes_wazuh_manager_security_monitoring_surface():
     assert len(runtime.package_vulnerabilities) == 368
 
     manager = runtime.security_monitoring_managers[0]
-    assert manager.security_monitoring_manager_id == "techvault-wazuh-manager"
+    assert manager.security_monitoring_manager_id == "techvault-wazuh-manager", (
+        "ACES PR #458 renamed manager_id -> security_monitoring_manager_id under "
+        "the <noun>_id primary-id convention."
+    )
     assert manager.implementation == "wazuh"
     assert manager.manager_kind == "siem"
     assert manager.version == "v4.12.0"
@@ -467,7 +470,10 @@ def test_techvault_sdl_compiles_with_wazuh_security_monitoring_refs():
     node = model.node_deployments["provision.node.techvault.wazuh-manager"].spec["node"]
     manager = node["runtime"]["security_monitoring_managers"][0]
 
-    assert manager["security_monitoring_manager_id"] == "techvault-wazuh-manager"
+    assert manager["security_monitoring_manager_id"] == "techvault-wazuh-manager", (
+        "ACES PR #458 renamed manager_id -> security_monitoring_manager_id under "
+        "the <noun>_id primary-id convention."
+    )
     assert manager["implementation"] == "wazuh"
     assert len(node["runtime"]["packages"]) == 322
     assert len(node["runtime"]["package_vulnerabilities"]) == 368

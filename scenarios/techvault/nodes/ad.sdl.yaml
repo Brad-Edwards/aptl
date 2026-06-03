@@ -3077,8 +3077,8 @@ nodes:
         role: primary
         user: root
         group: ''
-        working_directory: ''
-        description: ''
+        working_directory: /
+        description: PID 1 (formerly carried in the singular runtime.process field; folded into processes[0] when ACES PR
       - name: samba
         pid: null
         parent_pid: null
@@ -3126,7 +3126,7 @@ nodes:
         source: ''
         description: ''
       - name: SAMBA_ADMIN_PASSWORD
-        value: ''
+        value: <scenario-fixture-secret>
         value_classification: secret_fixture
         provenance: compose
         source: ''
@@ -6119,7 +6119,44 @@ nodes:
       ssh_servers: []
       datastore_services: []
       platform_applications: []
-      forwarding_agents: []
+      forwarding_agents:
+      - forwarding_agent_id: ad-wazuh-agent
+        implementation: wazuh_agent
+        agent_kind: log_forwarder
+        version: ''
+        name: wazuh-agent
+        sources: []
+        transforms: []
+        ship_targets:
+        - target_id: ad-wazuh-agent-events-1514
+          target_node_ref: techvault.wazuh-manager
+          target_service_ref: ''
+          ingestion_port: 1514
+          enrollment_port: null
+          protocol: tcp
+          enrollment_identity_classification: none
+          description: 'Wazuh agent ships events to the wazuh-manager agent_event_ingestion listener on TCP/1514, evidenced
+            by the ad runtime.environment WAZUH_MANAGER value and the matching agent-events-1514 listener on wazuh-manager.
+
+            '
+        buffer_policy:
+          buffer_policy_id: ad-wazuh-agent-buffer
+          queue_capacity: null
+          eps: null
+          crypto: unknown
+          reconnect_seconds: null
+          description: 'Wazuh agent buffer/queue policy lives as hashed file content inside /var/ossec/etc/ossec.conf rather
+            than parsed-and-enumerated facts; queue_capacity, eps, crypto, and reconnect_seconds are intentionally left unset.
+
+            '
+        reload_channels: []
+        settings: []
+        description: 'In-process Wazuh agent (supervised by supervisord per ADR-020; ad container''s supervised process set
+          includes /opt/aptl/wazuh/wazuh-agent.sh and the standard Wazuh agent daemons). Tails Samba logs under /var/log/samba
+          (log.samba, log.smbd, log.winbindd) and forwards them to wazuh-manager. Source, transform, and ship_target specifics
+          beyond the ingestion target are not enumerated as parsed facts in the current evidence bundle and are left unset.
+
+          '
       orchestration_authorities: []
       app_authorizations: []
       scheduled_jobs: []

@@ -3,6 +3,34 @@ description: 'ACES-authored TechVault scenario inventory surface. This file is t
   the TechVault container inventory passes and does not replace the legacy scenario set until the cutover issue completes.
 
   '
+forwarding_agents:
+- forwarding_agent_id: aptl-db-wazuh-agent
+  implementation: wazuh_agent
+  agent_kind: log_forwarder
+  name: aptl-db-agent
+  description: "Off-node Wazuh agent sidecar container (compose service `wazuh-sidecar-db`, image `aptl-wazuh-sidecar:local`,\
+    \ container name `aptl-wazuh-sidecar-db`). It mounts the db node's `db_data` volume read-only at /logs and forwards PostgreSQL\
+    \ logs from /logs/pg_log/postgresql.log to the wazuh-manager. Registered as `aptl-db-agent` on nodes.wazuh-manager.runtime.security_monitoring_managers[0].agents.\
+    \ Encoded at the scenario level (per Brad-Edwards/aces#460) because the sidecar is an APTL ADR-020 infrastructure carve-out\
+    \ \u2014 it serves the db node which has no first-party Wazuh package, but is itself not a scenario participant and has\
+    \ no captured inventory bundle. All encoded specifics are evidenced by docker-compose.yml lines 930-955.\n"
+  buffer_policy:
+    buffer_policy_id: aptl-db-wazuh-agent-buffer
+    description: 'The sidecar''s Wazuh agent carries runtime buffer/queue policy configured inside the aptl-wazuh-sidecar:local
+      image; the granular queue_capacity, eps, crypto, and reconnect_seconds fields are intentionally left unset because they
+      are not enumerated as parsed facts in the docker-compose.yml authored spec (no sidecar inventory bundle is in scope
+      per APTL #388).
+
+      '
+  ship_targets:
+  - target_id: aptl-db-wazuh-agent-events-1514
+    target_node_ref: techvault.wazuh-manager
+    ingestion_port: 1514
+    protocol: tcp
+    description: 'Compose `WAZUH_MANAGER=wazuh.manager` resolves to the wazuh-manager node; events ship to its agent_event_ingestion
+      listener on TCP/1514 (already encoded as nodes.wazuh-manager.runtime.security_monitoring_managers[0].listeners agent-events-1514).
+
+      '
 imports:
 - source: local:techvault/nodes/redteam-net.sdl.yaml
   namespace: techvault

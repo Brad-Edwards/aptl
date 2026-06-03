@@ -243,7 +243,16 @@ facts:
       surface: nodes
       fields:
         - nodes.techvault.fileshare.runtime.processes
-      rationale: ACES runtime.processes records primary runtime process identity.
+      rationale: >
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        supervisord identity (role: primary, user: root, working_directory: /,
+        command: /usr/bin/python3 /usr/bin/supervisord -n -c
+        /etc/supervisor/supervisord.conf) is now carried as the first entry of
+        runtime.processes. NOTE: fileshare is one of the inventories whose
+        plural processes list previously omitted PID 1 entirely (the singular
+        runtime.process field was the only encoding), so the migration
+        explicitly adds the supervisord entry rather than relying on it
+        already being there.
 
   - id: fileshare.runtime.supervised-process-set
     category: runtime-configuration
@@ -518,9 +527,19 @@ facts:
       surface: relationships
       fields:
         - relationships.fileshare-forwards-wazuh
+        - relationships.fileshare-forwards-wazuh.forwarding_edge
+        - nodes.techvault.fileshare.runtime.forwarding_agents
         - features.fileshare-rsyslog-forwarding
         - features.fileshare-wazuh-agent
-      rationale: ACES relationships and features encode log forwarding and in-process Wazuh agent dependencies.
+      rationale: >
+        ACES PR #458 introduced typed relationship payloads alongside the new
+        node-scoped runtime.forwarding_agents family. The
+        fileshare→wazuh-manager relationship now carries a
+        forwarding_edge.forwarder_ref pointing at the in-process
+        fileshare-wazuh-agent (per ADR-020); the legacy
+        properties.protocol="syslog-and-wazuh-agent" + log_paths prose is
+        retired. The fileshare-rsyslog-forwarding / fileshare-wazuh-agent
+        feature entries continue to anchor the build-side dependency facts.
 
   - id: fileshare.capture.toolchain-baseline
     category: provenance

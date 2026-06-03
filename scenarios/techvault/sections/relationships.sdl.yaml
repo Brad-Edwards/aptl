@@ -4,13 +4,24 @@ relationships:
     type: connects_to
     source: techvault.db
     target: techvault.wazuh-manager
-    description: Wazuh sidecar tails PostgreSQL logs from the db_data volume and forwards them to the SOC stack.
-    properties:
-      protocol: syslog-via-sidecar
-      source_log: /var/lib/postgresql/data/pg_log/postgresql.log
+    description: 'The off-node wazuh-sidecar-db container tails PostgreSQL logs from the shared db_data volume and forwards
+      them to the SOC stack. Typed forwarding_edge.forwarder_ref resolves into the scenario-level forwarding_agents registry
+      (introduced by Brad-Edwards/aces#460) rather than a node-hosted agent, because the sidecar is an APTL ADR-020 infrastructure
+      carve-out (postgres:16-alpine has no first-party Wazuh package) and is not itself a scenario participant node.
+
+      '
+    properties: {}
     database_access: null
     mail_access: null
-    forwarding_edge: null
+    forwarding_edge:
+      forwarder_ref: aptl-db-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: ''
     service_integration: null
     proxy_upstream: null
   webapp-connects-db:
@@ -34,25 +45,44 @@ relationships:
     type: connects_to
     source: techvault.webapp
     target: techvault.wazuh-manager
-    description: Webapp forwards logs and Wazuh agent telemetry to the SOC stack.
-    properties:
-      protocol: syslog-and-wazuh-agent
+    description: Webapp forwards gunicorn rsyslog output and Wazuh agent telemetry to the SOC stack.
+    properties: {}
     database_access: null
     mail_access: null
-    forwarding_edge: null
+    forwarding_edge:
+      forwarder_ref: webapp-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: 'Typed forwarding edge replaces the legacy syslog-and-wazuh-agent prose property; resolves to the webapp-wazuh-agent
+        runtime forwarding agent on the webapp node.
+
+        '
     service_integration: null
     proxy_upstream: null
   fileshare-forwards-wazuh:
     type: connects_to
     source: techvault.fileshare
     target: techvault.wazuh-manager
-    description: Fileshare forwards Samba logs and Wazuh agent telemetry to the SOC stack.
-    properties:
-      protocol: syslog-and-wazuh-agent
-      log_paths: /var/log/samba/log.samba-bgqd,/var/log/samba/log.*
+    description: Fileshare forwards Samba logs (log.samba-bgqd and log.*) and Wazuh agent telemetry to the SOC stack.
+    properties: {}
     database_access: null
     mail_access: null
-    forwarding_edge: null
+    forwarding_edge:
+      forwarder_ref: fileshare-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: 'Typed forwarding edge replaces the legacy syslog-and-wazuh-agent + log_paths prose property; resolves
+        to the fileshare-wazuh-agent runtime forwarding agent on the fileshare node (in-process per ADR-020).
+
+        '
     service_integration: null
     proxy_upstream: null
   kali-probes-mailserver-smtp:
@@ -116,13 +146,22 @@ relationships:
     type: connects_to
     source: techvault.ad
     target: techvault.wazuh-manager
-    description: AD forwards Samba logs and Wazuh agent telemetry to the SOC stack.
-    properties:
-      protocol: syslog-and-wazuh-agent
-      log_paths: /var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd
+    description: AD forwards Samba logs (log.samba, log.smbd, log.winbindd) and Wazuh agent telemetry to the SOC stack.
+    properties: {}
     database_access: null
     mail_access: null
-    forwarding_edge: null
+    forwarding_edge:
+      forwarder_ref: ad-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: 'Typed forwarding edge replaces the legacy syslog-and-wazuh-agent + log_paths prose property; resolves
+        to the ad-wazuh-agent runtime forwarding agent on the ad node (in-process per ADR-020).
+
+        '
     service_integration: null
     proxy_upstream: null
   ad-provides-domain:
@@ -199,27 +238,45 @@ relationships:
     type: connects_to
     source: techvault.victim
     target: techvault.wazuh-manager
-    description: Victim forwards rsyslog output and carries Wazuh agent configuration pointed at the SOC stack.
-    properties:
-      protocol: syslog-and-wazuh-agent
-      configured_manager: 172.20.2.30
-      log_config: /etc/rsyslog.d/90-forward.conf
+    description: Victim forwards rsyslog output to the SOC stack; victim does not run a Wazuh agent in-process.
+    properties: {}
     database_access: null
     mail_access: null
-    forwarding_edge: null
+    forwarding_edge:
+      forwarder_ref: victim-rsyslog-forwarder
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: 'Typed forwarding edge replaces the legacy syslog-and-wazuh-agent + configured_manager + log_config prose
+        property; resolves to the victim-rsyslog-forwarder runtime forwarding agent on the victim node. The implementation
+        is rsyslog (not wazuh_agent) because victim''s evidenced process inventory does not include any Wazuh daemons.
+
+        '
     service_integration: null
     proxy_upstream: null
   dns-forwards-wazuh:
     type: connects_to
     source: techvault.dns
     target: techvault.wazuh-manager
-    description: DNS forwards BIND logs and Wazuh agent telemetry to the SOC stack.
-    properties:
-      protocol: syslog-and-wazuh-agent
-      log_paths: /var/log/named/query.log,/var/log/named/default.log
+    description: DNS forwards BIND query/default logs and Wazuh agent telemetry to the SOC stack.
+    properties: {}
     database_access: null
     mail_access: null
-    forwarding_edge: null
+    forwarding_edge:
+      forwarder_ref: dns-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: 'Typed forwarding edge replaces the legacy syslog-and-wazuh-agent prose property; resolves to the dns-wazuh-agent
+        runtime forwarding agent on the dns node (in-process per ADR-020).
+
+        '
     service_integration: null
     proxy_upstream: null
   misp-connects-mariadb:

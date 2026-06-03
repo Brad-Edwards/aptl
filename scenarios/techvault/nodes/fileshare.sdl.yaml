@@ -1315,7 +1315,8 @@ nodes:
         user: root
         group: ''
         working_directory: /
-        description: 'Container entrypoint observed as [''/opt/setup-shares.sh'']. Evidence: docs/aces/inventory/fileshare/evidence/runtime-baseline.txt.'
+        description: 'Container entrypoint observed as [''/opt/setup-shares.sh'']. Evidence: docs/aces/inventory/fileshare/evidence/runtime-baseline.txt.
+          Folded into processes[0] from the legacy runtime.process field retired by ACES PR #458.'
       - name: rsyslog
         pid: null
         parent_pid: null
@@ -2423,7 +2424,45 @@ nodes:
       ssh_servers: []
       datastore_services: []
       platform_applications: []
-      forwarding_agents: []
+      forwarding_agents:
+      - forwarding_agent_id: fileshare-wazuh-agent
+        implementation: wazuh_agent
+        agent_kind: log_forwarder
+        version: ''
+        name: wazuh-agent
+        sources: []
+        transforms: []
+        ship_targets:
+        - target_id: fileshare-wazuh-agent-events-1514
+          target_node_ref: techvault.wazuh-manager
+          target_service_ref: ''
+          ingestion_port: 1514
+          enrollment_port: null
+          protocol: tcp
+          enrollment_identity_classification: none
+          description: 'Wazuh agent ships events to the wazuh-manager agent_event_ingestion listener on TCP/1514, evidenced
+            by the fileshare runtime.environment WAZUH_MANAGER value and the matching agent-events-1514 listener on wazuh-manager.
+
+            '
+        buffer_policy:
+          buffer_policy_id: fileshare-wazuh-agent-buffer
+          queue_capacity: null
+          eps: null
+          crypto: unknown
+          reconnect_seconds: null
+          description: 'Wazuh agent buffer/queue policy lives as hashed file content inside /var/ossec/etc/ossec.conf rather
+            than parsed-and-enumerated facts; queue_capacity, eps, crypto, and reconnect_seconds are intentionally left unset.
+
+            '
+        reload_channels: []
+        settings: []
+        description: 'In-process Wazuh agent (supervised by supervisord per ADR-020; fileshare container''s supervised process
+          set includes the wazuh-agent helper observed at steady state). Tails Samba logs under /var/log/samba (log.samba-bgqd
+          and log.*) and forwards them to wazuh-manager. The agent''s evidenced runtime environment carries WAZUH_MANAGER=wazuh.manager,
+          AGENT_NAME=aptl-fileshare-agent, and LOG_PATHS=/var/log/samba/log.samba-bgqd,/var/log/samba/log.*. Source, transform,
+          and ship_target specifics beyond the ingestion target are not enumerated as parsed facts.
+
+          '
       orchestration_authorities: []
       app_authorizations: []
       scheduled_jobs: []

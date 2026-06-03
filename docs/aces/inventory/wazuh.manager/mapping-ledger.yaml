@@ -232,7 +232,13 @@ facts:
       fields:
         - nodes.techvault.wazuh-manager.runtime.processes
         - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.components
-      rationale: ACES runtime process identities and ACES #428 components capture both process and Wazuh component state.
+      rationale: >
+        ACES PR #458 removed the singular runtime.process field; the PID 1
+        s6-svscan-1 supervisor identity is now expressed as the first entry
+        of runtime.processes (role: supervisor). The same runtime.processes
+        field continues to carry the full Wazuh manager process inventory
+        (Wazuh API workers, daemons, log tailing, Filebeat). ACES #428 components
+        carry the corresponding Wazuh component state.
   - id: wazuh-manager.runtime.environment
     category: runtime-configuration
     summary: Runtime environment records Wazuh API/indexer variables, Filebeat TLS configuration, root shell defaults, and redacted secret-bearing values.

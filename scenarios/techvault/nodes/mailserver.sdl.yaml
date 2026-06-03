@@ -6397,7 +6397,11 @@ nodes:
           value_classification: redacted
           provenance: command_output
           source_path: /etc/dovecot/dovecot.conf
-          description: Runtime setting captured from doveconf -n.
+          description: 'Runtime setting captured from doveconf -n. Raw value omitted and value_classification set to redacted
+            under the unified secret-name redaction rule introduced by ACES PR #458; the upstream tool already masks this
+            value as ''# hidden, use -P to show it''.
+
+            '
         - setting_id: dovecot-078-ssl-prefer-server-ciphers
           component_ref: dovecot
           name: ssl_prefer_server_ciphers

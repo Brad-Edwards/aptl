@@ -1530,7 +1530,7 @@ nodes:
         source: ''
         description: ''
       - name: DB_PASSWORD
-        value: ''
+        value: techvault_db_pass
         value_classification: secret_fixture
         provenance: compose
         source: ''
@@ -3382,7 +3382,45 @@ nodes:
       ssh_servers: []
       datastore_services: []
       platform_applications: []
-      forwarding_agents: []
+      forwarding_agents:
+      - forwarding_agent_id: webapp-wazuh-agent
+        implementation: wazuh_agent
+        agent_kind: log_forwarder
+        version: ''
+        name: wazuh-agent
+        sources: []
+        transforms: []
+        ship_targets:
+        - target_id: webapp-wazuh-events-1514
+          target_node_ref: techvault.wazuh-manager
+          target_service_ref: ''
+          ingestion_port: 1514
+          enrollment_port: null
+          protocol: tcp
+          enrollment_identity_classification: none
+          description: "Wazuh agent ships events to the wazuh-manager agent_event_ingestion listener on TCP/1514 \u2014 evidenced\
+            \ by the WAZUH_MANAGER=wazuh.manager environment variable in webapp's runtime.environment and the corresponding\
+            \ agent-events-1514 listener already encoded on nodes.wazuh-manager.runtime.security_monitoring_managers.\n"
+        buffer_policy:
+          buffer_policy_id: webapp-wazuh-agent-buffer
+          queue_capacity: null
+          eps: null
+          crypto: unknown
+          reconnect_seconds: null
+          description: 'The Wazuh agent and rsyslog both carry runtime buffer/queue policy configured in /var/ossec/etc/ossec.conf
+            and /etc/rsyslog.d/90-forward.conf; those files are captured as hashed filesystem content rather than parsed into
+            enumerated fields, so queue_capacity, eps, crypto, and reconnect_seconds are intentionally left unset to avoid
+            asserting unevidenced specifics.
+
+            '
+        reload_channels: []
+        settings: []
+        description: 'In-process Wazuh agent sidecar that forwards webapp gunicorn logs (via rsyslogd tailing /var/log/gunicorn
+          and /etc/rsyslog.d/90-forward.conf) and Wazuh agent telemetry to the wazuh-manager. Daemons observed at steady state:
+          wazuh-agentd, wazuh-execd, wazuh-syscheckd, wazuh-logcollector, wazuh-modulesd. Source/transform/ship_target specifics
+          are not catalogued by the current evidence bundle and are left unset.
+
+          '
       orchestration_authorities: []
       app_authorizations: []
       scheduled_jobs: []

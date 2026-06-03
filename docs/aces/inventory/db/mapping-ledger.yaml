@@ -179,7 +179,11 @@ facts:
     surface: nodes
     fields:
     - nodes.techvault.db.runtime.processes
-    rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
+    rationale: >
+      ACES PR #458 removed the singular runtime.process field. The PID 1
+      postgres-postmaster identity (role: primary, user: postgres, the Compose
+      logging flags) is encoded as the first entry of runtime.processes; the
+      full PostgreSQL worker process set continues under the same field.
 - id: db.runtime.environment-policy
   category: runtime-configuration
   summary: Runtime environment variables include Compose fixture DB/user/password inputs plus upstream image defaults, with secret value redacted in evidence.
@@ -287,7 +291,11 @@ facts:
     rationale: Brad-Edwards/aces#388 added first-class database logical-state fields, so these facts are encoded as typed database runtime inventory rather than prose application descriptions.
 - id: db.relationships
   category: relationship
-  summary: The DB receives webapp PostgreSQL connections and participates in Wazuh log forwarding through the db sidecar.
+  summary: >
+    The DB receives webapp PostgreSQL connections (typed database_access
+    payload) and participates in Wazuh log forwarding through the off-node
+    wazuh-sidecar-db carve-out (typed forwarding_edge payload resolving into
+    the scenario-level forwarding_agents registry).
   evidence:
   - path: evidence/compose-service.db.json
   - path: evidence/runtime-baseline.txt
@@ -298,4 +306,16 @@ facts:
     - relationships.webapp-connects-db
     - relationships.webapp-connects-db.database_access
     - relationships.db-logs-forwarded-wazuh
-    rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
+    - relationships.db-logs-forwarded-wazuh.forwarding_edge
+    - forwarding_agents.aptl-db-wazuh-agent
+    rationale: >
+      ACES PR #458 introduced typed relationship payloads (database_access,
+      forwarding_edge, …). The webapp→db edge keeps its connects_to verb
+      with the database_access payload. The db→wazuh-manager edge replaces
+      the legacy properties.protocol="syslog-via-sidecar" prose with a typed
+      forwarding_edge.forwarder_ref. ACES #460 (consumed here) added the
+      scenario-level forwarding_agents registry so that the wazuh-sidecar-db
+      carve-out (APTL ADR-020; postgres:16-alpine has no first-party Wazuh
+      package) — which has no captured inventory bundle of its own and is
+      not a scenario participant node — can host the forwarder without
+      mis-typing it as a node-hosted agent on db or wazuh-manager.

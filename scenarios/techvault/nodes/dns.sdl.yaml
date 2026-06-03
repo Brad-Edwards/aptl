@@ -3031,7 +3031,45 @@ nodes:
       ssh_servers: []
       datastore_services: []
       platform_applications: []
-      forwarding_agents: []
+      forwarding_agents:
+      - forwarding_agent_id: dns-wazuh-agent
+        implementation: wazuh_agent
+        agent_kind: log_forwarder
+        version: ''
+        name: wazuh-agent
+        sources: []
+        transforms: []
+        ship_targets:
+        - target_id: dns-wazuh-agent-events-1514
+          target_node_ref: techvault.wazuh-manager
+          target_service_ref: ''
+          ingestion_port: 1514
+          enrollment_port: null
+          protocol: tcp
+          enrollment_identity_classification: none
+          description: "Wazuh agent ships events to the wazuh-manager agent_event_ingestion listener on TCP/1514 \u2014 evidenced\
+            \ by the dns runtime.environment WAZUH_MANAGER value and the corresponding agent-events-1514 listener already\
+            \ encoded on nodes.wazuh-manager.runtime.security_monitoring_managers.\n"
+        buffer_policy:
+          buffer_policy_id: dns-wazuh-agent-buffer
+          queue_capacity: null
+          eps: null
+          crypto: unknown
+          reconnect_seconds: null
+          description: 'Wazuh agent buffer/queue policy is carried as hashed file content inside /var/ossec/etc/ossec.conf
+            rather than parsed-and-enumerated facts; queue_capacity, eps, crypto, and reconnect_seconds are intentionally
+            left unset to avoid asserting unevidenced specifics.
+
+            '
+        reload_channels: []
+        settings: []
+        description: 'In-process Wazuh agent (supervised by supervisord per ADR-020; dns container has wazuh-agentd, wazuh-execd,
+          wazuh-syscheckd, wazuh-logcollector, wazuh-modulesd, and a wrapper tail process as its supervised process set).
+          Tails named query/default logs under /var/log/named and forwards them to wazuh-manager. Source, transform, and ship_target
+          specifics beyond the wazuh-manager ingestion target are not enumerated as parsed facts in the current evidence bundle
+          and are left unset.
+
+          '
       orchestration_authorities: []
       app_authorizations: []
       scheduled_jobs: []

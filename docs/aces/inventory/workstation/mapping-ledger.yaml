@@ -22,7 +22,7 @@ provenance:
 correspondence_checks:
   - id: workstation-node-source-correspondence
     status: planned
-    source: nodes.workstation.source
+    source: nodes.techvault.workstation.source
     realized_evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-history.image.txt
@@ -41,7 +41,7 @@ correspondence_checks:
       asset spec and evidence, not a fresh live equivalence run.
   - id: workstation-runtime-correspondence
     status: planned
-    source: nodes.workstation.runtime
+    source: nodes.techvault.workstation.runtime
     realized_evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
@@ -97,8 +97,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.workstation.source.name
-        - nodes.workstation.source.version
+        - nodes.techvault.workstation.source.name
+        - nodes.techvault.workstation.source.version
       rationale: >
         ACES node source identifies the first-party artifact and immutable
         observed image digest used by later backend realization.
@@ -119,15 +119,15 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.workstation.source.build.base_image
-        - nodes.workstation.source.build.dockerfile_path
-        - nodes.workstation.source.build.instructions
-        - nodes.workstation.source.build.layers
-        - nodes.workstation.source.build.build_args
-        - nodes.workstation.source.build.copied_sources
-        - nodes.workstation.source.build.config
-        - nodes.workstation.source.build.source_inputs
-        - nodes.workstation.source.build.attestation
+        - nodes.techvault.workstation.source.build.base_image
+        - nodes.techvault.workstation.source.build.dockerfile_path
+        - nodes.techvault.workstation.source.build.instructions
+        - nodes.techvault.workstation.source.build.layers
+        - nodes.techvault.workstation.source.build.build_args
+        - nodes.techvault.workstation.source.build.copied_sources
+        - nodes.techvault.workstation.source.build.config
+        - nodes.techvault.workstation.source.build.source_inputs
+        - nodes.techvault.workstation.source.build.attestation
       rationale: >
         ACES Source.build encodes the observed Dockerfile recipe, Docker
         history/layer chain, copied source mappings, checksum-addressed source
@@ -143,8 +143,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.workstation.os
-        - nodes.workstation.os_version
+        - nodes.techvault.workstation.os
+        - nodes.techvault.workstation.os_version
       rationale: ACES nodes have explicit OS family and version fields.
 
   - id: workstation.network.identity
@@ -163,7 +163,7 @@ facts:
       fields:
         - infrastructure.workstation.links
         - infrastructure.workstation.properties
-        - nodes.workstation.runtime.network.endpoints
+        - nodes.techvault.workstation.runtime.network.endpoints
       rationale: >
         ACES infrastructure and runtime.network fields encode the authored
         network link, static IP, aliases, DNS names, endpoint IDs, MAC address,
@@ -184,10 +184,10 @@ facts:
       disposition: encoded
       surface: nodes.services
       fields:
-        - nodes.workstation.services
-        - nodes.workstation.conditions
-        - nodes.workstation.runtime.health
-        - nodes.workstation.runtime.ssh_servers
+        - nodes.techvault.workstation.services
+        - nodes.techvault.workstation.conditions
+        - nodes.techvault.workstation.runtime.health
+        - nodes.techvault.workstation.runtime.ssh_servers
         - conditions.workstation-ssh-ready
       rationale: >
         ACES node service bindings, conditions, health logs, and ssh_servers
@@ -209,7 +209,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.workstation.runtime.mounts
+        - nodes.techvault.workstation.runtime.mounts
       rationale: >
         ACES runtime.mounts carries observed mount type, source, target,
         options, read-only state, propagation, backend-generated status, and
@@ -228,9 +228,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.workstation.runtime.container
-        - nodes.workstation.runtime.linux_capabilities
-        - nodes.workstation.runtime.operational_policy
+        - nodes.techvault.workstation.runtime.container
+        - nodes.techvault.workstation.runtime.linux_capabilities
+        - nodes.techvault.workstation.runtime.operational_policy
       rationale: >
         ACES runtime.container, runtime.linux_capabilities, and
         runtime.operational_policy encode Docker host/security, namespace,
@@ -249,10 +249,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.workstation.runtime.process
-        - nodes.workstation.runtime.processes
+        - nodes.techvault.workstation.runtime.processes
       rationale: >
-        ACES runtime.process and runtime.processes encode the primary process
+        ACES runtime.processes encode the primary process
         and the supervised/steady-state process set observed by Docker, ps, and
         osquery.
 
@@ -269,8 +268,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.workstation.runtime.environment
-        - nodes.workstation.source.build.config.default_environment
+        - nodes.techvault.workstation.runtime.environment
+        - nodes.techvault.workstation.source.build.config.default_environment
       rationale: >
         ACES runtime.environment and source.build.config.default_environment
         carry observed runtime env vars and image-default environment values
@@ -291,7 +290,7 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.workstation.runtime.filesystem_inventory
+        - nodes.techvault.workstation.runtime.filesystem_inventory
         - content.workstation-*
       caveat: >
         The encoded inventory covers the captured authored/custom and
@@ -313,7 +312,7 @@ facts:
       disposition: encoded
       surface: accounts
       fields:
-        - nodes.workstation.runtime.local_identity
+        - nodes.techvault.workstation.runtime.local_identity
         - accounts.workstation-local-*
       rationale: >
         ACES local identity and account surfaces encode users, UID/GID values,
@@ -336,8 +335,8 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.workstation.runtime.packages
-        - nodes.workstation.runtime.dependency_manifests
+        - nodes.techvault.workstation.runtime.packages
+        - nodes.techvault.workstation.runtime.dependency_manifests
       caveat: >
         RPM repository file contents and scanner SBOM component records are
         retained as evidence; current ACES package fields encode package
@@ -362,7 +361,7 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.workstation.runtime.package_vulnerabilities
+        - nodes.techvault.workstation.runtime.package_vulnerabilities
       caveat: >
         Vulnerability records are time-sensitive to the Trivy database and
         advisory feeds available at capture time.
@@ -392,10 +391,10 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.workstation.runtime.processes
-        - nodes.workstation.runtime.ssh_servers
-        - nodes.workstation.runtime.network
-        - nodes.workstation.runtime.container
+        - nodes.techvault.workstation.runtime.processes
+        - nodes.techvault.workstation.runtime.ssh_servers
+        - nodes.techvault.workstation.runtime.network
+        - nodes.techvault.workstation.runtime.container
       caveat: >
         osquery unavailable/not-applicable table attempts are retained as
         evidence and capture limits; they do not imply empty package,
@@ -420,10 +419,10 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.workstation.source.build.instructions
-        - nodes.workstation.source.build.source_inputs
-        - nodes.workstation.runtime.filesystem_inventory
-        - nodes.workstation.runtime.service_manager_units
+        - nodes.techvault.workstation.source.build.instructions
+        - nodes.techvault.workstation.source.build.source_inputs
+        - nodes.techvault.workstation.runtime.filesystem_inventory
+        - nodes.techvault.workstation.runtime.service_manager_units
       caveat: >
         Build-time provisioning recipe and filesystem placement are encoded;
         realized service-manager unit outcome is encoded as observed runtime
@@ -455,7 +454,7 @@ facts:
         - vulnerabilities.workstation-hardcoded-app-secrets
         - vulnerabilities.workstation-passwordless-private-key
         - vulnerabilities.workstation-nopasswd-sudo
-        - nodes.workstation.vulnerabilities
+        - nodes.techvault.workstation.vulnerabilities
         - content.workstation-credential-fixtures
       rationale: >
         ACES vulnerabilities and content encode the scenario weakness IDs,
@@ -499,7 +498,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.workstation.runtime.service_manager_units
+        - nodes.techvault.workstation.runtime.service_manager_units
       rationale: >
         Brad-Edwards/aces#418 added Node.runtime.service_manager_units, so the
         captured unit-file enable states, load/active/sub/result states, exit
@@ -527,9 +526,9 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.workstation.source.build.attestation
-        - nodes.workstation.runtime.package_vulnerabilities
-        - nodes.workstation.runtime.packages
+        - nodes.techvault.workstation.source.build.attestation
+        - nodes.techvault.workstation.runtime.package_vulnerabilities
+        - nodes.techvault.workstation.runtime.packages
       caveat: >
         Capture toolchain and evidence-integrity metadata are preserved in the
         inventory bundle and ledger; ACES SDL carries the relevant derived asset

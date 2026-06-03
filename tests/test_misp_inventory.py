@@ -10,6 +10,8 @@ import re
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -25,6 +27,10 @@ LEDGER_PATH = MISP_DIR / "mapping-ledger.yaml"
 EVIDENCE_DIR = MISP_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
+TECHVAULT_NAMESPACE = "techvault"
+MISP_NODE_ID = f"{TECHVAULT_NAMESPACE}.misp"
+MISP_CONTENT_ID = f"{TECHVAULT_NAMESPACE}.misp-reference-datasets"
+MISP_REL_PREFIX = f"{TECHVAULT_NAMESPACE}."
 
 IMAGE_ID = "sha256:992fd95b8d9698a18e1acdd7dbf5e8d03b32a03fd80e4bcbcff77bc7f17768cd"
 IMAGE_DIGEST = (
@@ -43,7 +49,9 @@ SOURCE_INPUT_COUNT = 4
 RUNTIME_PROCESS_COUNT = 49
 RUNTIME_ENV_COUNT = 18
 SERVICE_LISTENER_COUNT = 15
-LEDGER_FACT_COUNT = 26
+PLATFORM_CONTENT_OBJECT_COUNT = 10
+PLATFORM_SETTING_COUNT = 6
+LEDGER_FACT_COUNT = 27
 
 REQUIRED_EVIDENCE_FILES = {
     "capture-limits.txt",
@@ -134,6 +142,8 @@ def _evidence_text(path: Path) -> str:
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -164,6 +174,16 @@ def _misp_content_counts() -> dict[str, int]:
         for row in lines[1:]
         if "\t" in row
     }
+
+
+def _misp_admin_settings() -> dict[str, str]:
+    lines = _runtime_state_section("db-admin-settings")
+    rows = {}
+    for line in lines[1:]:
+        parts = line.split("\t", maxsplit=2)
+        if len(parts) == 3:
+            rows[parts[1]] = parts[2]
+    return rows
 
 
 def _runtime_state_section(name: str) -> list[str]:
@@ -220,6 +240,7 @@ def test_misp_capture_script_pins_toolchain_and_protocol_probes():
         "yq -o=json '.services.misp'",
         "participant-discovery.misp-suricata-sync.txt",
         "/events/restSearch",
+        "select id,setting,value from admin_settings",
         "evidence-sha256sums.txt",
         "filesystem-tree.txt.gz",
         "osquery-listening-ports.json",
@@ -245,6 +266,7 @@ def test_misp_mapping_ledger_validates_without_gaps():
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
     assert dispositions["misp.runtime.service-listeners"] == "encoded_with_caveat"
     assert dispositions["misp.application.local-authorization"] == "encoded"
+    assert dispositions["misp.application.platform-settings"] == "encoded"
     assert dispositions["misp.application.content-state"] == "encoded_with_caveat"
     assert dispositions["misp.relationship.redis"] == "encoded_with_caveat"
 
@@ -329,7 +351,18 @@ def test_misp_runtime_evidence_counts_and_caveats():
     assert counts["objects"] == 0
     assert counts["taxonomies"] == 165
     assert counts["galaxies"] == 112
+    assert counts["galaxy_clusters"] == 49300
     assert counts["warninglists"] == 122
+    assert counts["sharing_groups"] == 0
+    assert counts["object_templates"] == 388
+
+    settings = _misp_admin_settings()
+    assert settings["db_version"] == "146"
+    assert settings["fix_login"] == "2026-05-23 06:19:07"
+    assert settings["default_role"] == "3"
+    assert settings["clean_db"] == "0"
+    assert "addIPLogging" in settings["update_progress"]
+    assert settings["update_fail_number"] == "0"
 
     assert len(_runtime_baseline_section("users")) == LOCAL_IDENTITY_USER_COUNT
     assert len(_runtime_baseline_section("groups")) == LOCAL_IDENTITY_GROUP_COUNT
@@ -362,7 +395,7 @@ def test_misp_sbom_toolchain_evidence_is_cyclonedx():
 
 
 def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
-    node = scenario.nodes["misp"]
+    node = scenario.nodes[MISP_NODE_ID]
     assert node.source.version == IMAGE_DIGEST
     assert node.os_version == "Debian GNU/Linux 13 (trixie)"
     assert len(node.source.build.instructions) == DOCKER_HISTORY_ROW_COUNT
@@ -380,7 +413,7 @@ def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
     assert len(runtime.filesystem_inventory) == FILESYSTEM_ENTRY_COUNT
     assert len(runtime.local_identity.users) == LOCAL_IDENTITY_USER_COUNT
     assert len(runtime.local_identity.groups) == LOCAL_IDENTITY_GROUP_COUNT
-    assert len(runtime.processes) + 1 == RUNTIME_PROCESS_COUNT
+    assert len(runtime.processes) == RUNTIME_PROCESS_COUNT
     assert len(runtime.environment) == RUNTIME_ENV_COUNT
     assert len(runtime.service_listeners) == SERVICE_LISTENER_COUNT
 
@@ -394,7 +427,7 @@ def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
     published = {(port.host_ip, port.host_port, port.container_port) for port in runtime.network.published_ports}
     assert published == {("0.0.0.0", 8443, 443), ("::", 8443, 443)}
 
-    listeners = {listener.listener_id: listener for listener in runtime.service_listeners}
+    listeners = {listener.service_listener_id: listener for listener in runtime.service_listeners}
     assert listeners["https-443-ipv4"].scope == "wildcard"
     assert listeners["https-443-ipv4"].published_port_refs[0].host_port == 8443
     assert listeners["misp-zmq-50000-loopback"].scope == "loopback_only"
@@ -404,7 +437,7 @@ def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
     assert listeners["php-fpm-unix-socket"].protocol == "unix"
 
     authority = runtime.identity_authorities[0]
-    assert authority.authority_id == "misp-local-authorization"
+    assert authority.identity_authority_id == "misp-local-authorization"
     subjects = {subject.subject_id: subject for subject in authority.subjects}
     assert subjects["user-admin"].principal_name == "admin@admin.test"
     assert subjects["auth-key-2"].kind == "service_principal"
@@ -425,21 +458,46 @@ def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
     assert routes["restsearch-post"].auth_required is True
     assert routes["restsearch-post"].auth_scheme == "MISP API key in Authorization header"
 
-    content = scenario.content["misp-reference-datasets"]
+    platform = runtime.platform_applications[0]
+    assert platform.platform_application_id == "misp-threat-intel"
+    assert platform.platform_kind == "threat_intel"
+    assert platform.product == "MISP"
+    assert platform.version == "2.5.36"
+    assert len(platform.content_objects) == PLATFORM_CONTENT_OBJECT_COUNT
+    assert len(platform.settings) == PLATFORM_SETTING_COUNT
+    platform_content = {item.content_object_id: item for item in platform.content_objects}
+    assert platform_content["misp-taxonomies"].kind == "taxonomy"
+    assert platform_content["misp-taxonomies"].attributes["row_count"] == 165
+    assert platform_content["misp-galaxy-clusters"].kind == "galaxy_cluster"
+    assert platform_content["misp-galaxy-clusters"].attributes["row_count"] == 49300
+    assert platform_content["misp-sharing-groups"].kind == "sharing_group"
+    assert platform_content["misp-object-templates"].attributes["row_count"] == 388
+    platform_settings = {setting.name: setting for setting in platform.settings}
+    assert platform_settings["db_version"].value == "146"
+    assert platform_settings["default_role"].provenance == "database"
+    assert platform_settings["default_role"].classification == "plain"
+    assert "addIPLogging" in platform_settings["update_progress"].value
+
+    content = scenario.content[MISP_CONTENT_ID]
     content_counts = {item.name: item.tags[1] for item in content.items}
     assert content_counts["events"] == "count:0"
     assert content_counts["attributes"] == "count:0"
     assert content_counts["objects"] == "count:0"
     assert content_counts["taxonomies"] == "count:165"
+    assert content_counts["galaxy_clusters"] == "count:49300"
+    assert content_counts["object_templates"] == "count:388"
 
     relationships = scenario.relationships
-    assert relationships["misp-connects-mariadb"].properties["auth_method"] == "password"
-    assert relationships["misp-connects-redis"].properties["auth_method"] == "unknown"
-    assert relationships["misp-suricata-sync-queries-misp-api"].properties["tls_verification"] == "lab_ca"
+    assert relationships[f"{MISP_REL_PREFIX}misp-connects-mariadb"].properties["auth_method"] == "password"
+    assert relationships[f"{MISP_REL_PREFIX}misp-connects-redis"].properties["auth_method"] == "unknown"
+    assert (
+        relationships[f"{MISP_REL_PREFIX}misp-suricata-sync-queries-misp-api"].properties["tls_verification"]
+        == "lab_ca"
+    )
 
 
 def test_techvault_sdl_compiles_with_misp_runtime_fields(compiled_runtime_model):
-    node = compiled_runtime_model.node_deployments["provision.node.misp"].spec["node"]
+    node = compiled_runtime_model.node_deployments[f"provision.node.{MISP_NODE_ID}"].spec["node"]
     runtime = node["runtime"]
 
     assert node["source"]["version"] == IMAGE_DIGEST
@@ -454,7 +512,10 @@ def test_techvault_sdl_compiles_with_misp_runtime_fields(compiled_runtime_model)
     assert len(runtime["service_listeners"]) == SERVICE_LISTENER_COUNT
     assert runtime["container"]["runtime_name"] == "runc"
     assert runtime["applications"][0]["application_id"] == "misp-web"
-    assert runtime["identity_authorities"][0]["authority_id"] == "misp-local-authorization"
+    assert runtime["platform_applications"][0]["platform_application_id"] == "misp-threat-intel"
+    assert len(runtime["platform_applications"][0]["settings"]) == PLATFORM_SETTING_COUNT
+    assert len(runtime["platform_applications"][0]["content_objects"]) == PLATFORM_CONTENT_OBJECT_COUNT
+    assert runtime["identity_authorities"][0]["identity_authority_id"] == "misp-local-authorization"
 
 
 def test_parity_inventory_cites_misp_inventory_and_aces_sdl():
@@ -463,6 +524,7 @@ def test_parity_inventory_cites_misp_inventory_and_aces_sdl():
     assert row["category"] == "aces_sdl"
     assert "runtime.service_listeners" in row["aces_target"]
     assert "runtime.identity_authorities" in row["aces_target"]
+    assert "runtime.platform_applications" in row["aces_target"]
     assert "tests/test_misp_inventory.py" in row["validation_evidence"]
-    assert "Brad-Edwards/aces#431 consumed" in row["validation_evidence"]
+    assert "Brad-Edwards/aces#431/#465 consumed" in row["validation_evidence"]
     assert "#347/#348/#349" in row["blocking_followup"]

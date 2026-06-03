@@ -11,6 +11,8 @@ import subprocess
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -105,6 +107,8 @@ def _json_file(name: str):
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -396,7 +400,7 @@ def test_techvault_sdl_encodes_wazuh_manager_security_monitoring_surface():
     from aces_sdl import parse_sdl_file
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
-    node = scenario.nodes["wazuh-manager"]
+    node = scenario.nodes["techvault.wazuh-manager"]
     runtime = node.runtime
     assert runtime is not None
     assert len(runtime.filesystem_inventory) == 1220
@@ -408,7 +412,7 @@ def test_techvault_sdl_encodes_wazuh_manager_security_monitoring_surface():
     assert len(runtime.package_vulnerabilities) == 368
 
     manager = runtime.security_monitoring_managers[0]
-    assert manager.manager_id == "techvault-wazuh-manager"
+    assert manager.security_monitoring_manager_id == "techvault-wazuh-manager"
     assert manager.implementation == "wazuh"
     assert manager.manager_kind == "siem"
     assert manager.version == "v4.12.0"
@@ -460,10 +464,10 @@ def test_techvault_sdl_compiles_with_wazuh_security_monitoring_refs():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.wazuh-manager"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.wazuh-manager"].spec["node"]
     manager = node["runtime"]["security_monitoring_managers"][0]
 
-    assert manager["manager_id"] == "techvault-wazuh-manager"
+    assert manager["security_monitoring_manager_id"] == "techvault-wazuh-manager"
     assert manager["implementation"] == "wazuh"
     assert len(node["runtime"]["packages"]) == 322
     assert len(node["runtime"]["package_vulnerabilities"]) == 368

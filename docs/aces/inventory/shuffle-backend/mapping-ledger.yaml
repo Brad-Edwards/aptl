@@ -31,14 +31,14 @@ provenance:
 correspondence_checks:
   - id: shuffle-backend.node-source-correspondence
     status: implemented
-    source: nodes.shuffle-backend.source
+    source: nodes.techvault.shuffle-backend.source
     realized_evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-buildx-imagetools.image.raw.json
     ledger_fact_ids:
       - shuffle-backend.image.identity
     method: >
-      Compare nodes.shuffle-backend.source in scenarios/techvault.sdl.yaml
+      Compare nodes.techvault.shuffle-backend.source in scenarios/techvault.sdl.yaml
       against captured Docker inspect image identity and registry manifest
       evidence.
     limit: >
@@ -46,7 +46,7 @@ correspondence_checks:
       perform a clean-lab rebuild.
   - id: shuffle-backend-runtime-correspondence
     status: implemented
-    source: nodes.shuffle-backend.runtime and infrastructure.shuffle-backend
+    source: nodes.techvault.shuffle-backend.runtime and infrastructure.shuffle-backend
     realized_evidence:
       - path: evidence/runtime-baseline.txt
       - path: evidence/docker-inspect.container.json
@@ -90,8 +90,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.shuffle-backend.source.name
-        - nodes.shuffle-backend.source.version
+        - nodes.techvault.shuffle-backend.source.name
+        - nodes.techvault.shuffle-backend.source.version
       rationale: >
         ACES node source is a provider-neutral artifact reference and can carry
         the immutable image digest as the version/pin used by later encoders.
@@ -105,8 +105,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.shuffle-backend.os
-        - nodes.shuffle-backend.os_version
+        - nodes.techvault.shuffle-backend.os
+        - nodes.techvault.shuffle-backend.os_version
       rationale: ACES nodes have explicit OS family and version fields.
   - id: shuffle-backend.network.identity
     category: network
@@ -121,7 +121,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.shuffle-backend.runtime.network
+        - nodes.techvault.shuffle-backend.runtime.network
         - infrastructure.shuffle-backend.links
         - infrastructure.shuffle-backend.properties
       rationale: >
@@ -140,7 +140,7 @@ facts:
       disposition: encoded
       surface: nodes.services
       fields:
-        - nodes.shuffle-backend.services
+        - nodes.techvault.shuffle-backend.services
       rationale: ACES node service bindings model exposed network services by port.
   - id: shuffle-backend.data.mount
     category: runtime-configuration
@@ -155,7 +155,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.shuffle-backend.runtime.mounts
+        - nodes.techvault.shuffle-backend.runtime.mounts
       rationale: >
         Current ACES runtime mount fields encode volume-backed node-local
         persistence directly.
@@ -173,8 +173,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.shuffle-backend.runtime.mounts
-        - nodes.shuffle-backend.runtime.local_control_interfaces
+        - nodes.techvault.shuffle-backend.runtime.mounts
+        - nodes.techvault.shuffle-backend.runtime.local_control_interfaces
       rationale: >
         Current ACES runtime mount and local control interface fields encode
         path-local control sockets without treating them as backend-only detail.
@@ -189,10 +189,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.shuffle-backend.runtime.process
-        - nodes.shuffle-backend.runtime.processes
+        - nodes.techvault.shuffle-backend.runtime.processes
       rationale: >
-        Current ACES runtime process fields encode PID, command, user, role,
+        Current ACES runtime process inventory fields encode PID, command, user, role,
         and working directory for PID 1.
   - id: shuffle-backend.package.inventory
     category: runtime-inventory
@@ -207,8 +206,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.shuffle-backend.runtime.packages
-        - nodes.shuffle-backend.runtime.dependency_manifests
+        - nodes.techvault.shuffle-backend.runtime.packages
+        - nodes.techvault.shuffle-backend.runtime.dependency_manifests
       rationale: >
         Current ACES runtime package and dependency manifest fields encode the
         observed Alpine packages and Go module manifest.
@@ -226,7 +225,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.shuffle-backend.runtime.package_vulnerabilities
+        - nodes.techvault.shuffle-backend.runtime.package_vulnerabilities
       rationale: >
         Current ACES package vulnerability scanner-state fields preserve
         package, version, advisory, severity, scanner, image digest, and scan

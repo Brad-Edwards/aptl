@@ -26,8 +26,8 @@ as current-running steady-state evidence, not as clean-lab rebuild proof.
   MISP steady-state inventory.
 - MISP 2.5.36 web/API routes for `/users/login` and `/events/restSearch`,
   MISP-local users/org/roles/API-key metadata in `runtime.identity_authorities`,
-  and a `content` dataset recording that events, attributes, and objects were
-  empty while reference collections were present.
+  and MISP threat-intelligence platform state in `runtime.platform_applications`
+  covering reference content objects and admin settings.
 - Relationships from MISP to `misp-db` and `misp-redis`, plus the
   `misp-suricata-sync` HTTPS/API relationship. Companion full inventories remain
   owned by #347, #348, and #349.
@@ -41,8 +41,9 @@ as current-running steady-state evidence, not as clean-lab rebuild proof.
   238 dpkg packages, 593 Trivy vulnerability findings, 21 local users,
   42 local groups, 49 steady-state processes, and 15 unique service listeners.
 - MISP logical state: one admin user, one local organisation, six roles, one
-  API-key metadata row, zero events, zero attributes, zero objects, five tags,
-  165 taxonomies, 112 galaxies, 122 warninglists, and two feeds.
+  API-key metadata row, six admin settings, zero events, zero attributes, zero
+  objects, five tags, 165 taxonomies, 112 galaxies, 49,300 galaxy clusters,
+  122 warninglists, two feeds, zero sharing groups, and 388 object templates.
 - Participant discovery: `aptl-misp-suricata-sync` resolves `misp` and
   `aptl-misp`, reaches TCP 443 and TCP 80, and verifies TLS with the lab CA.
   `aptl-kali` cannot reach `172.20.0.16:443` from its current network vantage.

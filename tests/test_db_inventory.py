@@ -9,6 +9,8 @@ import re
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -67,6 +69,8 @@ def _json_file(name: str):
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -135,8 +139,8 @@ def test_db_mapping_ledger_validates_and_tracks_gap_handoff():
     assert dispositions["db.runtime.filesystem-inventory"] == "encoded_with_caveat"
     assert dispositions["db.runtime.vulnerability-scan"] == "encoded"
     assert dispositions["db.postgres.logical-state"] == "encoded"
-    assert "nodes.db.runtime.database_services.databases" in fields["db.postgres.logical-state"]
-    assert "nodes.db.runtime.database_services.roles" in fields["db.postgres.logical-state"]
+    assert "nodes.techvault.db.runtime.database_services.databases" in fields["db.postgres.logical-state"]
+    assert "nodes.techvault.db.runtime.database_services.roles" in fields["db.postgres.logical-state"]
     assert "relationships.webapp-connects-db.database_access" in fields["db.relationships"]
 
 
@@ -269,7 +273,8 @@ def test_techvault_sdl_encodes_db_inventory_surfaces():
     source_inputs = {item["source_path"]: item for item in build["source_inputs"]}
     assert source_inputs["containers/db/init/01-schema.sql"]["destination_path"] == "/docker-entrypoint-initdb.d/01-schema.sql"
     assert db["os_version"] == "Alpine Linux v3.23"
-    assert {"port": 5432, "protocol": "tcp", "name": "postgres"} in db["services"]
+    services = {(service["port"], service["protocol"], service["name"]) for service in db["services"]}
+    assert (5432, "tcp", "postgres") in services
 
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
     assert mounts["/var/lib/postgresql/data"]["source"] == "aptl_db_data"
@@ -287,18 +292,18 @@ def test_techvault_sdl_encodes_db_inventory_surfaces():
     assert runtime["container"]["runtime_name"] == "runc"
     assert runtime["health"]["status"] == "healthy"
     assert len(runtime["health"]["log"]) == 5
-    assert runtime["process"]["user"] == "postgres"
-    assert "logging_collector=on" in " ".join(runtime["process"]["command"])
+    primary_process = next(process for process in runtime["processes"] if process["role"] == "primary")
+    assert primary_process["user"] == "postgres"
+    assert "logging_collector=on" in " ".join(primary_process["command"])
     assert {process["name"] for process in runtime["processes"]} >= {"postgres-postmaster", "postgres-logger"}
     environment = {item["name"]: item for item in runtime["environment"]}
-    assert "value" not in environment["POSTGRES_PASSWORD"]
+    assert environment["POSTGRES_PASSWORD"]["value"] == ""
     assert environment["POSTGRES_PASSWORD"]["value_classification"] == "secret_fixture"
     assert runtime["linux_capabilities"]["effective"] == []
     assert runtime["operational_policy"]["restart"] == "unless_stopped"
-    assert runtime["operational_policy"]["resource_limits"] == {
-        "memory": 268435456,
-        "memory_swap": 536870912,
-    }
+    limits = runtime["operational_policy"]["resource_limits"]
+    assert limits["memory"] == 268435456
+    assert limits["memory_swap"] == 536870912
     assert len(runtime["packages"]) == len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines())
     assert len(runtime["package_vulnerabilities"]) == len(_json_file("trivy-vulnerability-list.json"))
     database_service = runtime["database_services"][0]
@@ -346,10 +351,9 @@ def test_techvault_sdl_encodes_db_inventory_surfaces():
     assert data["relationships"]["webapp-connects-db"]["target"] == (
         "nodes.db.runtime.database_services.techvault-postgres.databases.techvault"
     )
-    assert data["relationships"]["webapp-connects-db"]["database_access"] == {
-        "role_ref": "techvault",
-        "auth_method": "password",
-    }
+    database_access = data["relationships"]["webapp-connects-db"]["database_access"]
+    assert database_access["role_ref"] == "techvault"
+    assert database_access["auth_method"] == "password"
 
 
 def test_db_filesystem_tree_is_encoded_as_runtime_inventory():
@@ -458,7 +462,7 @@ def test_techvault_sdl_parses_and_compiles_with_db_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.db"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.db"].spec["node"]
     runtime = node["runtime"]
 
     assert node["source"]["version"] == IMAGE_DIGEST
@@ -496,4 +500,4 @@ def test_parity_inventory_cites_db_inventory_and_aces_sdl():
     assert rows["compose.service.db"]["legacy_source"] == "docker-compose.yml (service: db)"
     assert rows["compose.service.db"]["category"] == "aces_sdl"
     assert rows["compose.service.db"]["blocking_followup"] == "n/a"
-    assert "nodes.db" in rows["compose.service.db"]["aces_target"]
+    assert "nodes.techvault.db" in rows["compose.service.db"]["aces_target"]

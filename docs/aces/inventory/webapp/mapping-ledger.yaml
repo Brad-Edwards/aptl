@@ -22,7 +22,7 @@ provenance:
 correspondence_checks:
   - id: webapp-node-source-correspondence
     status: planned
-    source: nodes.webapp.source
+    source: nodes.techvault.webapp.source
     realized_evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/source-checksums.txt
@@ -38,7 +38,7 @@ correspondence_checks:
       not rerun the lab for live equivalence proof.
   - id: webapp-runtime-correspondence
     status: planned
-    source: nodes.webapp.runtime
+    source: nodes.techvault.webapp.runtime
     realized_evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
@@ -106,8 +106,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.source.name
-        - nodes.webapp.source.version
+        - nodes.techvault.webapp.source.name
+        - nodes.techvault.webapp.source.version
       rationale: >
         ACES node source identifies the provider-neutral artifact and immutable
         digest used by later backend realization.
@@ -125,15 +125,15 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.source.build.base_image
-        - nodes.webapp.source.build.dockerfile_path
-        - nodes.webapp.source.build.instructions
-        - nodes.webapp.source.build.layers
-        - nodes.webapp.source.build.build_args
-        - nodes.webapp.source.build.copied_sources
-        - nodes.webapp.source.build.config
-        - nodes.webapp.source.build.source_inputs
-        - nodes.webapp.source.build.attestation
+        - nodes.techvault.webapp.source.build.base_image
+        - nodes.techvault.webapp.source.build.dockerfile_path
+        - nodes.techvault.webapp.source.build.instructions
+        - nodes.techvault.webapp.source.build.layers
+        - nodes.techvault.webapp.source.build.build_args
+        - nodes.techvault.webapp.source.build.copied_sources
+        - nodes.techvault.webapp.source.build.config
+        - nodes.techvault.webapp.source.build.source_inputs
+        - nodes.techvault.webapp.source.build.attestation
       rationale: >
         ACES #364 added the Source.build image provenance surface, so the
         observed Dockerfile recipe, Docker history/layer chain, copied source
@@ -150,8 +150,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.os
-        - nodes.webapp.os_version
+        - nodes.techvault.webapp.os
+        - nodes.techvault.webapp.os_version
       rationale: ACES nodes have explicit OS family and version fields.
 
   - id: webapp.network.identity
@@ -170,7 +170,7 @@ facts:
       fields:
         - infrastructure.webapp.links
         - infrastructure.webapp.properties
-        - nodes.webapp.runtime.network.endpoints
+        - nodes.techvault.webapp.runtime.network.endpoints
       rationale: >
         ACES infrastructure properties encode authored network attachment and
         static IP assignments; ACES #366 runtime.network now encodes Docker
@@ -189,7 +189,7 @@ facts:
       disposition: encoded
       surface: nodes.services
       fields:
-        - nodes.webapp.services
+        - nodes.techvault.webapp.services
       rationale: ACES node service bindings model exposed network services by port.
 
   - id: webapp.healthcheck
@@ -205,7 +205,7 @@ facts:
       surface: conditions
       fields:
         - conditions.webapp-http-ready
-        - nodes.webapp.conditions
+        - nodes.techvault.webapp.conditions
       rationale: ACES conditions represent health/readiness commands and timing.
 
   - id: webapp.runtime.log-volume
@@ -219,7 +219,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.mounts
+        - nodes.techvault.webapp.runtime.mounts
       rationale: ACES #354 added typed runtime mount inventory.
 
   - id: webapp.runtime.mount-table
@@ -235,7 +235,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.mounts
+        - nodes.techvault.webapp.runtime.mounts
       rationale: >
         ACES #368 added filesystem type, propagation, stability, and
         backend-generated fields to typed runtime mounts, so the full observed
@@ -253,7 +253,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.process
+        - nodes.techvault.webapp.runtime.processes
       rationale: ACES #354 added primary runtime process identity.
 
   - id: webapp.runtime.package-inventory
@@ -270,8 +270,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.packages
-        - nodes.webapp.runtime.dependency_manifests
+        - nodes.techvault.webapp.runtime.packages
+        - nodes.techvault.webapp.runtime.dependency_manifests
       rationale: >
         ACES #354 added runtime package and dependency-manifest inventory. The
         Trivy and Syft CycloneDX SBOMs added by APTL #368 provide standards
@@ -294,7 +294,7 @@ facts:
       disposition: encoded
       surface: content
       fields:
-        - nodes.webapp.runtime.filesystem_inventory
+        - nodes.techvault.webapp.runtime.filesystem_inventory
         - content.webapp-file-app-app-py
         - content.webapp-file-app-requirements-txt
         - content.webapp-file-app-static-style-css
@@ -338,7 +338,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.package_vulnerabilities
+        - nodes.techvault.webapp.runtime.package_vulnerabilities
       rationale: ACES #354 added scanner-derived package vulnerability findings.
 
   - id: webapp.runtime.local-accounts
@@ -379,7 +379,7 @@ facts:
       caveat: >
         Top-level ACES accounts are curated account placements, not the full
         observed Linux identity database. The complete passwd/group/sudo
-        inventory is encoded under nodes.webapp.runtime.local_identity.
+        inventory is encoded under nodes.techvault.webapp.runtime.local_identity.
       rationale: >
         ACES can express local account name, node binding, shell, home, auth
         method, and disabled state, so those account-placement fields remain
@@ -414,8 +414,8 @@ facts:
         - vulnerabilities.webapp-api-rate-limit-missing
         - vulnerabilities.webapp-hardcoded-secret
         - vulnerabilities.webapp-verbose-error-disclosure
-        - nodes.webapp.vulnerabilities
-        - nodes.webapp.runtime.applications.routes.vulnerability_refs
+        - nodes.techvault.webapp.vulnerabilities
+        - nodes.techvault.webapp.runtime.applications.routes.vulnerability_refs
       rationale: >
         ACES top-level vulnerabilities model CWE-classified scenario weaknesses,
         and ACES #367 runtime.application route refs place those weaknesses on
@@ -450,7 +450,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.processes
+        - nodes.techvault.webapp.runtime.processes
       rationale: >
         ACES #358 added runtime process-set inventory, which preserves the
         load-bearing supervisord, gunicorn, rsyslog, and Wazuh daemon process
@@ -470,7 +470,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.environment
+        - nodes.techvault.webapp.runtime.environment
       rationale: >
         ACES #358 added observed runtime environment variables with value
         classification and provenance, so Compose, image, container, and runtime
@@ -490,9 +490,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.linux_capabilities
-        - nodes.webapp.runtime.operational_policy
-        - nodes.webapp.runtime.operational_policy.resource_limits
+        - nodes.techvault.webapp.runtime.linux_capabilities
+        - nodes.techvault.webapp.runtime.operational_policy
+        - nodes.techvault.webapp.runtime.operational_policy.resource_limits
       rationale: >
         ACES #358 added typed Linux capability policy plus restart and resource
         limit inventory under runtime operational policy.
@@ -511,7 +511,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.filesystem_inventory
+        - nodes.techvault.webapp.runtime.filesystem_inventory
       rationale: >
         ACES #363 added path type, owner/group, UID/GID, mode, size, digest,
         source, stability, and sensitivity fields for runtime filesystem
@@ -529,9 +529,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.local_identity.users
-        - nodes.webapp.runtime.local_identity.groups
-        - nodes.webapp.runtime.local_identity.sudo_rules
+        - nodes.techvault.webapp.runtime.local_identity.users
+        - nodes.techvault.webapp.runtime.local_identity.groups
+        - nodes.techvault.webapp.runtime.local_identity.sudo_rules
       rationale: >
         ACES #365 added the runtime.local_identity surface, so the observed
         /etc/passwd users, UID/GID values, primary groups, GECOS fields, home
@@ -554,10 +554,10 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.network.hostname
-        - nodes.webapp.runtime.network.domainname
-        - nodes.webapp.runtime.network.endpoints
-        - nodes.webapp.runtime.network.published_ports
+        - nodes.techvault.webapp.runtime.network.hostname
+        - nodes.techvault.webapp.runtime.network.domainname
+        - nodes.techvault.webapp.runtime.network.endpoints
+        - nodes.techvault.webapp.runtime.network.published_ports
       rationale: >
         ACES #366 added runtime.network, so the Docker aliases, DNS names,
         generated DNS prefix, endpoint IDs, MAC addresses, IP prefix lengths,
@@ -578,16 +578,16 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.applications
-        - nodes.webapp.runtime.applications.routes
-        - nodes.webapp.runtime.applications.routes.parameters
-        - nodes.webapp.runtime.applications.routes.responses
-        - nodes.webapp.runtime.applications.routes.redirects
-        - nodes.webapp.runtime.applications.routes.disclosures
-        - nodes.webapp.runtime.applications.routes.exposed_fields
-        - nodes.webapp.runtime.applications.routes.templates
-        - nodes.webapp.runtime.applications.routes.static_assets
-        - nodes.webapp.runtime.applications.routes.vulnerability_refs
+        - nodes.techvault.webapp.runtime.applications
+        - nodes.techvault.webapp.runtime.applications.routes
+        - nodes.techvault.webapp.runtime.applications.routes.parameters
+        - nodes.techvault.webapp.runtime.applications.routes.responses
+        - nodes.techvault.webapp.runtime.applications.routes.redirects
+        - nodes.techvault.webapp.runtime.applications.routes.disclosures
+        - nodes.techvault.webapp.runtime.applications.routes.exposed_fields
+        - nodes.techvault.webapp.runtime.applications.routes.templates
+        - nodes.techvault.webapp.runtime.applications.routes.static_assets
+        - nodes.techvault.webapp.runtime.applications.routes.vulnerability_refs
       rationale: >
         ACES #367 added runtime.applications, so the Flask route/API/UI
         surface now directly encodes route paths, methods, auth/session
@@ -609,9 +609,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.container
-        - nodes.webapp.runtime.health
-        - nodes.webapp.runtime.mounts
+        - nodes.techvault.webapp.runtime.container
+        - nodes.techvault.webapp.runtime.health
+        - nodes.techvault.webapp.runtime.mounts
       rationale: >
         ACES #368 added container host/security configuration, runtime health
         observation, and full runtime mount fields.
@@ -645,11 +645,11 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.webapp.runtime.packages
-        - nodes.webapp.runtime.dependency_manifests
-        - nodes.webapp.runtime.processes
-        - nodes.webapp.runtime.network.published_ports
-        - nodes.webapp.runtime.container
+        - nodes.techvault.webapp.runtime.packages
+        - nodes.techvault.webapp.runtime.dependency_manifests
+        - nodes.techvault.webapp.runtime.processes
+        - nodes.techvault.webapp.runtime.network.published_ports
+        - nodes.techvault.webapp.runtime.container
       rationale: >
         The added toolchain outputs strengthen the existing encoded runtime
         inventory surfaces rather than introducing a new ACES semantic gap:

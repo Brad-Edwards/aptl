@@ -21,7 +21,7 @@ provenance:
 correspondence_checks:
   - id: wazuh-manager-node-source-correspondence
     status: planned
-    source: nodes.wazuh-manager.source
+    source: nodes.techvault.wazuh-manager.source
     realized_evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-history.image.jsonl
@@ -34,7 +34,7 @@ correspondence_checks:
     limit: Planned because issue #340 records a frozen steady-state asset spec rather than a destructive live equivalence proof.
   - id: wazuh-manager-runtime-correspondence
     status: planned
-    source: nodes.wazuh-manager.runtime
+    source: nodes.techvault.wazuh-manager.runtime
     realized_evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
@@ -82,8 +82,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.source.name
-        - nodes.wazuh-manager.source.version
+        - nodes.techvault.wazuh-manager.source.name
+        - nodes.techvault.wazuh-manager.source.version
       rationale: ACES SDL encodes the upstream image identity directly; evidence remains provenance, not a substitute for SDL encoding.
   - id: wazuh-manager.image.history
     category: provenance
@@ -96,9 +96,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.source.build.instructions
-        - nodes.wazuh-manager.source.build.layers
-        - nodes.wazuh-manager.source.build.config
+        - nodes.techvault.wazuh-manager.source.build.instructions
+        - nodes.techvault.wazuh-manager.source.build.layers
+        - nodes.techvault.wazuh-manager.source.build.config
       rationale: ACES SDL has typed image-build provenance for the captured inspect/history facts.
   - id: wazuh-manager.compose.service
     category: runtime-configuration
@@ -110,9 +110,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.source.build.source_inputs
-        - nodes.wazuh-manager.runtime.container
-        - nodes.wazuh-manager.runtime.network
+        - nodes.techvault.wazuh-manager.source.build.source_inputs
+        - nodes.techvault.wazuh-manager.runtime.container
+        - nodes.techvault.wazuh-manager.runtime.network
         - infrastructure.wazuh-manager
       rationale: Compose intent and mounted APTL inputs are encoded as runtime/source-input realization facts.
   - id: wazuh-manager.os.version
@@ -125,8 +125,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.os
-        - nodes.wazuh-manager.os_version
+        - nodes.techvault.wazuh-manager.os
+        - nodes.techvault.wazuh-manager.os_version
       rationale: ACES nodes support the observed OS family and version.
   - id: wazuh-manager.network.identity
     category: network
@@ -141,7 +141,7 @@ facts:
       surface: infrastructure
       fields:
         - infrastructure.wazuh-manager
-        - nodes.wazuh-manager.runtime.network.endpoints
+        - nodes.techvault.wazuh-manager.runtime.network.endpoints
       rationale: ACES runtime network realization records endpoint IPs, Docker aliases, and generated Docker IDs.
   - id: wazuh-manager.transport.listeners
     category: service-surface
@@ -154,8 +154,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.services
-        - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.listeners
+        - nodes.techvault.wazuh-manager.services
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.listeners
       rationale: ACES #428 adds typed security-monitoring listeners bound to same-node services.
   - id: wazuh-manager.host-published-ports
     category: network
@@ -167,7 +167,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.network.published_ports
+        - nodes.techvault.wazuh-manager.runtime.network.published_ports
       rationale: ACES runtime network realization encodes host-published ports separately from logical service listeners.
   - id: wazuh-manager.runtime.mount-table
     category: runtime-configuration
@@ -189,7 +189,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.mounts
+        - nodes.techvault.wazuh-manager.runtime.mounts
       rationale: ACES runtime mounts encode bind/volume source kind, read-only state, generated backend volumes, and stability.
   - id: wazuh-manager.runtime.container-policy
     category: runtime-configuration
@@ -202,9 +202,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.container
-        - nodes.wazuh-manager.runtime.operational_policy
-        - nodes.wazuh-manager.runtime.linux_capabilities
+        - nodes.techvault.wazuh-manager.runtime.container
+        - nodes.techvault.wazuh-manager.runtime.operational_policy
+        - nodes.techvault.wazuh-manager.runtime.linux_capabilities
       rationale: Current ACES SDL has typed runtime surfaces for container policy and Linux capabilities.
   - id: wazuh-manager.runtime.health
     category: runtime-configuration
@@ -216,7 +216,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.health
+        - nodes.techvault.wazuh-manager.runtime.health
         - conditions.wazuh-api-ready
       rationale: ACES runtime health encodes observed Docker health logs while scenario conditions encode the authored readiness command.
   - id: wazuh-manager.runtime.processes
@@ -230,9 +230,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.process
-        - nodes.wazuh-manager.runtime.processes
-        - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.components
+        - nodes.techvault.wazuh-manager.runtime.processes
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.components
       rationale: ACES runtime process identities and ACES #428 components capture both process and Wazuh component state.
   - id: wazuh-manager.runtime.environment
     category: runtime-configuration
@@ -245,7 +244,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.environment
+        - nodes.techvault.wazuh-manager.runtime.environment
       rationale: ACES runtime environment supports provenance and redacted value classification.
   - id: wazuh-manager.runtime.local-identity-database
     category: identity
@@ -256,7 +255,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.local_identity
+        - nodes.techvault.wazuh-manager.runtime.local_identity
       rationale: ACES runtime local identity records passwd/group facts without promoting them to scenario actor accounts.
   - id: wazuh-manager.runtime.filesystem-inventory
     category: filesystem
@@ -270,7 +269,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.filesystem_inventory
+        - nodes.techvault.wazuh-manager.runtime.filesystem_inventory
       rationale: ACES filesystem entries can encode stat-backed entries and path-only entries when the provenance is Wazuh manager introspection.
   - id: wazuh-manager.runtime.package-inventory
     category: software
@@ -285,8 +284,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.packages
-        - nodes.wazuh-manager.runtime.dependency_manifests
+        - nodes.techvault.wazuh-manager.runtime.packages
+        - nodes.techvault.wazuh-manager.runtime.dependency_manifests
       rationale: Runtime packages and dependency manifests capture software inventory while scanner SBOMs remain evidence.
   - id: wazuh-manager.runtime.vulnerability-scan
     category: vulnerabilities
@@ -299,7 +298,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.package_vulnerabilities
+        - nodes.techvault.wazuh-manager.runtime.package_vulnerabilities
       rationale: ACES runtime package vulnerabilities encode scanner-derived package finding IDs, affected package versions, severities, fixed versions, and scan provenance.
   - id: wazuh-manager.security-monitoring.manager-state
     category: security-monitoring
@@ -312,8 +311,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager
-        - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.components
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.components
       rationale: ACES #428 provides typed Wazuh/SIEM manager and component semantics.
   - id: wazuh-manager.security-monitoring.agent-enrollment
     category: security-monitoring
@@ -324,8 +323,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.agents
-        - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.agent_groups
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.agents
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.agent_groups
       rationale: ACES #428 supports enrolled security-monitoring agents and manager-side groups.
   - id: wazuh-manager.security-monitoring.content-sets
     category: security-monitoring
@@ -338,8 +337,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.content_sets
-        - nodes.wazuh-manager.runtime.filesystem_inventory
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.content_sets
+        - nodes.techvault.wazuh-manager.runtime.filesystem_inventory
       rationale: ACES #428 adds typed content-set semantics for security-monitoring rules, decoders, policies, active response, and lists.
   - id: wazuh-manager.security-monitoring.detection-definitions
     category: security-monitoring
@@ -353,7 +352,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.detection_definitions
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.detection_definitions
       rationale: ACES #434 adds typed detection-definition semantics for manager-loaded rules, correlation rules, decoders, predicates, source spans, canonical digests, and local correlation references.
   - id: wazuh-manager.security-monitoring.settings
     category: security-monitoring
@@ -366,7 +365,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.settings
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.settings
       rationale: ACES #428 supports bounded manager settings with source/provenance and secret-safe classifications.
   - id: wazuh-manager.capture.osquery-baseline
     category: capture-methodology

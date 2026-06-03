@@ -29,7 +29,7 @@ inventory, Shuffle ledger, or regression-test updates in this PR.
 
 ### SCA-001: `shuffle-backend` inventory facts were absent from the SDL
 
-Fixed. `scenarios/techvault.sdl.yaml` now includes `nodes.shuffle-backend` and
+Fixed. `scenarios/techvault.sdl.yaml` now includes `nodes.techvault.shuffle-backend` and
 `infrastructure.shuffle-backend` with the captured image digest, Alpine version,
 security-network identity, API listener on TCP 5001, `/shuffle-database` mount,
 writable Docker socket control interface, PID 1 process identity, 21 Alpine
@@ -41,7 +41,7 @@ triage=0`.
 
 ### SCA-002: `wazuh-manager` was encoded as a skeletal node
 
-Fixed. `nodes.wazuh-manager` now records the Wazuh API on TCP 55000, the
+Fixed. `nodes.techvault.wazuh-manager` now records the Wazuh API on TCP 55000, the
 Compose healthcheck as `conditions.wazuh-api-ready`, runtime environment
 redaction policy, entrypoint/resource/restart policy, persistent/config mounts,
 and custom decoder/rule files mounted into the manager. `infrastructure` now
@@ -96,10 +96,10 @@ catalogued facts:
 
 | Artifact | Audit result |
 | --- | --- |
-| `docs/aces/inventory/webapp/` and `nodes.webapp` | Runtime mounts, filesystem inventory, container host/security state, local identity, network realization, application surface, process set, environment, capability policy, packages, dependency manifests, and package vulnerabilities are encoded. The remaining local-account caveat distinguishes curated top-level scenario accounts from full observed Linux identity under `runtime.local_identity`. |
-| `docs/aces/inventory/db/` and `nodes.db` | PostgreSQL runtime, logical database state, mounts, filesystem inventory, process set, environment, capability/restart/resource policy, package inventory, local identity, and vulnerabilities are encoded. The filesystem caveat is a capture-boundary statement, not a delivery-layer classification. |
-| `docs/aces/inventory/kali/` and `nodes.kali` | The previous `init_process`, `seccomp_profile`/`security_opt`, `process_overrides`, and `ssh_servers` blockers have been consumed. Remaining caveats cover degraded audit readiness evidence, scanner-source limits, and the distinction between curated top-level accounts and full local identity inventory. |
-| `docs/aces/inventory/ad/` and `nodes.ad` | AD runtime, identity authority state, filesystem inventory, process set, environment, network, packages, vulnerabilities, relationships, and curated accounts are encoded. Caveats preserve evidence-size and scanner-output boundaries rather than routing node state to delivery. |
+| `docs/aces/inventory/webapp/` and `nodes.techvault.webapp` | Runtime mounts, filesystem inventory, container host/security state, local identity, network realization, application surface, process set, environment, capability policy, packages, dependency manifests, and package vulnerabilities are encoded. The remaining local-account caveat distinguishes curated top-level scenario accounts from full observed Linux identity under `runtime.local_identity`. |
+| `docs/aces/inventory/db/` and `nodes.techvault.db` | PostgreSQL runtime, logical database state, mounts, filesystem inventory, process set, environment, capability/restart/resource policy, package inventory, local identity, and vulnerabilities are encoded. The filesystem caveat is a capture-boundary statement, not a delivery-layer classification. |
+| `docs/aces/inventory/kali/` and `nodes.techvault.kali` | The previous `init_process`, `seccomp_profile`/`security_opt`, `process_overrides`, and `ssh_servers` blockers have been consumed. Remaining caveats cover degraded audit readiness evidence, scanner-source limits, and the distinction between curated top-level accounts and full local identity inventory. |
+| `docs/aces/inventory/ad/` and `nodes.techvault.ad` | AD runtime, identity authority state, filesystem inventory, process set, environment, network, packages, vulnerabilities, relationships, and curated accounts are encoded. Caveats preserve evidence-size and scanner-output boundaries rather than routing node state to delivery. |
 
 ## Evidence Reviewed
 

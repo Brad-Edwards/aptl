@@ -281,8 +281,10 @@ docker exec "$CONTAINER" sh -lc '
   query -e "select id,name,perm_add,perm_modify,perm_modify_org,perm_publish,perm_delegate,perm_sync,perm_admin,perm_audit,perm_full,perm_auth,perm_site_admin,perm_tagger,perm_template,perm_sharing_group,perm_tag_editor,perm_sighting,perm_object_template,perm_galaxy_editor,perm_warninglist,perm_analyst_data,perm_skip_otp,default_role,restricted_to_site_admin from roles order by id;"
   printf "%s\n" --db-auth-keys--
   query -e "select id,uuid,user_id,created,expiration,read_only,comment,allowed_ips from auth_keys order by id;"
+  printf "%s\n" --db-admin-settings--
+  query -e "select id,setting,value from admin_settings order by id;"
   printf "%s\n" --db-content-counts--
-  query -e "select '\''events'\'' as table_name, count(*) as count from events union all select '\''attributes'\'', count(*) from attributes union all select '\''objects'\'', count(*) from objects union all select '\''tags'\'', count(*) from tags union all select '\''taxonomies'\'', count(*) from taxonomies union all select '\''galaxies'\'', count(*) from galaxies union all select '\''warninglists'\'', count(*) from warninglists union all select '\''feeds'\'', count(*) from feeds;"
+  query -e "select '\''events'\'' as table_name, count(*) as count from events union all select '\''attributes'\'', count(*) from attributes union all select '\''objects'\'', count(*) from objects union all select '\''tags'\'', count(*) from tags union all select '\''taxonomies'\'', count(*) from taxonomies union all select '\''galaxies'\'', count(*) from galaxies union all select '\''galaxy_clusters'\'', count(*) from galaxy_clusters union all select '\''warninglists'\'', count(*) from warninglists union all select '\''feeds'\'', count(*) from feeds union all select '\''sharing_groups'\'', count(*) from sharing_groups union all select '\''object_templates'\'', count(*) from object_templates;"
   printf "%s\n" --db-schema-sample--
   query -e "show tables;" | sed -n "1,220p"
   printf "%s\n" --http-login--

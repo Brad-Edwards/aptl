@@ -20,7 +20,7 @@ provenance:
       - No registry-visible OCI, in-toto, or SLSA attestation was available in the captured imagetools evidence.
 notes:
   - Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start.
-  - ACES #431 is consumed through nodes.misp.runtime.service_listeners; no known ACES expressivity gap remains for the catalogued MISP steady-state facts.
+  - ACES #431 is consumed through nodes.techvault.misp.runtime.service_listeners; no known ACES expressivity gap remains for the catalogued MISP steady-state facts.
   - No MISP events, attributes, or objects were present, so typed threat-intelligence event semantics were not exercised by this snapshot.
 correspondence_checks:
   - id: misp-evidence-bundle-integrity
@@ -34,8 +34,8 @@ correspondence_checks:
       - misp.capture.toolchain-baseline
   - id: misp-sdl-runtime-correspondence
     status: implemented
-    source: scenarios/techvault.sdl.yaml nodes.misp
-    method: tests/test_misp_inventory.py parses ACES SDL and asserts image, runtime, listener, package, CVE, identity, route, content, and relationship counts.
+    source: scenarios/techvault.sdl.yaml nodes.techvault.misp
+    method: tests/test_misp_inventory.py parses ACES SDL and asserts image, runtime, listener, package, CVE, identity, route, platform-application, content, and relationship counts.
     realized_evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
@@ -47,6 +47,7 @@ correspondence_checks:
       - misp.runtime.service-listeners
       - misp.application.routes-health
       - misp.application.local-authorization
+      - misp.application.platform-settings
       - misp.runtime.vulnerability-scan
   - id: misp-scope-and-redaction-caveats
     status: implemented
@@ -94,9 +95,9 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.source.name
-        - nodes.misp.source.version
-        - nodes.misp.os_version
+        - nodes.techvault.misp.source.name
+        - nodes.techvault.misp.source.version
+        - nodes.techvault.misp.os_version
   - id: misp.image.history-layers
     category: image
     summary: Docker history and layer metadata are encoded as upstream-image build provenance.
@@ -110,10 +111,10 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.source.build.instructions
-        - nodes.misp.source.build.layers
-        - nodes.misp.source.build.config
-        - nodes.misp.source.build.attestation
+        - nodes.techvault.misp.source.build.instructions
+        - nodes.techvault.misp.source.build.layers
+        - nodes.techvault.misp.source.build.config
+        - nodes.techvault.misp.source.build.attestation
   - id: misp.compose.service-contract
     category: compose
     summary: Compose declares aptl-misp, hostname misp, profile soc, ports 8443:443, mounted MISP volumes/certs, healthcheck, memory limit, dependencies, and security-net address.
@@ -126,7 +127,7 @@ facts:
       surface: nodes
       checked_surfaces: [nodes, infrastructure, conditions]
       fields:
-        - nodes.misp
+        - nodes.techvault.misp
         - infrastructure.misp
         - conditions.misp-https-ready
   - id: misp.source.realization-inputs
@@ -140,7 +141,7 @@ facts:
       surface: nodes
       checked_surfaces: [nodes, content]
       fields:
-        - nodes.misp.source.build.source_inputs
+        - nodes.techvault.misp.source.build.source_inputs
       caveat: server.key is captured as a mounted path and filesystem entry but not hashed because it is private key material.
   - id: misp.runtime.container-policy
     category: runtime
@@ -155,9 +156,9 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.runtime.container
-        - nodes.misp.runtime.operational_policy
-        - nodes.misp.runtime.health
+        - nodes.techvault.misp.runtime.container
+        - nodes.techvault.misp.runtime.operational_policy
+        - nodes.techvault.misp.runtime.health
   - id: misp.network.identity-publication
     category: network
     summary: MISP is attached to security-net at 172.20.0.16 with Docker aliases/DNS names and host-published HTTPS on 8443.
@@ -171,8 +172,8 @@ facts:
       surface: nodes
       checked_surfaces: [nodes, infrastructure]
       fields:
-        - nodes.misp.runtime.network.endpoints
-        - nodes.misp.runtime.network.published_ports
+        - nodes.techvault.misp.runtime.network.endpoints
+        - nodes.techvault.misp.runtime.network.published_ports
         - infrastructure.misp
   - id: misp.runtime.mounts-volumes
     category: runtime
@@ -187,7 +188,7 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.runtime.mounts
+        - nodes.techvault.misp.runtime.mounts
   - id: misp.runtime.filesystem-inventory
     category: runtime
     summary: The SDL encodes the full compressed filesystem manifest and checksum surface, including redacted secret-bearing config/key paths.
@@ -200,7 +201,7 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.runtime.filesystem_inventory
+        - nodes.techvault.misp.runtime.filesystem_inventory
       caveat: Secret-bearing config files and the private key path are represented by path/metadata/sensitivity; raw contents and hashes are intentionally absent.
   - id: misp.runtime.process-tree
     category: runtime
@@ -214,8 +215,7 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.runtime.process
-        - nodes.misp.runtime.processes
+        - nodes.techvault.misp.runtime.processes
   - id: misp.runtime.service-listeners
     category: runtime
     summary: ACES #431 listener fields encode wildcard HTTP/HTTPS, loopback MISP ZMQ/supervisor, Docker embedded DNS, and Unix sockets.
@@ -228,8 +228,8 @@ facts:
       surface: nodes
       checked_surfaces: [nodes, nodes.services]
       fields:
-        - nodes.misp.services
-        - nodes.misp.runtime.service_listeners
+        - nodes.techvault.misp.services
+        - nodes.techvault.misp.runtime.service_listeners
       caveat: Docker embedded DNS listener ports are backend-generated and encoded as node-local runtime listeners, not MISP application services.
   - id: misp.runtime.environment
     category: runtime
@@ -243,7 +243,7 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.runtime.environment
+        - nodes.techvault.misp.runtime.environment
   - id: misp.runtime.local-identity
     category: runtime
     summary: Local passwd/group inventory records 21 users, 42 groups, and no sudo rules for the container.
@@ -254,7 +254,7 @@ facts:
       surface: nodes
       checked_surfaces: [nodes, accounts]
       fields:
-        - nodes.misp.runtime.local_identity
+        - nodes.techvault.misp.runtime.local_identity
   - id: misp.application.software-versions
     category: application
     summary: MISP, PHP, nginx, Python, MariaDB client, PyMISP, Composer, Pipfile, and requirements manifests are captured and encoded.
@@ -267,8 +267,8 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.runtime.software_components
-        - nodes.misp.runtime.dependency_manifests
+        - nodes.techvault.misp.runtime.software_components
+        - nodes.techvault.misp.runtime.dependency_manifests
   - id: misp.application.routes-health
     category: application
     summary: HTTP login and MISP REST search routes are represented with observed methods, auth requirement, and health/API observations.
@@ -280,8 +280,8 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.runtime.applications.misp-web.routes
-        - nodes.misp.runtime.health
+        - nodes.techvault.misp.runtime.applications.misp-web.routes
+        - nodes.techvault.misp.runtime.health
   - id: misp.application.local-authorization
     category: identity
     summary: MISP-local admin user, organisation, six roles, permission policies, and API-key metadata are encoded as a runtime identity authority.
@@ -292,10 +292,23 @@ facts:
       surface: nodes
       checked_surfaces: [nodes, accounts]
       fields:
-        - nodes.misp.runtime.identity_authorities.misp-local-authorization
+        - nodes.techvault.misp.runtime.identity_authorities.misp-local-authorization
+  - id: misp.application.platform-settings
+    category: application
+    summary: MISP platform-application state encodes threat-intelligence reference content objects and six database-backed admin settings.
+    evidence:
+      - path: evidence/misp-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.misp.runtime.platform_applications.misp-threat-intel
+        - nodes.techvault.misp.runtime.platform_applications.misp-threat-intel.content_objects
+        - nodes.techvault.misp.runtime.platform_applications.misp-threat-intel.settings
   - id: misp.application.content-state
     category: content
-    summary: MISP database content counts show zero events, zero attributes, zero objects, and installed reference collections.
+    summary: MISP database content counts show zero events, zero attributes, zero objects, and installed reference collections, with typed threat-intelligence platform content also encoded under runtime.platform_applications.
     evidence:
       - path: evidence/misp-state.txt
     aces:
@@ -303,9 +316,10 @@ facts:
       surface: content
       checked_surfaces: [content, nodes]
       fields:
-        - content.misp-reference-datasets
-        - nodes.misp.runtime.applications.misp-web.description
-      caveat: Counts are represented as generic content dataset items because no MISP event/attribute/object rows were present; typed threat-intelligence object semantics are not exercised by this snapshot.
+        - content.techvault.misp-reference-datasets
+        - nodes.techvault.misp.runtime.platform_applications.misp-threat-intel.content_objects
+        - nodes.techvault.misp.runtime.applications.misp-web.description
+      caveat: No MISP event/attribute/object rows were present, so concrete event/attribute/object semantics are not exercised by this snapshot; reference collections and settings are encoded through the ACES platform-application surface.
   - id: misp.runtime.package-inventory
     category: runtime
     summary: dpkg package inventory captures 238 installed OS packages.
@@ -317,7 +331,7 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.runtime.packages
+        - nodes.techvault.misp.runtime.packages
   - id: misp.runtime.vulnerability-scan
     category: runtime
     summary: Trivy captured 593 vulnerability findings and severity counts for the MISP image.
@@ -331,7 +345,7 @@ facts:
       surface: nodes
       checked_surfaces: [nodes, vulnerabilities]
       fields:
-        - nodes.misp.runtime.package_vulnerabilities
+        - nodes.techvault.misp.runtime.package_vulnerabilities
       caveat: Vulnerability scanner output is time-sensitive and tied to the captured Trivy version/database state.
   - id: misp.runtime.sbom-toolchain
     category: runtime
@@ -346,8 +360,8 @@ facts:
       surface: nodes
       checked_surfaces: [nodes]
       fields:
-        - nodes.misp.runtime.packages
-        - nodes.misp.runtime.software_components
+        - nodes.techvault.misp.runtime.packages
+        - nodes.techvault.misp.runtime.software_components
       caveat: SBOMs are retained as evidence; SDL package fields use dpkg and scanner-derived summaries rather than embedding full CycloneDX documents.
   - id: misp.runtime.osquery-baseline
     category: runtime
@@ -365,9 +379,9 @@ facts:
       surface: nodes
       checked_surfaces: [nodes, runtime_contract]
       fields:
-        - nodes.misp.runtime.processes
-        - nodes.misp.runtime.service_listeners
-        - nodes.misp.runtime.network
+        - nodes.techvault.misp.runtime.processes
+        - nodes.techvault.misp.runtime.service_listeners
+        - nodes.techvault.misp.runtime.network
       caveat: installed_applications and programs tables are unavailable in the digest-pinned Linux osquery image and are recorded as capture limits.
   - id: misp.participant-discovery
     category: relationship
@@ -381,7 +395,7 @@ facts:
       checked_surfaces: [relationships, nodes]
       fields:
         - relationships.misp-suricata-sync-queries-misp-api
-        - nodes.misp.runtime.service_listeners.https-443-ipv4.readiness
+        - nodes.techvault.misp.runtime.service_listeners.https-443-ipv4.readiness
   - id: misp.relationship.mariadb
     category: relationship
     summary: MISP points at `misp-db` using MYSQL_HOST, database `misp`, user `misp`, and a redacted password.
@@ -395,7 +409,7 @@ facts:
       checked_surfaces: [relationships, nodes]
       fields:
         - relationships.misp-connects-mariadb
-        - nodes.misp.runtime.environment
+        - nodes.techvault.misp.runtime.environment
   - id: misp.relationship.redis
     category: relationship
     summary: MISP points at `misp-redis` through REDIS_HOST; MISP-side evidence does not expose a Redis password variable although the target service is configured to require one.
@@ -409,7 +423,7 @@ facts:
       checked_surfaces: [relationships, nodes]
       fields:
         - relationships.misp-connects-redis
-        - nodes.misp.runtime.environment
+        - nodes.techvault.misp.runtime.environment
       caveat: Redis authentication semantics are recorded as unknown for the MISP asset pass because the companion Redis service is owned by issue #348.
   - id: misp.relationship.suricata-sync
     category: relationship
@@ -435,9 +449,9 @@ facts:
       surface: nodes
       checked_surfaces: [nodes, infrastructure, relationships]
       fields:
-        - nodes.misp-db
-        - nodes.misp-redis
-        - nodes.misp-suricata-sync
+        - nodes.techvault.misp-db
+        - nodes.techvault.misp-redis
+        - nodes.techvault.misp-suricata-sync
         - infrastructure.misp-db
         - infrastructure.misp-redis
         - infrastructure.misp-suricata-sync

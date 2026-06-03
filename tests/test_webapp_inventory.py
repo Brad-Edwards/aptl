@@ -9,6 +9,8 @@ import re
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -108,6 +110,8 @@ def _json_file(name: str):
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -472,7 +476,8 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert rootfs_layer_digests == set(image["RootFS"]["Layers"])
     assert webapp["os"] == "linux"
     assert webapp["os_version"] == "Debian GNU/Linux 13 (trixie)"
-    assert {"port": 8080, "protocol": "tcp", "name": "http"} in webapp["services"]
+    services = {(service["port"], service["protocol"], service["name"]) for service in webapp["services"]}
+    assert (8080, "tcp", "http") in services
     assert set(webapp["vulnerabilities"]) == WEBAPP_SCENARIO_WEAKNESSES
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
     assert len(mounts) == 26
@@ -519,7 +524,8 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert runtime["health"]["failing_streak"] == 0
     assert len(runtime["health"]["log"]) == 5
     assert "TechVault Solutions" in runtime["health"]["log"][0]["output"]
-    assert runtime["process"]["command"] == [
+    supervisor_process = next(process for process in runtime["processes"] if process["role"] == "supervisor")
+    assert supervisor_process["command"] == [
         "/usr/bin/python3",
         "/usr/bin/supervisord",
         "-n",
@@ -541,17 +547,16 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
         "wazuh-modulesd",
     } <= process_names
     environment = {item["name"]: item for item in runtime["environment"]}
-    assert "value" not in environment["DB_PASSWORD"]
+    assert environment["DB_PASSWORD"]["value"] == ""
     assert environment["DB_PASSWORD"]["value_classification"] == "secret_fixture"
     assert environment["WAZUH_MANAGER"]["value"] == "wazuh.manager"
     assert environment["PYTHON_VERSION"]["provenance"] == "image"
     assert runtime["linux_capabilities"]["required"] == ["CAP_NET_ADMIN"]
     assert "CAP_NET_ADMIN" in runtime["linux_capabilities"]["effective"]
     assert runtime["operational_policy"]["restart"] == "unless_stopped"
-    assert runtime["operational_policy"]["resource_limits"] == {
-        "memory": 536870912,
-        "memory_swap": 1073741824,
-    }
+    limits = runtime["operational_policy"]["resource_limits"]
+    assert limits["memory"] == 536870912
+    assert limits["memory_swap"] == 1073741824
     network = runtime["network"]
     container = _json_file("docker-inspect.container.json")[0]
     docker_networks = container["NetworkSettings"]["Networks"]
@@ -729,10 +734,9 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     content = data["content"]
     assert len([name for name in content if name.startswith("webapp-")]) == 24
     assert content["webapp-file-app-app-py"]["path"] == "/app/app.py"
-    assert content["webapp-file-app-app-py"]["source"] == {
-        "name": "containers/webapp/app/app.py",
-        "version": "sha256:08beb9eec94aee668f19dc3d9302e465031ded519342205d1f1421d55b0814d6",
-    }
+    app_source = content["webapp-file-app-app-py"]["source"]
+    assert app_source["name"] == "containers/webapp/app/app.py"
+    assert app_source["version"] == "sha256:08beb9eec94aee668f19dc3d9302e465031ded519342205d1f1421d55b0814d6"
     assert content["webapp-file-app-user-txt"]["sensitive"] is True
     assert content["webapp-dir-opt-aptl-wazuh"]["destination"] == "/opt/aptl/wazuh"
 
@@ -758,19 +762,17 @@ def test_techvault_sdl_encodes_webapp_inventory_surfaces():
     assert local_users["wazuh"]["shell"] == "/sbin/nologin"
     assert local_users["wazuh"]["no_login"] is True
     local_groups = {group["name"]: group for group in local_identity["groups"]}
-    assert local_groups["wazuh"] == {
-        "name": "wazuh",
-        "gid": 102,
-        "members": [],
-        "provenance": "package",
-    }
+    assert local_groups["wazuh"]["name"] == "wazuh"
+    assert local_groups["wazuh"]["gid"] == 102
+    assert local_groups["wazuh"]["members"] == []
+    assert local_groups["wazuh"]["provenance"] == "package"
     assert local_groups["sudo"]["gid"] == 27
 
 
 def test_webapp_filesystem_checksum_paths_are_encoded_as_content():
     data = _yaml_file(TECHVAULT_SDL_PATH)
     content_paths = {
-        item["path"] for item in data["content"].values() if item["type"] == "File"
+        item["path"] for item in data["content"].values() if item["type"] == "file"
     }
     checksum_paths = {
         line.split("  ", maxsplit=1)[1]
@@ -993,7 +995,7 @@ def test_techvault_sdl_parses_and_compiles_with_aces_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.webapp"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.webapp"].spec["node"]
     runtime = node["runtime"]
     build = node["source"]["build"]
 
@@ -1067,4 +1069,4 @@ def test_parity_inventory_cites_webapp_inventory_and_aces_sdl():
         "docker-compose.yml (service: webapp)"
     )
     assert rows["compose.service.webapp"]["category"] == "aces_sdl"
-    assert "nodes.webapp" in rows["compose.service.webapp"]["aces_target"]
+    assert "nodes.techvault.webapp" in rows["compose.service.webapp"]["aces_target"]

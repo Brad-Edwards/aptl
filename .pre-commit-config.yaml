@@ -20,6 +20,9 @@ repos:
       - id: check-json
       - id: check-added-large-files
         args: [--maxkb=500]
+        # Scenario SDL inventories are authored evidence surfaces and can
+        # exceed 500 KB without being accidental binary/blob additions.
+        exclude: ^scenarios/.*\.sdl\.yaml$
       - id: check-merge-conflict
       - id: detect-private-key
         # `tests/` historically holds private-key-shaped fixtures.

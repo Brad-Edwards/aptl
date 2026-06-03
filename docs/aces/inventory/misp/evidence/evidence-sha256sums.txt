@@ -17,7 +17,7 @@ b36f5346fbc3c3655bcc3c8086a51b11dca27ead2139c794cd91dc8862357a47  docs/aces/inve
 883d8e8ff4b09e0fa96dde0b7ce988d30d29978048aa7a60a36ce944a1a53423  docs/aces/inventory/misp/evidence/filesystem-checksums.txt.xz
 8d42b7baf98bcb0906c38e1545bf02976bda90745851da4171ffc624f708a4ee  docs/aces/inventory/misp/evidence/filesystem-tree.txt.gz
 4093c179ca354b3b92dcecf73654c59d5fc0521b33174f0de8b82604cb08da4b  docs/aces/inventory/misp/evidence/language-manifests.txt
-7d0eb56c1ff3dec9b0aafa80b44838515fadb6339ca548a9d9d0e9228dbb5b6d  docs/aces/inventory/misp/evidence/misp-state.txt
+7e331f1bcbc067488a14e726a3346cc1b439ca6f4b65cef877f42e2902a852ab  docs/aces/inventory/misp/evidence/misp-state.txt
 25288ce6b4ce6656fd03332d3f013f6a051d5c468c983f85a58f84cfb2f2efde  docs/aces/inventory/misp/evidence/os-packages.txt
 9e58642ff525c09d997b2b86e0ce451629a86cb2e6f99ec38826ba2938a7edec  docs/aces/inventory/misp/evidence/osquery-apt-sources.json
 011c7d08aa327e9cd64298f0edcbc4a1f27591945df7049e4d3fdeff8f90dff9  docs/aces/inventory/misp/evidence/osquery-docker-containers.json

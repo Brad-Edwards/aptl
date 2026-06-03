@@ -8,6 +8,8 @@ import re
 
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -81,6 +83,8 @@ def _json_file(name: str):
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -380,8 +384,9 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert len(build["source_inputs"]) == 9
     assert len(build["copied_sources"]) == 8
     assert build["config"]["entrypoint"] == ["/opt/setup-shares.sh"]
-    assert {"port": 139, "protocol": "tcp", "name": "netbios-ssn"} in fileshare["services"]
-    assert {"port": 445, "protocol": "tcp", "name": "microsoft-ds"} in fileshare["services"]
+    services = {(service["port"], service["protocol"], service["name"]) for service in fileshare["services"]}
+    assert (139, "tcp", "netbios-ssn") in services
+    assert (445, "tcp", "microsoft-ds") in services
 
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
     assert mounts["/srv/shares"]["source"] == "aptl_fileshare_data"
@@ -394,8 +399,10 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert len(runtime["filesystem_inventory"]) == FILESYSTEM_ENTRY_COUNT
     assert len(runtime["local_identity"]["users"]) == LOCAL_IDENTITY_USER_COUNT
     assert len(runtime["local_identity"]["groups"]) == LOCAL_IDENTITY_GROUP_COUNT
-    assert runtime["process"]["name"] == "supervisord"
+    primary_process = next(process for process in runtime["processes"] if process["role"] == "primary")
+    assert primary_process["name"] == "supervisord"
     assert {process["name"] for process in runtime["processes"]} == {
+        "supervisord",
         "rsyslog",
         "samba",
         "wazuh-agent",
@@ -407,7 +414,7 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert len(runtime["health"]["log"]) == 5
 
     file_service = runtime["file_services"][0]
-    assert file_service["service_id"] == "fileshare-smb"
+    assert file_service["file_service_id"] == "fileshare-smb"
     assert file_service["service"] == "microsoft-ds"
     assert file_service["protocol"] == "smb"
     assert file_service["backend"] == "Samba 4.15.13-Ubuntu"
@@ -455,7 +462,7 @@ def test_techvault_sdl_parses_and_compiles_with_fileshare_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.fileshare"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.fileshare"].spec["node"]
     runtime = node["runtime"]
     build = node["source"]["build"]
 

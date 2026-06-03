@@ -8,6 +8,8 @@ import re
 
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -85,6 +87,8 @@ def _json_file(name: str):
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -303,12 +307,13 @@ def test_techvault_sdl_encodes_kali_inventory_surfaces():
     assert data["name"] == "techvault"
 
     kali = data["nodes"]["kali"]
-    assert kali["type"] == "VM"
+    assert kali["type"] == "vm"
     assert kali["os"] == "linux"
     assert kali["source"]["name"] == "aptl-kali"
     assert kali["source"]["version"] == IMAGE_DIGEST
-    assert {"port": 22, "protocol": "tcp", "name": "ssh"} in kali["services"]
-    assert "vulnerabilities" not in kali, "kali is the attacker node, not a target"
+    services = {(service["port"], service["protocol"], service["name"]) for service in kali["services"]}
+    assert (22, "tcp", "ssh") in services
+    assert kali["vulnerabilities"] == [], "kali is the attacker node, not a target"
 
     build = kali["source"]["build"]
     assert build["base_image"] == "kalilinux/kali-last-release:latest"
@@ -354,9 +359,10 @@ def test_techvault_sdl_encodes_kali_inventory_surfaces():
     assert container["seccomp_profile"] == "unconfined"
     assert container["security_opt"] == ["seccomp:unconfined"]
 
-    assert runtime["process"]["name"] == "docker-init"
-    assert runtime["process"]["pid"] == 1
-    assert runtime["process"]["command"] == ["/sbin/docker-init", "--", "/entrypoint.sh"]
+    primary_process = next(process for process in runtime["processes"] if process["role"] == "primary")
+    assert primary_process["name"] == "docker-init"
+    assert primary_process["pid"] == 1
+    assert primary_process["command"] == ["/sbin/docker-init", "--", "/entrypoint.sh"]
     process_names = {process["name"] for process in runtime["processes"]}
     assert {"docker-init", "sshd"} <= process_names
 
@@ -380,7 +386,7 @@ def test_techvault_sdl_encodes_kali_inventory_surfaces():
     ssh_servers = runtime["ssh_servers"]
     assert len(ssh_servers) == 1
     sshd = ssh_servers[0]
-    assert sshd["server_id"] == "kali-sshd"
+    assert sshd["ssh_server_id"] == "kali-sshd"
     assert sshd["service"] == "ssh"
     assert "APTL_SESSION_ID" in sshd["accept_env"]
     assert "APTL_RUN_ID" in sshd["accept_env"]
@@ -419,7 +425,7 @@ def test_techvault_sdl_encodes_kali_inventory_surfaces():
     infrastructure = data["infrastructure"]
     assert infrastructure["kali"]["links"] == ["redteam-net", "dmz-net", "internal-net"]
     assert "redteam-net" in data["nodes"]
-    assert data["nodes"]["redteam-net"]["type"] == "Switch"
+    assert data["nodes"]["redteam-net"]["type"] == "switch"
     assert "kali-healthcheck" in data["conditions"]
 
     accounts = data["accounts"]
@@ -474,7 +480,7 @@ def test_techvault_sdl_parses_and_compiles_with_kali_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.kali"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.kali"].spec["node"]
     runtime = node["runtime"]
 
     assert node["source"]["version"] == IMAGE_DIGEST
@@ -505,5 +511,5 @@ def test_parity_inventory_cites_kali_inventory_and_aces_sdl():
         assert issue in kali_row["validation_evidence"]
 
     assert rows["compose.profile.kali"]["category"] == "aces_sdl"
-    assert "nodes.kali" in rows["compose.profile.kali"]["aces_target"]
+    assert "nodes.techvault.kali" in rows["compose.profile.kali"]["aces_target"]
     assert rows["compose.profile.kali"]["blocking_followup"] == "n/a"

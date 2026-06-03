@@ -22,6 +22,14 @@ id	name	perm_add	perm_modify	perm_modify_org	perm_publish	perm_delegate	perm_syn
 --db-auth-keys--
 id	uuid	user_id	created	expiration	read_only	comment	allowed_ips
 2	1ab62418-77fb-4f99-a503-19dde721a291	1	1779517174	0	0		NULL
+--db-admin-settings--
+id	setting	value
+1	db_version	146
+8	fix_login	2026-05-23 06:19:07
+9	default_role	3
+10	clean_db	0
+12	update_progress	{"commands":["ALTER TABLE `logs` ADD  `ip` varchar(45) COLLATE utf8_bin DEFAULT NULL;"],"results":["Issues executing the SQL query for `addIPLogging`. The returned error is: \nSQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'ip'","Successfully indexed events -> first_publication","Successfully indexed event_report_tags -> tag_id","Successfully executed the SQL query for 131","Successfully executed the SQL query for 131","Successfully executed the SQL query for 131","Successfully executed the SQL query for 131","Successfully executed the SQL query for 131"],"time":{"started":["2026-05-23 06:21:46","2026-05-23 06:21:46","2026-05-23 06:19:16","2026-05-23 06:19:12","2026-05-23 06:19:12","2026-05-23 06:19:12","2026-05-23 06:19:12","2026-05-23 06:19:12","2026-05-23 06:19:12"],"elapsed":["00:00:00","00:00:00","00:00:00","00:00:00","00:00:00","00:00:00","00:00:00","00:00:00"]},"current":1,"total":1,"failed_num":[0],"toward_db_version":"addIPLogging","preTestSuccess":true}
+13	update_fail_number	0
 --db-content-counts--
 table_name	count
 events	0
@@ -30,8 +38,11 @@ objects	0
 tags	5
 taxonomies	165
 galaxies	112
+galaxy_clusters	49300
 warninglists	122
 feeds	2
+sharing_groups	0
+object_templates	388
 --db-schema-sample--
 Tables_in_misp
 access_logs

@@ -70,7 +70,7 @@ rows:
   - id: scen.techvault.webapp-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.webapp + infrastructure.webapp + runtime + content + accounts
+    legacy_field: nodes.techvault.webapp + infrastructure.webapp + runtime + content + accounts
     category: aces_sdl
     aces_target: ACES nodes / infrastructure / runtime / content / accounts fields
     runtime_owner: n/a
@@ -81,29 +81,29 @@ rows:
   - id: scen.techvault.misp-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.misp + infrastructure.misp + runtime + content + relationships
+    legacy_field: nodes.techvault.misp + infrastructure.misp + runtime + platform application state + content + relationships
     category: aces_sdl
-    aces_target: ACES nodes / infrastructure / runtime.service_listeners / runtime.applications / runtime.identity_authorities / content / relationships fields
+    aces_target: ACES nodes / infrastructure / runtime.service_listeners / runtime.applications / runtime.platform_applications / runtime.identity_authorities / content / relationships fields
     runtime_owner: n/a
-    validation_evidence: "docs/aces/inventory/misp/ + tests/test_misp_inventory.py + scenarios/techvault.sdl.yaml + Brad-Edwards/aces#431 consumed"
+    validation_evidence: "docs/aces/inventory/misp/ + tests/test_misp_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/ + Brad-Edwards/aces#431/#465 consumed"
     blocking_followup: "#347/#348/#349 for companion service full inventories"
-    notes: SCN-010 issue #346 MISP inventory pass. The SDL encodes the catalogued MISP image, build provenance, runtime, full filesystem manifest, listeners, local and application identity, package/CVE inventory, API routes, content-count state, and MISP-to-database/Redis/Suricata-sync relationship facts. Brad-Edwards/aces#431 is consumed through runtime.service_listeners with no known remaining ACES expressivity blocker for the catalogued MISP steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+    notes: SCN-010 issue #346 MISP inventory pass. The SDL encodes the catalogued MISP image, build provenance, runtime, full filesystem manifest, listeners, local and application identity, package/CVE inventory, API routes, threat-intelligence platform content/settings, content-count state, and MISP-to-database/Redis/Suricata-sync relationship facts. Brad-Edwards/aces#431 is consumed through runtime.service_listeners, ACES platform-application support is consumed through runtime.platform_applications, and Brad-Edwards/aces#465 is consumed through modular SDL imports with no known remaining ACES expressivity blocker for the catalogued MISP steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
   - id: scen.techvault.workstation-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.workstation + infrastructure.workstation + runtime + content + accounts + relationships
+    legacy_field: nodes.techvault.workstation + infrastructure.workstation + runtime + content + accounts + relationships
     category: aces_sdl
     aces_target: ACES nodes / infrastructure / runtime / content / accounts / relationships fields
     runtime_owner: n/a
     validation_evidence: "docs/aces/inventory/workstation/ + tests/test_workstation_inventory.py + scenarios/techvault.sdl.yaml + Brad-Edwards/aces#418 consumed"
     blocking_followup: n/a
-    notes: SCN-010 issue #334 workstation inventory pass. The SDL encodes the catalogued workstation image, build, runtime, filesystem, identity, package/CVE, SSH, credential-fixture weakness, relationship, and systemd service-manager unit-state facts. Brad-Edwards/aces#418 is consumed through nodes.workstation.runtime.service_manager_units, with no known remaining ACES expressivity blocker for the catalogued workstation steady-state inventory.
+    notes: SCN-010 issue #334 workstation inventory pass. The SDL encodes the catalogued workstation image, build, runtime, filesystem, identity, package/CVE, SSH, credential-fixture weakness, relationship, and systemd service-manager unit-state facts. Brad-Edwards/aces#418 is consumed through nodes.techvault.workstation.runtime.service_manager_units, with no known remaining ACES expressivity blocker for the catalogued workstation steady-state inventory.
 
   - id: scen.techvault.victim-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.victim + infrastructure.victim + runtime + content + accounts + relationships
+    legacy_field: nodes.techvault.victim + infrastructure.victim + runtime + content + accounts + relationships
     category: aces_sdl
     aces_target: ACES nodes / infrastructure / runtime / content / accounts / relationships fields
     runtime_owner: n/a
@@ -114,7 +114,7 @@ rows:
   - id: scen.techvault.fileshare-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.fileshare + infrastructure.fileshare + runtime + content + accounts + relationships
+    legacy_field: nodes.techvault.fileshare + infrastructure.fileshare + runtime + content + accounts + relationships
     category: aces_sdl
     aces_target: ACES nodes / infrastructure / runtime / content / accounts / relationships fields
     runtime_owner: n/a
@@ -125,7 +125,7 @@ rows:
   - id: scen.techvault.db-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.db + infrastructure.db + runtime + content + accounts
+    legacy_field: nodes.techvault.db + infrastructure.db + runtime + content + accounts
     category: aces_sdl
     aces_target: ACES nodes / infrastructure / runtime.database_services / content / accounts / relationships fields
     runtime_owner: n/a
@@ -136,7 +136,7 @@ rows:
   - id: scen.techvault.kali-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.kali + nodes.redteam-net + infrastructure.kali + runtime + content + accounts
+    legacy_field: nodes.techvault.kali + nodes.techvault.redteam-net + infrastructure.kali + runtime + content + accounts
     category: aces_sdl
     aces_target: ACES nodes / infrastructure / runtime / content / accounts fields
     runtime_owner: n/a
@@ -147,7 +147,7 @@ rows:
   - id: scen.techvault.ad-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.ad + infrastructure.ad + runtime.identity_authorities + content + accounts + relationships
+    legacy_field: nodes.techvault.ad + infrastructure.ad + runtime.identity_authorities + content + accounts + relationships
     category: aces_sdl
     aces_target: ACES nodes / infrastructure / runtime.identity_authorities / content / accounts / relationships fields
     runtime_owner: n/a
@@ -158,7 +158,7 @@ rows:
   - id: scen.techvault.shuffle-backend-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.shuffle-backend + infrastructure.shuffle-backend + runtime
+    legacy_field: nodes.techvault.shuffle-backend + infrastructure.shuffle-backend + runtime
     category: aces_sdl
     aces_target: ACES nodes / infrastructure / runtime fields
     runtime_owner: n/a
@@ -169,7 +169,7 @@ rows:
   - id: scen.techvault.wazuh-manager-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
-    legacy_field: nodes.wazuh-manager + infrastructure.wazuh-manager + runtime
+    legacy_field: nodes.techvault.wazuh-manager + infrastructure.wazuh-manager + runtime
     category: aces_sdl
     aces_target: ACES nodes / infrastructure / runtime / runtime.security_monitoring_managers / runtime.security_monitoring_managers.detection_definitions / conditions fields
     runtime_owner: n/a
@@ -641,7 +641,7 @@ rows:
     legacy_source: "docker-compose.yml (service: db)"
     legacy_field: db
     category: aces_sdl
-    aces_target: ACES nodes.db + nodes.db.runtime.database_services + infrastructure.db + conditions.db-postgres-ready + relationships.webapp-connects-db.database_access + relationships.db-logs-forwarded-wazuh
+    aces_target: ACES nodes.techvault.db + nodes.techvault.db.runtime.database_services + infrastructure.db + conditions.db-postgres-ready + relationships.webapp-connects-db.database_access + relationships.db-logs-forwarded-wazuh
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/db/ + scenarios/techvault.sdl.yaml + tests/test_db_inventory.py
     blocking_followup: n/a
@@ -652,7 +652,7 @@ rows:
     legacy_source: "docker-compose.yml (service: webapp)"
     legacy_field: webapp
     category: aces_sdl
-    aces_target: ACES nodes.webapp + infrastructure.webapp + conditions.webapp-http-ready + relationships.webapp-connects-db
+    aces_target: ACES nodes.techvault.webapp + infrastructure.webapp + conditions.webapp-http-ready + relationships.webapp-connects-db
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/webapp/ + scenarios/techvault.sdl.yaml + tests/test_webapp_inventory.py
     blocking_followup: n/a
@@ -663,7 +663,7 @@ rows:
     legacy_source: "docker-compose.yml (service: fileshare)"
     legacy_field: fileshare
     category: aces_sdl
-    aces_target: ACES nodes.fileshare + infrastructure.fileshare + conditions.fileshare-smb-ready + relationships.fileshare-forwards-wazuh
+    aces_target: ACES nodes.techvault.fileshare + infrastructure.fileshare + conditions.fileshare-smb-ready + relationships.fileshare-forwards-wazuh
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/fileshare/ + scenarios/techvault.sdl.yaml + tests/test_fileshare_inventory.py
     blocking_followup: n/a
@@ -674,7 +674,7 @@ rows:
     legacy_source: "docker-compose.yml (service: dns)"
     legacy_field: dns
     category: aces_sdl
-    aces_target: ACES nodes.dns + nodes.dns.runtime.dns_services + infrastructure.dns + conditions.dns-soa-ready + relationships.dns-forwards-wazuh
+    aces_target: ACES nodes.techvault.dns + nodes.techvault.dns.runtime.dns_services + infrastructure.dns + conditions.dns-soa-ready + relationships.dns-forwards-wazuh
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/dns/ + scenarios/techvault.sdl.yaml + tests/test_dns_inventory.py + Brad-Edwards/aces#426/#427 consumed
     blocking_followup: n/a
@@ -685,7 +685,7 @@ rows:
     legacy_source: "docker-compose.yml (service: shuffle-backend)"
     legacy_field: shuffle-backend
     category: aces_sdl
-    aces_target: ACES nodes.shuffle-backend + infrastructure.shuffle-backend + runtime
+    aces_target: ACES nodes.techvault.shuffle-backend + infrastructure.shuffle-backend + runtime
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/shuffle-backend/ + scenarios/techvault.sdl.yaml + tests/test_techvault_classification_audit.py
     blocking_followup: n/a
@@ -696,7 +696,7 @@ rows:
     legacy_source: "docker-compose.yml (service: wazuh.manager)"
     legacy_field: wazuh.manager
     category: aces_sdl
-    aces_target: ACES nodes.wazuh-manager + infrastructure.wazuh-manager + runtime + runtime.security_monitoring_managers + runtime.security_monitoring_managers.detection_definitions + conditions.wazuh-api-ready
+    aces_target: ACES nodes.techvault.wazuh-manager + infrastructure.wazuh-manager + runtime + runtime.security_monitoring_managers + runtime.security_monitoring_managers.detection_definitions + conditions.wazuh-api-ready
     runtime_owner: n/a
     validation_evidence: docker-compose.yml + docs/aces/inventory/wazuh.manager/ + scenarios/techvault.sdl.yaml + tests/test_wazuh_manager_inventory.py + tests/test_techvault_classification_audit.py + Brad-Edwards/aces#428 + Brad-Edwards/aces#434
     blocking_followup: n/a
@@ -707,7 +707,7 @@ rows:
     legacy_source: "docker-compose.yml (profile: victim)"
     legacy_field: victim
     category: aces_sdl
-    aces_target: ACES nodes.victim + infrastructure.victim + conditions.victim-ssh-ready
+    aces_target: ACES nodes.techvault.victim + infrastructure.victim + conditions.victim-ssh-ready
     runtime_owner: AptlConfig.containers.victim
     validation_evidence: docs/aces/inventory/victim/ + scenarios/techvault.sdl.yaml + tests/test_victim_inventory.py
     blocking_followup: n/a
@@ -718,7 +718,7 @@ rows:
     legacy_source: "docker-compose.yml (profile: kali)"
     legacy_field: kali
     category: aces_sdl
-    aces_target: ACES nodes.kali + nodes.redteam-net + infrastructure.kali + conditions.kali-healthcheck
+    aces_target: ACES nodes.techvault.kali + nodes.techvault.redteam-net + infrastructure.kali + conditions.kali-healthcheck
     runtime_owner: AptlConfig.containers.kali
     validation_evidence: docs/aces/inventory/kali/ + scenarios/techvault.sdl.yaml + tests/test_kali_inventory.py + ACES ADR-027/028/030/031 consumed
     blocking_followup: n/a
@@ -729,7 +729,7 @@ rows:
     legacy_source: "docker-compose.yml service mailserver + docs/aces/inventory/mailserver/"
     legacy_field: mailserver steady-state participant-observable asset spec
     category: aces_sdl
-    aces_target: ACES nodes.mailserver + nodes.mailserver.runtime.mail_services + infrastructure.mailserver + conditions.mailserver-smtp-ready + relationships.kali-probes-mailserver-smtp/kali-probes-mailserver-imap
+    aces_target: ACES nodes.techvault.mailserver + nodes.techvault.mailserver.runtime.mail_services + infrastructure.mailserver + conditions.mailserver-smtp-ready + relationships.kali-probes-mailserver-smtp/kali-probes-mailserver-imap
     runtime_owner: scenarios/techvault.sdl.yaml
     validation_evidence: docs/aces/inventory/mailserver/ + scenarios/techvault.sdl.yaml + tests/test_mailserver_inventory.py + ACES ADR-038 consumed
     blocking_followup: n/a
@@ -740,7 +740,7 @@ rows:
     legacy_source: "docker-compose.yml service dns + docs/aces/inventory/dns/"
     legacy_field: dns steady-state participant-observable asset spec
     category: aces_sdl
-    aces_target: ACES nodes.dns + nodes.dns.runtime.dns_services + infrastructure.dns + conditions.dns-soa-ready + relationships.dns-forwards-wazuh
+    aces_target: ACES nodes.techvault.dns + nodes.techvault.dns.runtime.dns_services + infrastructure.dns + conditions.dns-soa-ready + relationships.dns-forwards-wazuh
     runtime_owner: scenarios/techvault.sdl.yaml
     validation_evidence: docs/aces/inventory/dns/ + scenarios/techvault.sdl.yaml + tests/test_dns_inventory.py + Brad-Edwards/aces#426/#427 consumed
     blocking_followup: n/a
@@ -817,7 +817,7 @@ rows:
     legacy_source: docker-compose.yml (networks)
     legacy_field: aptl-security
     category: aces_sdl
-    aces_target: ACES nodes.security-net + infrastructure.security-net properties
+    aces_target: ACES nodes.techvault.security-net + infrastructure.security-net properties
     runtime_owner: n/a
     validation_evidence: tests/test_consistency.py (network presence) + tests/test_techvault_classification_audit.py
     blocking_followup: n/a
@@ -828,7 +828,7 @@ rows:
     legacy_source: docker-compose.yml (networks)
     legacy_field: aptl-dmz
     category: aces_sdl
-    aces_target: ACES nodes.dmz-net + infrastructure.dmz-net properties
+    aces_target: ACES nodes.techvault.dmz-net + infrastructure.dmz-net properties
     runtime_owner: n/a
     validation_evidence: tests/test_consistency.py + tests/test_techvault_classification_audit.py
     blocking_followup: n/a
@@ -839,7 +839,7 @@ rows:
     legacy_source: docker-compose.yml (networks)
     legacy_field: aptl-internal
     category: aces_sdl
-    aces_target: ACES nodes.internal-net + infrastructure.internal-net properties
+    aces_target: ACES nodes.techvault.internal-net + infrastructure.internal-net properties
     runtime_owner: n/a
     validation_evidence: tests/test_consistency.py + tests/test_techvault_classification_audit.py
     blocking_followup: n/a
@@ -850,7 +850,7 @@ rows:
     legacy_source: docker-compose.yml (networks)
     legacy_field: aptl-redteam
     category: aces_sdl
-    aces_target: ACES nodes.redteam-net + infrastructure.redteam-net properties
+    aces_target: ACES nodes.techvault.redteam-net + infrastructure.redteam-net properties
     runtime_owner: n/a
     validation_evidence: tests/test_consistency.py + tests/test_techvault_classification_audit.py
     blocking_followup: n/a
@@ -1737,7 +1737,7 @@ rows:
     legacy_source: config/wazuh_cluster/
     legacy_field: wazuh_manager.conf + custom rule XML
     category: aces_sdl
-    aces_target: ACES nodes.wazuh-manager.runtime.security_monitoring_managers.settings + nodes.wazuh-manager.runtime.security_monitoring_managers.detection_definitions
+    aces_target: ACES nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.settings + nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.detection_definitions
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/wazuh.manager/ + scenarios/techvault.sdl.yaml + tests/test_wazuh_manager_inventory.py + Brad-Edwards/aces#428 + Brad-Edwards/aces#434
     blocking_followup: n/a

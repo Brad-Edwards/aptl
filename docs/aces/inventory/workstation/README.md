@@ -105,7 +105,7 @@ and runtime lifecycle state, scenario weakness IDs, content entries, local
 account records, and relationships to Wazuh, webapp, database, and AD assets.
 
 Brad-Edwards/aces#418 is merged and consumed here through
-`nodes.workstation.runtime.service_manager_units`. No known ACES expressivity
+`nodes.techvault.workstation.runtime.service_manager_units`. No known ACES expressivity
 gap remains for the catalogued workstation steady-state inventory facts in this
 ledger, and the mapping ledger has no `needs_gap_triage` entries.
 

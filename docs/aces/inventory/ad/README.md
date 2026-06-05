@@ -61,7 +61,7 @@ rebuild proof.
 - The domain contains 15 users and 45 groups at capture time. Scenario users,
   service accounts, SPNs, high-risk group memberships, and password policy are
   recorded in the runtime baseline and encoded in the SDL under
-  `nodes.ad.runtime.identity_authorities` without raw passwords.
+  `nodes.techvault.ad.runtime.identity_authorities` without raw passwords.
 - The service exposes DNS, Kerberos, RPC, NetBIOS, LDAP, SMB, LDAPS, Global
   Catalog, and dynamic RPC listener surfaces inside the internal network. No
   host ports are published.

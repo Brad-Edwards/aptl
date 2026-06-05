@@ -10,6 +10,8 @@ import re
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -112,6 +114,8 @@ def _evidence_text(path: Path) -> str:
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -194,7 +198,7 @@ def test_workstation_mapping_ledger_validates_without_gap_triage():
         for fact in ledger["facts"]
         if fact["id"] == "workstation.runtime.service-manager-state"
     )
-    assert "nodes.workstation.runtime.service_manager_units" in service_manager_fact[
+    assert "nodes.techvault.workstation.runtime.service_manager_units" in service_manager_fact[
         "aces"
     ]["fields"]
 
@@ -518,7 +522,7 @@ def test_workstation_service_manager_units_match_systemd_evidence():
 def test_workstation_filesystem_checksum_paths_are_encoded_as_content():
     data = _yaml_file(TECHVAULT_SDL_PATH)
     content_paths = {
-        item["path"] for item in data["content"].values() if item["type"] == "File"
+        item["path"] for item in data["content"].values() if item["type"] == "file"
     }
     checksum_paths = {
         line.split("  ", maxsplit=1)[1]
@@ -641,14 +645,25 @@ def test_techvault_sdl_parses_and_compiles_with_workstation_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.workstation"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.workstation"].spec["node"]
     runtime = node["runtime"]
 
     assert len(runtime["mounts"]) == 30
     assert len(runtime["filesystem_inventory"]) == FILESYSTEM_ENTRY_COUNT
     assert len(runtime["processes"]) == 3
+    assert "process" not in runtime, (
+        "ACES PR #458 removed runtime.process; PID 1 systemd-init identity is "
+        "carried as processes[0]."
+    )
+    assert runtime["processes"][0]["name"] == "systemd-init"
+    assert runtime["processes"][0]["pid"] == 1
+    assert runtime["processes"][0]["command"] == ["/usr/sbin/init"]
     assert len(runtime["environment"]) == 6
     assert len(runtime["ssh_servers"]) == 1
+    assert runtime["ssh_servers"][0]["ssh_server_id"] == "workstation-sshd", (
+        "ACES PR #458 renamed server_id -> ssh_server_id on the typed "
+        "runtime.ssh_servers family under the <noun>_id primary-id convention."
+    )
     assert len(runtime["service_manager_units"]) == SERVICE_MANAGER_UNIT_COUNT
     assert len(runtime["packages"]) == RUNTIME_PACKAGE_COUNT
     assert len(runtime["package_vulnerabilities"]) == TRIVY_FINDING_COUNT

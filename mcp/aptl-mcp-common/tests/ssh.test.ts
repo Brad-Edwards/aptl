@@ -503,6 +503,32 @@ describe('Session Cleanup and Timeout Handling', () => {
     await expect(p3).rejects.toThrow('Session closed while command was queued');
   });
 
+  it('redacts embedded credentials in the command-timeout rejection (sec-02)', async () => {
+    // A timed-out command's SSHError can reach stderr ahead of the MCP
+    // serialization boundary's redaction; the message must not leak the
+    // password (ARCH-386-08 / sec-02). Attach the catch handler before
+    // advancing the fake timer so the rejection is never momentarily
+    // unhandled when the timeout fires.
+    const errP = session
+      .executeCommand('hydra -p hunter2 ssh://target', 5000)
+      .catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    const err = (await errP) as SSHError;
+    expect(err).toBeInstanceOf(SSHError);
+    expect(err.message).toContain('Command timeout:');
+    expect(err.message).toContain('[REDACTED]');
+    expect(err.message).not.toContain('hunter2');
+
+    // A credential-free command stays fully readable for debugging.
+    const benignP = session
+      .executeCommand('ls -la /tmp', 5000)
+      .catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(5000);
+    const benignErr = (await benignP) as SSHError;
+    expect(benignErr.message).toBe('Command timeout: ls -la /tmp');
+  });
+
   it('per-command timeout cleared on success', async () => {
     const commandPromise = session.executeCommand('echo hello', 5000);
 

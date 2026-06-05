@@ -1,0 +1,17 @@
+name: techvault-node-security-net
+nodes:
+  security-net:
+    type: switch
+    description: Security/SOC network used by Wazuh and related telemetry.
+    source: null
+    resources: null
+    os: null
+    os_version: ''
+    features: {}
+    conditions: {}
+    injects: {}
+    vulnerabilities: []
+    roles: {}
+    services: []
+    asset_value: null
+    runtime: null

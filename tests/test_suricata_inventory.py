@@ -45,7 +45,8 @@ LEDGER_ENCODED_COUNT = 20
 LEDGER_BLOCKED_COUNT = 0
 AUTHORED_CONTENT_FILES = 6
 BUILD_HISTORY_LAYER_COUNT = 17
-SOURCE_INPUT_COUNT = 2
+SOURCE_INPUT_COUNT = 6  # suricata.yaml, local.rules, + 4 MISP baselines
+NODE_KEY = "techvault.suricata"
 GAP_ISSUES = []  # ACES #429/#430 landed; both formerly-blocked facts are now encoded
 
 REQUIRED_EVIDENCE_FILES = {'docker-logs.suricata.txt', 'docker-volume.suricata-logs.json', 'docker-network.aptl-dmz.json', 'osquery-version.txt', 'participant-discovery.kali.txt', 'docker-inspect.container.json', 'docker-buildx-imagetools.image.txt', 'docker-buildx-imagetools.image.raw.json', 'docker-history.image.jsonl', 'osquery-processes.json', 'suricata-state.txt', 'docker-network.aptl-internal.json', 'captured-at-utc.txt', 'osquery-programs.json', 'os-packages.txt', 'docker-history.image.txt', 'source-checksums.txt', 'docker-top.txt', 'osquery-docker-images.json', 'osquery-installed-applications.json', 'trivy-vulnerability-counts.json', 'osquery-docker-containers.json', 'docker-inspect.image.json', 'docker-network.aptl-security.json', 'osquery-listening-ports.json', 'osquery-apt-sources.json', 'syft-version.json', 'trivy-sbom.cyclonedx.json.gz', 'trivy-vulnerability-list.json', 'filesystem-tree.txt', 'capture-limits.txt', 'docker-volume.suricata-command-socket.json', 'trivy-version.txt', 'language-manifests.txt', 'syft-sbom.cyclonedx.json.gz', 'compose-service.suricata.json', 'docker-compose-version.json', 'filesystem-checksums.txt', 'evidence-sha256sums.txt', 'runtime-baseline.txt', 'docker-version.json'}
@@ -232,7 +233,7 @@ def test_techvault_sdl_encodes_suricata_inventory_surfaces():
     from aces_sdl import parse_sdl_file
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
-    node = scenario.nodes["suricata"]
+    node = scenario.nodes[NODE_KEY]
     assert node.source.version == IMAGE_DIGEST
     assert node.os_version == "AlmaLinux 9.7 (Moss Jungle Cat)"
     # passive sensor: no node services and no published ports
@@ -246,7 +247,8 @@ def test_techvault_sdl_encodes_suricata_inventory_surfaces():
     assert len(runtime.local_identity.users) == LOCAL_IDENTITY_USER_COUNT
     assert len(runtime.local_identity.groups) == LOCAL_IDENTITY_GROUP_COUNT
     assert runtime.network.published_ports == []
-    assert {ep.network for ep in runtime.network.endpoints} == {"dmz-net", "internal-net", "security-net"}
+    assert {ep.network for ep in runtime.network.endpoints} == {
+        "techvault.dmz-net", "techvault.internal-net", "techvault.security-net"}
 
     # the unix command socket is the only control surface
     assert len(runtime.local_control_interfaces) == 1
@@ -265,7 +267,9 @@ def test_techvault_sdl_encodes_suricata_inventory_surfaces():
     assert sensor.implementation.value == "suricata"
     assert sensor.monitoring_posture.value == "passive"
     assert sensor.capture_mode.value == "pcap"
-    assert set(sensor.monitored_network_refs) == {"dmz-net", "internal-net", "security-net"}
+    assert sensor.network_sensor_id == "suricata-sensor"
+    assert set(sensor.monitored_network_refs) == {
+        "techvault.dmz-net", "techvault.internal-net", "techvault.security-net"}
 
     # IDS/NDR detection engine (ACES #430 surface)
     assert len(runtime.network_detection_engines) == 1
@@ -277,9 +281,14 @@ def test_techvault_sdl_encodes_suricata_inventory_surfaces():
     assert engine.control_channels[0].kind.value == "unix_socket"
     assert "rule_reload" in [c.value for c in engine.control_channels[0].capabilities]
 
-    relationship = scenario.relationships["suricata-logs-forwarded-wazuh"]
-    assert relationship.source == "suricata"
-    assert relationship.target == "wazuh-manager"
+    # wazuh log-forwarding is now a typed forwarding_edge into the scenario-level
+    # forwarding_agents registry (ACES #460), not a plain connects_to.
+    relationship = scenario.relationships["techvault.suricata-logs-forwarded-wazuh"]
+    assert relationship.source == "techvault.suricata"
+    assert relationship.target == "techvault.wazuh-manager"
+    assert relationship.forwarding_edge.forwarder_ref == "aptl-suricata-wazuh-agent"
+    agent_ids = {fa.forwarding_agent_id for fa in scenario.forwarding_agents}
+    assert "aptl-suricata-wazuh-agent" in agent_ids
 
 
 def test_techvault_sdl_encodes_suricata_authored_content_and_no_accounts():
@@ -289,11 +298,11 @@ def test_techvault_sdl_encodes_suricata_authored_content_and_no_accounts():
     from aces_sdl import parse_sdl_file
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
-    content = {k: v for k, v in scenario.content.items() if k.startswith("suricata-")}
+    content = {k: v for k, v in scenario.content.items() if "suricata-file" in k}
     assert len(content) == AUTHORED_CONTENT_FILES
     # every authored content file targets the suricata node, is a File, and cites a repo source + sha256
     for entry in content.values():
-        assert entry.target == "suricata"
+        assert entry.target == "techvault.suricata"
         assert entry.type.value == "file"
         assert entry.source.name.startswith("config/suricata/")
         assert entry.source.version.startswith("sha256:")
@@ -313,7 +322,7 @@ def test_techvault_sdl_compiles_with_suricata_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.suricata"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.suricata"].spec["node"]
     runtime = node["runtime"]
     build = node["source"]["build"]
 

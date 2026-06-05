@@ -1,0 +1,351 @@
+name: techvault-relationships
+relationships:
+  suricata-logs-forwarded-wazuh:
+    type: connects_to
+    source: techvault.suricata
+    target: techvault.wazuh-manager
+    description: 'The off-node wazuh-sidecar-suricata container tails Suricata eve.json from the read-only suricata_logs volume and forwards alert telemetry to the SOC stack. Typed forwarding_edge.forwarder_ref resolves into the scenario-level forwarding_agents registry (Brad-Edwards/aces#460); the sidecar is an APTL ADR-020 carve-out (jasonish/suricata:7.0 has no first-party Wazuh package) and is not itself a scenario participant node.'
+    properties: {}
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: aptl-suricata-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: eve_json
+      description: ''
+    service_integration: null
+    proxy_upstream: null
+  db-logs-forwarded-wazuh:
+    type: connects_to
+    source: techvault.db
+    target: techvault.wazuh-manager
+    description: 'The off-node wazuh-sidecar-db container tails PostgreSQL logs from the shared db_data volume and forwards
+      them to the SOC stack. Typed forwarding_edge.forwarder_ref resolves into the scenario-level forwarding_agents registry
+      (introduced by Brad-Edwards/aces#460) rather than a node-hosted agent, because the sidecar is an APTL ADR-020 infrastructure
+      carve-out (postgres:16-alpine has no first-party Wazuh package) and is not itself a scenario participant node.
+
+      '
+    properties: {}
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: aptl-db-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: ''
+    service_integration: null
+    proxy_upstream: null
+  webapp-connects-db:
+    type: connects_to
+    source: nodes.techvault.webapp.runtime.applications.techvault-portal
+    target: nodes.techvault.db.runtime.database_services.techvault-postgres.databases.techvault
+    description: Webapp uses the TechVault PostgreSQL database on the internal network.
+    properties:
+      protocol: postgresql
+      port: '5432'
+      auth_method: password
+    database_access:
+      role_ref: techvault
+      auth_method: password
+      description: ''
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  webapp-forwards-wazuh:
+    type: connects_to
+    source: techvault.webapp
+    target: techvault.wazuh-manager
+    description: Webapp forwards gunicorn rsyslog output and Wazuh agent telemetry to the SOC stack.
+    properties: {}
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: webapp-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: 'Typed forwarding edge replaces the legacy syslog-and-wazuh-agent prose property; resolves to the webapp-wazuh-agent
+        runtime forwarding agent on the webapp node.
+
+        '
+    service_integration: null
+    proxy_upstream: null
+  fileshare-forwards-wazuh:
+    type: connects_to
+    source: techvault.fileshare
+    target: techvault.wazuh-manager
+    description: Fileshare forwards Samba logs (log.samba-bgqd and log.*) and Wazuh agent telemetry to the SOC stack.
+    properties: {}
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: fileshare-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: 'Typed forwarding edge replaces the legacy syslog-and-wazuh-agent + log_paths prose property; resolves
+        to the fileshare-wazuh-agent runtime forwarding agent on the fileshare node (in-process per ADR-020).
+
+        '
+    service_integration: null
+    proxy_upstream: null
+  kali-probes-mailserver-smtp:
+    type: connects_to
+    source: techvault.kali
+    target: nodes.techvault.mailserver.runtime.mail_services.techvault-mail.listeners.smtp-25
+    description: Kali participant-vantage discovery reached the mailserver SMTP listener on the DMZ network.
+    properties:
+      protocol: smtp
+      port: '25'
+      vantage: aptl-kali
+    database_access: null
+    mail_access:
+      protocol: smtp
+      auth_mechanism: none
+      tls_mode: none
+      listener_ref: smtp-25
+      mailbox_ref: ''
+      domain_ref: techvault-domain
+      description: ''
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  kali-probes-mailserver-imap:
+    type: connects_to
+    source: techvault.kali
+    target: nodes.techvault.mailserver.runtime.mail_services.techvault-mail.listeners.imap-143
+    description: Kali participant-vantage discovery reached the Dovecot IMAP listener and observed pre-login capabilities.
+    properties:
+      protocol: imap
+      port: '143'
+      vantage: aptl-kali
+    database_access: null
+    mail_access:
+      protocol: imap
+      auth_mechanism: plain
+      tls_mode: none
+      listener_ref: imap-143
+      mailbox_ref: ''
+      domain_ref: techvault-domain
+      description: ''
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  ad-forwards-dns:
+    type: connects_to
+    source: techvault.ad
+    target: techvault.dns
+    description: Samba internal DNS forwards unresolved queries to the TechVault DNS forwarder at 172.20.1.22.
+    properties:
+      protocol: dns
+      port: '53'
+      auth_method: none
+      forwarder: 172.20.1.22
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  ad-forwards-wazuh:
+    type: connects_to
+    source: techvault.ad
+    target: techvault.wazuh-manager
+    description: AD forwards Samba logs (log.samba, log.smbd, log.winbindd) and Wazuh agent telemetry to the SOC stack.
+    properties: {}
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: ad-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: 'Typed forwarding edge replaces the legacy syslog-and-wazuh-agent + log_paths prose property; resolves
+        to the ad-wazuh-agent runtime forwarding agent on the ad node (in-process per ADR-020).
+
+        '
+    service_integration: null
+    proxy_upstream: null
+  ad-provides-domain:
+    type: connects_to
+    source: techvault.ad
+    target: techvault.internal-net
+    description: AD provides TECHVAULT.LOCAL identity, Kerberos, LDAP, SMB, and DNS services to internal TechVault participants.
+    properties:
+      realm: TECHVAULT.LOCAL
+      domain: techvault.local
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  workstation-configures-wazuh:
+    type: connects_to
+    source: techvault.workstation
+    target: techvault.wazuh-manager
+    description: 'Workstation runtime environment points Wazuh agent/SIEM configuration at 172.20.2.30; the service-manager
+      failure state is blocked on ACES #418.'
+    properties:
+      protocol: wazuh-agent
+      configured_manager: 172.20.2.30
+      observed_unit_state: blocked-by-aces-418
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  workstation-credentials-reference-db:
+    type: connects_to
+    source: techvault.workstation-credential-fixtures
+    target: techvault.db
+    description: Workstation credential fixtures contain PostgreSQL connection material for the TechVault database.
+    properties:
+      protocol: postgresql
+      port: '5432'
+      auth_method: password
+      sensitivity: secret_fixture
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  workstation-credentials-reference-webapp:
+    type: connects_to
+    source: techvault.workstation-credential-fixtures
+    target: techvault.webapp
+    description: Workstation credential fixtures contain webapp URL, admin credentials, API key, and JWT/application secrets.
+    properties:
+      protocol: http
+      port: '8080'
+      sensitivity: secret_fixture
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  workstation-credentials-reference-ad:
+    type: connects_to
+    source: techvault.workstation-credential-fixtures
+    target: techvault.ad
+    description: Workstation credential fixtures contain AD domain/DC references and administrator-style fixture credentials.
+    properties:
+      realm: TECHVAULT.LOCAL
+      sensitivity: secret_fixture
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  victim-forwards-wazuh:
+    type: connects_to
+    source: techvault.victim
+    target: techvault.wazuh-manager
+    description: Victim forwards rsyslog output to the SOC stack; victim does not run a Wazuh agent in-process.
+    properties: {}
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: victim-rsyslog-forwarder
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: 'Typed forwarding edge replaces the legacy syslog-and-wazuh-agent + configured_manager + log_config prose
+        property; resolves to the victim-rsyslog-forwarder runtime forwarding agent on the victim node. The implementation
+        is rsyslog (not wazuh_agent) because victim''s evidenced process inventory does not include any Wazuh daemons.
+
+        '
+    service_integration: null
+    proxy_upstream: null
+  dns-forwards-wazuh:
+    type: connects_to
+    source: techvault.dns
+    target: techvault.wazuh-manager
+    description: DNS forwards BIND query/default logs and Wazuh agent telemetry to the SOC stack.
+    properties: {}
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: dns-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: unknown
+      description: 'Typed forwarding edge replaces the legacy syslog-and-wazuh-agent prose property; resolves to the dns-wazuh-agent
+        runtime forwarding agent on the dns node (in-process per ADR-020).
+
+        '
+    service_integration: null
+    proxy_upstream: null
+  misp-connects-mariadb:
+    type: connects_to
+    source: nodes.techvault.misp.runtime.applications.misp-web
+    target: techvault.misp-db
+    description: MISP application configuration points at the MariaDB companion service using MYSQL_HOST=misp-db, database
+      misp, and user misp; password value is redacted.
+    properties:
+      protocol: mysql
+      port: '3306'
+      database: misp
+      auth_method: password
+      credential_source: MYSQL_PASSWORD redacted
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  misp-connects-redis:
+    type: connects_to
+    source: nodes.techvault.misp.runtime.applications.misp-web
+    target: techvault.misp-redis
+    description: MISP runtime environment points Redis use at REDIS_HOST=misp-redis. The MISP container evidence did not expose
+      a Redis password variable, while the companion Redis service is configured to require one; auth is therefore recorded
+      as unknown for this asset pass.
+    properties:
+      protocol: redis
+      port: '6379'
+      auth_method: unknown
+      target_requires_password: 'true'
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  misp-suricata-sync-queries-misp-api:
+    type: connects_to
+    source: techvault.misp-suricata-sync
+    target: nodes.techvault.misp.runtime.applications.misp-web
+    description: The MISP-to-Suricata sync service resolves the MISP container, reaches TCP 443/80, and verifies the MISP
+      TLS certificate with the lab CA before using the API key supplied out of band.
+    properties:
+      protocol: https
+      port: '443'
+      auth_method: api_key
+      tls_verification: lab_ca
+      vantage: aptl-misp-suricata-sync
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null

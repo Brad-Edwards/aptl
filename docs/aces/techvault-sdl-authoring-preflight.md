@@ -20,11 +20,38 @@ decision.
   scenario meaning. Docker Compose profiles, generated config, readiness,
   endpoint snapshots, and run archives stay owned by the existing APTL
   boundaries named in ADR-035.
+- Issue #388 is a reconciliation pass over already-captured TechVault facts,
+  not a new capture pass and not an ACES language-design fork. Migrate only
+  facts that are already evidenced in `docs/aces/inventory/*/` or already
+  encoded in the canonical TechVault SDL.
+- The ACES `origin/dev` surface landed in PR #458. APTL must parse and compile
+  the reconciled SDL against an ACES dependency that includes that merge
+  (`53db0df` or later); a lockfile pinned before that merge is a blocker, not a
+  reason to avoid the new typed families.
+- The new runtime-family names and relationship subtypes are the canonical
+  vocabulary: `runtime.datastore_services`, `runtime.platform_applications`,
+  `runtime.app_authorizations`, `runtime.forwarding_agents`,
+  `runtime.scheduled_jobs`, `runtime.orchestration_authorities`, plus typed
+  `forwarding_edge`, `service_integration`, and `proxy_upstream` relationship
+  blocks. Do not preserve generic `connects_to` + prose/properties where one of
+  those typed blocks can carry the already-evidenced semantics.
 
 ## Cross-Cutting Concerns To Reuse
 
 - ACES parser, models, semantic validators, imports, lockfile, and runtime
   compiler from the sibling `../aces-sdl` implementation.
+- ACES runtime family registry and validators:
+  `aces_sdl._runtime_service_families.RUNTIME_SERVICE_FAMILIES`,
+  `RuntimeConfiguration`, the `Runtime*` family classes, shared
+  `runtime_values.name_indicates_secret`, and the semantic validator passes for
+  runtime families and typed relationship blocks.
+- Existing ACES family boundaries: `runtime.database_services` stays the
+  relational database surface, `runtime.applications` stays inbound HTTP/API/UI
+  route inventory, `runtime.service_manager_units` stays systemd-scoped unit
+  lifecycle, `runtime.local_control_interfaces` stays the socket/control-shell
+  surface, `runtime.identity_authorities` stays wire-protocol directory state,
+  `runtime.security_monitoring_managers` stays the SIEM manager side, and
+  `runtime.network_detection_engines` stays detection-rule consumer state.
 - ACES backend profile and conformance authorities:
   `contracts/profiles/backend/provisioning-only.json`,
   `aces_contracts.backend_profiles.load_backend_profile`,
@@ -33,6 +60,12 @@ decision.
 - APTL parity inventory:
   `docs/aces/parity-inventory.yaml`, `docs/aces/parity-inventory.md`, and
   `tests/test_parity_inventory.py`.
+- APTL inventory ledger schema and CLI:
+  `src/aptl/core/aces_inventory.py`, `src/aptl/cli/aces_inventory.py`,
+  `aptl aces-inventory validate`, `aptl aces-inventory gaps`, and the existing
+  per-asset inventory tests. If ledgers need exact new runtime-family surface
+  labels, extend `AcesSurface` narrowly there; do not bypass the schema with
+  free-form ledger shapes.
 - APTL lab/config/runtime owners: `AptlConfig`, `EnvVars`,
   `find_placeholder_env_values`, `_LAB_START_STEPS`, `DeploymentBackend`,
   `LabResult`, `StartupDiagnostic`, `RangeSnapshot.to_dict()`,
@@ -45,6 +78,26 @@ decision.
 - **ACES SDL shape:** the document must pass ACES `SDLModel` closed-world
   validation (`extra="forbid"`), ACES semantic validation, and runtime
   compilation. Do not add local APTL YAML shape checks for ACES fields.
+- **Runtime family model guards:** stable ids must use the family `<noun>_id`
+  fields, not variables; concrete family discriminators must satisfy their
+  ACES profile guards. Examples: search-index datastores need index
+  shard/replica geometry; concrete platform application kinds need their
+  required content/binding profile; log forwarders need buffer policy and
+  ingestion targets; content-sync forwarders need API pull, IOC-to-rule
+  transform, and reload channel; host-root orchestration authorities need a
+  concrete same-node control-interface ref.
+- **Relationship validators:** `forwarding_edge` must resolve to a
+  `runtime.forwarding_agents` entry and agree with ship-target listener
+  semantics; `service_integration` endpoints must resolve to platform
+  applications and its auth principal to the engine application's
+  authorization store; `proxy_upstream` route/node/service facts must resolve
+  and agree with any route-level `upstream_target`.
+- **Enum sentinel discipline:** open vocabularies carry `unknown` and `other`;
+  closed structural vocabularies do not. Do not add `unknown`/`other` to closed
+  fields such as scheduled-job `schedule.kind` or authorization grant `effect`,
+  and do not omit the sentinels from open discriminators such as datastore
+  `data_model`, platform `platform_kind`, forwarding `agent_kind`, and
+  orchestration `privilege_class`.
 - **Imports and modules:** if imports are used, resolve and verify them through
   ACES `aces sdl resolve` / `verify-imports` / lockfile behavior. Do not fetch
   or execute import content from an APTL helper.
@@ -53,6 +106,12 @@ decision.
   (`.env`, Wazuh/TheHive/MISP tokens, API passwords, private keys, cookies,
   bearer tokens, generated rendered config) must stay out of the SDL and under
   `EnvVars`, ADR-028, and ADR-029.
+- **Runtime secret fields:** new runtime settings, principals, connector names,
+  enrollment identities, datastore settings, and app authorization principals
+  must reuse ACES' shared secret-name redaction logic. Raw API keys, bcrypt
+  hashes, passwords, bearer tokens, private keys, Wazuh enrollment material,
+  and docker-socket-derived operator secrets are never serialized into SDL,
+  ledgers, validation errors, or test diagnostics.
 - **Environment binding:** durable knobs belong in strict `AptlConfig`;
   runtime secrets belong in `.env` parsed by `load_dotenv` and shaped by
   `EnvVars`. Do not add ACES-specific environment parsing.
@@ -83,6 +142,12 @@ Parameterization belongs in ACES `variables`, imports/modules, and backend
 profile declarations. One obvious future scenario in APTL's supported
 expressivity class should not require editing a TechVault-only adapter branch.
 
+For #388 specifically, the seam is the node-scoped runtime service-family
+registry plus typed top-level relationships. If the next reasonable SOC
+platform or datastore appears, it should be another instance of an existing
+family or a linked ACES expressivity issue, not a TechVault-only `properties`
+convention.
+
 ## Gotchas And Anti-Patterns
 
 - Recreating `ScenarioDefinition`, a Pydantic mirror of ACES SDL, or a
@@ -92,6 +157,21 @@ expressivity class should not require editing a TechVault-only adapter branch.
   model explicitly represents that concept.
 - Hiding missing ACES expressivity behind `metadata`, `x-aptl-*`, comments, or
   scenario-name dispatch instead of recording an ACES schema/profile gap.
+- Keeping old generic `connects_to` edges with protocol prose after ACES can
+  validate the relationship as `database_access`, `mail_access`,
+  `forwarding_edge`, `service_integration`, or `proxy_upstream`.
+- Double-encoding the same fact across sibling families: `scheduled_jobs` is
+  cadence/run-state only; forwarding inputs/transforms/outputs stay on
+  `forwarding_agents`; service-manager unit lifecycle stays on
+  `service_manager_units`; orchestration authority references the docker socket
+  control interface instead of duplicating it.
+- Conflating app-internal RBAC with OS users, directory identities, or database
+  GRANTs. Use `app_authorizations` for application resource-scoped permission
+  stores and derive storage/presentation tier from the owning family reference.
+- Treating no inventory bundle as permission to invent logical state. If an
+  SOC container has no committed evidence bundle or ledger, only migrate facts
+  already present in the canonical SDL or explicitly document the
+  non-migration/downstream-only boundary.
 - Copying the parity inventory rows into tests as a second truth source rather
   than reading/citing the inventory.
 - Treating designed vulnerable credentials and operator secrets as the same
@@ -108,3 +188,7 @@ expressivity class should not require editing a TechVault-only adapter branch.
   run archive layout, or lab startup ordering while authoring the SDL.
 - Do not deprecate DSL/SCN requirements or perform Phase B cutover work from
   this issue.
+- Do not file ACES issues for facts the new PR #458 surfaces already express;
+  conversely, do not force-fit facts that still fail those structural or
+  semantic validators. A filed ACES expressivity issue remains a blocker until
+  the APTL encoding can be cleanly represented.

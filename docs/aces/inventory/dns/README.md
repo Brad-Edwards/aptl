@@ -23,7 +23,7 @@ logical DNS state, and filesystem metadata/checksums for load-bearing paths.
 ACES issue #426 and the merged ACES DNS runtime work in PR #427 are consumed
 by this branch. The catalogued DNS resolver, zone, RRset, SOA/MX/SRV/PTR/A
 record, logging, transfer, and dynamic-update facts are encoded in
-`scenarios/techvault.sdl.yaml` under `nodes.dns.runtime.dns_services`.
+`scenarios/techvault.sdl.yaml` under `nodes.techvault.dns.runtime.dns_services`.
 No known ACES expressivity gap remains for the catalogued DNS steady-state
 facts.
 

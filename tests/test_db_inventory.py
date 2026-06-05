@@ -9,6 +9,8 @@ import re
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -67,6 +69,8 @@ def _json_file(name: str):
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -135,8 +139,8 @@ def test_db_mapping_ledger_validates_and_tracks_gap_handoff():
     assert dispositions["db.runtime.filesystem-inventory"] == "encoded_with_caveat"
     assert dispositions["db.runtime.vulnerability-scan"] == "encoded"
     assert dispositions["db.postgres.logical-state"] == "encoded"
-    assert "nodes.db.runtime.database_services.databases" in fields["db.postgres.logical-state"]
-    assert "nodes.db.runtime.database_services.roles" in fields["db.postgres.logical-state"]
+    assert "nodes.techvault.db.runtime.database_services.databases" in fields["db.postgres.logical-state"]
+    assert "nodes.techvault.db.runtime.database_services.roles" in fields["db.postgres.logical-state"]
     assert "relationships.webapp-connects-db.database_access" in fields["db.relationships"]
 
 
@@ -269,7 +273,8 @@ def test_techvault_sdl_encodes_db_inventory_surfaces():
     source_inputs = {item["source_path"]: item for item in build["source_inputs"]}
     assert source_inputs["containers/db/init/01-schema.sql"]["destination_path"] == "/docker-entrypoint-initdb.d/01-schema.sql"
     assert db["os_version"] == "Alpine Linux v3.23"
-    assert {"port": 5432, "protocol": "tcp", "name": "postgres"} in db["services"]
+    services = {(service["port"], service["protocol"], service["name"]) for service in db["services"]}
+    assert (5432, "tcp", "postgres") in services
 
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
     assert mounts["/var/lib/postgresql/data"]["source"] == "aptl_db_data"
@@ -287,18 +292,25 @@ def test_techvault_sdl_encodes_db_inventory_surfaces():
     assert runtime["container"]["runtime_name"] == "runc"
     assert runtime["health"]["status"] == "healthy"
     assert len(runtime["health"]["log"]) == 5
-    assert runtime["process"]["user"] == "postgres"
-    assert "logging_collector=on" in " ".join(runtime["process"]["command"])
+    assert "process" not in runtime, (
+        "ACES PR #458 removed runtime.process; PID 1 identity now lives as "
+        "processes[0]."
+    )
+    primary = runtime["processes"][0]
+    assert primary["name"] == "postgres-postmaster"
+    assert primary["pid"] == 1
+    assert primary["role"] == "primary"
+    assert primary["user"] == "postgres"
+    assert "logging_collector=on" in " ".join(primary["command"])
     assert {process["name"] for process in runtime["processes"]} >= {"postgres-postmaster", "postgres-logger"}
     environment = {item["name"]: item for item in runtime["environment"]}
     assert environment["POSTGRES_PASSWORD"]["value"] == "<scenario-fixture-secret>"
     assert environment["POSTGRES_PASSWORD"]["value_classification"] == "secret_fixture"
     assert runtime["linux_capabilities"]["effective"] == []
     assert runtime["operational_policy"]["restart"] == "unless_stopped"
-    assert runtime["operational_policy"]["resource_limits"] == {
-        "memory": 268435456,
-        "memory_swap": 536870912,
-    }
+    limits = runtime["operational_policy"]["resource_limits"]
+    assert limits["memory"] == 268435456
+    assert limits["memory_swap"] == 536870912
     assert len(runtime["packages"]) == len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines())
     assert len(runtime["package_vulnerabilities"]) == len(_json_file("trivy-vulnerability-list.json"))
     database_service = runtime["database_services"][0]
@@ -346,10 +358,9 @@ def test_techvault_sdl_encodes_db_inventory_surfaces():
     assert data["relationships"]["webapp-connects-db"]["target"] == (
         "nodes.db.runtime.database_services.techvault-postgres.databases.techvault"
     )
-    assert data["relationships"]["webapp-connects-db"]["database_access"] == {
-        "role_ref": "techvault",
-        "auth_method": "password",
-    }
+    database_access = data["relationships"]["webapp-connects-db"]["database_access"]
+    assert database_access["role_ref"] == "techvault"
+    assert database_access["auth_method"] == "password"
 
 
 def test_db_filesystem_tree_is_encoded_as_runtime_inventory():
@@ -427,6 +438,50 @@ def test_db_passwd_users_are_encoded_as_accounts():
     assert data["accounts"]["db-postgres-role-techvault"]["password_strength"] == "weak"
 
 
+def test_techvault_sdl_db_uses_aces_pr458_and_460_forwarding_surfaces():
+    """ACES PR #458 + #460 (#388 reconciliation): db's PostgreSQL-log forwarder
+    is the off-node `wazuh-sidecar-db` container (ADR-020 carve-out;
+    postgres:16-alpine has no first-party Wazuh package). #460 added the
+    scenario-level `forwarding_agents:` registry so the sidecar can host the
+    forwarder without mis-typing it as a node-hosted agent on db itself.
+    """
+    data = _yaml_file(TECHVAULT_SDL_PATH)
+
+    scenario_agents = {
+        agent["forwarding_agent_id"]: agent
+        for agent in data.get("forwarding_agents", [])
+    }
+    assert "aptl-db-wazuh-agent" in scenario_agents, (
+        "PR #460: db's off-node Wazuh sidecar must be registered under the "
+        "scenario-level forwarding_agents registry, not under db's own "
+        "runtime.forwarding_agents (which would mis-type where the agent runs)."
+    )
+    agent = scenario_agents["aptl-db-wazuh-agent"]
+    assert agent["implementation"] == "wazuh_agent"
+    assert agent["agent_kind"] == "log_forwarder"
+    assert agent["name"] == "aptl-db-agent", (
+        "Sidecar AGENT_NAME on compose service wazuh-sidecar-db is aptl-db-agent."
+    )
+    assert agent["buffer_policy"]["buffer_policy_id"] == "aptl-db-wazuh-agent-buffer"
+    ship_target_nodes = {target["target_node_ref"] for target in agent["ship_targets"]}
+    assert ship_target_nodes == {"wazuh-manager"}
+    ship_target_ports = {target["ingestion_port"] for target in agent["ship_targets"]}
+    assert ship_target_ports == {1514}
+
+    db_runtime = data["nodes"]["db"]["runtime"]
+    assert not db_runtime.get("forwarding_agents"), (
+        "ADR-020: db itself runs no Wazuh daemons; its forwarder lives off-node "
+        "on the wazuh-sidecar-db container, registered at scenario scope."
+    )
+
+    forward_rel = data["relationships"]["db-logs-forwarded-wazuh"]
+    assert forward_rel["properties"] == {}, (
+        "PR #458: the typed forwarding_edge payload replaces the legacy "
+        "properties.protocol/source_log prose."
+    )
+    assert forward_rel["forwarding_edge"]["forwarder_ref"] == "aptl-db-wazuh-agent"
+
+
 def test_db_runtime_network_matches_docker_evidence():
     data = _yaml_file(TECHVAULT_SDL_PATH)
     network = data["nodes"]["db"]["runtime"]["network"]
@@ -458,7 +513,7 @@ def test_techvault_sdl_parses_and_compiles_with_db_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.db"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.db"].spec["node"]
     runtime = node["runtime"]
 
     assert node["source"]["version"] == IMAGE_DIGEST
@@ -496,4 +551,4 @@ def test_parity_inventory_cites_db_inventory_and_aces_sdl():
     assert rows["compose.service.db"]["legacy_source"] == "docker-compose.yml (service: db)"
     assert rows["compose.service.db"]["category"] == "aces_sdl"
     assert rows["compose.service.db"]["blocking_followup"] == "n/a"
-    assert "nodes.db" in rows["compose.service.db"]["aces_target"]
+    assert "nodes.techvault.db" in rows["compose.service.db"]["aces_target"]

@@ -18,6 +18,12 @@ project (soc profile) on 2026-05-28 and did not run
 `aptl lab stop -v && aptl lab start`. Treat this bundle as a frozen observation
 of that local steady state, not as clean-lab rebuild proof.
 
+The SDL encoding is authored into the decomposed TechVault module tree
+(`scenarios/techvault/nodes/suricata.sdl.yaml` plus the `sections/*` and the
+root `forwarding_agents`), reconciled to the ACES #458/#460 harmonized runtime
+surfaces (`network_sensors`, `network_detection_engines`, `forwarding_agents`,
+`techvault.*`-namespaced refs).
+
 ## Asset Summary
 
 | Field | Captured value |

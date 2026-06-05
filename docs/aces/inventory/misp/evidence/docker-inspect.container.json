@@ -1,0 +1,333 @@
+[
+  {
+    "Id": "6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe",
+    "Created": "2026-05-23T06:18:31.972449017Z",
+    "Path": "/entrypoint.sh",
+    "Args": [],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2958905,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-23T06:18:50.192751102Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-05-29T02:14:06.497076824+02:00",
+            "End": "2026-05-29T02:14:06.566746865+02:00",
+            "ExitCode": 0,
+            "Output": "<REDACTED-HTML-HEALTHCHECK-OUTPUT>"
+          },
+          {
+            "Start": "2026-05-29T02:14:36.567826793+02:00",
+            "End": "2026-05-29T02:14:36.615315649+02:00",
+            "ExitCode": 0,
+            "Output": "<REDACTED-HTML-HEALTHCHECK-OUTPUT>"
+          },
+          {
+            "Start": "2026-05-29T02:15:06.616211634+02:00",
+            "End": "2026-05-29T02:15:06.681614262+02:00",
+            "ExitCode": 0,
+            "Output": "<REDACTED-HTML-HEALTHCHECK-OUTPUT>"
+          },
+          {
+            "Start": "2026-05-29T02:15:36.683199142+02:00",
+            "End": "2026-05-29T02:15:36.744719354+02:00",
+            "ExitCode": 0,
+            "Output": "<REDACTED-HTML-HEALTHCHECK-OUTPUT>"
+          },
+          {
+            "Start": "2026-05-29T02:16:06.745477268+02:00",
+            "End": "2026-05-29T02:16:06.811078889+02:00",
+            "ExitCode": 0,
+            "Output": "<REDACTED-HTML-HEALTHCHECK-OUTPUT>"
+          }
+        ]
+      }
+    },
+    "Image": "sha256:992fd95b8d9698a18e1acdd7dbf5e8d03b32a03fd80e4bcbcff77bc7f17768cd",
+    "ResolvConfPath": "/var/lib/docker/containers/6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe/hostname",
+    "HostsPath": "/var/lib/docker/containers/6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe/hosts",
+    "LogPath": "/var/lib/docker/containers/6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe/6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe-json.log",
+    "Name": "/aptl-misp",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "aptl_misp_config:/var/www/MISP/app/Config:rw",
+        "/home/atomik/src/aptl/config/soc_certs/misp/server.pem:/etc/nginx/certs/cert.pem:ro",
+        "/home/atomik/src/aptl/config/soc_certs/misp/server.key:/etc/nginx/certs/key.pem:ro",
+        "aptl_misp_data:/var/www/MISP/app/files:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-security",
+      "PortBindings": {
+        "443/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "8443"
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 2147483648,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 4294967296,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_misp_data",
+        "Source": "/var/lib/docker/volumes/aptl_misp_data/_data",
+        "Destination": "/var/www/MISP/app/files",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_misp_config",
+        "Source": "/var/lib/docker/volumes/aptl_misp_config/_data",
+        "Destination": "/var/www/MISP/app/Config",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/soc_certs/misp/server.pem",
+        "Destination": "/etc/nginx/certs/cert.pem",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/soc_certs/misp/server.key",
+        "Destination": "/etc/nginx/certs/key.pem",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      }
+    ],
+    "Config": {
+      "Hostname": "misp",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "443/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "REDIS_HOST=misp-redis",
+        "BASE_URL=https://localhost",
+        "MYSQL_DATABASE=misp",
+        "MYSQL_USER=misp",
+        "ADMIN_PASSWORD=<REDACTED-ADMIN-PASSWORD>",
+        "MYSQL_PASSWORD=<REDACTED-MYSQL-PASSWORD>",
+        "ADMIN_EMAIL=admin@admin.test",
+        "ADMIN_KEY=<REDACTED-ADMIN-KEY>",
+        "MYSQL_HOST=misp-db",
+        "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG=C.UTF-8",
+        "GPG_KEY=<REDACTED-GPG-KEY>",
+        "PYTHON_VERSION=3.12.13",
+        "PYTHON_SHA256=c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684",
+        "DEBIAN_FRONTEND=noninteractive"
+      ],
+      "Cmd": null,
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "curl -ksf https://localhost/users/login || (nginx -s reload 2>/dev/null; exit 1)"
+        ],
+        "Interval": 30000000000,
+        "Timeout": 10000000000,
+        "StartPeriod": 300000000000,
+        "Retries": 15
+      },
+      "Image": "ghcr.io/misp/misp-docker/misp-core:latest",
+      "Volumes": null,
+      "WorkingDir": "/var/www/MISP",
+      "Entrypoint": [
+        "/entrypoint.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "c275da3a4af77a8430eb8b134d4036ad53ced79463c07754b38c011c69f1301f",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "misp-db:service_healthy:false,misp-redis:service_started:false",
+        "com.docker.compose.image": "sha256:992fd95b8d9698a18e1acdd7dbf5e8d03b32a03fd80e4bcbcff77bc7f17768cd",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "misp",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "3ca186663c42938a17fd006e289e66991b76a2564b62aaf6280a973e268c7500",
+      "SandboxKey": "<REDACTED>",
+      "Ports": {
+        "443/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "8443"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "8443"
+          }
+        ]
+      },
+      "Networks": {
+        "aptl_aptl-security": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.0.16"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-misp",
+            "misp"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "f409670052bafc8156295ba9726eece73f5c59596fcc9c3bfbbccbc469ed1e6a",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.16",
+          "MacAddress": "86:fa:65:cd:e7:af",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-misp",
+            "misp",
+            "6397f21096e0"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:a060290773f9932ff2cd03215dabcbed211ab04db3de7ae490d9e32f883f536d",
+      "size": 4438,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

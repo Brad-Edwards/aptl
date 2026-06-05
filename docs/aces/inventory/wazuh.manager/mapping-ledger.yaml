@@ -1,0 +1,454 @@
+schema_version: 1
+asset:
+  id: wazuh.manager
+  scenario: TechVault
+  aptl_issue: 340
+  aces_methodology_issue: 428
+  source_class: upstream-image-plus-mounted-configuration
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: wazuh/wazuh-manager@sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence:
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+      - path: evidence/docker-buildx-imagetools.image.txt
+    limits:
+      - The upstream image exposes Docker inspect/history and a registry manifest, but no registry-visible in-toto/SLSA attestation was captured for this image digest.
+correspondence_checks:
+  - id: wazuh-manager-node-source-correspondence
+    status: planned
+    source: nodes.techvault.wazuh-manager.source
+    realized_evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-history.image.jsonl
+      - path: evidence/source-checksums.txt
+    ledger_fact_ids:
+      - wazuh-manager.image.identity
+      - wazuh-manager.image.history
+      - wazuh-manager.compose.service
+    method: Compare the ACES source name/version/build provenance and APTL source inputs against the upstream image inspect/history and source checksums captured in this bundle.
+    limit: Planned because issue #340 records a frozen steady-state asset spec rather than a destructive live equivalence proof.
+  - id: wazuh-manager-runtime-correspondence
+    status: planned
+    source: nodes.techvault.wazuh-manager.runtime
+    realized_evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/wazuh-manager-state.txt
+      - path: evidence/wazuh-api-probe.json
+      - path: evidence/os-packages.txt
+      - path: evidence/syft-sbom.cyclonedx.json.gz
+      - path: evidence/trivy-vulnerability-list.json
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/wazuh-detection-definitions.summary.json
+      - path: evidence/wazuh-detection-definitions.rules.json.gz
+      - path: evidence/wazuh-detection-definitions.decoders.json.gz
+    ledger_fact_ids:
+      - wazuh-manager.transport.listeners
+      - wazuh-manager.host-published-ports
+      - wazuh-manager.runtime.mount-table
+      - wazuh-manager.runtime.container-policy
+      - wazuh-manager.runtime.health
+      - wazuh-manager.runtime.processes
+      - wazuh-manager.runtime.environment
+      - wazuh-manager.runtime.local-identity-database
+      - wazuh-manager.runtime.filesystem-inventory
+      - wazuh-manager.runtime.package-inventory
+      - wazuh-manager.runtime.vulnerability-scan
+      - wazuh-manager.security-monitoring.manager-state
+      - wazuh-manager.security-monitoring.agent-enrollment
+      - wazuh-manager.security-monitoring.content-sets
+      - wazuh-manager.security-monitoring.detection-definitions
+      - wazuh-manager.security-monitoring.settings
+    method: Re-run the encoded scenario from ACES SDL, recapture Wazuh manager runtime evidence, and compare network, filesystem, package, vulnerability, local identity, and typed Wazuh manager logical state against this ledger.
+    limit: Planned because this issue records the frozen steady-state ACES spec and evidence, not a destructive clean-lab equivalence run.
+notes:
+  - Capture used the existing running local aptl project as authorized on 2026-05-29 and did not reset the lab.
+  - ACES issues #428 and #434 are consumed; no known remaining ACES expressivity blocker remains for the catalogued Wazuh manager steady-state inventory facts.
+  - The SDL build-history strings normalize braced shell parameter syntax to shell-equivalent unbraced syntax because ACES reserves ${...} for scenario variables; raw history remains in evidence.
+facts:
+  - id: wazuh-manager.image.identity
+    category: provenance
+    summary: The asset uses upstream image wazuh/wazuh-manager@sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561 tagged as 4.12.0.
+    evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-buildx-imagetools.image.txt
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.source.name
+        - nodes.techvault.wazuh-manager.source.version
+      rationale: ACES SDL encodes the upstream image identity directly; evidence remains provenance, not a substitute for SDL encoding.
+  - id: wazuh-manager.image.history
+    category: provenance
+    summary: Docker history records 27 upstream image history rows/layer records plus image defaults for entrypoint, environment, and exposed ports.
+    evidence:
+      - path: evidence/docker-history.image.txt
+      - path: evidence/docker-history.image.jsonl
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.source.build.instructions
+        - nodes.techvault.wazuh-manager.source.build.layers
+        - nodes.techvault.wazuh-manager.source.build.config
+      rationale: ACES SDL has typed image-build provenance for the captured inspect/history facts.
+  - id: wazuh-manager.compose.service
+    category: runtime-configuration
+    summary: Compose realizes the service with upstream image, hostname, healthcheck, environment, volumes, published ports, and three network attachments.
+    evidence:
+      - path: evidence/compose-service.wazuh.manager.json
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.source.build.source_inputs
+        - nodes.techvault.wazuh-manager.runtime.container
+        - nodes.techvault.wazuh-manager.runtime.network
+        - infrastructure.wazuh-manager
+      rationale: Compose intent and mounted APTL inputs are encoded as runtime/source-input realization facts.
+  - id: wazuh-manager.os.version
+    category: runtime-configuration
+    summary: The realized runtime OS is Amazon Linux 2023.8.20250818.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.os
+        - nodes.techvault.wazuh-manager.os_version
+      rationale: ACES nodes support the observed OS family and version.
+  - id: wazuh-manager.network.identity
+    category: network
+    summary: The service is attached to security-net at 172.20.0.10, dmz-net at 172.20.1.10, and internal-net at 172.20.2.30.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-network.aptl-security.json
+      - path: evidence/docker-network.aptl-dmz.json
+      - path: evidence/docker-network.aptl-internal.json
+    aces:
+      disposition: encoded
+      surface: infrastructure
+      fields:
+        - infrastructure.wazuh-manager
+        - nodes.techvault.wazuh-manager.runtime.network.endpoints
+      rationale: ACES runtime network realization records endpoint IPs, Docker aliases, and generated Docker IDs.
+  - id: wazuh-manager.transport.listeners
+    category: service-surface
+    summary: Wazuh exposes agent event ingestion on TCP 1514, enrollment on TCP 1515, syslog on UDP 514, and the HTTPS API on TCP 55000.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/wazuh-api-probe.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.services
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.listeners
+      rationale: ACES #428 adds typed security-monitoring listeners bound to same-node services.
+  - id: wazuh-manager.host-published-ports
+    category: network
+    summary: Docker publishes host ports 1514/tcp, 1515/tcp, 514/udp, and 55000/tcp for the manager.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/compose-service.wazuh.manager.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.network.published_ports
+      rationale: ACES runtime network realization encodes host-published ports separately from logical service listeners.
+  - id: wazuh-manager.runtime.mount-table
+    category: runtime-configuration
+    summary: The realized container has 25 mounts covering Wazuh configuration, queues, logs, integrations, active-response content, Filebeat state, certificates, and APTL rule/decoder binds.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-volume.wazuh-etc.json
+      - path: evidence/docker-volume.wazuh-logs.json
+      - path: evidence/docker-volume.wazuh-queue.json
+      - path: evidence/docker-volume.wazuh-var-multigroups.json
+      - path: evidence/docker-volume.wazuh-integrations.json
+      - path: evidence/docker-volume.wazuh-active-response.json
+      - path: evidence/docker-volume.wazuh-agentless.json
+      - path: evidence/docker-volume.wazuh-api-configuration.json
+      - path: evidence/docker-volume.wazuh-wodles.json
+      - path: evidence/docker-volume.filebeat-etc.json
+      - path: evidence/docker-volume.filebeat-var.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.mounts
+      rationale: ACES runtime mounts encode bind/volume source kind, read-only state, generated backend volumes, and stability.
+  - id: wazuh-manager.runtime.container-policy
+    category: runtime-configuration
+    summary: Docker inspect records entrypoint, restart/resource policy, namespace/security posture, logging, default masks, and PID 1 capability mask.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/compose-service.wazuh.manager.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.container
+        - nodes.techvault.wazuh-manager.runtime.operational_policy
+        - nodes.techvault.wazuh-manager.runtime.linux_capabilities
+      rationale: Current ACES SDL has typed runtime surfaces for container policy and Linux capabilities.
+  - id: wazuh-manager.runtime.health
+    category: runtime-configuration
+    summary: Docker healthcheck status was healthy; the readiness command received the expected unauthenticated Wazuh API 401 response.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/wazuh-api-probe.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.health
+        - conditions.wazuh-api-ready
+      rationale: ACES runtime health encodes observed Docker health logs while scenario conditions encode the authored readiness command.
+  - id: wazuh-manager.runtime.processes
+    category: runtime-configuration
+    summary: PID and process evidence records s6 supervision, Wazuh API workers, Wazuh daemons, log tailing, and Filebeat forwarding.
+    evidence:
+      - path: evidence/docker-top.txt
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/wazuh-manager-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.processes
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.components
+      rationale: >
+        ACES PR #458 removed the singular runtime.process field; the PID 1
+        s6-svscan-1 supervisor identity is now expressed as the first entry
+        of runtime.processes (role: supervisor). The same runtime.processes
+        field continues to carry the full Wazuh manager process inventory
+        (Wazuh API workers, daemons, log tailing, Filebeat). ACES #428 components
+        carry the corresponding Wazuh component state.
+  - id: wazuh-manager.runtime.environment
+    category: runtime-configuration
+    summary: Runtime environment records Wazuh API/indexer variables, Filebeat TLS configuration, root shell defaults, and redacted secret-bearing values.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/compose-service.wazuh.manager.json
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.environment
+      rationale: ACES runtime environment supports provenance and redacted value classification.
+  - id: wazuh-manager.runtime.local-identity-database
+    category: identity
+    summary: getent captured 14 local users and 25 local groups, including the Wazuh service user and group.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.local_identity
+      rationale: ACES runtime local identity records passwd/group facts without promoting them to scenario actor accounts.
+  - id: wazuh-manager.runtime.filesystem-inventory
+    category: filesystem
+    summary: The scoped filesystem inventory records 933 stat/checksum entries plus Wazuh-state-observed loaded rule and decoder paths used by manager content references.
+    evidence:
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/wazuh-manager-state.txt
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.filesystem_inventory
+      rationale: ACES filesystem entries can encode stat-backed entries and path-only entries when the provenance is Wazuh manager introspection.
+  - id: wazuh-manager.runtime.package-inventory
+    category: software
+    summary: RPM captured 118 OS packages; the normalized Syft CycloneDX SBOM captured 322 runtime components including Python and Go dependencies.
+    evidence:
+      - path: evidence/os-packages.txt
+      - path: evidence/syft-sbom.cyclonedx.json.gz
+      - path: evidence/trivy-sbom.cyclonedx.json.gz
+      - path: evidence/language-manifests.txt
+      - path: evidence/syft-version.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.packages
+        - nodes.techvault.wazuh-manager.runtime.dependency_manifests
+      rationale: Runtime packages and dependency manifests capture software inventory while scanner SBOMs remain evidence.
+  - id: wazuh-manager.runtime.vulnerability-scan
+    category: vulnerabilities
+    summary: Trivy captured 368 vulnerability findings at snapshot time with severity counts critical 8, high 183, medium 157, and low 20.
+    evidence:
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-vulnerability-counts.json
+      - path: evidence/trivy-vulnerability-list.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.package_vulnerabilities
+      rationale: ACES runtime package vulnerabilities encode scanner-derived package finding IDs, affected package versions, severities, fixed versions, and scan provenance.
+  - id: wazuh-manager.security-monitoring.manager-state
+    category: security-monitoring
+    summary: Wazuh reported version v4.12.0 revision rc1 with running analysis, remoted, authd, db, syscheck, logcollector, modules, integratord, execd, API, and Filebeat forwarder components.
+    evidence:
+      - path: evidence/wazuh-manager-state.txt
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-top.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.components
+      rationale: ACES #428 provides typed Wazuh/SIEM manager and component semantics.
+  - id: wazuh-manager.security-monitoring.agent-enrollment
+    category: security-monitoring
+    summary: The manager reported seven available agents in the default group, covering DNS, webapp, fileshare, AD, DB, Suricata, and dc.techvault.local.
+    evidence:
+      - path: evidence/wazuh-manager-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.agents
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.agent_groups
+      rationale: ACES #428 supports enrolled security-monitoring agents and manager-side groups.
+  - id: wazuh-manager.security-monitoring.content-sets
+    category: security-monitoring
+    summary: Wazuh manager introspection reported 173 loaded rule XML files, 123 decoder XML files, plus filesystem-observed SCA policy, active-response, and CDB-list content.
+    evidence:
+      - path: evidence/wazuh-manager-state.txt
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.content_sets
+        - nodes.techvault.wazuh-manager.runtime.filesystem_inventory
+      rationale: ACES #428 adds typed content-set semantics for security-monitoring rules, decoders, policies, active response, and lists.
+  - id: wazuh-manager.security-monitoring.detection-definitions
+    category: security-monitoring
+    summary: ACES #434-backed parsing recorded 6,121 loaded Wazuh detection definitions: 4,542 rule/correlation-rule definitions and 1,579 decoder definitions, with zero parse errors and zero unresolved correlation or parent references.
+    evidence:
+      - path: evidence/wazuh-detection-definitions.summary.json
+      - path: evidence/wazuh-detection-definitions.rules.json.gz
+      - path: evidence/wazuh-detection-definitions.decoders.json.gz
+      - path: evidence/wazuh-manager-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.detection_definitions
+      rationale: ACES #434 adds typed detection-definition semantics for manager-loaded rules, correlation rules, decoders, predicates, source spans, canonical digests, and local correlation references.
+  - id: wazuh-manager.security-monitoring.settings
+    category: security-monitoring
+    summary: Manager settings encode indexer URL, Filebeat TLS verification, API auth posture, default group size, and loaded rule/decoder counts with provenance and redaction classification.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/wazuh-manager-state.txt
+      - path: evidence/wazuh-api-probe.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-manager.runtime.security_monitoring_managers.techvault-wazuh-manager.settings
+      rationale: ACES #428 supports bounded manager settings with source/provenance and secret-safe classifications.
+  - id: wazuh-manager.capture.osquery-baseline
+    category: capture-methodology
+    summary: Digest-pinned osquery captured host/container scanner tables where available and recorded unavailable Linux table attempts.
+    evidence:
+      - path: evidence/osquery-version.txt
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-programs.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      fields:
+        - docs.aces.inventory.wazuh.manager.evidence
+      rationale: osquery table evidence is retained as method evidence; not every osquery table corresponds to a separate stable SDL field.
+      caveat: osquery table attempts are retained as inventory evidence; ACES SDL carries derived runtime facts rather than a first-class osquery-table manifest.
+  - id: wazuh-manager.capture.toolchain-baseline
+    category: capture-methodology
+    summary: The bundle records Trivy, Syft, osquery, Docker, Compose, filesystem manifest, redaction, compression, and capture-limit evidence for rerunnable methodology review.
+    evidence:
+      - path: evidence/capture-limits.txt
+      - path: evidence/captured-at-utc.txt
+      - path: evidence/compose-service.wazuh.manager.json
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+      - path: evidence/docker-buildx-imagetools.image.txt
+      - path: evidence/docker-compose-version.json
+      - path: evidence/docker-history.image.jsonl
+      - path: evidence/docker-history.image.txt
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-network.aptl-dmz.json
+      - path: evidence/docker-network.aptl-internal.json
+      - path: evidence/docker-network.aptl-security.json
+      - path: evidence/docker-top.txt
+      - path: evidence/docker-version.json
+      - path: evidence/docker-volume.filebeat-etc.json
+      - path: evidence/docker-volume.filebeat-var.json
+      - path: evidence/docker-volume.wazuh-active-response.json
+      - path: evidence/docker-volume.wazuh-agentless.json
+      - path: evidence/docker-volume.wazuh-api-configuration.json
+      - path: evidence/docker-volume.wazuh-etc.json
+      - path: evidence/docker-volume.wazuh-integrations.json
+      - path: evidence/docker-volume.wazuh-logs.json
+      - path: evidence/docker-volume.wazuh-queue.json
+      - path: evidence/docker-volume.wazuh-var-multigroups.json
+      - path: evidence/docker-volume.wazuh-wodles.json
+      - path: evidence/evidence-sha256sums.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/language-manifests.txt
+      - path: evidence/os-packages.txt
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-programs.json
+      - path: evidence/osquery-version.txt
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/source-checksums.txt
+      - path: evidence/syft-sbom.cyclonedx.json.gz
+      - path: evidence/syft-version.json
+      - path: evidence/trivy-sbom.cyclonedx.json.gz
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-vulnerability-counts.json
+      - path: evidence/trivy-vulnerability-list.json
+      - path: evidence/wazuh-api-probe.json
+      - path: evidence/wazuh-manager-state.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      fields:
+        - docs.aces.inventory.wazuh.manager.evidence
+      rationale: Toolchain and capture-limit files are methodology evidence. SDL encodes the resulting facts; the evidence bundle preserves tool/version/limit detail for audit.
+      caveat: Capture toolchain and evidence-integrity metadata are encoded as inventory bundle provenance and ledger facts; ACES SDL carries the derived asset facts, not a first-class evidence-bundle manifest.

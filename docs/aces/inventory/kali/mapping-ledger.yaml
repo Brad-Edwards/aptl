@@ -26,7 +26,7 @@ provenance:
 correspondence_checks:
   - id: kali-node-source-correspondence
     status: planned
-    source: nodes.kali.source
+    source: nodes.techvault.kali.source
     realized_evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/source-checksums.txt
@@ -44,7 +44,7 @@ correspondence_checks:
       rerun the lab for a live equivalence proof.
   - id: kali-runtime-correspondence
     status: planned
-    source: nodes.kali.runtime
+    source: nodes.techvault.kali.runtime
     realized_evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
@@ -100,7 +100,7 @@ notes:
   - >
     Kali is the scenario attacker node, not a target host: it carries no
     authored scenario weaknesses. Scanner CVE findings are runtime package
-    evidence under nodes.kali.runtime.package_vulnerabilities, not top-level
+    evidence under nodes.techvault.kali.runtime.package_vulnerabilities, not top-level
     vulnerabilities entries.
   - >
     The kali_captures and kali_operations named volumes and the
@@ -122,8 +122,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.source.name
-        - nodes.kali.source.version
+        - nodes.techvault.kali.source.name
+        - nodes.techvault.kali.source.version
       rationale: >
         ACES node source identifies the provider-neutral artifact and the
         observed immutable image digest used by later backend realization.
@@ -141,14 +141,14 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.source.build.base_image
-        - nodes.kali.source.build.dockerfile_path
-        - nodes.kali.source.build.instructions
-        - nodes.kali.source.build.layers
-        - nodes.kali.source.build.copied_sources
-        - nodes.kali.source.build.config
-        - nodes.kali.source.build.source_inputs
-        - nodes.kali.source.build.attestation
+        - nodes.techvault.kali.source.build.base_image
+        - nodes.techvault.kali.source.build.dockerfile_path
+        - nodes.techvault.kali.source.build.instructions
+        - nodes.techvault.kali.source.build.layers
+        - nodes.techvault.kali.source.build.copied_sources
+        - nodes.techvault.kali.source.build.config
+        - nodes.techvault.kali.source.build.source_inputs
+        - nodes.techvault.kali.source.build.attestation
       rationale: >
         ACES Source.build (image provenance) encodes the observed Dockerfile
         recipe, Docker history/layer chain, copied source mappings,
@@ -164,8 +164,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.os
-        - nodes.kali.os_version
+        - nodes.techvault.kali.os
+        - nodes.techvault.kali.os_version
       rationale: ACES nodes have explicit OS family and version fields.
   - id: kali.network.identity
     category: network
@@ -200,7 +200,7 @@ facts:
       disposition: encoded
       surface: nodes.services
       fields:
-        - nodes.kali.services
+        - nodes.techvault.kali.services
       rationale: ACES node service bindings model exposed network services by port.
   - id: kali.healthcheck
     category: runtime-configuration
@@ -215,7 +215,7 @@ facts:
       surface: conditions
       fields:
         - conditions.kali-healthcheck
-        - nodes.kali.conditions
+        - nodes.techvault.kali.conditions
       rationale: ACES conditions represent health/readiness commands and timing.
   - id: kali.runtime.mounts
     category: runtime-configuration
@@ -231,7 +231,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.mounts
+        - nodes.techvault.kali.runtime.mounts
       rationale: >
         ACES typed runtime mounts encode filesystem type, options, propagation,
         stability, and backend-generated fields for the full observed mount
@@ -251,7 +251,7 @@ facts:
       disposition: encoded
       surface: content
       fields:
-        - nodes.kali.runtime.filesystem_inventory
+        - nodes.techvault.kali.runtime.filesystem_inventory
         - content
       rationale: >
         ACES runtime filesystem inventory carries path type, owner/group,
@@ -272,11 +272,13 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.process
-        - nodes.kali.runtime.processes
+        - nodes.techvault.kali.runtime.processes
       rationale: >
-        ACES runtime process identity and process-set inventory preserve PID 1
-        and the load-bearing process set.
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        docker-init identity (role: primary, user: root, command:
+        /sbin/docker-init -- /entrypoint.sh) continues as processes[0]; the
+        load-bearing process set (docker-init, sleep, sshd) continues under
+        the same runtime.processes field.
   - id: kali.runtime.environment
     category: runtime-configuration
     summary: >
@@ -291,7 +293,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.environment
+        - nodes.techvault.kali.runtime.environment
       rationale: >
         ACES observed runtime environment variables carry value classification
         and provenance so image, compose, container, and runtime variables are
@@ -309,7 +311,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.linux_capabilities
+        - nodes.techvault.kali.runtime.linux_capabilities
       rationale: >
         ACES linux_capabilities encodes the container-wide
         required/effective/add/drop capability sets. The capsh per-process
@@ -327,7 +329,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.operational_policy
+        - nodes.techvault.kali.runtime.operational_policy
       rationale: >
         ACES runtime operational policy encodes restart policy and resource
         limits.
@@ -344,7 +346,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.container
+        - nodes.techvault.kali.runtime.container
       rationale: >
         ACES RuntimeContainerConfiguration encodes entrypoint, namespaces,
         privileged/read-only flags, masked/read-only paths, runtime name,
@@ -366,7 +368,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.network
+        - nodes.techvault.kali.runtime.network
       rationale: >
         ACES runtime.network encodes Docker aliases, DNS names, endpoint IDs,
         MAC addresses, IP/gateway data, bridge/IPAM backend detail, and the
@@ -384,7 +386,7 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.kali.runtime.health
+        - nodes.techvault.kali.runtime.health
       caveat: >
         The container is healthy but capture-degraded: the readiness marker
         records auditd=degraded because the kernel audit netlink interface is
@@ -408,7 +410,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.container.extra_hosts
+        - nodes.techvault.kali.runtime.container.extra_hosts
       rationale: >
         ACES RuntimeContainerConfiguration.extra_hosts encodes static
         hostname/address /etc/hosts injection directly.
@@ -426,8 +428,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.packages
-        - nodes.kali.runtime.dependency_manifests
+        - nodes.techvault.kali.runtime.packages
+        - nodes.techvault.kali.runtime.dependency_manifests
       rationale: >
         ACES runtime package and dependency-manifest inventory encode the
         observed dpkg package set and language manifests.
@@ -446,7 +448,7 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.kali.runtime.package_vulnerabilities
+        - nodes.techvault.kali.runtime.package_vulnerabilities
       caveat: >
         Grype is the primary scanner for this asset because Trivy 0.70.0 has
         no advisory database for the rolling kali-rolling release and reports
@@ -471,7 +473,7 @@ facts:
       caveat: >
         Top-level ACES accounts are curated account placements, not the full
         observed Linux identity database; the complete passwd/group/sudo
-        inventory is encoded under nodes.kali.runtime.local_identity.
+        inventory is encoded under nodes.techvault.kali.runtime.local_identity.
       rationale: >
         ACES accounts express local account name, node binding, shell, home,
         auth method, and disabled state.
@@ -487,9 +489,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.local_identity.users
-        - nodes.kali.runtime.local_identity.groups
-        - nodes.kali.runtime.local_identity.sudo_rules
+        - nodes.techvault.kali.runtime.local_identity.users
+        - nodes.techvault.kali.runtime.local_identity.groups
+        - nodes.techvault.kali.runtime.local_identity.sudo_rules
       rationale: >
         ACES runtime.local_identity encodes the observed passwd users, group
         records, and sudo-rule inventory.
@@ -514,7 +516,7 @@ facts:
         attacker node reachability; ACES connects_to relationships model
         active connections, of which an idle attacker node has none at the
         steady-state snapshot. The kali SSH service itself is encoded under
-        nodes.kali.services.
+        nodes.techvault.kali.services.
   - id: kali.runtime.init-process
     category: runtime-configuration
     summary: >
@@ -527,11 +529,11 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.container.init_process.enabled
-        - nodes.kali.runtime.container.init_process.implementation
-        - nodes.kali.runtime.container.init_process.executable_path
-        - nodes.kali.runtime.container.init_process.reaps_children
-        - nodes.kali.runtime.container.init_process.argv
+        - nodes.techvault.kali.runtime.container.init_process.enabled
+        - nodes.techvault.kali.runtime.container.init_process.implementation
+        - nodes.techvault.kali.runtime.container.init_process.executable_path
+        - nodes.techvault.kali.runtime.container.init_process.reaps_children
+        - nodes.techvault.kali.runtime.container.init_process.argv
       rationale: >
         ACES ADR-027 / Brad-Edwards/aces#384 added
         RuntimeContainerConfiguration.init_process to express a
@@ -548,8 +550,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.container.seccomp_profile
-        - nodes.kali.runtime.container.security_opt
+        - nodes.techvault.kali.runtime.container.seccomp_profile
+        - nodes.techvault.kali.runtime.container.security_opt
       rationale: >
         ACES ADR-028 / Brad-Edwards/aces#385 added
         RuntimeContainerConfiguration.seccomp_profile and security_opt to
@@ -568,7 +570,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.linux_capabilities.process_overrides
+        - nodes.techvault.kali.runtime.linux_capabilities.process_overrides
       rationale: >
         ACES ADR-030 / Brad-Edwards/aces#386 added
         RuntimeCapabilityPolicy.process_overrides with subtree-scope deltas
@@ -588,7 +590,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.kali.runtime.ssh_servers
+        - nodes.techvault.kali.runtime.ssh_servers
       rationale: >
         ACES ADR-031 / Brad-Edwards/aces#387 added RuntimeConfiguration.ssh_servers
         as a typed sshd policy surface (SshServerConfig + SshMatchRule +

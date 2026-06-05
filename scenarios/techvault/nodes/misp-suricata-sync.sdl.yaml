@@ -1,0 +1,21 @@
+name: techvault-node-misp-suricata-sync
+nodes:
+  misp-suricata-sync:
+    type: vm
+    description: 'MISP-to-Suricata IOC synchronization companion service stub; full steady-state inventory is owned by issue
+      #349.'
+    source:
+      name: aptl-misp-suricata-sync
+      version: local-build:containers/misp-suricata-sync/Dockerfile
+      build: null
+    resources: null
+    os: linux
+    os_version: ''
+    features: {}
+    conditions: {}
+    injects: {}
+    vulnerabilities: []
+    roles: {}
+    services: []
+    asset_value: null
+    runtime: null

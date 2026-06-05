@@ -281,7 +281,7 @@ facts:
     caveat: misp-iocs.rules is encoded as the authored seed (source.version); the realized on-node copy differs because aptl-misp-suricata-sync rewrites it from live MISP IOCs at runtime (authored-vs-realized split).
 - id: suricata.relationships.log-forwarding
   category: topology
-  summary: aptl-wazuh-sidecar-suricata tails eve.json from the suricata_logs volume (read-only) and forwards alert telemetry to the SOC Wazuh manager.
+  summary: 'aptl-wazuh-sidecar-suricata tails eve.json from the suricata_logs volume (read-only) and forwards alert telemetry to the SOC Wazuh manager. Encoded (ACES #460) as a scenario-level forwarding_agents entry (aptl-suricata-wazuh-agent) plus a relationship whose forwarding_edge.forwarder_ref resolves into it; the agent is registered on wazuh-manager.runtime.security_monitoring_managers[0].agents.'
   evidence:
   - path: evidence/docker-volume.suricata-logs.json
   - path: evidence/suricata-state.txt
@@ -290,6 +290,7 @@ facts:
     surface: relationships
     fields:
     - relationships.suricata-logs-forwarded-wazuh
+    - forwarding_agents.aptl-suricata-wazuh-agent
     rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
 - id: suricata.sensor.monitoring-posture
   category: observability

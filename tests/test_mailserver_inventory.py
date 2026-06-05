@@ -6,7 +6,10 @@ import hashlib
 import json
 import re
 
+import pytest
 import yaml
+
+from tests.techvault_sdl import load_legacy_techvault_sdl
 
 from aptl.core.aces_inventory import (
     gap_report,
@@ -14,6 +17,8 @@ from aptl.core.aces_inventory import (
     validate_mapping_ledger,
 )
 
+
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MAILSERVER_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "mailserver"
@@ -61,6 +66,8 @@ def _evidence_text(path: Path) -> str:
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -214,7 +221,7 @@ def test_techvault_sdl_encodes_mailserver_inventory_surfaces():
     from aces_sdl import parse_sdl_file
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
-    node = scenario.nodes["mailserver"]
+    node = scenario.nodes["techvault.mailserver"]
     assert node.source.version == IMAGE_DIGEST
     assert node.os_version == "Debian GNU/Linux 12 (bookworm)"
 
@@ -233,10 +240,26 @@ def test_techvault_sdl_encodes_mailserver_inventory_surfaces():
     assert published == {25: 25, 143: 143, 587: 587, 993: 993}
 
     mail_service = runtime.mail_services[0]
-    assert mail_service.service_id == "techvault-mail"
+    assert mail_service.mail_service_id == "techvault-mail", (
+        "ACES PR #458 renamed service_id -> mail_service_id under the <noun>_id "
+        "primary-id convention."
+    )
     assert mail_service.engine == "docker-mailserver"
     assert len(mail_service.mailboxes) == MAILBOX_COUNT
     assert len(mail_service.settings) == MAIL_SETTING_COUNT
+    ssl_key_settings = [s for s in mail_service.settings if s.name == "ssl_key"]
+    assert ssl_key_settings, "ssl_key setting must remain encoded under mail_services.settings"
+    assert ssl_key_settings[0].value_classification == "redacted", (
+        "ACES PR #458 unified secret-name redaction: settings whose name carries "
+        "a secret-bearing pattern (per name_indicates_secret) must use "
+        "value_classification 'redacted' or 'operator_secret' and omit the raw "
+        "value."
+    )
+    assert not ssl_key_settings[0].value, (
+        "Raw value must be omitted under the secret-name redaction rule; "
+        "pydantic may surface a missing YAML field as either None or '' "
+        "depending on the model's annotation default."
+    )
     assert mail_service.aliases == []
     assert mail_service.queues[0].message_count == 0
 
@@ -247,8 +270,8 @@ def test_techvault_sdl_encodes_mailserver_inventory_surfaces():
     assert "AUTH=LOGIN" in listeners["imap-143"].capabilities
 
     relationships = scenario.relationships
-    smtp_probe = relationships["kali-probes-mailserver-smtp"]
-    assert smtp_probe.target == "nodes.mailserver.runtime.mail_services.techvault-mail.listeners.smtp-25"
+    smtp_probe = relationships["techvault.kali-probes-mailserver-smtp"]
+    assert smtp_probe.target == "nodes.techvault.mailserver.runtime.mail_services.techvault-mail.listeners.smtp-25"
     assert smtp_probe.mail_access.listener_ref == "smtp-25"
     assert smtp_probe.mail_access.protocol == "smtp"
 
@@ -259,7 +282,7 @@ def test_techvault_sdl_parses_and_compiles_with_mailserver_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.mailserver"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.mailserver"].spec["node"]
     runtime = node["runtime"]
     build = node["source"]["build"]
     mail_service = runtime["mail_services"][0]
@@ -277,7 +300,10 @@ def test_techvault_sdl_parses_and_compiles_with_mailserver_runtime_fields():
     assert len(runtime["network"]["endpoints"]) == 2
     assert len(runtime["network"]["published_ports"]) == 4
     assert runtime["container"]["runtime_name"] == "runc"
-    assert mail_service["service_id"] == "techvault-mail"
+    assert mail_service["mail_service_id"] == "techvault-mail", (
+        "ACES PR #458 renamed service_id -> mail_service_id under the <noun>_id "
+        "primary-id convention."
+    )
     assert mail_service["engine"] == "docker-mailserver"
     assert len(mail_service["listeners"]) == 4
     assert len(mail_service["mailboxes"]) == MAILBOX_COUNT
@@ -289,6 +315,6 @@ def test_parity_inventory_cites_mailserver_inventory_and_aces_sdl():
     rows = {row["id"]: row for row in _yaml_file(PARITY_PATH)["rows"]}
     row = rows["scen.techvault.mailserver-inventory"]
     assert row["category"] == "aces_sdl"
-    assert "nodes.mailserver.runtime.mail_services" in row["aces_target"]
+    assert "nodes.techvault.mailserver.runtime.mail_services" in row["aces_target"]
     assert "tests/test_mailserver_inventory.py" in row["validation_evidence"]
     assert row["blocking_followup"] == "n/a"

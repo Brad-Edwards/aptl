@@ -1,0 +1,18 @@
+--dns--
+172.20.0.16     misp
+172.20.0.16     aptl-misp
+--tcp443--
+misp:443 reachable
+--tcp80--
+misp:80 reachable
+--tls--
+Connecting to 172.20.0.16
+CONNECTION ESTABLISHED
+Protocol version: TLSv1.3
+Ciphersuite: TLS_AES_256_GCM_SHA384
+Peer certificate: O=APTL, CN=aptl-misp
+Hash used: SHA256
+Signature type: rsa_pss_rsae_sha256
+Verification: OK
+Peer Temp Key: X25519, 253 bits
+DONE

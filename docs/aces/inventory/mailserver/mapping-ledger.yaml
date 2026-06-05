@@ -20,7 +20,7 @@ provenance:
 correspondence_checks:
   - id: mailserver-node-source-correspondence
     status: planned
-    source: nodes.mailserver.source
+    source: nodes.techvault.mailserver.source
     realized_evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-history.image.jsonl
@@ -35,7 +35,7 @@ correspondence_checks:
       proof.'
   - id: mailserver-runtime-correspondence
     status: planned
-    source: nodes.mailserver.runtime
+    source: nodes.techvault.mailserver.runtime
     realized_evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
@@ -84,8 +84,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.source.name
-        - nodes.mailserver.source.version
+        - nodes.techvault.mailserver.source.name
+        - nodes.techvault.mailserver.source.version
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.image.history
@@ -98,9 +98,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.source.build.instructions
-        - nodes.mailserver.source.build.layers
-        - nodes.mailserver.source.build.config
+        - nodes.techvault.mailserver.source.build.instructions
+        - nodes.techvault.mailserver.source.build.layers
+        - nodes.techvault.mailserver.source.build.config
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.compose.service
@@ -114,9 +114,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.source.build.source_inputs
-        - nodes.mailserver.runtime.container
-        - nodes.mailserver.runtime.network
+        - nodes.techvault.mailserver.source.build.source_inputs
+        - nodes.techvault.mailserver.runtime.container
+        - nodes.techvault.mailserver.runtime.network
         - infrastructure.mailserver
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
@@ -133,8 +133,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.mail_services.techvault-mail.mailboxes
-        - nodes.mailserver.runtime.filesystem_inventory
+        - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.mailboxes
+        - nodes.techvault.mailserver.runtime.filesystem_inventory
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.os.version
@@ -147,8 +147,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.os
-        - nodes.mailserver.os_version
+        - nodes.techvault.mailserver.os
+        - nodes.techvault.mailserver.os_version
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.network.identity
@@ -165,7 +165,7 @@ facts:
       surface: infrastructure
       fields:
         - infrastructure.mailserver
-        - nodes.mailserver.runtime.network.endpoints
+        - nodes.techvault.mailserver.runtime.network.endpoints
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.transport.listeners
@@ -180,8 +180,8 @@ facts:
       disposition: encoded
       surface: nodes.services
       fields:
-        - nodes.mailserver.services
-        - nodes.mailserver.runtime.mail_services.techvault-mail.listeners
+        - nodes.techvault.mailserver.services
+        - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.listeners
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.host-published-ports
@@ -195,7 +195,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.network.published_ports
+        - nodes.techvault.mailserver.runtime.network.published_ports
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.runtime.mount-table
@@ -212,7 +212,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.mounts
+        - nodes.techvault.mailserver.runtime.mounts
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.runtime.container-policy
@@ -226,9 +226,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.container
-        - nodes.mailserver.runtime.operational_policy
-        - nodes.mailserver.runtime.linux_capabilities
+        - nodes.techvault.mailserver.runtime.container
+        - nodes.techvault.mailserver.runtime.operational_policy
+        - nodes.techvault.mailserver.runtime.linux_capabilities
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.runtime.processes
@@ -243,10 +243,15 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.process
-        - nodes.mailserver.runtime.mail_services.techvault-mail.components
-      rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
-        for the SDL encoding.
+        - nodes.techvault.mailserver.runtime.processes
+        - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.components
+      rationale: >
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        dumb-init/supervisord identity (role: primary, user: root) is now
+        expressed as the first entry of runtime.processes. The components
+        facts on mail_services continue under the same mail_service_id-keyed
+        entry (renamed from service_id per the <noun>_id primary-id
+        convention).
   - id: mailserver.runtime.environment
     category: runtime-configuration
     summary: Runtime environment records docker-mailserver feature toggles, hostname, ONE_DIR, PERMIT_DOCKER, SSL_TYPE, and
@@ -259,7 +264,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.environment
+        - nodes.techvault.mailserver.runtime.environment
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.runtime.local-identity-database
@@ -271,7 +276,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.local_identity
+        - nodes.techvault.mailserver.runtime.local_identity
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.runtime.filesystem-inventory
@@ -286,7 +291,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.filesystem_inventory
+        - nodes.techvault.mailserver.runtime.filesystem_inventory
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.runtime.package-inventory
@@ -301,8 +306,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.packages
-        - nodes.mailserver.source.build.config.default_environment
+        - nodes.techvault.mailserver.runtime.packages
+        - nodes.techvault.mailserver.source.build.config.default_environment
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.runtime.vulnerability-scan
@@ -317,7 +322,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.package_vulnerabilities
+        - nodes.techvault.mailserver.runtime.package_vulnerabilities
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.mail.protocol-capabilities
@@ -330,7 +335,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.mail_services.techvault-mail.listeners
+        - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.listeners
         - relationships.kali-probes-mailserver-smtp.mail_access
         - relationships.kali-probes-mailserver-imap.mail_access
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
@@ -347,9 +352,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.mail_services.techvault-mail.domains
-        - nodes.mailserver.runtime.mail_services.techvault-mail.mailbox_stores
-        - nodes.mailserver.runtime.mail_services.techvault-mail.mailboxes
+        - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.domains
+        - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.mailbox_stores
+        - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.mailboxes
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.mail.alias-queue-state
@@ -363,8 +368,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.mail_services.techvault-mail.aliases
-        - nodes.mailserver.runtime.mail_services.techvault-mail.queues
+        - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.aliases
+        - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.queues
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.mail.runtime-settings
@@ -378,7 +383,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.mailserver.runtime.mail_services.techvault-mail.settings
+        - nodes.techvault.mailserver.runtime.mail_services.techvault-mail.settings
       rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute
         for the SDL encoding.
   - id: mailserver.capture.toolchain-baseline

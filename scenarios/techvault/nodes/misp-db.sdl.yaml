@@ -1,0 +1,24 @@
+name: techvault-node-misp-db
+nodes:
+  misp-db:
+    type: vm
+    description: 'MISP MariaDB companion service stub; full steady-state inventory is owned by issue #347.'
+    source:
+      name: mariadb
+      version: '10.11'
+      build: null
+    resources: null
+    os: linux
+    os_version: ''
+    features: {}
+    conditions: {}
+    injects: {}
+    vulnerabilities: []
+    roles: {}
+    services:
+    - port: 3306
+      protocol: tcp
+      name: mariadb
+      description: ''
+    asset_value: null
+    runtime: null

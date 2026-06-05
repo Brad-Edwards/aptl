@@ -1,0 +1,24 @@
+name: techvault-node-misp-redis
+nodes:
+  misp-redis:
+    type: vm
+    description: 'MISP Redis companion service stub; full steady-state inventory is owned by issue #348.'
+    source:
+      name: redis
+      version: 7-alpine
+      build: null
+    resources: null
+    os: linux
+    os_version: ''
+    features: {}
+    conditions: {}
+    injects: {}
+    vulnerabilities: []
+    roles: {}
+    services:
+    - port: 6379
+      protocol: tcp
+      name: redis
+      description: ''
+    asset_value: null
+    runtime: null

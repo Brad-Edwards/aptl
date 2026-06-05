@@ -22,7 +22,7 @@ provenance:
 correspondence_checks:
   - id: ad-node-source-correspondence
     status: planned
-    source: nodes.ad.source
+    source: nodes.techvault.ad.source
     realized_evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/source-checksums.txt
@@ -38,7 +38,7 @@ correspondence_checks:
       evidence, not a live equivalence checker.
   - id: ad-runtime-correspondence
     status: planned
-    source: nodes.ad.runtime
+    source: nodes.techvault.ad.runtime
     realized_evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
@@ -96,8 +96,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.source.name
-        - nodes.ad.source.version
+        - nodes.techvault.ad.source.name
+        - nodes.techvault.ad.source.version
       rationale: ACES node source identifies the artifact and immutable digest.
 
   - id: ad.build.recipe
@@ -114,13 +114,13 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.source.build.base_image
-        - nodes.ad.source.build.dockerfile_path
-        - nodes.ad.source.build.instructions
-        - nodes.ad.source.build.layers
-        - nodes.ad.source.build.copied_sources
-        - nodes.ad.source.build.source_inputs
-        - nodes.ad.source.build.attestation
+        - nodes.techvault.ad.source.build.base_image
+        - nodes.techvault.ad.source.build.dockerfile_path
+        - nodes.techvault.ad.source.build.instructions
+        - nodes.techvault.ad.source.build.layers
+        - nodes.techvault.ad.source.build.copied_sources
+        - nodes.techvault.ad.source.build.source_inputs
+        - nodes.techvault.ad.source.build.attestation
       rationale: ACES node source build fields encode the observed Dockerfile recipe and source inputs.
 
   - id: ad.os.version
@@ -133,8 +133,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.os
-        - nodes.ad.os_version
+        - nodes.techvault.ad.os
+        - nodes.techvault.ad.os_version
       rationale: ACES nodes have explicit OS family and version fields.
 
   - id: ad.network.identity
@@ -153,7 +153,7 @@ facts:
       fields:
         - infrastructure.ad.links
         - infrastructure.ad.properties
-        - nodes.ad.runtime.network.endpoints
+        - nodes.techvault.ad.runtime.network.endpoints
       rationale: ACES infrastructure and runtime network fields encode authored and realized attachment facts.
 
   - id: ad.runtime.service-surface
@@ -169,7 +169,7 @@ facts:
       disposition: encoded
       surface: nodes.services
       fields:
-        - nodes.ad.services
+        - nodes.techvault.ad.services
       rationale: ACES node service bindings and runtime logical state encode network services by port and protocol.
 
   - id: ad.healthcheck
@@ -186,8 +186,8 @@ facts:
       surface: conditions
       fields:
         - conditions.ad-domain-ready
-        - nodes.ad.conditions
-        - nodes.ad.runtime.health
+        - nodes.techvault.ad.conditions
+        - nodes.techvault.ad.runtime.health
       rationale: ACES conditions represent health/readiness commands and timing.
 
   - id: ad.runtime.volumes
@@ -205,7 +205,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.runtime.mounts
+        - nodes.techvault.ad.runtime.mounts
       rationale: ACES typed runtime mount inventory encodes observed mount targets, backing kinds, options, and stability.
 
   - id: ad.runtime.primary-process
@@ -221,9 +221,15 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.runtime.process
-        - nodes.ad.runtime.processes
-      rationale: ACES runtime process fields encode primary and supervised processes.
+        - nodes.techvault.ad.runtime.processes
+      rationale: >
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        supervisord identity is now carried as the first entry of
+        runtime.processes (enriched with pid: 1, working_directory: /, and the
+        full command list previously held by the singular field — the existing
+        plural entry had supervisord by name only, without those fields).
+        The samba + rsyslog + in-process Wazuh agent process set continues
+        under the same runtime.processes field.
 
   - id: ad.runtime.environment-policy
     category: runtime-configuration
@@ -238,7 +244,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.runtime.environment
+        - nodes.techvault.ad.runtime.environment
       rationale: ACES runtime environment entries encode provenance and value classification.
 
   - id: ad.runtime.capability-restart-policy
@@ -253,8 +259,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.runtime.linux_capabilities
-        - nodes.ad.runtime.operational_policy
+        - nodes.techvault.ad.runtime.linux_capabilities
+        - nodes.techvault.ad.runtime.operational_policy
       rationale: ACES runtime policy fields encode container capabilities and resource policy.
 
   - id: ad.runtime.container-host-config
@@ -267,7 +273,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.runtime.container
+        - nodes.techvault.ad.runtime.container
       rationale: ACES runtime container fields encode host/security configuration details.
 
   - id: ad.runtime.package-inventory
@@ -280,7 +286,7 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.ad.runtime.packages
+        - nodes.techvault.ad.runtime.packages
       caveat: >
         The SDL encodes the 257 package rows and records checksum-addressed
         package evidence outside the SDL.
@@ -298,7 +304,7 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.ad.runtime.package_vulnerabilities
+        - nodes.techvault.ad.runtime.package_vulnerabilities
       caveat: >
         The SDL encodes the scanner findings list while the full scanner JSON
         remains in compressed evidence.
@@ -318,7 +324,7 @@ facts:
       disposition: encoded
       surface: content
       fields:
-        - nodes.ad.runtime.filesystem_inventory
+        - nodes.techvault.ad.runtime.filesystem_inventory
         - content.ad-file-*
       rationale: ACES content and runtime filesystem fields encode catalogued path metadata and digest facts.
 
@@ -333,9 +339,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.runtime.local_identity.users
-        - nodes.ad.runtime.local_identity.groups
-        - nodes.ad.runtime.local_identity.sudo_rules
+        - nodes.techvault.ad.runtime.local_identity.users
+        - nodes.techvault.ad.runtime.local_identity.groups
+        - nodes.techvault.ad.runtime.local_identity.sudo_rules
         - accounts.ad-local-*
       rationale: ACES runtime local identity fields encode participant-observable host identity surfaces.
 
@@ -352,11 +358,11 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.ad.runtime.identity_authorities.techvault-domain
-        - nodes.ad.runtime.identity_authorities.techvault-domain.services
-        - nodes.ad.runtime.identity_authorities.techvault-domain.subjects
-        - nodes.ad.runtime.identity_authorities.techvault-domain.policies
-        - nodes.ad.runtime.identity_authorities.techvault-domain.relationships
+        - nodes.techvault.ad.runtime.identity_authorities.techvault-domain
+        - nodes.techvault.ad.runtime.identity_authorities.techvault-domain.services
+        - nodes.techvault.ad.runtime.identity_authorities.techvault-domain.subjects
+        - nodes.techvault.ad.runtime.identity_authorities.techvault-domain.policies
+        - nodes.techvault.ad.runtime.identity_authorities.techvault-domain.relationships
         - accounts.ad-domain-* (scenario/provisioning refs with evidence-bounded groups)
         - features.techvault-ad-domain-service
         - relationships.ad-provides-domain
@@ -403,5 +409,15 @@ facts:
       fields:
         - relationships.ad-forwards-dns
         - relationships.ad-forwards-wazuh
+        - relationships.ad-forwards-wazuh.forwarding_edge
+        - nodes.techvault.ad.runtime.forwarding_agents
         - relationships.ad-provides-domain
-      rationale: ACES relationships encode host-originating service dependencies and trust services.
+      rationale: >
+        ACES PR #458 introduced typed relationship payloads alongside the new
+        node-scoped runtime.forwarding_agents family. The ad→wazuh-manager
+        relationship now carries a forwarding_edge.forwarder_ref pointing at
+        the in-process ad-wazuh-agent (per ADR-020); the legacy
+        properties.protocol="syslog-and-wazuh-agent" + log_paths prose is
+        retired. The ad-forwards-dns and ad-provides-domain edges remain
+        verb-typed (connects_to) because they describe trust/dependency
+        rather than a typed forwarding flow.

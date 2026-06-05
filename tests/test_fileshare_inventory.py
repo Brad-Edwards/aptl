@@ -6,7 +6,10 @@ import hashlib
 import json
 import re
 
+import pytest
 import yaml
+
+from tests.techvault_sdl import load_legacy_techvault_sdl
 
 from aptl.core.aces_inventory import (
     gap_report,
@@ -14,6 +17,8 @@ from aptl.core.aces_inventory import (
     validate_mapping_ledger,
 )
 
+
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FILESHARE_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "fileshare"
@@ -81,6 +86,8 @@ def _json_file(name: str):
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -209,7 +216,7 @@ def test_fileshare_mapping_ledger_references_every_evidence_file():
 
 
 def test_fileshare_evidence_does_not_commit_generated_secret_material():
-    forbidden = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----|APTL\\{|^Token:", re.MULTILINE)
+    forbidden = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----|APTL\{|^Token:", re.MULTILINE)
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()
@@ -380,8 +387,9 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert len(build["source_inputs"]) == 9
     assert len(build["copied_sources"]) == 8
     assert build["config"]["entrypoint"] == ["/opt/setup-shares.sh"]
-    assert {"port": 139, "protocol": "tcp", "name": "netbios-ssn"} in fileshare["services"]
-    assert {"port": 445, "protocol": "tcp", "name": "microsoft-ds"} in fileshare["services"]
+    services = {(service["port"], service["protocol"], service["name"]) for service in fileshare["services"]}
+    assert (139, "tcp", "netbios-ssn") in services
+    assert (445, "tcp", "microsoft-ds") in services
 
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
     assert mounts["/srv/shares"]["source"] == "aptl_fileshare_data"
@@ -394,12 +402,21 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert len(runtime["filesystem_inventory"]) == FILESYSTEM_ENTRY_COUNT
     assert len(runtime["local_identity"]["users"]) == LOCAL_IDENTITY_USER_COUNT
     assert len(runtime["local_identity"]["groups"]) == LOCAL_IDENTITY_GROUP_COUNT
-    assert runtime["process"]["name"] == "supervisord"
-    assert {process["name"] for process in runtime["processes"]} == {
-        "rsyslog",
-        "samba",
-        "wazuh-agent",
-    }
+    assert "process" not in runtime, (
+        "ACES PR #458 removed runtime.process; PID 1 supervisord identity now "
+        "lives inside runtime.processes."
+    )
+    process_names = {process["name"] for process in runtime["processes"]}
+    assert process_names == {"supervisord", "rsyslog", "samba", "wazuh-agent"}, (
+        "supervisord is added by the PR #458 migration: fileshare's plural "
+        "processes list previously omitted PID 1 entirely; the singular "
+        "runtime.process field was the only encoding."
+    )
+    supervisord_processes = [p for p in runtime["processes"] if p["name"] == "supervisord"]
+    assert len(supervisord_processes) == 1
+    assert supervisord_processes[0]["pid"] == 1
+    assert supervisord_processes[0]["role"] == "primary"
+    assert supervisord_processes[0]["user"] == "root"
     assert runtime["linux_capabilities"]["add"] == ["CAP_NET_ADMIN"]
     assert runtime["operational_policy"]["restart"] == "unless_stopped"
     assert runtime["operational_policy"]["resource_limits"]["memory"] == 536870912
@@ -407,7 +424,10 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert len(runtime["health"]["log"]) == 5
 
     file_service = runtime["file_services"][0]
-    assert file_service["service_id"] == "fileshare-smb"
+    assert file_service["file_service_id"] == "fileshare-smb", (
+        "ACES PR #458 renamed service_id -> file_service_id under the <noun>_id "
+        "primary-id convention."
+    )
     assert file_service["service"] == "microsoft-ds"
     assert file_service["protocol"] == "smb"
     assert file_service["backend"] == "Samba 4.15.13-Ubuntu"
@@ -455,7 +475,7 @@ def test_techvault_sdl_parses_and_compiles_with_fileshare_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.fileshare"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.fileshare"].spec["node"]
     runtime = node["runtime"]
     build = node["source"]["build"]
 
@@ -513,6 +533,28 @@ def test_techvault_sdl_fileshare_content_accounts_relationships_and_parity():
     assert content["fileshare-file-srv-shares-shared-user-flag-txt"]["sensitive"] is True
     assert "fileshare-samba-svc-fileshare" not in accounts
     assert accounts["fileshare-local-svc-fileshare"]["disabled"] is False
-    assert relationships["fileshare-forwards-wazuh"]["target"] == "wazuh-manager"
+    forward = relationships["fileshare-forwards-wazuh"]
+    assert forward["target"] == "wazuh-manager"
+    assert forward["properties"] == {}, (
+        "PR #458: the typed forwarding_edge payload replaces the legacy "
+        "properties.protocol/log_paths prose."
+    )
+    assert forward["forwarding_edge"]["forwarder_ref"] == "fileshare-wazuh-agent"
+
+    fileshare_runtime = data["nodes"]["fileshare"]["runtime"]
+    forwarding_agents = {
+        agent["forwarding_agent_id"]: agent
+        for agent in fileshare_runtime.get("forwarding_agents", [])
+    }
+    assert "fileshare-wazuh-agent" in forwarding_agents, (
+        "PR #458: fileshare runs the Wazuh agent in-process (ADR-020), so the "
+        "forwarder must be encoded under nodes.techvault.fileshare.runtime.forwarding_agents."
+    )
+    fs_agent = forwarding_agents["fileshare-wazuh-agent"]
+    assert fs_agent["implementation"] == "wazuh_agent"
+    assert fs_agent["agent_kind"] == "log_forwarder"
+    assert fs_agent["buffer_policy"]["buffer_policy_id"] == "fileshare-wazuh-agent-buffer"
+    assert 1514 in {target["ingestion_port"] for target in fs_agent["ship_targets"]}
+
     assert rows["scen.techvault.fileshare-inventory"]["category"] == "aces_sdl"
     assert rows["compose.service.fileshare"]["category"] == "aces_sdl"

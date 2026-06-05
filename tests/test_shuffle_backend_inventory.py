@@ -19,6 +19,8 @@ from aptl.core.aces_inventory import (
 )
 
 
+pytestmark = pytest.mark.integration
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SHUFFLE_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "shuffle-backend"
 SHUFFLE_DOC_PATH = SHUFFLE_DIR / "README.md"

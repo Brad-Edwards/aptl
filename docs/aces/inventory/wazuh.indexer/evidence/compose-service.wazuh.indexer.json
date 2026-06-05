@@ -1,0 +1,105 @@
+{
+  "profiles": [
+    "wazuh"
+  ],
+  "command": null,
+  "container_name": "aptl-wazuh-indexer",
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "2147483648"
+      }
+    },
+    "placement": {}
+  },
+  "entrypoint": null,
+  "environment": {
+    "OPENSEARCH_JAVA_OPTS": "-Xms1g -Xmx1g"
+  },
+  "hostname": "wazuh.indexer",
+  "healthcheck": {
+    "test": [
+      "CMD-SHELL",
+      "curl -ks https://localhost:9200 || exit 1"
+    ],
+    "timeout": "10s",
+    "interval": "30s",
+    "retries": 10,
+    "start_period": "3m0s"
+  },
+  "image": "wazuh/wazuh-indexer:4.12.0",
+  "networks": {
+    "aptl-security": {
+      "ipv4_address": "172.20.0.12"
+    }
+  },
+  "ports": [
+    {
+      "mode": "ingress",
+      "target": 9200,
+      "published": "9200",
+      "protocol": "tcp"
+    }
+  ],
+  "restart": "always",
+  "ulimits": {
+    "memlock": {
+      "soft": -1,
+      "hard": -1
+    },
+    "nofile": {
+      "soft": 65536,
+      "hard": 65536
+    }
+  },
+  "volumes": [
+    {
+      "type": "volume",
+      "source": "wazuh-indexer-data",
+      "target": "/var/lib/wazuh-indexer",
+      "volume": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl4/config/wazuh_indexer_ssl_certs/root-ca.pem",
+      "target": "/usr/share/wazuh-indexer/certs/root-ca.pem",
+      "bind": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl4/config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem",
+      "target": "/usr/share/wazuh-indexer/certs/wazuh.indexer.key",
+      "bind": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl4/config/wazuh_indexer_ssl_certs/wazuh.indexer.pem",
+      "target": "/usr/share/wazuh-indexer/certs/wazuh.indexer.pem",
+      "bind": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl4/config/wazuh_indexer_ssl_certs/admin.pem",
+      "target": "/usr/share/wazuh-indexer/certs/admin.pem",
+      "bind": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl4/config/wazuh_indexer_ssl_certs/admin-key.pem",
+      "target": "/usr/share/wazuh-indexer/certs/admin-key.pem",
+      "bind": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl4/config/wazuh_indexer/wazuh.indexer.yml",
+      "target": "/usr/share/wazuh-indexer/opensearch.yml",
+      "bind": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl4/config/wazuh_indexer/internal_users.yml",
+      "target": "/usr/share/wazuh-indexer/opensearch-security/internal_users.yml",
+      "bind": {}
+    }
+  ]
+}

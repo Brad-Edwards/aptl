@@ -1802,12 +1802,12 @@ rows:
     surface: defensive_stack_configs
     legacy_source: config/wazuh_indexer/
     legacy_field: internal_users.yml + wazuh.indexer.yml
-    category: aptl_backend_responsibility
-    aces_target: n/a
+    category: aces_sdl
+    aces_target: nodes.wazuh-indexer.source.build.source_inputs + nodes.wazuh-indexer.runtime.datastore_services + nodes.wazuh-indexer.runtime.identity_authorities
     runtime_owner: config/wazuh_indexer + docker-compose `wazuh`
-    validation_evidence: lab health (Indexer reachable)
+    validation_evidence: docs/aces/inventory/wazuh.indexer/ + tests/test_wazuh_indexer_inventory.py
     blocking_followup: n/a
-    notes: Indexer + internal users.
+    notes: Indexer OpenSearch config and internal users are encoded under runtime.datastore_services and runtime.identity_authorities by the SCN-010 wazuh.indexer inventory bundle (#341).
 
   - id: defconf.wazuh_indexer_ssl_certs
     surface: defensive_stack_configs
@@ -1816,9 +1816,9 @@ rows:
     category: aptl_backend_responsibility
     aces_target: n/a
     runtime_owner: config/wazuh_indexer_ssl_certs + _step_generate_certs
-    validation_evidence: tests/test_certs.py
+    validation_evidence: tests/test_certs.py + docs/aces/inventory/wazuh.indexer/ (transport_security paths)
     blocking_followup: n/a
-    notes: Wazuh PKI bundle.
+    notes: Wazuh PKI bundle. The indexer-side certs (root-ca, wazuh.indexer.pem/.key, admin.pem/.key) are cited under nodes.wazuh-indexer.runtime.datastore_services[].transport_security by #341; the dashboard-side certs remain owned by the future dashboard inventory.
 
   - id: defconf.certs_yml
     surface: defensive_stack_configs

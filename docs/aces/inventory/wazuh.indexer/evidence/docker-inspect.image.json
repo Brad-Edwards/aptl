@@ -1,0 +1,73 @@
+[
+  {
+    "Id": "sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299",
+    "RepoTags": [
+      "wazuh/wazuh-indexer:4.12.0"
+    ],
+    "RepoDigests": [
+      "wazuh/wazuh-indexer@sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2025-09-01T12:04:22.200511438Z",
+    "Config": {
+      "User": "wazuh-indexer",
+      "ExposedPorts": {
+        "9200/tcp": {}
+      },
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "USER=wazuh-indexer",
+        "GROUP=wazuh-indexer",
+        "NAME=wazuh-indexer",
+        "INSTALL_DIR=/usr/share/wazuh-indexer"
+      ],
+      "Entrypoint": [
+        "/entrypoint.sh"
+      ],
+      "Cmd": [
+        "opensearchwrapper"
+      ],
+      "WorkingDir": "/usr/share/wazuh-indexer",
+      "ArgsEscaped": true
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 1017375716,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:3ad05f16deb4834f12b2e9194e45fda60e7583caf0ab3f512d773e1962d3ab83",
+        "sha256:76ac0b560acec7430b6cd7db15e3e7771706f70c37665151472a0eff3b9f7c91",
+        "sha256:0f556c05f5c27ccd9800d2f90fc1e3a4c63382a97d986698b33de7bfcb2423a7",
+        "sha256:54fa7421082ca2c8189edd0bc8fbd9441421025315c298ad686869fcf85e669e",
+        "sha256:870844ea88efb6ccf9c472912f72ddd8f31ef8befe76e3e96e04e1ed01719fb4",
+        "sha256:4669e35a44d7d839402534ebc77fecd553af149e0fe3a29aa71ef8cecdced0e9",
+        "sha256:a7f848aeed5b3d48f608b378153b00d2d264fa1307ebefc0b98fd72da9785341",
+        "sha256:d9248f1982b8ee8fad5527a55c5c7e64fd7d678b706951de4493c5fa7d38b1d1",
+        "sha256:254399a765dac984ce5054736949a2bd3d6c86a49b3585bab8df206f0451dc23",
+        "sha256:8ca0300cd8dc32dfeb25938ca609ab2a100b46d801e58f00804775a70119d73f",
+        "sha256:92e225dfb33fedd6f15875518f75ae0aa21a37ea605654350f74f4cdff66b0b8",
+        "sha256:11afd1bcf970ab5d73f4a5da25973f1fa5d8593d2e06fe168f5ab0b0537e28ac",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+        "sha256:a33cb09617f3e8e4996c47b1d0c39014a7d68e8a508a21ae5f0589f11ff29267",
+        "sha256:587e2e99ddbf8f13674cf0d0a8491b914721626a54f4df1764b6084f6947cce7"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-05-23T06:17:03.121161312Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299",
+      "size": 3649
+    },
+    "Identity": {
+      "Pull": [
+        {
+          "Repository": "docker.io/wazuh/wazuh-indexer"
+        }
+      ]
+    }
+  }
+]

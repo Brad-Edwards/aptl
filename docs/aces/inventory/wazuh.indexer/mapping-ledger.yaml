@@ -1,0 +1,484 @@
+schema_version: 1
+asset:
+  id: wazuh.indexer
+  scenario: TechVault
+  aptl_issue: 341
+  aces_methodology_issue: 353
+  source_class: upstream-image-plus-mounted-configuration
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: wazuh/wazuh-indexer@sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence:
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+      - path: evidence/docker-buildx-imagetools.image.txt
+    limits:
+      - The upstream image exposes Docker inspect/history and a registry manifest, but no registry-visible in-toto/SLSA attestation was captured for this image digest.
+correspondence_checks:
+  - id: wazuh-indexer-node-source-correspondence
+    status: planned
+    source: nodes.techvault.wazuh-indexer.source
+    realized_evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-history.image.jsonl
+      - path: evidence/source-checksums.txt
+    ledger_fact_ids:
+      - wazuh-indexer.image.identity
+      - wazuh-indexer.image.history
+      - wazuh-indexer.compose.service
+    method: Compare the ACES source name/version/build provenance and APTL source inputs against the upstream image inspect/history and source checksums captured in this bundle.
+    limit: Planned because issue #341 records a frozen steady-state asset spec rather than a destructive live equivalence proof.
+  - id: wazuh-indexer-runtime-correspondence
+    status: planned
+    source: nodes.techvault.wazuh-indexer.runtime
+    realized_evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/wazuh-indexer-state.txt
+      - path: evidence/wazuh-indexer-api-probe.json
+      - path: evidence/os-packages.txt
+      - path: evidence/syft-sbom.cyclonedx.json.gz
+      - path: evidence/trivy-vulnerability-list.json
+      - path: evidence/filesystem-tree.txt
+    ledger_fact_ids:
+      - wazuh-indexer.transport.listeners
+      - wazuh-indexer.host-published-ports
+      - wazuh-indexer.runtime.mount-table
+      - wazuh-indexer.runtime.container-policy
+      - wazuh-indexer.runtime.health
+      - wazuh-indexer.runtime.processes
+      - wazuh-indexer.runtime.environment
+      - wazuh-indexer.runtime.local-identity-database
+      - wazuh-indexer.runtime.filesystem-inventory
+      - wazuh-indexer.runtime.package-inventory
+      - wazuh-indexer.runtime.vulnerability-scan
+      - wazuh-indexer.datastore.cluster-state
+      - wazuh-indexer.datastore.node-membership
+      - wazuh-indexer.datastore.indices
+      - wazuh-indexer.datastore.persistence
+      - wazuh-indexer.datastore.transport-security
+      - wazuh-indexer.datastore.settings
+      - wazuh-indexer.datastore.plugins
+      - wazuh-indexer.identity.internal-users
+      - wazuh-indexer.identity.security-roles
+      - wazuh-indexer.identity.role-mappings
+      - wazuh-indexer.identity.security-config
+    method: Re-run the encoded scenario from ACES SDL, recapture Wazuh indexer runtime evidence, and compare network, filesystem, package, vulnerability, local identity, and typed OpenSearch datastore/security logical state against this ledger.
+    limit: Planned because this issue records the frozen steady-state ACES spec and evidence, not a destructive clean-lab equivalence run.
+notes:
+  - Capture used the existing running local aptl project as authorized by the user on 2026-06-05 and did not reset the lab.
+  - INDEXER_USERNAME / INDEXER_PASSWORD were sourced from the lab .env at capture time and passed only via docker exec environment variables; the raw values are never written to evidence, and redact_stream remains the final defence against accidental leakage of credentials, bcrypt hashes, bearer tokens, and TLS private keys.
+  - ACES runtime.datastore_services (`RuntimeDatastoreService` with engine=OPENSEARCH and data_model=SEARCH_INDEX) is consumed for the typed indexer cluster, node, partition, persistence, transport_security, and settings facts; no known remaining ACES expressivity blocker remains for the catalogued Wazuh indexer steady-state inventory.
+  - The SDL build-history strings normalize braced shell parameter syntax to shell-equivalent unbraced syntax because ACES reserves ${...} for scenario variables; raw history remains in evidence.
+facts:
+  - id: wazuh-indexer.image.identity
+    category: provenance
+    summary: The asset uses upstream image wazuh/wazuh-indexer@sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299 tagged as 4.12.0.
+    evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-buildx-imagetools.image.txt
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.source.name
+        - nodes.techvault.wazuh-indexer.source.version
+      rationale: ACES SDL encodes the upstream image identity directly; evidence remains provenance, not a substitute for SDL encoding.
+  - id: wazuh-indexer.image.history
+    category: provenance
+    summary: Docker history records the upstream image build instruction, layer, and config rows for the Wazuh indexer 4.12.0 image.
+    evidence:
+      - path: evidence/docker-history.image.txt
+      - path: evidence/docker-history.image.jsonl
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.source.build.instructions
+        - nodes.techvault.wazuh-indexer.source.build.layers
+        - nodes.techvault.wazuh-indexer.source.build.config
+      rationale: ACES SDL has typed image-build provenance for the captured inspect/history facts.
+  - id: wazuh-indexer.compose.service
+    category: runtime-configuration
+    summary: Compose realizes the service with upstream image, hostname, healthcheck, environment, the wazuh-indexer-data named volume, seven bind-mounted PKI files, two bind-mounted source-owned YAML files, the host-published TCP/9200 port, ulimits, the deploy memory limit, and security-net attachment.
+    evidence:
+      - path: evidence/compose-service.wazuh.indexer.json
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.source.build.source_inputs
+        - nodes.techvault.wazuh-indexer.runtime.container
+        - nodes.techvault.wazuh-indexer.runtime.network
+        - infrastructure.wazuh-indexer
+      rationale: Compose intent and mounted APTL inputs are encoded as runtime/source-input realization facts.
+  - id: wazuh-indexer.os.version
+    category: runtime-configuration
+    summary: The realized runtime OS is Amazon Linux 2023.8.20250818.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.os
+        - nodes.techvault.wazuh-indexer.os_version
+      rationale: ACES nodes support the observed OS family and version.
+  - id: wazuh-indexer.network.identity
+    category: network
+    summary: The service is attached to security-net at 172.20.0.12 with the docker DNS aliases aptl-wazuh-indexer and wazuh.indexer.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-network.aptl-security.json
+    aces:
+      disposition: encoded
+      surface: infrastructure
+      fields:
+        - infrastructure.wazuh-indexer
+        - nodes.techvault.wazuh-indexer.runtime.network.endpoints
+      rationale: ACES runtime network realization records endpoint IPs, Docker aliases, and generated Docker IDs.
+  - id: wazuh-indexer.transport.listeners
+    category: service-surface
+    summary: The indexer exposes the OpenSearch REST API on TCP 9200 (configured http.port range 9200-9299) and the OpenSearch transport on TCP 9300 (configured transport.tcp.port range 9300-9399), both bound to 0.0.0.0.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/wazuh-indexer-state.txt
+      - path: evidence/wazuh-indexer-api-probe.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.services
+        - nodes.techvault.wazuh-indexer.runtime.service_listeners
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.cluster.transport_publish_address
+      rationale: ACES service_listeners encode the bound HTTP and transport listeners; runtime.datastore_services records the typed OpenSearch transport publish address alongside.
+  - id: wazuh-indexer.host-published-ports
+    category: network
+    summary: "Docker publishes host port 9200/tcp on 0.0.0.0 and :: for the indexer REST API; transport (9300) is not host-published."
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/compose-service.wazuh.indexer.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.network.published_ports
+      rationale: ACES runtime network realization encodes host-published ports separately from logical service listeners.
+  - id: wazuh-indexer.runtime.mount-table
+    category: runtime-configuration
+    summary: The realized container has eight mounts covering the wazuh-indexer-data named volume, the indexer OpenSearch YAML bind, the internal_users.yml bind, and five generated TLS PEM binds (root-ca, indexer cert+key, admin cert+key).
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-volume.wazuh-indexer-data.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.mounts
+      rationale: ACES runtime mounts encode bind/volume source kind, read-only state, generated backend volumes, and stability.
+  - id: wazuh-indexer.runtime.container-policy
+    category: runtime-configuration
+    summary: Docker inspect records the /entrypoint.sh entrypoint, opensearchwrapper command, restart=always policy, 2GB memory limit, memlock/nofile ulimits, ipc=private, no added capabilities, PID 1 capability bounding set (CapBnd=a80425fb, CapEff=0), and Docker default seccomp/AppArmor posture.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/compose-service.wazuh.indexer.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.container
+        - nodes.techvault.wazuh-indexer.runtime.operational_policy
+        - nodes.techvault.wazuh-indexer.runtime.linux_capabilities
+      rationale: Current ACES SDL has typed runtime surfaces for container policy and Linux capabilities.
+  - id: wazuh-indexer.runtime.health
+    category: runtime-configuration
+    summary: Docker healthcheck status was healthy; the readiness command (curl -ks https://localhost:9200) receives an HTTP/1.1 401 Unauthorized response which is the expected unauthenticated OpenSearch security-plugin response and is treated as the readiness signal by Compose.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/wazuh-indexer-api-probe.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.health
+        - conditions.wazuh-indexer-ready
+      rationale: ACES runtime health encodes observed Docker health logs while scenario conditions encode the authored readiness command.
+  - id: wazuh-indexer.runtime.processes
+    category: runtime-configuration
+    summary: PID 1 is the OpenSearch JDK java process running as wazuh-indexer:wazuh-indexer (UID 1000) with the -Xms1g/-Xmx1g heap, security manager, performance-analyzer policy, and OpenSearch bootstrap. The /proc snapshot lists 96 process entries (overwhelmingly the JVM's thread group plus an opensearch-performance-analyzer side process).
+    evidence:
+      - path: evidence/docker-top.txt
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.processes
+      rationale: ACES PR #458 removed the singular runtime.process field; PID 1 is expressed as the first entry of runtime.processes (role=supervisor for the OpenSearch JVM that owns the container) and the runtime.processes list carries the observed side processes.
+  - id: wazuh-indexer.runtime.environment
+    category: runtime-configuration
+    summary: Runtime environment records the OPENSEARCH_JAVA_OPTS heap setting, OpenSearch path home/conf/data/logs variables, locale defaults, and the wazuh-indexer service-user shell defaults; no secret-bearing variables are declared by the indexer service in Compose.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/compose-service.wazuh.indexer.json
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.environment
+      rationale: ACES runtime environment supports provenance and redacted value classification.
+  - id: wazuh-indexer.runtime.local-identity-database
+    category: identity
+    summary: getent captured 14 local users and 25 local groups, including the wazuh-indexer service user/group (UID/GID 1000) that runs the OpenSearch JVM.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.local_identity
+      rationale: ACES runtime local identity records passwd/group facts without promoting them to scenario actor accounts.
+  - id: wazuh-indexer.runtime.filesystem-inventory
+    category: filesystem
+    summary: The scoped filesystem inventory records 747 stat entries and 145 sha256-checksummed file entries across the OpenSearch config tree, security plugin config, certs bind tree, opensearch-security plugin layout, performance-analyzer plugin layout, /etc/wazuh-indexer, /var/lib/wazuh-indexer, and /var/log/wazuh-indexer. Private TLS key bytes are intentionally omitted; their paths are present and their checksums are recorded as <OMITTED-OPERATOR-SECRET-CHECKSUM>.
+    evidence:
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.filesystem_inventory
+      rationale: ACES filesystem entries can encode stat-backed entries and path-only entries with secret-safe redaction classifications.
+  - id: wazuh-indexer.runtime.package-inventory
+    category: software
+    summary: RPM captured 110 OS packages; the normalized Syft CycloneDX SBOM captured 840 runtime components covering the JDK and bundled OpenSearch jars.
+    evidence:
+      - path: evidence/os-packages.txt
+      - path: evidence/syft-sbom.cyclonedx.json.gz
+      - path: evidence/trivy-sbom.cyclonedx.json.gz
+      - path: evidence/language-manifests.txt
+      - path: evidence/syft-version.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.packages
+        - nodes.techvault.wazuh-indexer.runtime.dependency_manifests
+      rationale: Runtime packages and dependency manifests capture software inventory while scanner SBOMs remain evidence.
+  - id: wazuh-indexer.runtime.vulnerability-scan
+    category: vulnerabilities
+    summary: Trivy captured 276 vulnerability findings (130 unique CVE IDs) at snapshot time with severity counts high 135, medium 123, low 18, and zero critical.
+    evidence:
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-vulnerability-counts.json
+      - path: evidence/trivy-vulnerability-list.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.package_vulnerabilities
+      rationale: ACES runtime package vulnerabilities encode scanner-derived package finding IDs, affected package versions, severities, fixed versions, and scan provenance.
+  - id: wazuh-indexer.datastore.cluster-state
+    category: datastore
+    summary: The single-node OpenSearch 2.19.1 cluster has cluster_name "opensearch", cluster_uuid "u-vGl1n0Q7e-SKz1tWvb-w", status green, 40 indices, 96 primary shards, 983700 documents, and ~1.3 GB store at snapshot time.
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.cluster
+      rationale: ACES runtime_datastore RuntimeDatastoreService + RuntimeDatastoreCluster supplies the cluster identity, UUID, status, and aggregate shard/doc/store telemetry under engine=OPENSEARCH and data_model=SEARCH_INDEX.
+  - id: wazuh-indexer.datastore.node-membership
+    category: datastore
+    summary: The cluster has one node (id 5N5vnFZERhu2OYBxv5Lo8Q, name wazuh.indexer, version 2.19.1, build_hash dae2bfc93896178873b43cdf4781f183c72b238f, build_type rpm) holding the cluster_manager + data + ingest + remote_cluster_client roles, transport_address 172.20.0.12:9300, http publish 172.20.0.12:9200.
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes
+      rationale: ACES RuntimeDatastoreNode + RuntimeDatastoreNodeRole vocab supplies the node identity, role set, publish addresses, and version provenance.
+  - id: wazuh-indexer.datastore.indices
+    category: datastore
+    summary: The cluster carries 40 indices (wazuh-alerts-4.x-* daily, wazuh-archives-4.x-* daily, wazuh-monitoring-2026.*w weekly, wazuh-statistics-2026.*w weekly, wazuh-states-vulnerabilities-wazuh.manager, plus six bootstrap system indices .kibana / .kibana_1 / .opendistro_security / .opensearch-observability / .opensearch-sap-log-types-config / .plugins-ml-config) with per-index uuid, primary/replica counts, doc counts, and store size.
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.partitions
+      rationale: ACES RuntimeDatastorePartition with kind=INDEX models the OpenSearch indices, carries the snapshot-time uuid, primary/replica counts, and stable store-size shape.
+  - id: wazuh-indexer.datastore.persistence
+    category: datastore
+    summary: OpenSearch persistence is rooted at path.home=/usr/share/wazuh-indexer with path.data=/var/lib/wazuh-indexer (backed by the wazuh-indexer-data named volume) and path.logs=/var/log/wazuh-indexer; no path.repo is configured (no snapshot repository registered).
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+      - path: evidence/docker-volume.wazuh-indexer-data.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.persistence
+      rationale: ACES RuntimeDatastorePersistence supplies the path.data / path.logs / path.repo paths and ties them back to the realized mount table.
+  - id: wazuh-indexer.datastore.transport-security
+    category: datastore
+    summary: Transport security is OpenSearch Security mutual TLS using bind-mounted PEM material - root-ca.pem at /usr/share/wazuh-indexer/certs/root-ca.pem, server cert at wazuh.indexer.pem, server private key at wazuh.indexer.key, admin cert at admin.pem, admin private key at admin-key.pem - with hostname verification disabled on the transport layer and the admin_dn allowlist CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US.
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.transport_security
+      rationale: ACES RuntimeDatastoreTransportSecurity + RuntimeDatastoreTransportSecurityMode encode the mutual-TLS mode, the PEM trust/cert/key paths, and the hostname-verification flags. Private key bytes are intentionally omitted from evidence checksums.
+  - id: wazuh-indexer.datastore.settings
+    category: datastore
+    summary: Curated OpenSearch cluster settings record network.host=0.0.0.0, discovery.type=single-node, http.port range 9200-9299, transport.tcp.port range 9300-9399, OpenSearch Security HTTP transport class wiring, compatibility.override_main_response_version=true, and persistent plugins.index_state_management.template_migration.control=-1 (only persistent setting); no transient settings are set.
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.settings
+      rationale: ACES RuntimeDatastoreSetting + RuntimeDatastoreSettingScope/Provenance carry the per-setting scope (cluster, node), source provenance (opensearch.yml vs persistent vs transient), and bounded value classification.
+  - id: wazuh-indexer.datastore.plugins
+    category: datastore
+    summary: The node has 18 OpenSearch plugins installed at version 2.19.1.0, covering alerting, anomaly-detection, asynchronous-search, cross-cluster-replication, geospatial, index-management, job-scheduler, knn, ml, neural-search, notifications, notifications-core, observability, performance-analyzer, reports-scheduler, security, security-analytics, and sql.
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes
+      rationale: Installed plugins are first-party properties of the realized OpenSearch node and are carried on RuntimeDatastoreNode alongside the version/build provenance.
+  - id: wazuh-indexer.identity.internal-users
+    category: identity
+    summary: internal_users.yml declares six built-in OpenSearch Security internal users - admin (reserved, backend_role admin), kibanaserver (reserved), kibanaro (backend_roles kibanauser+readall, three demo attributes), logstash (backend_role logstash), readall (backend_role readall), snapshotrestore (backend_role snapshotrestore). All bcrypt hashes are <REDACTED-INDEXER-INTERNAL-USER-HASH>; reserved/hidden flags and role memberships are recorded.
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.identity_authorities
+      rationale: ACES runtime identity_authorities encode authority-local users and their attributes; OpenSearch Security internal users are recorded here with bcrypt hashes redacted as operator_secret material.
+  - id: wazuh-indexer.identity.security-roles
+    category: identity
+    summary: A curated subset of OpenSearch Security roles is recorded - the reserved admin role (cluster_permissions [unlimited], wildcard index permissions), reserved kibana_server / kibana_read_only roles, and the security_analytics_* roles seeded by the security-analytics plugin. The full role catalogue lives in opensearch-security plugin source; this inventory captures the realized role-set names, reserved/hidden flags, and high-level permission shape rather than every role definition.
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.identity_authorities
+      rationale: OpenSearch Security roles are recorded under the same identity_authorities surface as the internal users.
+  - id: wazuh-indexer.identity.role-mappings
+    category: identity
+    summary: Role mappings record the standard reserved mappings (own_index, kibana_user, manage_snapshots, logstash, readall, security_rest_api_access) plus the all_access mapping that elevates the admin backend role to the all_access role, and the alerting and observability role mappings used by the OpenSearch alerting and observability plugins. No host-based or and_backend_roles mappings are configured.
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.identity_authorities
+      rationale: Role mappings (user-to-role) live on the same identity_authorities surface.
+  - id: wazuh-indexer.identity.security-config
+    category: identity
+    summary: The OpenSearch Security dynamic config has six http authc domains - jwt_auth_domain (disabled), ldap (disabled), basic_internal_auth_domain (enabled, order 4, challenge true, backend intern), proxy_auth_domain (disabled), clientcert_auth_domain (disabled, transport-only), kerberos_auth_domain (disabled) - and two authz LDAP domains (roles_from_another_ldap, roles_from_myldap, both disabled). The realized authentication path is therefore basic auth against the internal users authority on the HTTP layer.
+    evidence:
+      - path: evidence/wazuh-indexer-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.identity_authorities
+      rationale: The realized authc/authz chain is recorded under identity_authorities as the security authority's chain configuration (mode, order, backend_kind), without leaking real credentials or signing keys.
+  - id: wazuh-indexer.capture.osquery-baseline
+    category: capture-methodology
+    summary: Digest-pinned osquery captured host/container scanner tables where available and recorded unavailable Linux table attempts.
+    evidence:
+      - path: evidence/osquery-version.txt
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-programs.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      fields:
+        - docs.aces.inventory.wazuh.indexer.evidence
+      rationale: osquery table evidence is retained as method evidence; not every osquery table corresponds to a separate stable SDL field.
+      caveat: osquery table attempts are retained as inventory evidence; ACES SDL carries derived runtime facts rather than a first-class osquery-table manifest.
+  - id: wazuh-indexer.capture.toolchain-baseline
+    category: capture-methodology
+    summary: The bundle records Trivy, Syft, osquery, Docker, Compose, filesystem manifest, redaction, compression, and capture-limit evidence for rerunnable methodology review.
+    evidence:
+      - path: evidence/capture-limits.txt
+      - path: evidence/captured-at-utc.txt
+      - path: evidence/compose-service.wazuh.indexer.json
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+      - path: evidence/docker-buildx-imagetools.image.txt
+      - path: evidence/docker-compose-version.json
+      - path: evidence/docker-history.image.jsonl
+      - path: evidence/docker-history.image.txt
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-network.aptl-security.json
+      - path: evidence/docker-top.txt
+      - path: evidence/docker-version.json
+      - path: evidence/docker-volume.wazuh-indexer-data.json
+      - path: evidence/evidence-sha256sums.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/language-manifests.txt
+      - path: evidence/os-packages.txt
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-programs.json
+      - path: evidence/osquery-version.txt
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/source-checksums.txt
+      - path: evidence/syft-sbom.cyclonedx.json.gz
+      - path: evidence/syft-version.json
+      - path: evidence/trivy-sbom.cyclonedx.json.gz
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-vulnerability-counts.json
+      - path: evidence/trivy-vulnerability-list.json
+      - path: evidence/wazuh-indexer-api-probe.json
+      - path: evidence/wazuh-indexer-state.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      fields:
+        - docs.aces.inventory.wazuh.indexer.evidence
+      rationale: Toolchain and capture-limit files are methodology evidence. SDL encodes the resulting facts; the evidence bundle preserves tool/version/limit detail for audit.
+      caveat: Capture toolchain and evidence-integrity metadata are encoded as inventory bundle provenance and ledger facts; ACES SDL carries the derived asset facts, not a first-class evidence-bundle manifest.

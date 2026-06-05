@@ -1,7 +1,7 @@
 [
   {
-    "Id": "ca1a6f1b480bf70f479d07a302484614c5389850385248b38579becfe7526836",
-    "Created": "2026-05-19T21:45:42.921409117Z",
+    "Id": "b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa",
+    "Created": "2026-05-23T06:18:31.96851201Z",
     "Path": "./shufflebackend",
     "Args": [],
     "State": {
@@ -11,17 +11,17 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 42691,
+      "Pid": 2959862,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-19T21:46:01.819259368Z",
+      "StartedAt": "2026-05-23T06:18:55.646269521Z",
       "FinishedAt": "0001-01-01T00:00:00Z"
     },
     "Image": "sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d",
-    "ResolvConfPath": "/var/lib/docker/containers/ca1a6f1b480bf70f479d07a302484614c5389850385248b38579becfe7526836/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/ca1a6f1b480bf70f479d07a302484614c5389850385248b38579becfe7526836/hostname",
-    "HostsPath": "/var/lib/docker/containers/ca1a6f1b480bf70f479d07a302484614c5389850385248b38579becfe7526836/hosts",
-    "LogPath": "/var/lib/docker/containers/ca1a6f1b480bf70f479d07a302484614c5389850385248b38579becfe7526836/ca1a6f1b480bf70f479d07a302484614c5389850385248b38579becfe7526836-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa/hostname",
+    "HostsPath": "/var/lib/docker/containers/b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa/hosts",
+    "LogPath": "/var/lib/docker/containers/b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa/b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa-json.log",
     "Name": "/aptl-shuffle-backend",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -167,14 +167,14 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
+        "SHUFFLE_OPENSEARCH_PASSWORD=<REDACTED-SHUFFLE-OPENSEARCH-PASSWORD>",
+        "SHUFFLE_DEFAULT_USERNAME=admin",
+        "SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true",
+        "SHUFFLE_APP_SDK_TIMEOUT=120",
         "SHUFFLE_DEFAULT_APIKEY=<REDACTED-SHUFFLE-DEFAULT-APIKEY>",
         "SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200",
-        "SHUFFLE_DEFAULT_USERNAME=admin",
-        "SHUFFLE_APP_SDK_TIMEOUT=120",
-        "SHUFFLE_DEFAULT_PASSWORD=<REDACTED-SHUFFLE-DEFAULT-PASSWORD>",
         "SHUFFLE_OPENSEARCH_USERNAME=admin",
-        "SHUFFLE_OPENSEARCH_PASSWORD=<REDACTED-SHUFFLE-OPENSEARCH-PASSWORD>",
-        "SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true",
+        "SHUFFLE_DEFAULT_PASSWORD=<REDACTED-SHUFFLE-DEFAULT-PASSWORD>",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       ],
       "Cmd": [
@@ -198,8 +198,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "dbd87a2ad5bb8b079b4878b2b9983bde90add485b7058a608f4063373870cf91",
-      "SandboxKey": "/var/run/docker/netns/dbd87a2ad5bb",
+      "SandboxID": "100c0010e8c2924b82e6202578091338efe5ef95a9231f3478683c89a1613d90",
+      "SandboxKey": "/var/run/docker/netns/100c0010e8c2",
       "Ports": {
         "5001/tcp": null
       },
@@ -215,11 +215,11 @@
           ],
           "DriverOpts": null,
           "GwPriority": 0,
-          "NetworkID": "4fa4515432a4e517e928bb7a7c71b3ebf2c4e6c740084654cbd1d84b8e76bf09",
-          "EndpointID": "5e4a8a5d486fedc17596e86d50ba86839fd5c0c127e5f563acc1ad3e2fe4341e",
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "d4294cfc69dd529f1d3d826007ac7fc22c76094148e61be663ac8bf9d1752e22",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.20",
-          "MacAddress": "46:d3:60:5f:b8:79",
+          "MacAddress": "12:03:45:c0:31:dd",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -227,7 +227,7 @@
           "DNSNames": [
             "aptl-shuffle-backend",
             "shuffle-backend",
-            "ca1a6f1b480b"
+            "b735a6511901"
           ]
         }
       }

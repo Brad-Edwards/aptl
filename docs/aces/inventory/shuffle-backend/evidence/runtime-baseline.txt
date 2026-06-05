@@ -1,57 +1,84 @@
-Wed May 20 20:17:02 UTC 2026
-Linux shuffle-backend 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 Linux
-uid=0(root) gid=0(root) groups=0(root),0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),10(wheel),11(floppy),20(dialout),26(tape),27(video)
-/app
+--os-release--
 NAME="Alpine Linux"
 ID=alpine
 VERSION_ID=3.22.2
 PRETTY_NAME="Alpine Linux v3.22"
 HOME_URL="https://alpinelinux.org/"
 BUG_REPORT_URL="https://gitlab.alpinelinux.org/alpine/aports/-/issues"
-
--- processes --
-PID   USER     TIME  COMMAND
-    1 root      2:09 ./shufflebackend
-   53 root      0:00 sh -lc  date -u uname -a id pwd cat /etc/os-release || true printf "\n-- processes --\n" ps auxww 2>/dev/null || ps -ef 2>/dev/null || true printf "\n-- listeners --\n" netstat -lntup 2>/dev/null || cat /proc/net/tcp /proc/net/tcp6 printf "\n-- mounts --\n" cat /proc/mounts printf "\n-- passwd --\n" cat /etc/passwd printf "\n-- group --\n" cat /etc/group printf "\n-- sudoers --\n" find /etc/sudoers /etc/sudoers.d -maxdepth 1 -type f -print -exec sed -n "1,220p" {} \; 2>/dev/null || true
-   63 root      0:00 ps auxww
-
--- listeners --
+--id--
+uid=0(root) gid=0(root) groups=0(root),0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),10(wheel),11(floppy),20(dialout),26(tape),27(video)
+--pwd--
+/app
+--uname--
+Linux shuffle-backend 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 Linux
+--capabilities-pid1--
+CapInh:	0000000000000000
+CapPrm:	00000000a80425fb
+CapEff:	00000000a80425fb
+CapBnd:	00000000a80425fb
+CapAmb:	0000000000000000
+--no-new-privs-pid1--
+NoNewPrivs:	0
+--environment--
+CHARSET=UTF-8
+HOME=/root
+HOSTNAME=shuffle-backend
+LANG=C.UTF-8
+LC_COLLATE=C
+PAGER=less
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PWD=/app
+SHLVL=1
+SHUFFLE_APP_SDK_TIMEOUT=120
+SHUFFLE_DEFAULT_APIKEY=<REDACTED>
+SHUFFLE_DEFAULT_PASSWORD=<REDACTED>
+SHUFFLE_DEFAULT_USERNAME=admin
+SHUFFLE_OPENSEARCH_PASSWORD=<REDACTED>
+SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true
+SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200
+SHUFFLE_OPENSEARCH_USERNAME=admin
+--listeners--
 Active Internet connections (only servers)
 Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
-tcp        0      0 127.0.0.11:36983        0.0.0.0:*               LISTEN      -
+tcp        0      0 127.0.0.11:34327        0.0.0.0:*               LISTEN      -
 tcp        0      0 :::5001                 :::*                    LISTEN      1/shufflebackend
-udp        0      0 127.0.0.11:60218        0.0.0.0:*                           -
-
--- mounts --
-overlay / overlay rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40945/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/303/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/295/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/288/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/284/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/213/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/212/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/211/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/60/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40951/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/40951/work,nouserxattr 0 0
-proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
-tmpfs /dev tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
-devpts /dev/pts devpts rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666 0 0
-sysfs /sys sysfs ro,nosuid,nodev,noexec,relatime 0 0
-cgroup /sys/fs/cgroup cgroup2 ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot 0 0
-mqueue /dev/mqueue mqueue rw,nosuid,nodev,noexec,relatime 0 0
-shm /dev/shm tmpfs rw,nosuid,nodev,noexec,relatime,size=65536k,inode64 0 0
-/dev/md2 /shuffle-database ext4 rw,relatime 0 0
-/dev/md2 /etc/resolv.conf ext4 rw,relatime 0 0
-/dev/md2 /etc/hostname ext4 rw,relatime 0 0
-/dev/md2 /etc/hosts ext4 rw,relatime 0 0
-tmpfs /run/docker.sock tmpfs rw,nosuid,nodev,noexec,relatime,size=13180520k,mode=755,inode64 0 0
-proc /proc/bus proc ro,nosuid,nodev,noexec,relatime 0 0
-proc /proc/fs proc ro,nosuid,nodev,noexec,relatime 0 0
-proc /proc/irq proc ro,nosuid,nodev,noexec,relatime 0 0
-proc /proc/sys proc ro,nosuid,nodev,noexec,relatime 0 0
-proc /proc/sysrq-trigger proc ro,nosuid,nodev,noexec,relatime 0 0
-tmpfs /proc/acpi tmpfs ro,relatime,inode64 0 0
-tmpfs /proc/interrupts tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
-tmpfs /proc/kcore tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
-tmpfs /proc/keys tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
-tmpfs /proc/latency_stats tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
-tmpfs /proc/scsi tmpfs ro,relatime,inode64 0 0
-tmpfs /proc/timer_list tmpfs rw,nosuid,size=65536k,mode=755,inode64 0 0
-tmpfs /sys/devices/virtual/powercap tmpfs ro,relatime,inode64 0 0
-tmpfs /sys/firmware tmpfs ro,relatime,inode64 0 0
-
--- passwd --
+udp        0      0 127.0.0.11:53753        0.0.0.0:*                           -
+--connection-state-summary--
+   7489 ESTABLISHED
+      4 TIME_WAIT
+--established-peer-summary--
+   3744 inbound  -> local :5001
+   3743 outbound -> remote :5001
+      2 outbound -> remote :9200
+--mounts--
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51160/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/303/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/295/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/288/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/284/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/213/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/212/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/211/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/60/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51166/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51166/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /shuffle-database type ext4 (rw,relatime)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+tmpfs on /run/docker.sock type tmpfs (rw,nosuid,nodev,noexec,relatime,size=13180520k,mode=755,inode64)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
+--users--
 root:x:0:0:root:/root:/bin/sh
 bin:x:1:1:bin:/bin:/sbin/nologin
 daemon:x:2:2:daemon:/sbin:/sbin/nologin
@@ -69,8 +96,7 @@ games:x:35:35:games:/usr/games:/sbin/nologin
 ntp:x:123:123:NTP:/var/empty:/sbin/nologin
 guest:x:405:100:guest:/dev/null:/sbin/nologin
 nobody:x:65534:65534:nobody:/:/sbin/nologin
-
--- group --
+--groups--
 root:x:0:root
 bin:x:1:root,bin,daemon
 daemon:x:2:root,bin,daemon
@@ -106,5 +132,30 @@ utmp:x:406:
 ping:x:999:
 nogroup:x:65533:
 nobody:x:65534:
-
--- sudoers --
+--process-tree--
+PID   PPID  USER     COMMAND
+    1     0 root     ./shufflebackend
+  119     1 root     [ssl_client]
+ 2532     1 root     [ssl_client]
+ 2534     1 root     [ssl_client]
+ 2547     1 root     [ssl_client]
+ 2551     1 root     [ssl_client]
+ 2555     1 root     [ssl_client]
+ 4998     1 root     [ssl_client]
+ 5009     1 root     [ssl_client]
+ 5038     1 root     [ssl_client]
+ 5049     1 root     [ssl_client]
+ 5060     1 root     [ssl_client]
+ 7521     1 root     [ssl_client]
+ 7532     1 root     [ssl_client]
+ 7561     1 root     [ssl_client]
+ 7572     1 root     [ssl_client]
+ 7583     1 root     [ssl_client]
+ 9991     0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --capabilities-pid1--   grep "^Cap" /proc/1/status || true   printf "%s\n" --no-new-privs-pid1--   grep "^NoNewPrivs" /proc/1/status || true   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (netstat -lntup || true) 2>&1   printf "%s\n" --connection-state-summary--   (netstat -nt 2>/dev/null | awk "NR>2{print \$6}" | sort | uniq -c | sort -rn || true) 2>&1   printf "%s\n" --established-peer-summary--   (netstat -nt 2>/dev/null | awk "\$6==\"ESTABLISHED\"{split(\$4,l,\":\"); split(\$5,r,\":\"); lp=l[length(l)]; rp=r[length(r)]; if(lp==\"5001\") print \"inbound  -> local :5001\"; else print \"outbound -> remote :\"rp}" | sort | uniq -c | sort -rn | head -20 || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --process-tree--   ps -eo pid,ppid,user,args 2>/dev/null || ps -ef || true   printf "%s\n" --shells--   cat /etc/shells 2>/dev/null || true   printf "%s\n" --binary-info--   ls -l /app/shufflebackend   file /app/shufflebackend 2>/dev/null || true
+10025  9991 root     ps -eo pid,ppid,user,args
+--shells--
+# valid login shells
+/bin/sh
+/bin/ash
+--binary-info--
+-rwxr-xr-x    1 root     root     119680431 Feb 12 15:25 /app/shufflebackend

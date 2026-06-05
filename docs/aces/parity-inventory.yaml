@@ -162,9 +162,9 @@ rows:
     category: aces_sdl
     aces_target: ACES nodes / infrastructure / runtime fields
     runtime_owner: n/a
-    validation_evidence: "docs/aces/inventory/shuffle-backend/ + tests/test_techvault_classification_audit.py + tests/test_aces_inventory_methodology.py"
+    validation_evidence: "docs/aces/inventory/shuffle-backend/ + tests/test_shuffle_backend_inventory.py + tests/test_techvault_classification_audit.py + tests/test_aces_inventory_methodology.py"
     blocking_followup: n/a
-    notes: Classification-audit fix for issue #369; current SDL encodes the captured Shuffle backend image identity, OS, security-network identity, API listener, persistent mount, Docker socket control interface, process identity, packages, Go manifest, and Trivy scanner state with no remaining ACES #354 gap marker.
+    notes: "SCN-010 issue #360 completion-grade inventory; current SDL encodes the full captured Shuffle backend runtime surface (image identity, Alpine OS, security-network identity, 5001/tcp API listener and Docker DNS service listeners, persistent mount, Docker socket control interface, PID 1 process, local identity, environment, 21 apk packages, 157 Go software components, Go manifest, 90 Trivy findings, Shuffle REST routes, org/admin identity authority, Shuffle SOAR platform state, and the shuffle-opensearch datastore relationship) with no remaining ACES expressivity gap. Apikey, admin/OpenSearch passwords, and session material are redacted."
 
   - id: scen.techvault.wazuh-manager-inventory
     surface: scenarios_yaml
@@ -687,9 +687,9 @@ rows:
     category: aces_sdl
     aces_target: ACES nodes.techvault.shuffle-backend + infrastructure.shuffle-backend + runtime
     runtime_owner: n/a
-    validation_evidence: docs/aces/inventory/shuffle-backend/ + scenarios/techvault.sdl.yaml + tests/test_techvault_classification_audit.py
+    validation_evidence: docs/aces/inventory/shuffle-backend/ + scenarios/techvault.sdl.yaml + tests/test_shuffle_backend_inventory.py + tests/test_techvault_classification_audit.py
     blocking_followup: n/a
-    notes: Shuffle backend service identity, network attachment, 5001/tcp API listener, persistent state volume, Docker socket bind, package inventory, and Trivy scanner state are now represented by the TechVault SDL.
+    notes: "SCN-010 issue #360 completion-grade inventory; Shuffle backend service identity, network attachment, 5001/tcp API listener, persistent state volume, Docker socket bind/control interface, process identity, local identity, environment, package inventory, Go software components, Trivy scanner state, REST API routes, org/admin identity authority, Shuffle SOAR platform state, and the shuffle-opensearch datastore relationship are represented by the TechVault SDL."
 
   - id: compose.service.wazuh-manager
     surface: docker_compose_topology

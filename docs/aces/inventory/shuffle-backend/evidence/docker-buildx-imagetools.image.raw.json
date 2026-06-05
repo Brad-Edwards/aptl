@@ -4,7 +4,7 @@
   "manifests": [
     {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:f9f43c5ac9b23f919e9c0362f1ddc3d15faad46c8418faa0a5baff8ddf99f79d",
+      "digest": "sha256:fa02b57c35f44cbf0beea742dc4c7c45953f28f94a2e831c4e665584c1710131",
       "size": 1813,
       "platform": {
         "architecture": "amd64",
@@ -13,7 +13,7 @@
     },
     {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:436586973fcbb781d3cec27ae0d0580c82d8771e951db51e99c93dc7b083904a",
+      "digest": "sha256:229364f3bcffb7784b4961ccf33bc6c479e1403cc7841e625b44a7d73a253b2e",
       "size": 1813,
       "platform": {
         "architecture": "arm64",
@@ -22,10 +22,10 @@
     },
     {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:624cfe407e3c036bc7b0723006030f82258ab9f643a0f637ba77ad2d707d191e",
-      "size": 567,
+      "digest": "sha256:68acabfb415ddc62125cdf7eca43e74c02b2fb939154904adaaf4da52611c88f",
+      "size": 565,
       "annotations": {
-        "vnd.docker.reference.digest": "sha256:f9f43c5ac9b23f919e9c0362f1ddc3d15faad46c8418faa0a5baff8ddf99f79d",
+        "vnd.docker.reference.digest": "sha256:fa02b57c35f44cbf0beea742dc4c7c45953f28f94a2e831c4e665584c1710131",
         "vnd.docker.reference.type": "attestation-manifest"
       },
       "platform": {
@@ -35,10 +35,10 @@
     },
     {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:59060c86afa2dc1ed27980d7b4121c00a98304981de88d0ab3f5cc074072f1dd",
-      "size": 567,
+      "digest": "sha256:481254c9b6890f969ed0e74dbe236dffdab167d59292d29f9aec8c400855d2bb",
+      "size": 565,
       "annotations": {
-        "vnd.docker.reference.digest": "sha256:436586973fcbb781d3cec27ae0d0580c82d8771e951db51e99c93dc7b083904a",
+        "vnd.docker.reference.digest": "sha256:229364f3bcffb7784b4961ccf33bc6c479e1403cc7841e625b44a7d73a253b2e",
         "vnd.docker.reference.type": "attestation-manifest"
       },
       "platform": {

@@ -1,2 +1,2 @@
-USER                PID                 %CPU                %MEM                VSZ                 RSS                 TTY                 STAT                START               TIME                COMMAND
-root                42691               0.1                 0.0                 1640096             109656              ?                   Ssl                 May19               2:09                ./shufflebackend
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+root                2959862             2959838             0                   May23               ?                   00:36:31            ./shufflebackend

@@ -1,0 +1,8 @@
+--dns--
+172.20.0.20       shuffle-backend  shuffle-backend
+172.20.0.20       aptl-shuffle-backend  aptl-shuffle-backend
+--api-base--
+{"success":true,"updated":1780636899,"workflows":{"create":true,"run":true,"backend_version":"","run_finished":true,"execution_took":60.314146377,"run_status":"FINISHED","delete":true,"execution_id":"
+--tcp5001--
+wget: server returned error: HTTP/1.1 404 Not Found
+rc=0

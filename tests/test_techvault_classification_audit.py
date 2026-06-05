@@ -65,12 +65,13 @@ def test_shuffle_backend_runtime_inventory_is_encoded_from_evidence():
     assert runtime["processes"][0]["user"] == "root"
     assert runtime["processes"][0]["pid"] == 1
     assert len(runtime["packages"]) == 21
-    assert len(runtime["package_vulnerabilities"]) == len(findings) == 86
+    assert len(runtime["package_vulnerabilities"]) == len(findings) == 90
     assert {finding["severity"] for finding in runtime["package_vulnerabilities"]} == {
         "critical",
         "high",
         "medium",
         "low",
+        "unknown",
     }
 
     endpoint = runtime["network"]["endpoints"][0]
@@ -176,7 +177,7 @@ def test_techvault_sdl_compiles_with_audit_fix_nodes():
 
     shuffle = model.node_deployments["provision.node.techvault.shuffle-backend"].spec["node"]
     wazuh = model.node_deployments["provision.node.techvault.wazuh-manager"].spec["node"]
-    assert len(shuffle["runtime"]["package_vulnerabilities"]) == 86
+    assert len(shuffle["runtime"]["package_vulnerabilities"]) == 90
     assert [endpoint["network"] for endpoint in wazuh["runtime"]["network"]["endpoints"]] == [
         "techvault.security-net",
         "techvault.dmz-net",

@@ -1,0 +1,207 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-shuffle-backend PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "./shufflebackend",
+      "gid": "0",
+      "name": "shufflebackend",
+      "path": "/app/shufflebackend",
+      "pid": "1",
+      "start_time": "1779517135",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "119",
+      "start_time": "1780638962",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "2532",
+      "start_time": "1780639166",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "2534",
+      "start_time": "1780639166",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "2547",
+      "start_time": "1780639166",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "2551",
+      "start_time": "1780639166",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "2555",
+      "start_time": "1780639166",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "4998",
+      "start_time": "1780639532",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "5009",
+      "start_time": "1780639532",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "5038",
+      "start_time": "1780639533",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "5049",
+      "start_time": "1780639533",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "5060",
+      "start_time": "1780639533",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "7521",
+      "start_time": "1780639754",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "7532",
+      "start_time": "1780639754",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "7561",
+      "start_time": "1780639755",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "7572",
+      "start_time": "1780639755",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "7583",
+      "start_time": "1780639755",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "10044",
+      "start_time": "1780639878",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "10055",
+      "start_time": "1780639878",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "10084",
+      "start_time": "1780639878",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "10095",
+      "start_time": "1780639878",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "ssl_client",
+      "path": "",
+      "pid": "10106",
+      "start_time": "1780639878",
+      "uid": "0"
+    }
+  ]
+}

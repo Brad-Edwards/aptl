@@ -86,8 +86,19 @@ rows:
     aces_target: ACES nodes / infrastructure / runtime.service_listeners / runtime.applications / runtime.platform_applications / runtime.identity_authorities / content / relationships fields
     runtime_owner: n/a
     validation_evidence: "docs/aces/inventory/misp/ + tests/test_misp_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/ + Brad-Edwards/aces#431/#465 consumed"
-    blocking_followup: "#347/#348/#349 for companion service full inventories"
+    blocking_followup: "#348/#349 for remaining companion service full inventories"
     notes: SCN-010 issue #346 MISP inventory pass. The SDL encodes the catalogued MISP image, build provenance, runtime, full filesystem manifest, listeners, local and application identity, package/CVE inventory, API routes, threat-intelligence platform content/settings, content-count state, and MISP-to-database/Redis/Suricata-sync relationship facts. Brad-Edwards/aces#431 is consumed through runtime.service_listeners, ACES platform-application support is consumed through runtime.platform_applications, and Brad-Edwards/aces#465 is consumed through modular SDL imports with no known remaining ACES expressivity blocker for the catalogued MISP steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
+  - id: scen.techvault.misp-db-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.misp-db + infrastructure.misp-db + runtime.database_services + content + accounts + relationships
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime.service_listeners / runtime.database_services / content / accounts / relationships fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/misp-db/ + tests/test_misp_db_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/ + Brad-Edwards/aces#388/#431/#465 consumed"
+    blocking_followup: n/a
+    notes: SCN-010 issue #347 MISP MariaDB companion inventory pass. The SDL encodes the catalogued MariaDB image, build provenance, runtime, filesystem manifest, local identity, package/CVE inventory, software components, listeners, database logical state, MISP table cardinalities, database role/account anchors, and typed MISP-to-MariaDB relationship facts. Brad-Edwards/aces#388 is consumed through runtime.database_services, Brad-Edwards/aces#431 is consumed through runtime.service_listeners, and Brad-Edwards/aces#465 is consumed through modular SDL imports with no known remaining ACES expressivity blocker for the catalogued MISP DB steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
   - id: scen.techvault.workstation-inventory
     surface: scenarios_yaml

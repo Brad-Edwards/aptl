@@ -282,7 +282,7 @@ relationships:
   misp-connects-mariadb:
     type: connects_to
     source: nodes.techvault.misp.runtime.applications.misp-web
-    target: techvault.misp-db
+    target: nodes.techvault.misp-db.runtime.database_services.misp-mariadb.databases.misp
     description: MISP application configuration points at the MariaDB companion service using MYSQL_HOST=misp-db, database
       misp, and user misp; password value is redacted.
     properties:
@@ -291,7 +291,10 @@ relationships:
       database: misp
       auth_method: password
       credential_source: MYSQL_PASSWORD redacted
-    database_access: null
+    database_access:
+      role_ref: misp
+      auth_method: password
+      description: MISP application authenticates to the MariaDB misp database as the database-local misp role.
     mail_access: null
     forwarding_edge: null
     service_integration: null

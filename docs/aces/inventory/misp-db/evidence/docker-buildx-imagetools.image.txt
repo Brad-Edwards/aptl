@@ -1,0 +1,88 @@
+Name:      docker.io/library/mariadb:10.11
+MediaType: application/vnd.oci.image.index.v1+json
+Digest:    sha256:5a5c675881ef3fd1c1da9b0a3bfd6ee82edbe39cd9e32e06be18034c37235e0e
+
+Manifests:
+  Name:        docker.io/library/mariadb:10.11@sha256:fa3a8c2475c503a08ed131d06b555a674d54754e266d19e3f80ba0013352009f
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/amd64
+  Annotations:
+    org.opencontainers.image.created:         2026-05-29T23:07:40Z
+    org.opencontainers.image.revision:        53935c78b82bff912b361357d59db11d7246ea96
+    org.opencontainers.image.source:          https://github.com/MariaDB/mariadb-docker.git#53935c78b82bff912b361357d59db11d7246ea96:10.11
+    org.opencontainers.image.url:             https://hub.docker.com/_/mariadb
+    org.opencontainers.image.version:         10.11.18-jammy
+    com.docker.official-images.bashbrew.arch: amd64
+    org.opencontainers.image.base.digest:     sha256:ce941a2a18bbb922e434d6d6d2b31e571a5c3826eaf6ada0a41dcc905bd2d906
+    org.opencontainers.image.base.name:       ubuntu:jammy
+
+  Name:        docker.io/library/mariadb:10.11@sha256:ba02538da1e20471f55e5f146efd25becd63225c66fd7b5d3b4dd890fb344a0a
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations:
+    com.docker.official-images.bashbrew.arch: amd64
+    vnd.docker.reference.digest:              sha256:fa3a8c2475c503a08ed131d06b555a674d54754e266d19e3f80ba0013352009f
+    vnd.docker.reference.type:                attestation-manifest
+
+  Name:        docker.io/library/mariadb:10.11@sha256:93148da8d55378963e05dbf8a65dd876ace05beba178c229a393672f869bea04
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/arm64/v8
+  Annotations:
+    org.opencontainers.image.base.name:       ubuntu:jammy
+    org.opencontainers.image.created:         2026-05-29T23:07:42Z
+    org.opencontainers.image.revision:        53935c78b82bff912b361357d59db11d7246ea96
+    org.opencontainers.image.source:          https://github.com/MariaDB/mariadb-docker.git#53935c78b82bff912b361357d59db11d7246ea96:10.11
+    org.opencontainers.image.url:             https://hub.docker.com/_/mariadb
+    org.opencontainers.image.version:         10.11.18-jammy
+    com.docker.official-images.bashbrew.arch: arm64v8
+    org.opencontainers.image.base.digest:     sha256:c1fc012913af7a4dd0d86553d9dae19b323e7fb60d5407e800cbfbc8f7e6aa63
+
+  Name:        docker.io/library/mariadb:10.11@sha256:bb6dd75ffbf60575320732ba8c5fd21ac81fbf823fa1f4c7d77bda718d38e836
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations:
+    vnd.docker.reference.type:                attestation-manifest
+    com.docker.official-images.bashbrew.arch: arm64v8
+    vnd.docker.reference.digest:              sha256:93148da8d55378963e05dbf8a65dd876ace05beba178c229a393672f869bea04
+
+  Name:        docker.io/library/mariadb:10.11@sha256:6abdcc9b81d9998339bbe76d111efc0b9cf4471e76654e3f6b5704aa6913dbc6
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/ppc64le
+  Annotations:
+    org.opencontainers.image.source:          https://github.com/MariaDB/mariadb-docker.git#53935c78b82bff912b361357d59db11d7246ea96:10.11
+    org.opencontainers.image.url:             https://hub.docker.com/_/mariadb
+    org.opencontainers.image.version:         10.11.18-jammy
+    com.docker.official-images.bashbrew.arch: ppc64le
+    org.opencontainers.image.base.digest:     sha256:80435fb65985ed3da6442908da1f4e893b00ebbe77cdffb234aad08b22314330
+    org.opencontainers.image.base.name:       ubuntu:jammy
+    org.opencontainers.image.created:         2026-05-30T02:13:47Z
+    org.opencontainers.image.revision:        53935c78b82bff912b361357d59db11d7246ea96
+
+  Name:        docker.io/library/mariadb:10.11@sha256:800740cb34c79a22eb7978e365e660524e7473ca43e45267a4aecd18dc860972
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations:
+    com.docker.official-images.bashbrew.arch: ppc64le
+    vnd.docker.reference.digest:              sha256:6abdcc9b81d9998339bbe76d111efc0b9cf4471e76654e3f6b5704aa6913dbc6
+    vnd.docker.reference.type:                attestation-manifest
+
+  Name:        docker.io/library/mariadb:10.11@sha256:705c8284efe8a5436f87255e5cc5b5af6e60cdf1f1b66df35daa3d3772fd00cb
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/s390x
+  Annotations:
+    org.opencontainers.image.source:          https://github.com/MariaDB/mariadb-docker.git#53935c78b82bff912b361357d59db11d7246ea96:10.11
+    org.opencontainers.image.url:             https://hub.docker.com/_/mariadb
+    org.opencontainers.image.version:         10.11.18-jammy
+    com.docker.official-images.bashbrew.arch: s390x
+    org.opencontainers.image.base.digest:     sha256:1a4c892c44d3a63d9b603f17d4fe1d1ff8813065fffc18c7baa7c623de8dfe48
+    org.opencontainers.image.base.name:       ubuntu:jammy
+    org.opencontainers.image.created:         2026-05-29T23:13:26Z
+    org.opencontainers.image.revision:        53935c78b82bff912b361357d59db11d7246ea96
+
+  Name:        docker.io/library/mariadb:10.11@sha256:0e13da6a3e636202a6a02af924c0dc039025e6839b001162318fc319911ffaef
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations:
+    com.docker.official-images.bashbrew.arch: s390x
+    vnd.docker.reference.digest:              sha256:705c8284efe8a5436f87255e5cc5b5af6e60cdf1f1b66df35daa3d3772fd00cb
+    vnd.docker.reference.type:                attestation-manifest

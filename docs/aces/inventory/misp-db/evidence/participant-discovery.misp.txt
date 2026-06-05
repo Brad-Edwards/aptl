@@ -1,0 +1,8 @@
+--dns--
+172.20.0.17     misp-db
+172.20.0.17     aptl-misp-db
+--tcp3306--
+misp-db:3306 reachable
+--mysql-client--
+version	database_name
+10.11.16-MariaDB-ubu2204	misp

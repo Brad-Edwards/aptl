@@ -270,3 +270,19 @@ features:
     - MYSQL_PASSWORD=<redacted>
     - REDIS_HOST=misp-redis
     - ADMIN_KEY=<redacted>
+  techvault-misp-db-service:
+    name: ''
+    type: service
+    source:
+      name: mariadb
+      version: 10.11.16
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: ''
+    description: MISP MariaDB companion service configured by docker-compose.yml.
+    environment:
+    - MYSQL_DATABASE=misp
+    - MYSQL_USER=misp
+    - MYSQL_PASSWORD=<redacted>
+    - MYSQL_ROOT_PASSWORD=<redacted>

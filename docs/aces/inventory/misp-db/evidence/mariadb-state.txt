@@ -1,0 +1,483 @@
+--mariadb-version--
+version	version_comment	hostname	port	datadir	socket	log_error
+10.11.16-MariaDB-ubu2204	mariadb.org binary distribution	1574ba5c2bb2	3306	/var/lib/mysql/	/run/mysqld/mysqld.sock
+--databases--
+Database
+information_schema
+misp
+mysql
+performance_schema
+sys
+--users--
+User	Host	plugin	Super_priv	Create_user_priv	Grant_priv	has_auth_string
+healthcheck	127.0.0.1	mysql_native_password	N	N	N	1
+healthcheck	::1	mysql_native_password	N	N	N	1
+healthcheck	localhost	mysql_native_password	N	N	N	1
+mariadb.sys	localhost	mysql_native_password	N	N	N	0
+misp	%	mysql_native_password	N	N	N	1
+root	%	mysql_native_password	Y	Y	Y	1
+root	localhost	mysql_native_password	Y	Y	Y	1
+--schema-tables--
+TABLE_SCHEMA	TABLE_NAME	TABLE_TYPE	ENGINE	TABLE_ROWS
+misp	access_logs	BASE TABLE	InnoDB	0
+misp	admin_settings	BASE TABLE	InnoDB	6
+misp	allowedlist	BASE TABLE	InnoDB	0
+misp	analyst_data_blocklists	BASE TABLE	InnoDB	0
+misp	attachment_scans	BASE TABLE	InnoDB	0
+misp	attributes	BASE TABLE	InnoDB	0
+misp	attribute_tags	BASE TABLE	InnoDB	0
+misp	attr_value_counts	BASE TABLE	InnoDB	0
+misp	audit_logs	BASE TABLE	InnoDB	99824
+misp	auth_keys	BASE TABLE	InnoDB	1
+misp	bookmarks	BASE TABLE	InnoDB	0
+misp	bruteforces	BASE TABLE	InnoDB	0
+misp	cake_sessions	BASE TABLE	InnoDB	0
+misp	cerebrates	BASE TABLE	InnoDB	0
+misp	collections	BASE TABLE	InnoDB	0
+misp	collection_elements	BASE TABLE	InnoDB	0
+misp	correlations	BASE TABLE	InnoDB	0
+misp	correlation_exclusions	BASE TABLE	InnoDB	0
+misp	correlation_rules	BASE TABLE	InnoDB	0
+misp	correlation_values	BASE TABLE	InnoDB	0
+misp	cryptographic_keys	BASE TABLE	InnoDB	0
+misp	dashboards	BASE TABLE	InnoDB	0
+misp	decaying_models	BASE TABLE	InnoDB	0
+misp	decaying_model_mappings	BASE TABLE	InnoDB	0
+misp	default_correlations	BASE TABLE	InnoDB	0
+misp	events	BASE TABLE	InnoDB	0
+misp	event_blocklists	BASE TABLE	InnoDB	0
+misp	event_delegations	BASE TABLE	InnoDB	0
+misp	event_graph	BASE TABLE	InnoDB	0
+misp	event_locks	BASE TABLE	InnoDB	0
+misp	event_reports	BASE TABLE	InnoDB	0
+misp	event_report_tags	BASE TABLE	InnoDB	0
+misp	event_report_template_variables	BASE TABLE	InnoDB	0
+misp	event_tags	BASE TABLE	InnoDB	0
+misp	favourite_tags	BASE TABLE	InnoDB	0
+misp	feeds	BASE TABLE	InnoDB	2
+misp	fuzzy_correlate_ssdeep	BASE TABLE	InnoDB	0
+misp	galaxies	BASE TABLE	InnoDB	112
+misp	galaxy_clusters	BASE TABLE	InnoDB	56341
+misp	galaxy_cluster_blocklists	BASE TABLE	InnoDB	0
+misp	galaxy_cluster_relations	BASE TABLE	InnoDB	59905
+misp	galaxy_cluster_relation_tags	BASE TABLE	InnoDB	18934
+misp	galaxy_elements	BASE TABLE	InnoDB	321235
+misp	inbox	BASE TABLE	InnoDB	0
+misp	jobs	BASE TABLE	InnoDB	126
+misp	logs	BASE TABLE	InnoDB	3935
+misp	news	BASE TABLE	InnoDB	0
+misp	notes	BASE TABLE	InnoDB	0
+misp	noticelists	BASE TABLE	InnoDB	1
+misp	noticelist_entries	BASE TABLE	InnoDB	7
+misp	notification_logs	BASE TABLE	InnoDB	0
+misp	no_acl_correlations	BASE TABLE	InnoDB	0
+misp	objects	BASE TABLE	InnoDB	0
+misp	object_references	BASE TABLE	InnoDB	0
+misp	object_relationships	BASE TABLE	InnoDB	0
+misp	object_templates	BASE TABLE	InnoDB	388
+misp	object_template_elements	BASE TABLE	InnoDB	5523
+misp	opinions	BASE TABLE	InnoDB	0
+misp	organisations	BASE TABLE	InnoDB	1
+misp	org_blocklists	BASE TABLE	InnoDB	2
+misp	over_correlating_values	BASE TABLE	InnoDB	0
+misp	posts	BASE TABLE	InnoDB	0
+misp	regexp	BASE TABLE	InnoDB	29
+misp	relationships	BASE TABLE	InnoDB	0
+misp	rest_client_histories	BASE TABLE	InnoDB	0
+misp	roles	BASE TABLE	InnoDB	6
+misp	scheduled_tasks	BASE TABLE	InnoDB	9
+misp	servers	BASE TABLE	InnoDB	0
+misp	shadow_attributes	BASE TABLE	InnoDB	0
+misp	shadow_attribute_correlations	BASE TABLE	InnoDB	0
+misp	sharing_groups	BASE TABLE	InnoDB	0
+misp	sharing_group_blueprints	BASE TABLE	InnoDB	0
+misp	sharing_group_orgs	BASE TABLE	InnoDB	0
+misp	sharing_group_servers	BASE TABLE	InnoDB	0
+misp	sightingdbs	BASE TABLE	InnoDB	0
+misp	sightingdb_orgs	BASE TABLE	InnoDB	0
+misp	sightings	BASE TABLE	InnoDB	0
+misp	sighting_blocklists	BASE TABLE	InnoDB	0
+misp	system_settings	BASE TABLE	InnoDB	0
+misp	tags	BASE TABLE	InnoDB	5
+misp	tag_collections	BASE TABLE	InnoDB	0
+misp	tag_collection_tags	BASE TABLE	InnoDB	0
+misp	tasks	BASE TABLE	InnoDB	0
+misp	taxii_servers	BASE TABLE	InnoDB	0
+misp	taxonomies	BASE TABLE	InnoDB	165
+misp	taxonomy_entries	BASE TABLE	InnoDB	12986
+misp	taxonomy_predicates	BASE TABLE	InnoDB	1215
+misp	templates	BASE TABLE	InnoDB	4
+misp	template_elements	BASE TABLE	InnoDB	45
+misp	template_element_attributes	BASE TABLE	InnoDB	30
+misp	template_element_files	BASE TABLE	InnoDB	4
+misp	template_element_texts	BASE TABLE	InnoDB	11
+misp	template_tags	BASE TABLE	InnoDB	0
+misp	threads	BASE TABLE	InnoDB	0
+misp	threat_levels	BASE TABLE	InnoDB	4
+misp	users	BASE TABLE	InnoDB	1
+misp	user_login_profiles	BASE TABLE	InnoDB	0
+misp	user_settings	BASE TABLE	InnoDB	0
+misp	warninglists	BASE TABLE	InnoDB	122
+misp	warninglist_entries	BASE TABLE	InnoDB	2509058
+misp	warninglist_types	BASE TABLE	InnoDB	570
+misp	workflows	BASE TABLE	InnoDB	0
+misp	workflow_blueprints	BASE TABLE	InnoDB	0
+mysql	columns_priv	BASE TABLE	Aria	0
+mysql	column_stats	BASE TABLE	Aria	0
+mysql	db	BASE TABLE	Aria	1
+mysql	event	BASE TABLE	Aria	0
+mysql	func	BASE TABLE	Aria	0
+mysql	general_log	BASE TABLE	CSV	2
+mysql	global_priv	BASE TABLE	Aria	7
+mysql	gtid_slave_pos	BASE TABLE	InnoDB	0
+mysql	help_category	BASE TABLE	Aria	50
+mysql	help_keyword	BASE TABLE	Aria	106
+mysql	help_relation	BASE TABLE	Aria	201
+mysql	help_topic	BASE TABLE	Aria	833
+mysql	index_stats	BASE TABLE	Aria	0
+mysql	innodb_index_stats	BASE TABLE	InnoDB	1255
+mysql	innodb_table_stats	BASE TABLE	InnoDB	104
+mysql	plugin	BASE TABLE	Aria	0
+mysql	proc	BASE TABLE	Aria	50
+mysql	procs_priv	BASE TABLE	Aria	0
+mysql	proxies_priv	BASE TABLE	Aria	2
+mysql	roles_mapping	BASE TABLE	Aria	0
+mysql	servers	BASE TABLE	Aria	0
+mysql	slow_log	BASE TABLE	CSV	2
+mysql	tables_priv	BASE TABLE	Aria	1
+mysql	table_stats	BASE TABLE	Aria	0
+mysql	time_zone	BASE TABLE	Aria	1793
+mysql	time_zone_leap_second	BASE TABLE	Aria	0
+mysql	time_zone_name	BASE TABLE	Aria	1793
+mysql	time_zone_transition	BASE TABLE	Aria	117324
+mysql	time_zone_transition_type	BASE TABLE	Aria	10000
+mysql	transaction_registry	BASE TABLE	InnoDB	0
+mysql	user	VIEW	NULL	0
+sys	host_summary	VIEW	NULL	0
+sys	host_summary_by_file_io	VIEW	NULL	0
+sys	host_summary_by_file_io_type	VIEW	NULL	0
+sys	host_summary_by_stages	VIEW	NULL	0
+sys	host_summary_by_statement_latency	VIEW	NULL	0
+sys	host_summary_by_statement_type	VIEW	NULL	0
+sys	innodb_buffer_stats_by_schema	VIEW	NULL	0
+sys	innodb_buffer_stats_by_table	VIEW	NULL	0
+sys	innodb_lock_waits	VIEW	NULL	0
+sys	io_by_thread_by_latency	VIEW	NULL	0
+sys	io_global_by_file_by_bytes	VIEW	NULL	0
+sys	io_global_by_file_by_latency	VIEW	NULL	0
+sys	io_global_by_wait_by_bytes	VIEW	NULL	0
+sys	io_global_by_wait_by_latency	VIEW	NULL	0
+sys	latest_file_io	VIEW	NULL	0
+sys	memory_by_host_by_current_bytes	VIEW	NULL	0
+sys	memory_by_thread_by_current_bytes	VIEW	NULL	0
+sys	memory_by_user_by_current_bytes	VIEW	NULL	0
+sys	memory_global_by_current_bytes	VIEW	NULL	0
+sys	memory_global_total	VIEW	NULL	0
+sys	metrics	VIEW	NULL	0
+sys	processlist	VIEW	NULL	0
+sys	ps_check_lost_instrumentation	VIEW	NULL	0
+sys	schema_auto_increment_columns	VIEW	NULL	0
+sys	schema_index_statistics	VIEW	NULL	0
+sys	schema_object_overview	VIEW	NULL	0
+sys	schema_redundant_indexes	VIEW	NULL	0
+sys	schema_tables_with_full_table_scans	VIEW	NULL	0
+sys	schema_table_lock_waits	VIEW	NULL	0
+sys	schema_table_statistics	VIEW	NULL	0
+sys	schema_table_statistics_with_buffer	VIEW	NULL	0
+sys	schema_unused_indexes	VIEW	NULL	0
+sys	session	VIEW	NULL	0
+sys	session_ssl_status	VIEW	NULL	0
+sys	statements_with_errors_or_warnings	VIEW	NULL	0
+sys	statements_with_full_table_scans	VIEW	NULL	0
+sys	statements_with_runtimes_in_95th_percentile	VIEW	NULL	0
+sys	statements_with_sorting	VIEW	NULL	0
+sys	statements_with_temp_tables	VIEW	NULL	0
+sys	statement_analysis	VIEW	NULL	0
+sys	sys_config	BASE TABLE	Aria	6
+sys	user_summary	VIEW	NULL	0
+sys	user_summary_by_file_io	VIEW	NULL	0
+sys	user_summary_by_file_io_type	VIEW	NULL	0
+sys	user_summary_by_stages	VIEW	NULL	0
+sys	user_summary_by_statement_latency	VIEW	NULL	0
+sys	user_summary_by_statement_type	VIEW	NULL	0
+sys	version	VIEW	NULL	0
+sys	waits_by_host_by_latency	VIEW	NULL	0
+sys	waits_by_user_by_latency	VIEW	NULL	0
+sys	waits_global_by_latency	VIEW	NULL	0
+sys	wait_classes_global_by_avg_latency	VIEW	NULL	0
+sys	wait_classes_global_by_latency	VIEW	NULL	0
+sys	x$host_summary	VIEW	NULL	0
+sys	x$host_summary_by_file_io	VIEW	NULL	0
+sys	x$host_summary_by_file_io_type	VIEW	NULL	0
+sys	x$host_summary_by_stages	VIEW	NULL	0
+sys	x$host_summary_by_statement_latency	VIEW	NULL	0
+sys	x$host_summary_by_statement_type	VIEW	NULL	0
+sys	x$innodb_buffer_stats_by_schema	VIEW	NULL	0
+sys	x$innodb_buffer_stats_by_table	VIEW	NULL	0
+sys	x$innodb_lock_waits	VIEW	NULL	0
+sys	x$io_by_thread_by_latency	VIEW	NULL	0
+sys	x$io_global_by_file_by_bytes	VIEW	NULL	0
+sys	x$io_global_by_file_by_latency	VIEW	NULL	0
+sys	x$io_global_by_wait_by_bytes	VIEW	NULL	0
+sys	x$io_global_by_wait_by_latency	VIEW	NULL	0
+sys	x$latest_file_io	VIEW	NULL	0
+sys	x$memory_by_host_by_current_bytes	VIEW	NULL	0
+sys	x$memory_by_thread_by_current_bytes	VIEW	NULL	0
+sys	x$memory_by_user_by_current_bytes	VIEW	NULL	0
+sys	x$memory_global_by_current_bytes	VIEW	NULL	0
+sys	x$memory_global_total	VIEW	NULL	0
+sys	x$processlist	VIEW	NULL	0
+sys	x$ps_digest_95th_percentile_by_avg_us	VIEW	NULL	0
+sys	x$ps_digest_avg_latency_distribution	VIEW	NULL	0
+sys	x$ps_schema_table_statistics_io	VIEW	NULL	0
+sys	x$schema_flattened_keys	VIEW	NULL	0
+sys	x$schema_index_statistics	VIEW	NULL	0
+sys	x$schema_tables_with_full_table_scans	VIEW	NULL	0
+sys	x$schema_table_lock_waits	VIEW	NULL	0
+sys	x$schema_table_statistics	VIEW	NULL	0
+sys	x$schema_table_statistics_with_buffer	VIEW	NULL	0
+sys	x$session	VIEW	NULL	0
+sys	x$statements_with_errors_or_warnings	VIEW	NULL	0
+sys	x$statements_with_full_table_scans	VIEW	NULL	0
+sys	x$statements_with_runtimes_in_95th_percentile	VIEW	NULL	0
+sys	x$statements_with_sorting	VIEW	NULL	0
+sys	x$statements_with_temp_tables	VIEW	NULL	0
+sys	x$statement_analysis	VIEW	NULL	0
+sys	x$user_summary	VIEW	NULL	0
+sys	x$user_summary_by_file_io	VIEW	NULL	0
+sys	x$user_summary_by_file_io_type	VIEW	NULL	0
+sys	x$user_summary_by_stages	VIEW	NULL	0
+sys	x$user_summary_by_statement_latency	VIEW	NULL	0
+sys	x$user_summary_by_statement_type	VIEW	NULL	0
+sys	x$waits_by_host_by_latency	VIEW	NULL	0
+sys	x$waits_by_user_by_latency	VIEW	NULL	0
+sys	x$waits_global_by_latency	VIEW	NULL	0
+sys	x$wait_classes_global_by_avg_latency	VIEW	NULL	0
+sys	x$wait_classes_global_by_latency	VIEW	NULL	0
+--misp-table-counts--
+TABLE_NAME	TABLE_ROWS
+access_logs	0
+admin_settings	6
+allowedlist	0
+analyst_data_blocklists	0
+attachment_scans	0
+attributes	0
+attribute_tags	0
+attr_value_counts	0
+audit_logs	99824
+auth_keys	1
+bookmarks	0
+bruteforces	0
+cake_sessions	0
+cerebrates	0
+collections	0
+collection_elements	0
+correlations	0
+correlation_exclusions	0
+correlation_rules	0
+correlation_values	0
+cryptographic_keys	0
+dashboards	0
+decaying_models	0
+decaying_model_mappings	0
+default_correlations	0
+events	0
+event_blocklists	0
+event_delegations	0
+event_graph	0
+event_locks	0
+event_reports	0
+event_report_tags	0
+event_report_template_variables	0
+event_tags	0
+favourite_tags	0
+feeds	2
+fuzzy_correlate_ssdeep	0
+galaxies	112
+galaxy_clusters	56341
+galaxy_cluster_blocklists	0
+galaxy_cluster_relations	59905
+galaxy_cluster_relation_tags	18934
+galaxy_elements	321235
+inbox	0
+jobs	126
+logs	3935
+news	0
+notes	0
+noticelists	1
+noticelist_entries	7
+notification_logs	0
+no_acl_correlations	0
+objects	0
+object_references	0
+object_relationships	0
+object_templates	388
+object_template_elements	5523
+opinions	0
+organisations	1
+org_blocklists	2
+over_correlating_values	0
+posts	0
+regexp	29
+relationships	0
+rest_client_histories	0
+roles	6
+scheduled_tasks	9
+servers	0
+shadow_attributes	0
+shadow_attribute_correlations	0
+sharing_groups	0
+sharing_group_blueprints	0
+sharing_group_orgs	0
+sharing_group_servers	0
+sightingdbs	0
+sightingdb_orgs	0
+sightings	0
+sighting_blocklists	0
+system_settings	0
+tags	5
+tag_collections	0
+tag_collection_tags	0
+tasks	0
+taxii_servers	0
+taxonomies	165
+taxonomy_entries	12986
+taxonomy_predicates	1215
+templates	4
+template_elements	45
+template_element_attributes	30
+template_element_files	4
+template_element_texts	11
+template_tags	0
+threads	0
+threat_levels	4
+users	1
+user_login_profiles	0
+user_settings	0
+warninglists	122
+warninglist_entries	2509058
+warninglist_types	570
+workflows	0
+workflow_blueprints	0
+--settings--
+Variable_name	Value
+bind_address
+character_set_server	utf8mb4
+collation_server	utf8mb4_general_ci
+datadir	/var/lib/mysql/
+general_log	OFF
+hostname	1574ba5c2bb2
+log_error
+max_connections	151
+port	3306
+skip_networking	OFF
+slow_query_log	OFF
+socket	/run/mysqld/mysqld.sock
+sql_mode	STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION
+version	10.11.16-MariaDB-ubu2204
+version_comment	mariadb.org binary distribution
+--schema-sample--
+Tables_in_misp
+access_logs
+admin_settings
+allowedlist
+analyst_data_blocklists
+attachment_scans
+attr_value_counts
+attribute_tags
+attributes
+audit_logs
+auth_keys
+bookmarks
+bruteforces
+cake_sessions
+cerebrates
+collection_elements
+collections
+correlation_exclusions
+correlation_rules
+correlation_values
+correlations
+cryptographic_keys
+dashboards
+decaying_model_mappings
+decaying_models
+default_correlations
+event_blocklists
+event_delegations
+event_graph
+event_locks
+event_report_tags
+event_report_template_variables
+event_reports
+event_tags
+events
+favourite_tags
+feeds
+fuzzy_correlate_ssdeep
+galaxies
+galaxy_cluster_blocklists
+galaxy_cluster_relation_tags
+galaxy_cluster_relations
+galaxy_clusters
+galaxy_elements
+inbox
+jobs
+logs
+news
+no_acl_correlations
+notes
+noticelist_entries
+noticelists
+notification_logs
+object_references
+object_relationships
+object_template_elements
+object_templates
+objects
+opinions
+org_blocklists
+organisations
+over_correlating_values
+posts
+regexp
+relationships
+rest_client_histories
+roles
+scheduled_tasks
+servers
+shadow_attribute_correlations
+shadow_attributes
+sharing_group_blueprints
+sharing_group_orgs
+sharing_group_servers
+sharing_groups
+sighting_blocklists
+sightingdb_orgs
+sightingdbs
+sightings
+system_settings
+tag_collection_tags
+tag_collections
+tags
+tasks
+taxii_servers
+taxonomies
+taxonomy_entries
+taxonomy_predicates
+template_element_attributes
+template_element_files
+template_element_texts
+template_elements
+template_tags
+templates
+threads
+threat_levels
+user_login_profiles
+user_settings
+users
+warninglist_entries
+warninglist_types
+warninglists
+workflow_blueprints
+workflows

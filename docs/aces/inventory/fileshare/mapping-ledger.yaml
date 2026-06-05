@@ -22,7 +22,7 @@ provenance:
 correspondence_checks:
   - id: fileshare-node-source-correspondence
     status: planned
-    source: nodes.fileshare.source
+    source: nodes.techvault.fileshare.source
     realized_evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/source-checksums.txt
@@ -41,7 +41,7 @@ correspondence_checks:
       this branch does not rerun the lab for a live equivalence proof.
   - id: fileshare-runtime-correspondence
     status: planned
-    source: nodes.fileshare.runtime
+    source: nodes.techvault.fileshare.runtime
     realized_evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
@@ -102,8 +102,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.source.name
-        - nodes.fileshare.source.version
+        - nodes.techvault.fileshare.source.name
+        - nodes.techvault.fileshare.source.version
       rationale: >
         ACES node source identifies the provider-neutral artifact and the
         observed immutable image digest used by later backend realization.
@@ -124,14 +124,14 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.source.build.base_image
-        - nodes.fileshare.source.build.dockerfile_path
-        - nodes.fileshare.source.build.instructions
-        - nodes.fileshare.source.build.layers
-        - nodes.fileshare.source.build.copied_sources
-        - nodes.fileshare.source.build.config
-        - nodes.fileshare.source.build.source_inputs
-        - nodes.fileshare.source.build.attestation
+        - nodes.techvault.fileshare.source.build.base_image
+        - nodes.techvault.fileshare.source.build.dockerfile_path
+        - nodes.techvault.fileshare.source.build.instructions
+        - nodes.techvault.fileshare.source.build.layers
+        - nodes.techvault.fileshare.source.build.copied_sources
+        - nodes.techvault.fileshare.source.build.config
+        - nodes.techvault.fileshare.source.build.source_inputs
+        - nodes.techvault.fileshare.source.build.attestation
       rationale: >
         ACES Source.build encodes the observed Dockerfile recipe, Docker
         history/layer chain, copied source mappings, checksum-addressed source
@@ -147,8 +147,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.os
-        - nodes.fileshare.os_version
+        - nodes.techvault.fileshare.os
+        - nodes.techvault.fileshare.os_version
       rationale: ACES nodes have explicit OS family and version fields.
 
   - id: fileshare.network.identity
@@ -167,7 +167,7 @@ facts:
       fields:
         - infrastructure.fileshare.links
         - infrastructure.fileshare.properties
-        - nodes.fileshare.runtime.network.endpoints
+        - nodes.techvault.fileshare.runtime.network.endpoints
       rationale: >
         ACES infrastructure properties encode authored network attachment and
         static IP assignment; runtime.network encodes Docker aliases, DNS
@@ -187,7 +187,7 @@ facts:
       disposition: encoded
       surface: nodes.services
       fields:
-        - nodes.fileshare.services
+        - nodes.techvault.fileshare.services
       rationale: ACES node service bindings model exposed network services by port.
 
   - id: fileshare.healthcheck
@@ -203,7 +203,7 @@ facts:
       surface: conditions
       fields:
         - conditions.fileshare-smb-ready
-        - nodes.fileshare.conditions
+        - nodes.techvault.fileshare.conditions
       rationale: ACES conditions represent health/readiness commands and timing.
 
   - id: fileshare.runtime.mount-table
@@ -221,7 +221,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.mounts
+        - nodes.techvault.fileshare.runtime.mounts
       rationale: >
         ACES typed runtime mounts encode filesystem type, options, propagation,
         stability, and backend-generated fields for the full observed mount
@@ -242,7 +242,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.processes
+        - nodes.techvault.fileshare.runtime.processes
       rationale: >
         ACES PR #458 removed the singular runtime.process field. The PID 1
         supervisord identity (role: primary, user: root, working_directory: /,
@@ -268,8 +268,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.supervised_processes
-        - nodes.fileshare.runtime.processes
+        - nodes.techvault.fileshare.runtime.supervised_processes
+        - nodes.techvault.fileshare.runtime.processes
       rationale: >
         ACES runtime supervised-process and process inventories encode daemon
         ownership, command lines, and runtime process identity.
@@ -288,7 +288,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.environment
+        - nodes.techvault.fileshare.runtime.environment
       rationale: ACES runtime.environment carries observed env names, values, and classification.
 
   - id: fileshare.runtime.capability-restart-policy
@@ -304,9 +304,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.capabilities
-        - nodes.fileshare.runtime.restart_policy
-        - nodes.fileshare.runtime.resource_limits
+        - nodes.techvault.fileshare.runtime.capabilities
+        - nodes.techvault.fileshare.runtime.restart_policy
+        - nodes.techvault.fileshare.runtime.resource_limits
       rationale: ACES runtime policy fields encode Linux capabilities, restart policy, and resource limits.
 
   - id: fileshare.runtime.container-host-config
@@ -322,7 +322,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.container
+        - nodes.techvault.fileshare.runtime.container
       rationale: ACES runtime.container carries observed Docker Config and HostConfig fields.
 
   - id: fileshare.runtime.health
@@ -336,7 +336,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.health
+        - nodes.techvault.fileshare.runtime.health
       rationale: ACES runtime.health captures observed container health state and log entries.
 
   - id: fileshare.runtime.package-inventory
@@ -355,8 +355,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.packages
-        - nodes.fileshare.runtime.dependency_manifests
+        - nodes.techvault.fileshare.runtime.packages
+        - nodes.techvault.fileshare.runtime.dependency_manifests
       rationale: >
         ACES runtime package and dependency-manifest inventory can encode the
         package/component identity and tool provenance captured here.
@@ -374,7 +374,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.package_vulnerabilities
+        - nodes.techvault.fileshare.runtime.package_vulnerabilities
       rationale: >
         ACES scanner-derived package finding inventory records advisory ID,
         package, installed/fixed version, severity, target, scanner, and
@@ -398,7 +398,7 @@ facts:
       disposition: encoded
       surface: content
       fields:
-        - nodes.fileshare.runtime.filesystem_inventory
+        - nodes.techvault.fileshare.runtime.filesystem_inventory
         - content
       rationale: >
         ACES runtime filesystem inventory carries path type, owner/group,
@@ -422,7 +422,7 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.filesystem_inventory
+        - nodes.techvault.fileshare.runtime.filesystem_inventory
       rationale: >
         ACES runtime filesystem inventory encodes metadata,
         expected-absent path observations, generated stability, and
@@ -443,8 +443,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.file_services.fileshare-smb
-        - nodes.fileshare.runtime.filesystem_inventory
+        - nodes.techvault.fileshare.runtime.file_services.fileshare-smb
+        - nodes.techvault.fileshare.runtime.filesystem_inventory
       rationale: >
         ACES file-service inventory and filesystem inventory can encode the
         Samba server identity, share definitions, paths, access rules, and
@@ -465,9 +465,9 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.file_services.fileshare-smb.shares
-        - nodes.fileshare.runtime.file_services.fileshare-smb.access_rules
-        - nodes.fileshare.runtime.file_services.fileshare-smb.access_observations
+        - nodes.techvault.fileshare.runtime.file_services.fileshare-smb.shares
+        - nodes.techvault.fileshare.runtime.file_services.fileshare-smb.access_rules
+        - nodes.techvault.fileshare.runtime.file_services.fileshare-smb.access_observations
       rationale: >
         ACES file-service inventory can encode share auth boundaries, guest
         access, visibility, configured access rules, and observed access-probe
@@ -485,7 +485,7 @@ facts:
       disposition: encoded
       surface: accounts
       fields:
-        - nodes.fileshare.runtime.local_identity
+        - nodes.techvault.fileshare.runtime.local_identity
         - accounts
       rationale: >
         ACES local identity and accounts surfaces encode users, UIDs/GIDs,
@@ -505,8 +505,8 @@ facts:
       disposition: encoded
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.file_services.fileshare-smb.principals.nobody
-        - nodes.fileshare.runtime.file_services.fileshare-smb.principals.svc-fileshare
+        - nodes.techvault.fileshare.runtime.file_services.fileshare-smb.principals.nobody
+        - nodes.techvault.fileshare.runtime.file_services.fileshare-smb.principals.svc-fileshare
       rationale: >
         ACES file-service principals encode service-local Samba identities,
         account status, service-local RID evidence, credential classification,
@@ -528,7 +528,7 @@ facts:
       fields:
         - relationships.fileshare-forwards-wazuh
         - relationships.fileshare-forwards-wazuh.forwarding_edge
-        - nodes.fileshare.runtime.forwarding_agents
+        - nodes.techvault.fileshare.runtime.forwarding_agents
         - features.fileshare-rsyslog-forwarding
         - features.fileshare-wazuh-agent
       rationale: >
@@ -581,8 +581,8 @@ facts:
       disposition: encoded_with_caveat
       surface: nodes
       fields:
-        - nodes.fileshare.runtime.capture
-        - nodes.fileshare.runtime.scanner_evidence
+        - nodes.techvault.fileshare.runtime.capture
+        - nodes.techvault.fileshare.runtime.scanner_evidence
       caveat: >
         Capture metadata is provenance for the encoded asset spec. It is not a
         claim of byte-identical rebuildability or live equivalence.

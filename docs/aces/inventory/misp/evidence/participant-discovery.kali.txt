@@ -1,0 +1,5 @@
+--dns--
+--ports--
+172.20.0.16: inverse host lookup failed: Host name lookup failure
+(UNKNOWN) [172.20.0.16] 443 (https) : Network is unreachable
+misp.techvault.local: forward host lookup failed: Host name lookup failure : Resource temporarily unavailable

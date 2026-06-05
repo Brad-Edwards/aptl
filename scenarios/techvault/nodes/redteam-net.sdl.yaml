@@ -1,0 +1,17 @@
+name: techvault-node-redteam-net
+nodes:
+  redteam-net:
+    type: switch
+    description: TechVault red-team network for the kali attacker container.
+    source: null
+    resources: null
+    os: null
+    os_version: ''
+    features: {}
+    conditions: {}
+    injects: {}
+    vulnerabilities: []
+    roles: {}
+    services: []
+    asset_value: null
+    runtime: null

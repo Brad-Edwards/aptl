@@ -1,0 +1,59 @@
+{
+  "profiles": [
+    "soc"
+  ],
+  "image": "ghcr.io/misp/misp-docker/misp-core:latest",
+  "container_name": "aptl-misp",
+  "hostname": "misp",
+  "restart": "unless-stopped",
+  "ports": [
+    "8443:443"
+  ],
+  "environment": [
+    "MYSQL_HOST=misp-db",
+    "MYSQL_DATABASE=misp",
+    "MYSQL_USER=misp",
+    "MYSQL_PASSWORD=<REDACTED-MYSQL-PASSWORD>",
+    "ADMIN_EMAIL=admin@admin.test",
+    "ADMIN_PASSWORD=<REDACTED-ADMIN-PASSWORD>",
+    "ADMIN_KEY=<REDACTED-ADMIN-KEY>",
+    "BASE_URL=https://localhost",
+    "REDIS_HOST=misp-redis"
+  ],
+  "volumes": [
+    "misp_data:/var/www/MISP/app/files",
+    "misp_config:/var/www/MISP/app/Config",
+    "./config/soc_certs/misp/server.pem:/etc/nginx/certs/cert.pem:ro",
+    "./config/soc_certs/misp/server.key:/etc/nginx/certs/key.pem:ro"
+  ],
+  "healthcheck": {
+    "test": [
+      "CMD-SHELL",
+      "curl -ksf https://localhost/users/login || (nginx -s reload 2>/dev/null; exit 1)"
+    ],
+    "interval": "30s",
+    "timeout": "10s",
+    "retries": 15,
+    "start_period": "300s"
+  },
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "2g"
+      }
+    }
+  },
+  "depends_on": {
+    "misp-db": {
+      "condition": "service_healthy"
+    },
+    "misp-redis": {
+      "condition": "service_started"
+    }
+  },
+  "networks": {
+    "aptl-security": {
+      "ipv4_address": "172.20.0.16"
+    }
+  }
+}

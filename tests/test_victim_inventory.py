@@ -10,6 +10,8 @@ import re
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -63,6 +65,8 @@ def _evidence_text(path: Path) -> str:
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -144,7 +148,7 @@ def test_victim_mapping_ledger_validates_without_gap_triage():
         for fact in ledger["facts"]
         if fact["id"] == "victim.runtime.service-manager-state"
     )
-    assert "nodes.victim.runtime.service_manager_units" in service_manager_fact[
+    assert "nodes.techvault.victim.runtime.service_manager_units" in service_manager_fact[
         "aces"
     ]["fields"]
 
@@ -467,7 +471,7 @@ def test_victim_service_manager_units_match_systemd_evidence():
 def test_victim_filesystem_checksum_paths_are_encoded_as_content():
     data = _yaml_file(TECHVAULT_SDL_PATH)
     content_paths = {
-        item["path"] for item in data["content"].values() if item["type"] == "File"
+        item["path"] for item in data["content"].values() if item["type"] == "file"
     }
     checksum_paths = {
         line.split("  ", maxsplit=1)[1]
@@ -595,7 +599,7 @@ def test_techvault_sdl_parses_and_compiles_with_victim_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.victim"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.victim"].spec["node"]
     runtime = node["runtime"]
 
     assert len(runtime["mounts"]) == 30
@@ -636,7 +640,7 @@ def test_parity_inventory_cites_victim_inventory_and_profile_cutover():
     profile = rows["compose.profile.victim"]
     assert profile["category"] == "aces_sdl"
     assert profile["blocking_followup"] == "n/a"
-    assert "nodes.victim" in profile["aces_target"]
+    assert "nodes.techvault.victim" in profile["aces_target"]
 
 
 def test_techvault_sdl_victim_uses_aces_pr458_runtime_forwarding_surfaces():
@@ -644,7 +648,7 @@ def test_techvault_sdl_victim_uses_aces_pr458_runtime_forwarding_surfaces():
     NOT a Wazuh agent (victim's process inventory carries systemd-journal +
     rsyslogd + sshd; no wazuh-* daemons). The typed forwarding_edge payload
     on victim-forwards-wazuh must resolve to a forwarding_agents entry on
-    nodes.victim.runtime, with implementation: rsyslog (not wazuh_agent).
+    nodes.techvault.victim.runtime, with implementation: rsyslog (not wazuh_agent).
     """
     data = _yaml_file(TECHVAULT_SDL_PATH)
     victim_runtime = data["nodes"]["victim"]["runtime"]
@@ -664,7 +668,7 @@ def test_techvault_sdl_victim_uses_aces_pr458_runtime_forwarding_surfaces():
     assert 1514 in {target["ingestion_port"] for target in agent["ship_targets"]}
 
     forward = data["relationships"]["victim-forwards-wazuh"]
-    assert "properties" not in forward, (
+    assert forward["properties"] == {}, (
         "PR #458: the typed forwarding_edge payload replaces the legacy "
         "properties.protocol/configured_manager/log_config prose."
     )

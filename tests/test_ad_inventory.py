@@ -10,6 +10,8 @@ import re
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -83,6 +85,8 @@ def _json_file(name: str):
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -218,7 +222,7 @@ def test_ad_mapping_ledger_validates_and_tracks_gap_handoff():
         fact for fact in ledger["facts"] if fact["id"] == "ad.runtime.domain-state"
     )
     assert (
-        "nodes.ad.runtime.identity_authorities.techvault-domain"
+        "nodes.techvault.ad.runtime.identity_authorities.techvault-domain"
         in domain_state["aces"]["fields"]
     )
 
@@ -437,10 +441,9 @@ def test_techvault_sdl_encodes_ad_inventory_surfaces():
     assert runtime["health"]["status"] == "healthy"
     assert runtime["health"]["failing_streak"] == 0
     assert len(runtime["health"]["log"]) == 5
-    assert runtime["operational_policy"]["resource_limits"] == {
-        "memory": 536870912,
-        "memory_swap": 1073741824,
-    }
+    limits = runtime["operational_policy"]["resource_limits"]
+    assert limits["memory"] == 536870912
+    assert limits["memory_swap"] == 1073741824
     assert runtime["network"]["endpoints"][0]["ip_address"] == "172.20.2.10"
 
     authority = runtime["identity_authorities"][0]
@@ -521,7 +524,7 @@ def test_techvault_sdl_encodes_ad_content_accounts_and_relationships():
     assert unsupported_jessica_memberships.isdisjoint(authority_relationships)
     forward = relationships["ad-forwards-wazuh"]
     assert forward["target"] == "wazuh-manager"
-    assert "properties" not in forward, (
+    assert forward["properties"] == {}, (
         "PR #458: the typed forwarding_edge payload replaces the legacy "
         "properties.protocol/log_paths prose."
     )
@@ -534,7 +537,7 @@ def test_techvault_sdl_encodes_ad_content_accounts_and_relationships():
     }
     assert "ad-wazuh-agent" in forwarding_agents, (
         "PR #458: ad runs the Wazuh agent in-process (ADR-020), so the forwarder "
-        "must be encoded under nodes.ad.runtime.forwarding_agents."
+        "must be encoded under nodes.techvault.ad.runtime.forwarding_agents."
     )
     ad_agent = forwarding_agents["ad-wazuh-agent"]
     assert ad_agent["implementation"] == "wazuh_agent"
@@ -558,7 +561,7 @@ def test_ad_filesystem_checksum_paths_are_encoded_as_content():
     content_paths = {
         item["path"]
         for item in data["content"].values()
-        if item["type"] == "File" and item.get("target") == "ad"
+        if item["type"] == "file" and item.get("target") == "ad"
     }
     checksum_paths = {
         line.split("  ", maxsplit=1)[1]
@@ -793,7 +796,7 @@ def test_techvault_sdl_parses_and_compiles_with_ad_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.ad"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.ad"].spec["node"]
     runtime = node["runtime"]
     authority = runtime["identity_authorities"][0]
 

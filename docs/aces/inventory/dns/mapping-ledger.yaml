@@ -19,7 +19,7 @@ provenance:
 correspondence_checks:
 - id: dns-node-source-correspondence
   status: planned
-  source: nodes.dns.source
+  source: nodes.techvault.dns.source
   realized_evidence:
   - path: evidence/docker-inspect.image.json
   - path: evidence/source-checksums.txt
@@ -31,7 +31,7 @@ correspondence_checks:
   limit: 'Planned because issue #336 records the current steady-state asset spec; this branch does not rerun the lab for a live equivalence proof.'
 - id: dns-runtime-correspondence
   status: planned
-  source: nodes.dns.runtime
+  source: nodes.techvault.dns.runtime
   realized_evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/runtime-baseline.txt
@@ -56,7 +56,7 @@ correspondence_checks:
   limit: Planned because this issue records the frozen steady-state ACES spec and evidence, not a destructive clean-lab equivalence run.
 - id: dns-logical-state-correspondence
   status: planned
-  source: nodes.dns.runtime.dns_services.techvault-bind
+  source: nodes.techvault.dns.runtime.dns_services.techvault-bind
   realized_evidence:
   - path: evidence/runtime-baseline.txt
   - path: evidence/filesystem-checksums.txt
@@ -85,8 +85,8 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.source.name
-    - nodes.dns.source.version
+    - nodes.techvault.dns.source.name
+    - nodes.techvault.dns.source.version
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.build.recipe
   category: provenance
@@ -100,14 +100,14 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.source.build.base_image
-    - nodes.dns.source.build.dockerfile_path
-    - nodes.dns.source.build.instructions
-    - nodes.dns.source.build.layers
-    - nodes.dns.source.build.copied_sources
-    - nodes.dns.source.build.config
-    - nodes.dns.source.build.source_inputs
-    - nodes.dns.source.build.attestation
+    - nodes.techvault.dns.source.build.base_image
+    - nodes.techvault.dns.source.build.dockerfile_path
+    - nodes.techvault.dns.source.build.instructions
+    - nodes.techvault.dns.source.build.layers
+    - nodes.techvault.dns.source.build.copied_sources
+    - nodes.techvault.dns.source.build.config
+    - nodes.techvault.dns.source.build.source_inputs
+    - nodes.techvault.dns.source.build.attestation
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.os.version
   category: runtime-configuration
@@ -119,8 +119,8 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.os
-    - nodes.dns.os_version
+    - nodes.techvault.dns.os
+    - nodes.techvault.dns.os_version
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.network.identity
   category: network
@@ -136,7 +136,7 @@ facts:
     surface: infrastructure
     fields:
     - infrastructure.dns
-    - nodes.dns.runtime.network.endpoints
+    - nodes.techvault.dns.runtime.network.endpoints
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.transport.listeners
   category: service-surface
@@ -150,9 +150,9 @@ facts:
     disposition: encoded
     surface: nodes.services
     fields:
-    - nodes.dns.services
-    - nodes.dns.runtime.network.published_ports
-    - nodes.dns.runtime.dns_services.techvault-bind.settings
+    - nodes.techvault.dns.services
+    - nodes.techvault.dns.runtime.network.published_ports
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.settings
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.healthcheck
   category: runtime-configuration
@@ -165,8 +165,8 @@ facts:
     surface: conditions
     fields:
     - conditions.dns-soa-ready
-    - nodes.dns.conditions
-    - nodes.dns.runtime.health
+    - nodes.techvault.dns.conditions
+    - nodes.techvault.dns.runtime.health
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.runtime.mount-table
   category: runtime-configuration
@@ -179,7 +179,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.mounts
+    - nodes.techvault.dns.runtime.mounts
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.runtime.filesystem-inventory
   category: runtime-configuration
@@ -193,7 +193,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.filesystem_inventory
+    - nodes.techvault.dns.runtime.filesystem_inventory
     - content.dns-file-etc-bind-named-conf
     - content.dns-file-etc-bind-zones-techvault-local-zone
     - content.dns-file-etc-bind-zones-172-20-rev
@@ -209,7 +209,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.processes
+    - nodes.techvault.dns.runtime.processes
     rationale: >
       ACES PR #458 removed the singular runtime.process field. The PID 1
       supervisord identity (role: primary, user: root, command:
@@ -234,7 +234,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.processes
+    - nodes.techvault.dns.runtime.processes
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.runtime.environment-policy
   category: runtime-configuration
@@ -247,7 +247,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.environment
+    - nodes.techvault.dns.runtime.environment
     - features.techvault-dns-service.environment
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.runtime.container-policy
@@ -261,9 +261,9 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.container
-    - nodes.dns.runtime.operational_policy
-    - nodes.dns.runtime.linux_capabilities
+    - nodes.techvault.dns.runtime.container
+    - nodes.techvault.dns.runtime.operational_policy
+    - nodes.techvault.dns.runtime.linux_capabilities
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.runtime.local-identity-database
   category: runtime-configuration
@@ -274,7 +274,7 @@ facts:
     disposition: encoded
     surface: accounts
     fields:
-    - nodes.dns.runtime.local_identity
+    - nodes.techvault.dns.runtime.local_identity
     - accounts.dns-local-bind
     - accounts.dns-local-wazuh
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
@@ -291,8 +291,8 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.packages
-    - nodes.dns.runtime.dependency_manifests
+    - nodes.techvault.dns.runtime.packages
+    - nodes.techvault.dns.runtime.dependency_manifests
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.runtime.vulnerability-scan
   category: runtime-configuration
@@ -307,7 +307,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.package_vulnerabilities
+    - nodes.techvault.dns.runtime.package_vulnerabilities
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.service.implementation
   category: dns-runtime
@@ -320,9 +320,9 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.dns_services.techvault-bind.implementation
-    - nodes.dns.runtime.dns_services.techvault-bind.version
-    - nodes.dns.runtime.dns_services.techvault-bind.configuration_file_refs
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.implementation
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.version
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.configuration_file_refs
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.resolver-policy
   category: dns-runtime
@@ -335,8 +335,8 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.dns_services.techvault-bind.resolver_policy
-    - nodes.dns.runtime.dns_services.techvault-bind.settings
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.resolver_policy
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.settings
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.zone.forward
   category: dns-runtime
@@ -349,7 +349,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.dns_services.techvault-bind.zones.techvault-local
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.zones.techvault-local
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.zone.reverse
   category: dns-runtime
@@ -362,7 +362,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.dns_services.techvault-bind.zones.reverse-20-172
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.zones.reverse-20-172
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.zone.dynamic-update-transfer
   category: dns-runtime
@@ -374,8 +374,8 @@ facts:
     disposition: encoded_with_caveat
     surface: nodes
     fields:
-    - nodes.dns.runtime.dns_services.techvault-bind.dynamic_update
-    - nodes.dns.runtime.dns_services.techvault-bind.zones.*.transfer
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.dynamic_update
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.zones.*.transfer
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
     caveat: AXFR was observed from localhost only; this issue did not separately probe non-local clients for allow-transfer behavior.
 - id: dns.runtime.logging-relationship
@@ -392,9 +392,9 @@ facts:
     fields:
     - relationships.dns-forwards-wazuh
     - relationships.dns-forwards-wazuh.forwarding_edge
-    - nodes.dns.runtime.forwarding_agents
+    - nodes.techvault.dns.runtime.forwarding_agents
     - features.dns-wazuh-agent
-    - nodes.dns.runtime.dns_services.techvault-bind.log_file_refs
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.log_file_refs
     rationale: >
       ACES PR #458 introduced typed relationship payloads alongside the new
       node-scoped runtime.forwarding_agents family. The dns→wazuh-manager
@@ -421,9 +421,9 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.dns.runtime.processes
-    - nodes.dns.runtime.network
-    - nodes.dns.runtime.container
+    - nodes.techvault.dns.runtime.processes
+    - nodes.techvault.dns.runtime.network
+    - nodes.techvault.dns.runtime.container
     rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
 - id: dns.capture.toolchain-baseline
   category: assurance

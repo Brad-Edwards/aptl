@@ -9,6 +9,8 @@ import re
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -64,6 +66,8 @@ def _evidence_text(path: Path) -> str:
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -217,7 +221,7 @@ def test_techvault_sdl_encodes_mailserver_inventory_surfaces():
     from aces_sdl import parse_sdl_file
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
-    node = scenario.nodes["mailserver"]
+    node = scenario.nodes["techvault.mailserver"]
     assert node.source.version == IMAGE_DIGEST
     assert node.os_version == "Debian GNU/Linux 12 (bookworm)"
 
@@ -266,8 +270,8 @@ def test_techvault_sdl_encodes_mailserver_inventory_surfaces():
     assert "AUTH=LOGIN" in listeners["imap-143"].capabilities
 
     relationships = scenario.relationships
-    smtp_probe = relationships["kali-probes-mailserver-smtp"]
-    assert smtp_probe.target == "nodes.mailserver.runtime.mail_services.techvault-mail.listeners.smtp-25"
+    smtp_probe = relationships["techvault.kali-probes-mailserver-smtp"]
+    assert smtp_probe.target == "nodes.techvault.mailserver.runtime.mail_services.techvault-mail.listeners.smtp-25"
     assert smtp_probe.mail_access.listener_ref == "smtp-25"
     assert smtp_probe.mail_access.protocol == "smtp"
 
@@ -278,7 +282,7 @@ def test_techvault_sdl_parses_and_compiles_with_mailserver_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.mailserver"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.mailserver"].spec["node"]
     runtime = node["runtime"]
     build = node["source"]["build"]
     mail_service = runtime["mail_services"][0]
@@ -311,6 +315,6 @@ def test_parity_inventory_cites_mailserver_inventory_and_aces_sdl():
     rows = {row["id"]: row for row in _yaml_file(PARITY_PATH)["rows"]}
     row = rows["scen.techvault.mailserver-inventory"]
     assert row["category"] == "aces_sdl"
-    assert "nodes.mailserver.runtime.mail_services" in row["aces_target"]
+    assert "nodes.techvault.mailserver.runtime.mail_services" in row["aces_target"]
     assert "tests/test_mailserver_inventory.py" in row["validation_evidence"]
     assert row["blocking_followup"] == "n/a"

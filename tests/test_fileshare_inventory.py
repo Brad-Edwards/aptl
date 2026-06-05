@@ -9,6 +9,8 @@ import re
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -84,6 +86,8 @@ def _json_file(name: str):
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -383,8 +387,9 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert len(build["source_inputs"]) == 9
     assert len(build["copied_sources"]) == 8
     assert build["config"]["entrypoint"] == ["/opt/setup-shares.sh"]
-    assert {"port": 139, "protocol": "tcp", "name": "netbios-ssn"} in fileshare["services"]
-    assert {"port": 445, "protocol": "tcp", "name": "microsoft-ds"} in fileshare["services"]
+    services = {(service["port"], service["protocol"], service["name"]) for service in fileshare["services"]}
+    assert (139, "tcp", "netbios-ssn") in services
+    assert (445, "tcp", "microsoft-ds") in services
 
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
     assert mounts["/srv/shares"]["source"] == "aptl_fileshare_data"
@@ -470,7 +475,7 @@ def test_techvault_sdl_parses_and_compiles_with_fileshare_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.fileshare"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.fileshare"].spec["node"]
     runtime = node["runtime"]
     build = node["source"]["build"]
 
@@ -530,7 +535,7 @@ def test_techvault_sdl_fileshare_content_accounts_relationships_and_parity():
     assert accounts["fileshare-local-svc-fileshare"]["disabled"] is False
     forward = relationships["fileshare-forwards-wazuh"]
     assert forward["target"] == "wazuh-manager"
-    assert "properties" not in forward, (
+    assert forward["properties"] == {}, (
         "PR #458: the typed forwarding_edge payload replaces the legacy "
         "properties.protocol/log_paths prose."
     )
@@ -543,7 +548,7 @@ def test_techvault_sdl_fileshare_content_accounts_relationships_and_parity():
     }
     assert "fileshare-wazuh-agent" in forwarding_agents, (
         "PR #458: fileshare runs the Wazuh agent in-process (ADR-020), so the "
-        "forwarder must be encoded under nodes.fileshare.runtime.forwarding_agents."
+        "forwarder must be encoded under nodes.techvault.fileshare.runtime.forwarding_agents."
     )
     fs_agent = forwarding_agents["fileshare-wazuh-agent"]
     assert fs_agent["implementation"] == "wazuh_agent"

@@ -19,7 +19,7 @@ provenance:
 correspondence_checks:
 - id: db-node-source-correspondence
   status: planned
-  source: nodes.db.source
+  source: nodes.techvault.db.source
   realized_evidence:
   - path: evidence/docker-inspect.image.json
   - path: evidence/docker-history.image.jsonl
@@ -31,7 +31,7 @@ correspondence_checks:
   limit: Planned because this issue records frozen inventory evidence, not a fresh live equivalence run.
 - id: db-runtime-correspondence
   status: planned
-  source: nodes.db.runtime
+  source: nodes.techvault.db.runtime
   realized_evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/runtime-baseline.txt
@@ -63,8 +63,8 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.source.name
-    - nodes.db.source.version
+    - nodes.techvault.db.source.name
+    - nodes.techvault.db.source.version
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.build.recipe
   category: provenance
@@ -77,10 +77,10 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.source.build.instructions
-    - nodes.db.source.build.layers
-    - nodes.db.source.build.source_inputs
-    - nodes.db.source.build.config
+    - nodes.techvault.db.source.build.instructions
+    - nodes.techvault.db.source.build.layers
+    - nodes.techvault.db.source.build.source_inputs
+    - nodes.techvault.db.source.build.config
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.os.version
   category: runtime-configuration
@@ -92,9 +92,9 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.os
-    - nodes.db.os_version
-    - nodes.db.runtime.database_services.version
+    - nodes.techvault.db.os
+    - nodes.techvault.db.os_version
+    - nodes.techvault.db.runtime.database_services.version
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.network.identity
   category: network
@@ -108,7 +108,7 @@ facts:
     fields:
     - infrastructure.db.links
     - infrastructure.db.properties
-    - nodes.db.runtime.network.endpoints
+    - nodes.techvault.db.runtime.network.endpoints
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.postgres.service
   category: service-surface
@@ -120,8 +120,8 @@ facts:
     disposition: encoded
     surface: nodes.services
     fields:
-    - nodes.db.services
-    - nodes.db.runtime.database_services
+    - nodes.techvault.db.services
+    - nodes.techvault.db.runtime.database_services
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.healthcheck
   category: runtime-configuration
@@ -134,8 +134,8 @@ facts:
     surface: conditions
     fields:
     - conditions.db-postgres-ready
-    - nodes.db.conditions
-    - nodes.db.runtime.health
+    - nodes.techvault.db.conditions
+    - nodes.techvault.db.runtime.health
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.runtime.mount-table
   category: runtime-configuration
@@ -148,7 +148,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.runtime.mounts
+    - nodes.techvault.db.runtime.mounts
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.runtime.filesystem-inventory
   category: filesystem-inventory
@@ -160,7 +160,7 @@ facts:
     disposition: encoded_with_caveat
     surface: nodes
     fields:
-    - nodes.db.runtime.filesystem_inventory
+    - nodes.techvault.db.runtime.filesystem_inventory
     - content.db-init-schema-sql
     - content.db-init-seed-data-sql
     - content.db-postgresql-conf
@@ -178,7 +178,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.runtime.processes
+    - nodes.techvault.db.runtime.processes
     rationale: >
       ACES PR #458 removed the singular runtime.process field. The PID 1
       postgres-postmaster identity (role: primary, user: postgres, the Compose
@@ -195,7 +195,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.runtime.environment
+    - nodes.techvault.db.runtime.environment
     - features.techvault-postgres-service.environment
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.runtime.capability-restart-policy
@@ -208,8 +208,8 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.runtime.linux_capabilities
-    - nodes.db.runtime.operational_policy
+    - nodes.techvault.db.runtime.linux_capabilities
+    - nodes.techvault.db.runtime.operational_policy
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.runtime.container-host-config
   category: runtime-configuration
@@ -220,7 +220,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.runtime.container
+    - nodes.techvault.db.runtime.container
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.runtime.package-inventory
   category: runtime-inventory
@@ -232,8 +232,8 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.runtime.packages
-    - nodes.db.runtime.dependency_manifests
+    - nodes.techvault.db.runtime.packages
+    - nodes.techvault.db.runtime.dependency_manifests
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.runtime.vulnerability-scan
   category: vulnerability-inventory
@@ -247,7 +247,7 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.runtime.package_vulnerabilities
+    - nodes.techvault.db.runtime.package_vulnerabilities
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.runtime.local-identity-database
   category: identity-surface
@@ -258,9 +258,9 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.runtime.local_identity.users
-    - nodes.db.runtime.local_identity.groups
-    - nodes.db.runtime.local_identity.sudo_rules
+    - nodes.techvault.db.runtime.local_identity.users
+    - nodes.techvault.db.runtime.local_identity.groups
+    - nodes.techvault.db.runtime.local_identity.sudo_rules
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued DB fact directly.
 - id: db.runtime.local-accounts
   category: identity-surface
@@ -285,9 +285,9 @@ facts:
     disposition: encoded
     surface: nodes
     fields:
-    - nodes.db.runtime.database_services.databases
-    - nodes.db.runtime.database_services.roles
-    - nodes.db.runtime.database_services.settings
+    - nodes.techvault.db.runtime.database_services.databases
+    - nodes.techvault.db.runtime.database_services.roles
+    - nodes.techvault.db.runtime.database_services.settings
     rationale: Brad-Edwards/aces#388 added first-class database logical-state fields, so these facts are encoded as typed database runtime inventory rather than prose application descriptions.
 - id: db.relationships
   category: relationship

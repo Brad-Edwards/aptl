@@ -1,0 +1,2105 @@
+name: techvault-accounts
+accounts:
+  db-local-root:
+    username: root
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /bin/sh
+    home: /root
+    disabled: false
+  db-local-bin:
+    username: bin
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /bin
+    disabled: true
+  db-local-daemon:
+    username: daemon
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /sbin
+    disabled: true
+  db-local-lp:
+    username: lp
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  db-local-sync:
+    username: sync
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /sbin
+    disabled: false
+  db-local-shutdown:
+    username: shutdown
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/shutdown
+    home: /sbin
+    disabled: false
+  db-local-halt:
+    username: halt
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/halt
+    home: /sbin
+    disabled: false
+  db-local-mail:
+    username: mail
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/mail
+    disabled: true
+  db-local-news:
+    username: news
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /usr/lib/news
+    disabled: true
+  db-local-uucp:
+    username: uucp
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/spool/uucppublic
+    disabled: true
+  db-local-cron:
+    username: cron
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/spool/cron
+    disabled: true
+  db-local-ftp:
+    username: ftp
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/lib/ftp
+    disabled: true
+  db-local-sshd:
+    username: sshd
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /dev/null
+    disabled: true
+  db-local-games:
+    username: games
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /usr/games
+    disabled: true
+  db-local-ntp:
+    username: ntp
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/empty
+    disabled: true
+  db-local-guest:
+    username: guest
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /dev/null
+    disabled: true
+  db-local-nobody:
+    username: nobody
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /
+    disabled: true
+  db-local-postgres:
+    username: postgres
+    node: techvault.db
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /bin/sh
+    home: /var/lib/postgresql
+    disabled: false
+  db-postgres-role-techvault:
+    username: techvault
+    node: techvault.db
+    groups: []
+    password_strength: weak
+    auth_method: password
+    description: PostgreSQL role created from the TechVault fixture POSTGRES_USER environment value.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  webapp-local-root:
+    username: root
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: root
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /root
+    disabled: false
+  webapp-local-daemon:
+    username: daemon
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: daemon
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/sbin
+    disabled: true
+  webapp-local-bin:
+    username: bin
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: bin
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  webapp-local-sys:
+    username: sys
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sys
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /dev
+    disabled: true
+  webapp-local-sync:
+    username: sync
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sync
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /bin
+    disabled: false
+  webapp-local-games:
+    username: games
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: games
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/games
+    disabled: true
+  webapp-local-man:
+    username: man
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: man
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/cache/man
+    disabled: true
+  webapp-local-lp:
+    username: lp
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: lp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  webapp-local-mail:
+    username: mail
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: mail
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/mail
+    disabled: true
+  webapp-local-news:
+    username: news
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: news
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/news
+    disabled: true
+  webapp-local-uucp:
+    username: uucp
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: uucp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/uucp
+    disabled: true
+  webapp-local-proxy:
+    username: proxy
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: proxy
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  webapp-local-www-data:
+    username: www-data
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: www-data
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/www
+    disabled: true
+  webapp-local-backup:
+    username: backup
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: backup
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/backups
+    disabled: true
+  webapp-local-list:
+    username: list
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: Mailing List Manager
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/list
+    disabled: true
+  webapp-local-irc:
+    username: irc
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ircd
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/ircd
+    disabled: true
+  webapp-local-apt:
+    username: _apt
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  webapp-local-nobody:
+    username: nobody
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: nobody
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  webapp-local-systemd-network:
+    username: systemd-network
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: systemd Network Management
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /
+    disabled: true
+  webapp-local-systemd-timesync:
+    username: systemd-timesync
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: systemd Time Synchronization
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /
+    disabled: true
+  webapp-local-debian-exim:
+    username: Debian-exim
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/exim4
+    disabled: true
+  webapp-local-messagebus:
+    username: messagebus
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: System Message Bus
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  webapp-local-wazuh:
+    username: wazuh
+    node: techvault.webapp
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/ossec
+    disabled: true
+  webapp-db-account:
+    username: techvault
+    node: techvault.db
+    groups: []
+    password_strength: weak
+    auth_method: password
+    description: Database account used by the TechVault webapp fixture.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  fileshare-local-root:
+    username: root
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: root
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /root
+    disabled: false
+  fileshare-local-daemon:
+    username: daemon
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: daemon
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/sbin
+    disabled: true
+  fileshare-local-bin:
+    username: bin
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: bin
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  fileshare-local-sys:
+    username: sys
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sys
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /dev
+    disabled: true
+  fileshare-local-sync:
+    username: sync
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sync
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /bin
+    disabled: false
+  fileshare-local-games:
+    username: games
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: games
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/games
+    disabled: true
+  fileshare-local-man:
+    username: man
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: man
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/cache/man
+    disabled: true
+  fileshare-local-lp:
+    username: lp
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: lp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  fileshare-local-mail:
+    username: mail
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: mail
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/mail
+    disabled: true
+  fileshare-local-news:
+    username: news
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: news
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/news
+    disabled: true
+  fileshare-local-uucp:
+    username: uucp
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: uucp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/uucp
+    disabled: true
+  fileshare-local-proxy:
+    username: proxy
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: proxy
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  fileshare-local-www-data:
+    username: www-data
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: www-data
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/www
+    disabled: true
+  fileshare-local-backup:
+    username: backup
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: backup
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/backups
+    disabled: true
+  fileshare-local-list:
+    username: list
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: Mailing List Manager
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/list
+    disabled: true
+  fileshare-local-irc:
+    username: irc
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ircd
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/ircd
+    disabled: true
+  fileshare-local-gnats:
+    username: gnats
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: Gnats Bug-Reporting System (admin)
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/lib/gnats
+    disabled: true
+  fileshare-local-nobody:
+    username: nobody
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: nobody
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  fileshare-local--apt:
+    username: _apt
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  fileshare-local-messagebus:
+    username: messagebus
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  fileshare-local-syslog:
+    username: syslog
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /home/syslog
+    disabled: true
+  fileshare-local-wazuh:
+    username: wazuh
+    node: techvault.fileshare
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/ossec
+    disabled: true
+  fileshare-local-svc-fileshare:
+    username: svc-fileshare
+    node: techvault.fileshare
+    groups: []
+    password_strength: weak
+    auth_method: samba-passdb
+    description: Participant-visible Samba service account fixture provisioned by setup-shares.sh.
+    mail: ''
+    spn: ''
+    shell: /bin/sh
+    home: /home/svc-fileshare
+    disabled: false
+  kali-local-root:
+    username: root
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: root
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /root
+    disabled: false
+  kali-local-daemon:
+    username: daemon
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: daemon
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/sbin
+    disabled: true
+  kali-local-bin:
+    username: bin
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: bin
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  kali-local-sys:
+    username: sys
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sys
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /dev
+    disabled: true
+  kali-local-sync:
+    username: sync
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sync
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /bin
+    disabled: false
+  kali-local-games:
+    username: games
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: games
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/games
+    disabled: true
+  kali-local-man:
+    username: man
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: man
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/cache/man
+    disabled: true
+  kali-local-lp:
+    username: lp
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: lp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  kali-local-mail:
+    username: mail
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: mail
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/mail
+    disabled: true
+  kali-local-news:
+    username: news
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: news
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/news
+    disabled: true
+  kali-local-uucp:
+    username: uucp
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: uucp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/uucp
+    disabled: true
+  kali-local-proxy:
+    username: proxy
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: proxy
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  kali-local-www-data:
+    username: www-data
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: www-data
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/www
+    disabled: true
+  kali-local-backup:
+    username: backup
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: backup
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/backups
+    disabled: true
+  kali-local-list:
+    username: list
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: Mailing List Manager
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/list
+    disabled: true
+  kali-local-irc:
+    username: irc
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ircd
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/ircd
+    disabled: true
+  kali-local-apt:
+    username: _apt
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  kali-local-nobody:
+    username: nobody
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: nobody
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  kali-local-systemd-network:
+    username: systemd-network
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: systemd Network Management
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /
+    disabled: true
+  kali-local-systemd-timesync:
+    username: systemd-timesync
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: systemd Time Synchronization
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /
+    disabled: true
+  kali-local-messagebus:
+    username: messagebus
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: System Message Bus
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  kali-local-tcpdump:
+    username: tcpdump
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: tcpdump
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  kali-local-rpc:
+    username: _rpc
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/rpcbind
+    disabled: true
+  kali-local-statd:
+    username: statd
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/lib/nfs
+    disabled: true
+  kali-local-sshd:
+    username: sshd
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sshd user
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/sshd
+    disabled: true
+  kali-local-postgres:
+    username: postgres
+    node: techvault.kali
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: PostgreSQL administrator
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /var/lib/postgresql
+    disabled: false
+  kali-local-kali:
+    username: kali
+    node: techvault.kali
+    groups:
+    - sudo
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /home/kali
+    disabled: false
+  ad-local-root:
+    username: root
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /root
+    disabled: false
+  ad-local-daemon:
+    username: daemon
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/sbin
+    disabled: true
+  ad-local-bin:
+    username: bin
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  ad-local-sys:
+    username: sys
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /dev
+    disabled: true
+  ad-local-sync:
+    username: sync
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /bin
+    disabled: false
+  ad-local-games:
+    username: games
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/games
+    disabled: true
+  ad-local-man:
+    username: man
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/cache/man
+    disabled: true
+  ad-local-lp:
+    username: lp
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  ad-local-mail:
+    username: mail
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/mail
+    disabled: true
+  ad-local-news:
+    username: news
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/news
+    disabled: true
+  ad-local-uucp:
+    username: uucp
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/uucp
+    disabled: true
+  ad-local-proxy:
+    username: proxy
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  ad-local-www-data:
+    username: www-data
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/www
+    disabled: true
+  ad-local-backup:
+    username: backup
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/backups
+    disabled: true
+  ad-local-list:
+    username: list
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/list
+    disabled: true
+  ad-local-irc:
+    username: irc
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/ircd
+    disabled: true
+  ad-local-gnats:
+    username: gnats
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/lib/gnats
+    disabled: true
+  ad-local-nobody:
+    username: nobody
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  ad-local-apt:
+    username: _apt
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  ad-local-messagebus:
+    username: messagebus
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  ad-local-syslog:
+    username: syslog
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /home/syslog
+    disabled: true
+  ad-local-wazuh:
+    username: wazuh
+    node: techvault.ad
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ''
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/ossec
+    disabled: true
+  ad-domain-administrator:
+    username: Administrator
+    node: techvault.ad
+    groups:
+    - Domain Admins
+    - Domain Users
+    password_strength: strong
+    auth_method: password
+    description: Built-in domain administrator fixture account; raw password redacted.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-guest:
+    username: Guest
+    node: techvault.ad
+    groups:
+    - Domain Guests
+    password_strength: none
+    auth_method: password
+    description: ''
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: true
+  ad-domain-krbtgt:
+    username: krbtgt
+    node: techvault.ad
+    groups:
+    - Domain Users
+    password_strength: none
+    auth_method: password
+    description: ''
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: true
+  ad-domain-sarah-mitchell:
+    username: sarah.mitchell
+    node: techvault.ad
+    groups:
+    - Executives
+    - Domain Users
+    password_strength: strong
+    auth_method: password
+    description: Executive domain user.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-james-rodriguez:
+    username: james.rodriguez
+    node: techvault.ad
+    groups:
+    - Executives
+    - IT-Admins
+    - Domain Users
+    password_strength: strong
+    auth_method: password
+    description: CTO domain user.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-lisa-chang:
+    username: lisa.chang
+    node: techvault.ad
+    groups:
+    - Executives
+    - Sales
+    - Domain Users
+    password_strength: strong
+    auth_method: password
+    description: VP of Sales domain user.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-emily-chen:
+    username: emily.chen
+    node: techvault.ad
+    groups:
+    - Engineering
+    - IT-Admins
+    - Domain Admins
+    - Domain Users
+    password_strength: strong
+    auth_method: password
+    description: DevOps domain admin account; weakness ref ad-domain-admin-devops.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-michael-thompson:
+    username: michael.thompson
+    node: techvault.ad
+    groups:
+    - Engineering
+    - Domain Users
+    password_strength: weak
+    auth_method: password
+    description: Seasonal weak password scenario account; weakness ref ad-seasonal-password-michael.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-david-kim:
+    username: david.kim
+    node: techvault.ad
+    groups:
+    - Engineering
+    - IT-Admins
+    - Domain Users
+    password_strength: strong
+    auth_method: password
+    description: Security engineer domain user.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-jessica-williams:
+    username: jessica.williams
+    node: techvault.ad
+    groups: []
+    password_strength: weak
+    auth_method: password
+    description: Weak-password scenario account; weakness ref ad-weak-password-jessica.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-robert-martinez:
+    username: robert.martinez
+    node: techvault.ad
+    groups:
+    - Sales
+    - Domain Users
+    password_strength: strong
+    auth_method: password
+    description: Sales domain user.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-contractor-temp:
+    username: contractor.temp
+    node: techvault.ad
+    groups:
+    - VPN-Users
+    - Remote-Desktop
+    - Engineering
+    - Domain Users
+    password_strength: weak
+    auth_method: password
+    description: Overprivileged contractor scenario account; weakness ref ad-contractor-overprivileged.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-former-employee:
+    username: former.employee
+    node: techvault.ad
+    groups:
+    - Domain Users
+    password_strength: weak
+    auth_method: password
+    description: Enabled former employee scenario account; weakness ref ad-former-employee-enabled.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-svc-sql:
+    username: svc-sql
+    node: techvault.ad
+    groups:
+    - Domain Users
+    password_strength: weak
+    auth_method: password
+    description: Service account with SPNs MSSQLSvc/db.techvault.local:1433 and MSSQLSvc/db.techvault.local; weakness ref
+      ad-kerberoast-svc-sql.
+    mail: ''
+    spn: MSSQLSvc/db.techvault.local:1433
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-svc-web:
+    username: svc-web
+    node: techvault.ad
+    groups:
+    - Domain Users
+    password_strength: weak
+    auth_method: password
+    description: Service account with HTTP/webapp.techvault.local SPN; weakness ref ad-kerberoast-svc-web.
+    mail: ''
+    spn: HTTP/webapp.techvault.local
+    shell: ''
+    home: ''
+    disabled: false
+  ad-domain-svc-backup:
+    username: svc-backup
+    node: techvault.ad
+    groups:
+    - Domain Admins
+    - Domain Users
+    password_strength: weak
+    auth_method: password
+    description: Privileged backup service account; weakness ref ad-domain-admin-svc-backup.
+    mail: ''
+    spn: ''
+    shell: ''
+    home: ''
+    disabled: false
+  workstation-local-root:
+    username: root
+    node: techvault.workstation
+    groups: []
+    password_strength: medium
+    auth_method: local
+    description: root
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /root
+    disabled: false
+  workstation-local-bin:
+    username: bin
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: bin
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /bin
+    disabled: true
+  workstation-local-daemon:
+    username: daemon
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: daemon
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /sbin
+    disabled: true
+  workstation-local-adm:
+    username: adm
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: adm
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/adm
+    disabled: true
+  workstation-local-lp:
+    username: lp
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: lp
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  workstation-local-sync:
+    username: sync
+    node: techvault.workstation
+    groups: []
+    password_strength: medium
+    auth_method: local
+    description: sync
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /sbin
+    disabled: false
+  workstation-local-shutdown:
+    username: shutdown
+    node: techvault.workstation
+    groups: []
+    password_strength: medium
+    auth_method: local
+    description: shutdown
+    mail: ''
+    spn: ''
+    shell: /sbin/shutdown
+    home: /sbin
+    disabled: false
+  workstation-local-halt:
+    username: halt
+    node: techvault.workstation
+    groups: []
+    password_strength: medium
+    auth_method: local
+    description: halt
+    mail: ''
+    spn: ''
+    shell: /sbin/halt
+    home: /sbin
+    disabled: false
+  workstation-local-mail:
+    username: mail
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: mail
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/spool/mail
+    disabled: true
+  workstation-local-operator:
+    username: operator
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: operator
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /root
+    disabled: true
+  workstation-local-games:
+    username: games
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: games
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /usr/games
+    disabled: true
+  workstation-local-ftp:
+    username: ftp
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: FTP User
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/ftp
+    disabled: true
+  workstation-local-nobody:
+    username: nobody
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: Kernel Overflow User
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /
+    disabled: true
+  workstation-local-tss:
+    username: tss
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: Account used for TPM access
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /
+    disabled: true
+  workstation-local-systemd-coredump:
+    username: systemd-coredump
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: systemd Core Dumper
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /
+    disabled: true
+  workstation-local-dbus:
+    username: dbus
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: System message bus
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /
+    disabled: true
+  workstation-local-sshd:
+    username: sshd
+    node: techvault.workstation
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: Privilege-separated SSH
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/share/empty.sshd
+    disabled: true
+  workstation-local-labadmin:
+    username: labadmin
+    node: techvault.workstation
+    groups:
+    - wheel
+    password_strength: medium
+    auth_method: ssh-key+sudo
+    description: Local workstation user labadmin
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /home/labadmin
+    disabled: false
+  workstation-local-dev-user:
+    username: dev-user
+    node: techvault.workstation
+    groups:
+    - wheel
+    password_strength: weak
+    auth_method: password+ssh-key
+    description: Local workstation user dev-user
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /home/dev-user
+    disabled: false
+  workstation-local-wazuh:
+    username: wazuh
+    node: techvault.workstation
+    groups:
+    - wazuh
+    password_strength: none
+    auth_method: local
+    description: Local workstation user wazuh
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/ossec
+    disabled: true
+  victim-local-root:
+    username: root
+    node: techvault.victim
+    groups: []
+    password_strength: medium
+    auth_method: local
+    description: root
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /root
+    disabled: false
+  victim-local-bin:
+    username: bin
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: bin
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /bin
+    disabled: true
+  victim-local-daemon:
+    username: daemon
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: daemon
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /sbin
+    disabled: true
+  victim-local-adm:
+    username: adm
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: adm
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/adm
+    disabled: true
+  victim-local-lp:
+    username: lp
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: lp
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  victim-local-sync:
+    username: sync
+    node: techvault.victim
+    groups: []
+    password_strength: medium
+    auth_method: local
+    description: sync
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /sbin
+    disabled: false
+  victim-local-shutdown:
+    username: shutdown
+    node: techvault.victim
+    groups: []
+    password_strength: medium
+    auth_method: local
+    description: shutdown
+    mail: ''
+    spn: ''
+    shell: /sbin/shutdown
+    home: /sbin
+    disabled: false
+  victim-local-halt:
+    username: halt
+    node: techvault.victim
+    groups: []
+    password_strength: medium
+    auth_method: local
+    description: halt
+    mail: ''
+    spn: ''
+    shell: /sbin/halt
+    home: /sbin
+    disabled: false
+  victim-local-mail:
+    username: mail
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: mail
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/spool/mail
+    disabled: true
+  victim-local-operator:
+    username: operator
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: operator
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /root
+    disabled: true
+  victim-local-games:
+    username: games
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: games
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /usr/games
+    disabled: true
+  victim-local-ftp:
+    username: ftp
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: FTP User
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/ftp
+    disabled: true
+  victim-local-nobody:
+    username: nobody
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: Kernel Overflow User
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /
+    disabled: true
+  victim-local-tss:
+    username: tss
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: Account used for TPM access
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /
+    disabled: true
+  victim-local-systemd-coredump:
+    username: systemd-coredump
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: systemd Core Dumper
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /
+    disabled: true
+  victim-local-dbus:
+    username: dbus
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: System message bus
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /
+    disabled: true
+  victim-local-sshd:
+    username: sshd
+    node: techvault.victim
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: Privilege-separated SSH
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/share/empty.sshd
+    disabled: true
+  victim-local-labadmin:
+    username: labadmin
+    node: techvault.victim
+    groups:
+    - wheel
+    password_strength: medium
+    auth_method: ssh-key+sudo
+    description: Local labadmin account observed in /etc/passwd.
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /home/labadmin
+    disabled: false
+  victim-local-wazuh:
+    username: wazuh
+    node: techvault.victim
+    groups:
+    - wazuh
+    password_strength: none
+    auth_method: local
+    description: Local wazuh account observed in /etc/passwd.
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/ossec
+    disabled: true
+  dns-local-bind:
+    username: bind
+    node: techvault.dns
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: BIND service account created by package installation and used by named.
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/cache/bind
+    disabled: true
+  dns-local-wazuh:
+    username: wazuh
+    node: techvault.dns
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: In-process Wazuh agent service account.
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/ossec
+    disabled: true

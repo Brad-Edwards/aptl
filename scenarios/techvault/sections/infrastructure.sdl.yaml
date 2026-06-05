@@ -1,0 +1,204 @@
+name: techvault-infrastructure
+infrastructure:
+  dmz-net:
+    count: 1
+    links: []
+    dependencies: []
+    properties:
+      cidr: 172.20.1.0/24
+      gateway: 172.20.1.1
+      internal: true
+    acls: []
+    description: ''
+  internal-net:
+    count: 1
+    links: []
+    dependencies: []
+    properties:
+      cidr: 172.20.2.0/24
+      gateway: 172.20.2.1
+      internal: true
+    acls: []
+    description: ''
+  security-net:
+    count: 1
+    links: []
+    dependencies: []
+    properties:
+      cidr: 172.20.0.0/24
+      gateway: 172.20.0.1
+      internal: false
+    acls: []
+    description: ''
+  db:
+    count: 1
+    links:
+    - techvault.internal-net
+    dependencies: []
+    properties:
+    - techvault.internal-net: 172.20.2.11
+    acls: []
+    description: ''
+  shuffle-backend:
+    count: 1
+    links:
+    - techvault.security-net
+    dependencies: []
+    properties:
+    - techvault.security-net: 172.20.0.20
+    acls: []
+    description: ''
+  wazuh-manager:
+    count: 1
+    links:
+    - techvault.security-net
+    - techvault.dmz-net
+    - techvault.internal-net
+    dependencies: []
+    properties:
+    - techvault.security-net: 172.20.0.10
+    - techvault.dmz-net: 172.20.1.10
+    - techvault.internal-net: 172.20.2.30
+    acls: []
+    description: ''
+  webapp:
+    count: 1
+    links:
+    - techvault.dmz-net
+    - techvault.internal-net
+    dependencies:
+    - techvault.db
+    - techvault.wazuh-manager
+    properties:
+    - techvault.dmz-net: 172.20.1.20
+    - techvault.internal-net: 172.20.2.25
+    acls: []
+    description: ''
+  fileshare:
+    count: 1
+    links:
+    - techvault.internal-net
+    dependencies:
+    - techvault.wazuh-manager
+    properties:
+    - techvault.internal-net: 172.20.2.12
+    acls: []
+    description: ''
+  mailserver:
+    count: 1
+    links:
+    - techvault.dmz-net
+    - techvault.internal-net
+    dependencies: []
+    properties:
+    - techvault.dmz-net: 172.20.1.21
+    - techvault.internal-net: 172.20.2.26
+    acls: []
+    description: Mailserver is attached to both the DMZ and internal TechVault networks; host-published ports are encoded
+      under nodes.mailserver.runtime.network.
+  redteam-net:
+    count: 1
+    links: []
+    dependencies: []
+    properties:
+      cidr: 172.20.4.0/24
+      gateway: 172.20.4.1
+      internal: true
+    acls: []
+    description: ''
+  kali:
+    count: 1
+    links:
+    - techvault.redteam-net
+    - techvault.dmz-net
+    - techvault.internal-net
+    dependencies: []
+    properties:
+    - techvault.redteam-net: 172.20.4.30
+    - techvault.dmz-net: 172.20.1.30
+    - techvault.internal-net: 172.20.2.35
+    acls: []
+    description: ''
+  ad:
+    count: 1
+    links:
+    - techvault.internal-net
+    dependencies:
+    - techvault.wazuh-manager
+    properties:
+    - techvault.internal-net: 172.20.2.10
+    acls: []
+    description: ''
+  workstation:
+    count: 1
+    links:
+    - techvault.internal-net
+    dependencies:
+    - techvault.wazuh-manager
+    properties:
+    - techvault.internal-net: 172.20.2.40
+    acls: []
+    description: Workstation is attached only to the internal TechVault network with no host-published ports.
+  victim:
+    count: 1
+    links:
+    - techvault.internal-net
+    dependencies:
+    - techvault.wazuh-manager
+    properties:
+    - techvault.internal-net: 172.20.2.20
+    acls: []
+    description: Victim is attached only to the internal TechVault network with no host-published ports.
+  dns:
+    count: 1
+    links:
+    - techvault.dmz-net
+    - techvault.internal-net
+    - techvault.security-net
+    dependencies:
+    - techvault.wazuh-manager
+    properties:
+    - techvault.dmz-net: 172.20.1.22
+    - techvault.internal-net: 172.20.2.27
+    - techvault.security-net: 172.20.0.25
+    acls: []
+    description: DNS is attached to DMZ, internal, and security networks with static IPs; host-published 5353 mappings are
+      encoded under nodes.dns.runtime.network.
+  misp:
+    count: 1
+    links:
+    - techvault.security-net
+    dependencies:
+    - techvault.misp-db
+    - techvault.misp-redis
+    properties:
+    - techvault.security-net: 172.20.0.16
+    acls: []
+    description: MISP is attached to the SOC/security network; host-published HTTPS is encoded under nodes.misp.runtime.network.
+  misp-db:
+    count: 1
+    links:
+    - techvault.security-net
+    dependencies: []
+    properties:
+    - techvault.security-net: 172.20.0.17
+    acls: []
+    description: 'MISP database companion node; full inventory follows in issue #347.'
+  misp-redis:
+    count: 1
+    links:
+    - techvault.security-net
+    dependencies: []
+    properties: null
+    acls: []
+    description: 'MISP Redis companion node; Compose does not pin a static address and full inventory follows in issue #348.'
+  misp-suricata-sync:
+    count: 1
+    links:
+    - techvault.security-net
+    dependencies:
+    - techvault.misp
+    properties:
+    - techvault.security-net: 172.20.0.19
+    acls: []
+    description: 'IOC sync companion service reaches MISP over verified HTTPS; full inventory follows in issue #349.'

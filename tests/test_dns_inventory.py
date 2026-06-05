@@ -10,6 +10,8 @@ import re
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
@@ -87,6 +89,8 @@ def _json_file(name: str):
 
 
 def _yaml_file(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -359,8 +363,9 @@ def test_techvault_sdl_encodes_dns_inventory_surfaces():
         "-c",
         "/etc/supervisor/supervisord.conf",
     ]
-    assert {"port": 53, "protocol": "tcp", "name": "dns-tcp"} in dns["services"]
-    assert {"port": 53, "protocol": "udp", "name": "dns-udp"} in dns["services"]
+    services = {(service["port"], service["protocol"], service["name"]) for service in dns["services"]}
+    assert (53, "tcp", "dns-tcp") in services
+    assert (53, "udp", "dns-udp") in services
 
     assert len(runtime["mounts"]) == 26
     assert len(runtime["packages"]) == PACKAGE_COUNT
@@ -451,7 +456,7 @@ def test_techvault_sdl_parses_and_compiles_with_dns_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments["provision.node.dns"].spec["node"]
+    node = model.node_deployments["provision.node.techvault.dns"].spec["node"]
     runtime = node["runtime"]
     dns_service = runtime["dns_services"][0]
 
@@ -509,7 +514,7 @@ def test_techvault_sdl_dns_content_accounts_relationships_and_parity():
     assert accounts["dns-local-wazuh"]["home"] == "/var/ossec"
     forward = relationships["dns-forwards-wazuh"]
     assert forward["target"] == "wazuh-manager"
-    assert "properties" not in forward, (
+    assert forward["properties"] == {}, (
         "PR #458: the typed forwarding_edge payload replaces the legacy "
         "properties.protocol/log_paths prose."
     )
@@ -522,7 +527,7 @@ def test_techvault_sdl_dns_content_accounts_relationships_and_parity():
     }
     assert "dns-wazuh-agent" in forwarding_agents, (
         "PR #458: dns runs the Wazuh agent in-process (ADR-020), so the "
-        "forwarder must be encoded under nodes.dns.runtime.forwarding_agents."
+        "forwarder must be encoded under nodes.techvault.dns.runtime.forwarding_agents."
     )
     agent = forwarding_agents["dns-wazuh-agent"]
     assert agent["implementation"] == "wazuh_agent"
@@ -532,6 +537,6 @@ def test_techvault_sdl_dns_content_accounts_relationships_and_parity():
 
     assert relationships["ad-forwards-dns"]["target"] == "dns"
     assert rows["scen.techvault.dns-inventory"]["category"] == "aces_sdl"
-    assert "nodes.dns.runtime.dns_services" in rows["scen.techvault.dns-inventory"]["aces_target"]
+    assert "nodes.techvault.dns.runtime.dns_services" in rows["scen.techvault.dns-inventory"]["aces_target"]
     assert rows["compose.service.dns"]["category"] == "aces_sdl"
     assert rows["compose.profile.dns"]["category"] == "aptl_backend_responsibility"

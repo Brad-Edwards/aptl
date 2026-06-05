@@ -69,7 +69,7 @@ local lab state, not as clean-lab rebuild proof.
   `sshd.service`, and `systemd-journald.service` were active. The
   `systemd-tmpfiles-*` units failed with credentials setup errors.
 - Wazuh and Falco packages/configuration are present. Their realized unit
-  states are encoded through `nodes.victim.runtime.service_manager_units`.
+  states are encoded through `nodes.techvault.victim.runtime.service_manager_units`.
 - The committed SDL encodes 173 runtime filesystem entries,
   173 victim content entries, 19 host-local accounts,
   38 host-local groups, 1 NOPASSWD sudo rule,

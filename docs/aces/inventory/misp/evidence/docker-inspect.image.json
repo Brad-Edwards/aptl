@@ -1,0 +1,71 @@
+[
+  {
+    "Id": "sha256:992fd95b8d9698a18e1acdd7dbf5e8d03b32a03fd80e4bcbcff77bc7f17768cd",
+    "RepoTags": [
+      "ghcr.io/misp/misp-docker/misp-core:latest"
+    ],
+    "RepoDigests": [
+      "ghcr.io/misp/misp-docker/misp-core@sha256:992fd95b8d9698a18e1acdd7dbf5e8d03b32a03fd80e4bcbcff77bc7f17768cd"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2026-04-04T09:23:48.413209835Z",
+    "Config": {
+      "Env": [
+        "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG=C.UTF-8",
+        "GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305",
+        "PYTHON_VERSION=3.12.13",
+        "PYTHON_SHA256=c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684",
+        "DEBIAN_FRONTEND=noninteractive"
+      ],
+      "Entrypoint": [
+        "/entrypoint.sh"
+      ],
+      "WorkingDir": "/var/www/MISP"
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 409180825,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:188c9b34dfbe022075d01fc4f5a305412909ef97de440783c15043e68e1b1913",
+        "sha256:1c107a897b02ca7ece069bfef2339f4e02f95f12dbb025da7305fcbe2b626f34",
+        "sha256:481070cf8ce5b1834cf16a80eec044aced637a96ef8cd1e3c193947e2ff5cbd9",
+        "sha256:addf8d91bd2117a572c640e2bd2e0d15c7adf862773498ca0aea234b7a32528e",
+        "sha256:489bde3f66887d28bf8356f16608f10c5a4c4eaa6fe0b9984d631a54bc92e3bf",
+        "sha256:5e71fff256be6a4d03ef5ea2a1fe07ed61142298a2a761ecff4e05276ee7b755",
+        "sha256:e1a4dc3a784ad9b052b08f32fdd0ff2c72242ab61dea7019bd84949f5fd1247e",
+        "sha256:3ec893e4e15b40f900b93441a923d55f17c01175b5dac04d413f901b3560788b",
+        "sha256:e1edadc77aea1f9b5a1f469de247f84a4801d2c1312d34565f207d81a4d3d90d",
+        "sha256:9bfb9322fef02d22519a26a9133b75dd2ed3c0a6cb2397bc47d89179b0801b6d",
+        "sha256:fc05d6e0fd5678b897e397476801e0e66d1158345207aaa516962322c09069bf",
+        "sha256:7bd6e409343f48be055d94b4ff2c3ed1111a6288abe24c2e281cc0a2b071ea6a",
+        "sha256:72178b1b85f8a0d87f81aa3130eb83910060aa742cdf121e545334e7753fe217",
+        "sha256:6d084d6a09b6e86ba54426b27b3729f7a736350942f855b5353442b03121c05c",
+        "sha256:16f38df32c88bee4eb4a32c6f145781a1e7537681d4bdd1d86deec476a307153",
+        "sha256:b7168a8d82e22b27f9c47abc72ebc0b888b3b1e98e0db8d6b75fae9c8d00cb9e",
+        "sha256:1301c75136bae303540c513cc1b450cddff045895047088f04abb75541d99704",
+        "sha256:67add05f33adb6559e9ae7c48e2e8fe9dc66f9254c70fb64e5492e288169c31a",
+        "sha256:32c71dbc3227310dfc8bf2782639a7af5a2145dc2dec1f5ee79108967fdefffd",
+        "sha256:4140f0dc077b1055e9e30bd14f12c5b4604219c4d84e05cd1408df1fac67a256",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-04-29T04:09:40.601222435Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+      "digest": "sha256:992fd95b8d9698a18e1acdd7dbf5e8d03b32a03fd80e4bcbcff77bc7f17768cd",
+      "size": 685
+    },
+    "Identity": {
+      "Pull": [
+        {
+          "Repository": "ghcr.io/misp/misp-docker/misp-core"
+        }
+      ]
+    }
+  }
+]

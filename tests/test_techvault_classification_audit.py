@@ -6,6 +6,8 @@ import json
 import pytest
 import yaml
 
+from tests.techvault_sdl import load_legacy_techvault_sdl
+
 
 pytestmark = pytest.mark.integration
 
@@ -17,6 +19,8 @@ SHUFFLE_EVIDENCE = PROJECT_ROOT / "docs" / "aces" / "inventory" / "shuffle-backe
 
 
 def _yaml(path: Path):
+    if path == TECHVAULT_SDL_PATH:
+        return load_legacy_techvault_sdl(str(path))
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
@@ -42,7 +46,8 @@ def test_shuffle_backend_runtime_inventory_is_encoded_from_evidence():
         "sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d"
     )
     assert node["os_version"] == "Alpine Linux 3.22.2"
-    assert node["services"] == [{"port": 5001, "protocol": "tcp", "name": "shuffle-api"}]
+    services = {(service["port"], service["protocol"], service["name"]) for service in node["services"]}
+    assert services == {(5001, "tcp", "shuffle-api")}
 
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
     assert mounts["/shuffle-database"]["source_kind"] == "volume"
@@ -84,7 +89,7 @@ def test_shuffle_backend_runtime_inventory_is_encoded_from_evidence():
         "SHUFFLE_DEFAULT_PASSWORD",
         "SHUFFLE_OPENSEARCH_PASSWORD",
     }
-    assert all("value" not in item for item in secret_env.values())
+    assert all(item["value"] == "" for item in secret_env.values())
 
 
 def test_wazuh_manager_sdl_matches_compose_visible_surfaces():
@@ -141,7 +146,7 @@ def test_wazuh_manager_sdl_matches_compose_visible_surfaces():
     env = {item["name"]: item for item in runtime["environment"]}
     for name in ("INDEXER_PASSWORD", "API_PASSWORD"):
         assert env[name]["value_classification"] == "redacted"
-        assert "value" not in env[name]
+        assert env[name]["value"] == ""
 
 
 def test_switch_network_internal_flags_match_compose():
@@ -169,13 +174,13 @@ def test_techvault_sdl_compiles_with_audit_fix_nodes():
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
 
-    shuffle = model.node_deployments["provision.node.shuffle-backend"].spec["node"]
-    wazuh = model.node_deployments["provision.node.wazuh-manager"].spec["node"]
+    shuffle = model.node_deployments["provision.node.techvault.shuffle-backend"].spec["node"]
+    wazuh = model.node_deployments["provision.node.techvault.wazuh-manager"].spec["node"]
     assert len(shuffle["runtime"]["package_vulnerabilities"]) == 86
     assert [endpoint["network"] for endpoint in wazuh["runtime"]["network"]["endpoints"]] == [
-        "security-net",
-        "dmz-net",
-        "internal-net",
+        "techvault.security-net",
+        "techvault.dmz-net",
+        "techvault.internal-net",
     ]
 
 

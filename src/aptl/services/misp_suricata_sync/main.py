@@ -133,7 +133,19 @@ def run_loop(
 
     runner = SyncRunner(cfg, client=client, reloader=reloader)
     while not stop.is_set():
-        runner.run_once()
+        try:
+            runner.run_once()
+        except Exception:  # broad by design: one tick's failure must not kill the daemon
+            # A single tick raising (disk full on a rule/list write, a malformed
+            # MISP payload that slips past the None-check, a reloader that
+            # throws) previously propagated out of run_loop -> main and killed
+            # the long-running service, silently stopping IOC enforcement
+            # (ARCH-386-07 / mispsync-01). Log with traceback and retry on the
+            # next interval; reload-retry state on the runner is preserved.
+            log.exception(
+                "Unhandled error during sync tick; the service will retry on "
+                "the next interval"
+            )
         stop.wait(cfg.sync_interval_seconds)
 
 
@@ -148,11 +160,11 @@ def main() -> int:
     """Service entrypoint. Returns process exit code."""
     try:
         cfg = ServiceConfig.from_env()
-    except Exception as exc:  # noqa: BLE001 - explicit fail-fast on bad env
+    except Exception:  # broad by design: fail fast on any bad-config error
         # Use a one-shot logger init at WARNING so the failure is visible
         # without committing to the (potentially-bogus) configured level.
         setup_logging(level=logging.WARNING)
-        log.error("misp-suricata-sync failed to start: %s", exc)
+        log.exception("misp-suricata-sync failed to start")
         return 2
 
     setup_logging(level=getattr(logging, cfg.log_level.upper(), logging.INFO))

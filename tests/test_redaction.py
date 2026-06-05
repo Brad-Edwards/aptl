@@ -1,5 +1,7 @@
 """Tests for the shared redaction helper used at serialization boundaries."""
 
+import json
+
 import pytest
 
 from aptl.utils.redaction import REDACTED, redact
@@ -764,3 +766,106 @@ class TestExperimentNoRedactToggle:
         assert experiment_no_redact_active() is True
         monkeypatch.delenv("APTL_EXPERIMENT_NO_REDACT")
         assert experiment_no_redact_active() is False
+
+
+class TestRedactorBounds:
+    """Defense-in-depth bounds on the redactor itself (issue #386, ARCH-386-01).
+
+    These guard against the redaction layer becoming a denial-of-service
+    (catastrophic regex backtracking) or a fail-open crash (RecursionError)
+    when fed hostile or pathological control-plane artifacts. Both bounds
+    fail CLOSED — they over-redact, never leak.
+    """
+
+    # A budget that cleanly separates the linear path (milliseconds) from a
+    # reintroduced O(n^2) backtracking regression (tens of seconds at these
+    # input sizes), while staying loose enough never to flake on a busy CI.
+    _BUDGET_S = 3.0
+
+    def _redact_within_budget(self, value):
+        import time
+
+        start = time.monotonic()
+        out = redact(value)
+        return out, time.monotonic() - start
+
+    def test_impacket_positional_no_at_is_linear_not_redos(self):
+        # `user:value` with no terminating `@`: before the fix this drove
+        # `_IMPACKET_POSITIONAL_*` into O(n^2) backtracking. Stay under
+        # _MAX_SCAN_LEN so the pattern actually runs (the cap doesn't mask it).
+        payload = "impacket-psexec " + "a" * 20000 + ":" + "b" * 20000
+        _, elapsed = self._redact_within_budget(payload)
+        assert elapsed < self._BUDGET_S
+
+    def test_long_flag_token_is_linear_not_redos(self):
+        payload = "hydra " + "--" + "a" * 40000 + " target"
+        _, elapsed = self._redact_within_budget(payload)
+        assert elapsed < self._BUDGET_S
+
+    def test_impacket_positional_still_redacted(self):
+        # The ReDoS fix must not weaken redaction of valid targets.
+        assert (
+            redact("psexec.py corp/alice:S3cr3t@dc01.lab.local x")
+            == "psexec.py corp/alice:[REDACTED]@dc01.lab.local x"
+        )
+        assert redact("psexec.py alice:b:c@host") == "psexec.py alice:[REDACTED]@host"
+        # A target whose segment names no impacket tool is left alone.
+        assert redact("echo hello:world@notatool") == "echo hello:world@notatool"
+
+    def test_oversized_input_is_bounded_and_still_redacts_linear_secrets(self):
+        from aptl.utils.redaction import _MAX_SCAN_LEN
+
+        payload = (
+            "psexec.py " + "a" * 90000 + ":" + "b" * 90000 + " password=hunter2"
+        )
+        assert len(payload) > _MAX_SCAN_LEN
+        out, elapsed = self._redact_within_budget(payload)
+        assert elapsed < self._BUDGET_S
+        # Linear key/value redaction still applies above the cap...
+        assert "password=hunter2" not in out
+        assert f"password={REDACTED}" in out
+
+    def test_deep_dict_fails_closed_without_recursionerror(self):
+        from aptl.utils.redaction import _MAX_DEPTH
+
+        root = node = {}
+        for _ in range(_MAX_DEPTH + 50):
+            node["n"] = {}
+            node = node["n"]
+        node["password"] = "should-never-survive"
+        out = redact(root)  # must not raise RecursionError
+        serialized = json.dumps(out)
+        # Fail-closed: the subtree past the depth cap collapses to the marker,
+        # so the deep secret is over-redacted rather than leaked.
+        assert "should-never-survive" not in serialized
+        assert REDACTED in serialized
+
+    def test_deep_list_fails_closed_without_recursionerror(self):
+        from aptl.utils.redaction import _MAX_DEPTH
+
+        root = cur = []
+        for _ in range(_MAX_DEPTH + 50):
+            nxt = []
+            cur.append(nxt)
+            cur = nxt
+        cur.append("token=should-never-survive")
+        out = redact(root)  # must not raise RecursionError
+        assert "should-never-survive" not in json.dumps(out)
+
+    def test_shallow_nesting_below_cap_is_unaffected(self):
+        # A structure well within the cap redacts normally end-to-end.
+        nested = {"a": {"b": {"c": {"password": "hunter2", "host": "dc01"}}}}
+        assert redact(nested) == {
+            "a": {"b": {"c": {"password": REDACTED, "host": "dc01"}}}
+        }
+
+    def test_bytes_values_are_redacted_not_bypassed(self):
+        # bytes/bytearray previously fell through unredacted (redact-03).
+        assert redact(b"password=hunter2") == f"password={REDACTED}"
+        assert redact(bytearray(b"token: abc")) == f"token: {REDACTED}"
+        # Non-UTF-8 bytes decode with replacement and still redact embedded kv.
+        assert f"pass={REDACTED}" in redact(b"\xff\xfepass=\x00secret")
+
+    def test_bytes_in_container_are_redacted(self):
+        out = redact({"blob": b"api_key=AKIA1234567890"})
+        assert out == {"blob": f"api_key={REDACTED}"}

@@ -1566,8 +1566,8 @@ nodes:
         source: ''
         description: ''
       - name: GPG_KEY
-        value: A035C8C19219BA821ECEA86B64E628F8D684696D
-        value_classification: plain
+        value: ''
+        value_classification: redacted
         provenance: image
         source: ''
         description: ''
@@ -1608,8 +1608,8 @@ nodes:
         source: ''
         description: ''
       - name: PWD
-        value: /app
-        value_classification: plain
+        value: ''
+        value_classification: redacted
         provenance: runtime
         source: ''
         description: ''

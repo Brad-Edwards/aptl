@@ -34,6 +34,35 @@ def _rows() -> dict[str, dict]:
     return {row["id"]: row for row in _yaml(PARITY_PATH)["rows"]}
 
 
+def test_no_node_runtime_env_var_exposes_a_secret_named_value():
+    """Structural gate: ACES rejects a `runtime.environment` variable whose NAME
+    looks secret-bearing (e.g. PWD, *_KEY, *TOKEN, *PASSWORD) unless its value is
+    omitted. Every such variable across every TechVault node must therefore carry
+    an empty value. Variables intentionally exposing a participant-visible lab
+    credential use the `secret_fixture` classification and are exempt — the
+    fixture value is a deliberate scenario fact, not a leak."""
+    from aces_sdl.runtime_values import name_indicates_secret
+
+    sdl = _yaml(TECHVAULT_SDL_PATH)
+    offenders = []
+    for node_name, node in sdl["nodes"].items():
+        runtime = node.get("runtime") or {}
+        for entry in runtime.get("environment") or []:
+            name = entry.get("name", "")
+            value = entry.get("value", "")
+            classification = entry.get("value_classification", "")
+            if (
+                name_indicates_secret(name)
+                and value not in ("", None)
+                and classification != "secret_fixture"
+            ):
+                offenders.append(f"{node_name}:{name} ({classification})")
+    assert not offenders, (
+        "runtime.environment variables with secret-bearing names must omit their "
+        f"value (ACES rule) or be classified secret_fixture: {offenders}"
+    )
+
+
 def test_shuffle_backend_runtime_inventory_is_encoded_from_evidence():
     sdl = _yaml(TECHVAULT_SDL_PATH)
     node = sdl["nodes"]["shuffle-backend"]

@@ -76,14 +76,15 @@ REQUIRED_EVIDENCE_FILES = {
     "wazuh-indexer-index-mappings-census.json",
 }
 
-# These literal strings must NEVER appear in committed evidence; the redaction
-# stream and out-of-band omission are the only acceptable ways for committed
-# evidence to record their existence.
+# These patterns must NEVER match committed evidence; the redaction stream and
+# out-of-band omission are the only acceptable ways for committed evidence to
+# record secret material's existence. Each pattern is matched against the whole
+# evidence file as a single string (no re.MULTILINE), so anchors are avoided —
+# every pattern here is a substring/inline match that can actually fire.
 RAW_SECRET_PATTERNS = (
-    r"BEGIN .*PRIVATE KEY",
-    r"^admin:\s*$",
-    r"\$2[ay]\$\d{2}\$[./A-Za-z0-9]{53}",
-    r"authorization:\s*Bearer\s+[A-Za-z0-9._-]+",
+    r"BEGIN .*PRIVATE KEY",  # raw PEM private key bytes
+    r"\$2[ay]\$\d{2}\$[./A-Za-z0-9]{53}",  # bcrypt internal-user hash
+    r"authorization:\s*Bearer\s+[A-Za-z0-9._-]+",  # bearer token
 )
 
 

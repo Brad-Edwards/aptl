@@ -6790,8 +6790,8 @@ nodes:
         value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         value_classification: plain
       - name: PWD
-        value: /
-        value_classification: plain
+        value: ''
+        value_classification: redacted
         provenance: runtime
         source: runtime-baseline.txt
         description: Runtime-observed process environment value not present in docker inspect Config.Env.

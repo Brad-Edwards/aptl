@@ -335,6 +335,13 @@ def test_techvault_sdl_compiles_with_suricata_runtime_fields():
     assert node["source"]["version"] == IMAGE_DIGEST
     assert len(build["source_inputs"]) == SOURCE_INPUT_COUNT
     assert build["attestation"]["status"] == "absent"
+    # source_inputs land at their realized on-node destinations (the four MISP
+    # baselines under /var/lib/suricata/rules/misp, not the local.rules path)
+    dest_by_src = {si["source_path"]: si["destination_path"] for si in build["source_inputs"]}
+    assert dest_by_src["config/suricata/suricata.yaml"] == "/etc/suricata/suricata.yaml"
+    assert dest_by_src["config/suricata/rules/local.rules"] == "/etc/suricata/rules/local.rules"
+    for misp in ("misp-iocs.rules", "misp-md5.list", "misp-sha1.list", "misp-sha256.list"):
+        assert dest_by_src[f"config/suricata/rules/misp/{misp}"] == f"/var/lib/suricata/rules/misp/{misp}"
     assert len(runtime["packages"]) == RUNTIME_PACKAGE_COUNT
     assert len(runtime["package_vulnerabilities"]) == TRIVY_FINDING_COUNT
     assert len(runtime["network"]["endpoints"]) == 3

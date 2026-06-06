@@ -180,22 +180,22 @@ nodes:
           checksum_algorithm: sha256
         - identifier: config-suricata-rules-misp-misp-iocs.rules
           source_path: config/suricata/rules/misp/misp-iocs.rules
-          destination_path: /etc/suricata/rules/local.rules
+          destination_path: /var/lib/suricata/rules/misp/misp-iocs.rules
           checksum: 462aecd67796a9ff9acd80e2bb2e9e597f05bfb05892c0766110bca933a30ede
           checksum_algorithm: sha256
         - identifier: config-suricata-rules-misp-misp-md5.list
           source_path: config/suricata/rules/misp/misp-md5.list
-          destination_path: /etc/suricata/rules/local.rules
+          destination_path: /var/lib/suricata/rules/misp/misp-md5.list
           checksum: 66be1ef4237386fd2e34a978fc245bb2030641fd76409062d72919954830f376
           checksum_algorithm: sha256
         - identifier: config-suricata-rules-misp-misp-sha1.list
           source_path: config/suricata/rules/misp/misp-sha1.list
-          destination_path: /etc/suricata/rules/local.rules
+          destination_path: /var/lib/suricata/rules/misp/misp-sha1.list
           checksum: d91e7c095d162c8efb5ff55389043cf429809899df45f32f931f5d2eae381f0c
           checksum_algorithm: sha256
         - identifier: config-suricata-rules-misp-misp-sha256.list
           source_path: config/suricata/rules/misp/misp-sha256.list
-          destination_path: /etc/suricata/rules/local.rules
+          destination_path: /var/lib/suricata/rules/misp/misp-sha256.list
           checksum: b059ca012bd1345811fb9aae5e7a758498b33063887b092956bd083e41fa85dd
           checksum_algorithm: sha256
         attestation:

@@ -1,0 +1,2 @@
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+systemd+            2955413             2955384             0                   May23               ?                   00:14:34            /usr/bin/suricata --user suricata --group suricata -c /etc/suricata/suricata.yaml --pcap

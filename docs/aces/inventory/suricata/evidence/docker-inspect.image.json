@@ -1,0 +1,63 @@
+[
+  {
+    "Id": "sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d",
+    "RepoTags": [
+      "jasonish/suricata:7.0"
+    ],
+    "RepoDigests": [
+      "jasonish/suricata@sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2026-04-28T21:36:25.31874344Z",
+    "Config": {
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG=C.utf8"
+      ],
+      "Entrypoint": [
+        "/docker-entrypoint.sh"
+      ],
+      "Volumes": {
+        "/etc/suricata": {},
+        "/var/lib/suricata": {},
+        "/var/log/suricata": {},
+        "/var/run/suricata": {}
+      },
+      "WorkingDir": "/",
+      "ArgsEscaped": true
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 137919647,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:f9b0f83065cf63c678d2a2762f5354469300a22b736f0af3938c6fb0f94710a2",
+        "sha256:4652cb9f860863bb39663e9240164f6be3b020d55748922960a6bc0c4b5e0081",
+        "sha256:2cd29263f754170b463c3c4172fff63dd09df0fbc4bbdfacf666df6d85f4e7d4",
+        "sha256:6f83fc38fd0550f69645f04866e9bbaeb18243dfdcaa2b66d6770d3dd660decf",
+        "sha256:bf824170c145f089d0416e11a8e54cfac29c7898c0552626569edf76a6bc4c2c",
+        "sha256:96e6995c0ebe43070e05648332f524f40e865a607000119f22ff3fa8aa7e4f3f",
+        "sha256:247ead26407e881c94320904771ee14643e7f52cd26086a9e6e207e8af17b308",
+        "sha256:2a1bda26578db9185910f3838af346ed876ec0526c8d21d8e29098469c7d4ebe",
+        "sha256:dfe304617de962b4ef6748aec3e8fbc49d5750bc5709f50917045c581dbf46fc",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-04-29T04:08:39.900246426Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+      "digest": "sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d",
+      "size": 743
+    },
+    "Identity": {
+      "Pull": [
+        {
+          "Repository": "docker.io/jasonish/suricata"
+        }
+      ]
+    }
+  }
+]

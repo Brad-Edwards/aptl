@@ -1,0 +1,29 @@
+directory drwxr-xr-x 755 998 suricata 998 suricata 4096 1779517114 /etc/suricata
+regular file -rw------- 600 998 suricata 998 suricata 3327 1777412177 /etc/suricata/classification.config
+regular file -rw------- 600 998 suricata 998 suricata 1375 1777412177 /etc/suricata/reference.config
+directory drwxr-xr-x 755 998 suricata 998 suricata 4096 1779517114 /etc/suricata/rules
+regular file -rw-rw-r-- 664 1000 UNKNOWN 1000 UNKNOWN 3636 1777705328 /etc/suricata/rules/local.rules
+regular file -rw-rw-r-- 664 1000 UNKNOWN 1000 UNKNOWN 2720 1777853070 /etc/suricata/suricata.yaml
+regular file -rw------- 600 998 suricata 998 suricata 1643 1777412177 /etc/suricata/threshold.config
+regular file -rw-r--r-- 644 998 suricata 998 suricata 43 1777411914 /etc/suricata/update.yaml
+directory drwxr-x--- 750 998 suricata 998 suricata 4096 1779517114 /var/lib/suricata/rules
+regular file -rw-r--r-- 644 998 suricata 998 suricata 3228 1777412184 /var/lib/suricata/rules/classification.config
+directory drwxr-xr-x 755 998 suricata 998 suricata 4096 1779517175 /var/lib/suricata/rules/misp
+regular file -rw-r--r-- 644 0 root 0 root 206 1779517175 /var/lib/suricata/rules/misp/misp-iocs.rules
+regular file -rw-r--r-- 644 998 suricata 998 suricata 156 1779517020 /var/lib/suricata/rules/misp/misp-md5.list
+regular file -rw-r--r-- 644 998 suricata 998 suricata 157 1779517020 /var/lib/suricata/rules/misp/misp-sha1.list
+regular file -rw-r--r-- 644 998 suricata 998 suricata 159 1779517020 /var/lib/suricata/rules/misp/misp-sha256.list
+regular file -rw-r--r-- 644 998 suricata 998 suricata 43427254 1777412184 /var/lib/suricata/rules/suricata.rules
+directory drwxr-xr-x 755 998 suricata 998 suricata 4096 1779517111 /var/lib/suricata/update
+directory drwxr-xr-x 755 998 suricata 998 suricata 4096 1779517111 /var/lib/suricata/update/cache
+regular file -rw-r--r-- 644 998 suricata 998 suricata 9855 1777412179 /var/lib/suricata/update/cache/1e596eb1ec1ec9b6d6121727d3d926b5-trafficid.rules
+regular file -rw-r--r-- 644 998 suricata 998 suricata 5446978 1777412181 /var/lib/suricata/update/cache/dd47cf274d55dc05064b14d1515d82a2-emerging.rules.tar.gz
+regular file -rw-r--r-- 644 998 suricata 998 suricata 14677 1777412179 /var/lib/suricata/update/cache/index.yaml
+directory drwxr-xr-x 755 998 suricata 998 suricata 4096 1779517111 /var/lib/suricata/update/sources
+regular file -rw-r--r-- 644 998 suricata 998 suricata 31 1777412179 /var/lib/suricata/update/sources/et-open.yaml
+regular file -rw-r--r-- 644 998 suricata 998 suricata 23 1777412179 /var/lib/suricata/update/sources/oisf-trafficid.yaml
+directory drwxr-xr-x 755 998 suricata 998 suricata 4096 1779517115 /var/log/suricata
+regular file -rw-r--r-- 644 998 suricata 998 suricata 486908719 1780009695 /var/log/suricata/eve.json
+regular file -rw-r--r-- 644 998 suricata 998 suricata 111076 1780009466 /var/log/suricata/fast.log
+directory drwxr-xr-x 755 998 suricata 998 suricata 4096 1779517143 /var/run/suricata
+socket srw-rw---- 660 998 suricata 998 suricata 0 1779517143 /var/run/suricata/suricata-command.socket

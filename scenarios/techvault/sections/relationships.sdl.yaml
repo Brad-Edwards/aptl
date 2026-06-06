@@ -1,5 +1,24 @@
 name: techvault-relationships
 relationships:
+  suricata-logs-forwarded-wazuh:
+    type: connects_to
+    source: techvault.suricata
+    target: techvault.wazuh-manager
+    description: 'The off-node wazuh-sidecar-suricata container tails Suricata eve.json from the read-only suricata_logs volume and forwards alert telemetry to the SOC stack. Typed forwarding_edge.forwarder_ref resolves into the scenario-level forwarding_agents registry (Brad-Edwards/aces#460); the sidecar is an APTL ADR-020 carve-out (jasonish/suricata:7.0 has no first-party Wazuh package) and is not itself a scenario participant node.'
+    properties: {}
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: aptl-suricata-wazuh-agent
+      target_listener_role: other
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: ''
+      crypto_method: ''
+      parse_format: eve_json
+      description: ''
+    service_integration: null
+    proxy_upstream: null
   db-logs-forwarded-wazuh:
     type: connects_to
     source: techvault.db

@@ -746,6 +746,39 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #335 inventory pass encodes the docker-mailserver steady-state image, runtime, mail-service logical state, filesystem, local identity, package/CVE summary, and participant probe facts with no known remaining ACES expressivity blocker. TCP/993 is host-published but refused at the participant vantage; TCP/465 is reachable but not working implicit TLS in this capture.
 
+  - id: scen.techvault.suricata-inventory
+    surface: scenarios_yaml
+    legacy_source: "docker-compose.yml service suricata + docs/aces/inventory/suricata/"
+    legacy_field: suricata steady-state participant-observable asset spec
+    category: aces_sdl
+    aces_target: ACES nodes.suricata (source/runtime mounts, container, linux_capabilities, operational_policy, network endpoints, local_control_interfaces, network_sensors, network_detection_engines, process, environment, filesystem_inventory, local_identity, software_components, packages, package_vulnerabilities) + infrastructure.suricata + content.suricata-* (6 authored config/ruleset files) + relationships.suricata-logs-forwarded-wazuh
+    runtime_owner: scenarios/techvault.sdl.yaml
+    validation_evidence: docs/aces/inventory/suricata/ + scenarios/techvault.sdl.yaml + tests/test_suricata_inventory.py
+    blocking_followup: n/a
+    notes: SCN-010 issue #345 inventory pass. First passive network-sensor archetype in TechVault. Encodes the upstream jasonish/suricata:7.0 image, runtime/container/capability posture, network attachment to dmz/internal/security, the unix command socket, filesystem/ruleset config files, the six APTL-authored config files (suricata.yaml, local.rules, four MISP baselines) as content entries, local identity, 191 rpm packages, 18 Trivy findings, Suricata 7.0.15 software identity, the passive sensor posture, the IDS detection engine, and the eve.json log-forwarding relationship to wazuh-manager. No authored accounts (the suricata user is image-provided, captured in local_identity). No remaining ACES expressivity blocker.
+
+  - id: scen.techvault.suricata-sensor-posture
+    surface: scenarios_yaml
+    legacy_source: "docker-compose.yml service suricata (--pcap, interface: any, 3 networks) + docs/aces/inventory/suricata/"
+    legacy_field: passive network-sensor monitoring posture
+    category: aces_sdl
+    aces_target: ACES nodes.suricata.runtime.network_sensors (implementation=suricata, monitoring_posture=passive, capture_mode=pcap, monitored_network_refs=dmz/internal/security)
+    runtime_owner: scenarios/techvault.sdl.yaml
+    validation_evidence: scenarios/techvault.sdl.yaml + docs/aces/inventory/suricata/mapping-ledger.yaml fact suricata.sensor.monitoring-posture
+    blocking_followup: n/a
+    notes: SCN-010 issue #345. Previously aces_schema_profile_gap; resolved by ACES Brad-Edwards/aces#429 (PR #435 added runtime.network_sensors) and now encoded.
+
+  - id: scen.techvault.suricata-ids-engine
+    surface: scenarios_yaml
+    legacy_source: "config/suricata/suricata.yaml + /var/lib/suricata/rules + docs/aces/inventory/suricata/"
+    legacy_field: IDS/NDR detection-engine semantics (app-layer parsers, rule sources, zoning, alert streams)
+    category: aces_sdl
+    aces_target: ACES nodes.suricata.runtime.network_detection_engines (app_layer_protocols, rule_sources, network_sets, output_streams, control_channels)
+    runtime_owner: scenarios/techvault.sdl.yaml
+    validation_evidence: scenarios/techvault.sdl.yaml + docs/aces/inventory/suricata/mapping-ledger.yaml fact suricata.ids.detection-engine
+    blocking_followup: n/a
+    notes: SCN-010 issue #345. Previously aces_schema_profile_gap; resolved by ACES Brad-Edwards/aces#430 (PR #437/#438 added runtime.network_detection_engines) and now encoded.
+
   - id: scen.techvault.dns-inventory
     surface: scenarios_yaml
     legacy_source: "docker-compose.yml service dns + docs/aces/inventory/dns/"

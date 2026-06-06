@@ -1,5 +1,18 @@
 name: techvault-infrastructure
 infrastructure:
+  suricata:
+    count: 1
+    links:
+    - techvault.dmz-net
+    - techvault.internal-net
+    - techvault.security-net
+    dependencies: []
+    properties:
+    - techvault.dmz-net: 172.20.1.50
+    - techvault.internal-net: 172.20.2.50
+    - techvault.security-net: 172.20.0.50
+    acls: []
+    description: 'Suricata IDS sensor is attached to the DMZ, internal, and security TechVault networks and publishes no host ports; its passive cross-network monitoring posture is encoded under nodes.suricata.runtime.network_sensors.'
   dmz-net:
     count: 1
     links: []

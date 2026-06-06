@@ -31,6 +31,26 @@ forwarding_agents:
       listener on TCP/1514 (already encoded as nodes.wazuh-manager.runtime.security_monitoring_managers[0].listeners agent-events-1514).
 
       '
+- forwarding_agent_id: aptl-suricata-wazuh-agent
+  implementation: wazuh_agent
+  agent_kind: log_forwarder
+  name: aptl-suricata-agent
+  description: 'Off-node Wazuh agent sidecar container (compose service wazuh-sidecar-suricata, image aptl-wazuh-sidecar:local, container aptl-wazuh-sidecar-suricata). It mounts the suricata node''s suricata_logs volume read-only at /logs and forwards Suricata EVE JSON from /logs/eve.json (LOG_FORMAT=json) to the wazuh-manager. Registered as aptl-suricata-agent on nodes.wazuh-manager.runtime.security_monitoring_managers[0].agents. Encoded at the scenario level (per Brad-Edwards/aces#460) because the sidecar is an APTL ADR-020 infrastructure carve-out: the suricata node runs upstream jasonish/suricata:7.0 with no first-party Wazuh package, and the sidecar is not itself a scenario participant. Evidenced by docker-compose.yml lines 957-975.'
+  sources:
+  - source_id: aptl-suricata-wazuh-agent-eve
+    kind: tailed_path
+    location: /logs/eve.json
+    parse_format: eve_json
+    description: 'Tails the Suricata EVE JSON alert stream from the read-only suricata_logs mount (compose LOG_PATHS=/logs/eve.json, LOG_FORMAT=json).'
+  buffer_policy:
+    buffer_policy_id: aptl-suricata-wazuh-agent-buffer
+    description: 'Buffer/queue policy is configured inside the aptl-wazuh-sidecar:local image; granular fields are unset because they are not enumerated in the docker-compose.yml authored spec (no sidecar inventory bundle is in scope per APTL #388).'
+  ship_targets:
+  - target_id: aptl-suricata-wazuh-agent-events-1514
+    target_node_ref: techvault.wazuh-manager
+    ingestion_port: 1514
+    protocol: tcp
+    description: 'Compose WAZUH_MANAGER=wazuh.manager resolves to the wazuh-manager node; events ship to its agent_event_ingestion listener on TCP/1514.'
 imports:
 - source: local:techvault/nodes/redteam-net.sdl.yaml
   namespace: techvault
@@ -71,6 +91,8 @@ imports:
 - source: local:techvault/nodes/misp-redis.sdl.yaml
   namespace: techvault
 - source: local:techvault/nodes/misp-suricata-sync.sdl.yaml
+  namespace: techvault
+- source: local:techvault/nodes/suricata.sdl.yaml
   namespace: techvault
 - source: local:techvault/sections/infrastructure.sdl.yaml
   namespace: techvault

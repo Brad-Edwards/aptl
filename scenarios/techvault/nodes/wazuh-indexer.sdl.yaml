@@ -463,13 +463,13 @@ nodes:
           gid: 1000
           mode: '0644'
           size: 1704
-          content_digest: ''
-          digest_algorithm: ''
+          content_digest: abfe717cb6dcf0377ce662c7ad6dc171a2f0e9b5c64abf96fee56f9254ce9511
+          digest_algorithm: sha256
           source_path: ''
           provenance: docker exec; docs/aces/inventory/wazuh.indexer/evidence/filesystem-tree.txt; docs/aces/inventory/wazuh.indexer/evidence/filesystem-checksums.txt
           stability: stable
-          sensitivity: redacted
-          description: Private TLS key material; raw content checksum omitted as <OMITTED-OPERATOR-SECRET-CHECKSUM>.
+          sensitivity: secret_fixture
+          description: Private TLS key material; sha256 content checksum recorded (scenario-generated key).
         - path: /usr/share/wazuh-indexer/certs/admin.pem
           entry_type: file
           presence: present
@@ -511,13 +511,13 @@ nodes:
           gid: 1000
           mode: '0644'
           size: 1704
-          content_digest: ''
-          digest_algorithm: ''
+          content_digest: b9003fbf3ac6030da81bb19abeef031d35881010d2d8145cfc57c4978044f7a3
+          digest_algorithm: sha256
           source_path: ''
           provenance: docker exec; docs/aces/inventory/wazuh.indexer/evidence/filesystem-tree.txt; docs/aces/inventory/wazuh.indexer/evidence/filesystem-checksums.txt
           stability: stable
-          sensitivity: redacted
-          description: Private TLS key material; raw content checksum omitted as <OMITTED-OPERATOR-SECRET-CHECKSUM>.
+          sensitivity: secret_fixture
+          description: Private TLS key material; sha256 content checksum recorded (scenario-generated key).
         - path: /usr/share/wazuh-indexer/certs/wazuh.indexer.pem
           entry_type: file
           presence: present

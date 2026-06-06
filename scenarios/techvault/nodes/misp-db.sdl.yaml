@@ -4250,6 +4250,8 @@ nodes:
         gid: 999
         mode: '660'
         size: 16384
+        content_digest: 64b86998dad1c91b037425e3a9ba7a81ea760e2e98f1b4ef91bba2338431dc4a
+        digest_algorithm: sha256
         stability: volume_backed
         sensitivity: operator_secret
         description: Captured filesystem inventory entry from filesystem-tree.txt.gz.
@@ -4262,6 +4264,8 @@ nodes:
         gid: 999
         mode: '660'
         size: 16384
+        content_digest: 6ebc31b709bd56e7edecc4ba5d37ee7a249515e436a9c639dfe529288a03609e
+        digest_algorithm: sha256
         stability: volume_backed
         sensitivity: operator_secret
         description: Captured filesystem inventory entry from filesystem-tree.txt.gz.
@@ -4274,6 +4278,8 @@ nodes:
         gid: 999
         mode: '660'
         size: 2183
+        content_digest: 2e8f3e7bf74781236bf1b4c05d17abd27d894409ce4555c37c6045092f7ec701
+        digest_algorithm: sha256
         stability: volume_backed
         sensitivity: operator_secret
         description: Captured filesystem inventory entry from filesystem-tree.txt.gz.

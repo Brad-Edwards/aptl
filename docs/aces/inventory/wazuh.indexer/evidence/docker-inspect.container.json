@@ -23,32 +23,32 @@
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-06-05T07:38:55.664485997+02:00",
-            "End": "2026-06-05T07:38:55.725392282+02:00",
+            "Start": "2026-06-06T05:42:06.222305831+02:00",
+            "End": "2026-06-06T05:42:06.29707413+02:00",
             "ExitCode": 0,
             "Output": "Unauthorized"
           },
           {
-            "Start": "2026-06-05T07:39:25.726201088+02:00",
-            "End": "2026-06-05T07:39:25.784620543+02:00",
+            "Start": "2026-06-06T05:42:36.298055817+02:00",
+            "End": "2026-06-06T05:42:36.356434908+02:00",
             "ExitCode": 0,
             "Output": "Unauthorized"
           },
           {
-            "Start": "2026-06-05T07:39:55.78620167+02:00",
-            "End": "2026-06-05T07:39:55.867991764+02:00",
+            "Start": "2026-06-06T05:43:06.358020371+02:00",
+            "End": "2026-06-06T05:43:06.414875007+02:00",
             "ExitCode": 0,
             "Output": "Unauthorized"
           },
           {
-            "Start": "2026-06-05T07:40:25.868572787+02:00",
-            "End": "2026-06-05T07:40:25.924484302+02:00",
+            "Start": "2026-06-06T05:43:36.41593006+02:00",
+            "End": "2026-06-06T05:43:36.474362222+02:00",
             "ExitCode": 0,
             "Output": "Unauthorized"
           },
           {
-            "Start": "2026-06-05T07:40:55.925941228+02:00",
-            "End": "2026-06-05T07:40:55.985836837+02:00",
+            "Start": "2026-06-06T05:44:06.475341344+02:00",
+            "End": "2026-06-06T05:44:06.541982292+02:00",
             "ExitCode": 0,
             "Output": "Unauthorized"
           }
@@ -198,6 +198,38 @@
     "Mounts": [
       {
         "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca.pem",
+        "Destination": "/usr/share/wazuh-indexer/certs/root-ca.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem",
+        "Destination": "/usr/share/wazuh-indexer/certs/wazuh.indexer.key",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.indexer.pem",
+        "Destination": "/usr/share/wazuh-indexer/certs/wazuh.indexer.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/admin.pem",
+        "Destination": "/usr/share/wazuh-indexer/certs/admin.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
         "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/admin-key.pem",
         "Destination": "/usr/share/wazuh-indexer/certs/admin-key.pem",
         "Mode": "rw",
@@ -229,38 +261,6 @@
         "Mode": "rw",
         "RW": true,
         "Propagation": ""
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca.pem",
-        "Destination": "/usr/share/wazuh-indexer/certs/root-ca.pem",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem",
-        "Destination": "/usr/share/wazuh-indexer/certs/wazuh.indexer.key",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.indexer.pem",
-        "Destination": "/usr/share/wazuh-indexer/certs/wazuh.indexer.pem",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/admin.pem",
-        "Destination": "/usr/share/wazuh-indexer/certs/admin.pem",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
       }
     ],
     "Config": {

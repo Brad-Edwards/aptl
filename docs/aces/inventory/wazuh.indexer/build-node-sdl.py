@@ -613,15 +613,25 @@ def parse_vulnerabilities() -> list[dict]:
     return out
 
 
+# ACES expressivity gaps blocking full datastore encoding. Observed structured
+# facts in these dimensions live in the evidence bundle + mapping ledger
+# (disposition blocked_by_aces_gap); they are NOT forced into SDL prose.
+ACES_GAP_CARDINALITY = "Brad-Edwards/aces#468"  # cluster/partition uuid, doc count, store size, creation, status
+ACES_GAP_MAPPINGS = "Brad-Edwards/aces#469"  # structured index mapping + template-body schema
+ACES_GAP_NODE_PROVENANCE = "Brad-Edwards/aces#470"  # engine version/build/plugin-version/heap/publish addresses
+
+
 def parse_datastore_services() -> list[dict]:
     """Parse OpenSearch state into a single RuntimeDatastoreService entry.
 
     The shape conforms to the ACES ``RuntimeDatastoreService`` schema:
     cluster + nodes + partitions (search-index profile) + transport_security
-    + bounded settings list. Rich operational telemetry (cluster UUID, per-
-    index UUIDs, doc counts, store sizes, plugin catalogue) is carried in
-    the mapping ledger and evidence files; the SDL records the bounded
-    schema-valid view that the parser accepts.
+    + bounded settings list. Dimensions ACES cannot type today — per-index and
+    cluster cardinality/size/identity (ACES #468), structured index mappings and
+    template bodies (ACES #469), and node engine provenance (ACES #470) — are
+    deliberately NOT stuffed into description prose here; they are captured in
+    the evidence bundle and recorded as blocked_by_aces_gap facts in the mapping
+    ledger. The SDL encodes only what has a typed home.
     """
     cluster_health = json.loads(indexer_state_section("cluster-health"))
     cluster_stats = json.loads(indexer_state_section("cluster-stats-summary"))
@@ -645,6 +655,11 @@ def parse_datastore_services() -> list[dict]:
         else:
             other_roles.append(r)
             node_roles.append("other")
+    node_role_note = (
+        f" OpenSearch roles outside the ACES vocabulary mapped to 'other': {', '.join(other_roles)}."
+        if other_roles
+        else ""
+    )
     nodes_out = [
         {
             "node_id": node_id,
@@ -652,17 +667,15 @@ def parse_datastore_services() -> list[dict]:
             "roles": node_roles,
             "is_coordinator": True,
             "address": transport_publish,
+            # Engine version, build hash, per-plugin versions, JVM heap, and the
+            # http/transport publish-address split have no typed RuntimeDatastoreNode
+            # home; observed in evidence and blocked on ACES #470. Do NOT inline them.
             "description": (
-                f"OpenSearch {node.get('version','')} ({node.get('build_type','')} build "
-                f"{node.get('build_hash','')}) holding the "
-                f"{', '.join(role_list_raw)} role set. "
-                "Full node and plugin telemetry are recorded in "
-                "docs/aces/inventory/wazuh.indexer/evidence/wazuh-indexer-state.txt."
-                + (
-                    f" Non-vocabulary OpenSearch roles mapped to 'other': {', '.join(other_roles)}."
-                    if other_roles
-                    else ""
-                )
+                "Single OpenSearch member of the TechVault Wazuh indexer cluster."
+                + node_role_note
+                + f" Engine version / build hash / per-plugin versions / JVM heap / publish-address split"
+                f" are observed in docs/aces/inventory/wazuh.indexer/evidence/wazuh-indexer-state.txt"
+                f" and blocked on {ACES_GAP_NODE_PROVENANCE} (no typed node-provenance fields)."
             ),
         }
     ]
@@ -677,10 +690,15 @@ def parse_datastore_services() -> list[dict]:
                 "shard_count": int(idx.get("pri", "0") or 0),
                 "replica_count": int(idx.get("rep", "0") or 0),
                 "health": idx.get("health", ""),
+                # uuid, doc count, deleted count, store size, creation date, and
+                # open/closed status have no typed RuntimeDatastorePartition home;
+                # observed in evidence (cat-indices + mapping census) and blocked on
+                # ACES #468 (cardinality/size/identity) and #469 (structured mapping).
+                # They are intentionally NOT inlined into this description.
                 "description": (
-                    f"OpenSearch index ({idx.get('uuid','')}, status {idx.get('status','')}, "
-                    f"docs.count {idx.get('docs.count','')}, store.size {idx.get('store.size','')}, "
-                    f"created {idx.get('creation.date.string','')}) observed from /_cat/indices."
+                    f"OpenSearch index partition; cardinality/size/identity (uuid, doc count, "
+                    f"store size, creation date, open/closed status) blocked on {ACES_GAP_CARDINALITY}, "
+                    f"structured field mapping blocked on {ACES_GAP_MAPPINGS}; both observed in evidence."
                 ),
             }
         )
@@ -753,12 +771,12 @@ def parse_datastore_services() -> list[dict]:
         "discovery_mode": "single-node",
         "partitioner": "opensearch_default",
         "native_protocol_version": node.get("version", ""),
+        # cluster uuid, node count, aggregate shard/doc/store totals have no typed
+        # RuntimeDatastoreCluster home; observed in evidence and blocked on ACES #468.
         "description": (
-            f"Single-node OpenSearch cluster, uuid {cluster_stats.get('cluster_uuid','')}, "
-            f"{cluster_health.get('number_of_nodes',0)} node(s), "
-            f"{cluster_health.get('active_primary_shards',0)} primary shards, "
-            f"{cluster_stats.get('indices',{}).get('docs',{}).get('count',0)} docs, "
-            f"{cluster_stats.get('indices',{}).get('store',{}).get('size_in_bytes',0)} store bytes."
+            "Single-node OpenSearch cluster. Cluster uuid, node count, and aggregate "
+            f"shard/doc/store totals blocked on {ACES_GAP_CARDINALITY}; observed in "
+            "docs/aces/inventory/wazuh.indexer/evidence/wazuh-indexer-state.txt."
         ),
     }
 
@@ -774,7 +792,19 @@ def parse_datastore_services() -> list[dict]:
         ),
     }
 
+    # Plugin NAMES have a typed home (engine_plugins: list[str]); per-plugin
+    # VERSION does not — blocked on ACES #470.
     engine_plugin_ids = sorted({p.get("component", "") for p in plugins if p.get("component")})
+
+    # Template NAMES have a typed home (templates: list[str]); the structured
+    # template BODY (settings + mappings + index_patterns) does not — blocked on
+    # ACES #469. Names are encoded; bodies live in evidence.
+    cat_templates_text = indexer_state_section("cat-templates")
+    template_names = (
+        sorted({t.get("name", "") for t in json.loads(cat_templates_text) if t.get("name")})
+        if cat_templates_text
+        else []
+    )
 
     return [
         {
@@ -788,13 +818,19 @@ def parse_datastore_services() -> list[dict]:
             "cluster": cluster_block,
             "nodes": nodes_out,
             "partitions": partitions,
+            "templates": template_names,
             "engine_plugins": engine_plugin_ids,
             "transport_security": transport_security,
             "settings": settings,
             "description": (
-                "Wazuh indexer (OpenSearch 2.19.1 fork) datastore service spec for the steady-state TechVault lab. "
-                "Persistence is mounted at /var/lib/wazuh-indexer via the wazuh-indexer-data named volume; SEARCH_INDEX "
-                "profile does not carry a Redis-style persistence model."
+                "Wazuh indexer (OpenSearch 2.19.1 fork) datastore service for the steady-state TechVault lab; "
+                "persistence mounted at /var/lib/wazuh-indexer via the wazuh-indexer-data named volume. "
+                "Encoded: cluster identity (typed fields), node membership/roles, per-index partition geometry "
+                "(shard/replica/health), transport mutual-TLS, settings, plugin + template NAMES. "
+                f"Blocked on ACES gaps: per-index/cluster cardinality+size+identity ({ACES_GAP_CARDINALITY}), "
+                f"structured index mapping + template bodies ({ACES_GAP_MAPPINGS}), node engine provenance + "
+                f"per-plugin versions ({ACES_GAP_NODE_PROVENANCE}). Blocked dimensions live in the evidence bundle "
+                "and the mapping ledger, not in this prose."
             ),
         }
     ]

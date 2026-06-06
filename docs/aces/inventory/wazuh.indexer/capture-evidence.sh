@@ -304,6 +304,92 @@ docker exec \
   cat /usr/share/wazuh-indexer/jvm.options 2>/dev/null
 ' | redact_stream > "$OUT/wazuh-indexer-state.txt"
 
+# Structured index template bodies (settings + mappings + index_patterns). These
+# are the canonical mapping inventory for the Wazuh index families
+# (wazuh-alerts-4.x-*, wazuh-archives-4.x-*, wazuh-monitoring-*, wazuh-statistics-*,
+# wazuh-states-vulnerabilities-*). Committed gzipped; ACES `mappings`/`templates`
+# are name-only `list[str]` and cannot encode these bodies (blocked surface).
+docker exec \
+  -e "INDEXER_USERNAME=$INDEXER_USERNAME" \
+  -e "INDEXER_PASSWORD=$INDEXER_PASSWORD" \
+  "$CONTAINER" bash -lc '
+  set +e
+  cred="${INDEXER_USERNAME}:${INDEXER_PASSWORD}"
+  curl -ks -u "$cred" "https://localhost:9200/_template"
+' | redact_stream | jq -cS . | gzip -n > "$OUT/wazuh-indexer-templates.json.gz"
+
+# Per-index structured-mapping census: top-level + leaf field counts and a
+# canonical sha256 of each index mapping. Proves every realized index carries a
+# distinct structured field schema (search-index mapping inventory), which has
+# no typed ACES home today (blocked surface). The full per-index mappings are
+# large and near-identical across daily indices, so the census records the
+# observable shape + digest rather than 40x near-duplicate bodies; one full
+# representative mapping per family is captured in wazuh-indexer-family-mappings.json.gz.
+docker exec \
+  -e "INDEXER_USERNAME=$INDEXER_USERNAME" \
+  -e "INDEXER_PASSWORD=$INDEXER_PASSWORD" \
+  "$CONTAINER" bash -lc '
+  set +e
+  cred="${INDEXER_USERNAME}:${INDEXER_PASSWORD}"
+  curl -ks -u "$cred" "https://localhost:9200/_mapping"
+' | redact_stream | python3 -c '
+import hashlib, json, sys
+
+data = json.load(sys.stdin)
+
+
+def leaf_count(props):
+    total = 0
+    for body in props.values():
+        if "properties" in body:
+            total += leaf_count(body["properties"])
+        else:
+            total += 1
+    return total
+
+
+rows = []
+for index in sorted(data):
+    mappings = data[index].get("mappings", {})
+    props = mappings.get("properties", {})
+    canonical = json.dumps(mappings, sort_keys=True, separators=(",", ":"))
+    rows.append(
+        {
+            "index": index,
+            "top_level_field_count": len(props),
+            "leaf_field_count": leaf_count(props),
+            "dynamic": mappings.get("dynamic", ""),
+            "mapping_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        }
+    )
+json.dump({"index_count": len(rows), "indices": rows}, sys.stdout, indent=2)
+' > "$OUT/wazuh-indexer-index-mappings-census.json"
+
+# One full representative mapping per index family (gzipped) so the structured
+# field schema is recoverable from evidence without committing 40x near-identical
+# daily-index bodies.
+docker exec \
+  -e "INDEXER_USERNAME=$INDEXER_USERNAME" \
+  -e "INDEXER_PASSWORD=$INDEXER_PASSWORD" \
+  "$CONTAINER" bash -lc '
+  set +e
+  cred="${INDEXER_USERNAME}:${INDEXER_PASSWORD}"
+  families=""
+  for pattern in "wazuh-alerts-4.x-*" "wazuh-archives-4.x-*" "wazuh-monitoring-*" "wazuh-statistics-*" "wazuh-states-vulnerabilities-*" ".opendistro_security" ".kibana_1"; do
+    idx="$(curl -ks -u "$cred" "https://localhost:9200/_cat/indices/$pattern?h=index&s=index" | head -1 | tr -d "[:space:]")"
+    [ -n "$idx" ] && families="$families $idx"
+  done
+  first=1
+  echo "{"
+  for idx in $families; do
+    [ $first -eq 1 ] || echo ","
+    first=0
+    printf "%s: " "$(printf "%s" "$idx" | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))")"
+    curl -ks -u "$cred" "https://localhost:9200/$idx/_mapping" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps(d.get(list(d)[0],{}) if d else {}))"
+  done
+  echo "}"
+' | redact_stream | jq -cS . | gzip -n > "$OUT/wazuh-indexer-family-mappings.json.gz"
+
 docker exec "$CONTAINER" bash -lc '
   set +e
   curl -ks -i https://localhost:9200 2>&1 | sed -n "1,80p"

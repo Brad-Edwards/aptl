@@ -71,6 +71,9 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
     "wazuh-indexer-api-probe.json",
     "wazuh-indexer-state.txt",
+    "wazuh-indexer-templates.json.gz",
+    "wazuh-indexer-family-mappings.json.gz",
+    "wazuh-indexer-index-mappings-census.json",
 }
 
 # These literal strings must NEVER appear in committed evidence; the redaction
@@ -152,10 +155,18 @@ def test_wazuh_indexer_inventory_note_declares_scope_and_evidence():
         "runtime.identity_authorities",
         "mapping-ledger.yaml",
         "aptl aces-inventory validate",
-        "No known ACES expressivity gap remains",
+        # The note must honestly disclose the blocked surfaces + their ACES
+        # issues, and that the inventory issue stays open until ACES lands them.
+        "Blocked surfaces (open ACES expressivity gaps)",
+        "Brad-Edwards/aces#468",
+        "Brad-Edwards/aces#469",
+        "Brad-Edwards/aces#470",
+        "stays open until these ACES surfaces land",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Wazuh indexer inventory note missing scope markers: {missing}"
+    # The over-claim the original pass shipped must never come back.
+    assert "No known ACES expressivity gap remains" not in text
 
 
 def test_wazuh_indexer_capture_script_pins_toolchain_and_redaction():
@@ -205,28 +216,61 @@ def test_wazuh_indexer_capture_stream_redaction_is_key_aware():
     assert "<REDACTED-INDEXER-INTERNAL-USER-HASH>" in redacted
 
 
-def test_wazuh_indexer_mapping_ledger_validates_without_gap_triage():
+def test_wazuh_indexer_mapping_ledger_validates_with_recorded_aces_gaps():
     result = validate_mapping_ledger(INDEXER_DIR)
     assert result.ok, result.errors
-    assert result.blocked_count == 0
+    # No untriaged rows, but the OpenSearch cardinality/size, structured
+    # mapping, and node-provenance surfaces are honestly recorded as blocked
+    # on filed ACES expressivity issues rather than forced into SDL prose.
     assert result.triage_count == 0
-    assert result.gap_issues == []
+    assert result.blocked_count == 4
+    assert set(result.gap_issues) == {
+        "Brad-Edwards/aces #468",
+        "Brad-Edwards/aces #469",
+        "Brad-Edwards/aces #470",
+    }
 
     ledger = load_mapping_ledger(LEDGER_PATH)
     assert ledger["asset"]["aptl_issue"] == 341
     assert IMAGE_DIGEST_RE.match(ledger["provenance"]["image_digest"])
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
-    assert dispositions["wazuh-indexer.datastore.cluster-state"] == "encoded"
-    assert dispositions["wazuh-indexer.datastore.indices"] == "encoded"
+    # Encoded surfaces: cluster identity, partition geometry, internal users.
+    assert dispositions["wazuh-indexer.datastore.cluster-identity"] == "encoded_with_caveat"
+    assert dispositions["wazuh-indexer.datastore.partition-geometry"] == "encoded_with_caveat"
     assert dispositions["wazuh-indexer.identity.internal-users"] == "encoded"
-    assert dispositions["wazuh-indexer.capture.toolchain-baseline"] == "encoded_with_caveat"
-    assert len(ledger["facts"]) >= 25
+    # Plugin names encoded, per-plugin version blocked → caveat.
+    assert dispositions["wazuh-indexer.datastore.plugins"] == "encoded_with_caveat"
+    # Blocked surfaces: cardinality/size/identity, structured mappings, node provenance.
+    assert dispositions["wazuh-indexer.datastore.cluster-cardinality"] == "blocked_by_aces_gap"
+    assert dispositions["wazuh-indexer.datastore.partition-cardinality"] == "blocked_by_aces_gap"
+    assert dispositions["wazuh-indexer.datastore.index-mappings"] == "blocked_by_aces_gap"
+    assert dispositions["wazuh-indexer.datastore.node-provenance"] == "blocked_by_aces_gap"
+    assert len(ledger["facts"]) >= 30
 
 
-def test_wazuh_indexer_gap_report_has_no_remaining_aces_gaps():
+def test_wazuh_indexer_gap_report_records_blocked_surfaces_with_linked_issues():
     report = gap_report(INDEXER_DIR)
-    assert report["gaps"] == []
     assert report["triage_needed"] == []
+    gaps = report["gaps"]
+    by_fact = {g["fact_id"]: g for g in gaps}
+    expected = {
+        "wazuh-indexer.datastore.cluster-cardinality": 468,
+        "wazuh-indexer.datastore.partition-cardinality": 468,
+        "wazuh-indexer.datastore.index-mappings": 469,
+        "wazuh-indexer.datastore.node-provenance": 470,
+    }
+    assert set(by_fact) == set(expected), f"unexpected blocked-fact set: {sorted(by_fact)}"
+    for fact_id, issue_number in expected.items():
+        gap = by_fact[fact_id]
+        assert gap["gap_issue"]["tracker"] == "Brad-Edwards/aces"
+        assert gap["gap_issue"]["number"] == issue_number
+        assert gap["gap_issue"]["url"].endswith(f"/issues/{issue_number}")
+        assert gap["why_not_current_surfaces"]
+    # The structured-mapping gap must point at the real captured evidence,
+    # not at SDL prose.
+    mapping_evidence = {e["path"] for e in by_fact["wazuh-indexer.datastore.index-mappings"]["evidence"]}
+    assert "evidence/wazuh-indexer-index-mappings-census.json" in mapping_evidence
+    assert "evidence/wazuh-indexer-templates.json.gz" in mapping_evidence
 
 
 def test_wazuh_indexer_evidence_bundle_files_are_present_and_non_empty():
@@ -406,7 +450,32 @@ def test_techvault_sdl_encodes_wazuh_indexer_datastore_surface():
     assert {"discovery.type", "network.host", "http.port", "transport.tcp.port"} <= setting_names
     assert ds["transport_security"]["mode"] == "mutual_tls"
     assert ds["transport_security"]["client_verification"] is True
+    # Plugin + template NAMES have a typed home and are encoded.
     assert len(ds["engine_plugins"]) >= 18
+    template_names = set(ds.get("templates", []))
+    assert {"wazuh", "wazuh-agent", "wazuh-statistics"} <= template_names
+
+    # Honesty guard (the bug this re-encode fixes): blocked structured
+    # observables must NOT be forced back into SDL prose. The datastore
+    # service must carry zero per-index/cluster cardinality-size values and
+    # zero engine build provenance in any description string; those live in
+    # evidence + the blocked_by_aces_gap ledger facts.
+    ds_blob = json.dumps(ds)
+    forbidden_prose = [
+        "u-vGl1n0Q7e",            # cluster uuid
+        "docs.count",             # per-index doc count label
+        "store.size",             # per-index store size label
+        "store bytes",
+        "dae2bfc93896",           # node build hash
+        "1053842",                # aggregate doc count
+        "1391460626",             # aggregate store bytes
+    ]
+    leaked = [needle for needle in forbidden_prose if needle in ds_blob]
+    assert not leaked, f"blocked structured values leaked back into SDL prose: {leaked}"
+    # The descriptions must instead reference the ACES blocker issues.
+    assert "Brad-Edwards/aces#468" in ds_blob
+    assert "Brad-Edwards/aces#469" in ds_blob
+    assert "Brad-Edwards/aces#470" in ds_blob
 
     authorities = runtime["identity_authorities"]
     assert len(authorities) == 1

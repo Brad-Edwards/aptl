@@ -27,7 +27,7 @@ correspondence_checks:
   - path: evidence/docker-inspect.image.json
   - path: evidence/docker-history.image.jsonl
   - path: evidence/source-checksums.txt
-  - path: evidence/dashboard-config-files.redacted.txt
+  - path: evidence/dashboard-config-files.txt
   ledger_fact_ids:
   - wazuh-dashboard.image.identity
   - wazuh-dashboard.image.history
@@ -74,8 +74,8 @@ correspondence_checks:
     run.
 notes:
 - Capture used the existing running local aptl project as authorized on 2026-06-06 and did not reset the lab.
-- Raw dashboard, indexer, Wazuh API, cookie, and private-key values are redacted or omitted; path, metadata, and setting-name
-  evidence remains.
+- Dashboard, indexer, and Wazuh API fixture credential values required by the TechVault range are retained in captured
+  Compose, runtime, configuration, and SDL evidence; only transient HTTP authorization/cookie probe values are omitted.
 - No known remaining ACES expressivity blocker remains for the catalogued Wazuh dashboard steady-state inventory facts in
   this ledger.
 facts:
@@ -118,7 +118,7 @@ facts:
   evidence:
   - path: evidence/compose-service.wazuh.dashboard.json
   - path: evidence/source-checksums.txt
-  - path: evidence/dashboard-config-files.redacted.txt
+  - path: evidence/dashboard-config-files.txt
   aces:
     disposition: encoded
     surface: nodes
@@ -222,7 +222,8 @@ facts:
       not a substitute for SDL encoding.
 - id: wazuh-dashboard.runtime.environment
   category: runtime-configuration
-  summary: Runtime environment records dashboard/indexer/API variables, image defaults, and redacted secret-bearing values.
+  summary: Runtime environment records dashboard/indexer/API variables, image defaults, and fixture credential values classified
+    as intentional scenario fixtures.
   evidence:
   - path: evidence/runtime-baseline.txt
   - path: evidence/compose-service.wazuh.dashboard.json
@@ -248,7 +249,7 @@ facts:
       not a substitute for SDL encoding.
 - id: wazuh-dashboard.runtime.filesystem-inventory
   category: filesystem
-  summary: Docker export captured 91312 filesystem metadata rows and 78821 checksum rows; SDL encodes the load-bearing dashboard
+  summary: Docker export captured 91312 filesystem metadata rows and 78822 checksum rows; SDL encodes the load-bearing dashboard
     filesystem entries and references the full manifest evidence.
   evidence:
   - path: evidence/filesystem-tree.txt.gz.part-000
@@ -266,7 +267,7 @@ facts:
     surface: nodes
     fields:
     - nodes.techvault.wazuh-dashboard.runtime.filesystem_inventory
-    caveat: The SDL encodes load-bearing dashboard filesystem entries while the full 91,312-row exported rootfs tree and 78,821 checksum rows remain in compressed evidence for audit and future equivalence checks.
+    caveat: The SDL encodes load-bearing dashboard filesystem entries while the full 91,312-row exported rootfs tree and 78,822 checksum rows remain in compressed evidence for audit and future equivalence checks.
     rationale: Current ACES SDL has typed surfaces for this observed fact; evidence remains provenance and audit support,
       not a substitute for SDL encoding.
 - id: wazuh-dashboard.runtime.package-inventory
@@ -322,7 +323,7 @@ facts:
   summary: The Wazuh dashboard analytics application is configured with default route /app/wz-home, Wazuh plugin 4.12.0, OpenSearch
     Dashboards 2.19.1, the Wazuh indexer backend, and Wazuh manager API backend.
   evidence:
-  - path: evidence/dashboard-config-files.redacted.txt
+  - path: evidence/dashboard-config-files.txt
   - path: evidence/language-manifests.txt
   - path: evidence/wazuh-dashboard-state.txt
   aces:

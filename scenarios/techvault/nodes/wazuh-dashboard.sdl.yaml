@@ -341,7 +341,7 @@ nodes:
         description: ''
       - target: /usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem
         source: /home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem
-        source_sensitivity: unknown
+        source_sensitivity: secret_fixture
         source_kind: bind
         filesystem_type: bind
         read_only: false
@@ -351,7 +351,7 @@ nodes:
         propagation: rprivate
         stability: stable
         backend_generated: false
-        description: Private-key bind mount path; raw key material is not committed.
+        description: Dashboard fixture private-key bind mount path; source checksum is retained in source-checksums.txt.
       - target: /usr/share/wazuh-dashboard/certs/root-ca.pem
         source: /home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca.pem
         source_sensitivity: unknown
@@ -380,7 +380,7 @@ nodes:
         description: ''
       - target: /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
         source: /home/atomik/src/aptl/.aptl/config/wazuh_dashboard/wazuh.yml
-        source_sensitivity: unknown
+        source_sensitivity: secret_fixture
         source_kind: bind
         filesystem_type: bind
         read_only: false
@@ -390,7 +390,7 @@ nodes:
         propagation: rprivate
         stability: stable
         backend_generated: false
-        description: Generated Wazuh API credential configuration bind; raw password is redacted.
+        description: Generated Wazuh API fixture credential configuration bind; captured as range content.
       - target: /usr/share/wazuh-dashboard/data/wazuh/config
         source: aptl_wazuh-dashboard-config
         source_sensitivity: unknown
@@ -668,7 +668,7 @@ nodes:
         provenance: docs/aces/inventory/wazuh.dashboard/evidence/filesystem-tree.txt.gz; docs/aces/inventory/wazuh.dashboard/evidence/filesystem-checksums.txt.xz
         stability: stable
         sensitivity: plain
-        description: Mounted OpenSearch Dashboards configuration, redacted separately in dashboard-config-files.redacted.txt.
+        description: Mounted OpenSearch Dashboards configuration captured in dashboard-config-files.txt.
       - path: /usr/share/wazuh-dashboard/config/opensearch_dashboards.keystore
         entry_type: file
         presence: present
@@ -681,8 +681,8 @@ nodes:
         source_path: ''
         provenance: docs/aces/inventory/wazuh.dashboard/evidence/filesystem-tree.txt.gz; docs/aces/inventory/wazuh.dashboard/evidence/filesystem-checksums.txt.xz
         stability: stable
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: OpenSearch Dashboards runtime keystore file captured as a participant-visible fixture path; decoded keystore entries are not asserted separately.
       - path: /usr/share/wazuh-dashboard/data
         entry_type: directory
         presence: present
@@ -734,11 +734,13 @@ nodes:
         gid: 1000
         mode: '644'
         size: 5301
+        content_digest: c02a378f842bdceac6e604dcd4cb929eb686d1874baa7fc8d0cc3c4e0d7e6781
+        digest_algorithm: sha256
         source_path: .aptl/config/wazuh_dashboard/wazuh.yml
         provenance: docs/aces/inventory/wazuh.dashboard/evidence/filesystem-tree.txt.gz; docs/aces/inventory/wazuh.dashboard/evidence/filesystem-checksums.txt.xz
         stability: stable
-        sensitivity: redacted
-        description: Generated Wazuh API connection configuration; raw password value is redacted from committed evidence.
+        sensitivity: secret_fixture
+        description: Generated Wazuh API connection configuration with fixture credential values retained in dashboard-config-files.txt.
       - path: /usr/share/wazuh-dashboard/certs
         entry_type: directory
         presence: present
@@ -794,11 +796,13 @@ nodes:
         gid: 0
         mode: '644'
         size: 0
+        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/wazuh.dashboard/evidence/filesystem-tree.txt.gz; docs/aces/inventory/wazuh.dashboard/evidence/filesystem-checksums.txt.xz
         stability: stable
-        sensitivity: redacted
-        description: Mounted dashboard private key path; raw key material is not committed.
+        sensitivity: secret_fixture
+        description: Dashboard fixture private-key bind target; Docker export records the mount placeholder checksum while source-checksums.txt retains the source private-key checksum.
       - path: /usr/share/wazuh-dashboard/node
         entry_type: directory
         presence: present
@@ -1036,9 +1040,11 @@ nodes:
         source: docker inspect / runtime env
         value: admin
       - name: INDEXER_PASSWORD
-        value_classification: redacted
+        value_classification: secret_fixture
         provenance: compose
         source: docker inspect / runtime env
+        value: SecretPassword
+        description: Intentional TechVault fixture credential visible inside the range.
       - name: WAZUH_API_URL
         value_classification: plain
         provenance: compose
@@ -1050,18 +1056,22 @@ nodes:
         source: docker inspect / runtime env
         value: kibanaserver
       - name: DASHBOARD_PASSWORD
-        value_classification: redacted
+        value_classification: secret_fixture
         provenance: compose
         source: docker inspect / runtime env
+        value: kibanaserver
+        description: Intentional TechVault fixture credential visible inside the range.
       - name: API_USERNAME
         value_classification: plain
         provenance: compose
         source: docker inspect / runtime env
         value: wazuh-wui
       - name: API_PASSWORD
-        value_classification: redacted
+        value_classification: secret_fixture
         provenance: compose
         source: docker inspect / runtime env
+        value: WazuhPass123!
+        description: Intentional TechVault fixture credential visible inside the range.
       - name: PATH
         value_classification: plain
         provenance: image
@@ -1725,7 +1735,7 @@ nodes:
             location: cookie
             required: true
             data_type: session
-            description: Authentication/session cookie; raw values are redacted.
+            description: Authentication/session cookie; transient probe values are omitted from evidence.
           responses:
           - status_code: 401
             content_type: application/json; charset=utf-8
@@ -1743,7 +1753,7 @@ nodes:
           exposed_fields:
           - name: set-cookie
             sensitivity: redacted
-            description: Response sets an HttpOnly cookie clearing prior session state; value redacted in evidence.
+            description: Response sets an HttpOnly cookie clearing prior session state; transient probe value omitted from evidence.
           upstream_target: null
       database_services: []
       dns_services: []
@@ -1773,7 +1783,7 @@ nodes:
           - wazuh-dashboard-index-pattern
           marking_refs: []
           evidence_refs:
-          - docs/aces/inventory/wazuh.dashboard/evidence/dashboard-config-files.redacted.txt
+          - docs/aces/inventory/wazuh.dashboard/evidence/dashboard-config-files.txt
           - docs/aces/inventory/wazuh.dashboard/evidence/language-manifests.txt
           description: Configured default Wazuh home route and plugin/package metadata observed from runtime files.
         - content_object_id: wazuh-dashboard-index-pattern
@@ -1785,7 +1795,7 @@ nodes:
           references: []
           marking_refs: []
           evidence_refs:
-          - docs/aces/inventory/wazuh.dashboard/evidence/dashboard-config-files.redacted.txt
+          - docs/aces/inventory/wazuh.dashboard/evidence/dashboard-config-files.txt
           description: Bounded index-backend reference used by the analytics-dashboard content profile.
         markings: []
         upstream_bindings:
@@ -1798,7 +1808,7 @@ nodes:
           role: backend_api
           target_node_ref: techvault.wazuh-manager
           target_service_ref: wazuh-api
-          description: Wazuh API URL points at https://wazuh.manager:55000 with credential values redacted.
+          description: Wazuh API URL points at https://wazuh.manager:55000; fixture credential values are retained in runtime.environment and dashboard-config-files.txt.
         connectors: []
         execution_policy: null
         settings:
@@ -1812,7 +1822,7 @@ nodes:
           name: Wazuh API password
           classification: redacted
           provenance: config_file
-          description: Wazuh API password exists in generated wazuh.yml but raw value is not committed.
+          description: Raw fixture value is retained in runtime.environment and dashboard-config-files.txt; this platform-setting surface marks secret-bearing setting names as redacted.
         authorization_ref: ''
         description: Wazuh analytics dashboard configured against the Wazuh indexer and manager.
       forwarding_agents: []

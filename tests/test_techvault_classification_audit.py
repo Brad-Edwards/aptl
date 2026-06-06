@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 COMPOSE_PATH = PROJECT_ROOT / "docker-compose.yml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
+NODE_SDL_DIR = PROJECT_ROOT / "scenarios" / "techvault" / "nodes"
 SHUFFLE_EVIDENCE = PROJECT_ROOT / "docs" / "aces" / "inventory" / "shuffle-backend" / "evidence"
 
 
@@ -32,6 +33,46 @@ def _json(path: Path):
 
 def _rows() -> dict[str, dict]:
     return {row["id"]: row for row in _yaml(PARITY_PATH)["rows"]}
+
+
+def _walk_dicts(value, path=()):
+    if isinstance(value, dict):
+        yield path, value
+        for key, child in value.items():
+            yield from _walk_dicts(child, path + (key,))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from _walk_dicts(child, path + (index,))
+
+
+def test_secret_named_environment_values_are_fixtures_or_omitted():
+    from aces_sdl.runtime_values import name_indicates_secret
+
+    offenders = []
+    for node_path in sorted(NODE_SDL_DIR.glob("*.sdl.yaml")):
+        data = _yaml(node_path)
+        for path, item in _walk_dicts(data):
+            if not {"name", "value", "value_classification"} <= set(item):
+                continue
+            name = item["name"]
+            has_raw_value = item["value"] not in ("", None)
+            classification = item["value_classification"]
+            if (
+                isinstance(name, str)
+                and name_indicates_secret(name)
+                and has_raw_value
+                and classification != "secret_fixture"
+            ):
+                breadcrumb = "/".join(str(part) for part in path)
+                offenders.append(
+                    f"{node_path.relative_to(PROJECT_ROOT)}:{breadcrumb}: "
+                    f"name={name} classification={classification}"
+                )
+
+    assert not offenders, (
+        "Secret-token environment names with raw observed values must be "
+        f"classified as fixture content, not blanked or left plain: {offenders}"
+    )
 
 
 def test_shuffle_backend_runtime_inventory_is_encoded_from_evidence():

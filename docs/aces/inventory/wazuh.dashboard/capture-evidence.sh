@@ -17,8 +17,6 @@ OSQUERY_IMAGE="${OSQUERY_IMAGE:-osquery/osquery@sha256:f8ec3300048158292df2d4bb0
 SYFT_NORMALIZER="$ASSET_DIR/normalize-syft-cyclonedx.jq"
 EVIDENCE_CHUNK_SIZE="${EVIDENCE_CHUNK_SIZE:-450k}"
 
-SECRET_NAME_REGEX="(token|secret|password|passwd|credential|cookie|session|private_key|api_key|jwt|flag_key|access_key|shared_key|enrollment_key|client_key|cluster_key|ssl_key|key$)"
-
 require() {
   command -v "$1" >/dev/null 2>&1 || {
     printf 'required command missing: %s\n' "$1" >&2
@@ -36,42 +34,11 @@ write_chunked_stream() {
   split -b "$EVIDENCE_CHUNK_SIZE" -d -a 3 - "$OUT/$base.part-"
 }
 
-redact_stream() {
+sanitize_http_stream() {
   sed -E \
-    -e 's#(^|[^[:alnum:]_./-])(([-[:alnum:]_.]*(token|secret|password|passwd|credential|cookie|session|private_key|api_key|jwt|flag_key|access_key|shared_key|enrollment_key|client_key|cluster_key|ssl_key)[-[:alnum:]_.]*|[-[:alnum:]_.]*key)[[:space:]]*[:=][[:space:]]*)("[^"]*"|[^[:space:],;]+)#\1\2<REDACTED-SECRET>#Ig' \
-    -e 's#(<([-[:alnum:]_.:]*(token|secret|password|passwd|credential|cookie|session|private_key|api_key|jwt|flag_key|access_key|shared_key|enrollment_key|client_key|cluster_key|ssl_key)[-[:alnum:]_.:]*|[-[:alnum:]_.:]*key)[^>]*>)[^<]*(</\2>)#\1<REDACTED-SECRET>\4#Ig' \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|ACCESS_KEY|SHARED_KEY|ENROLLMENT_KEY|CLIENT_KEY|CLUSTER_KEY|SSL_KEY)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's#(Authorization:[[:space:]]*)[^[:space:]]+([[:space:]]+[^[:space:]]+)?#\1<REDACTED-AUTHORIZATION>#Ig'
+    -e 's#(Authorization:[[:space:]]*)[^[:space:]]+([[:space:]]+[^[:space:]]+)?#\1<HTTP-AUTHORIZATION-HEADER-OMITTED>#Ig' \
+    -e 's#(set-cookie:[[:space:]]*)[^;[:space:]]+#\1<HTTP-COOKIE-VALUE-OMITTED>#Ig'
 }
-
-redact_env_jq='
-  def redact_env($secret_re):
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test($secret_re; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys($secret_re):
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test($secret_re; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
 
 write_json_status() {
   local output="$1"
@@ -126,41 +93,21 @@ mkdir -p "$OUT"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 record_limit "This capture used the existing running lab as authorized by the user on 2026-06-06 and did not run aptl lab stop -v && aptl lab start; it is a non-destructive frozen steady-state observation, not clean-lab rebuild proof."
-record_limit "Raw Wazuh API credentials, indexer credentials, dashboard service credentials, bearer tokens, cookies, and private key material are intentionally absent from committed evidence; paths, metadata, redacted setting names, and safe hashes are retained where permitted."
+record_limit "HTTP authorization headers and transient HTTP cookie values from unauthenticated probe responses are omitted from committed evidence; scenario fixture credentials and private-key file checksums are retained as captured range facts."
 record_limit "The Wazuh dashboard image does not include find, tar, ps, ss, netstat, ip, or mount; runtime evidence uses Docker inspect/network records, docker top, osquery namespace sharing, /proc/net/* listener fallback, and host-side docker export filesystem capture."
 
 docker version --format json | jq . > "$OUT/docker-version.json"
 docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 
 COMPOSE_PROFILES="$COMPOSE_PROFILES" docker compose -f "$COMPOSE_FILE" config --format json \
-  | jq \
-    --arg service "$COMPOSE_SERVICE" \
-    --arg secret_re "$SECRET_NAME_REGEX" '
-      .services[$service]
-      | .environment = (
-          (.environment // {})
-          | with_entries(
-              if (.key | test($secret_re; "i")) then
-                .value = ("<REDACTED-" + (.key | gsub("_"; "-")) + ">")
-              else
-                .
-              end
-            )
-        )
-    ' > "$OUT/compose-service.wazuh.dashboard.json"
+  | jq --arg service "$COMPOSE_SERVICE" '.services[$service]' \
+  > "$OUT/compose-service.wazuh.dashboard.json"
 
-docker inspect "$CONTAINER" \
-  | jq --arg secret_re "$SECRET_NAME_REGEX" \
-      "$redact_env_jq
-      .[].Config.Env |= ((. // []) | map(redact_env(\$secret_re)))
-      | redact_sensitive_keys(\$secret_re)" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq --arg secret_re "$SECRET_NAME_REGEX" "$redact_env_jq redact_sensitive_keys(\$secret_re)" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw | jq . > "$OUT/docker-buildx-imagetools.image.raw.json"
@@ -175,17 +122,17 @@ fi
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_wazuh-dashboard-config | jq . > "$OUT/docker-volume.wazuh-dashboard-config.json"
 docker volume inspect aptl_wazuh-dashboard-custom | jq . > "$OUT/docker-volume.wazuh-dashboard-custom.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
 
 sha256sum \
   "$ROOT/docker-compose.yml" \
   "$ROOT/config/wazuh_dashboard/opensearch_dashboards.yml" \
   "$ROOT/config/wazuh_dashboard/wazuh.yml" \
+  "$ROOT/.aptl/config/wazuh_dashboard/wazuh.yml" \
   "$ROOT/config/wazuh_indexer_ssl_certs/root-ca.pem" \
   "$ROOT/config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem" \
+  "$ROOT/config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem" \
   | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
-printf '<OMITTED-OPERATOR-SECRET-CHECKSUM>  config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem\n' >> "$OUT/source-checksums.txt"
-printf '<OMITTED-OPERATOR-SECRET-CHECKSUM>  .aptl/config/wazuh_dashboard/wazuh.yml\n' >> "$OUT/source-checksums.txt"
 
 {
   echo --opensearch-dashboards-yml--
@@ -198,7 +145,8 @@ printf '<OMITTED-OPERATOR-SECRET-CHECKSUM>  .aptl/config/wazuh_dashboard/wazuh.y
   docker exec "$CONTAINER" bash -lc 'sed -n "1,240p" /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml 2>/dev/null'
   echo --runtime-wazuh-yml--
   docker exec "$CONTAINER" bash -lc 'sed -n "1,160p" /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml 2>/dev/null'
-} | redact_stream > "$OUT/dashboard-config-files.redacted.txt"
+} > "$OUT/dashboard-config-files.txt"
+rm -f "$OUT/dashboard-config-files.redacted.txt"
 
 docker exec "$CONTAINER" bash -lc '
   rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n" | sort
@@ -216,7 +164,7 @@ docker exec "$CONTAINER" bash -lc '
   /usr/share/wazuh-dashboard/node/bin/node --version 2>&1 || true
   echo --plugin-directories--
   ls -la /usr/share/wazuh-dashboard/plugins 2>&1 || true
-' | redact_stream > "$OUT/language-manifests.txt"
+' > "$OUT/language-manifests.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set +e
@@ -246,7 +194,7 @@ docker exec "$CONTAINER" bash -lc '
   getent group | sed -n "1,260p"
   echo --process-tree--
   ps -eo pid,ppid,user,args || true
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' | sed -E 's/[[:space:]]+$//' > "$OUT/runtime-baseline.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set +e
@@ -262,20 +210,19 @@ docker exec "$CONTAINER" bash -lc '
   ls -la /usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom 2>&1
   echo --wazuh-plugin-package--
   sed -n "1,120p" /usr/share/wazuh-dashboard/plugins/wazuh/package.json 2>&1 || true
-' | redact_stream > "$OUT/wazuh-dashboard-state.txt"
+' > "$OUT/wazuh-dashboard-state.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set +e
   curl -ks -i https://localhost:5601/api/status 2>&1 | sed -n "1,120p"
   echo --root-probe--
   curl -ks -i https://localhost:5601/ 2>&1 | sed -n "1,80p"
-' | redact_stream \
+' | sanitize_http_stream \
   | jq -Rs '{vantage: "container localhost", commands: ["curl -ks -i https://localhost:5601/api/status", "curl -ks -i https://localhost:5601/"], output: .}' \
   > "$OUT/wazuh-dashboard-probe.json"
 
 docker export "$CONTAINER" \
   | tar -tvf - \
-  | redact_stream \
   | gzip -n \
   | write_chunked_stream "filesystem-tree.txt.gz"
 
@@ -300,8 +247,6 @@ docker export "$CONTAINER" \
 (
   cd "$tmp_root"
   find . -type f \
-    ! -path './usr/share/wazuh-dashboard/certs/*key*' \
-    ! -path './usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml' \
     ! -path './etc/shadow' \
     ! -path './etc/shadow-' \
     ! -path './etc/gshadow' \
@@ -310,10 +255,9 @@ docker export "$CONTAINER" \
     | sort -z \
     | xargs -0 -r sha256sum \
     | sed 's#  \./#  /#'
-  printf '<OMITTED-SECRET-CHECKSUM>  /usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem\n'
 ) | xz -T0 -9e \
   | write_chunked_stream "filesystem-checksums.txt.xz"
-record_limit "Filesystem checksums exclude raw secret-bearing files such as /etc/shadow, /etc/shadow-, /etc/gshadow, /etc/gshadow-, the mounted runtime Wazuh API credential file, and dashboard private-key paths; metadata remains in chunked filesystem-tree.txt.gz.part-* evidence where present."
+record_limit "Filesystem checksums exclude host identity databases such as /etc/shadow, /etc/shadow-, /etc/gshadow, and /etc/gshadow-; dashboard fixture config and private-key file checksums are retained."
 record_limit "Large compressed filesystem manifests are split into ${EVIDENCE_CHUNK_SIZE} chunks (filesystem-tree.txt.gz.part-* and filesystem-checksums.txt.xz.part-*) to preserve full evidence while satisfying the repository added-file size gate."
 
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" --version \

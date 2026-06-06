@@ -24,11 +24,11 @@
   },
   "entrypoint": null,
   "environment": {
-    "API_PASSWORD": "<REDACTED-API-PASSWORD>",
+    "API_PASSWORD": "WazuhPass123!",
     "API_USERNAME": "wazuh-wui",
-    "DASHBOARD_PASSWORD": "<REDACTED-DASHBOARD-PASSWORD>",
+    "DASHBOARD_PASSWORD": "kibanaserver",
     "DASHBOARD_USERNAME": "kibanaserver",
-    "INDEXER_PASSWORD": "<REDACTED-INDEXER-PASSWORD>",
+    "INDEXER_PASSWORD": "SecretPassword",
     "INDEXER_USERNAME": "admin",
     "WAZUH_API_URL": "https://wazuh.manager"
   },

@@ -20,7 +20,7 @@ This capture is non-destructive. It used the existing running lab as authorized 
 | Dashboard / Wazuh versions | OpenSearch Dashboards 2.19.1; Wazuh dashboard 4.12.0 rc1 |
 | Package inventory | 108 RPM packages, 1594 Syft SBOM components |
 | Trivy vulnerability findings | 378 total: critical 10, high 183, medium 160, low 25 |
-| Filesystem evidence | 91312 exported rootfs metadata rows; 78821 checksum rows |
+| Filesystem evidence | 91312 exported rootfs metadata rows; 78822 checksum rows |
 
 ## Evidence Bundle
 
@@ -30,7 +30,7 @@ This capture is non-destructive. It used the existing running lab as authorized 
 | Capture time, tool versions, limits, and checksums are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt`, `evidence/syft-version.json`, `evidence/osquery-version.txt`, `evidence/evidence-sha256sums.txt` |
 | Compose service intent and upstream image identity are recorded. | `evidence/compose-service.wazuh.dashboard.json`, `evidence/docker-inspect.image.json`, `evidence/docker-history.image.txt`, `evidence/docker-history.image.jsonl`, `evidence/docker-buildx-imagetools.image.txt`, `evidence/docker-buildx-imagetools.image.raw.json`, `evidence/source-checksums.txt` |
 | Runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-security.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt`, `evidence/osquery-processes.json`, `evidence/osquery-listening-ports.json` |
-| Dashboard configuration and logical surface are recorded with secret redaction. | `evidence/dashboard-config-files.redacted.txt`, `evidence/wazuh-dashboard-state.txt`, `evidence/wazuh-dashboard-probe.json`, `evidence/language-manifests.txt` |
+| Dashboard configuration and logical surface are recorded with scenario fixture values retained. | `evidence/dashboard-config-files.txt`, `evidence/wazuh-dashboard-state.txt`, `evidence/wazuh-dashboard-probe.json`, `evidence/language-manifests.txt` |
 | Persistent dashboard volumes are recorded. | `evidence/docker-volume.wazuh-dashboard-config.json`, `evidence/docker-volume.wazuh-dashboard-custom.json` |
 | Filesystem inventory is recorded. | `evidence/filesystem-tree.txt.gz.part-*`, `evidence/filesystem-checksums.txt.xz.part-*` |
 | OS packages and SBOM component inventories are recorded. | `evidence/os-packages.txt`, `evidence/trivy-sbom.cyclonedx.json.gz`, `evidence/syft-sbom.cyclonedx.json.gz` |
@@ -44,7 +44,7 @@ This capture is non-destructive. It used the existing running lab as authorized 
 - The realized runtime OS is Amazon Linux 2023. The image does not include `find`, `tar`, `ps`, `ss`, `netstat`, `ip`, or `mount`, so runtime evidence combines Docker inspect/network records, `docker top`, osquery namespace sharing, `/proc/net/*` fallback, and host-side `docker export` rootfs capture. The full compressed filesystem manifests are chunked as `filesystem-tree.txt.gz.part-*` and `filesystem-checksums.txt.xz.part-*` so the evidence remains complete while each committed file stays below the repository large-file gate.
 - The dashboard reports OpenSearch Dashboards 2.19.1 and Wazuh dashboard 4.12.0 rc1. The Wazuh plugin package reports revision `03` and uses the default route `/app/wz-home`.
 - The HTTPS listener is bound on container TCP 5601 and host-published on TCP 443. Unauthenticated `/api/status` returns HTTP 401 JSON; unauthenticated `/` redirects to `/app/login?`.
-- Raw Wazuh API credentials, indexer credentials, dashboard credentials, cookies, and private key material are not committed as raw values. SDL records redacted value classifications and selected filesystem entries carry path and metadata only.
+- Wazuh API, indexer, and dashboard fixture credential values required by the TechVault range are retained in the Compose, runtime, configuration, and SDL evidence. The unauthenticated HTTP probe omits transient authorization and cookie header values only.
 
 ## ACES Mapping Result
 
@@ -65,4 +65,4 @@ uv run aptl aces-inventory gaps docs/aces/inventory/wazuh.dashboard
 - The capture does not prove byte-identical rebuildability or full root filesystem equivalence.
 - Vulnerability results are time-sensitive to the Trivy database and advisory feeds.
 - osquery `apt_sources`, `installed_applications`, and `programs` were not applicable or unavailable in the digest-pinned Linux osquery scanner image.
-- Secret-bearing runtime configuration and private-key material are redacted or omitted from committed evidence.
+- Transient HTTP authorization and cookie header values from the unauthenticated probe are omitted from committed evidence; scenario fixture credentials and private-key source checksums are retained as captured range facts.

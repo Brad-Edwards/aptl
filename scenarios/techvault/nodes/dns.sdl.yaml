@@ -1213,10 +1213,10 @@ nodes:
         description: ''
       - name: PWD
         value: /
-        value_classification: plain
+        value_classification: secret_fixture
         provenance: unknown
         source: ''
-        description: ''
+        description: Shell working-directory variable retained as observed range fixture; classified because current ACES secret-name rules treat PWD as secret-bearing.
       - name: WAZUH_MANAGER
         value: wazuh.manager
         value_classification: plain

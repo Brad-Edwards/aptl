@@ -42,7 +42,7 @@ TRIVY_SBOM_COMPONENT_COUNT = 1868
 SOFTWARE_COMPONENT_COUNT = 80
 TRIVY_FINDING_COUNT = 378
 FILESYSTEM_ENTRY_COUNT = 91312
-FILESYSTEM_CHECKSUM_COUNT = 78821
+FILESYSTEM_CHECKSUM_COUNT = 78822
 FILESYSTEM_INVENTORY_COUNT = 40
 LOCAL_IDENTITY_USER_COUNT = 14
 LOCAL_IDENTITY_GROUP_COUNT = 25
@@ -60,7 +60,7 @@ REQUIRED_EVIDENCE_FILES = {
     "capture-limits.txt",
     "captured-at-utc.txt",
     "compose-service.wazuh.dashboard.json",
-    "dashboard-config-files.redacted.txt",
+    "dashboard-config-files.txt",
     "docker-buildx-imagetools.image.raw.json",
     "docker-buildx-imagetools.image.txt",
     "docker-compose-version.json",
@@ -98,12 +98,10 @@ REQUIRED_EVIDENCE_FILES = {
     "wazuh-dashboard-state.txt",
 }
 
-# Raw secret values and private-key material that must not be committed.
-RAW_SECRET_PATTERNS = (
-    r"SecretPassword",
-    r"WazuhPass123!",
-    r"BEGIN .*PRIVATE KEY",
-    r"authorization: Bearer",
+SCENARIO_FIXTURE_ENV_NAMES = (
+    "INDEXER_PASSWORD",
+    "DASHBOARD_PASSWORD",
+    "API_PASSWORD",
 )
 
 
@@ -166,12 +164,22 @@ def _runtime_baseline_section(name: str) -> list[str]:
     return [line for line in section.strip().splitlines() if line]
 
 
-def _redact_with_capture_script(text: str) -> str:
+def _scenario_fixture_env_values() -> dict[str, str]:
+    compose_env = _json_file("compose-service.wazuh.dashboard.json")["environment"]
+    values = {name: compose_env.get(name, "") for name in SCENARIO_FIXTURE_ENV_NAMES}
+    missing = set(SCENARIO_FIXTURE_ENV_NAMES) - set(compose_env)
+    assert not missing, f"Missing fixture environment values in evidence: {sorted(missing)}"
+    empty = [name for name, value in values.items() if not value]
+    assert not empty, f"Empty fixture environment values in evidence: {empty}"
+    return values
+
+
+def _sanitize_http_with_capture_script(text: str) -> str:
     script = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
-    match = re.search(r"redact_stream\(\) \{\n.*?\n\}", script, re.DOTALL)
-    assert match, "capture script must define redact_stream"
+    match = re.search(r"sanitize_http_stream\(\) \{\n.*?\n\}", script, re.DOTALL)
+    assert match, "capture script must define sanitize_http_stream"
     result = subprocess.run(
-        ["bash", "-c", f"{match.group(0)}\nredact_stream"],
+        ["bash", "-c", f"{match.group(0)}\nsanitize_http_stream"],
         input=text,
         capture_output=True,
         check=True,
@@ -199,14 +207,16 @@ def test_wazuh_dashboard_inventory_note_declares_scope_and_evidence():
     assert not missing, f"Wazuh dashboard inventory note missing markers: {missing}"
 
 
-def test_wazuh_dashboard_capture_script_pins_toolchain_and_redaction():
+def test_wazuh_dashboard_capture_script_pins_toolchain_and_fixture_policy():
     text = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
     required = (
         "aquasec/trivy@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e",
         "anchore/syft@sha256:86fde6445b483d902fe011dd9f68c4987dd94e07da1e9edc004e3c2422650de6",
         "osquery/osquery@sha256:f8ec3300048158292df2d4bb0d1d7804af358f530005828c3387553f23c796cd",
+        "sanitize_http_stream",
         "wazuh-dashboard-state.txt",
         "wazuh-dashboard-probe.json",
+        "dashboard-config-files.txt",
         "filesystem-tree.txt.gz.part-",
         "filesystem-checksums.txt.xz.part-",
         "write_chunked_stream",
@@ -215,30 +225,39 @@ def test_wazuh_dashboard_capture_script_pins_toolchain_and_redaction():
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Capture script missing reproducibility markers: {missing}"
+    assert "redact_stream" not in text
+    assert "REDACTED-SECRET" not in text
     assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
 
 
-def test_wazuh_dashboard_capture_stream_redaction_is_key_aware():
-    secret_value = "dash-4279-credential-1836"
+def test_wazuh_dashboard_capture_http_sanitizer_preserves_fixture_lines():
+    fixture_value = "dash-4279-credential-1836"
     public_value = "public-observation-2026"
-    redacted = _redact_with_capture_script(
+    sanitized = _sanitize_http_with_capture_script(
         "\n".join(
             [
-                f"INDEXER_PASSWORD={secret_value}",
-                f"dashboard_password: {secret_value}",
-                f"api_key = {secret_value}",
-                f"server.ssl.key: {secret_value}",
-                f"<password>{secret_value}</password>",
-                f"<api_key>{secret_value}</api_key>",
-                f"Authorization: Bearer {secret_value}",
+                f"INDEXER_PASSWORD={fixture_value}",
+                f"dashboard_password: {fixture_value}",
+                f"api_key = {fixture_value}",
+                f"server.ssl.key: {fixture_value}",
+                f"<password>{fixture_value}</password>",
+                f"<api_key>{fixture_value}</api_key>",
+                f"Authorization: Bearer {fixture_value}",
+                f"set-cookie: session={fixture_value}; HttpOnly",
                 f"regular_field: {public_value}",
             ]
         )
     )
 
-    assert secret_value not in redacted
-    assert public_value in redacted
-    assert "<REDACTED" in redacted
+    assert f"INDEXER_PASSWORD={fixture_value}" in sanitized
+    assert f"dashboard_password: {fixture_value}" in sanitized
+    assert f"api_key = {fixture_value}" in sanitized
+    assert f"server.ssl.key: {fixture_value}" in sanitized
+    assert f"<password>{fixture_value}</password>" in sanitized
+    assert f"<api_key>{fixture_value}</api_key>" in sanitized
+    assert public_value in sanitized
+    assert "Authorization: <HTTP-AUTHORIZATION-HEADER-OMITTED>" in sanitized
+    assert "set-cookie: <HTTP-COOKIE-VALUE-OMITTED>; HttpOnly" in sanitized
 
 
 def test_wazuh_dashboard_mapping_ledger_validates_without_gap_triage():
@@ -327,26 +346,46 @@ def test_wazuh_dashboard_mapping_ledger_references_every_evidence_file():
     assert not missing, f"Ledger does not reference every evidence file: {sorted(missing)}"
 
 
-def test_wazuh_dashboard_evidence_does_not_contain_raw_secret_material():
-    patterns = [re.compile(pattern, re.IGNORECASE) for pattern in RAW_SECRET_PATTERNS]
-    offenders = {}
-    for path in EVIDENCE_DIR.iterdir():
-        if not path.is_file():
-            continue
-        text = _evidence_text(path)
-        leaked = [pattern.pattern for pattern in patterns if pattern.search(text)]
-        if leaked:
-            offenders[path.name] = leaked
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+def test_wazuh_dashboard_fixture_values_are_preserved_in_evidence_and_sdl(runtime):
+    fixture_env = _scenario_fixture_env_values()
+
+    compose_env = _json_file("compose-service.wazuh.dashboard.json")["environment"]
+    inspect_env = {
+        name: value
+        for name, value in (
+            item.split("=", maxsplit=1)
+            for item in _json_file("docker-inspect.container.json")[0]["Config"]["Env"]
+        )
+    }
+    runtime_baseline = (EVIDENCE_DIR / "runtime-baseline.txt").read_text(
+        encoding="utf-8"
+    )
+    config_text = (EVIDENCE_DIR / "dashboard-config-files.txt").read_text(
+        encoding="utf-8"
+    )
+    sdl_env = {item["name"]: item for item in runtime["environment"]}
+
+    for name, value in fixture_env.items():
+        assert compose_env[name] == value
+        assert inspect_env[name] == value
+        assert f"{name}={value}" in runtime_baseline
+        assert sdl_env[name]["value"] == value
+        assert sdl_env[name]["value_classification"] == "secret_fixture"
+
+    assert fixture_env["API_PASSWORD"] in config_text
+    assert "server.ssl.key:" in config_text
+    assert "dashboard-config-files.redacted.txt" not in {
+        path.name for path in EVIDENCE_DIR.iterdir()
+    }
 
 
-def test_wazuh_dashboard_sdl_does_not_commit_raw_secret_material():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.IGNORECASE)
-    text = TECHVAULT_SDL_PATH.read_text(encoding="utf-8")
-    text += (PROJECT_ROOT / "scenarios" / "techvault" / "nodes").joinpath(
-        "wazuh-dashboard.sdl.yaml"
-    ).read_text(encoding="utf-8")
-    assert not forbidden.search(text), "Raw secret material leaked into the SDL"
+def test_wazuh_dashboard_source_checksums_keep_scenario_fixture_inputs():
+    source_checksums = (EVIDENCE_DIR / "source-checksums.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "OMITTED" not in source_checksums
+    assert ".aptl/config/wazuh_dashboard/wazuh.yml" in source_checksums
+    assert "config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem" in source_checksums
 
 
 def test_wazuh_dashboard_runtime_evidence_counts_and_caveats():
@@ -454,17 +493,11 @@ def test_techvault_sdl_encodes_wazuh_dashboard_runtime_surfaces(node, runtime):
         "host_port"
     ] == 443
 
-    secret_env = {
-        item["name"]
-        for item in runtime["environment"]
-        if item["value_classification"] == "redacted"
-    }
-    assert secret_env == {"API_PASSWORD", "DASHBOARD_PASSWORD", "INDEXER_PASSWORD"}
-    assert all(
-        "value" not in item or item["value"] == ""
-        for item in runtime["environment"]
-        if item["value_classification"] == "redacted"
-    )
+    fixture_env = _scenario_fixture_env_values()
+    environment = {item["name"]: item for item in runtime["environment"]}
+    for name, value in fixture_env.items():
+        assert environment[name]["value"] == value
+        assert environment[name]["value_classification"] == "secret_fixture"
 
 
 def test_techvault_sdl_encodes_wazuh_dashboard_application_and_platform(runtime):

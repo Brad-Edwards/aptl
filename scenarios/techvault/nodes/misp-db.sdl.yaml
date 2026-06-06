@@ -6791,10 +6791,10 @@ nodes:
         value_classification: plain
       - name: PWD
         value: /
-        value_classification: plain
+        value_classification: secret_fixture
         provenance: runtime
         source: runtime-baseline.txt
-        description: Runtime-observed process environment value not present in docker inspect Config.Env.
+        description: Shell working-directory variable retained as observed range fixture; classified because current ACES secret-name rules treat PWD as secret-bearing.
       linux_capabilities:
         required: []
         effective: []

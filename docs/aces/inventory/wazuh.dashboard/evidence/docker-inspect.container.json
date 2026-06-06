@@ -21,32 +21,32 @@
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-06-06T05:53:13.897648887+02:00",
-            "End": "2026-06-06T05:53:13.960205002+02:00",
+            "Start": "2026-06-06T09:30:40.853029917+02:00",
+            "End": "2026-06-06T09:30:40.911734002+02:00",
             "ExitCode": 0,
             "Output": ""
           },
           {
-            "Start": "2026-06-06T05:53:43.960703712+02:00",
-            "End": "2026-06-06T05:53:44.017417986+02:00",
+            "Start": "2026-06-06T09:31:10.912650536+02:00",
+            "End": "2026-06-06T09:31:10.968247847+02:00",
             "ExitCode": 0,
             "Output": ""
           },
           {
-            "Start": "2026-06-06T05:54:14.018377967+02:00",
-            "End": "2026-06-06T05:54:14.084287038+02:00",
+            "Start": "2026-06-06T09:31:40.968778448+02:00",
+            "End": "2026-06-06T09:31:41.020888436+02:00",
             "ExitCode": 0,
             "Output": ""
           },
           {
-            "Start": "2026-06-06T05:54:44.085359669+02:00",
-            "End": "2026-06-06T05:54:44.160075344+02:00",
+            "Start": "2026-06-06T09:32:11.02183178+02:00",
+            "End": "2026-06-06T09:32:11.09181814+02:00",
             "ExitCode": 0,
             "Output": ""
           },
           {
-            "Start": "2026-06-06T05:55:14.161242911+02:00",
-            "End": "2026-06-06T05:55:14.230594317+02:00",
+            "Start": "2026-06-06T09:32:41.092408137+02:00",
+            "End": "2026-06-06T09:32:41.151038089+02:00",
             "ExitCode": 0,
             "Output": ""
           }
@@ -259,12 +259,12 @@
       "StdinOnce": false,
       "Env": [
         "INDEXER_USERNAME=admin",
-        "INDEXER_PASSWORD=<REDACTED-INDEXER-PASSWORD>",
+        "INDEXER_PASSWORD=SecretPassword",
         "WAZUH_API_URL=https://wazuh.manager",
         "DASHBOARD_USERNAME=kibanaserver",
-        "DASHBOARD_PASSWORD=<REDACTED-DASHBOARD-PASSWORD>",
+        "DASHBOARD_PASSWORD=kibanaserver",
         "API_USERNAME=wazuh-wui",
-        "API_PASSWORD=<REDACTED-API-PASSWORD>",
+        "API_PASSWORD=WazuhPass123!",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "USER=wazuh-dashboard",
         "GROUP=wazuh-dashboard",
@@ -316,7 +316,7 @@
     },
     "NetworkSettings": {
       "SandboxID": "49929268e4fe9f3883403720321107c72cf5eec6a58149ffac83a8f39ef53292",
-      "SandboxKey": "<REDACTED>",
+      "SandboxKey": "/var/run/docker/netns/49929268e4fe",
       "Ports": {
         "443/tcp": null,
         "5601/tcp": [

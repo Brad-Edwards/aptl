@@ -68,6 +68,8 @@ imports:
   namespace: techvault
 - source: local:techvault/nodes/wazuh-manager.sdl.yaml
   namespace: techvault
+- source: local:techvault/nodes/wazuh-dashboard.sdl.yaml
+  namespace: techvault
 - source: local:techvault/nodes/webapp.sdl.yaml
   namespace: techvault
 - source: local:techvault/nodes/fileshare.sdl.yaml

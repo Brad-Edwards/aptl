@@ -74,6 +74,17 @@ infrastructure:
     - techvault.internal-net: 172.20.2.30
     acls: []
     description: ''
+  wazuh-dashboard:
+    count: 1
+    links:
+    - techvault.security-net
+    dependencies:
+    - techvault.wazuh-manager
+    properties:
+    - techvault.security-net: 172.20.0.11
+    acls: []
+    description: Wazuh dashboard is attached to the security TechVault network and publishes host TCP 443 to the dashboard
+      listener on container TCP 5601; runtime publication details are encoded under nodes.wazuh-dashboard.runtime.network.
   webapp:
     count: 1
     links:

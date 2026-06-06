@@ -1,0 +1,3 @@
+Name:      docker.io/wazuh/wazuh-dashboard:4.12.0
+MediaType: application/vnd.docker.distribution.manifest.v2+json
+Digest:    sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7

@@ -188,6 +188,17 @@ rows:
     blocking_followup: n/a
     notes: Issue #340 inventory; current SDL encodes Wazuh manager image provenance, Amazon Linux runtime identity, container/network/health state, process/capability/environment/local-identity state, filesystem inventory, package and vulnerability inventories, ACES #428 security-monitoring manager listeners, components, agents, groups, content sets, and settings, plus ACES #434 parsed detection definitions for 4,542 rules/correlation rules and 1,579 decoders.
 
+  - id: scen.techvault.wazuh-dashboard-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.wazuh-dashboard + infrastructure.wazuh-dashboard + runtime
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime / runtime.service_listeners / runtime.applications / runtime.platform_applications fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/wazuh.dashboard/ + scenarios/techvault/nodes/wazuh-dashboard.sdl.yaml + tests/test_wazuh_dashboard_inventory.py"
+    blocking_followup: n/a
+    notes: "Issue #342 inventory; current SDL encodes Wazuh dashboard image provenance, Amazon Linux runtime identity, container/network/health state, process/capability/environment/local-identity state, filesystem evidence, package and vulnerability inventories, HTTPS route behavior, and analytics-dashboard platform state. The capture is a non-destructive current-running observation, not clean-lab rebuild proof."
+
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml
     legacy_source: scenarios/ad-domain-compromise.yaml

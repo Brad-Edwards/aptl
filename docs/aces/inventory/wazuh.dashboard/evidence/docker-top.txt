@@ -1,0 +1,3 @@
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+atomik              2966185             2966108             0                   May23               ?                   00:00:00            /bin/bash /entrypoint.sh
+atomik              2967441             2966185             0                   May23               ?                   00:21:48            /usr/share/wazuh-dashboard/node/bin/node --no-warnings --max-http-header-size=65536 /usr/share/wazuh-dashboard/src/cli/dist -c /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml

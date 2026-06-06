@@ -5799,8 +5799,8 @@ nodes:
         - setting_id: dovecot-003-auth-verbose-passwords
           component_ref: dovecot
           name: auth_verbose_passwords
-          value: ''
-          value_classification: redacted
+          value: "sha1:6"
+          value_classification: secret_fixture
           provenance: command_output
           source_path: /etc/dovecot/dovecot.conf
           description: Runtime setting captured from doveconf -n.
@@ -6393,8 +6393,8 @@ nodes:
         - setting_id: dovecot-077-ssl-key
           component_ref: dovecot
           name: ssl_key
-          value: ''
-          value_classification: redacted
+          value: "/etc/ssl/private/ssl-cert-snakeoil.key"
+          value_classification: secret_fixture
           provenance: command_output
           source_path: /etc/dovecot/dovecot.conf
           description: 'Runtime setting captured from doveconf -n. Raw value omitted and value_classification set to redacted

@@ -1,29 +1,8 @@
-
--- python --version --
-sh: python: not found
-
--- python3 --version --
-sh: python3: not found
-
--- pip freeze --
-sh: pip: not found
-
--- pip3 freeze --
-sh: pip3: not found
-
--- node --version --
-sh: node: not found
-
--- npm --version --
-sh: npm: not found
-
--- npm ls --all --json --
-sh: npm: not found
-
--- go version --
-sh: go: not found
-
--- /app/go.mod --
+--manifest-paths--
+/app/go.mod\t8728 bytes
+/app/go.sum\t66140 bytes
+--go-version-embedded--
+--go-mod--
 module shuffle
 
 go 1.24.0
@@ -203,9 +182,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
--- /app/go.sum sha256 --
-f877e1bf4be4267150aaee92e413ed80dddb91261319709191bf9949dd7d6c06  /app/go.sum
-
--- /app/go.sum line count --
-691 /app/go.sum
+--go-sum-module-count--
+236

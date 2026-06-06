@@ -333,3 +333,21 @@ relationships:
     forwarding_edge: null
     service_integration: null
     proxy_upstream: null
+  shuffle-backend-connects-opensearch:
+    type: connects_to
+    source: nodes.techvault.shuffle-backend.runtime.platform_applications.shuffle-soar
+    target: techvault.shuffle-opensearch
+    description: The Shuffle backend persists all organisation, user, workflow, app, and execution state in the OpenSearch
+      datastore at SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200. Authentication is HTTP basic (admin); TLS
+      verification is disabled via SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true and the password value is redacted.
+    properties:
+      protocol: https
+      port: '9200'
+      auth_method: password
+      tls_verification: disabled
+      credential_source: SHUFFLE_OPENSEARCH_PASSWORD redacted
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null

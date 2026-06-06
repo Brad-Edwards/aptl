@@ -1,0 +1,81 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-wazuh-sidecar-db PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "/bin/bash /opt/aptl/wazuh/wazuh-agent.sh",
+      "gid": "0",
+      "name": "wazuh-agent.sh",
+      "path": "/usr/bin/bash",
+      "pid": "1",
+      "start_time": "1779517173",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-execd",
+      "gid": "101",
+      "name": "wazuh-execd",
+      "path": "",
+      "pid": "49",
+      "start_time": "1779517174",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-agentd",
+      "gid": "101",
+      "name": "wazuh-agentd",
+      "path": "",
+      "pid": "60",
+      "start_time": "1779517175",
+      "uid": "100"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-syscheckd",
+      "gid": "101",
+      "name": "wazuh-syscheckd",
+      "path": "",
+      "pid": "74",
+      "start_time": "1779517176",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-logcollector",
+      "gid": "101",
+      "name": "wazuh-logcollec",
+      "path": "",
+      "pid": "84",
+      "start_time": "1779517176",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-modulesd",
+      "gid": "0",
+      "name": "wazuh-modulesd",
+      "path": "/var/ossec/bin/wazuh-modulesd",
+      "pid": "98",
+      "start_time": "1779517176",
+      "uid": "0"
+    },
+    {
+      "cmdline": "tail -F /var/ossec/logs/ossec.log",
+      "gid": "0",
+      "name": "tail",
+      "path": "/usr/bin/tail",
+      "pid": "116",
+      "start_time": "1779517179",
+      "uid": "0"
+    },
+    {
+      "cmdline": "sleep 5",
+      "gid": "0",
+      "name": "sleep",
+      "path": "/usr/bin/sleep",
+      "pid": "240522",
+      "start_time": "1780717529",
+      "uid": "0"
+    }
+  ]
+}

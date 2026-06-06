@@ -3165,9 +3165,9 @@ nodes:
             value: techvault
             description: Database user.
           - name: secret_key_length
-            sensitivity: plain
+            sensitivity: secret_fixture
             value: '25'
-            description: Length of the Flask secret key.
+            description: Non-secret length metadata for the Flask fixture secret key; classified because key-bearing names trigger ACES secret-name rules.
           - name: jwt_algorithm
             sensitivity: plain
             value: HS256

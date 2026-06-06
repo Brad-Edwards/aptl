@@ -75,6 +75,36 @@ def test_secret_named_environment_values_are_fixtures_or_omitted():
     )
 
 
+def test_secret_named_sensitive_values_are_fixtures_or_omitted():
+    from aces_sdl.runtime_values import name_indicates_secret
+
+    offenders = []
+    for node_path in sorted(NODE_SDL_DIR.glob("*.sdl.yaml")):
+        data = _yaml(node_path)
+        for path, item in _walk_dicts(data):
+            if not {"name", "value", "sensitivity"} <= set(item):
+                continue
+            name = item["name"]
+            has_raw_value = item["value"] not in ("", None)
+            sensitivity = item["sensitivity"]
+            if (
+                isinstance(name, str)
+                and name_indicates_secret(name)
+                and has_raw_value
+                and sensitivity != "secret_fixture"
+            ):
+                breadcrumb = "/".join(str(part) for part in path)
+                offenders.append(
+                    f"{node_path.relative_to(PROJECT_ROOT)}:{breadcrumb}: "
+                    f"name={name} sensitivity={sensitivity}"
+                )
+
+    assert not offenders, (
+        "Secret-token runtime field names with raw observed values must be "
+        f"classified as fixture content, not blanked or left plain: {offenders}"
+    )
+
+
 def test_shuffle_backend_runtime_inventory_is_encoded_from_evidence():
     sdl = _yaml(TECHVAULT_SDL_PATH)
     node = sdl["nodes"]["shuffle-backend"]

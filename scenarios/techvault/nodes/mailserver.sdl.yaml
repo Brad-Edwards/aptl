@@ -4026,8 +4026,8 @@ nodes:
         source: ''
         description: ''
       - name: PWD
-        value: ''
-        value_classification: redacted
+        value: /
+        value_classification: plain
         provenance: runtime
         source: ''
         description: ''

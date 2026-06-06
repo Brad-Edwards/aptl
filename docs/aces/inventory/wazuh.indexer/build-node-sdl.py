@@ -430,52 +430,21 @@ def parse_processes() -> list[dict]:
     return out
 
 
-def _env_name_is_secret(name: str) -> bool:
-    """Mirror ACES `name_indicates_secret` so generated env vars stay compliant.
-
-    ACES `RuntimeEnvironmentVariable` requires that a variable whose NAME looks
-    secret-bearing (e.g. `PWD` → `pwd`, anything with `key`/`token`/`secret`/
-    `passwd`/`credential`) omit its value. Import the canonical predicate when
-    aces_sdl is importable so this generator tracks the upstream token list; fall
-    back to a vendored subset otherwise.
-    """
-    try:
-        from aces_sdl.runtime_values import name_indicates_secret
-
-        return bool(name_indicates_secret(name))
-    except Exception:
-        lowered = name.lower().replace("-", "_")
-        tokens = (
-            "access_key", "access_token", "api_key", "auth_key", "client_key",
-            "client_secret", "credential", "passphrase", "passwd", "password",
-            "private_key", "pwd", "secret", "shared_key", "token",
-        )
-        if any(tok in lowered for tok in tokens):
-            return True
-        return "key" in [p for p in re.split(r"[^a-z0-9]+", lowered) if p]
-
-
 def parse_environment() -> list[dict]:
     out = []
     for line in runtime_section("environment"):
         if "=" not in line:
             continue
         key, value = line.split("=", 1)
-        # An already-<REDACTED ...> value, or a name ACES treats as secret-bearing,
-        # must be encoded as redacted with the value omitted.
-        sensitive = "<REDACTED" in value or _env_name_is_secret(key)
+        sensitive = "<REDACTED" in value
         out.append(
             {
                 "name": key,
-                "value": "" if sensitive else value,
+                "value": value,
                 "value_classification": "redacted" if sensitive else "plain",
                 "provenance": "runtime",
                 "source": "docs/aces/inventory/wazuh.indexer/evidence/runtime-baseline.txt",
-                "description": (
-                    "Value omitted: ACES requires secret-bearing-named runtime env vars to omit their value."
-                    if sensitive and "<REDACTED" not in value
-                    else ""
-                ),
+                "description": "",
             }
         )
     return out

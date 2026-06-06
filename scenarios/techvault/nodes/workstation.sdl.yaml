@@ -4221,8 +4221,8 @@ nodes:
         source: docker-inspect.container.json
         description: ''
       - name: LABADMIN_SSH_KEY_FILE
-        value: ''
-        value_classification: redacted
+        value: /keys/aptl_lab_key.pub
+        value_classification: plain
         provenance: compose
         source: docker-inspect.container.json
         description: ''

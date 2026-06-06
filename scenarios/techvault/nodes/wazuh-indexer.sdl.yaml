@@ -12774,11 +12774,11 @@ nodes:
           source: docs/aces/inventory/wazuh.indexer/evidence/runtime-baseline.txt
           description: ''
         - name: PWD
-          value: ''
-          value_classification: redacted
+          value: /usr/share/wazuh-indexer
+          value_classification: plain
           provenance: runtime
           source: docs/aces/inventory/wazuh.indexer/evidence/runtime-baseline.txt
-          description: 'Value omitted: ACES requires secret-bearing-named runtime env vars to omit their value.'
+          description: ''
         - name: SHLVL
           value: '1'
           value_classification: plain

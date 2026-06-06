@@ -434,8 +434,8 @@ nodes:
         description: ''
       environment:
       - name: SHUFFLE_DEFAULT_APIKEY
-        value: ''
-        value_classification: redacted
+        value: 31a211c4-ea5c-4a49-b022-5e2434e758a7
+        value_classification: secret_fixture
         provenance: compose
         source: ''
         description: ''
@@ -458,8 +458,8 @@ nodes:
         source: ''
         description: ''
       - name: SHUFFLE_DEFAULT_PASSWORD
-        value: ''
-        value_classification: redacted
+        value: ShuffleAdmin2024!
+        value_classification: secret_fixture
         provenance: compose
         source: ''
         description: ''
@@ -470,8 +470,8 @@ nodes:
         source: ''
         description: ''
       - name: SHUFFLE_OPENSEARCH_PASSWORD
-        value: ''
-        value_classification: redacted
+        value: StrongPassword123!
+        value_classification: secret_fixture
         provenance: compose
         source: ''
         description: ''

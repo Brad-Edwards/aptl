@@ -86,7 +86,7 @@ rows:
     aces_target: ACES nodes / infrastructure / runtime.service_listeners / runtime.applications / runtime.platform_applications / runtime.identity_authorities / content / relationships fields
     runtime_owner: n/a
     validation_evidence: "docs/aces/inventory/misp/ + tests/test_misp_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/ + Brad-Edwards/aces#431/#465 consumed"
-    blocking_followup: "#348/#349 for remaining companion service full inventories"
+    blocking_followup: "#349 for the remaining companion service full inventory"
     notes: SCN-010 issue #346 MISP inventory pass. The SDL encodes the catalogued MISP image, build provenance, runtime, full filesystem manifest, listeners, local and application identity, package/CVE inventory, API routes, threat-intelligence platform content/settings, content-count state, and MISP-to-database/Redis/Suricata-sync relationship facts. Brad-Edwards/aces#431 is consumed through runtime.service_listeners, ACES platform-application support is consumed through runtime.platform_applications, and Brad-Edwards/aces#465 is consumed through modular SDL imports with no known remaining ACES expressivity blocker for the catalogued MISP steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
   - id: scen.techvault.misp-db-inventory
@@ -99,6 +99,17 @@ rows:
     validation_evidence: "docs/aces/inventory/misp-db/ + tests/test_misp_db_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/ + Brad-Edwards/aces#388/#431/#465 consumed"
     blocking_followup: n/a
     notes: SCN-010 issue #347 MISP MariaDB companion inventory pass. The SDL encodes the catalogued MariaDB image, build provenance, runtime, filesystem manifest, local identity, package/CVE inventory, software components, listeners, database logical state, MISP table cardinalities, database role/account anchors, and typed MISP-to-MariaDB relationship facts. Brad-Edwards/aces#388 is consumed through runtime.database_services, Brad-Edwards/aces#431 is consumed through runtime.service_listeners, and Brad-Edwards/aces#465 is consumed through modular SDL imports with no known remaining ACES expressivity blocker for the catalogued MISP DB steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
+  - id: scen.techvault.misp-redis-inventory
+    surface: scenarios_yaml
+    legacy_field: nodes.techvault.misp-redis + infrastructure.misp-redis + runtime.datastore_services + runtime.app_authorizations + relationships
+    legacy_source: scenarios/techvault.sdl.yaml
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime.service_listeners / runtime.datastore_services / runtime.app_authorizations / relationships fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/misp-redis/ + tests/test_misp_redis_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/ + Brad-Edwards/aces#431 consumed"
+    blocking_followup: n/a
+    notes: SCN-010 issue #348 MISP Redis companion inventory pass; completion-grade. The SDL encodes the catalogued redis:7-alpine image identity, upstream build provenance, present-but-unverified SLSA/SPDX attestation, runtime container policy, the anonymous /data volume mount, PID 1 redis-server (uid 999, no effective capabilities), security-net DHCP endpoint, 17 apk packages, redis/gosu software components, 101 Trivy findings, IPv4/IPv6 Redis listeners plus Docker DNS listeners, the key-value datastore_services state (engine redis, persistence posture, 16 configured logical DBs with the db0/db1/db13 snapshot population, CONFIG settings), the redis_acl app_authorizations default user, and the typed MISP-to-Redis relationship. Redis is the first node to populate runtime.datastore_services (not the relational database_services); Brad-Edwards/aces#431 is consumed through runtime.service_listeners with no known remaining ACES expressivity blocker for the catalogued MISP Redis steady-state inventory. The Redis auth fixture and ACL hash are redacted; the capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
   - id: scen.techvault.workstation-inventory
     surface: scenarios_yaml

@@ -1,0 +1,491 @@
+schema_version: 1
+asset:
+  id: misp-redis
+  scenario: TechVault
+  aptl_issue: 348
+  aces_methodology_issue: 353
+  source_class: upstream-image-plus-anonymous-volume-runtime-state
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+  attestation:
+    status: captured
+    verification_status: not_verified
+    standards:
+    - SLSA provenance v0.2
+    - SPDX
+    predicate_types:
+    - https://slsa.dev/provenance/v0.2
+    - https://spdx.dev/Document
+    evidence:
+    - path: evidence/docker-buildx-imagetools.image.txt
+    - path: evidence/docker-buildx-imagetools.image.raw.json
+    - path: evidence/docker-buildx-imagetools.attestation-amd64.raw.json
+    limits:
+    - Registry-visible SLSA provenance and SPDX SBOM attestation manifests were captured for redis:7-alpine, but signatures, transparency-log inclusion, and builder identity were not cryptographically verified in this pass.
+notes:
+- Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start.
+- Redis is encoded through runtime.datastore_services (key_value), runtime.app_authorizations (redis_acl), and runtime.service_listeners; ACES #431 is consumed for listener semantics. No known ACES expressivity gap remains for the catalogued MISP Redis steady-state facts.
+- The Redis auth fixture and its ACL password hash are redacted from every committed artifact; the password-required posture is preserved as a classified fact.
+- misp-redis has no Compose healthcheck, no on-disk redis.conf (config is supplied via the Compose command), and no scenario-declared vulnerabilities; the keyspace is volatile MISP-driven state encoded as a snapshot in the datastore logical-db partitions.
+correspondence_checks:
+- id: misp-redis-evidence-bundle-integrity
+  status: implemented
+  source: docs/aces/inventory/misp-redis/evidence
+  method: evidence-sha256sums.txt hashes every committed evidence file except the manifest itself.
+  realized_evidence:
+  - path: evidence/evidence-sha256sums.txt
+  - path: evidence/captured-at-utc.txt
+  ledger_fact_ids:
+  - misp-redis.capture.toolchain-baseline
+- id: misp-redis-sdl-runtime-correspondence
+  status: implemented
+  source: scenarios/techvault.sdl.yaml nodes.techvault.misp-redis
+  method: tests/test_misp_redis_inventory.py parses and compiles the ACES SDL and asserts image, runtime, listener, package, CVE, identity, datastore, ACL, and relationship surfaces against the evidence.
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/redis-state.txt
+  - path: evidence/trivy-vulnerability-list.json
+  ledger_fact_ids:
+  - misp-redis.runtime.container-policy
+  - misp-redis.runtime.service-listeners
+  - misp-redis.datastore.service
+  - misp-redis.datastore.logical-dbs
+  - misp-redis.datastore.acl
+  - misp-redis.runtime.vulnerability-scan
+- id: misp-redis-scope-and-redaction-caveats
+  status: implemented
+  source: docs/aces/inventory/misp-redis/evidence/capture-limits.txt
+  method: README and tests assert non-destructive capture scope, Redis auth redaction, Syft normalization, dump.rdb checksum exclusion, and unavailable osquery tables.
+  realized_evidence:
+  - path: evidence/capture-limits.txt
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  ledger_fact_ids:
+  - misp-redis.capture.toolchain-baseline
+  - misp-redis.runtime.filesystem-inventory
+  - misp-redis.datastore.acl
+facts:
+- id: misp-redis.capture.toolchain-baseline
+  category: capture
+  summary: Capture used digest-pinned Trivy, Syft, and osquery images, recorded Docker/Compose versions, and recorded explicit capture limits.
+  evidence:
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-compose-version.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/syft-version.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/capture-limits.txt
+  - path: evidence/evidence-sha256sums.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: runtime_contract
+    checked_surfaces:
+    - runtime_contract
+    fields:
+    - docs/aces/inventory/misp-redis/capture-evidence.sh
+    - docs/aces/inventory/misp-redis/evidence/capture-limits.txt
+    rationale: Current ACES SDL runtime/profile fields carry this catalogued MISP Redis fact directly.
+    caveat: Scanner and runtime observations are time-sensitive evidence from the current-running lab, not immutable clean-reset proof.
+- id: misp-redis.image.identity-provenance
+  category: image
+  summary: Redis resolved to the captured upstream image digest and Alpine 3.21.7 image metadata.
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-buildx-imagetools.image.txt
+  - path: evidence/docker-buildx-imagetools.image.raw.json
+  - path: evidence/osquery-docker-images.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.source.name
+    - nodes.techvault.misp-redis.source.version
+    - nodes.techvault.misp-redis.os_version
+    rationale: Current ACES SDL node source/os fields carry this catalogued MISP Redis fact directly.
+- id: misp-redis.image.history-layers
+  category: image
+  summary: Docker history (17 instructions), 8 rootfs layers, image config, and present SLSA/SPDX attestation are encoded as upstream-image build provenance.
+  evidence:
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/trivy-vulnerabilities.json.gz
+  - path: evidence/docker-buildx-imagetools.attestation-amd64.raw.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.source.build.instructions
+    - nodes.techvault.misp-redis.source.build.layers
+    - nodes.techvault.misp-redis.source.build.config
+    - nodes.techvault.misp-redis.source.build.attestation
+    rationale: Current ACES SDL build-provenance fields carry this catalogued MISP Redis fact directly.
+- id: misp-redis.compose.service-contract
+  category: compose
+  summary: Compose declares aptl-misp-redis, image redis:7-alpine, the redis-server --requirepass command, a 128 MiB memory limit, the soc profile, and the security-net attachment with no host-published ports.
+  evidence:
+  - path: evidence/compose-service.misp-redis.json
+  - path: evidence/source-checksums.txt
+  - path: evidence/docker-compose-version.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - infrastructure
+    fields:
+    - nodes.techvault.misp-redis.runtime.container
+    - nodes.techvault.misp-redis.runtime.operational_policy
+    - infrastructure.misp-redis
+    rationale: Current ACES SDL node runtime/container and infrastructure fields carry this catalogued MISP Redis fact directly.
+- id: misp-redis.source.realization-inputs
+  category: source
+  summary: The local docker-compose.yml checksum is captured as the local realization input for the upstream Redis image.
+  evidence:
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.source.build.source_inputs
+    rationale: Current ACES SDL build source_inputs field carries this catalogued MISP Redis fact directly.
+- id: misp-redis.runtime.container-policy
+  category: runtime
+  summary: Docker runtime policy captures restart behavior, the 128 MiB memory limit, namespaces, privileged/read-only flags, runc runtime, log driver, and absent healthcheck.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-logs.misp-redis.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.container
+    - nodes.techvault.misp-redis.runtime.operational_policy
+    - nodes.techvault.misp-redis.runtime.health
+    rationale: Current ACES SDL node runtime container/policy/health fields carry this catalogued MISP Redis fact directly.
+- id: misp-redis.network.identity
+  category: network
+  summary: misp-redis is attached to security-net at a DHCP-assigned 172.20.0.3 with Docker aliases, DNS names, a MAC address, and no host-published ports.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/participant-discovery.misp.txt
+  - path: evidence/participant-discovery.kali.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - infrastructure
+    fields:
+    - nodes.techvault.misp-redis.runtime.network.endpoints
+    - nodes.techvault.misp-redis.runtime.network.published_ports
+    - infrastructure.misp-redis
+    rationale: Current ACES SDL node network and infrastructure fields carry this catalogued MISP Redis fact directly.
+- id: misp-redis.runtime.mounts-volume
+  category: runtime
+  summary: The runtime mount table records the anonymous Docker volume backing /data (image VOLUME /data), with no named Compose volume.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.mounts
+    rationale: Current ACES SDL node runtime mounts field carries this catalogued MISP Redis fact directly.
+    caveat: /data is backed by an anonymous Docker volume from the image VOLUME declaration; no named Compose volume exists, so the source name is backend-generated and not stable across container removal.
+- id: misp-redis.runtime.filesystem-inventory
+  category: filesystem
+  summary: The SDL encodes a curated load-bearing filesystem set (Redis binaries, entrypoint, gosu, identity files, apk config, /data, dump.rdb) with checksums, backed by the full compressed tree and checksum manifests.
+  evidence:
+  - path: evidence/filesystem-tree.txt.gz
+  - path: evidence/filesystem-checksums.txt.xz
+  - path: evidence/capture-limits.txt
+  - path: evidence/redis-manifest.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.filesystem_inventory
+    rationale: Current ACES SDL node runtime filesystem_inventory field carries this catalogued MISP Redis fact directly.
+    caveat: /data/dump.rdb is a volatile binary RDB that can embed cached secret material; it is represented by path/metadata and excluded from content checksums, and /etc/shadow is metadata-only.
+- id: misp-redis.runtime.process
+  category: runtime
+  summary: Runtime process evidence captures PID 1 redis-server running as the redis service account (uid 999, gid 1000).
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-processes.json
+  - path: evidence/docker-top.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.processes
+    rationale: Current ACES SDL node runtime processes field carries this catalogued MISP Redis fact directly.
+- id: misp-redis.runtime.service-listeners
+  category: runtime
+  summary: ACES listener fields encode the Redis RESP listeners on the IPv4 and IPv6 wildcard and the Docker embedded DNS TCP/UDP listeners.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/participant-discovery.misp.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.services
+    - nodes.techvault.misp-redis.runtime.service_listeners
+    rationale: ACES #431 listener fields carry this catalogued MISP Redis fact directly.
+    caveat: Docker embedded DNS listener ports are backend-generated and ephemeral; they are encoded as node-local runtime listeners, not Redis application services.
+- id: misp-redis.runtime.environment
+  category: runtime
+  summary: The runtime environment captures the five Redis image default variables (PATH, GOSU_VERSION, REDIS_VERSION, REDIS_DOWNLOAD_URL, REDIS_DOWNLOAD_SHA); Compose adds none.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.environment
+    rationale: Current ACES SDL node runtime environment field carries this catalogued MISP Redis fact directly.
+- id: misp-redis.runtime.capabilities
+  category: runtime
+  summary: PID 1 runs with no effective Linux capabilities (CapEff=0); the entrypoint drops privileges to the redis user via gosu and no Compose capabilities are added.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.linux_capabilities
+    rationale: Current ACES SDL node runtime linux_capabilities field carries this catalogued MISP Redis fact directly.
+- id: misp-redis.runtime.local-identity
+  category: identity
+  summary: Local passwd/group inventory records 18 users (including the redis service account) and 36 groups, with no sudo rules.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.local_identity
+    rationale: Current ACES SDL node runtime local_identity field carries this catalogued MISP Redis fact directly.
+- id: misp-redis.runtime.package-inventory
+  category: runtime
+  summary: apk package inventory captures 17 installed OS packages including the .redis-rundeps virtual package.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/osquery-apt-sources.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.packages
+    rationale: Current ACES SDL node runtime packages field carries this catalogued MISP Redis fact directly.
+- id: misp-redis.runtime.software-components
+  category: runtime
+  summary: Software components capture the Redis 7.4.8 server and the gosu 1.17 Go binary tree (gosu, moby/sys/user, golang.org/x/sys, go stdlib 1.18.2).
+  evidence:
+  - path: evidence/redis-manifest.txt
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.software_components
+    rationale: Current ACES SDL node runtime software_components field carries this catalogued MISP Redis fact directly.
+- id: misp-redis.runtime.vulnerability-scan
+  category: runtime
+  summary: Trivy captured 101 vulnerability findings (4 critical, 46 high, 47 medium, 4 low), dominated by the gosu go1.18.2 stdlib, plus severity counts.
+  evidence:
+  - path: evidence/trivy-vulnerabilities.json.gz
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-version.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.package_vulnerabilities
+    rationale: Current ACES SDL node runtime package_vulnerabilities field carries this catalogued MISP Redis fact directly.
+    caveat: Vulnerability scanner output is time-sensitive and tied to the captured Trivy version/database state.
+- id: misp-redis.runtime.sbom-toolchain
+  category: runtime
+  summary: Required Trivy CycloneDX and useful-optional Syft CycloneDX SBOMs are captured; Syft output is deterministically normalized.
+  evidence:
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/syft-version.json
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.packages
+    - nodes.techvault.misp-redis.runtime.software_components
+    rationale: Current ACES SDL node runtime package/software_component fields carry this catalogued MISP Redis fact directly.
+    caveat: SBOMs are retained as evidence; SDL package fields use apk and scanner-derived summaries rather than embedding full CycloneDX documents.
+- id: misp-redis.runtime.osquery-baseline
+  category: runtime
+  summary: osquery captured processes, listeners, host-side Docker container/image rows, and the unavailable Alpine application/program/apt-sources table status.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.processes
+    - nodes.techvault.misp-redis.runtime.service_listeners
+    - nodes.techvault.misp-redis.runtime.network
+    rationale: Current ACES SDL node runtime process/listener/network fields carry this catalogued MISP Redis fact directly.
+    caveat: apt_sources, installed_applications, and programs tables are unavailable for the Alpine target in the digest-pinned Linux osquery image and are recorded as capture limits.
+- id: misp-redis.datastore.service
+  category: datastore
+  summary: Redis 7.4.8 exposes a key_value RESP datastore service on TCP 6379, encoded through runtime.datastore_services rather than the relational database_services.
+  evidence:
+  - path: evidence/redis-state.txt
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-listening-ports.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.datastore_services.misp_redis
+    rationale: ACES runtime.datastore_services (engine redis, data_model key_value) carries this catalogued fact directly; Redis is deliberately not encoded as relational database_services.
+- id: misp-redis.datastore.persistence
+  category: datastore
+  summary: The key-value persistence profile captures the RDB save points (3600 1, 300 100, 60 10000), AOF disabled, noeviction, and maxmemory 0.
+  evidence:
+  - path: evidence/redis-state.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.datastore_services.misp_redis.persistence
+    rationale: The ACES key_value data_model requires and carries a persistence profile directly.
+- id: misp-redis.datastore.logical-dbs
+  category: datastore
+  summary: 16 logical DBs are configured; db0 (120 keys), db1 (9 keys), and db13 (21 keys) are populated at the snapshot, encoded as logical_db partitions with datatype census.
+  evidence:
+  - path: evidence/redis-state.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.datastore_services.misp_redis.partitions
+    rationale: ACES logical_db partitions with datatype_census carry the observed Redis keyspace shape directly.
+    caveat: Per-DB key counts and datatype census are volatile, MISP-driven, TTL-bearing snapshot observations; the configured 16-logical-DB capacity is the stable fact while population is point-in-time.
+- id: misp-redis.datastore.settings
+  category: datastore
+  summary: 18 captured CONFIG settings (save, appendonly, maxmemory-policy, dir, bind, databases, etc.) are encoded as datastore settings with the requirepass value redacted.
+  evidence:
+  - path: evidence/redis-state.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.datastore_services.misp_redis.settings
+    rationale: ACES datastore settings carry the catalogued CONFIG fact directly; the secret-named requirepass setting omits its value and is classified redacted.
+- id: misp-redis.datastore.acl
+  category: identity
+  summary: The single built-in default Redis ACL user (enabled, sanitize-payload, password-required, full +@all access over ~* keys and &* channels) is encoded via app_authorizations with resource_vocabulary redis_acl.
+  evidence:
+  - path: evidence/redis-state.txt
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-redis.runtime.app_authorizations.misp_redis_acl
+    - nodes.techvault.misp-redis.runtime.datastore_services.misp_redis.authorization_ref
+    rationale: ACES runtime.app_authorizations with resource_vocabulary redis_acl carries the Redis ACL directly, linked from the datastore via authorization_ref.
+    caveat: The raw Redis password and its ACL hash are redacted; the password-required posture is preserved via credential_classification and the redacted requirepass setting.
+- id: misp-redis.participant-discovery
+  category: relationship
+  summary: MISP resolves and reaches misp-redis on TCP 6379; Kali cannot reach the security-net address from its current network vantage.
+  evidence:
+  - path: evidence/participant-discovery.misp.txt
+  - path: evidence/participant-discovery.kali.txt
+  aces:
+    disposition: encoded
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    - nodes
+    fields:
+    - relationships.misp-connects-redis
+    - nodes.techvault.misp-redis.runtime.service_listeners.redis-6379-ipv4
+    rationale: Current ACES SDL relationship and node listener fields carry this catalogued reachability fact directly.
+- id: misp-redis.relationship.misp
+  category: relationship
+  summary: MISP points at misp-redis via REDIS_HOST=misp-redis; the Redis side requires a password while MISP exposes no Redis password variable, so MISP-side auth is recorded as unknown.
+  evidence:
+  - path: evidence/compose-service.misp-redis.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/redis-state.txt
+  - path: evidence/participant-discovery.misp.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    fields:
+    - relationships.misp-connects-redis
+    rationale: Current ACES SDL relationship fields carry this catalogued MISP-to-Redis fact directly, targeting the typed datastore service.
+    caveat: target_requires_password is confirmed true by Redis-side ACL evidence, but MISP-side auth_method remains unobserved (unknown) because the MISP container exposes no Redis password variable.

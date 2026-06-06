@@ -18,6 +18,7 @@ from aptl.core.aces_inventory import (
     validate_mapping_ledger,
 )
 
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MISP_DB_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "misp-db"
@@ -599,4 +600,5 @@ def test_parity_inventory_cites_misp_db_inventory_and_updates_misp_followups():
 
     misp = rows["scen.techvault.misp-inventory"]
     assert "#347" not in misp["blocking_followup"]
-    assert "#348/#349" in misp["blocking_followup"]
+    assert "#348" not in misp["blocking_followup"]
+    assert "#349" in misp["blocking_followup"]

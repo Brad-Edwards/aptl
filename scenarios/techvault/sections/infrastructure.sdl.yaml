@@ -216,7 +216,9 @@ infrastructure:
     dependencies: []
     properties: null
     acls: []
-    description: 'MISP Redis companion node; Compose does not pin a static address and full inventory follows in issue #348.'
+    description: MISP Redis companion node attached to the SOC/security network; Compose pins no static address (DHCP, observed
+      172.20.0.3 at capture time). Steady-state runtime state is encoded under nodes.techvault.misp-redis.runtime
+      (datastore_services key-value store, app_authorizations Redis ACL, listeners, packages, and CVE inventory).
   misp-suricata-sync:
     count: 1
     links:

@@ -1,0 +1,11 @@
+- Compose service evidence was extracted from docker-compose.yml with a YAML->JSON projection because the full local compose project can include profile-dependent services outside this asset scope.
+- Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof.
+- misp-redis declares no named volume; its keyspace persists only to the container COW layer at /data/dump.rdb. The Redis keyspace, per-logical-db key counts, datatype census, dump.rdb size/mtime, and rdb_changes_since_last_save are MISP-driven runtime state that drift continuously; they are captured as a point-in-time snapshot, and the SDL encodes the stable shape (key_value model, configured 16 logical DBs, persistence posture) with the observed population marked as a snapshot caveat.
+- Full filesystem evidence is captured as compressed manifests. SDL encodes load-bearing participant-visible paths and structured runtime surfaces directly; byte-identical rebuild proof remains out of scope for this inventory issue.
+- The Redis auth fixture is redacted from every committed artifact: docker inspect Cmd, the compose command, CONFIG/ACL probe output, logs, and runtime baseline. Its declaration (password-required service) and classification are captured instead of the raw value or its ACL hash.
+- Redis configuration is supplied entirely via the Compose command line (redis-server --requirepass ...); no redis.conf file ships in the image or is mounted. Active runtime configuration is captured from CONFIG GET in redis-state.txt.
+- /data/dump.rdb is a volatile binary RDB serialization of MISP's cached keyspace that can embed cached secret material; it is represented by path/size/mtime metadata in filesystem-tree.txt.gz and excluded from content checksums.
+- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; filesystem provenance is captured in filesystem-tree.txt.gz and filesystem-checksums.txt.xz.
+- osquery apt_sources table is not meaningful for an Alpine (apk) target; recorded as unavailable.
+- osquery installed_applications table unavailable in the digest-pinned Linux scanner image.
+- osquery programs table unavailable in the digest-pinned Linux scanner image.

@@ -11,8 +11,8 @@ ea52d072bc59efebd2a02c01916efe098ada0065f86ea224f2d7c6247c8c888b  /srv/shares/pu
 f5365990a73bd9e2160e4ac151a65bf4c19fc5f5becba4b828a9ffeb2b7ce79e  /srv/shares/finance/reports/q3-revenue.csv
 2a88894cf3d3c74ecdbce5eaa25fd39b05c5406ec88adfddd98f10c90d0f23fd  /srv/shares/hr/employees/directory.csv
 491627d3143ea4c1f8048dc8929ae0bfb0782d86d7b3c4ab36fe4a7e2fa97bab  /srv/shares/it-backups/keys/README
-MISSING  /srv/shares/it-backups/keys/deploy_key
-MISSING  /srv/shares/it-backups/keys/deploy_key.pub
+ef731cb1a6c3cd4cbeebb6d329f3e964ad681bb95d55ed8c50dae19c164b0563  /srv/shares/it-backups/keys/deploy_key
+18552a0fe052a2df2c30e53fcfcc11f85c472ee384b6d45bbda0573ba0454469  /srv/shares/it-backups/keys/deploy_key.pub
 369a29418de741ef026090c81c6475f1c7e4b9740fa24d4e76a1af450878f2cc  /srv/shares/it-backups/db_backup_20240115.sql
 cdf50ce20d4a965ab60e6137301aa3a17c69a1e53917f8a0297dc7728d8e498b  /srv/shares/shared/wifi-passwords.txt
 7b70bc64197cb51970709a7b3719955d09bcfe2e4b645c4793635b2966c79414  /srv/shares/shared/meeting-notes-q3.txt

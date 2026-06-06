@@ -66,8 +66,13 @@ mkdir -p /srv/shares/it-backups/keys
 cat > /srv/shares/it-backups/keys/README <<'EOF'
 Old SSH keys from server migration. TODO: rotate and delete.
 EOF
-# Generate a dummy SSH key for the planted file
-ssh-keygen -t rsa -b 2048 -f /srv/shares/it-backups/keys/deploy_key -N "" -q 2>/dev/null || true
+# Plant a leaked SSH deploy key (the intended attack surface for this share).
+# Generated once and persisted on the fileshare_data volume. Do NOT swallow
+# failures: a missing ssh-keygen previously made this silently no-op, so the
+# planted key never existed and the documented attack path was broken.
+if [ ! -f /srv/shares/it-backups/keys/deploy_key ]; then
+    ssh-keygen -t rsa -b 2048 -f /srv/shares/it-backups/keys/deploy_key -N "" -q
+fi
 
 cat > /srv/shares/it-backups/db_backup_20240115.sql <<'EOF'
 -- PostgreSQL dump from production

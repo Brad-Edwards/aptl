@@ -21,8 +21,8 @@ drwxr-x--- root root 0 0 4096 /srv/shares/hr/employees
 drwx------ root root 0 0 4096 /srv/shares/it-backups
 drwx------ root root 0 0 4096 /srv/shares/it-backups/keys
 -rwx------ root root 0 0 61 /srv/shares/it-backups/keys/README
-MISSING /srv/shares/it-backups/keys/deploy_key
-MISSING /srv/shares/it-backups/keys/deploy_key.pub
+-rw------- root root 0 0 1831 /srv/shares/it-backups/keys/deploy_key
+-rw-r--r-- root root 0 0 404 /srv/shares/it-backups/keys/deploy_key.pub
 -rwx------ root root 0 0 377 /srv/shares/it-backups/db_backup_20240115.sql
 drwxrwxrwx root root 0 0 4096 /srv/shares/shared
 -rwxrwxrwx root root 0 0 133 /srv/shares/shared/wifi-passwords.txt

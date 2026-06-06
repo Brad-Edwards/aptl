@@ -1,0 +1,18 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-misp-db PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "mariadbd",
+      "gid": "999",
+      "name": "mariadbd",
+      "path": "",
+      "pid": "1",
+      "start_time": "1779517113",
+      "uid": "999"
+    }
+  ]
+}

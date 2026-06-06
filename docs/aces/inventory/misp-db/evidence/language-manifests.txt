@@ -1,0 +1,18 @@
+--database-manifest-scan--
+/usr/local/bin/docker-entrypoint.sh	26369	676f9025c3adba5f656b1ef6eb18567bf8f4a01f66cc6ec5a0a9a1d3b24bfed5
+/etc/mysql/my.cnf	24	c3a36a268b1c87e796beeb640a30346941059e954c8182a6908a9ce36d728c27
+/etc/mysql/mariadb.cnf	1127	c3a36a268b1c87e796beeb640a30346941059e954c8182a6908a9ce36d728c27
+/etc/mysql/mariadb.conf.d/50-server.cnf	3760	730f1a7decf874c1c197371bc0e189eca59ab02d1b79756814d4e1bc5a6a86a5
+/etc/apt/sources.list	2403	15a39563d491def84446c8a5304e873a6b6509d56e2b54edce8eea154e1290a0
+/etc/apt/sources.list.d/mariadb.list	83	b5c70a0557a2e71e38b2b61141c681fd85791c050c62d2143acb07600b864981
+--mariadb-version--
+mariadb  Ver 15.1 Distrib 10.11.16-MariaDB, for debian-linux-gnu (x86_64) using  EditLine wrapper
+--entrypoint-help--
+mariadbd  Ver 10.11.16-MariaDB-ubu2204 for debian-linux-gnu on x86_64 (mariadb.org binary distribution)
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Starts the MariaDB database server.
+
+Usage: mariadbd [OPTIONS]
+
+For more help options (several pages), use mysqld --verbose --help.

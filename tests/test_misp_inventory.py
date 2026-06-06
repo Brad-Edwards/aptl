@@ -225,7 +225,7 @@ def test_misp_inventory_note_declares_scope_and_realization_caveats():
         "No known ACES expressivity gap remains",
         "runtime.service_listeners",
         "zero events",
-        "#347, #348, and #349",
+        "#348 and #349",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"MISP inventory note missing scope markers: {missing}"
@@ -527,4 +527,4 @@ def test_parity_inventory_cites_misp_inventory_and_aces_sdl():
     assert "runtime.platform_applications" in row["aces_target"]
     assert "tests/test_misp_inventory.py" in row["validation_evidence"]
     assert "Brad-Edwards/aces#431/#465 consumed" in row["validation_evidence"]
-    assert "#347/#348/#349" in row["blocking_followup"]
+    assert "#348/#349" in row["blocking_followup"]

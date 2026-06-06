@@ -1,0 +1,41 @@
+{
+  "profiles": [
+    "soc"
+  ],
+  "image": "mariadb:10.11",
+  "container_name": "aptl-misp-db",
+  "restart": "unless-stopped",
+  "environment": [
+    "MYSQL_DATABASE=misp",
+    "MYSQL_USER=misp",
+    "MYSQL_PASSWORD=<REDACTED-MYSQL-PASSWORD>",
+    "MYSQL_ROOT_PASSWORD=<REDACTED-MYSQL-ROOT-PASSWORD>"
+  ],
+  "volumes": [
+    "misp_db_data:/var/lib/mysql"
+  ],
+  "healthcheck": {
+    "test": [
+      "CMD",
+      "healthcheck.sh",
+      "--connect",
+      "--innodb_initialized"
+    ],
+    "interval": "15s",
+    "timeout": "5s",
+    "retries": 15,
+    "start_period": "300s"
+  },
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "512m"
+      }
+    }
+  },
+  "networks": {
+    "aptl-security": {
+      "ipv4_address": "172.20.0.17"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "table": "docker_images",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%mariadb%\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "created": "1776285903",
+      "id": "407fccb51e710f34752c1a3ef9b936d1f55f38d4ac7fa043b3759742d266fd9a",
+      "size_bytes": "465520347",
+      "tags": "mariadb:10.11"
+    }
+  ]
+}

@@ -183,7 +183,8 @@ infrastructure:
     properties:
     - techvault.security-net: 172.20.0.17
     acls: []
-    description: 'MISP database companion node; full inventory follows in issue #347.'
+    description: MISP MariaDB companion node attached to the SOC/security network with static address 172.20.0.17; runtime
+      database state is encoded under nodes.techvault.misp-db.runtime.database_services.
   misp-redis:
     count: 1
     links:

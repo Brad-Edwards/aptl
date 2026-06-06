@@ -7840,3 +7840,633 @@ content:
       description: 388 object template rows were present.
     sensitive: false
     tags: []
+  misp-db-docker-entrypoint:
+    type: file
+    description: Runtime-observed MISP DB companion file captured in filesystem evidence.
+    target: techvault.misp-db
+    path: /usr/local/bin/docker-entrypoint.sh
+    destination: ''
+    text: null
+    source:
+      name: runtime-observed:/usr/local/bin/docker-entrypoint.sh
+      version: sha256:676f9025c3adba5f656b1ef6eb18567bf8f4a01f66cc6ec5a0a9a1d3b24bfed5
+      build: null
+    format: ''
+    items: []
+    sensitive: false
+    tags: []
+  misp-db-mariadb-cnf:
+    type: file
+    description: Runtime-observed MISP DB companion file captured in filesystem evidence.
+    target: techvault.misp-db
+    path: /etc/mysql/mariadb.cnf
+    destination: ''
+    text: null
+    source:
+      name: runtime-observed:/etc/mysql/mariadb.cnf
+      version: sha256:c3a36a268b1c87e796beeb640a30346941059e954c8182a6908a9ce36d728c27
+      build: null
+    format: ''
+    items: []
+    sensitive: false
+    tags: []
+  misp-db-mariadb-server-cnf:
+    type: file
+    description: Runtime-observed MISP DB companion file captured in filesystem evidence.
+    target: techvault.misp-db
+    path: /etc/mysql/mariadb.conf.d/50-server.cnf
+    destination: ''
+    text: null
+    source:
+      name: runtime-observed:/etc/mysql/mariadb.conf.d/50-server.cnf
+      version: sha256:730f1a7decf874c1c197371bc0e189eca59ab02d1b79756814d4e1bc5a6a86a5
+      build: null
+    format: ''
+    items: []
+    sensitive: false
+    tags: []
+  misp-db-misp-users-table-definition:
+    type: file
+    description: Runtime-observed MISP DB companion file captured in filesystem evidence.
+    target: techvault.misp-db
+    path: /var/lib/mysql/misp/users.frm
+    destination: ''
+    text: null
+    source:
+      name: runtime-observed:/var/lib/mysql/misp/users.frm
+      version: sha256:95c5ce80f2aa71ca9f8a69053dff7c73d8db7e58b0af810f60552a2fa07ee2ee
+      build: null
+    format: ''
+    items: []
+    sensitive: false
+    tags: []
+  misp-db-misp-auth-keys-table-definition:
+    type: file
+    description: Runtime-observed MISP DB companion file captured in filesystem evidence.
+    target: techvault.misp-db
+    path: /var/lib/mysql/misp/auth_keys.frm
+    destination: ''
+    text: null
+    source:
+      name: runtime-observed:/var/lib/mysql/misp/auth_keys.frm
+      version: sha256:7a4098fe4d59543deaeec50fef6bf49579b5a617fb9f85f965dec2c0f1877cd3
+      build: null
+    format: ''
+    items: []
+    sensitive: true
+    tags: []
+  misp-db-mysql-global-priv-table-definition:
+    type: file
+    description: Runtime-observed MISP DB companion file captured in filesystem evidence.
+    target: techvault.misp-db
+    path: /var/lib/mysql/mysql/global_priv.frm
+    destination: ''
+    text: null
+    source: null
+    format: ''
+    items: []
+    sensitive: true
+    tags: []
+  misp-db-data-directory:
+    type: directory
+    description: Docker named volume aptl_misp_db_data mounted at /var/lib/mysql.
+    target: techvault.misp-db
+    path: ''
+    destination: /var/lib/mysql
+    text: null
+    source: null
+    format: ''
+    items: []
+    sensitive: false
+    tags:
+    - volume_backed
+  misp-db-table-cardinalities:
+    type: dataset
+    description: Current-running MISP database table cardinalities captured from information_schema.TABLES.
+    target: techvault.misp-db
+    path: ''
+    destination: ''
+    text: null
+    source: null
+    format: mariadb information_schema table row counts
+    items:
+    - name: misp.access_logs
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.access_logs.
+    - name: misp.admin_settings
+      tags:
+      - table
+      - count:6
+      description: MariaDB TABLE_ROWS observation for misp.admin_settings.
+    - name: misp.allowedlist
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.allowedlist.
+    - name: misp.analyst_data_blocklists
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.analyst_data_blocklists.
+    - name: misp.attachment_scans
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.attachment_scans.
+    - name: misp.attributes
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.attributes.
+    - name: misp.attribute_tags
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.attribute_tags.
+    - name: misp.attr_value_counts
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.attr_value_counts.
+    - name: misp.audit_logs
+      tags:
+      - table
+      - count:99824
+      description: MariaDB TABLE_ROWS observation for misp.audit_logs.
+    - name: misp.auth_keys
+      tags:
+      - table
+      - count:1
+      description: MariaDB TABLE_ROWS observation for misp.auth_keys.
+    - name: misp.bookmarks
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.bookmarks.
+    - name: misp.bruteforces
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.bruteforces.
+    - name: misp.cake_sessions
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.cake_sessions.
+    - name: misp.cerebrates
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.cerebrates.
+    - name: misp.collections
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.collections.
+    - name: misp.collection_elements
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.collection_elements.
+    - name: misp.correlations
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.correlations.
+    - name: misp.correlation_exclusions
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.correlation_exclusions.
+    - name: misp.correlation_rules
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.correlation_rules.
+    - name: misp.correlation_values
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.correlation_values.
+    - name: misp.cryptographic_keys
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.cryptographic_keys.
+    - name: misp.dashboards
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.dashboards.
+    - name: misp.decaying_models
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.decaying_models.
+    - name: misp.decaying_model_mappings
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.decaying_model_mappings.
+    - name: misp.default_correlations
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.default_correlations.
+    - name: misp.events
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.events.
+    - name: misp.event_blocklists
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.event_blocklists.
+    - name: misp.event_delegations
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.event_delegations.
+    - name: misp.event_graph
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.event_graph.
+    - name: misp.event_locks
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.event_locks.
+    - name: misp.event_reports
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.event_reports.
+    - name: misp.event_report_tags
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.event_report_tags.
+    - name: misp.event_report_template_variables
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.event_report_template_variables.
+    - name: misp.event_tags
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.event_tags.
+    - name: misp.favourite_tags
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.favourite_tags.
+    - name: misp.feeds
+      tags:
+      - table
+      - count:2
+      description: MariaDB TABLE_ROWS observation for misp.feeds.
+    - name: misp.fuzzy_correlate_ssdeep
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.fuzzy_correlate_ssdeep.
+    - name: misp.galaxies
+      tags:
+      - table
+      - count:112
+      description: MariaDB TABLE_ROWS observation for misp.galaxies.
+    - name: misp.galaxy_clusters
+      tags:
+      - table
+      - count:56341
+      description: MariaDB TABLE_ROWS observation for misp.galaxy_clusters.
+    - name: misp.galaxy_cluster_blocklists
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.galaxy_cluster_blocklists.
+    - name: misp.galaxy_cluster_relations
+      tags:
+      - table
+      - count:59905
+      description: MariaDB TABLE_ROWS observation for misp.galaxy_cluster_relations.
+    - name: misp.galaxy_cluster_relation_tags
+      tags:
+      - table
+      - count:18934
+      description: MariaDB TABLE_ROWS observation for misp.galaxy_cluster_relation_tags.
+    - name: misp.galaxy_elements
+      tags:
+      - table
+      - count:321235
+      description: MariaDB TABLE_ROWS observation for misp.galaxy_elements.
+    - name: misp.inbox
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.inbox.
+    - name: misp.jobs
+      tags:
+      - table
+      - count:126
+      description: MariaDB TABLE_ROWS observation for misp.jobs.
+    - name: misp.logs
+      tags:
+      - table
+      - count:3935
+      description: MariaDB TABLE_ROWS observation for misp.logs.
+    - name: misp.news
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.news.
+    - name: misp.notes
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.notes.
+    - name: misp.noticelists
+      tags:
+      - table
+      - count:1
+      description: MariaDB TABLE_ROWS observation for misp.noticelists.
+    - name: misp.noticelist_entries
+      tags:
+      - table
+      - count:7
+      description: MariaDB TABLE_ROWS observation for misp.noticelist_entries.
+    - name: misp.notification_logs
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.notification_logs.
+    - name: misp.no_acl_correlations
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.no_acl_correlations.
+    - name: misp.objects
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.objects.
+    - name: misp.object_references
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.object_references.
+    - name: misp.object_relationships
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.object_relationships.
+    - name: misp.object_templates
+      tags:
+      - table
+      - count:388
+      description: MariaDB TABLE_ROWS observation for misp.object_templates.
+    - name: misp.object_template_elements
+      tags:
+      - table
+      - count:5523
+      description: MariaDB TABLE_ROWS observation for misp.object_template_elements.
+    - name: misp.opinions
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.opinions.
+    - name: misp.organisations
+      tags:
+      - table
+      - count:1
+      description: MariaDB TABLE_ROWS observation for misp.organisations.
+    - name: misp.org_blocklists
+      tags:
+      - table
+      - count:2
+      description: MariaDB TABLE_ROWS observation for misp.org_blocklists.
+    - name: misp.over_correlating_values
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.over_correlating_values.
+    - name: misp.posts
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.posts.
+    - name: misp.regexp
+      tags:
+      - table
+      - count:29
+      description: MariaDB TABLE_ROWS observation for misp.regexp.
+    - name: misp.relationships
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.relationships.
+    - name: misp.rest_client_histories
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.rest_client_histories.
+    - name: misp.roles
+      tags:
+      - table
+      - count:6
+      description: MariaDB TABLE_ROWS observation for misp.roles.
+    - name: misp.scheduled_tasks
+      tags:
+      - table
+      - count:9
+      description: MariaDB TABLE_ROWS observation for misp.scheduled_tasks.
+    - name: misp.servers
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.servers.
+    - name: misp.shadow_attributes
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.shadow_attributes.
+    - name: misp.shadow_attribute_correlations
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.shadow_attribute_correlations.
+    - name: misp.sharing_groups
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.sharing_groups.
+    - name: misp.sharing_group_blueprints
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.sharing_group_blueprints.
+    - name: misp.sharing_group_orgs
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.sharing_group_orgs.
+    - name: misp.sharing_group_servers
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.sharing_group_servers.
+    - name: misp.sightingdbs
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.sightingdbs.
+    - name: misp.sightingdb_orgs
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.sightingdb_orgs.
+    - name: misp.sightings
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.sightings.
+    - name: misp.sighting_blocklists
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.sighting_blocklists.
+    - name: misp.system_settings
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.system_settings.
+    - name: misp.tags
+      tags:
+      - table
+      - count:5
+      description: MariaDB TABLE_ROWS observation for misp.tags.
+    - name: misp.tag_collections
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.tag_collections.
+    - name: misp.tag_collection_tags
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.tag_collection_tags.
+    - name: misp.tasks
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.tasks.
+    - name: misp.taxii_servers
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.taxii_servers.
+    - name: misp.taxonomies
+      tags:
+      - table
+      - count:165
+      description: MariaDB TABLE_ROWS observation for misp.taxonomies.
+    - name: misp.taxonomy_entries
+      tags:
+      - table
+      - count:12986
+      description: MariaDB TABLE_ROWS observation for misp.taxonomy_entries.
+    - name: misp.taxonomy_predicates
+      tags:
+      - table
+      - count:1215
+      description: MariaDB TABLE_ROWS observation for misp.taxonomy_predicates.
+    - name: misp.templates
+      tags:
+      - table
+      - count:4
+      description: MariaDB TABLE_ROWS observation for misp.templates.
+    - name: misp.template_elements
+      tags:
+      - table
+      - count:45
+      description: MariaDB TABLE_ROWS observation for misp.template_elements.
+    - name: misp.template_element_attributes
+      tags:
+      - table
+      - count:30
+      description: MariaDB TABLE_ROWS observation for misp.template_element_attributes.
+    - name: misp.template_element_files
+      tags:
+      - table
+      - count:4
+      description: MariaDB TABLE_ROWS observation for misp.template_element_files.
+    - name: misp.template_element_texts
+      tags:
+      - table
+      - count:11
+      description: MariaDB TABLE_ROWS observation for misp.template_element_texts.
+    - name: misp.template_tags
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.template_tags.
+    - name: misp.threads
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.threads.
+    - name: misp.threat_levels
+      tags:
+      - table
+      - count:4
+      description: MariaDB TABLE_ROWS observation for misp.threat_levels.
+    - name: misp.users
+      tags:
+      - table
+      - count:1
+      description: MariaDB TABLE_ROWS observation for misp.users.
+    - name: misp.user_login_profiles
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.user_login_profiles.
+    - name: misp.user_settings
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.user_settings.
+    - name: misp.warninglists
+      tags:
+      - table
+      - count:122
+      description: MariaDB TABLE_ROWS observation for misp.warninglists.
+    - name: misp.warninglist_entries
+      tags:
+      - table
+      - count:2509058
+      description: MariaDB TABLE_ROWS observation for misp.warninglist_entries.
+    - name: misp.warninglist_types
+      tags:
+      - table
+      - count:570
+      description: MariaDB TABLE_ROWS observation for misp.warninglist_types.
+    - name: misp.workflows
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.workflows.
+    - name: misp.workflow_blueprints
+      tags:
+      - table
+      - count:0
+      description: MariaDB TABLE_ROWS observation for misp.workflow_blueprints.
+    sensitive: false
+    tags:
+    - mariadb
+    - misp
+    - table-cardinalities

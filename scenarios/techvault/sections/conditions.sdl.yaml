@@ -111,3 +111,13 @@ conditions:
     description: Docker Compose healthcheck for the aptl-misp container. Output is redacted in committed evidence because
       it contains HTML token material.
     environment: []
+  misp-db-ready:
+    name: ''
+    command: healthcheck.sh --connect --innodb_initialized
+    interval: 15
+    timeout: 5
+    retries: 15
+    start_period: 300
+    source: null
+    description: Docker Compose healthcheck for the aptl-misp-db MariaDB companion service.
+    environment: []

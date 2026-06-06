@@ -29,8 +29,8 @@ as current-running steady-state evidence, not as clean-lab rebuild proof.
   and MISP threat-intelligence platform state in `runtime.platform_applications`
   covering reference content objects and admin settings.
 - Relationships from MISP to `misp-db` and `misp-redis`, plus the
-  `misp-suricata-sync` HTTPS/API relationship. Companion full inventories remain
-  owned by #347, #348, and #349.
+  `misp-suricata-sync` HTTPS/API relationship. The `misp-db` companion full
+  inventory is owned by #347; remaining companion full inventories are #348 and #349.
 
 ## Evidence Highlights
 

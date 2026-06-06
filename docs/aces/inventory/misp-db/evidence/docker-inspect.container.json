@@ -1,0 +1,309 @@
+[
+  {
+    "Id": "1574ba5c2bb24a249ffe94f8181ddb9ac33655518416af53707a74ece6173cbf",
+    "Created": "2026-05-23T06:18:29.922029522Z",
+    "Path": "docker-entrypoint.sh",
+    "Args": [
+      "mariadbd"
+    ],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2955532,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-23T06:18:34.462268335Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-06-05T07:26:56.871908576+02:00",
+            "End": "2026-06-05T07:26:56.929573095+02:00",
+            "ExitCode": 0,
+            "Output": ""
+          },
+          {
+            "Start": "2026-06-05T07:27:11.930547012+02:00",
+            "End": "2026-06-05T07:27:11.982958773+02:00",
+            "ExitCode": 0,
+            "Output": ""
+          },
+          {
+            "Start": "2026-06-05T07:27:26.983629032+02:00",
+            "End": "2026-06-05T07:27:27.050967096+02:00",
+            "ExitCode": 0,
+            "Output": ""
+          },
+          {
+            "Start": "2026-06-05T07:27:42.05186043+02:00",
+            "End": "2026-06-05T07:27:42.114174468+02:00",
+            "ExitCode": 0,
+            "Output": ""
+          },
+          {
+            "Start": "2026-06-05T07:27:57.115631319+02:00",
+            "End": "2026-06-05T07:27:57.179726546+02:00",
+            "ExitCode": 0,
+            "Output": ""
+          }
+        ]
+      }
+    },
+    "Image": "sha256:407fccb51e710f34752c1a3ef9b936d1f55f38d4ac7fa043b3759742d266fd9a",
+    "ResolvConfPath": "/var/lib/docker/containers/1574ba5c2bb24a249ffe94f8181ddb9ac33655518416af53707a74ece6173cbf/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/1574ba5c2bb24a249ffe94f8181ddb9ac33655518416af53707a74ece6173cbf/hostname",
+    "HostsPath": "/var/lib/docker/containers/1574ba5c2bb24a249ffe94f8181ddb9ac33655518416af53707a74ece6173cbf/hosts",
+    "LogPath": "/var/lib/docker/containers/1574ba5c2bb24a249ffe94f8181ddb9ac33655518416af53707a74ece6173cbf/1574ba5c2bb24a249ffe94f8181ddb9ac33655518416af53707a74ece6173cbf-json.log",
+    "Name": "/aptl-misp-db",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "aptl_misp_db_data:/var/lib/mysql:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-security",
+      "PortBindings": {},
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 536870912,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 1073741824,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_misp_db_data",
+        "Source": "/var/lib/docker/volumes/aptl_misp_db_data/_data",
+        "Destination": "/var/lib/mysql",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "1574ba5c2bb2",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "3306/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "MYSQL_PASSWORD=<REDACTED-MYSQL-PASSWORD>",
+        "MYSQL_ROOT_PASSWORD=<REDACTED-MYSQL-ROOT-PASSWORD>",
+        "MYSQL_DATABASE=misp",
+        "MYSQL_USER=misp",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "GOSU_VERSION=1.19",
+        "LANG=C.UTF-8",
+        "MARIADB_VERSION=1:10.11.16+maria~ubu2204"
+      ],
+      "Cmd": [
+        "mariadbd"
+      ],
+      "Healthcheck": {
+        "Test": [
+          "CMD",
+          "healthcheck.sh",
+          "--connect",
+          "--innodb_initialized"
+        ],
+        "Interval": 15000000000,
+        "Timeout": 5000000000,
+        "StartPeriod": 300000000000,
+        "Retries": 15
+      },
+      "Image": "mariadb:10.11",
+      "Volumes": {
+        "/var/lib/mysql": {}
+      },
+      "WorkingDir": "",
+      "Entrypoint": [
+        "docker-entrypoint.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "b38b63eea06a2e6dceec441ed62198156357215ef7e02acda3fb7774f93ae6a3",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "",
+        "com.docker.compose.image": "sha256:407fccb51e710f34752c1a3ef9b936d1f55f38d4ac7fa043b3759742d266fd9a",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "misp-db",
+        "com.docker.compose.version": "5.1.3",
+        "org.opencontainers.image.authors": "MariaDB Community",
+        "org.opencontainers.image.base.name": "docker.io/library/ubuntu:jammy",
+        "org.opencontainers.image.description": "MariaDB Database for relational SQL",
+        "org.opencontainers.image.documentation": "https://hub.docker.com/_/mariadb/",
+        "org.opencontainers.image.licenses": "GPL-2.0",
+        "org.opencontainers.image.source": "https://github.com/MariaDB/mariadb-docker",
+        "org.opencontainers.image.title": "MariaDB Database",
+        "org.opencontainers.image.url": "https://github.com/MariaDB/mariadb-docker",
+        "org.opencontainers.image.vendor": "MariaDB Community",
+        "org.opencontainers.image.version": "10.11.16"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "a002b9dab6e7d87e218ceb1ba192a97ee1a1b88c2122e4916581a72465678ecc",
+      "SandboxKey": "<REDACTED>",
+      "Ports": {
+        "3306/tcp": null
+      },
+      "Networks": {
+        "aptl_aptl-security": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.0.17"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-misp-db",
+            "misp-db"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "16c627c6f35a90e618081014ff0ca0715aec52c1999dcb38b97caef2ca822acb",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.17",
+          "MacAddress": "92:10:31:d6:8d:68",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-misp-db",
+            "misp-db",
+            "1574ba5c2bb2"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:9ec803a18f88f1df2b8328565a661335875419c531e19b45bc916eb3b51e5422",
+      "size": 2481,
+      "annotations": {
+        "com.docker.official-images.bashbrew.arch": "amd64",
+        "org.opencontainers.image.base.digest": "sha256:14be402d3f1eeeb5e7da73d3260322c68e7b51c88388f53e88eb21d6450bd520",
+        "org.opencontainers.image.base.name": "ubuntu:jammy",
+        "org.opencontainers.image.created": "2026-04-15T20:44:31Z",
+        "org.opencontainers.image.revision": "66972bc2e0c6fd33dcd5d98de0653c5696a1166e",
+        "org.opencontainers.image.source": "https://github.com/MariaDB/mariadb-docker.git#66972bc2e0c6fd33dcd5d98de0653c5696a1166e:10.11",
+        "org.opencontainers.image.url": "https://hub.docker.com/_/mariadb",
+        "org.opencontainers.image.version": "10.11.16-jammy"
+      },
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

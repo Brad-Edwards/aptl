@@ -3167,7 +3167,7 @@ nodes:
           - name: secret_key_length
             sensitivity: plain
             value: '25'
-            description: Length of the Flask secret key.
+            description: Non-secret length metadata for the Flask fixture secret key.
           - name: jwt_algorithm
             sensitivity: plain
             value: HS256

@@ -6794,7 +6794,7 @@ nodes:
         value_classification: plain
         provenance: runtime
         source: runtime-baseline.txt
-        description: Runtime-observed process environment value not present in docker inspect Config.Env.
+        description: ''
       linux_capabilities:
         required: []
         effective: []

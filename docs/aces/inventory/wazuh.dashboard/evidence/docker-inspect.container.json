@@ -1,0 +1,372 @@
+[
+  {
+    "Id": "c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7",
+    "Created": "2026-05-23T06:18:32.801281828Z",
+    "Path": "/entrypoint.sh",
+    "Args": [],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2966185,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-23T06:19:17.853018717Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-06-06T09:30:40.853029917+02:00",
+            "End": "2026-06-06T09:30:40.911734002+02:00",
+            "ExitCode": 0,
+            "Output": ""
+          },
+          {
+            "Start": "2026-06-06T09:31:10.912650536+02:00",
+            "End": "2026-06-06T09:31:10.968247847+02:00",
+            "ExitCode": 0,
+            "Output": ""
+          },
+          {
+            "Start": "2026-06-06T09:31:40.968778448+02:00",
+            "End": "2026-06-06T09:31:41.020888436+02:00",
+            "ExitCode": 0,
+            "Output": ""
+          },
+          {
+            "Start": "2026-06-06T09:32:11.02183178+02:00",
+            "End": "2026-06-06T09:32:11.09181814+02:00",
+            "ExitCode": 0,
+            "Output": ""
+          },
+          {
+            "Start": "2026-06-06T09:32:41.092408137+02:00",
+            "End": "2026-06-06T09:32:41.151038089+02:00",
+            "ExitCode": 0,
+            "Output": ""
+          }
+        ]
+      }
+    },
+    "Image": "sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7",
+    "ResolvConfPath": "/var/lib/docker/containers/c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7/hostname",
+    "HostsPath": "/var/lib/docker/containers/c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7/hosts",
+    "LogPath": "/var/lib/docker/containers/c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7/c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7-json.log",
+    "Name": "/aptl-wazuh-dashboard",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:rw",
+        "/home/atomik/src/aptl/config/wazuh_dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:rw",
+        "/home/atomik/src/aptl/.aptl/config/wazuh_dashboard/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml:rw",
+        "aptl_wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config:rw",
+        "aptl_wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-security",
+      "PortBindings": {
+        "5601/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "443"
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "always",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 1073741824,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 2147483648,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh-dashboard-custom",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh-dashboard-custom/_data",
+        "Destination": "/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem",
+        "Destination": "/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem",
+        "Destination": "/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca.pem",
+        "Destination": "/usr/share/wazuh-dashboard/certs/root-ca.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_dashboard/opensearch_dashboards.yml",
+        "Destination": "/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/.aptl/config/wazuh_dashboard/wazuh.yml",
+        "Destination": "/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh-dashboard-config",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh-dashboard-config/_data",
+        "Destination": "/usr/share/wazuh-dashboard/data/wazuh/config",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "wazuh.dashboard",
+      "Domainname": "",
+      "User": "wazuh-dashboard",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "443/tcp": {},
+        "5601/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "INDEXER_USERNAME=admin",
+        "INDEXER_PASSWORD=SecretPassword",
+        "WAZUH_API_URL=https://wazuh.manager",
+        "DASHBOARD_USERNAME=kibanaserver",
+        "DASHBOARD_PASSWORD=kibanaserver",
+        "API_USERNAME=wazuh-wui",
+        "API_PASSWORD=WazuhPass123!",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "USER=wazuh-dashboard",
+        "GROUP=wazuh-dashboard",
+        "NAME=wazuh-dashboard",
+        "INSTALL_DIR=/usr/share/wazuh-dashboard",
+        "PATTERN=",
+        "CHECKS_PATTERN=",
+        "CHECKS_TEMPLATE=",
+        "CHECKS_API=",
+        "CHECKS_SETUP=",
+        "APP_TIMEOUT=",
+        "API_SELECTOR=",
+        "IP_SELECTOR=",
+        "IP_IGNORE=",
+        "WAZUH_MONITORING_ENABLED=",
+        "WAZUH_MONITORING_FREQUENCY=",
+        "WAZUH_MONITORING_SHARDS=",
+        "WAZUH_MONITORING_REPLICAS="
+      ],
+      "Cmd": null,
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "curl -ks https://localhost:5601 || exit 1"
+        ],
+        "Interval": 30000000000,
+        "Timeout": 10000000000,
+        "StartPeriod": 120000000000,
+        "Retries": 5
+      },
+      "Image": "wazuh/wazuh-dashboard:4.12.0",
+      "Volumes": null,
+      "WorkingDir": "/usr/share/wazuh-dashboard",
+      "Entrypoint": [
+        "/entrypoint.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "00a60418d41baa12f527f7f72791a2bce6e2bc3aeed46c47e9c570300d7f02e7",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "wazuh.indexer:service_healthy:false,wazuh.manager:service_healthy:false",
+        "com.docker.compose.image": "sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "wazuh.dashboard",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "49929268e4fe9f3883403720321107c72cf5eec6a58149ffac83a8f39ef53292",
+      "SandboxKey": "/var/run/docker/netns/49929268e4fe",
+      "Ports": {
+        "443/tcp": null,
+        "5601/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "443"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "443"
+          }
+        ]
+      },
+      "Networks": {
+        "aptl_aptl-security": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.0.11"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-wazuh-dashboard",
+            "wazuh.dashboard"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "20430152a65e828de2388ba941a29d8e3d837b692290217cb7ec7e641ba329ff",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.11",
+          "MacAddress": "9a:ac:f7:25:27:95",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-wazuh-dashboard",
+            "wazuh.dashboard",
+            "c064e5698405"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7",
+      "size": 3024,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

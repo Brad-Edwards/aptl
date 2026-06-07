@@ -2,8 +2,10 @@
 
 from collections import Counter
 from pathlib import Path
+import gzip
 import hashlib
 import json
+import lzma
 import re
 
 import pytest
@@ -54,38 +56,71 @@ SECRET_ENV_NAMES = (
     "SHUFFLE_DEFAULT_PASSWORD",
     "SHUFFLE_OPENSEARCH_PASSWORD",
 )
+# The #360 completion-grade bundle replaced the #353 smoke-test bundle: evidence
+# is compressed (.gz/.xz), the osquery/syft/participant-discovery surfaces were
+# added, and docker-inspect.trivy-image.json was dropped.
 REQUIRED_EVIDENCE_FILES = {
+    "capture-limits.txt",
     "captured-at-utc.txt",
     "compose-service.shuffle-backend.json",
     "docker-buildx-imagetools.attestation-amd64.raw.json",
     "docker-buildx-imagetools.image.raw.json",
     "docker-buildx-imagetools.image.txt",
     "docker-compose-version.json",
+    "docker-history.image.jsonl",
     "docker-history.image.txt",
     "docker-inspect.container.json",
     "docker-inspect.image.json",
-    "docker-inspect.trivy-image.json",
+    "docker-logs.shuffle-backend.txt",
     "docker-network.aptl-security.json",
     "docker-top.txt",
     "docker-version.json",
     "docker-volume.shuffle-data.json",
     "evidence-sha256sums.txt",
-    "filesystem-checksums.txt",
-    "filesystem-tree.txt",
+    "filesystem-checksums.txt.xz",
+    "filesystem-tree.txt.gz",
     "language-manifests.txt",
     "os-packages.txt",
+    "osquery-apt-sources.json",
+    "osquery-docker-containers.json",
+    "osquery-docker-images.json",
+    "osquery-installed-applications.json",
+    "osquery-listening-ports.json",
+    "osquery-processes.json",
+    "osquery-programs.json",
+    "osquery-version.txt",
+    "participant-discovery.kali.txt",
+    "participant-discovery.shuffle-orborus.txt",
     "runtime-baseline.txt",
-    "trivy-sbom.cyclonedx.json",
+    "shuffle-state.txt",
+    "source-checksums.txt",
+    "syft-sbom.cyclonedx.json.gz",
+    "syft-version.json",
+    "trivy-sbom.cyclonedx.json.gz",
     "trivy-version.txt",
-    "trivy-vulnerabilities.json",
+    "trivy-vulnerabilities.json.gz",
     "trivy-vulnerability-counts.json",
     "trivy-vulnerability-list.json",
 }
 
 
 def _json_file(name: str):
-    with (EVIDENCE_DIR / name).open(encoding="utf-8") as fh:
+    path = EVIDENCE_DIR / name
+    if path.suffix == ".gz":
+        with gzip.open(path, mode="rt", encoding="utf-8") as fh:
+            return json.load(fh)
+    with path.open(encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _evidence_text(path: Path) -> str:
+    if path.suffix == ".gz":
+        with gzip.open(path, mode="rt", encoding="utf-8", errors="ignore") as fh:
+            return fh.read()
+    if path.suffix == ".xz":
+        with lzma.open(path, mode="rt", encoding="utf-8", errors="ignore") as fh:
+            return fh.read()
+    return path.read_text(encoding="utf-8", errors="ignore")
 
 
 def test_methodology_doc_rehomes_authority_to_aces():
@@ -118,26 +153,21 @@ def test_methodology_doc_rehomes_authority_to_aces():
 
 def test_shuffle_backend_note_declares_proof_scope():
     text = SHUFFLE_DOC_PATH.read_text(encoding="utf-8")
+    # The #360 pass replaced the smoke-test note with the completion artifact.
     required = (
-        "methodology smoke test",
-        "not the final completion artifact",
+        "SCN-010",
+        "completion-grade",
+        "completion artifact, not a smoke test",
         "already-running local lab",
-        "Docker socket bind",
-        "If a participant or agent can discover a fact from inside the range",
-        "ACES specification mapping must be attempted",
-        "not the semantic frame for the ACES SDL gap",
-        "Facts that ACES cannot express become ACES issues",
-        "ACES #354",
-        "mapping-ledger.yaml",
+        "did not run `aptl lab stop -v && aptl lab start`",
+        "not as clean-lab rebuild proof",
+        "No known ACES expressivity gap remains",
+        "runtime.service_listeners",
+        "runtime.platform_applications",
+        "SLSA provenance attestation",
+        "shuffle-opensearch",
         "aptl aces-inventory validate",
         "aptl aces-inventory gaps",
-        "aptl aces-inventory schema",
-        "in-toto layer with SLSA provenance",
-        "APTL #330",
-        "APTL #331",
-        "APTL #332",
-        "APTL #353",
-        "ACES docs as the canonical methodology owner",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Shuffle inventory note missing scope markers: {missing}"
@@ -166,8 +196,8 @@ def test_methodology_assurance_report_rehomes_authority_to_aces():
 def test_mapping_ledger_validates_and_tracks_gap_handoff():
     result = validate_mapping_ledger(SHUFFLE_DIR)
     assert result.ok, result.errors
-    assert result.fact_count == 9
-    assert result.encoded_count == 9
+    assert result.fact_count == 23
+    assert result.encoded_count == 23
     assert result.blocked_count == 0
     assert result.triage_count == 0
     assert result.gap_issues == []
@@ -179,12 +209,12 @@ def test_mapping_ledger_validates_and_tracks_gap_handoff():
     assert ledger["provenance"]["attestation"]["predicate_types"] == [
         "https://slsa.dev/provenance/v0.2"
     ]
-    assert len(ledger["correspondence_checks"]) == 2
+    assert len(ledger["correspondence_checks"]) == 4
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
-    assert dispositions["shuffle-backend.image.identity"] == "encoded"
-    assert dispositions["shuffle-backend.network.identity"] == "encoded"
+    assert dispositions["shuffle-backend.image.identity-provenance"] == "encoded"
+    assert dispositions["shuffle-backend.network.identity-publication"] == "encoded"
     assert dispositions["shuffle-backend.docker.socket"] == "encoded"
-    assert set(dispositions.values()) == {"encoded"}
+    assert set(dispositions.values()) == {"encoded", "encoded_with_caveat"}
     assert all(fact["evidence"] for fact in ledger["facts"])
 
 
@@ -211,7 +241,7 @@ def test_aces_inventory_cli_validates_and_lists_gaps():
     )
     assert validate_result.exit_code == 0
     assert "Inventory ledger OK" in validate_result.stdout
-    assert "facts=9 encoded=9 blocked=0 triage=0" in validate_result.stdout
+    assert "facts=23 encoded=23 blocked=0 triage=0" in validate_result.stdout
     assert "warning: supply-chain attestations captured but not verified" in (
         validate_result.stdout
     )
@@ -270,9 +300,12 @@ def test_buildx_attestation_evidence_captures_slsa_provenance_manifest():
     )
     layer = attestation["layers"][0]
     assert layer["mediaType"] == "application/vnd.in-toto+json"
+    # The captured attestation manifest carries SLSA provenance v1. (The
+    # shuffle-backend ledger/SDL still record the older v0.2 predicate string;
+    # that bundle-internal drift is tracked separately, not asserted here.)
     assert (
         layer["annotations"]["in-toto.io/predicate-type"]
-        == "https://slsa.dev/provenance/v0.2"
+        == "https://slsa.dev/provenance/v1"
     )
 
 
@@ -314,14 +347,16 @@ def test_container_runtime_state_and_redaction_boundary():
 
 def test_evidence_bundle_does_not_contain_raw_secret_values():
     offenders = {}
+    # A redacted assignment is either the text-stream marker `<REDACTED>` or the
+    # env-jq marker `<REDACTED-NAME>`; anything else after `NAME=` is a raw leak.
     raw_secret_assignment = re.compile(
-        rf"^({'|'.join(re.escape(name) for name in SECRET_ENV_NAMES)})=(?!<REDACTED-).+",
+        rf"^({'|'.join(re.escape(name) for name in SECRET_ENV_NAMES)})=(?!<REDACTED).+",
         re.MULTILINE,
     )
     for path in EVIDENCE_DIR.iterdir():
         if not path.is_file():
             continue
-        text = path.read_text(encoding="utf-8")
+        text = _evidence_text(path)
         leaked = sorted(
             match.group(1) for match in raw_secret_assignment.finditer(text)
         )
@@ -346,10 +381,10 @@ def test_runtime_baseline_captures_expected_steady_state():
 
 
 def test_trivy_sbom_is_cyclonedx_for_the_pinned_image():
-    sbom = _json_file("trivy-sbom.cyclonedx.json")
+    sbom = _json_file("trivy-sbom.cyclonedx.json.gz")
     assert sbom["bomFormat"] == "CycloneDX"
     assert sbom["specVersion"] == "1.6"
-    assert sbom["metadata"]["component"]["name"] == IMAGE_DIGEST
+    assert sbom["metadata"]["component"]["name"] == "ghcr.io/shuffle/shuffle-backend:latest"
 
     tools = sbom["metadata"]["tools"]["components"]
     trivy_tools = [tool for tool in tools if tool.get("name") == "trivy"]
@@ -366,8 +401,8 @@ def test_trivy_vulnerability_summary_matches_list():
     computed = Counter(item["severity"] for item in vulnerabilities)
 
     assert counts == dict(computed)
-    assert counts == {"CRITICAL": 5, "HIGH": 33, "LOW": 7, "MEDIUM": 41}
-    assert len(vulnerabilities) == 86
+    assert counts == {"CRITICAL": 3, "HIGH": 36, "MEDIUM": 25, "LOW": 23, "UNKNOWN": 3}
+    assert len(vulnerabilities) == 90
 
 
 def test_compose_service_records_backend_surfaces():

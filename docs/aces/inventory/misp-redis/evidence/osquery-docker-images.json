@@ -1,0 +1,21 @@
+{
+  "table": "docker_images",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%redis%\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "created": "1776821692",
+      "id": "3e0669e42d4fe421c9dea0ba5fbc04d336b80b4f32a6c7d25bee3a1d089288a1",
+      "size_bytes": "175315376",
+      "tags": "redis:7"
+    },
+    {
+      "created": "1776385319",
+      "id": "7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+      "size_bytes": "61163774",
+      "tags": "redis:7-alpine"
+    }
+  ]
+}

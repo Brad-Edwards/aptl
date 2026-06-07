@@ -2,23 +2,2771 @@ name: techvault-node-misp-redis
 nodes:
   misp-redis:
     type: vm
-    description: 'MISP Redis companion service stub; full steady-state inventory is owned by issue #348.'
+    description: MISP Redis companion backing store (redis:7-alpine) steady-state inventory.
     source:
       name: redis
-      version: 7-alpine
-      build: null
-    resources: null
+      version: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+      build:
+        base_image: alpine:3.21.7
+        base_image_digest: ''
+        dockerfile_path: upstream:redis/docker-library/7/alpine
+        instructions:
+        - instruction: add
+          arguments:
+          - 'alpine-minirootfs-3.21.7-x86_64.tar.gz / # buildkit'
+          description: ''
+        - instruction: cmd
+          arguments:
+          - '["/bin/sh"]'
+          description: ''
+        - instruction: run
+          arguments:
+          - set -eux;  addgroup -S -g 1000 redis;  adduser -S -G redis -u 999 redis
+          description: ''
+        - instruction: run
+          arguments:
+          - set -eux;  apk add --no-cache   tzdata  ;
+          description: ''
+        - instruction: env
+          arguments:
+          - GOSU_VERSION=1.17
+          description: ''
+        - instruction: run
+          arguments:
+          - 'set -eux;  apk add --no-cache --virtual .gosu-fetch gnupg;  arch="$(apk --print-arch)";  case
+            "$arch" in   ''x86_64'') url=''https://github.com/tianon/gosu/releases/download/1.17/gosu-amd64'';
+            sha256=''bbc4136d03ab138b1ad66fa4fc051bafc6cc7ffae632b069a53657279a450de3'' ;;   ''aarch64'')
+            url=''https://github.com/tianon/gosu/releases/download/1.17/gosu-arm64''; sha256=''c3805a85d17f4454c23d7059bcb97e1ec1af272b90126e79ed002342de08389b''
+            ;;   ''armhf'') url=''https://github.com/tianon/gosu/releases/download/1.17/gosu-armhf'';
+            sha256=''e5866286277ff2a2159fb9196fea13e0a59d3f1091ea46ddb985160b94b6841b'' ;;   ''x86'')
+            url=''https://github.com/tianon/gosu/releases/download/1.17/gosu-i386''; sha256=''087dbb8fe479537e64f9c86fa49ff3b41dee1cbd28739a19aaef83dc8186b1ca''
+            ;;   ''ppc64le'') url=''https://github.com/tianon/gosu/releases/download/1.17/gosu-ppc64el'';
+            sha256=''1891acdcfa70046818ab6ed3c52b9d42fa10fbb7b340eb429c8c7849691dbd76'' ;;   ''riscv64'')
+            url=''https://github.com/tianon/gosu/releases/download/1.17/gosu-riscv64''; sha256=''38a6444b57adce135c42d5a3689f616fc7803ddc7a07ff6f946f2ebc67a26ba6''
+            ;;   ''s390x'') url=''https://github.com/tianon/gosu/releases/download/1.17/gosu-s390x'';
+            sha256=''69873bab588192f760547ca1f75b27cfcf106e9f7403fee6fd0600bc914979d0'' ;;   ''armv7'')
+            url=''https://github.com/tianon/gosu/releases/download/1.17/gosu-armhf''; sha256=''e5866286277ff2a2159fb9196fea13e0a59d3f1091ea46ddb985160b94b6841b''
+            ;;   *) echo >&2 "error: unsupported gosu architecture: ''$arch''"; exit 1 ;;  esac;  wget
+            -O /usr/local/bin/gosu.asc "$url.asc";  wget -O /usr/local/bin/gosu "$url";  echo "$sha256
+            */usr/local/bin/gosu" | sha256sum -c -;  export GNUPGHOME="$(mktemp -d)";  gpg --batch --keyserver
+            hkps://keys.openpgp.org --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4;  gpg --batch
+            --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu;  gpgconf --kill all;  rm -rf "$GNUPGHOME"
+            /usr/local/bin/gosu.asc;  apk del --no-network .gosu-fetch;  chmod +x /usr/local/bin/gosu;  gosu
+            --version;  gosu nobody true'
+          description: ''
+        - instruction: env
+          arguments:
+          - REDIS_VERSION=7.4.8
+          description: ''
+        - instruction: env
+          arguments:
+          - REDIS_DOWNLOAD_URL=http://download.redis.io/releases/redis-7.4.8.tar.gz
+          description: ''
+        - instruction: env
+          arguments:
+          - REDIS_DOWNLOAD_SHA=f6773cb7d63be236c59c2917a82f1f08e47b77d89b2f0c9f53becb22b8ea4172
+          description: ''
+        - instruction: run
+          arguments:
+          - set -eux;   apk add --no-cache --virtual .build-deps   coreutils   dpkg-dev dpkg   gcc   linux-headers   make   musl-dev   openssl-dev   wget  ;   wget
+            -O redis.tar.gz "$REDIS_DOWNLOAD_URL";  echo "$REDIS_DOWNLOAD_SHA *redis.tar.gz" | sha256sum
+            -c -;  mkdir -p /usr/src/redis;  tar -xzf redis.tar.gz -C /usr/src/redis --strip-components=1;  rm
+            redis.tar.gz;   grep -E '^ *createBoolConfig[(]"protected-mode",.*, *1 *,.*[)],$' /usr/src/redis/src/config.c;  sed
+            -ri 's!^( *createBoolConfig[(]"protected-mode",.*, *)1( *,.*[)],)$!\10\2!' /usr/src/redis/src/config.c;  grep
+            -E '^ *createBoolConfig[(]"protected-mode",.*, *0 *,.*[)],$' /usr/src/redis/src/config.c;   gnuArch="$(dpkg-architecture
+            --query DEB_BUILD_GNU_TYPE)";  extraJemallocConfigureFlags="--build=$gnuArch";  dpkgArch="$(dpkg
+            --print-architecture)";  case "${dpkgArch##*-}" in   amd64 | i386 | x32) extraJemallocConfigureFlags="$extraJemallocConfigureFlags
+            --with-lg-page=12" ;;   *) extraJemallocConfigureFlags="$extraJemallocConfigureFlags --with-lg-page=16"
+            ;;  esac;  extraJemallocConfigureFlags="$extraJemallocConfigureFlags --with-lg-hugepage=21";  grep
+            -F 'cd jemalloc && ./configure ' /usr/src/redis/deps/Makefile;  sed -ri 's!cd jemalloc &&
+            ./configure !&'"$extraJemallocConfigureFlags"' !' /usr/src/redis/deps/Makefile;  grep -F "cd
+            jemalloc && ./configure $extraJemallocConfigureFlags " /usr/src/redis/deps/Makefile;   export
+            BUILD_TLS=yes;  make -C /usr/src/redis -j "$(nproc)" all;  make -C /usr/src/redis install;   serverMd5="$(md5sum
+            /usr/local/bin/redis-server | cut -d' ' -f1)"; export serverMd5;  find /usr/local/bin/redis*
+            -maxdepth 0   -type f -not -name redis-server   -exec sh -eux -c '    md5="$(md5sum "$1" |
+            cut -d" " -f1)";    test "$md5" = "$serverMd5";   ' -- '{}' ';'   -exec ln -svfT 'redis-server'
+            '{}' ';'  ;   rm -r /usr/src/redis;   runDeps="$(   scanelf --needed --nobanner --format '%n#p'
+            --recursive /usr/local    | tr ',' '\n'    | sort -u    | awk 'system("[ -e /usr/local/lib/"
+            $1 " ]") == 0 { next } { print "so:" $1 }'  )";  apk add --no-network --virtual .redis-rundeps
+            $runDeps;  apk del --no-network .build-deps;   redis-cli --version;  redis-server --version
+          description: ''
+        - instruction: run
+          arguments:
+          - mkdir /data && chown redis:redis /data
+          description: ''
+        - instruction: volume
+          arguments:
+          - '[/data]'
+          description: ''
+        - instruction: workdir
+          arguments:
+          - /data
+          description: ''
+        - instruction: copy
+          arguments:
+          - 'docker-entrypoint.sh /usr/local/bin/ # buildkit'
+          description: ''
+        - instruction: entrypoint
+          arguments:
+          - '["docker-entrypoint.sh"]'
+          description: ''
+        - instruction: expose
+          arguments:
+          - map[6379/tcp:{}]
+          description: ''
+        - instruction: cmd
+          arguments:
+          - '["redis-server"]'
+          description: ''
+        layers:
+        - digest: sha256:7211d01aba8fa2e9eb71ad34395cd313df5fc51a6b69b92d2dfad32cc37759cb
+          created_by: captured OCI rootfs layer
+          size: null
+          empty: null
+          description: ''
+        - digest: sha256:4f86fad986e1f02137f503db1c741e9fad682deba7e84976a3c4313af7797c57
+          created_by: captured OCI rootfs layer
+          size: null
+          empty: null
+          description: ''
+        - digest: sha256:b6165e985556ccb8152f57676db001c194f9df5de53902d75caf181ab146c286
+          created_by: captured OCI rootfs layer
+          size: null
+          empty: null
+          description: ''
+        - digest: sha256:1f9c1fc390008989af87f884ab8cb36ccc6851b388ddcdb4132875247d9716ce
+          created_by: captured OCI rootfs layer
+          size: null
+          empty: null
+          description: ''
+        - digest: sha256:4399da77e53ba892af698e5c69f5db1eda9be079924aac474e8bcfcac3b454db
+          created_by: captured OCI rootfs layer
+          size: null
+          empty: null
+          description: ''
+        - digest: sha256:0c9881b0a7b120c3c28d28b5622e0d1d5c4e91c1a1f33acd34ca6659812ca9a8
+          created_by: captured OCI rootfs layer
+          size: null
+          empty: null
+          description: ''
+        - digest: sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef
+          created_by: captured OCI rootfs layer
+          size: null
+          empty: null
+          description: ''
+        - digest: sha256:bb1909cb63a94c5947e39bcc395955df58f05a8652affdee500c1129f8a6a1b3
+          created_by: captured OCI rootfs layer
+          size: null
+          empty: null
+          description: ''
+        build_args: []
+        copied_sources: []
+        config:
+          entrypoint:
+          - docker-entrypoint.sh
+          command:
+          - redis-server
+          working_directory: /data
+          exposed_ports:
+          - 6379/tcp
+          labels: {}
+          default_environment:
+          - name: PATH
+            value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            value_classification: plain
+            description: ''
+          description: ''
+        source_inputs:
+        - identifier: docker-compose-yml
+          source_path: docker-compose.yml
+          destination_path: ''
+          checksum: 6f57d5ff3dc4a988161be4a7e7cd19b511d2b7e715ebdc76cd504bfb3496b975
+          checksum_algorithm: sha256
+          description: Local Compose realization input declaring the misp-redis service.
+        attestation:
+          status: present
+          verification: unverified
+          attestation_type: slsa
+          predicate_type: https://slsa.dev/provenance/v0.2
+          evidence_reference: docs/aces/inventory/misp-redis/evidence/docker-buildx-imagetools.attestation-amd64.raw.json
+          description: Registry-visible SLSA provenance and SPDX SBOM attestation manifests were captured
+            for the redis:7-alpine image; signatures and builder identity were not cryptographically verified.
+        description: Upstream redis:7-alpine image provenance from local Docker inspect/history and registry
+          attestation evidence.
+    resources:
+      ram: 134217728
+      cpu: 1
     os: linux
-    os_version: ''
+    os_version: Alpine Linux 3.21.7
     features: {}
     conditions: {}
     injects: {}
     vulnerabilities: []
-    roles: {}
+    roles:
+      redis-service-account:
+        username: redis
+        entities: []
     services:
     - port: 6379
       protocol: tcp
       name: redis
-      description: ''
+      description: Redis RESP key-value service consumed by MISP for caching and background queues.
     asset_value: null
-    runtime: null
+    runtime:
+      mounts:
+      - target: /data
+        source: anonymous
+        source_sensitivity: unknown
+        source_kind: volume
+        filesystem_type: volume
+        read_only: false
+        options:
+        - rw
+        options_sensitivity: unknown
+        propagation: unknown
+        stability: volume_backed
+        backend_generated: true
+        description: Anonymous Docker volume backing /data from the image VOLUME /data declaration (no
+          named Compose volume); holds dump.rdb across restarts but not removal.
+      filesystem_inventory:
+      - path: /data
+        entry_type: directory
+        presence: present
+        owner_user: redis
+        owner_group: redis
+        uid: 999
+        gid: 1000
+        mode: '755'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Redis working directory and anonymous-volume mount point (image VOLUME /data).
+      - path: /data/dump.rdb
+        entry_type: file
+        presence: present
+        owner_user: redis
+        owner_group: redis
+        uid: 999
+        gid: 1000
+        mode: '600'
+        size: 44524
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: runtime_created
+        sensitivity: operator_secret
+        description: RDB persistence snapshot of MISP's cached keyspace; volatile binary, excluded from
+          content checksums.
+      - path: /usr/local/bin
+        entry_type: directory
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '755'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Redis distribution binary directory.
+      - path: /usr/local/bin/redis-server
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '755'
+        size: 17033840
+        content_digest: a5fed84c8d1d871609f9faa8b85a8b4ac79d98f5e9a3d5e4939af56223d6061c
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Redis server daemon binary (PID 1; INFO reports it cwd-relative as /data/redis-server).
+      - path: /usr/local/bin/redis-cli
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '755'
+        size: 7259768
+        content_digest: f95673286fcbc0b2b328daa57ceeae4505edbe6ceb72e3e8dcedbd89548a79a9
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Redis CLI client binary.
+      - path: /usr/local/bin/redis-benchmark
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '755'
+        size: 6320528
+        content_digest: 5343f8bbba87336dd767d51fafe22263fe62da45fc6651844abda67910fc7442
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Redis benchmark binary.
+      - path: /usr/local/bin/redis-check-aof
+        entry_type: symlink
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '777'
+        size: 12
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: AOF check tool (symlink to redis-server).
+      - path: /usr/local/bin/redis-check-rdb
+        entry_type: symlink
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '777'
+        size: 12
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: RDB check tool (symlink to redis-server).
+      - path: /usr/local/bin/redis-sentinel
+        entry_type: symlink
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '777'
+        size: 12
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Redis Sentinel (symlink to redis-server; not run in this scenario).
+      - path: /usr/local/bin/gosu
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '755'
+        size: 2355481
+        content_digest: bbc4136d03ab138b1ad66fa4fc051bafc6cc7ffae632b069a53657279a450de3
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: gosu 1.17 privilege-drop helper used by the entrypoint to exec redis-server as the
+          redis user.
+      - path: /usr/local/bin/docker-entrypoint.sh
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '755'
+        size: 661
+        content_digest: c211bc06cdc6bd3fa4752394767359159cbdbdfe1c2c7f445e600419e4c52091
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Image entrypoint that drops privileges via gosu and execs redis-server.
+      - path: /etc/passwd
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '644'
+        size: 746
+        content_digest: 305c31c876110cc0e1ed4f2cdc455c4f66370d9d17e1501de03f09c732ead76a
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Local user database.
+      - path: /etc/group
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '644'
+        size: 529
+        content_digest: 9c6691957cab32b964e3d6ebc2f4e86064b55684dfda6276729079ef70004ffd
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Local group database.
+      - path: /etc/shadow
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: shadow
+        uid: 0
+        gid: 42
+        mode: '640'
+        size: 287
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: operator_secret
+        description: Local shadow password store; represented by metadata only, content checksum omitted.
+      - path: /etc/os-release
+        entry_type: symlink
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '777'
+        size: 21
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Alpine release identity (symlink).
+      - path: /etc/alpine-release
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '644'
+        size: 7
+        content_digest: e5d47a14525fc3def9c74f3ef471856f938edb4eeb6873c340b5b525f479ed5d
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Alpine release version marker.
+      - path: /etc/apk/repositories
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '644'
+        size: 103
+        content_digest: 1d1decf5d5568acfedf2f39d6d17bbaa19143376ab626b0069a8a0e4f8d6786e
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: apk repository configuration.
+      - path: /etc/apk/world
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '644'
+        size: 112
+        content_digest: 792506e1de027f0abd2453f9a2abd9fefed9ca7ec87452593d047b2dd2fe289c
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: apk explicitly-installed world set.
+      local_control_interfaces: []
+      processes:
+      - name: redis-server
+        pid: 1
+        parent_pid: null
+        command:
+        - redis-server
+        - '*:6379'
+        command_redacted: false
+        role: primary
+        user: redis
+        group: redis
+        working_directory: /data
+        description: PID 1 redis-server, started by the entrypoint via gosu as the redis user (uid 999,
+          gid 1000); the password is not present in argv (Redis scrubs it from the proctitle).
+      environment:
+      - name: PATH
+        value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        value_classification: plain
+        provenance: image
+        source: ''
+        description: ''
+      - name: GOSU_VERSION
+        value: '1.17'
+        value_classification: plain
+        provenance: image
+        source: ''
+        description: ''
+      - name: REDIS_VERSION
+        value: 7.4.8
+        value_classification: plain
+        provenance: image
+        source: ''
+        description: ''
+      - name: REDIS_DOWNLOAD_URL
+        value: http://download.redis.io/releases/redis-7.4.8.tar.gz
+        value_classification: plain
+        provenance: image
+        source: ''
+        description: ''
+      - name: REDIS_DOWNLOAD_SHA
+        value: f6773cb7d63be236c59c2917a82f1f08e47b77d89b2f0c9f53becb22b8ea4172
+        value_classification: plain
+        provenance: image
+        source: ''
+        description: ''
+      linux_capabilities:
+        required: []
+        effective: []
+        add: []
+        drop: []
+        process_overrides: []
+        description: PID 1 runs with no effective capabilities (CapEff=0; entrypoint drops privileges
+          to the redis user via gosu). No Compose capability additions.
+      operational_policy:
+        restart: unless_stopped
+        resource_limits:
+          memory: 134217728
+          memory_swap: 268435456
+          cpu: null
+          pids: null
+          open_files: null
+          description: ''
+        description: ''
+      container:
+        entrypoint:
+        - docker-entrypoint.sh
+        command:
+        - redis-server
+        - --requirepass
+        - redispassword
+        log_driver: json-file
+        log_options: {}
+        namespaces:
+          cgroup: private
+          ipc: private
+          pid: ''
+          userns: ''
+          uts: ''
+        privileged: false
+        read_only_rootfs: false
+        publish_all_ports: false
+        autoremove: false
+        shm_size: 67108864
+        masked_paths:
+        - /proc/acpi
+        - /proc/asound
+        - /proc/interrupts
+        - /proc/kcore
+        - /proc/keys
+        - /proc/latency_stats
+        - /proc/scsi
+        - /proc/timer_list
+        - /sys/devices/virtual/powercap
+        - /sys/firmware
+        read_only_paths:
+        - /proc/bus
+        - /proc/fs
+        - /proc/irq
+        - /proc/sys
+        - /proc/sysrq-trigger
+        cgroup_parent: ''
+        runtime_name: runc
+        init_process: null
+        devices: []
+        device_cgroup_rules: []
+        seccomp_profile: ''
+        security_opt: []
+        extra_hosts: []
+        dns: []
+        dns_options: []
+        dns_search: []
+        group_add: []
+        description: The Compose command carries the requirepass scenario fixture verbatim (a disclosed
+          lab credential).
+      health: null
+      local_identity:
+        users:
+        - username: root
+          uid: 0
+          primary_gid: 0
+          primary_group: root
+          gecos: root
+          home: /root
+          shell: /bin/sh
+          supplemental_groups:
+          - adm
+          - bin
+          - daemon
+          - dialout
+          - disk
+          - floppy
+          - root
+          - sys
+          - tape
+          - video
+          - wheel
+          disabled: false
+          locked: false
+          no_login: false
+          provenance: image
+          stability: stable
+          description: ''
+        - username: bin
+          uid: 1
+          primary_gid: 1
+          primary_group: bin
+          gecos: bin
+          home: /bin
+          shell: /sbin/nologin
+          supplemental_groups:
+          - bin
+          - daemon
+          - sys
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: daemon
+          uid: 2
+          primary_gid: 2
+          primary_group: daemon
+          gecos: daemon
+          home: /sbin
+          shell: /sbin/nologin
+          supplemental_groups:
+          - adm
+          - bin
+          - daemon
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: lp
+          uid: 4
+          primary_gid: 7
+          primary_group: lp
+          gecos: lp
+          home: /var/spool/lpd
+          shell: /sbin/nologin
+          supplemental_groups:
+          - lp
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: sync
+          uid: 5
+          primary_gid: 0
+          primary_group: root
+          gecos: sync
+          home: /sbin
+          shell: /bin/sync
+          supplemental_groups: []
+          disabled: false
+          locked: false
+          no_login: false
+          provenance: image
+          stability: stable
+          description: ''
+        - username: shutdown
+          uid: 6
+          primary_gid: 0
+          primary_group: root
+          gecos: shutdown
+          home: /sbin
+          shell: /sbin/shutdown
+          supplemental_groups: []
+          disabled: false
+          locked: false
+          no_login: false
+          provenance: image
+          stability: stable
+          description: ''
+        - username: halt
+          uid: 7
+          primary_gid: 0
+          primary_group: root
+          gecos: halt
+          home: /sbin
+          shell: /sbin/halt
+          supplemental_groups: []
+          disabled: false
+          locked: false
+          no_login: false
+          provenance: image
+          stability: stable
+          description: ''
+        - username: mail
+          uid: 8
+          primary_gid: 12
+          primary_group: mail
+          gecos: mail
+          home: /var/mail
+          shell: /sbin/nologin
+          supplemental_groups:
+          - mail
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: news
+          uid: 9
+          primary_gid: 13
+          primary_group: news
+          gecos: news
+          home: /usr/lib/news
+          shell: /sbin/nologin
+          supplemental_groups:
+          - news
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: uucp
+          uid: 10
+          primary_gid: 14
+          primary_group: uucp
+          gecos: uucp
+          home: /var/spool/uucppublic
+          shell: /sbin/nologin
+          supplemental_groups:
+          - uucp
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: cron
+          uid: 16
+          primary_gid: 16
+          primary_group: cron
+          gecos: cron
+          home: /var/spool/cron
+          shell: /sbin/nologin
+          supplemental_groups:
+          - cron
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: ftp
+          uid: 21
+          primary_gid: 21
+          primary_group: ftp
+          gecos: ''
+          home: /var/lib/ftp
+          shell: /sbin/nologin
+          supplemental_groups: []
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: sshd
+          uid: 22
+          primary_gid: 22
+          primary_group: sshd
+          gecos: sshd
+          home: /dev/null
+          shell: /sbin/nologin
+          supplemental_groups: []
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: games
+          uid: 35
+          primary_gid: 35
+          primary_group: games
+          gecos: games
+          home: /usr/games
+          shell: /sbin/nologin
+          supplemental_groups:
+          - users
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: ntp
+          uid: 123
+          primary_gid: 123
+          primary_group: ntp
+          gecos: NTP
+          home: /var/empty
+          shell: /sbin/nologin
+          supplemental_groups: []
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: guest
+          uid: 405
+          primary_gid: 100
+          primary_group: users
+          gecos: guest
+          home: /dev/null
+          shell: /sbin/nologin
+          supplemental_groups: []
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: nobody
+          uid: 65534
+          primary_gid: 65534
+          primary_group: nobody
+          gecos: nobody
+          home: /
+          shell: /sbin/nologin
+          supplemental_groups: []
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: redis
+          uid: 999
+          primary_gid: 1000
+          primary_group: redis
+          gecos: ''
+          home: /home/redis
+          shell: /sbin/nologin
+          supplemental_groups:
+          - redis
+          disabled: false
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        groups:
+        - name: root
+          gid: 0
+          members:
+          - root
+          provenance: image
+          description: ''
+        - name: bin
+          gid: 1
+          members:
+          - root
+          - bin
+          - daemon
+          provenance: image
+          description: ''
+        - name: daemon
+          gid: 2
+          members:
+          - root
+          - bin
+          - daemon
+          provenance: image
+          description: ''
+        - name: sys
+          gid: 3
+          members:
+          - root
+          - bin
+          provenance: image
+          description: ''
+        - name: adm
+          gid: 4
+          members:
+          - root
+          - daemon
+          provenance: image
+          description: ''
+        - name: tty
+          gid: 5
+          members: []
+          provenance: image
+          description: ''
+        - name: disk
+          gid: 6
+          members:
+          - root
+          provenance: image
+          description: ''
+        - name: lp
+          gid: 7
+          members:
+          - lp
+          provenance: image
+          description: ''
+        - name: kmem
+          gid: 9
+          members: []
+          provenance: image
+          description: ''
+        - name: wheel
+          gid: 10
+          members:
+          - root
+          provenance: image
+          description: ''
+        - name: floppy
+          gid: 11
+          members:
+          - root
+          provenance: image
+          description: ''
+        - name: mail
+          gid: 12
+          members:
+          - mail
+          provenance: image
+          description: ''
+        - name: news
+          gid: 13
+          members:
+          - news
+          provenance: image
+          description: ''
+        - name: uucp
+          gid: 14
+          members:
+          - uucp
+          provenance: image
+          description: ''
+        - name: cron
+          gid: 16
+          members:
+          - cron
+          provenance: image
+          description: ''
+        - name: audio
+          gid: 18
+          members: []
+          provenance: image
+          description: ''
+        - name: cdrom
+          gid: 19
+          members: []
+          provenance: image
+          description: ''
+        - name: dialout
+          gid: 20
+          members:
+          - root
+          provenance: image
+          description: ''
+        - name: ftp
+          gid: 21
+          members: []
+          provenance: image
+          description: ''
+        - name: sshd
+          gid: 22
+          members: []
+          provenance: image
+          description: ''
+        - name: input
+          gid: 23
+          members: []
+          provenance: image
+          description: ''
+        - name: tape
+          gid: 26
+          members:
+          - root
+          provenance: image
+          description: ''
+        - name: video
+          gid: 27
+          members:
+          - root
+          provenance: image
+          description: ''
+        - name: netdev
+          gid: 28
+          members: []
+          provenance: image
+          description: ''
+        - name: kvm
+          gid: 34
+          members:
+          - kvm
+          provenance: image
+          description: ''
+        - name: games
+          gid: 35
+          members: []
+          provenance: image
+          description: ''
+        - name: shadow
+          gid: 42
+          members: []
+          provenance: image
+          description: ''
+        - name: www-data
+          gid: 82
+          members: []
+          provenance: image
+          description: ''
+        - name: users
+          gid: 100
+          members:
+          - games
+          provenance: image
+          description: ''
+        - name: ntp
+          gid: 123
+          members: []
+          provenance: image
+          description: ''
+        - name: abuild
+          gid: 300
+          members: []
+          provenance: image
+          description: ''
+        - name: utmp
+          gid: 406
+          members: []
+          provenance: image
+          description: ''
+        - name: ping
+          gid: 999
+          members: []
+          provenance: image
+          description: ''
+        - name: nogroup
+          gid: 65533
+          members: []
+          provenance: image
+          description: ''
+        - name: nobody
+          gid: 65534
+          members: []
+          provenance: image
+          description: ''
+        - name: redis
+          gid: 1000
+          members:
+          - redis
+          provenance: image
+          description: ''
+        sudo_rules: []
+        description: Local Alpine user/group databases observed via getent; no sudo is installed and PID
+          1 runs as the redis service account (uid 999).
+      identity_authorities: []
+      app_authorizations:
+      - app_authorization_id: misp_redis_acl
+        resource_vocabulary: redis_acl
+        auth_enabled: true
+        name: Redis ACL
+        principals:
+        - principal_id: redis_default_user
+          kind: user
+          name: default
+          reserved: true
+          hidden: false
+          credential_classification: redacted
+          backend_roles: []
+          description: The built-in Redis 'default' user, enabled (on) with sanitize-payload and password
+            authentication required. The credential value is the disclosed scenario fixture recorded in
+            the datastore requirepass setting; this principal surface structurally carries posture only
+            (no raw-value field).
+        roles: []
+        permission_grants:
+        - grant_id: redis_default_full_access
+          role_ref: ''
+          resource_kind: redis_acl
+          actions:
+          - +@all
+          resource_patterns:
+          - ~*
+          - '&*'
+          effect: allow
+          description: 'Observed ACL selectors for the default user: all command categories (+@all), all
+            key patterns (~*), and all pub/sub channels (&*).'
+        role_mappings: []
+        tenants: []
+        description: 'Single-user Redis ACL store (ACL LIST: one ''default'' user with full access).'
+      file_services: []
+      mail_services: []
+      network:
+        hostname: 45f5c73dd160
+        domainname: ''
+        endpoints:
+        - network: techvault.security-net
+          network_id: ''
+          network_id_stability: stable
+          endpoint_id: ''
+          endpoint_id_stability: ephemeral
+          backend_generated: true
+          ip_address: 172.20.0.3
+          ip_prefix_length: 24
+          gateway: 172.20.0.1
+          mac_address: 92:11:52:ea:7d:44
+          aliases:
+          - aptl-misp-redis
+          - misp-redis
+          dns_names:
+          - aptl-misp-redis
+          - misp-redis
+          - 45f5c73dd160
+          generated_dns_names:
+          - 45f5c73dd160
+          backend:
+            driver: bridge
+            ipam_driver: default
+            driver_options: {}
+            ipam_options: {}
+            description: ''
+          description: DHCP-assigned address on aptl-security (no static ipv4_address in Compose; observed
+            172.20.0.3 at capture time).
+        published_ports: []
+        description: ''
+      service_listeners:
+      - service_listener_id: redis-6379-ipv4
+        service: redis
+        address: 0.0.0.0
+        port: 6379
+        protocol: tcp
+        address_family: ipv4
+        scope: wildcard
+        bind_interface: ''
+        socket_path: ''
+        process_ref: redis-server
+        process_name: redis-server
+        published_port_refs: []
+        readiness:
+          probe: redis-cli -a <redacted> PING
+          criteria: PONG
+          evidence_refs:
+          - docs/aces/inventory/misp-redis/evidence/redis-state.txt
+          description: Authenticated PING readiness; INFO server reachable.
+        provenance: netstat
+        evidence_refs: &id001
+        - docs/aces/inventory/misp-redis/evidence/runtime-baseline.txt
+        - docs/aces/inventory/misp-redis/evidence/osquery-listening-ports.json
+        description: Redis RESP listener on the IPv4 wildcard (bind '* -::*'); reachable only on the aptl-security
+          network (no host-published port).
+      - service_listener_id: redis-6379-ipv6
+        service: redis
+        address: '::'
+        port: 6379
+        protocol: tcp
+        address_family: ipv6
+        scope: wildcard
+        bind_interface: ''
+        socket_path: ''
+        process_ref: redis-server
+        process_name: redis-server
+        published_port_refs: []
+        readiness: null
+        provenance: netstat
+        evidence_refs: *id001
+        description: Redis RESP listener on the IPv6 wildcard; the bind directive's '-::*' makes the IPv6
+          bind non-fatal but it is active.
+      - service_listener_id: docker-embedded-dns-tcp
+        service: ''
+        address: 127.0.0.11
+        port: 33479
+        protocol: tcp
+        address_family: ipv4
+        scope: loopback_only
+        bind_interface: ''
+        socket_path: ''
+        process_ref: ''
+        process_name: ''
+        published_port_refs: []
+        readiness: null
+        provenance: netstat
+        evidence_refs:
+        - docs/aces/inventory/misp-redis/evidence/runtime-baseline.txt
+        description: Docker embedded DNS resolver loopback TCP listener; backend-generated ephemeral port
+          (observed 33479 at capture time).
+      - service_listener_id: docker-embedded-dns-udp
+        service: ''
+        address: 127.0.0.11
+        port: 45861
+        protocol: udp
+        address_family: ipv4
+        scope: loopback_only
+        bind_interface: ''
+        socket_path: ''
+        process_ref: ''
+        process_name: ''
+        published_port_refs: []
+        readiness: null
+        provenance: netstat
+        evidence_refs:
+        - docs/aces/inventory/misp-redis/evidence/runtime-baseline.txt
+        description: Docker embedded DNS resolver loopback UDP listener; backend-generated ephemeral port
+          (observed 45861 at capture time).
+      applications: []
+      database_services: []
+      dns_services: []
+      network_sensors: []
+      network_detection_engines: []
+      security_monitoring_managers: []
+      ssh_servers: []
+      datastore_services:
+      - datastore_service_id: misp_redis
+        service: redis
+        engine: redis
+        data_model: key_value
+        protocol: resp
+        version: 7.4.8
+        name: MISP Redis cache and queue backing store
+        cluster: null
+        nodes: []
+        partitions:
+        - partition_id: redis_db0
+          kind: logical_db
+          name: Redis logical DB 0
+          shard_count: null
+          replica_count: null
+          replication_strategy: unknown
+          replication_factor: null
+          per_dc_factor_map: {}
+          durable_writes: null
+          datatype_census:
+            string: 125
+          health: ''
+          description: 'MISP-populated logical DB 0: 125 keys at the capture snapshot (volatile, MISP-driven,
+            TTL-bearing). Redis is configured with 16 logical DBs; population is a point-in-time observation,
+            not a steady-state-spec fact.'
+        - partition_id: redis_db1
+          kind: logical_db
+          name: Redis logical DB 1
+          shard_count: null
+          replica_count: null
+          replication_strategy: unknown
+          replication_factor: null
+          per_dc_factor_map: {}
+          durable_writes: null
+          datatype_census:
+            string: 9
+          health: ''
+          description: 'MISP-populated logical DB 1: 9 keys at the capture snapshot (volatile, MISP-driven,
+            TTL-bearing). Redis is configured with 16 logical DBs; population is a point-in-time observation,
+            not a steady-state-spec fact.'
+        - partition_id: redis_db13
+          kind: logical_db
+          name: Redis logical DB 13
+          shard_count: null
+          replica_count: null
+          replication_strategy: unknown
+          replication_factor: null
+          per_dc_factor_map: {}
+          durable_writes: null
+          datatype_census:
+            hash: 1
+            set: 1
+            string: 4
+            zset: 16
+          health: ''
+          description: 'MISP-populated logical DB 13: 22 keys at the capture snapshot (volatile, MISP-driven,
+            TTL-bearing). Redis is configured with 16 logical DBs; population is a point-in-time observation,
+            not a steady-state-spec fact.'
+        templates: []
+        aliases: []
+        mappings: []
+        lifecycle_policies: []
+        ingest_pipelines: []
+        persistence:
+          persistence_id: misp_redis_persistence
+          rdb_save_points:
+          - save 3600 1
+          - save 300 100
+          - save 60 10000
+          aof: false
+          eviction: noeviction
+          maxmemory: '0'
+          description: RDB snapshotting at the configured save points with AOF disabled and noeviction;
+            maxmemory 0 (unbounded by Redis, bounded only by the 128 MiB container memory limit).
+        pubsub_channels: []
+        queues_streams: []
+        engine_plugins: []
+        transport_security:
+          transport_security_id: misp_redis_transport
+          mode: none
+          client_verification: false
+          node_verification: false
+          description: Plaintext RESP on TCP 6379; no tls-port and no TLS material configured.
+        backup_targets: []
+        settings:
+        - setting_id: redis_cfg_save
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: save
+          value: 3600 1 300 100 60 10000
+          description: ''
+        - setting_id: redis_cfg_appendonly
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: appendonly
+          value: 'no'
+          description: ''
+        - setting_id: redis_cfg_appendfsync
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: appendfsync
+          value: everysec
+          description: ''
+        - setting_id: redis_cfg_maxmemory
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: maxmemory
+          value: '0'
+          description: ''
+        - setting_id: redis_cfg_maxmemory_policy
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: maxmemory-policy
+          value: noeviction
+          description: ''
+        - setting_id: redis_cfg_dir
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: dir
+          value: /data
+          description: ''
+        - setting_id: redis_cfg_dbfilename
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: dbfilename
+          value: dump.rdb
+          description: ''
+        - setting_id: redis_cfg_bind
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: bind
+          value: '* -::*'
+          description: ''
+        - setting_id: redis_cfg_protected_mode
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: protected-mode
+          value: 'no'
+          description: ''
+        - setting_id: redis_cfg_port
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: port
+          value: '6379'
+          description: ''
+        - setting_id: redis_cfg_databases
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: databases
+          value: '16'
+          description: ''
+        - setting_id: redis_cfg_tcp_keepalive
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: tcp-keepalive
+          value: '300'
+          description: ''
+        - setting_id: redis_cfg_timeout
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: timeout
+          value: '0'
+          description: ''
+        - setting_id: redis_cfg_loglevel
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: loglevel
+          value: notice
+          description: ''
+        - setting_id: redis_cfg_io_threads
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: io-threads
+          value: '1'
+          description: ''
+        - setting_id: redis_cfg_rdbcompression
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: rdbcompression
+          value: 'yes'
+          description: ''
+        - setting_id: redis_cfg_rdbchecksum
+          scope: engine
+          provenance: introspection
+          classification: plain
+          name: rdbchecksum
+          value: 'yes'
+          description: ''
+        - setting_id: redis_cfg_requirepass
+          scope: engine
+          provenance: configuration_file
+          classification: secret_fixture
+          name: requirepass
+          value: redispassword
+          description: Scenario fixture password enforced via the Compose command (redis-server --requirepass
+            redispassword); a disclosed lab credential preserved as scenario realization content for reproduction.
+        authorization_ref: misp_redis_acl
+        description: Redis 7.4.8 key-value store backing MISP caching and background queues. 16 logical
+          DBs configured; db0/db1/db13 populated at the capture snapshot (volatile). Password authentication
+          required; access governed by the single default ACL user (see app_authorizations.misp_redis_acl).
+      platform_applications: []
+      forwarding_agents: []
+      orchestration_authorities: []
+      scheduled_jobs: []
+      service_manager_units: []
+      packages:
+      - manager: apk
+        name: .redis-rundeps
+        version: '20260417.002159'
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: alpine-baselayout
+        version: 3.6.8-r1
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: alpine-baselayout-data
+        version: 3.6.8-r1
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: alpine-keys
+        version: 2.5-r0
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: alpine-release
+        version: 3.21.7-r0
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: apk-tools
+        version: 2.14.6-r3
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: busybox
+        version: 1.37.0-r14
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: busybox-binsh
+        version: 1.37.0-r14
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: ca-certificates-bundle
+        version: 20260413-r0
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: libcrypto3
+        version: 3.3.7-r0
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: libssl3
+        version: 3.3.7-r0
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: musl
+        version: 1.2.5-r11
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: musl-utils
+        version: 1.2.5-r11
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: scanelf
+        version: 1.3.8-r1
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: ssl_client
+        version: 1.37.0-r14
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: tzdata
+        version: 2026a-r0
+        architecture: x86_64
+        source: image
+        purl: ''
+      - manager: apk
+        name: zlib
+        version: 1.3.2-r0
+        architecture: x86_64
+        source: image
+        purl: ''
+      software_components:
+      - component_id: redis-server-7-4-8
+        name: redis-server
+        version: 7.4.8
+        component_type: application
+        provenance: sbom
+        ecosystem: c
+        purl: ''
+        cpe: ''
+        package_manager: source
+        package_name: redis
+        package_version: 7.4.8
+      - component_id: go-github-tianon-gosu
+        name: github.com/tianon/gosu
+        version: '1.17'
+        component_type: application
+        provenance: sbom
+        ecosystem: go
+        purl: pkg:golang/github.com/tianon/gosu
+        cpe: ''
+        package_manager: go
+        package_name: github.com/tianon/gosu
+        package_version: '1.17'
+      - component_id: go-github-moby-sys-user-v0-1-0
+        name: github.com/moby/sys/user
+        version: v0.1.0
+        component_type: library
+        provenance: sbom
+        ecosystem: go
+        purl: pkg:golang/github.com/moby/sys/user@v0.1.0
+        cpe: ''
+        package_manager: go
+        package_name: github.com/moby/sys/user
+        package_version: v0.1.0
+      - component_id: go-golang-org-x-sys-v0-13-0
+        name: golang.org/x/sys
+        version: v0.13.0
+        component_type: library
+        provenance: sbom
+        ecosystem: go
+        purl: pkg:golang/golang.org/x/sys@v0.13.0
+        cpe: ''
+        package_manager: go
+        package_name: golang.org/x/sys
+        package_version: v0.13.0
+      - component_id: go-stdlib-1-18-2
+        name: stdlib
+        version: go1.18.2
+        component_type: library
+        provenance: sbom
+        ecosystem: go
+        purl: pkg:golang/std@go1.18.2
+        cpe: ''
+        package_manager: go
+        package_name: stdlib
+        package_version: go1.18.2
+      dependency_manifests: []
+      package_vulnerabilities:
+      - id: CVE-2023-24538
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: critical
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.8, 1.20.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-24538
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-24540
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: critical
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.9, 1.20.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-24540
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-24790
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: critical
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.21.11, 1.22.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-24790
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-68121
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: critical
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.13, 1.25.7, 1.26.0-rc.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-68121
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-27664
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.18.6, 1.19.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-27664
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-28131
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.12, 1.18.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-28131
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-2879
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.18.7, 1.19.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-2879
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-2880
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.18.7, 1.19.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-2880
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-29804
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.11, 1.18.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-29804
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-30580
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.11, 1.18.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-30580
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-30630
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.12, 1.18.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-30630
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-30631
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.12, 1.18.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-30631
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-30632
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.12, 1.18.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-30632
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-30633
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.12, 1.18.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-30633
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-30634
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.11, 1.18.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-30634
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-30635
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.12, 1.18.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-30635
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-32189
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.13, 1.18.5
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32189
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-41715
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.18.7, 1.19.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41715
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-41716
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.18.8, 1.19.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41716
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-41720
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.18.9, 1.19.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41720
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-41722
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.6, 1.20.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41722
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-41723
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.6, 1.20.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41723
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-41724
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.6, 1.20.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41724
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-41725
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.6, 1.20.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41725
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-24534
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.8, 1.20.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-24534
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-24536
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.8, 1.20.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-24536
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-24537
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.8, 1.20.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-24537
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-24539
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.9, 1.20.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-24539
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-29400
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.9, 1.20.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29400
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-29403
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.10, 1.20.5
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29403
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-39325
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.20.10, 1.21.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-39325
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-45283
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.20.11, 1.21.4, 1.20.12, 1.21.5
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-45283
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-45287
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.20.0
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-45287
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-45288
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.21.9, 1.22.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-45288
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-34156
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.22.7, 1.23.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-34156
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-61726
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.12, 1.25.6
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-61726
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-61729
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.11, 1.25.5
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-61729
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-25679
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.8, 1.26.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-25679
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-32280
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.9, 1.26.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-32280
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-32281
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.9, 1.26.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-32281
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-32283
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.9, 1.26.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-32283
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-33811
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.10, 1.26.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-33811
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-33814
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.10, 1.26.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-33814
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-39820
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.10, 1.26.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-39820
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-39823
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.10, 1.26.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-39823
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-39825
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.10, 1.26.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-39825
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-39826
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.10, 1.26.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-39826
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-39836
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.10, 1.26.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-39836
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-42499
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.10, 1.26.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42499
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-42504
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: high
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.11, 1.26.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42504
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-1705
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.12, 1.18.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1705
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-1962
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.12, 1.18.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1962
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-32148
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.12, 1.18.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32148
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-41717
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.18.9, 1.19.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41717
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-24532
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.7, 1.20.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-24532
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-29406
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.11, 1.20.6
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29406
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-29409
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.19.12, 1.20.7, 1.21.0-rc.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29409
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-39318
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.20.8, 1.21.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-39318
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-39319
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.20.8, 1.21.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-39319
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-39326
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.20.12, 1.21.5
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-39326
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-45284
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.20.11, 1.21.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-45284
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-45289
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.21.8, 1.22.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-45289
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2023-45290
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.21.8, 1.22.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-45290
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-24783
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.21.8, 1.22.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-24783
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-24784
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.21.8, 1.22.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-24784
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-24785
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.21.8, 1.22.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-24785
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-24789
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.21.11, 1.22.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-24789
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-24791
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.21.12, 1.22.5
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-24791
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-34155
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.22.7, 1.23.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-34155
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-34158
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.22.7, 1.23.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-34158
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-45336
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.22.11, 1.23.5, 1.24.0-rc.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-45336
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-0913
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.23.10, 1.24.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-0913
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-22866
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.22.12, 1.23.6, 1.24.0-rc.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-22866
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-22870
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.23.7, 1.24.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-22870
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-22871
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.23.8, 1.24.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-22871
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-22873
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.23.9, 1.24.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-22873
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-4673
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.23.10, 1.24.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-4673
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-47906
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.23.12, 1.24.6
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-47906
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-47907
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.23.12, 1.24.6
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-47907
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-47912
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.8, 1.25.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-47912
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-58183
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.8, 1.25.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-58183
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-58185
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.8, 1.25.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-58185
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-58187
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.9, 1.25.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-58187
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-58188
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.8, 1.25.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-58188
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-58189
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.8, 1.25.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-58189
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-61723
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.8, 1.25.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-61723
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-61724
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.8, 1.25.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-61724
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-61725
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.8, 1.25.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-61725
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-61727
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.11, 1.25.5
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-61727
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-61728
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.12, 1.25.6
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-61728
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-61730
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.12, 1.25.6
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-61730
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-27142
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.8, 1.26.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27142
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-27145
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.11, 1.26.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27145
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-32282
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.9, 1.26.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-32282
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-32288
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.9, 1.26.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-32288
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-32289
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.9, 1.26.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-32289
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-42507
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: medium
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.11, 1.26.4
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42507
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2022-30629
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: low
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.17.11, 1.18.3
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-30629
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2024-45341
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: low
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.22.11, 1.23.5, 1.24.0-rc.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-45341
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2025-58186
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: low
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.24.8, 1.25.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-58186
+        scanner_version: 0.70.0
+        scanner_database: trivy-db
+      - id: CVE-2026-27139
+        package_name: stdlib
+        installed_version: v1.18.2
+        severity: low
+        scanner: trivy
+        image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+        scan_time: '2026-06-07T00:58:26Z'
+        fixed_version: 1.25.8, 1.26.1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27139
+        scanner_version: 0.70.0
+        scanner_database: trivy-db

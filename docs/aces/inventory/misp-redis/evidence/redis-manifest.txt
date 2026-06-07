@@ -1,0 +1,15 @@
+--redis-binaries--
+/usr/local/bin/redis-server	17033840	a5fed84c8d1d871609f9faa8b85a8b4ac79d98f5e9a3d5e4939af56223d6061c
+/usr/local/bin/redis-cli	7259768	f95673286fcbc0b2b328daa57ceeae4505edbe6ceb72e3e8dcedbd89548a79a9
+/usr/local/bin/redis-benchmark	6320528	5343f8bbba87336dd767d51fafe22263fe62da45fc6651844abda67910fc7442
+/usr/local/bin/docker-entrypoint.sh	661	c211bc06cdc6bd3fa4752394767359159cbdbdfe1c2c7f445e600419e4c52091
+--redis-symlinks--
+/usr/local/bin/redis-check-aof -> redis-server
+/usr/local/bin/redis-check-rdb -> redis-server
+/usr/local/bin/redis-sentinel -> redis-server
+--redis-server-version--
+Redis server v=7.4.8 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=dc3fdca8addf42ba
+--config-file-on-disk--
+/usr/local/etc/redis/redis.conf absent
+/etc/redis/redis.conf absent
+/data/redis.conf absent

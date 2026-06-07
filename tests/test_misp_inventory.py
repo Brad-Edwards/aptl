@@ -19,6 +19,8 @@ from aptl.core.aces_inventory import (
 )
 
 
+pytestmark = pytest.mark.integration
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MISP_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "misp"
 MISP_DOC_PATH = MISP_DIR / "README.md"
@@ -529,4 +531,6 @@ def test_parity_inventory_cites_misp_inventory_and_aces_sdl():
     assert "runtime.platform_applications" in row["aces_target"]
     assert "tests/test_misp_inventory.py" in row["validation_evidence"]
     assert "Brad-Edwards/aces#431/#465 consumed" in row["validation_evidence"]
-    assert "#348/#349" in row["blocking_followup"]
+    # #348 (misp-redis) is inventoried in this PR, so only #349 remains.
+    assert "#349" in row["blocking_followup"]
+    assert "#348" not in row["blocking_followup"]

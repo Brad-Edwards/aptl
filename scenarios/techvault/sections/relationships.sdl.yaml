@@ -350,10 +350,11 @@ relationships:
   misp-connects-redis:
     type: connects_to
     source: nodes.techvault.misp.runtime.applications.misp-web
-    target: techvault.misp-redis
-    description: MISP runtime environment points Redis use at REDIS_HOST=misp-redis. The MISP container evidence did not expose
-      a Redis password variable, while the companion Redis service is configured to require one; auth is therefore recorded
-      as unknown for this asset pass.
+    target: nodes.techvault.misp-redis.runtime.datastore_services.misp_redis
+    description: MISP runtime environment points Redis use at REDIS_HOST=misp-redis, and participant discovery confirms MISP
+      resolves misp-redis to 172.20.0.3 and reaches TCP 6379. The Redis side is now fully inventoried by issue 348 -- the
+      key-value datastore requires a password, enforced by the single default ACL user (requirepass). The MISP container
+      still exposes no Redis password variable, so MISP-side auth_method remains unobserved (unknown) for this asset pass.
     properties:
       protocol: redis
       port: '6379'

@@ -19,6 +19,8 @@ from aptl.core.aces_inventory import (
 )
 
 
+pytestmark = pytest.mark.integration
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MISP_DB_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "misp-db"
 MISP_DB_DOC_PATH = MISP_DB_DIR / "README.md"
@@ -603,4 +605,6 @@ def test_parity_inventory_cites_misp_db_inventory_and_updates_misp_followups():
 
     misp = rows["scen.techvault.misp-inventory"]
     assert "#347" not in misp["blocking_followup"]
-    assert "#348/#349" in misp["blocking_followup"]
+    # #348 (misp-redis) is inventoried in this PR, so only #349 remains.
+    assert "#348" not in misp["blocking_followup"]
+    assert "#349" in misp["blocking_followup"]

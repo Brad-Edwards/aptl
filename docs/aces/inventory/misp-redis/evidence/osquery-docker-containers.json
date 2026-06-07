@@ -7,7 +7,7 @@
   "rows": [
     {
       "cgroup_namespace": "",
-      "command": "docker-entrypoint.sh redis-server --requirepass <REDACTED-SCENARIO-FIXTURE>",
+      "command": "docker-entrypoint.sh redis-server --requirepass redispassword",
       "config_entrypoint": "docker-entrypoint.sh",
       "created": "1779517109",
       "finished_at": "0001-01-01T00:00:00Z",
@@ -26,7 +26,7 @@
       "security_options": "",
       "started_at": "2026-05-23T06:18:34.634895704Z",
       "state": "running",
-      "status": "Up 13 days",
+      "status": "Up 2 weeks",
       "user_namespace": "",
       "uts_namespace": ""
     }

@@ -29,10 +29,11 @@ find "$OUT" -maxdepth 1 -type f -delete
 : > "$OUT/capture-limits.txt"
 
 # The Redis auth fixture is read from the live container Cmd at capture time so
-# the raw value is never hard-coded in this committed script; it is held only in
-# this shell variable and delivered to the in-container probes over stdin (read
-# into REDISCLI_AUTH inside the exec) -- never via `redis-cli -a` and never via
-# `docker exec -e VAR=value`, both of which would leak the value into argv/proc.
+# it is not hard-coded in this script; it is held in this shell variable and
+# delivered to the in-container probes over stdin (read into REDISCLI_AUTH inside
+# the exec) rather than via `redis-cli -a` / `docker exec -e` -- a clean delivery
+# that keeps host argv tidy. The fixture value itself is a checked-in scenario
+# realization fact and is preserved (not redacted) in the captured evidence.
 REDIS_PASS="$(docker inspect "$CONTAINER" --format '{{json .Config.Cmd}}' \
   | jq -r 'index("--requirepass") as $i | if $i != null then .[$i+1] else empty end' 2>/dev/null || true)"
 
@@ -44,23 +45,20 @@ record_limit() {
 # (dynamically, without naming it in this script), any `--requirepass`/
 # `requirepass` value, the ACL password hash, NAME=value secret env, JSON
 # "key":"value" secrets, and PEM private-key envelopes.
+# The Redis auth fixture (redis-server --requirepass redispassword) is a
+# checked-in scenario realization fact, NOT an operator secret -- it is the
+# provisioning input that reproduces this asset, so it is preserved verbatim in
+# the evidence and encoded as a secret_fixture value in the SDL (per ACES #471:
+# SDL values are realization facts unless an author explicitly withholds them).
+# redact_stream only scrubs generic operator-secret SHAPES (NAME=value secret
+# env, JSON secret fields, PEM private keys) as a safety net; none of these match
+# the Redis fixture, so it passes through unredacted.
 redact_stream() {
-  local sed_args=(-E)
-  if [ -n "${REDIS_PASS:-}" ]; then
-    local escaped
-    escaped="$(printf '%s' "$REDIS_PASS" | sed -e 's/[][\\.*^$/&]/\\&/g')"
-    sed_args+=(-e "s/${escaped}/<REDACTED-SCENARIO-FIXTURE>/g")
-  fi
-  sed_args+=(
-    -e 's/(--requirepass[", ]+)[^",[:space:]]+/\1<REDACTED-SCENARIO-FIXTURE>/g'
-    -e 's/(requirepass"?[[:space:]]*[:=,]?[[:space:]]*"?)[^",[:space:]]+/\1<REDACTED>/Ig'
-    -e 's/#[a-f0-9]{64}/#<REDACTED-ACL-HASH>/g'
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)=([^[:space:]]+)/\1=<REDACTED>/Ig'
-    -e 's/("?(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie)"?[[:space:]]*[:=][[:space:]]*")[^"]*(")/\1<REDACTED>\3/Ig'
-    -e 's/-----BEGIN [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-BEGIN>/g'
+  sed -E \
+    -e 's/(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
+    -e 's/("?(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie)"?[[:space:]]*[:=][[:space:]]*")[^"]*(")/\1<REDACTED>\3/Ig' \
+    -e 's/-----BEGIN [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-BEGIN>/g' \
     -e 's/-----END [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-END>/g'
-  )
-  sed "${sed_args[@]}"
 }
 
 redact_env_jq='
@@ -99,7 +97,7 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 
 # Compose service extracted with a YAML->JSON projection (the full local compose
 # project can carry profile-dependent services outside this asset scope). The
-# `command` carrying the Redis auth fixture is redacted.
+# `command` carries the Redis auth fixture verbatim (a disclosed scenario fact).
 uv run python -c '
 import sys, yaml, json
 with open(sys.argv[1]) as fh:
@@ -161,7 +159,7 @@ docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.mis
 record_limit "Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof."
 record_limit "misp-redis declares no named volume; its keyspace persists only to the container COW layer at /data/dump.rdb. The Redis keyspace, per-logical-db key counts, datatype census, dump.rdb size/mtime, and rdb_changes_since_last_save are MISP-driven runtime state that drift continuously; they are captured as a point-in-time snapshot, and the SDL encodes the stable shape (key_value model, configured 16 logical DBs, persistence posture) with the observed population marked as a snapshot caveat."
 record_limit "Full filesystem evidence is captured as compressed manifests. SDL encodes load-bearing participant-visible paths and structured runtime surfaces directly; byte-identical rebuild proof remains out of scope for this inventory issue."
-record_limit "The Redis auth fixture is redacted from every committed artifact: docker inspect Cmd, the compose command, CONFIG/ACL probe output, logs, and runtime baseline. Its declaration (password-required service) and classification are captured instead of the raw value or its ACL hash."
+record_limit "The Redis auth fixture (redis-server --requirepass redispassword) is a checked-in scenario realization fact -- the provisioning input that reproduces this asset -- and is preserved verbatim in the evidence (compose command, docker inspect Cmd, ACL state) and encoded as a secret_fixture value in the SDL (ACES #471). It is a disclosed lab credential, not an operator secret; generic operator-secret shapes are still scrubbed as a safety net."
 
 sha256sum \
   "$ROOT/docker-compose.yml" \

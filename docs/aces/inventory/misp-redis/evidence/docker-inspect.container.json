@@ -6,7 +6,7 @@
     "Args": [
       "redis-server",
       "--requirepass",
-      "<REDACTED-SCENARIO-FIXTURE>"
+      "redispassword"
     ],
     "State": {
       "Status": "running",
@@ -169,7 +169,7 @@
       "Cmd": [
         "redis-server",
         "--requirepass",
-        "<REDACTED-SCENARIO-FIXTURE>"
+        "redispassword"
       ],
       "Image": "redis:7-alpine",
       "Volumes": {

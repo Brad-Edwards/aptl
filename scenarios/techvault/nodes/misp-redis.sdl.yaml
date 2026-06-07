@@ -253,7 +253,7 @@ nodes:
         uid: 999
         gid: 1000
         mode: '600'
-        size: 43261
+        size: 44524
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
@@ -589,7 +589,7 @@ nodes:
         command:
         - redis-server
         - --requirepass
-        - <REDACTED-SCENARIO-FIXTURE>
+        - redispassword
         log_driver: json-file
         log_options: {}
         namespaces:
@@ -632,8 +632,8 @@ nodes:
         dns_options: []
         dns_search: []
         group_add: []
-        description: The Compose command carries --requirepass; the fixture value is redacted from this
-          inventory.
+        description: The Compose command carries the requirepass scenario fixture verbatim (a disclosed
+          lab credential).
       health: null
       local_identity:
         users:
@@ -1137,7 +1137,9 @@ nodes:
           credential_classification: redacted
           backend_roles: []
           description: The built-in Redis 'default' user, enabled (on) with sanitize-payload and password
-            authentication required (requirepass). Raw password/ACL hash redacted.
+            authentication required. The credential value is the disclosed scenario fixture recorded in
+            the datastore requirepass setting; this principal surface structurally carries posture only
+            (no raw-value field).
         roles: []
         permission_grants:
         - grant_id: redis_default_full_access
@@ -1295,9 +1297,9 @@ nodes:
           per_dc_factor_map: {}
           durable_writes: null
           datatype_census:
-            string: 120
+            string: 125
           health: ''
-          description: 'MISP-populated logical DB 0: 120 keys at the capture snapshot (volatile, MISP-driven,
+          description: 'MISP-populated logical DB 0: 125 keys at the capture snapshot (volatile, MISP-driven,
             TTL-bearing). Redis is configured with 16 logical DBs; population is a point-in-time observation,
             not a steady-state-spec fact.'
         - partition_id: redis_db1
@@ -1328,9 +1330,9 @@ nodes:
             hash: 1
             set: 1
             string: 4
-            zset: 15
+            zset: 16
           health: ''
-          description: 'MISP-populated logical DB 13: 21 keys at the capture snapshot (volatile, MISP-driven,
+          description: 'MISP-populated logical DB 13: 22 keys at the capture snapshot (volatile, MISP-driven,
             TTL-bearing). Redis is configured with 16 logical DBs; population is a point-in-time observation,
             not a steady-state-spec fact.'
         templates: []
@@ -1482,11 +1484,11 @@ nodes:
         - setting_id: redis_cfg_requirepass
           scope: engine
           provenance: configuration_file
-          classification: redacted
+          classification: secret_fixture
           name: requirepass
-          value: ''
-          description: Password authentication is enforced via the Compose command (redis-server --requirepass
-            <fixture>); the raw value is redacted.
+          value: redispassword
+          description: Scenario fixture password enforced via the Compose command (redis-server --requirepass
+            redispassword); a disclosed lab credential preserved as scenario realization content for reproduction.
         authorization_ref: misp_redis_acl
         description: Redis 7.4.8 key-value store backing MISP caching and background queues. 16 logical
           DBs configured; db0/db1/db13 populated at the capture snapshot (volatile). Password authentication
@@ -1663,7 +1665,7 @@ nodes:
         severity: critical
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.8, 1.20.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-24538
         scanner_version: 0.70.0
@@ -1674,7 +1676,7 @@ nodes:
         severity: critical
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.9, 1.20.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-24540
         scanner_version: 0.70.0
@@ -1685,7 +1687,7 @@ nodes:
         severity: critical
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.21.11, 1.22.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-24790
         scanner_version: 0.70.0
@@ -1696,7 +1698,7 @@ nodes:
         severity: critical
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.13, 1.25.7, 1.26.0-rc.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-68121
         scanner_version: 0.70.0
@@ -1707,7 +1709,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.18.6, 1.19.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-27664
         scanner_version: 0.70.0
@@ -1718,7 +1720,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.12, 1.18.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-28131
         scanner_version: 0.70.0
@@ -1729,7 +1731,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.18.7, 1.19.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-2879
         scanner_version: 0.70.0
@@ -1740,7 +1742,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.18.7, 1.19.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-2880
         scanner_version: 0.70.0
@@ -1751,7 +1753,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.11, 1.18.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-29804
         scanner_version: 0.70.0
@@ -1762,7 +1764,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.11, 1.18.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-30580
         scanner_version: 0.70.0
@@ -1773,7 +1775,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.12, 1.18.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-30630
         scanner_version: 0.70.0
@@ -1784,7 +1786,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.12, 1.18.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-30631
         scanner_version: 0.70.0
@@ -1795,7 +1797,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.12, 1.18.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-30632
         scanner_version: 0.70.0
@@ -1806,7 +1808,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.12, 1.18.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-30633
         scanner_version: 0.70.0
@@ -1817,7 +1819,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.11, 1.18.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-30634
         scanner_version: 0.70.0
@@ -1828,7 +1830,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.12, 1.18.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-30635
         scanner_version: 0.70.0
@@ -1839,7 +1841,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.13, 1.18.5
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32189
         scanner_version: 0.70.0
@@ -1850,7 +1852,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.18.7, 1.19.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-41715
         scanner_version: 0.70.0
@@ -1861,7 +1863,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.18.8, 1.19.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-41716
         scanner_version: 0.70.0
@@ -1872,7 +1874,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.18.9, 1.19.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-41720
         scanner_version: 0.70.0
@@ -1883,7 +1885,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.6, 1.20.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-41722
         scanner_version: 0.70.0
@@ -1894,7 +1896,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.6, 1.20.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-41723
         scanner_version: 0.70.0
@@ -1905,7 +1907,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.6, 1.20.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-41724
         scanner_version: 0.70.0
@@ -1916,7 +1918,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.6, 1.20.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-41725
         scanner_version: 0.70.0
@@ -1927,7 +1929,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.8, 1.20.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-24534
         scanner_version: 0.70.0
@@ -1938,7 +1940,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.8, 1.20.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-24536
         scanner_version: 0.70.0
@@ -1949,7 +1951,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.8, 1.20.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-24537
         scanner_version: 0.70.0
@@ -1960,7 +1962,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.9, 1.20.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-24539
         scanner_version: 0.70.0
@@ -1971,7 +1973,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.9, 1.20.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-29400
         scanner_version: 0.70.0
@@ -1982,7 +1984,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.10, 1.20.5
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-29403
         scanner_version: 0.70.0
@@ -1993,7 +1995,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.20.10, 1.21.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-39325
         scanner_version: 0.70.0
@@ -2004,7 +2006,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.20.11, 1.21.4, 1.20.12, 1.21.5
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-45283
         scanner_version: 0.70.0
@@ -2015,7 +2017,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.20.0
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-45287
         scanner_version: 0.70.0
@@ -2026,7 +2028,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.21.9, 1.22.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-45288
         scanner_version: 0.70.0
@@ -2037,7 +2039,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.22.7, 1.23.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-34156
         scanner_version: 0.70.0
@@ -2048,7 +2050,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.12, 1.25.6
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61726
         scanner_version: 0.70.0
@@ -2059,7 +2061,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.11, 1.25.5
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61729
         scanner_version: 0.70.0
@@ -2070,7 +2072,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.8, 1.26.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-25679
         scanner_version: 0.70.0
@@ -2081,7 +2083,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32280
         scanner_version: 0.70.0
@@ -2092,7 +2094,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32281
         scanner_version: 0.70.0
@@ -2103,7 +2105,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32283
         scanner_version: 0.70.0
@@ -2114,7 +2116,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-33811
         scanner_version: 0.70.0
@@ -2125,7 +2127,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-33814
         scanner_version: 0.70.0
@@ -2136,7 +2138,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39820
         scanner_version: 0.70.0
@@ -2147,7 +2149,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39823
         scanner_version: 0.70.0
@@ -2158,7 +2160,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39825
         scanner_version: 0.70.0
@@ -2169,7 +2171,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39826
         scanner_version: 0.70.0
@@ -2180,7 +2182,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39836
         scanner_version: 0.70.0
@@ -2191,7 +2193,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42499
         scanner_version: 0.70.0
@@ -2202,7 +2204,7 @@ nodes:
         severity: high
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.11, 1.26.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42504
         scanner_version: 0.70.0
@@ -2213,7 +2215,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.12, 1.18.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1705
         scanner_version: 0.70.0
@@ -2224,7 +2226,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.12, 1.18.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1962
         scanner_version: 0.70.0
@@ -2235,7 +2237,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.12, 1.18.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32148
         scanner_version: 0.70.0
@@ -2246,7 +2248,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.18.9, 1.19.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-41717
         scanner_version: 0.70.0
@@ -2257,7 +2259,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.7, 1.20.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-24532
         scanner_version: 0.70.0
@@ -2268,7 +2270,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.11, 1.20.6
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-29406
         scanner_version: 0.70.0
@@ -2279,7 +2281,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.19.12, 1.20.7, 1.21.0-rc.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-29409
         scanner_version: 0.70.0
@@ -2290,7 +2292,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.20.8, 1.21.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-39318
         scanner_version: 0.70.0
@@ -2301,7 +2303,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.20.8, 1.21.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-39319
         scanner_version: 0.70.0
@@ -2312,7 +2314,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.20.12, 1.21.5
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-39326
         scanner_version: 0.70.0
@@ -2323,7 +2325,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.20.11, 1.21.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-45284
         scanner_version: 0.70.0
@@ -2334,7 +2336,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.21.8, 1.22.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-45289
         scanner_version: 0.70.0
@@ -2345,7 +2347,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.21.8, 1.22.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-45290
         scanner_version: 0.70.0
@@ -2356,7 +2358,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.21.8, 1.22.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-24783
         scanner_version: 0.70.0
@@ -2367,7 +2369,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.21.8, 1.22.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-24784
         scanner_version: 0.70.0
@@ -2378,7 +2380,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.21.8, 1.22.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-24785
         scanner_version: 0.70.0
@@ -2389,7 +2391,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.21.11, 1.22.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-24789
         scanner_version: 0.70.0
@@ -2400,7 +2402,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.21.12, 1.22.5
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-24791
         scanner_version: 0.70.0
@@ -2411,7 +2413,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.22.7, 1.23.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-34155
         scanner_version: 0.70.0
@@ -2422,7 +2424,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.22.7, 1.23.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-34158
         scanner_version: 0.70.0
@@ -2433,7 +2435,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.22.11, 1.23.5, 1.24.0-rc.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-45336
         scanner_version: 0.70.0
@@ -2444,7 +2446,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.23.10, 1.24.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-0913
         scanner_version: 0.70.0
@@ -2455,7 +2457,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.22.12, 1.23.6, 1.24.0-rc.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-22866
         scanner_version: 0.70.0
@@ -2466,7 +2468,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.23.7, 1.24.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-22870
         scanner_version: 0.70.0
@@ -2477,7 +2479,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.23.8, 1.24.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-22871
         scanner_version: 0.70.0
@@ -2488,7 +2490,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.23.9, 1.24.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-22873
         scanner_version: 0.70.0
@@ -2499,7 +2501,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.23.10, 1.24.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-4673
         scanner_version: 0.70.0
@@ -2510,7 +2512,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.23.12, 1.24.6
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-47906
         scanner_version: 0.70.0
@@ -2521,7 +2523,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.23.12, 1.24.6
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-47907
         scanner_version: 0.70.0
@@ -2532,7 +2534,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.8, 1.25.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-47912
         scanner_version: 0.70.0
@@ -2543,7 +2545,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.8, 1.25.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-58183
         scanner_version: 0.70.0
@@ -2554,7 +2556,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.8, 1.25.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-58185
         scanner_version: 0.70.0
@@ -2565,7 +2567,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.9, 1.25.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-58187
         scanner_version: 0.70.0
@@ -2576,7 +2578,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.8, 1.25.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-58188
         scanner_version: 0.70.0
@@ -2587,7 +2589,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.8, 1.25.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-58189
         scanner_version: 0.70.0
@@ -2598,7 +2600,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.8, 1.25.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61723
         scanner_version: 0.70.0
@@ -2609,7 +2611,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.8, 1.25.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61724
         scanner_version: 0.70.0
@@ -2620,7 +2622,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.8, 1.25.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61725
         scanner_version: 0.70.0
@@ -2631,7 +2633,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.11, 1.25.5
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61727
         scanner_version: 0.70.0
@@ -2642,7 +2644,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.12, 1.25.6
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61728
         scanner_version: 0.70.0
@@ -2653,7 +2655,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.12, 1.25.6
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61730
         scanner_version: 0.70.0
@@ -2664,7 +2666,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.8, 1.26.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27142
         scanner_version: 0.70.0
@@ -2675,7 +2677,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.11, 1.26.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27145
         scanner_version: 0.70.0
@@ -2686,7 +2688,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32282
         scanner_version: 0.70.0
@@ -2697,7 +2699,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32288
         scanner_version: 0.70.0
@@ -2708,7 +2710,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32289
         scanner_version: 0.70.0
@@ -2719,7 +2721,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.11, 1.26.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42507
         scanner_version: 0.70.0
@@ -2730,7 +2732,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.17.11, 1.18.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-30629
         scanner_version: 0.70.0
@@ -2741,7 +2743,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.22.11, 1.23.5, 1.24.0-rc.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-45341
         scanner_version: 0.70.0
@@ -2752,7 +2754,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.24.8, 1.25.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-58186
         scanner_version: 0.70.0
@@ -2763,7 +2765,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
-        scan_time: '2026-06-06T02:39:48Z'
+        scan_time: '2026-06-07T00:58:26Z'
         fixed_version: 1.25.8, 1.26.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27139
         scanner_version: 0.70.0

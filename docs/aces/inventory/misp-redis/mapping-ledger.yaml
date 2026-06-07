@@ -26,7 +26,7 @@ provenance:
 notes:
 - Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start.
 - Redis is encoded through runtime.datastore_services (key_value), runtime.app_authorizations (redis_acl), and runtime.service_listeners; ACES #431 is consumed for listener semantics. No known ACES expressivity gap remains for the catalogued MISP Redis steady-state facts.
-- The Redis auth fixture and its ACL password hash are redacted from every committed artifact; the password-required posture is preserved as a classified fact.
+- The Redis auth fixture (redis-server --requirepass redispassword) is a disclosed scenario realization fact -- the provisioning input that reproduces this asset -- preserved verbatim in the evidence and encoded as a secret_fixture value in the SDL (ACES #471), not an operator secret.
 - misp-redis has no Compose healthcheck, no on-disk redis.conf (config is supplied via the Compose command), and no scenario-declared vulnerabilities; the keyspace is volatile MISP-driven state encoded as a snapshot in the datastore logical-db partitions.
 correspondence_checks:
 - id: misp-redis-evidence-bundle-integrity
@@ -58,7 +58,7 @@ correspondence_checks:
 - id: misp-redis-scope-and-redaction-caveats
   status: implemented
   source: docs/aces/inventory/misp-redis/evidence/capture-limits.txt
-  method: README and tests assert non-destructive capture scope, Redis auth redaction, Syft normalization, dump.rdb checksum exclusion, and unavailable osquery tables.
+  method: README and tests assert non-destructive capture scope, preservation of the disclosed Redis auth fixture, Syft normalization, dump.rdb checksum exclusion, and unavailable osquery tables.
   realized_evidence:
   - path: evidence/capture-limits.txt
   - path: evidence/osquery-installed-applications.json
@@ -429,7 +429,7 @@ facts:
     caveat: Per-DB key counts and datatype census are volatile, MISP-driven, TTL-bearing snapshot observations; the configured 16-logical-DB capacity is the stable fact while population is point-in-time.
 - id: misp-redis.datastore.settings
   category: datastore
-  summary: 18 captured CONFIG settings (save, appendonly, maxmemory-policy, dir, bind, databases, etc.) are encoded as datastore settings with the requirepass value redacted.
+  summary: 18 captured CONFIG settings (save, appendonly, maxmemory-policy, dir, bind, databases, etc.) are encoded as datastore settings, including the requirepass scenario-fixture value preserved and classified secret_fixture.
   evidence:
   - path: evidence/redis-state.txt
   aces:
@@ -439,7 +439,7 @@ facts:
     - nodes
     fields:
     - nodes.techvault.misp-redis.runtime.datastore_services.misp_redis.settings
-    rationale: ACES datastore settings carry the catalogued CONFIG fact directly; the secret-named requirepass setting omits its value and is classified redacted.
+    rationale: ACES datastore settings carry the catalogued CONFIG fact directly; the requirepass scenario fixture preserves its value classified secret_fixture (ACES #471).
 - id: misp-redis.datastore.acl
   category: identity
   summary: The single built-in default Redis ACL user (enabled, sanitize-payload, password-required, full +@all access over ~* keys and &* channels) is encoded via app_authorizations with resource_vocabulary redis_acl.
@@ -455,7 +455,7 @@ facts:
     - nodes.techvault.misp-redis.runtime.app_authorizations.misp_redis_acl
     - nodes.techvault.misp-redis.runtime.datastore_services.misp_redis.authorization_ref
     rationale: ACES runtime.app_authorizations with resource_vocabulary redis_acl carries the Redis ACL directly, linked from the datastore via authorization_ref.
-    caveat: The raw Redis password and its ACL hash are redacted; the password-required posture is preserved via credential_classification and the redacted requirepass setting.
+    caveat: The Redis password is a disclosed scenario fixture preserved in the requirepass datastore setting (value, secret_fixture) and in the evidence; the app_authorizations principal surface structurally carries posture only (no raw-value field).
 - id: misp-redis.participant-discovery
   category: relationship
   summary: MISP resolves and reaches misp-redis on TCP 6379; Kali cannot reach the security-net address from its current network vantage.

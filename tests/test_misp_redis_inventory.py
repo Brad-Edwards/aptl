@@ -93,10 +93,13 @@ REQUIRED_EVIDENCE_FILES = {
 
 # The lab Redis auth fixture must never be committed raw; split so this detection
 # pattern is not itself a committed copy of the literal value.
+# The Redis auth fixture is a DISCLOSED scenario realization fact (the
+# provisioning input that reproduces this asset), preserved in the evidence and
+# encoded as a secret_fixture value in the SDL (ACES #471) -- it is NOT a leak.
+# Only real operator-secret shapes are forbidden in committed evidence.
 _REDIS_FIXTURE = "redis" "password"
 
 RAW_SECRET_PATTERNS = (
-    _REDIS_FIXTURE,
     r"BEGIN .*PRIVATE KEY",
 )
 
@@ -145,6 +148,28 @@ def _runtime_baseline_section(name: str) -> list[str]:
 
 def _redis_section(name: str) -> list[str]:
     return _section((EVIDENCE_DIR / "redis-state.txt").read_text(encoding="utf-8"), name)
+
+
+def _redis_datatype_census() -> dict[int, dict[str, int]]:
+    # The datatype census is the last section and has nested --dbN-- markers, so
+    # read it to EOF rather than via _section (which stops at the first marker).
+    blob = (EVIDENCE_DIR / "redis-state.txt").read_text(encoding="utf-8").split(
+        "--datatype-census--\n", 1
+    )[1]
+    census: dict[int, dict[str, int]] = {}
+    cur = None
+    for line in blob.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        marker = re.match(r"^--db(\d+)--$", line)
+        if marker:
+            cur = int(marker.group(1))
+            census[cur] = {}
+        elif cur is not None:
+            count, kind = line.split()
+            census[cur][kind] = int(count)
+    return census
 
 
 def _filesystem_tree_rows() -> list[list[str]]:
@@ -276,14 +301,23 @@ def test_misp_redis_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_misp_redis_evidence_does_not_commit_raw_secret_values():
+def test_misp_redis_evidence_does_not_commit_raw_operator_secrets():
     forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and forbidden.search(_evidence_text(path))
     ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+    assert not offenders, f"Raw operator-secret material leaked into evidence: {offenders}"
+
+
+def test_misp_redis_evidence_preserves_disclosed_auth_fixture():
+    # The Redis auth fixture is scenario realization content needed to reproduce
+    # this asset; it must be preserved verbatim, not redacted.
+    compose = _json_file("compose-service.misp-redis.json")
+    assert compose["command"] == f"redis-server --requirepass {_REDIS_FIXTURE}"
+    container = _json_file("docker-inspect.container.json")[0]
+    assert container["Config"]["Cmd"] == ["redis-server", "--requirepass", _REDIS_FIXTURE]
 
 
 def test_misp_redis_runtime_evidence_counts_and_caveats():
@@ -435,16 +469,22 @@ def test_techvault_sdl_encodes_misp_redis_datastore_and_acl(legacy_scenario):
     assert len(partitions) == DATASTORE_PARTITION_COUNT
     assert all(p["kind"] == "logical_db" for p in partitions.values())
     assert set(partitions) == {"redis_db0", "redis_db1", "redis_db13"}
-    assert partitions["redis_db0"]["datatype_census"] == {"string": 120}
-    assert partitions["redis_db13"]["datatype_census"] == {"zset": 15, "string": 4, "set": 1, "hash": 1}
+    # Per-DB datatype census is volatile MISP-driven state; assert the SDL
+    # matches the captured evidence snapshot rather than hard-coding drift-prone
+    # counts. (db0/db13 are key-value string/zset-bearing at capture time.)
+    evidence_census = _redis_datatype_census()
+    sdl_census = {p["partition_id"]: p["datatype_census"] for p in datastore["partitions"]}
+    assert sdl_census == {f"redis_db{db}": census for db, census in evidence_census.items()}
+    assert set(partitions["redis_db13"]["datatype_census"]) == {"zset", "string", "set", "hash"}
 
     settings = {s["name"]: s for s in datastore["settings"]}
     assert len(datastore["settings"]) == DATASTORE_SETTING_COUNT
     assert settings["databases"]["value"] == "16"
     assert settings["maxmemory-policy"]["value"] == "noeviction"
-    # The secret-named requirepass setting omits its value and is redacted.
-    assert settings["requirepass"]["value"] == ""
-    assert settings["requirepass"]["classification"] == "redacted"
+    # The requirepass fixture is a disclosed scenario realization fact (ACES
+    # #471): its value is preserved and classified secret_fixture, NOT redacted.
+    assert settings["requirepass"]["value"] == _REDIS_FIXTURE
+    assert settings["requirepass"]["classification"] == "secret_fixture"
 
     acl = runtime["app_authorizations"][0]
     assert acl["app_authorization_id"] == "misp_redis_acl"

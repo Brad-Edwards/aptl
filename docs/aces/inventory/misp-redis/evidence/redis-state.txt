@@ -8,22 +8,22 @@ arch_bits:64
 multiplexing_api:epoll
 run_id:50777b7cd400db3f815f8e661b862ee72adce5d1
 tcp_port:6379
-server_time_usec:1780713593672021
-uptime_in_seconds:1196479
+server_time_usec:1780793911633988
+uptime_in_seconds:1276797
 executable:/data/redis-server
 config_file:
 io_threads_active:0
 --keyspace--
-db0:keys=120,expires=120,avg_ttl=1729935,subexpiry=0
-db1:keys=9,expires=9,avg_ttl=76817613,subexpiry=0
-db13:keys=21,expires=3,avg_ttl=12006598835,subexpiry=0
+db0:keys=125,expires=125,avg_ttl=1811760,subexpiry=0
+db1:keys=9,expires=9,avg_ttl=82898900,subexpiry=0
+db13:keys=22,expires=3,avg_ttl=11979926089,subexpiry=0
 --persistence--
 loading:0
-rdb_changes_since_last_save:59
+rdb_changes_since_last_save:43
 rdb_bgsave_in_progress:0
-rdb_last_save_time:1780712479
+rdb_last_save_time:1780793229
 rdb_last_bgsave_status:ok
-rdb_saves:685
+rdb_saves:731
 aof_enabled:0
 aof_rewrite_in_progress:0
 aof_last_bgrewrite_status:ok
@@ -65,18 +65,18 @@ rdbchecksum	yes
 --acl-whoami--
 default
 --acl-list--
-user default on sanitize-payload #<REDACTED-ACL-HASH> ~* &* +@all
+user default on sanitize-payload #ca7e5f014bb04ceadef8fff8259a0ae557402bda21c58bd1743e053d5895cc0a ~* &* +@all
 --acl-cat-count--
 21
 --command-count--
 250
 --datatype-census--
 --db0--
-    120 string
+    125 string
 --db1--
       9 string
 --db13--
-     15 zset
+     16 zset
       4 string
       1 set
       1 hash

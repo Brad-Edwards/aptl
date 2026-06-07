@@ -33,22 +33,25 @@ now encodes:
   `60 10000`, AOF disabled, `noeviction`, `maxmemory 0`), the observed populated
   logical DBs (`db0`/`db1`/`db13`) as `logical_db` partitions with datatype
   census, transport security (`none`; plaintext RESP), and 18 captured CONFIG
-  settings with the `requirepass` value redacted. This is the first TechVault
-  node to populate the non-relational `runtime.datastore_services` surface;
-  Redis is deliberately NOT shoehorned into the relational
-  `runtime.database_services`.
+  settings — including the `requirepass` scenario-fixture value preserved and
+  classified `secret_fixture` (the disclosed credential that reproduces this
+  asset). This is the first TechVault node to populate the non-relational
+  `runtime.datastore_services` surface; Redis is deliberately NOT shoehorned into
+  the relational `runtime.database_services`.
 - `runtime.app_authorizations` for the Redis ACL (`resource_vocabulary:
   redis_acl`): the single built-in `default` user (enabled, `sanitize-payload`,
-  password-required, credential redacted) with a full-access permission grant
-  (`+@all` over `~*` keys and `&*` channels).
+  password-required; the credential value is the disclosed fixture recorded in
+  the `requirepass` setting) with a full-access permission grant (`+@all` over
+  `~*` keys and `&*` channels).
 - MISP-to-Redis relationship semantics through
   `relationships.misp-connects-redis`, now targeting the typed Redis datastore
   service; participant discovery confirms MISP reaches `misp-redis:6379` while
   MISP-side auth remains unobserved.
 
 No known ACES expressivity gap remains for the catalogued MISP Redis steady-state
-inventory. The Redis auth fixture and its ACL hash are redacted; the
-password-required posture is preserved as a classified fact.
+inventory. The Redis auth fixture is a disclosed scenario realization fact —
+preserved verbatim in the evidence and encoded as a `secret_fixture` value in the
+SDL (per ACES #471) so the asset can be reproduced — not an operator secret.
 
 ## Evidence Highlights
 
@@ -56,12 +59,12 @@ password-required posture is preserved as a classified fact.
 - Runtime counts: 17 apk packages, 101 Trivy vulnerability findings (4 critical,
   46 high, 47 medium, 4 low), 18 local users, 36 local groups, one steady-state
   `redis-server` process (PID 1, uid 999), and four unique service listeners.
-- Datastore state: `key_value`, 16 logical DBs configured; `db0` (120 keys),
-  `db1` (9 keys), and `db13` (21 keys) populated at the snapshot (volatile,
+- Datastore state: `key_value`, 16 logical DBs configured; `db0` (125 keys),
+  `db1` (9 keys), and `db13` (22 keys) populated at the snapshot (volatile,
   MISP-driven); RDB persistence at the configured save points, AOF off,
   `noeviction`, `maxmemory 0`.
 - Authentication: a single `default` Redis ACL user with `~* &* +@all` and
-  `requirepass` enforced; raw password and ACL hash redacted.
+  `requirepass` enforced; the fixture password is preserved as scenario content.
 - Participant discovery: `aptl-misp` resolves `misp-redis` / `aptl-misp-redis`
   to `172.20.0.3` and reaches TCP/6379; `aptl-kali` cannot reach the security-net
   address from its current network vantage.
@@ -69,9 +72,11 @@ password-required posture is preserved as a classified fact.
 ## Limits
 
 - This is not a destructive fresh-lab reset or byte-identical rebuild proof.
-- The Redis auth fixture (`redis-server --requirepass ...`) and the ACL password
-  hash are redacted from every committed artifact; the password-required service
-  fact and its classification are captured instead of the raw value.
+- The Redis auth fixture (`redis-server --requirepass redispassword`) is a
+  checked-in scenario realization fact — the provisioning input that reproduces
+  this asset — preserved verbatim in the evidence and encoded as a
+  `secret_fixture` value in the SDL. It is a disclosed lab credential, not an
+  operator secret; generic operator-secret shapes are still scrubbed.
 - `misp-redis` declares no named volume; `/data` is backed by an anonymous Docker
   volume (image `VOLUME /data`). The keyspace, per-DB key counts, datatype
   census, and `dump.rdb` are MISP-driven runtime state that drift continuously;

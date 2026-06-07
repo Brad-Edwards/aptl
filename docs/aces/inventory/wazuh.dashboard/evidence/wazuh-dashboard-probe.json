@@ -1,0 +1,8 @@
+{
+  "vantage": "container localhost",
+  "commands": [
+    "curl -ks -i https://localhost:5601/api/status",
+    "curl -ks -i https://localhost:5601/"
+  ],
+  "output": "HTTP/1.1 401 Unauthorized\r\nosd-name: wazuh.dashboard\r\nx-frame-options: sameorigin\r\ncontent-type: application/json; charset=utf-8\r\ncache-control: private, no-cache, no-store, must-revalidate\r\nset-cookie: <HTTP-COOKIE-VALUE-OMITTED>; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Path=/\r\ncontent-length: 77\r\nDate: Sat, 06 Jun 2026 07:32:47 GMT\r\nConnection: keep-alive\r\nKeep-Alive: timeout=120\r\n\r\n{\"statusCode\":401,\"error\":\"Unauthorized\",\"message\":\"Authentication required\"}--root-probe--\nHTTP/1.1 302 Found\r\nlocation: /app/login?\r\nosd-name: wazuh.dashboard\r\nx-frame-options: sameorigin\r\ncache-control: private, no-cache, no-store, must-revalidate\r\nset-cookie: <HTTP-COOKIE-VALUE-OMITTED>; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Path=/\r\ncontent-length: 0\r\nDate: Sat, 06 Jun 2026 07:32:47 GMT\r\nConnection: keep-alive\r\nKeep-Alive: timeout=120\r\n\r\n"
+}

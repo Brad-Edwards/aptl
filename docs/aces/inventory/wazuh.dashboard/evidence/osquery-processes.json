@@ -1,0 +1,27 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-wazuh-dashboard PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "/bin/bash /entrypoint.sh",
+      "gid": "1000",
+      "name": "entrypoint.sh",
+      "path": "",
+      "pid": "1",
+      "start_time": "1779517156",
+      "uid": "1000"
+    },
+    {
+      "cmdline": "/usr/share/wazuh-dashboard/node/bin/node --no-warnings --max-http-header-size=65536 /usr/share/wazuh-dashboard/src/cli/dist -c /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml",
+      "gid": "1000",
+      "name": "node",
+      "path": "",
+      "pid": "54",
+      "start_time": "1779517159",
+      "uid": "1000"
+    }
+  ]
+}

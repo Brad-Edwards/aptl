@@ -1,0 +1,57 @@
+--dashboard-version--
+2.19.1
+--version-json--
+{
+  "version": "4.12.0",
+  "stage": "rc1",
+  "commit": "eda6503-4a0e79949-b0c6e09"
+}
+--package-json--
+{
+  "name": "opensearch-dashboards",
+  "description": "OpenSearch Dashboards is a browser based analytics and search dashboard for OpenSearch. OpenSearch Dashboards is a snap to setup and start using. OpenSearch Dashboards strives to be easy to get started with, while also being flexible and powerful, just like OpenSearch.",
+  "keywords": [
+    "opensearch-dashboards",
+    "opensearch",
+    "logstash",
+    "analytics",
+    "visualizations",
+    "dashboards",
+    "dashboarding"
+  ],
+  "version": "2.19.1",
+  "branch": "2.x",
+  "build": {
+    "number": "412003",
+    "sha": "eda6503ef18fad7f0544fa9be3780684ec2ce4ad",
+    "distributable": true,
+    "release": true
+  },
+  "wazuh": {
+    "version": "4.12.0",
+    "revision": "1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/opensearch-project/opensearch-dashboards.git"
+  },
+  "engines": {
+    "node": ">=14.20.1 <19"
+  }
+}
+--node--
+v18.19.0
+--plugin-directories--
+total 52
+drwxr-x--- 1 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 .
+drwxr-xr-x 1 wazuh-dashboard wazuh-dashboard 4096 May 23 06:19 ..
+drwxr-xr-x 6 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 alertingDashboards
+drwxr-xr-x 8 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 customImportMapDashboards
+drwxr-xr-x 6 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 ganttChartDashboards
+drwxr-xr-x 8 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 indexManagementDashboards
+drwxr-xr-x 9 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 notificationsDashboards
+drwxr-xr-x 8 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 reportsDashboards
+drwxr-xr-x 7 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 securityDashboards
+drwxr-x--- 1 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 wazuh
+drwxr-xr-x 7 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 wazuhCheckUpdates
+drwxr-xr-x 7 wazuh-dashboard wazuh-dashboard 4096 Sep  1  2025 wazuhCore

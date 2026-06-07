@@ -100,6 +100,17 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #347 MISP MariaDB companion inventory pass. The SDL encodes the catalogued MariaDB image, build provenance, runtime, filesystem manifest, local identity, package/CVE inventory, software components, listeners, database logical state, MISP table cardinalities, database role/account anchors, and typed MISP-to-MariaDB relationship facts. Brad-Edwards/aces#388 is consumed through runtime.database_services, Brad-Edwards/aces#431 is consumed through runtime.service_listeners, and Brad-Edwards/aces#465 is consumed through modular SDL imports with no known remaining ACES expressivity blocker for the catalogued MISP DB steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
+  - id: scen.techvault.wazuh-sidecar-db-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.wazuh-sidecar-db + forwarding_agents.aptl-db-wazuh-agent + relationships + accounts
+    category: aces_sdl
+    aces_target: nodes.techvault.wazuh-sidecar-db (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, linux_capabilities, network, software_components) + forwarding_agents.aptl-db-wazuh-agent + relationships + accounts
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/wazuh-sidecar-db/ + tests/test_wazuh_sidecar_db_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/ + Brad-Edwards/aces#460 consumed"
+    blocking_followup: n/a
+    notes: SCN-010 issue #343 wazuh-sidecar-db log-forwarder inventory pass. Promotes the off-node Wazuh sidecar from a docker-compose-only forwarding_agents stub to the fully inventoried participant node nodes.techvault.wazuh-sidecar-db. The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, processes, environment, default-capability set (no CAP_NET_ADMIN), security-net endpoint, no-network-listener posture, and wazuh-agent software component; the cross-node forwarding behaviour stays in the scenario-level forwarding_agents registry (Brad-Edwards/aces#460), enriched from the captured ossec.conf, and is resolved by the db-logs-forwarded-wazuh and wazuh-sidecar-db-forwards-wazuh-manager relationship edges. No known remaining ACES expressivity blocker for the catalogued wazuh-sidecar-db steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
   - id: scen.techvault.workstation-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
@@ -187,6 +198,17 @@ rows:
     validation_evidence: "docs/aces/inventory/wazuh.manager/ + scenarios/techvault.sdl.yaml + tests/test_wazuh_manager_inventory.py + tests/test_techvault_classification_audit.py + Brad-Edwards/aces#428 + Brad-Edwards/aces#434"
     blocking_followup: n/a
     notes: Issue #340 inventory; current SDL encodes Wazuh manager image provenance, Amazon Linux runtime identity, container/network/health state, process/capability/environment/local-identity state, filesystem inventory, package and vulnerability inventories, ACES #428 security-monitoring manager listeners, components, agents, groups, content sets, and settings, plus ACES #434 parsed detection definitions for 4,542 rules/correlation rules and 1,579 decoders.
+
+  - id: scen.techvault.wazuh-dashboard-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.wazuh-dashboard + infrastructure.wazuh-dashboard + runtime
+    category: aces_sdl
+    aces_target: ACES nodes / infrastructure / runtime / runtime.service_listeners / runtime.applications / runtime.platform_applications fields
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/wazuh.dashboard/ + scenarios/techvault/nodes/wazuh-dashboard.sdl.yaml + tests/test_wazuh_dashboard_inventory.py"
+    blocking_followup: n/a
+    notes: "Issue #342 inventory; current SDL encodes Wazuh dashboard image provenance, Amazon Linux runtime identity, container/network/health state, process/capability/environment/local-identity state, filesystem evidence, package and vulnerability inventories, HTTPS route behavior, and analytics-dashboard platform state. The capture is a non-destructive current-running observation, not clean-lab rebuild proof."
 
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml

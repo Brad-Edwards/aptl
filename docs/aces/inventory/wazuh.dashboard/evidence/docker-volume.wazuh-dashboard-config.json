@@ -1,0 +1,16 @@
+[
+  {
+    "CreatedAt": "2026-05-23T08:18:29+02:00",
+    "Driver": "local",
+    "Labels": {
+      "com.docker.compose.config-hash": "5e3e38667ea4a319b3dd1aec1029f320630ec370708d2557c055e2e08b92d991",
+      "com.docker.compose.project": "aptl",
+      "com.docker.compose.version": "5.1.3",
+      "com.docker.compose.volume": "wazuh-dashboard-config"
+    },
+    "Mountpoint": "/var/lib/docker/volumes/aptl_wazuh-dashboard-config/_data",
+    "Name": "aptl_wazuh-dashboard-config",
+    "Options": null,
+    "Scope": "local"
+  }
+]

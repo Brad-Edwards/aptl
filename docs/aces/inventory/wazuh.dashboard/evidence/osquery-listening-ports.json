@@ -1,0 +1,57 @@
+{
+  "table": "listening_ports",
+  "query": "select port, protocol, address, pid, socket, path from listening_ports order by port, protocol, pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-wazuh-dashboard network namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "-1",
+      "port": "5601",
+      "protocol": "6",
+      "socket": "170297854"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "-1",
+      "port": "5601",
+      "protocol": "6",
+      "socket": "170297854"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "41661",
+      "protocol": "17",
+      "socket": "170277416"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "41661",
+      "protocol": "17",
+      "socket": "170277416"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "42189",
+      "protocol": "6",
+      "socket": "170277417"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "42189",
+      "protocol": "6",
+      "socket": "170277417"
+    }
+  ]
+}

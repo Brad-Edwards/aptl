@@ -1,0 +1,39 @@
+{
+  "profiles": [
+    "soc"
+  ],
+  "image": "aptl-wazuh-sidecar:local",
+  "build": {
+    "context": ".",
+    "dockerfile": "containers/wazuh-sidecar/Dockerfile"
+  },
+  "container_name": "aptl-wazuh-sidecar-db",
+  "hostname": "wazuh-sidecar-db",
+  "restart": "unless-stopped",
+  "environment": [
+    "WAZUH_MANAGER=wazuh.manager",
+    "AGENT_NAME=aptl-db-agent",
+    "LOG_PATHS=/logs/pg_log/postgresql.log",
+    "LOG_FORMAT=syslog"
+  ],
+  "volumes": [
+    "db_data:/logs:ro"
+  ],
+  "depends_on": {
+    "wazuh.manager": {
+      "condition": "service_healthy"
+    }
+  },
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "256m"
+      }
+    }
+  },
+  "networks": {
+    "aptl-security": {
+      "ipv4_address": "172.20.0.35"
+    }
+  }
+}

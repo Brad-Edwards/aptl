@@ -422,8 +422,12 @@ def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
     assert env["MYSQL_HOST"].value == "misp-db"
     assert env["REDIS_HOST"].value == "misp-redis"
     assert env["HOME"].value == "/root"
-    assert env["ADMIN_KEY"].value_classification == "redacted"
-    assert env["MYSQL_PASSWORD"].value_classification == "redacted"
+    # Scenario-fixture lab credentials are reproduction inputs: preserved as
+    # secret_fixture values (ACES #471), not redacted.
+    assert env["ADMIN_KEY"].value == "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw"
+    assert env["ADMIN_KEY"].value_classification == "secret_fixture"
+    assert env["MYSQL_PASSWORD"].value == "misp_db_password"
+    assert env["MYSQL_PASSWORD"].value_classification == "secret_fixture"
 
     published = {(port.host_ip, port.host_port, port.container_port) for port in runtime.network.published_ports}
     assert published == {("0.0.0.0", 8443, 443), ("::", 8443, 443)}

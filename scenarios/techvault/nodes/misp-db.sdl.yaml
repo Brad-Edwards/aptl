@@ -6768,15 +6768,17 @@ nodes:
         value: misp
         value_classification: plain
       - name: MYSQL_PASSWORD
+        value: misp_db_password
         provenance: compose
         source: docker-inspect.container.json
-        description: Secret-bearing fixture value redacted during capture.
-        value_classification: redacted
+        description: Scenario-fixture credential preserved as a reproduction input (ACES #471).
+        value_classification: secret_fixture
       - name: MYSQL_ROOT_PASSWORD
+        value: misp_root_password
         provenance: compose
         source: docker-inspect.container.json
-        description: Secret-bearing fixture value redacted during capture.
-        value_classification: redacted
+        description: Scenario-fixture credential preserved as a reproduction input (ACES #471).
+        value_classification: secret_fixture
       - name: MYSQL_USER
         provenance: compose
         source: docker-inspect.container.json

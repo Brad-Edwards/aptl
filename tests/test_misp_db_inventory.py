@@ -406,8 +406,12 @@ def test_techvault_sdl_encodes_misp_db_inventory_surfaces(legacy_scenario):
     env = {item["name"]: item for item in runtime["environment"]}
     assert env["MYSQL_DATABASE"]["value"] == "misp"
     assert env["MYSQL_USER"]["value"] == "misp"
-    assert env["MYSQL_PASSWORD"]["value_classification"] == "redacted"
-    assert env["MYSQL_ROOT_PASSWORD"]["value_classification"] == "redacted"
+    # Scenario-fixture lab credentials are reproduction inputs: preserved as
+    # secret_fixture values (ACES #471), not redacted.
+    assert env["MYSQL_PASSWORD"]["value"] == "misp_db_password"
+    assert env["MYSQL_PASSWORD"]["value_classification"] == "secret_fixture"
+    assert env["MYSQL_ROOT_PASSWORD"]["value"] == "misp_root_password"
+    assert env["MYSQL_ROOT_PASSWORD"]["value_classification"] == "secret_fixture"
     assert env["HOSTNAME"]["provenance"] == "runtime"
 
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}

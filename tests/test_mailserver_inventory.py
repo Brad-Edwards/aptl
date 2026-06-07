@@ -249,16 +249,16 @@ def test_techvault_sdl_encodes_mailserver_inventory_surfaces():
     assert len(mail_service.settings) == MAIL_SETTING_COUNT
     ssl_key_settings = [s for s in mail_service.settings if s.name == "ssl_key"]
     assert ssl_key_settings, "ssl_key setting must remain encoded under mail_services.settings"
-    assert ssl_key_settings[0].value_classification == "redacted", (
-        "ACES PR #458 unified secret-name redaction: settings whose name carries "
-        "a secret-bearing pattern (per name_indicates_secret) must use "
-        "value_classification 'redacted' or 'operator_secret' and omit the raw "
-        "value."
+    # ACES #471 made secret-name omission advisory: observed runtime values are
+    # scenario realization facts. doveconf -n masks ssl_key itself, so the
+    # observed value is dovecot's own mask token, not a secret to withhold.
+    assert ssl_key_settings[0].value_classification == "plain", (
+        "ssl_key carries dovecot's own masked token as its observed value, not a "
+        "withheld secret -- preserved as a realization fact (ACES #471)."
     )
-    assert not ssl_key_settings[0].value, (
-        "Raw value must be omitted under the secret-name redaction rule; "
-        "pydantic may surface a missing YAML field as either None or '' "
-        "depending on the model's annotation default."
+    assert ssl_key_settings[0].value == "# hidden, use -P to show it", (
+        "The observed doveconf -n value for ssl_key is dovecot's mask token; the "
+        "actual TLS key material is provisioned via the certificate mount."
     )
     assert mail_service.aliases == []
     assert mail_service.queues[0].message_count == 0

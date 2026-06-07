@@ -1091,8 +1091,8 @@ nodes:
         gid: 1000
         mode: '600'
         size: 411
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 3893e71546baef9cd178076c06acfcf98cdbe1478923abda856f1d58765f8c51
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
@@ -1235,8 +1235,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 1393
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 4f9361f8900354bf82b509b41affa6b2c2222a43758a58540715c6432c6c23f3
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
@@ -1251,8 +1251,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 204
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 71ce5db8b54fee32043721f2bdeacba818ede76f89c78fe337aaa8bb3823e2a0
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt
         stability: generated
@@ -1315,8 +1315,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 2610
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 238579880aa2dc76fc5108cb1d06b2aeaf9ebb9740fd550e853f9729ba93dbfc
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
@@ -1379,8 +1379,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 411
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: f32e267c4bdfe6f96a0fc15bd08a2850870c0946cd753d55ea5b608f7de66f42
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
@@ -1411,8 +1411,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 513
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: d3acb338f09a8da080b92110b32119f37a6d62ba786824bede283d022cd440eb
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
@@ -1555,8 +1555,8 @@ nodes:
         gid: 998
         mode: '640'
         size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
@@ -3890,7 +3890,7 @@ nodes:
         description: ''
       - name: LABADMIN_SSH_KEY_FILE
         value: /keys/aptl_lab_key.pub
-        value_classification: plain
+        value_classification: secret_fixture
         provenance: compose
         source: docker-inspect.container.json
         description: ''

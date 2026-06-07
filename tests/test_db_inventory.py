@@ -304,7 +304,7 @@ def test_techvault_sdl_encodes_db_inventory_surfaces():
     assert "logging_collector=on" in " ".join(primary["command"])
     assert {process["name"] for process in runtime["processes"]} >= {"postgres-postmaster", "postgres-logger"}
     environment = {item["name"]: item for item in runtime["environment"]}
-    assert environment["POSTGRES_PASSWORD"]["value"] == "<scenario-fixture-secret>"
+    assert environment["POSTGRES_PASSWORD"]["value"] == "techvault_db_pass"
     assert environment["POSTGRES_PASSWORD"]["value_classification"] == "secret_fixture"
     assert runtime["linux_capabilities"]["effective"] == []
     assert runtime["operational_policy"]["restart"] == "unless_stopped"
@@ -351,7 +351,7 @@ def test_techvault_sdl_encodes_db_inventory_surfaces():
     assert settings["log_statement"]["value"] == "all"
 
     assert data["conditions"]["db-postgres-ready"]["command"] == "pg_isready -U techvault -d techvault"
-    assert data["features"]["techvault-postgres-service"]["environment"][-1] == "POSTGRES_PASSWORD=<scenario-fixture-secret>"
+    assert data["features"]["techvault-postgres-service"]["environment"][-1] == "POSTGRES_PASSWORD=techvault_db_pass"
     assert data["content"]["db-init-schema-sql"]["path"] == "/docker-entrypoint-initdb.d/01-schema.sql"
     assert data["relationships"]["db-logs-forwarded-wazuh"]["target"] == "wazuh-manager"
     assert data["relationships"]["webapp-connects-db"]["source"] == "nodes.webapp.runtime.applications.techvault-portal"

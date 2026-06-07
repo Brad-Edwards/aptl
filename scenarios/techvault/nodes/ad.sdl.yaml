@@ -29,7 +29,7 @@ nodes:
           description: ''
         - instruction: env
           arguments:
-          - SAMBA_ADMIN_PASSWORD=<scenario-fixture-secret>
+          - SAMBA_ADMIN_PASSWORD=Admin123!
           description: ''
         - instruction: run
           arguments:
@@ -183,7 +183,7 @@ nodes:
           empty: true
           description: ''
         - digest: ''
-          created_by: ENV SAMBA_ADMIN_PASSWORD=<REDACTED-SCENARIO-FIXTURE>
+          created_by: ENV SAMBA_ADMIN_PASSWORD=Admin123!
           size: 0
           empty: true
           description: ''
@@ -300,7 +300,7 @@ nodes:
             value_classification: plain
             description: ''
           - name: SAMBA_ADMIN_PASSWORD
-            value: <scenario-fixture-secret>
+            value: Admin123!
             value_classification: secret_fixture
             description: ''
           description: ''
@@ -3126,7 +3126,7 @@ nodes:
         source: ''
         description: ''
       - name: SAMBA_ADMIN_PASSWORD
-        value: <scenario-fixture-secret>
+        value: Admin123!
         value_classification: secret_fixture
         provenance: compose
         source: ''

@@ -8,20 +8,30 @@ forwarding_agents:
   implementation: wazuh_agent
   agent_kind: log_forwarder
   name: aptl-db-agent
-  description: "Off-node Wazuh agent sidecar container (compose service `wazuh-sidecar-db`, image `aptl-wazuh-sidecar:local`,\
-    \ container name `aptl-wazuh-sidecar-db`). It mounts the db node's `db_data` volume read-only at /logs and forwards PostgreSQL\
-    \ logs from /logs/pg_log/postgresql.log to the wazuh-manager. Registered as `aptl-db-agent` on nodes.wazuh-manager.runtime.security_monitoring_managers[0].agents.\
-    \ Encoded at the scenario level (per Brad-Edwards/aces#460) because the sidecar is an APTL ADR-020 infrastructure carve-out\
-    \ \u2014 it serves the db node which has no first-party Wazuh package, but is itself not a scenario participant and has\
-    \ no captured inventory bundle. All encoded specifics are evidenced by docker-compose.yml lines 930-955.\n"
+  description: 'Off-node Wazuh agent sidecar container (compose service wazuh-sidecar-db, image aptl-wazuh-sidecar:local,
+    container aptl-wazuh-sidecar-db). It mounts the db node''s db_data volume read-only at /logs and forwards PostgreSQL logs
+    from /logs/pg_log/postgresql.log (LOG_FORMAT=syslog) to the wazuh-manager. Registered as aptl-db-agent on
+    nodes.wazuh-manager.runtime.security_monitoring_managers[0].agents (manager agent_control confirms agent id 005, status
+    Active). The sidecar is an APTL ADR-020 carve-out (postgres:16-alpine has no first-party Wazuh package); as of SCN-010
+    issue #343 its asset-level inventory (image, packages, CVEs, filesystem, identity, runtime) is captured under
+    docs/aces/inventory/wazuh-sidecar-db/ and encoded as the participant node nodes.techvault.wazuh-sidecar-db. This
+    scenario-level forwarding_agents entry (per Brad-Edwards/aces#460) carries the cross-node forwarding spec that the
+    relationships.db-logs-forwarded-wazuh and relationships.wazuh-sidecar-db-forwards-wazuh-manager edges resolve to.'
+  sources:
+  - source_id: aptl-db-wazuh-agent-pg-log
+    kind: tailed_path
+    location: /logs/pg_log/postgresql.log
+    parse_format: syslog
+    description: 'Tails the db container''s PostgreSQL log from the read-only db_data mount (compose LOG_PATHS=/logs/pg_log/postgresql.log,
+      LOG_FORMAT=syslog); rendered into /var/ossec/etc/ossec.conf as a localfile block (evidenced by wazuh-agent-state.txt).'
   buffer_policy:
     buffer_policy_id: aptl-db-wazuh-agent-buffer
-    description: 'The sidecar''s Wazuh agent carries runtime buffer/queue policy configured inside the aptl-wazuh-sidecar:local
-      image; the granular queue_capacity, eps, crypto, and reconnect_seconds fields are intentionally left unset because they
-      are not enumerated as parsed facts in the docker-compose.yml authored spec (no sidecar inventory bundle is in scope
-      per APTL #388).
-
-      '
+    queue_capacity: 5000
+    eps: 500
+    crypto: aes
+    reconnect_seconds: 60
+    description: 'Captured from the rendered /var/ossec/etc/ossec.conf in the wazuh-sidecar-db inventory bundle: client_buffer
+      queue_size 5000, events_per_second 500, crypto_method aes, time-reconnect 60s (notify_time 10s).'
   ship_targets:
   - target_id: aptl-db-wazuh-agent-events-1514
     target_node_ref: techvault.wazuh-manager
@@ -68,6 +78,8 @@ imports:
   namespace: techvault
 - source: local:techvault/nodes/wazuh-manager.sdl.yaml
   namespace: techvault
+- source: local:techvault/nodes/wazuh-indexer.sdl.yaml
+  namespace: techvault
 - source: local:techvault/nodes/wazuh-dashboard.sdl.yaml
   namespace: techvault
 - source: local:techvault/nodes/webapp.sdl.yaml
@@ -95,6 +107,8 @@ imports:
 - source: local:techvault/nodes/misp-suricata-sync.sdl.yaml
   namespace: techvault
 - source: local:techvault/nodes/suricata.sdl.yaml
+  namespace: techvault
+- source: local:techvault/nodes/wazuh-sidecar-db.sdl.yaml
   namespace: techvault
 - source: local:techvault/sections/infrastructure.sdl.yaml
   namespace: techvault

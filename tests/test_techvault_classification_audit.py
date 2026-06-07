@@ -80,19 +80,21 @@ def test_shuffle_backend_runtime_inventory_is_encoded_from_evidence():
     assert endpoint["ip_address"] == observed["IPAddress"] == "172.20.0.20"
     assert endpoint["aliases"] == observed["Aliases"]
 
-    # Scenario-fixture lab credentials are preserved as reproduction inputs
-    # (ACES #471): classified secret_fixture with their values present.
-    fixture_env = {
+    secret_env = {
         item["name"]: item
         for item in runtime["environment"]
         if item["value_classification"] == "secret_fixture"
     }
-    assert {
+    assert set(secret_env) == {
         "SHUFFLE_DEFAULT_APIKEY",
         "SHUFFLE_DEFAULT_PASSWORD",
         "SHUFFLE_OPENSEARCH_PASSWORD",
-    } <= set(fixture_env)
-    assert all(item["value"] for item in fixture_env.values())
+    }
+    assert all(item["value"] for item in secret_env.values()), (
+        "ACES #471 removed the secret-name value-omission rule: secret-named env "
+        "vars carry their real scenario value (the backend needs them to realize "
+        "the stack); they are never blanked."
+    )
 
 
 def test_wazuh_manager_sdl_matches_compose_visible_surfaces():
@@ -147,10 +149,12 @@ def test_wazuh_manager_sdl_matches_compose_visible_surfaces():
     assert filesystem["/wazuh-config-mount/etc/ossec.conf"]["sensitivity"] == "operator_secret"
 
     env = {item["name"]: item for item in runtime["environment"]}
-    # Scenario-fixture lab credentials are preserved as reproduction inputs (ACES #471).
     for name in ("INDEXER_PASSWORD", "API_PASSWORD"):
         assert env[name]["value_classification"] == "secret_fixture"
-        assert env[name]["value"]
+        assert env[name]["value"], (
+            f"{name} must carry its real scenario value (ACES #471); the manager "
+            "is not deployable without it, and the value is the asserted fact."
+        )
 
 
 def test_switch_network_internal_flags_match_compose():

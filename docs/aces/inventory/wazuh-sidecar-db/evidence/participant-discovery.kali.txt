@@ -1,0 +1,10 @@
+--dns--
+--route-to-security-net--
+RTNETLINK answers: Network is unreachable
+--tcp-probe--
+172.20.0.35: inverse host lookup failed: Host name lookup failure
+(UNKNOWN) [172.20.0.35] 1514 (?) : Network is unreachable
+172.20.0.35: inverse host lookup failed: Host name lookup failure
+(UNKNOWN) [172.20.0.35] 1515 (?) : Network is unreachable
+--ping--
+ping: connect: Network is unreachable

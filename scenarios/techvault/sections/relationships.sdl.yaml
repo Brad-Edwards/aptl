@@ -23,10 +23,11 @@ relationships:
     type: connects_to
     source: techvault.db
     target: techvault.wazuh-manager
-    description: 'The off-node wazuh-sidecar-db container tails PostgreSQL logs from the shared db_data volume and forwards
-      them to the SOC stack. Typed forwarding_edge.forwarder_ref resolves into the scenario-level forwarding_agents registry
-      (introduced by Brad-Edwards/aces#460) rather than a node-hosted agent, because the sidecar is an APTL ADR-020 infrastructure
-      carve-out (postgres:16-alpine has no first-party Wazuh package) and is not itself a scenario participant node.
+    description: 'Logical log-origin edge: the db container''s PostgreSQL logs reach the SOC stack via the off-node
+      wazuh-sidecar-db container, which tails them from the shared db_data volume. Typed forwarding_edge.forwarder_ref resolves
+      into the scenario-level forwarding_agents registry (Brad-Edwards/aces#460). As of SCN-010 issue #343 the sidecar itself
+      is inventoried as the participant node nodes.techvault.wazuh-sidecar-db; the realized sidecar-to-manager network edge
+      is wazuh-sidecar-db-forwards-wazuh-manager.
 
       '
     properties: {}
@@ -34,13 +35,41 @@ relationships:
     mail_access: null
     forwarding_edge:
       forwarder_ref: aptl-db-wazuh-agent
-      target_listener_role: other
+      target_listener_role: agent_event_ingestion
       enrollment_identity_ref: ''
       enrollment_identity_classification: none
-      protocol: ''
-      crypto_method: ''
-      parse_format: unknown
-      description: ''
+      protocol: tcp
+      crypto_method: aes
+      parse_format: syslog
+      description: 'Now evidenced by the wazuh-sidecar-db inventory bundle (rendered ossec.conf: server wazuh.manager:1514
+        tcp, crypto aes, localfile syslog /logs/pg_log/postgresql.log).'
+    service_integration: null
+    proxy_upstream: null
+  wazuh-sidecar-db-forwards-wazuh-manager:
+    type: connects_to
+    source: techvault.wazuh-sidecar-db
+    target: techvault.wazuh-manager
+    description: 'Realized network edge from the wazuh-sidecar-db node: its wazuh-agentd dials the manager on TCP/1514 and
+      registers via agent-auth. The manager agent_control lists it as agent id 005 aptl-db-agent, status Active (evidenced
+      by observer-discovery.wazuh-manager.txt); the agent is currently connected with events flowing (wazuh-agent-state.txt:
+      status=connected). The sidecar publishes no inbound listener and is unreachable from the kali participant vantage
+      (participant-discovery.kali.txt). SCN-010 issue #343.'
+    properties:
+      protocol: wazuh-agent
+      port: '1514'
+      vantage: aptl-wazuh-manager
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: aptl-db-wazuh-agent
+      target_listener_role: agent_event_ingestion
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: tcp
+      crypto_method: aes
+      parse_format: syslog
+      description: 'Resolves to the aptl-db-wazuh-agent scenario-level forwarding agent; enrollment on TCP/1515, event
+        shipping on TCP/1514.'
     service_integration: null
     proxy_upstream: null
   webapp-connects-db:

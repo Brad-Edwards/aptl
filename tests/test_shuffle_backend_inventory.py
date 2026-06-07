@@ -422,23 +422,19 @@ def test_techvault_sdl_encodes_shuffle_runtime_surfaces(node, runtime):
     assert endpoint["ip_address"] == "172.20.0.20"
     assert runtime["network"]["published_ports"] == []
 
-    # Scenario-fixture lab credentials are preserved as reproduction inputs
-    # (ACES #471): classified secret_fixture with their values present.
-    fixture_env = {
-        item["name"]
+    # ACES #471 removed the secret-name value-omission rule: secret-named env
+    # vars carry their real scenario value (the backend injects them to realize
+    # the stack), classified secret_fixture, never blanked.
+    secret_env = {
+        item["name"]: item["value"]
         for item in runtime["environment"]
         if item["value_classification"] == "secret_fixture"
     }
-    assert {
-        "SHUFFLE_DEFAULT_APIKEY",
-        "SHUFFLE_DEFAULT_PASSWORD",
-        "SHUFFLE_OPENSEARCH_PASSWORD",
-    } <= fixture_env
-    assert all(
-        item["value"]
-        for item in runtime["environment"]
-        if item["value_classification"] == "secret_fixture"
-    )
+    assert secret_env == {
+        "SHUFFLE_DEFAULT_APIKEY": "31a211c4-ea5c-4a49-b022-5e2434e758a7",
+        "SHUFFLE_DEFAULT_PASSWORD": "ShuffleAdmin2024!",
+        "SHUFFLE_OPENSEARCH_PASSWORD": "StrongPassword123!",
+    }
 
 
 def test_techvault_sdl_encodes_shuffle_application_and_identity(runtime):

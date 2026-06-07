@@ -18,6 +18,7 @@ from aptl.core.aces_inventory import (
     validate_mapping_ledger,
 )
 
+
 pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -422,12 +423,10 @@ def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
     assert env["MYSQL_HOST"].value == "misp-db"
     assert env["REDIS_HOST"].value == "misp-redis"
     assert env["HOME"].value == "/root"
-    # Scenario-fixture lab credentials are reproduction inputs: preserved as
-    # secret_fixture values (ACES #471), not redacted.
-    assert env["ADMIN_KEY"].value == "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw"
     assert env["ADMIN_KEY"].value_classification == "secret_fixture"
-    assert env["MYSQL_PASSWORD"].value == "misp_db_password"
+    assert env["ADMIN_KEY"].value == "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw"
     assert env["MYSQL_PASSWORD"].value_classification == "secret_fixture"
+    assert env["MYSQL_PASSWORD"].value == "misp_db_password"
 
     published = {(port.host_ip, port.host_port, port.container_port) for port in runtime.network.published_ports}
     assert published == {("0.0.0.0", 8443, 443), ("::", 8443, 443)}
@@ -532,5 +531,6 @@ def test_parity_inventory_cites_misp_inventory_and_aces_sdl():
     assert "runtime.platform_applications" in row["aces_target"]
     assert "tests/test_misp_inventory.py" in row["validation_evidence"]
     assert "Brad-Edwards/aces#431/#465 consumed" in row["validation_evidence"]
-    # #348 (misp-redis) completed; the misp row now tracks only the remaining #349.
+    # #348 (misp-redis) is inventoried in this PR, so only #349 remains.
     assert "#349" in row["blocking_followup"]
+    assert "#348" not in row["blocking_followup"]

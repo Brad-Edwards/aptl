@@ -1,0 +1,59 @@
+[
+  {
+    "Id": "sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3",
+    "RepoTags": [
+      "aptl-wazuh-sidecar:local"
+    ],
+    "RepoDigests": [
+      "aptl-wazuh-sidecar@sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2026-05-21T11:02:06.66866504+02:00",
+    "Config": {
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEBIAN_FRONTEND=noninteractive"
+      ],
+      "Entrypoint": [
+        "/opt/aptl/wazuh/wazuh-agent.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.service": "wazuh-sidecar-db",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 42635035,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:b2008ac19409fa6fee4b52596271400498aebd0be04dffac5351bd1dcf230f2a",
+        "sha256:e909e932e20d4205e92a0462dafa9c694ba2f07ac20b2eae7c75134fe6f423c5",
+        "sha256:fe195f65e35878e012a4d856013abc7ea5d5b824faa40a9a87a7f2bbb493a8fe",
+        "sha256:10806385ca51708c4467ef6cd6e4220b1ea4e74ca018904291e9d1b9100bf3f4",
+        "sha256:c9dd82298c212e8c2533b08cc4ecc692801f39b22a7794f28dee4921b886d6f8",
+        "sha256:186a86a296febff3c5d5178994ea074f518d9d94573780e6c8b26cb92285131f",
+        "sha256:138f109222cee44e3ebb2738cb43ef1e25f9b7f51dd881719b2867b89c89d802",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-05-23T06:17:07.969098911Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3",
+      "size": 856
+    },
+    "Identity": {
+      "Build": [
+        {
+          "Ref": "ewnq6q1usyhy7gszpvbsbh8js",
+          "CreatedAt": "2026-05-23T08:17:08.172896104+02:00"
+        }
+      ]
+    }
+  }
+]

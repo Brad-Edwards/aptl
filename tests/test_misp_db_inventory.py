@@ -18,6 +18,7 @@ from aptl.core.aces_inventory import (
     validate_mapping_ledger,
 )
 
+
 pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -406,12 +407,10 @@ def test_techvault_sdl_encodes_misp_db_inventory_surfaces(legacy_scenario):
     env = {item["name"]: item for item in runtime["environment"]}
     assert env["MYSQL_DATABASE"]["value"] == "misp"
     assert env["MYSQL_USER"]["value"] == "misp"
-    # Scenario-fixture lab credentials are reproduction inputs: preserved as
-    # secret_fixture values (ACES #471), not redacted.
-    assert env["MYSQL_PASSWORD"]["value"] == "misp_db_password"
     assert env["MYSQL_PASSWORD"]["value_classification"] == "secret_fixture"
-    assert env["MYSQL_ROOT_PASSWORD"]["value"] == "misp_root_password"
+    assert env["MYSQL_PASSWORD"]["value"] == "misp_db_password"
     assert env["MYSQL_ROOT_PASSWORD"]["value_classification"] == "secret_fixture"
+    assert env["MYSQL_ROOT_PASSWORD"]["value"] == "misp_root_password"
     assert env["HOSTNAME"]["provenance"] == "runtime"
 
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
@@ -426,7 +425,9 @@ def test_techvault_sdl_encodes_misp_db_inventory_surfaces(legacy_scenario):
         "95c5ce80f2aa71ca9f8a69053dff7c73d8db7e58b0af810f60552a2fa07ee2ee"
     )
     assert filesystem["/var/lib/mysql/mysql/global_priv.MAD"]["sensitivity"] == "operator_secret"
-    assert filesystem["/var/lib/mysql/mysql/global_priv.MAD"]["content_digest"] == ""
+    assert filesystem["/var/lib/mysql/mysql/global_priv.MAD"]["content_digest"] == (
+        "64b86998dad1c91b037425e3a9ba7a81ea760e2e98f1b4ef91bba2338431dc4a"
+    )
 
     listeners = {listener["service_listener_id"]: listener for listener in runtime["service_listeners"]}
     assert listeners["mariadb-3306-ipv4"]["scope"] == "wildcard"
@@ -604,5 +605,6 @@ def test_parity_inventory_cites_misp_db_inventory_and_updates_misp_followups():
 
     misp = rows["scen.techvault.misp-inventory"]
     assert "#347" not in misp["blocking_followup"]
+    # #348 (misp-redis) is inventoried in this PR, so only #349 remains.
     assert "#348" not in misp["blocking_followup"]
     assert "#349" in misp["blocking_followup"]

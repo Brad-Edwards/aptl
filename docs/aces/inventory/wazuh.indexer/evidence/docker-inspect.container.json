@@ -1,0 +1,373 @@
+[
+  {
+    "Id": "50c9dab972af1c3ae4b91598fceef4eda08df6545bf44b832f13cbb0b2c76d24",
+    "Created": "2026-05-23T06:18:29.896216808Z",
+    "Path": "/entrypoint.sh",
+    "Args": [
+      "opensearchwrapper"
+    ],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2955783,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-23T06:18:34.655179417Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-06-06T05:42:06.222305831+02:00",
+            "End": "2026-06-06T05:42:06.29707413+02:00",
+            "ExitCode": 0,
+            "Output": "Unauthorized"
+          },
+          {
+            "Start": "2026-06-06T05:42:36.298055817+02:00",
+            "End": "2026-06-06T05:42:36.356434908+02:00",
+            "ExitCode": 0,
+            "Output": "Unauthorized"
+          },
+          {
+            "Start": "2026-06-06T05:43:06.358020371+02:00",
+            "End": "2026-06-06T05:43:06.414875007+02:00",
+            "ExitCode": 0,
+            "Output": "Unauthorized"
+          },
+          {
+            "Start": "2026-06-06T05:43:36.41593006+02:00",
+            "End": "2026-06-06T05:43:36.474362222+02:00",
+            "ExitCode": 0,
+            "Output": "Unauthorized"
+          },
+          {
+            "Start": "2026-06-06T05:44:06.475341344+02:00",
+            "End": "2026-06-06T05:44:06.541982292+02:00",
+            "ExitCode": 0,
+            "Output": "Unauthorized"
+          }
+        ]
+      }
+    },
+    "Image": "sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299",
+    "ResolvConfPath": "/var/lib/docker/containers/50c9dab972af1c3ae4b91598fceef4eda08df6545bf44b832f13cbb0b2c76d24/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/50c9dab972af1c3ae4b91598fceef4eda08df6545bf44b832f13cbb0b2c76d24/hostname",
+    "HostsPath": "/var/lib/docker/containers/50c9dab972af1c3ae4b91598fceef4eda08df6545bf44b832f13cbb0b2c76d24/hosts",
+    "LogPath": "/var/lib/docker/containers/50c9dab972af1c3ae4b91598fceef4eda08df6545bf44b832f13cbb0b2c76d24/50c9dab972af1c3ae4b91598fceef4eda08df6545bf44b832f13cbb0b2c76d24-json.log",
+    "Name": "/aptl-wazuh-indexer",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "/home/atomik/src/aptl/config/wazuh_indexer/wazuh.indexer.yml:/usr/share/wazuh-indexer/opensearch.yml:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml:rw",
+        "aptl_wazuh-indexer-data:/var/lib/wazuh-indexer:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.key:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.indexer.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.pem:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-security",
+      "PortBindings": {
+        "9200/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "9200"
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "always",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 2147483648,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 4294967296,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": [
+        {
+          "Name": "memlock",
+          "Hard": -1,
+          "Soft": -1
+        },
+        {
+          "Name": "nofile",
+          "Hard": 65536,
+          "Soft": 65536
+        }
+      ],
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca.pem",
+        "Destination": "/usr/share/wazuh-indexer/certs/root-ca.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem",
+        "Destination": "/usr/share/wazuh-indexer/certs/wazuh.indexer.key",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.indexer.pem",
+        "Destination": "/usr/share/wazuh-indexer/certs/wazuh.indexer.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/admin.pem",
+        "Destination": "/usr/share/wazuh-indexer/certs/admin.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/admin-key.pem",
+        "Destination": "/usr/share/wazuh-indexer/certs/admin-key.pem",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer/wazuh.indexer.yml",
+        "Destination": "/usr/share/wazuh-indexer/opensearch.yml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_indexer/internal_users.yml",
+        "Destination": "/usr/share/wazuh-indexer/opensearch-security/internal_users.yml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh-indexer-data",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh-indexer-data/_data",
+        "Destination": "/var/lib/wazuh-indexer",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "wazuh.indexer",
+      "Domainname": "",
+      "User": "wazuh-indexer",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "9200/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "USER=wazuh-indexer",
+        "GROUP=wazuh-indexer",
+        "NAME=wazuh-indexer",
+        "INSTALL_DIR=/usr/share/wazuh-indexer"
+      ],
+      "Cmd": [
+        "opensearchwrapper"
+      ],
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "curl -ks https://localhost:9200 || exit 1"
+        ],
+        "Interval": 30000000000,
+        "Timeout": 10000000000,
+        "StartPeriod": 180000000000,
+        "Retries": 10
+      },
+      "Image": "wazuh/wazuh-indexer:4.12.0",
+      "Volumes": null,
+      "WorkingDir": "/usr/share/wazuh-indexer",
+      "Entrypoint": [
+        "/entrypoint.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "170f28139ffebbe62cd3b7b8cd07898e25525d524a48a705c58f3dc2241297d8",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "",
+        "com.docker.compose.image": "sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "wazuh.indexer",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "957d3373c6fcd91ae923df8b2a7193354893935ea091cde1617ac66375469c52",
+      "SandboxKey": "<REDACTED>",
+      "Ports": {
+        "9200/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "9200"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "9200"
+          }
+        ]
+      },
+      "Networks": {
+        "aptl_aptl-security": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.0.12"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-wazuh-indexer",
+            "wazuh.indexer"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "1eb3bb0e2a5be86233852f0b592b0a1819c4b6fbaf7406e91e8c87d29fcf178e",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.12",
+          "MacAddress": "ae:4b:7d:21:1f:d2",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-wazuh-indexer",
+            "wazuh.indexer",
+            "50c9dab972af"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299",
+      "size": 3649,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

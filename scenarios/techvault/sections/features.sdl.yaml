@@ -14,7 +14,7 @@ features:
     environment:
     - POSTGRES_DB=techvault
     - POSTGRES_USER=techvault
-    - POSTGRES_PASSWORD=<scenario-fixture-secret>
+    - POSTGRES_PASSWORD=techvault_db_pass
   techvault-webapp-service:
     name: ''
     type: service
@@ -32,7 +32,7 @@ features:
     - DB_PORT=5432
     - DB_NAME=techvault
     - DB_USER=techvault
-    - DB_PASSWORD=<scenario-fixture-secret>
+    - DB_PASSWORD=techvault_db_pass
     - FLASK_ENV=production
   webapp-rsyslog-forwarding:
     name: ''
@@ -141,7 +141,7 @@ features:
     environment:
     - SAMBA_DOMAIN=TECHVAULT
     - SAMBA_REALM=TECHVAULT.LOCAL
-    - SAMBA_ADMIN_PASSWORD=<scenario-fixture-secret>
+    - SAMBA_ADMIN_PASSWORD=Admin123!
     - DNS_FORWARDER=172.20.1.22
   ad-rsyslog-forwarding:
     name: ''

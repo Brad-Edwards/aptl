@@ -462,8 +462,17 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     filesystem = {entry["path"]: entry for entry in runtime["filesystem_inventory"]}
     assert filesystem["/srv/shares/shared/user-flag.txt"]["sensitivity"] == "secret_fixture"
     assert filesystem["/root/root.txt"]["mode"] == "0600"
-    assert filesystem["/srv/shares/it-backups/keys/deploy_key"]["entry_type"] == "file"
-    assert filesystem["/srv/shares/it-backups/keys/deploy_key"]["presence"] == "expected_absent"
+    # The planted leaked SSH deploy key is now present (the image was missing
+    # openssh-client, so the keygen previously silently no-oped).
+    deploy_key = filesystem["/srv/shares/it-backups/keys/deploy_key"]
+    assert deploy_key["entry_type"] == "file"
+    assert deploy_key["presence"] == "present"
+    assert deploy_key["sensitivity"] == "secret_fixture"
+    assert deploy_key["mode"] == "0600"
+    assert deploy_key["digest_algorithm"] == "sha256"
+    assert deploy_key["content_digest"] == (
+        "ef731cb1a6c3cd4cbeebb6d329f3e964ad681bb95d55ed8c50dae19c164b0563"
+    )
     assert filesystem["/srv/shares/engineering/deployments/deploy.sh"]["content_digest"] == (
         "4830319c1205cebdf51c139c0496f7e8ed27304acaafb8c4aa9b61f5bcade8e6"
     )

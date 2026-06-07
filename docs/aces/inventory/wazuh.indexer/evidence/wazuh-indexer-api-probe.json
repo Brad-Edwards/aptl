@@ -1,0 +1,5 @@
+{
+  "vantage": "container localhost",
+  "command": "curl -ks -i https://localhost:9200",
+  "output": "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"OpenSearch Security\"\r\ncontent-type: text/plain; charset=UTF-8\r\ncontent-length: 12\r\n\r\nUnauthorized"
+}

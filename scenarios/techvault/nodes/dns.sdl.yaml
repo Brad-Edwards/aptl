@@ -1213,7 +1213,7 @@ nodes:
         description: ''
       - name: PWD
         value: /
-        value_classification: plain
+        value_classification: secret_fixture
         provenance: unknown
         source: ''
         description: ''

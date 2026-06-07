@@ -348,7 +348,7 @@ nodes:
             description: ''
           - name: GPG_KEY
             value: A035C8C19219BA821ECEA86B64E628F8D684696D
-            value_classification: plain
+            value_classification: secret_fixture
             description: ''
           - name: PYTHON_VERSION
             value: 3.11.15
@@ -1567,7 +1567,7 @@ nodes:
         description: ''
       - name: GPG_KEY
         value: A035C8C19219BA821ECEA86B64E628F8D684696D
-        value_classification: plain
+        value_classification: secret_fixture
         provenance: image
         source: ''
         description: ''
@@ -1609,7 +1609,7 @@ nodes:
         description: ''
       - name: PWD
         value: /app
-        value_classification: plain
+        value_classification: secret_fixture
         provenance: runtime
         source: ''
         description: ''
@@ -3165,7 +3165,7 @@ nodes:
             value: techvault
             description: Database user.
           - name: secret_key_length
-            sensitivity: plain
+            sensitivity: secret_fixture
             value: '25'
             description: Non-secret length metadata for the Flask fixture secret key.
           - name: jwt_algorithm

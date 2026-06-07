@@ -421,8 +421,10 @@ def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
     assert env["MYSQL_HOST"].value == "misp-db"
     assert env["REDIS_HOST"].value == "misp-redis"
     assert env["HOME"].value == "/root"
-    assert env["ADMIN_KEY"].value_classification == "redacted"
-    assert env["MYSQL_PASSWORD"].value_classification == "redacted"
+    assert env["ADMIN_KEY"].value_classification == "secret_fixture"
+    assert env["ADMIN_KEY"].value == "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw"
+    assert env["MYSQL_PASSWORD"].value_classification == "secret_fixture"
+    assert env["MYSQL_PASSWORD"].value == "misp_db_password"
 
     published = {(port.host_ip, port.host_port, port.container_port) for port in runtime.network.published_ports}
     assert published == {("0.0.0.0", 8443, 443), ("::", 8443, 443)}

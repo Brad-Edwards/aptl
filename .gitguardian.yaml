@@ -2,3 +2,11 @@
 # GitGuardian configuration for APTL security lab
 
 version: v1
+
+# ACES asset inventories under docs/aces/inventory/ deliberately commit
+# scenario-fixture credentials -- the lab's intentionally-weak, disclosed
+# passwords/keys (e.g. the Redis requirepass fixture, webapp DB/JWT secrets).
+# They are scenario realization facts needed to reproduce the range, not
+# operator secrets, so the whole inventory tree is excluded from secret scanning.
+paths-ignore:
+  - 'docs/aces/inventory/**'

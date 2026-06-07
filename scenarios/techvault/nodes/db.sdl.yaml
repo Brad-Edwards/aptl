@@ -22499,7 +22499,7 @@ nodes:
         source: ''
         description: ''
       - name: POSTGRES_PASSWORD
-        value: <scenario-fixture-secret>
+        value: techvault_db_pass
         value_classification: secret_fixture
         provenance: compose
         source: ''

@@ -2668,11 +2668,11 @@ nodes:
             description: Role column rendered in the admin table.
           - name: backup_config.access_key
             sensitivity: secret_fixture
-            value: ''
+            value: AKIAIOSFODNN7EXAMPLE
             description: Backup access key column rendered in the backup table.
           - name: backup_config.secret_key
             sensitivity: secret_fixture
-            value: ''
+            value: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
             description: Backup secret key column rendered in the backup table.
           upstream_target: null
         - route_id: webapp-upload
@@ -2847,7 +2847,7 @@ nodes:
             description: User department.
           - name: api_key
             sensitivity: secret_fixture
-            value: ''
+            value: tvk_admin_a1b2c3d4e5f6g7h8i9j0
             description: API key value returned in the response.
           upstream_target: null
         - route_id: webapp-api-customers
@@ -2956,7 +2956,7 @@ nodes:
           exposed_fields:
           - name: token
             sensitivity: secret_fixture
-            value: ''
+            value: techvault-jwt-weak
             description: JWT signed with the hardcoded weak JWT secret.
           upstream_target: null
         - route_id: webapp-tools-ping

@@ -5799,8 +5799,8 @@ nodes:
         - setting_id: dovecot-003-auth-verbose-passwords
           component_ref: dovecot
           name: auth_verbose_passwords
-          value: ''
-          value_classification: redacted
+          value: "sha1:6"
+          value_classification: secret_fixture
           provenance: command_output
           source_path: /etc/dovecot/dovecot.conf
           description: Runtime setting captured from doveconf -n.
@@ -6393,15 +6393,14 @@ nodes:
         - setting_id: dovecot-077-ssl-key
           component_ref: dovecot
           name: ssl_key
-          value: ''
-          value_classification: redacted
+          value: "/etc/ssl/private/ssl-cert-snakeoil.key"
+          value_classification: secret_fixture
           provenance: command_output
           source_path: /etc/dovecot/dovecot.conf
-          description: 'Runtime setting captured from doveconf -n. Raw value omitted and value_classification set to redacted
-            under the unified secret-name redaction rule introduced by ACES PR #458; the upstream tool already masks this
-            value as ''# hidden, use -P to show it''.
-
-            '
+          description: 'Dovecot ssl_key setting — the configured TLS private-key file path (the default
+            snakeoil key shipped with the range), captured from the dovecot configuration and classified
+            secret_fixture as authored synthetic-range scenario content. The value is the asserted fact and
+            is recorded verbatim; ACES #471 removed the secret-name rule that previously forced it to be redacted.'
         - setting_id: dovecot-078-ssl-prefer-server-ciphers
           component_ref: dovecot
           name: ssl_prefer_server_ciphers

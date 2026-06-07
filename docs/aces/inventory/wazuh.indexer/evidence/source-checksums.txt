@@ -1,0 +1,3 @@
+6f57d5ff3dc4a988161be4a7e7cd19b511d2b7e715ebdc76cd504bfb3496b975  docker-compose.yml
+47d0c6032addfbed5539df70d5655c843c2ce05214eb1cde0bd3908e05fa4d5d  config/wazuh_indexer/wazuh.indexer.yml
+51aa50ddb9783a711b923f5fd32010a11fa6a5fa23fb140fd47a3ae3e0c82b2c  config/wazuh_indexer/internal_users.yml

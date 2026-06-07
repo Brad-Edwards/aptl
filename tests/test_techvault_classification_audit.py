@@ -83,14 +83,18 @@ def test_shuffle_backend_runtime_inventory_is_encoded_from_evidence():
     secret_env = {
         item["name"]: item
         for item in runtime["environment"]
-        if item["value_classification"] == "redacted"
+        if item["value_classification"] == "secret_fixture"
     }
     assert set(secret_env) == {
         "SHUFFLE_DEFAULT_APIKEY",
         "SHUFFLE_DEFAULT_PASSWORD",
         "SHUFFLE_OPENSEARCH_PASSWORD",
     }
-    assert all(item["value"] == "" for item in secret_env.values())
+    assert all(item["value"] for item in secret_env.values()), (
+        "ACES #471 removed the secret-name value-omission rule: secret-named env "
+        "vars carry their real scenario value (the backend needs them to realize "
+        "the stack); they are never blanked."
+    )
 
 
 def test_wazuh_manager_sdl_matches_compose_visible_surfaces():
@@ -146,8 +150,11 @@ def test_wazuh_manager_sdl_matches_compose_visible_surfaces():
 
     env = {item["name"]: item for item in runtime["environment"]}
     for name in ("INDEXER_PASSWORD", "API_PASSWORD"):
-        assert env[name]["value_classification"] == "redacted"
-        assert env[name]["value"] == ""
+        assert env[name]["value_classification"] == "secret_fixture"
+        assert env[name]["value"], (
+            f"{name} must carry its real scenario value (ACES #471); the manager "
+            "is not deployable without it, and the value is the asserted fact."
+        )
 
 
 def test_switch_network_internal_flags_match_compose():

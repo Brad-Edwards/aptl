@@ -121,3 +121,14 @@ conditions:
     source: null
     description: Docker Compose healthcheck for the aptl-misp-db MariaDB companion service.
     environment: []
+  wazuh-indexer-ready:
+    name: Wazuh indexer OpenSearch REST healthcheck
+    command: curl -ks https://localhost:9200 || exit 1
+    interval: 30
+    timeout: 10
+    retries: 10
+    start_period: 180
+    source: null
+    description: Docker Compose healthcheck for the aptl-wazuh-indexer container. OpenSearch Security challenges the unauthenticated
+      request with HTTP 401 Unauthorized; that response (exit code 0) is the readiness signal.
+    environment: []

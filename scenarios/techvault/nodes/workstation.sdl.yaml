@@ -77,7 +77,7 @@ nodes:
           description: ''
         - instruction: run
           arguments:
-          - useradd -m -s /bin/bash dev-user && echo "dev-user:<REDACTED-SCENARIO-FIXTURE>" | chpasswd && usermod -aG wheel
+          - useradd -m -s /bin/bash dev-user && echo "dev-user:Summer2024" | chpasswd && usermod -aG wheel
             dev-user && echo "dev-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev-user && chmod 440 /etc/sudoers.d/dev-user
           description: ''
         - instruction: run
@@ -328,7 +328,7 @@ nodes:
           description: ''
         - digest: sha256:44126b9aa8864896ba2c6411812a9aea705d894f401318ef1f37e3658b4c3998
           created_by: 'RUN |3 INSTALL_WAZUH=true INSTALL_FALCO=true INSTALL_XSIAM=false /bin/sh -c useradd -m -s /bin/bash
-            dev-user &&     echo "dev-user:<REDACTED-SCENARIO-FIXTURE>" | chpasswd &&     usermod -aG wheel dev-user &&     echo
+            dev-user &&     echo "dev-user:Summer2024" | chpasswd &&     usermod -aG wheel dev-user &&     echo
             "dev-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev-user &&     chmod 440 /etc/sudoers.d/dev-user # buildkit'
           size: 397000
           empty: false
@@ -1236,8 +1236,8 @@ nodes:
         gid: 1000
         mode: '0600'
         size: 411
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 3893e71546baef9cd178076c06acfcf98cdbe1478923abda856f1d58765f8c51
+        digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: volume_backed
@@ -1412,8 +1412,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 1393
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 491493352d6dd02ab710d522a996bd454c863ad49f609b3ee7cb93aa86d7db56
+        digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: stable
@@ -1444,8 +1444,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 214
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 5f610024f25c281a962dfcefc8e5213cc16e77a50b7f1b4740f35cbf4363ec29
+        digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: generated
@@ -1492,8 +1492,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 2610
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: e155424a1f64387f61b64b4b000742899bb7afeb164219a587b0cae1d16f8747
+        digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: stable
@@ -1556,8 +1556,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 411
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: e27cbf1b5cca1282ec32f40c396bfe71e4ffcc0c7d143c34aa26d54a7d197a33
+        digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: stable
@@ -1588,8 +1588,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 513
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: d524caa67bd69f27aa87fe487d66e85d4753abb10bc88ca3ce9c09aaf9a1d620
+        digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: stable
@@ -1700,8 +1700,8 @@ nodes:
         gid: 998
         mode: '0640'
         size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: stable

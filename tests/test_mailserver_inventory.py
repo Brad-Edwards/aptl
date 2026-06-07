@@ -249,16 +249,14 @@ def test_techvault_sdl_encodes_mailserver_inventory_surfaces():
     assert len(mail_service.settings) == MAIL_SETTING_COUNT
     ssl_key_settings = [s for s in mail_service.settings if s.name == "ssl_key"]
     assert ssl_key_settings, "ssl_key setting must remain encoded under mail_services.settings"
-    assert ssl_key_settings[0].value_classification == "redacted", (
-        "ACES PR #458 unified secret-name redaction: settings whose name carries "
-        "a secret-bearing pattern (per name_indicates_secret) must use "
-        "value_classification 'redacted' or 'operator_secret' and omit the raw "
-        "value."
+    assert ssl_key_settings[0].value_classification == "secret_fixture", (
+        "ACES #471 removed the secret-name value-omission rule: a secret-bearing "
+        "setting carries its real scenario value classified as secret_fixture, not "
+        "redacted. Every value in a synthetic-range SDL is authored scenario content."
     )
-    assert not ssl_key_settings[0].value, (
-        "Raw value must be omitted under the secret-name redaction rule; "
-        "pydantic may surface a missing YAML field as either None or '' "
-        "depending on the model's annotation default."
+    assert ssl_key_settings[0].value == "/etc/ssl/private/ssl-cert-snakeoil.key", (
+        "ssl_key carries the doveconf-reported key path verbatim; the value is the "
+        "asserted fact, never omitted."
     )
     assert mail_service.aliases == []
     assert mail_service.queues[0].message_count == 0

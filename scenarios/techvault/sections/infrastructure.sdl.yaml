@@ -74,6 +74,16 @@ infrastructure:
     - techvault.internal-net: 172.20.2.30
     acls: []
     description: ''
+  wazuh-indexer:
+    count: 1
+    links:
+    - techvault.security-net
+    dependencies: []
+    properties:
+    - techvault.security-net: 172.20.0.12
+    acls: []
+    description: 'Wazuh indexer (OpenSearch 2.19.1 fork) attached to security-net; host-published TCP/9200 REST API is encoded
+      under nodes.wazuh-indexer.runtime.network.published_ports.'
   wazuh-dashboard:
     count: 1
     links:

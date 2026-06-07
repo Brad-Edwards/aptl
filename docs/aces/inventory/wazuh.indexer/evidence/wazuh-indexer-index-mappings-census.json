@@ -1,0 +1,292 @@
+{
+  "index_count": 41,
+  "indices": [
+    {
+      "index": ".kibana_1",
+      "top_level_field_count": 28,
+      "leaf_field_count": 132,
+      "dynamic": "strict",
+      "mapping_sha256": "9fc02cd7cc7b3a37a685f8e6a61749130be1c0ac5a5ddb824b4e7579354a10f1"
+    },
+    {
+      "index": ".opendistro_security",
+      "top_level_field_count": 10,
+      "leaf_field_count": 10,
+      "dynamic": "",
+      "mapping_sha256": "6305dcadfd446ae17438672fa7f4aaa37683d148fc31dbd800e1b7accad23df0"
+    },
+    {
+      "index": ".opensearch-observability",
+      "top_level_field_count": 11,
+      "leaf_field_count": 11,
+      "dynamic": "false",
+      "mapping_sha256": "7670e53e3cf743bb8376dd4dfdd57e04444890825e5b543bcdf91b8a205dea74"
+    },
+    {
+      "index": ".plugins-ml-config",
+      "top_level_field_count": 6,
+      "leaf_field_count": 6,
+      "dynamic": "",
+      "mapping_sha256": "7862e83ff2faeee75a3750f54cde2f8ddcd50f937774ecc7162ad05f43ada37e"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.05.23",
+      "top_level_field_count": 25,
+      "leaf_field_count": 670,
+      "dynamic": "",
+      "mapping_sha256": "130c3a42ef1c56e9192533f1cccb4889770838801100c49671d3637dfcd4f09e"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.05.24",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.05.25",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.05.26",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.05.27",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.05.28",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.05.29",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.05.30",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.05.31",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.06.01",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.06.02",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.06.03",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.06.04",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.06.05",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-alerts-4.x-2026.06.06",
+      "top_level_field_count": 25,
+      "leaf_field_count": 645,
+      "dynamic": "",
+      "mapping_sha256": "ec4ace33e3929b69172165e717042e0a04365fcf1b571462031781383760892f"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.05.23",
+      "top_level_field_count": 25,
+      "leaf_field_count": 947,
+      "dynamic": "",
+      "mapping_sha256": "a05cd0f83be2f809b600f692c52a253d59aa05cd8fad5498b0dbc761b93d0ac8"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.05.24",
+      "top_level_field_count": 25,
+      "leaf_field_count": 922,
+      "dynamic": "",
+      "mapping_sha256": "5fb9e4ca6ffd4cfa73878d4f79af64d594e4eef145dc63d8432c335cb66e962d"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.05.25",
+      "top_level_field_count": 25,
+      "leaf_field_count": 922,
+      "dynamic": "",
+      "mapping_sha256": "5fb9e4ca6ffd4cfa73878d4f79af64d594e4eef145dc63d8432c335cb66e962d"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.05.26",
+      "top_level_field_count": 25,
+      "leaf_field_count": 920,
+      "dynamic": "",
+      "mapping_sha256": "a45195fa1fe2b1dc0756c8ba191e05b829577aa56564f4b2cb986a6a703dc013"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.05.27",
+      "top_level_field_count": 25,
+      "leaf_field_count": 920,
+      "dynamic": "",
+      "mapping_sha256": "a45195fa1fe2b1dc0756c8ba191e05b829577aa56564f4b2cb986a6a703dc013"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.05.28",
+      "top_level_field_count": 25,
+      "leaf_field_count": 922,
+      "dynamic": "",
+      "mapping_sha256": "5fb9e4ca6ffd4cfa73878d4f79af64d594e4eef145dc63d8432c335cb66e962d"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.05.29",
+      "top_level_field_count": 25,
+      "leaf_field_count": 922,
+      "dynamic": "",
+      "mapping_sha256": "5fb9e4ca6ffd4cfa73878d4f79af64d594e4eef145dc63d8432c335cb66e962d"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.05.30",
+      "top_level_field_count": 25,
+      "leaf_field_count": 922,
+      "dynamic": "",
+      "mapping_sha256": "5fb9e4ca6ffd4cfa73878d4f79af64d594e4eef145dc63d8432c335cb66e962d"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.05.31",
+      "top_level_field_count": 25,
+      "leaf_field_count": 922,
+      "dynamic": "",
+      "mapping_sha256": "5fb9e4ca6ffd4cfa73878d4f79af64d594e4eef145dc63d8432c335cb66e962d"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.06.01",
+      "top_level_field_count": 25,
+      "leaf_field_count": 920,
+      "dynamic": "",
+      "mapping_sha256": "a45195fa1fe2b1dc0756c8ba191e05b829577aa56564f4b2cb986a6a703dc013"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.06.02",
+      "top_level_field_count": 25,
+      "leaf_field_count": 920,
+      "dynamic": "",
+      "mapping_sha256": "a45195fa1fe2b1dc0756c8ba191e05b829577aa56564f4b2cb986a6a703dc013"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.06.03",
+      "top_level_field_count": 25,
+      "leaf_field_count": 920,
+      "dynamic": "",
+      "mapping_sha256": "a45195fa1fe2b1dc0756c8ba191e05b829577aa56564f4b2cb986a6a703dc013"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.06.04",
+      "top_level_field_count": 25,
+      "leaf_field_count": 922,
+      "dynamic": "",
+      "mapping_sha256": "5fb9e4ca6ffd4cfa73878d4f79af64d594e4eef145dc63d8432c335cb66e962d"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.06.05",
+      "top_level_field_count": 25,
+      "leaf_field_count": 922,
+      "dynamic": "",
+      "mapping_sha256": "5fb9e4ca6ffd4cfa73878d4f79af64d594e4eef145dc63d8432c335cb66e962d"
+    },
+    {
+      "index": "wazuh-archives-4.x-2026.06.06",
+      "top_level_field_count": 25,
+      "leaf_field_count": 922,
+      "dynamic": "",
+      "mapping_sha256": "5fb9e4ca6ffd4cfa73878d4f79af64d594e4eef145dc63d8432c335cb66e962d"
+    },
+    {
+      "index": "wazuh-monitoring-2026.21w",
+      "top_level_field_count": 20,
+      "leaf_field_count": 27,
+      "dynamic": "",
+      "mapping_sha256": "342c4b01d51d75ef017e33800aa4d14d059ca061488dc932b0e5d544e2b7f796"
+    },
+    {
+      "index": "wazuh-monitoring-2026.22w",
+      "top_level_field_count": 19,
+      "leaf_field_count": 26,
+      "dynamic": "",
+      "mapping_sha256": "0a7f0844e575a5fd681841ee2e6c8d474b5d3aa057a45e55fd729ff5ffaf2fc8"
+    },
+    {
+      "index": "wazuh-monitoring-2026.23w",
+      "top_level_field_count": 19,
+      "leaf_field_count": 26,
+      "dynamic": "",
+      "mapping_sha256": "0a7f0844e575a5fd681841ee2e6c8d474b5d3aa057a45e55fd729ff5ffaf2fc8"
+    },
+    {
+      "index": "wazuh-states-vulnerabilities-wazuh.manager",
+      "top_level_field_count": 5,
+      "leaf_field_count": 47,
+      "dynamic": "strict",
+      "mapping_sha256": "d587876a152590882a62698d10f916818db43b6e99be2164a3ec3af5c8d9943e"
+    },
+    {
+      "index": "wazuh-statistics-2026.21w",
+      "top_level_field_count": 8,
+      "leaf_field_count": 68,
+      "dynamic": "",
+      "mapping_sha256": "2b679216aac4c25efdd661f3bb98a9681e41066acc4338fe3d8fd1823bdfc146"
+    },
+    {
+      "index": "wazuh-statistics-2026.22w",
+      "top_level_field_count": 8,
+      "leaf_field_count": 68,
+      "dynamic": "",
+      "mapping_sha256": "2b679216aac4c25efdd661f3bb98a9681e41066acc4338fe3d8fd1823bdfc146"
+    },
+    {
+      "index": "wazuh-statistics-2026.23w",
+      "top_level_field_count": 8,
+      "leaf_field_count": 68,
+      "dynamic": "",
+      "mapping_sha256": "2b679216aac4c25efdd661f3bb98a9681e41066acc4338fe3d8fd1823bdfc146"
+    }
+  ]
+}

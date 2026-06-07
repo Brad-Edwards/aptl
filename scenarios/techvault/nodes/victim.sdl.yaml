@@ -3890,10 +3890,10 @@ nodes:
         description: ''
       - name: LABADMIN_SSH_KEY_FILE
         value: /keys/aptl_lab_key.pub
-        value_classification: secret_fixture
+        value_classification: plain
         provenance: compose
         source: docker-inspect.container.json
-        description: Participant SSH public-key file path retained as scenario content; classified because key-bearing names trigger ACES secret-name rules.
+        description: ''
       - name: PATH
         value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         value_classification: plain

@@ -4027,10 +4027,10 @@ nodes:
         description: ''
       - name: PWD
         value: /
-        value_classification: secret_fixture
+        value_classification: plain
         provenance: runtime
         source: ''
-        description: Shell working-directory variable retained as observed range fixture; classified because current ACES secret-name rules treat PWD as secret-bearing.
+        description: ''
       - name: SASLAUTHD_MECH_OPTIONS
         value: ''
         value_classification: plain

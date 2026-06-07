@@ -348,8 +348,8 @@ nodes:
             description: ''
           - name: GPG_KEY
             value: A035C8C19219BA821ECEA86B64E628F8D684696D
-            value_classification: secret_fixture
-            description: Upstream image GPG key fingerprint retained as observed range fixture; classified because key-bearing names trigger ACES secret-name rules.
+            value_classification: plain
+            description: ''
           - name: PYTHON_VERSION
             value: 3.11.15
             value_classification: plain
@@ -1567,10 +1567,10 @@ nodes:
         description: ''
       - name: GPG_KEY
         value: A035C8C19219BA821ECEA86B64E628F8D684696D
-        value_classification: secret_fixture
+        value_classification: plain
         provenance: image
         source: ''
-        description: Upstream image GPG key fingerprint retained as observed range fixture; classified because key-bearing names trigger ACES secret-name rules.
+        description: ''
       - name: HOME
         value: /root
         value_classification: plain
@@ -1609,10 +1609,10 @@ nodes:
         description: ''
       - name: PWD
         value: /app
-        value_classification: secret_fixture
+        value_classification: plain
         provenance: runtime
         source: ''
-        description: Shell working-directory variable retained as observed range fixture; classified because current ACES secret-name rules treat PWD as secret-bearing.
+        description: ''
       - name: PYTHON_SHA256
         value: 272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625
         value_classification: plain
@@ -3165,9 +3165,9 @@ nodes:
             value: techvault
             description: Database user.
           - name: secret_key_length
-            sensitivity: secret_fixture
+            sensitivity: plain
             value: '25'
-            description: Non-secret length metadata for the Flask fixture secret key; classified because key-bearing names trigger ACES secret-name rules.
+            description: Non-secret length metadata for the Flask fixture secret key.
           - name: jwt_algorithm
             sensitivity: plain
             value: HS256

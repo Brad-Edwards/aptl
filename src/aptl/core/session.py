@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from aptl.core.scenarios import ScenarioStateError
 from aptl.utils.logging import get_logger
@@ -33,7 +33,7 @@ class SessionState(str, Enum):
 
 
 @dataclass
-class ActiveSession:
+class ActiveSession(object):
     """Persistent state for a running scenario.
 
     Attributes:
@@ -54,11 +54,11 @@ class ActiveSession:
     span_id: str = ""
     hints_used: dict[str, int] = field(default_factory=dict)
     completed_objectives: list[str] = field(default_factory=list)
-    flags: dict[str, dict[str, dict]] = field(default_factory=dict)
+    flags: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
     run_id: str = ""
 
 
-def _serialize_session(session: ActiveSession) -> dict:
+def _serialize_session(session: ActiveSession) -> dict[str, Any]:
     """Convert an ActiveSession to a JSON-serializable dict.
 
     Args:
@@ -72,7 +72,7 @@ def _serialize_session(session: ActiveSession) -> dict:
     return d
 
 
-def _deserialize_session(data: dict) -> ActiveSession:
+def _deserialize_session(data: dict[str, Any]) -> ActiveSession:
     """Restore an ActiveSession from a deserialized dict.
 
     Args:
@@ -100,7 +100,7 @@ def _deserialize_session(data: dict) -> ActiveSession:
         raise ValueError(f"Malformed session data: {e}") from e
 
 
-class ScenarioSession:
+class ScenarioSession(object):
     """Manages active scenario state across commands.
 
     State is persisted to a JSON file in the .aptl/ directory so that
@@ -203,7 +203,7 @@ class ScenarioSession:
                 "Clear or finish the active session first."
             )
 
-        from aptl.core.telemetry import generate_trace_context
+        from aptl.core.telemetry import generate_trace_context, write_trace_context
 
         ctx = generate_trace_context()
 
@@ -216,6 +216,20 @@ class ScenarioSession:
         )
 
         self._write(session)
+        # ADR-012 intended `trace-context.json` to be the cross-process
+        # correlation handoff to MCP servers (and per ADR-033 / OBS-003
+        # it is also the trace_id source for per-run capture routing).
+        # Writing it here closes the latent producer gap that prevented
+        # MCP-side spans from joining the scenario trace and would have
+        # left every OBS-003 capture under the `_unbound` sentinel.
+        try:
+            write_trace_context(self._state_dir, ctx["trace_id"], ctx["span_id"])
+        except OSError as exc:
+            # Don't fail scenario start over a trace-context write
+            # failure — log and continue. The session is already
+            # persisted; downstream cross-process correlation is
+            # degraded but the scenario can still run.
+            log.warning("Failed to write trace-context.json: %s", exc)
         log.info("Started session for scenario '%s'", scenario_id)
         return session
 
@@ -288,13 +302,19 @@ class ScenarioSession:
         """Remove the session file.
 
         Used after report generation to return to idle state. Safe to
-        call when no session exists (no-op).
+        call when no session exists (no-op). Also clears
+        ``trace-context.json`` so a stale trace_id doesn't route the
+        next scenario's MCP-side captures into the wrong run directory.
         """
         if self._session_path.exists():
             self._session_path.unlink()
             log.info("Cleared session file")
         else:
             log.debug("No session file to clear")
+        trace_ctx_path = self._state_dir / "trace-context.json"
+        if trace_ctx_path.exists():
+            trace_ctx_path.unlink()
+            log.debug("Cleared trace-context.json")
 
     def set_evaluating(self) -> None:
         """Transition session state from ACTIVE to EVALUATING.
@@ -366,5 +386,6 @@ class ScenarioSession:
             fcntl.flock(fd, fcntl.LOCK_EX)
             os.write(fd, payload.encode("utf-8"))
         finally:
-            os.close(fd)  # releases lock
+            # `os.close(fd)` releases the LOCK_EX as a side effect.
+            os.close(fd)
         log.debug("Wrote session to %s", self._session_path)

@@ -1,0 +1,680 @@
+schema_version: 1
+asset:
+  id: webapp
+  scenario: TechVault
+  aptl_issue: 330
+  aces_methodology_issue: 353
+  source_class: custom-build
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: aptl-webapp@sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence: []
+    limits:
+      - >
+        This first-party local image was captured from the local Docker daemon.
+        No registry-visible OCI, in-toto, or SLSA attestation was available for
+        the mutable local tag at capture time.
+correspondence_checks:
+  - id: webapp-node-source-correspondence
+    status: planned
+    source: nodes.techvault.webapp.source
+    realized_evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/source-checksums.txt
+    ledger_fact_ids:
+      - webapp.image.identity
+      - webapp.build.recipe
+    method: >
+      Compare the ACES source name/version in scenarios/techvault.sdl.yaml
+      against the realized local image digest and source package checksums
+      captured here.
+    limit: >
+      Planned because issue #330 records the asset spec and this branch does
+      not rerun the lab for live equivalence proof.
+  - id: webapp-runtime-correspondence
+    status: planned
+    source: nodes.techvault.webapp.runtime
+    realized_evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/os-packages.txt
+      - path: evidence/language-manifests.txt
+      - path: evidence/trivy-sbom.cyclonedx.json
+      - path: evidence/syft-sbom.cyclonedx.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-listening-ports.json
+    ledger_fact_ids:
+      - webapp.runtime.log-volume
+      - webapp.runtime.mount-table
+      - webapp.runtime.filesystem-content
+      - webapp.runtime.filesystem-metadata
+      - webapp.runtime.primary-process
+      - webapp.runtime.supervised-process-set
+      - webapp.runtime.environment-policy
+      - webapp.runtime.capability-restart-policy
+      - webapp.runtime.container-host-config
+      - webapp.runtime.package-inventory
+      - webapp.runtime.vulnerability-scan
+    method: >
+      Re-run the encoded scenario from ACES SDL, recapture runtime evidence,
+      and compare the mount, filesystem, container host/security, health,
+      process, environment, capability, operational-policy, package, and
+      scanner surfaces against this ledger.
+    limit: >
+      Planned because this issue records the current non-destructive
+      steady-state ACES spec and evidence, not a fresh live equivalence run.
+notes:
+  - >
+    ACES #354 is closed and covers runtime mounts, primary process identity,
+    package inventory, dependency manifests, and scanner-derived package
+    findings.
+  - >
+    ACES #358 owns remaining container runtime env, capability, restart-policy,
+    and supervised-process-set expressivity; it is closed, and those fields are
+    now encoded in scenarios/techvault.sdl.yaml for the webapp asset.
+  - >
+    ACES #363, #364, #365, #366, #367, and #368 are closed and consumed by this
+    SDL update. No known ACES expressivity gap remains for the catalogued
+    webapp steady-state inventory facts in this mapping ledger.
+  - >
+    The webapp filesystem inventory is intentionally scoped to catalogued
+    authored/custom and scenario-relevant runtime paths. ACES can express a full
+    root filesystem inventory if captured later; full root filesystem parity is
+    deferred as capture/cataloguing scope, not blocked by ACES expressivity.
+  - >
+    APTL #368 replaced the earlier webapp inventory bundle with a single
+    current-baseline capture that includes required Trivy CycloneDX SBOM
+    evidence, useful-optional Syft CycloneDX SBOM evidence, and osquery table
+    attempts for the webapp bundle. Unsupported Linux osquery tables are
+    recorded in capture-limits.txt and per-table JSON evidence instead of being
+    treated as successful empty inventories.
+facts:
+  - id: webapp.image.identity
+    category: provenance
+    summary: >
+      The asset uses first-party local image aptl-webapp:latest, captured as
+      aptl-webapp@sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a.
+    evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.source.name
+        - nodes.techvault.webapp.source.version
+      rationale: >
+        ACES node source identifies the provider-neutral artifact and immutable
+        digest used by later backend realization.
+
+  - id: webapp.build.recipe
+    category: provenance
+    summary: >
+      The image is a custom build from containers/webapp/Dockerfile with source
+      inputs from containers/webapp/ and containers/_wazuh-agent/.
+    evidence:
+      - path: evidence/compose-service.webapp.json
+      - path: evidence/docker-history.image.txt
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.source.build.base_image
+        - nodes.techvault.webapp.source.build.dockerfile_path
+        - nodes.techvault.webapp.source.build.instructions
+        - nodes.techvault.webapp.source.build.layers
+        - nodes.techvault.webapp.source.build.build_args
+        - nodes.techvault.webapp.source.build.copied_sources
+        - nodes.techvault.webapp.source.build.config
+        - nodes.techvault.webapp.source.build.source_inputs
+        - nodes.techvault.webapp.source.build.attestation
+      rationale: >
+        ACES #364 added the Source.build image provenance surface, so the
+        observed Dockerfile recipe, Docker history/layer chain, copied source
+        mappings, checksum-addressed source inputs, image-default config, and
+        absent-attestation fact are encoded directly.
+
+  - id: webapp.os.version
+    category: runtime-configuration
+    summary: The realized runtime OS is Debian GNU/Linux 13 (trixie).
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.os
+        - nodes.techvault.webapp.os_version
+      rationale: ACES nodes have explicit OS family and version fields.
+
+  - id: webapp.network.identity
+    category: network
+    summary: >
+      The service is attached to aptl_aptl-dmz at 172.20.1.20 and
+      aptl_aptl-internal at 172.20.2.25, with aliases aptl-webapp and webapp.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-network.aptl-dmz.json
+      - path: evidence/docker-network.aptl-internal.json
+      - path: evidence/compose-service.webapp.json
+    aces:
+      disposition: encoded
+      surface: infrastructure
+      fields:
+        - infrastructure.webapp.links
+        - infrastructure.webapp.properties
+        - nodes.techvault.webapp.runtime.network.endpoints
+      rationale: >
+        ACES infrastructure properties encode authored network attachment and
+        static IP assignments; ACES #366 runtime.network now encodes Docker
+        aliases and DNS names as observed runtime realization facts.
+
+  - id: webapp.http.service
+    category: service-surface
+    summary: >
+      The webapp exposes HTTP on TCP port 8080 and listens on 0.0.0.0:8080
+      inside the container.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/compose-service.webapp.json
+    aces:
+      disposition: encoded
+      surface: nodes.services
+      fields:
+        - nodes.techvault.webapp.services
+      rationale: ACES node service bindings model exposed network services by port.
+
+  - id: webapp.healthcheck
+    category: runtime-configuration
+    summary: >
+      Compose declares a healthcheck using curl against http://localhost:8080/
+      with 15s interval, 5s timeout, 5 retries, and 30s start period.
+    evidence:
+      - path: evidence/compose-service.webapp.json
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: conditions
+      fields:
+        - conditions.webapp-http-ready
+        - nodes.techvault.webapp.conditions
+      rationale: ACES conditions represent health/readiness commands and timing.
+
+  - id: webapp.runtime.log-volume
+    category: runtime-configuration
+    summary: The named volume aptl_webapp_logs is mounted at /var/log/gunicorn.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-volume.webapp-logs.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.mounts
+      rationale: ACES #354 added typed runtime mount inventory.
+
+  - id: webapp.runtime.mount-table
+    category: runtime-configuration
+    summary: >
+      The realized container exposes 26 mount targets at steady state,
+      including overlay root, proc/sys/tmpfs pseudo-filesystems, Docker-managed
+      resolver/hostname/hosts files, and the Gunicorn log volume.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.mounts
+      rationale: >
+        ACES #368 added filesystem type, propagation, stability, and
+        backend-generated fields to typed runtime mounts, so the full observed
+        mount table is encoded directly.
+
+  - id: webapp.runtime.primary-process
+    category: runtime-configuration
+    summary: >
+      PID 1 runs supervisord as root with working directory /app.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-top.txt
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.processes
+      rationale: >
+        ACES PR #458 removed the singular runtime.process field. The PID 1
+        supervisord identity is now expressed as the first entry of the
+        runtime.processes list (role: supervisor); the supervised process set
+        fact continues to cover the full process inventory under the same
+        runtime.processes field.
+
+  - id: webapp.runtime.package-inventory
+    category: runtime-inventory
+    summary: >
+      The runtime image contains 212 Debian OS packages and Python dependency
+      manifests for Flask, gunicorn, psycopg2-binary, and PyJWT.
+    evidence:
+      - path: evidence/os-packages.txt
+      - path: evidence/language-manifests.txt
+      - path: evidence/trivy-sbom.cyclonedx.json
+      - path: evidence/syft-sbom.cyclonedx.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.packages
+        - nodes.techvault.webapp.runtime.dependency_manifests
+      rationale: >
+        ACES #354 added runtime package and dependency-manifest inventory. The
+        Trivy and Syft CycloneDX SBOMs added by APTL #368 provide standards
+        backed component-inventory evidence for the same runtime package and
+        dependency surfaces.
+
+  - id: webapp.runtime.filesystem-content
+    category: filesystem-inventory
+    summary: >
+      The observed webapp runtime files and directories under /app,
+      /entrypoint.sh, /etc/rsyslog.d, /etc/supervisor/conf.d,
+      /opt/aptl/wazuh, and /var/ossec/etc are represented as ACES content
+      entries with checksum-addressed source references where current ACES can
+      carry them.
+    evidence:
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: content
+      fields:
+        - nodes.techvault.webapp.runtime.filesystem_inventory
+        - content.webapp-file-app-app-py
+        - content.webapp-file-app-requirements-txt
+        - content.webapp-file-app-static-style-css
+        - content.webapp-file-app-templates-admin-html
+        - content.webapp-file-app-templates-base-html
+        - content.webapp-file-app-templates-dashboard-html
+        - content.webapp-file-app-templates-login-html
+        - content.webapp-file-app-templates-search-html
+        - content.webapp-file-app-templates-tools-html
+        - content.webapp-file-app-templates-upload-html
+        - content.webapp-file-app-user-txt
+        - content.webapp-file-entrypoint-sh
+        - content.webapp-file-etc-rsyslog-d-80-gunicorn-conf
+        - content.webapp-file-etc-rsyslog-d-90-forward-conf
+        - content.webapp-file-etc-supervisor-conf-d-webapp-conf
+        - content.webapp-file-opt-aptl-wazuh-ossec-conf-template
+        - content.webapp-file-opt-aptl-wazuh-wazuh-agent-sh
+        - content.webapp-file-var-ossec-etc-ossec-conf
+        - content.webapp-dir-app
+        - content.webapp-dir-app-static
+        - content.webapp-dir-app-templates
+        - content.webapp-dir-etc-rsyslog-d
+        - content.webapp-dir-etc-supervisor-conf-d
+        - content.webapp-dir-opt-aptl-wazuh
+      rationale: >
+        ACES #363 added first-class runtime filesystem inventory entries;
+        the SDL now encodes the catalogued observed file and directory set
+        with metadata and keeps content entries as source-placement references.
+
+  - id: webapp.runtime.vulnerability-scan
+    category: vulnerability-inventory
+    summary: >
+      Trivy reported 299 package vulnerability findings at capture time:
+      6 critical, 32 high, 99 medium, 158 low, and 4 unknown.
+    evidence:
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-sbom.cyclonedx.json
+      - path: evidence/trivy-vulnerability-counts.json
+      - path: evidence/trivy-vulnerability-list.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.package_vulnerabilities
+      rationale: ACES #354 added scanner-derived package vulnerability findings.
+
+  - id: webapp.runtime.local-accounts
+    category: identity-surface
+    summary: >
+      The observed /etc/passwd users are represented as ACES accounts with the
+      username, node, shell, home directory, disabled/no-login classification,
+      and local-file auth method for curated account-placement compatibility.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: accounts
+      fields:
+        - accounts.webapp-local-root
+        - accounts.webapp-local-daemon
+        - accounts.webapp-local-bin
+        - accounts.webapp-local-sys
+        - accounts.webapp-local-sync
+        - accounts.webapp-local-games
+        - accounts.webapp-local-man
+        - accounts.webapp-local-lp
+        - accounts.webapp-local-mail
+        - accounts.webapp-local-news
+        - accounts.webapp-local-uucp
+        - accounts.webapp-local-proxy
+        - accounts.webapp-local-www-data
+        - accounts.webapp-local-backup
+        - accounts.webapp-local-list
+        - accounts.webapp-local-irc
+        - accounts.webapp-local-apt
+        - accounts.webapp-local-nobody
+        - accounts.webapp-local-systemd-network
+        - accounts.webapp-local-systemd-timesync
+        - accounts.webapp-local-debian-exim
+        - accounts.webapp-local-messagebus
+        - accounts.webapp-local-wazuh
+      caveat: >
+        Top-level ACES accounts are curated account placements, not the full
+        observed Linux identity database. The complete passwd/group/sudo
+        inventory is encoded under nodes.techvault.webapp.runtime.local_identity.
+      rationale: >
+        ACES can express local account name, node binding, shell, home, auth
+        method, and disabled state, so those account-placement fields remain
+        encoded.
+
+  - id: webapp.scenario.weaknesses
+    category: vulnerability-inventory
+    summary: >
+      The webapp intentionally carries SQL injection, command injection, XSS,
+      IDOR, exposed secrets, weak JWT, unrestricted upload, and verbose error
+      disclosure scenario weaknesses.
+    evidence:
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: vulnerabilities
+      fields:
+        - vulnerabilities.webapp-sqli-login
+        - vulnerabilities.webapp-sqli-search
+        - vulnerabilities.webapp-command-injection
+        - vulnerabilities.webapp-reflected-xss
+        - vulnerabilities.webapp-stored-xss
+        - vulnerabilities.webapp-idor-files
+        - vulnerabilities.webapp-idor-users
+        - vulnerabilities.webapp-admin-authz-bypass
+        - vulnerabilities.webapp-backup-secret-disclosure
+        - vulnerabilities.webapp-env-disclosure
+        - vulnerabilities.webapp-debug-disclosure
+        - vulnerabilities.webapp-weak-jwt
+        - vulnerabilities.webapp-unrestricted-upload
+        - vulnerabilities.webapp-upload-path-traversal
+        - vulnerabilities.webapp-api-rate-limit-missing
+        - vulnerabilities.webapp-hardcoded-secret
+        - vulnerabilities.webapp-verbose-error-disclosure
+        - nodes.techvault.webapp.vulnerabilities
+        - nodes.techvault.webapp.runtime.applications.routes.vulnerability_refs
+      rationale: >
+        ACES top-level vulnerabilities model CWE-classified scenario weaknesses,
+        and ACES #367 runtime.application route refs place those weaknesses on
+        the observable Flask route/API/UI surface.
+
+  - id: webapp.relationships
+    category: relationship
+    summary: >
+      The webapp connects to the database at 172.20.2.11:5432 (typed
+      database_access payload) and forwards telemetry/logs toward Wazuh
+      manager/syslog surfaces through the in-process Wazuh agent (typed
+      forwarding_edge payload referencing the new
+      nodes.techvault.webapp.runtime.forwarding_agents entry).
+    evidence:
+      - path: evidence/compose-service.webapp.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: relationships
+      fields:
+        - relationships.webapp-connects-db
+        - relationships.webapp-connects-db.database_access
+        - relationships.webapp-forwards-wazuh
+        - relationships.webapp-forwards-wazuh.forwarding_edge
+        - nodes.techvault.webapp.runtime.forwarding_agents
+      rationale: >
+        ACES PR #458 introduced typed relationship payloads (forwarding_edge,
+        service_integration, proxy_upstream) alongside the existing
+        database_access / mail_access blocks, and a node-scoped
+        runtime.forwarding_agents family. The webapp→db edge keeps its
+        connects_to verb plus its database_access payload; the
+        webapp→wazuh-manager edge replaces the legacy
+        properties.protocol="syslog-and-wazuh-agent" prose with a typed
+        forwarding_edge.forwarder_ref pointing at the webapp-wazuh-agent
+        forwarding agent row.
+
+  - id: webapp.runtime.supervised-process-set
+    category: runtime-configuration
+    summary: >
+      The realized container has a supervised process set: supervisord, gunicorn
+      master/workers, rsyslog, the Wazuh agent wrapper, and Wazuh daemons.
+    evidence:
+      - path: evidence/docker-top.txt
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/filesystem-tree.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.processes
+      rationale: >
+        ACES #358 added runtime process-set inventory, which preserves the
+        load-bearing supervisord, gunicorn, rsyslog, and Wazuh daemon process
+        set separately from the primary PID 1 process identity.
+
+  - id: webapp.runtime.environment-policy
+    category: runtime-configuration
+    summary: >
+      The container has Compose/runtime environment variables that need
+      redaction classification and provenance separate from authored feature
+      environment.
+    evidence:
+      - path: evidence/compose-service.webapp.json
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.environment
+      rationale: >
+        ACES #358 added observed runtime environment variables with value
+        classification and provenance, so Compose, image, container, and runtime
+        variables no longer have to be collapsed into deployable feature
+        environment.
+
+  - id: webapp.runtime.capability-restart-policy
+    category: runtime-configuration
+    summary: >
+      The container carries CAP_NET_ADMIN, restart policy unless-stopped, and a
+      512 MiB memory limit.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/compose-service.webapp.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.linux_capabilities
+        - nodes.techvault.webapp.runtime.operational_policy
+        - nodes.techvault.webapp.runtime.operational_policy.resource_limits
+      rationale: >
+        ACES #358 added typed Linux capability policy plus restart and resource
+        limit inventory under runtime operational policy.
+
+  - id: webapp.runtime.filesystem-metadata
+    category: filesystem-inventory
+    summary: >
+      The catalogued filesystem inventory includes observable file types,
+      owner/group names, permissions, sizes, checksums, generated/runtime
+      stability, and runtime/source correspondence for the scoped path set.
+    evidence:
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/source-checksums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.filesystem_inventory
+      rationale: >
+        ACES #363 added path type, owner/group, UID/GID, mode, size, digest,
+        source, stability, and sensitivity fields for runtime filesystem
+        entries.
+
+  - id: webapp.runtime.local-identity-database
+    category: identity-surface
+    summary: >
+      The runtime identity database includes UID/GID, primary groups, local
+      group records, group GIDs, GECOS fields, and sudo/sudoers scope that
+      current ACES accounts cannot fully represent.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.local_identity.users
+        - nodes.techvault.webapp.runtime.local_identity.groups
+        - nodes.techvault.webapp.runtime.local_identity.sudo_rules
+      rationale: >
+        ACES #365 added the runtime.local_identity surface, so the observed
+        /etc/passwd users, UID/GID values, primary groups, GECOS fields, home
+        directories, shells, no-login state, /etc/group rows, group GIDs,
+        supplemental member lists, provenance/stability classifications, and
+        empty observed sudo-rule set are encoded directly.
+
+  - id: webapp.network.realization-metadata
+    category: network
+    summary: >
+      Docker exposes per-network aliases, DNS names, endpoint IDs, MAC
+      addresses, prefix lengths, network IDs, and host-published port bindings
+      for the webapp container.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-network.aptl-dmz.json
+      - path: evidence/docker-network.aptl-internal.json
+      - path: evidence/compose-service.webapp.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.network.hostname
+        - nodes.techvault.webapp.runtime.network.domainname
+        - nodes.techvault.webapp.runtime.network.endpoints
+        - nodes.techvault.webapp.runtime.network.published_ports
+      rationale: >
+        ACES #366 added runtime.network, so the Docker aliases, DNS names,
+        generated DNS prefix, endpoint IDs, MAC addresses, IP prefix lengths,
+        gateways, backend network IDs with stability classes, bridge/IPAM
+        backend detail, and host-published 8080/tcp binding are encoded
+        directly.
+
+  - id: webapp.application.http-surface
+    category: service-surface
+    summary: >
+      Participants and agents can observe the Flask HTTP route/API/UI surface,
+      including paths, methods, forms, response templates, static assets,
+      redirects, diagnostics, auth boundaries, and route-specific weaknesses.
+    evidence:
+      - path: evidence/source-checksums.txt
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.applications
+        - nodes.techvault.webapp.runtime.applications.routes
+        - nodes.techvault.webapp.runtime.applications.routes.parameters
+        - nodes.techvault.webapp.runtime.applications.routes.responses
+        - nodes.techvault.webapp.runtime.applications.routes.redirects
+        - nodes.techvault.webapp.runtime.applications.routes.disclosures
+        - nodes.techvault.webapp.runtime.applications.routes.exposed_fields
+        - nodes.techvault.webapp.runtime.applications.routes.templates
+        - nodes.techvault.webapp.runtime.applications.routes.static_assets
+        - nodes.techvault.webapp.runtime.applications.routes.vulnerability_refs
+      rationale: >
+        ACES #367 added runtime.applications, so the Flask route/API/UI
+        surface now directly encodes route paths, methods, auth/session
+        boundaries, request inputs, response shapes, template/static
+        associations, redirects, disclosed diagnostic/fixture fields, error
+        behavior, and route-specific vulnerability placement.
+
+  - id: webapp.runtime.container-host-config
+    category: runtime-configuration
+    summary: >
+      Docker inspect exposes container host/security/runtime configuration such
+      as entrypoint, log driver, namespace modes, privileged/read-only flags,
+      shm size, masked/read-only paths, runtime name, devices, DNS lists, and
+      health observation logs.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.container
+        - nodes.techvault.webapp.runtime.health
+        - nodes.techvault.webapp.runtime.mounts
+      rationale: >
+        ACES #368 added container host/security configuration, runtime health
+        observation, and full runtime mount fields.
+
+  - id: webapp.capture.toolchain-baseline
+    category: assurance
+    summary: >
+      APTL #368 replaced the webapp bundle with a reproducible current-baseline
+      capture that includes the methodology's required Trivy CycloneDX SBOM,
+      useful-optional Syft CycloneDX SBOM, and osquery table attempts, with
+      unsupported Linux osquery tables recorded as explicit limits.
+    evidence:
+      - path: evidence/capture-limits.txt
+      - path: evidence/captured-at-utc.txt
+      - path: evidence/docker-version.json
+      - path: evidence/docker-compose-version.json
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-sbom.cyclonedx.json
+      - path: evidence/syft-version.json
+      - path: evidence/syft-sbom.cyclonedx.json
+      - path: evidence/osquery-version.txt
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-programs.json
+      - path: evidence/evidence-sha256sums.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.webapp.runtime.packages
+        - nodes.techvault.webapp.runtime.dependency_manifests
+        - nodes.techvault.webapp.runtime.processes
+        - nodes.techvault.webapp.runtime.network.published_ports
+        - nodes.techvault.webapp.runtime.container
+      rationale: >
+        The added toolchain outputs strengthen the existing encoded runtime
+        inventory surfaces rather than introducing a new ACES semantic gap:
+        Trivy and Syft provide component inventory evidence for packages and
+        dependency manifests, osquery process/listener rows corroborate runtime
+        process and published-port observations, and osquery Docker rows
+        corroborate container/image identity. Unsupported osquery tables are
+        represented as capture limits, not as ACES-mapped asset facts.

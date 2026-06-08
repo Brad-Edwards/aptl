@@ -1,0 +1,249 @@
+{
+  "table": "listening_ports",
+  "query": "select port, protocol, address, pid, socket, path from listening_ports order by port, protocol, pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-misp network namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "address": "",
+      "path": "/var/www/MISP/.gnupg/S.gpg-agent",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/www/MISP/.gnupg/S.gpg-agent.extra",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/www/MISP/.gnupg/S.gpg-agent.browser",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/www/MISP/.gnupg/S.gpg-agent.ssh",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/www/MISP/.gnupg/S.gpg-agent",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/www/MISP/.gnupg/S.gpg-agent.extra",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/www/MISP/.gnupg/S.gpg-agent.browser",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/www/MISP/.gnupg/S.gpg-agent.ssh",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/run/supervisor.sock.8",
+      "pid": "8",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/run/supervisor.sock.8",
+      "pid": "8",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/dev/log",
+      "pid": "11",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/dev/log",
+      "pid": "11",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/php/php8.4-fpm.sock",
+      "pid": "3810",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/php/php8.4-fpm.sock",
+      "pid": "3810",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "96",
+      "port": "80",
+      "protocol": "6",
+      "socket": "170270077"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "96",
+      "port": "80",
+      "protocol": "6",
+      "socket": "170270078"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "96",
+      "port": "80",
+      "protocol": "6",
+      "socket": "170270077"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "96",
+      "port": "80",
+      "protocol": "6",
+      "socket": "170270078"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "96",
+      "port": "443",
+      "protocol": "6",
+      "socket": "170270075"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "96",
+      "port": "443",
+      "protocol": "6",
+      "socket": "170270076"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "96",
+      "port": "443",
+      "protocol": "6",
+      "socket": "170270075"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "96",
+      "port": "443",
+      "protocol": "6",
+      "socket": "170270076"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "8",
+      "port": "9001",
+      "protocol": "6",
+      "socket": "170240284"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "8",
+      "port": "9001",
+      "protocol": "6",
+      "socket": "170240284"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "34143",
+      "protocol": "6",
+      "socket": "170247263"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "34143",
+      "protocol": "6",
+      "socket": "170247263"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "50000",
+      "protocol": "6",
+      "socket": "170266314"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "50000",
+      "protocol": "6",
+      "socket": "170266314"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "52950",
+      "protocol": "17",
+      "socket": "170247262"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "52950",
+      "protocol": "17",
+      "socket": "170247262"
+    }
+  ]
+}

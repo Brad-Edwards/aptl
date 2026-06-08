@@ -1,0 +1,501 @@
+schema_version: 1
+asset:
+  id: misp-db
+  scenario: TechVault
+  aptl_issue: 347
+  aces_methodology_issue: 353
+  source_class: upstream-image-plus-volume-backed-runtime-state
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: mariadb@sha256:407fccb51e710f34752c1a3ef9b936d1f55f38d4ac7fa043b3759742d266fd9a
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence:
+    - path: evidence/docker-buildx-imagetools.image.txt
+    - path: evidence/docker-buildx-imagetools.image.raw.json
+    limits:
+    - No registry-visible OCI, in-toto, or SLSA attestation was available in the captured imagetools evidence.
+notes:
+- Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start.
+- 'Brad-Edwards/aces#388 and #431 are consumed through runtime.database_services and runtime.service_listeners; no known ACES
+  expressivity gap remains for the catalogued MISP DB steady-state facts.'
+- Raw MariaDB authentication material is redacted; secret-bearing table files are represented by metadata and selected safe
+  checksums rather than contents.
+correspondence_checks:
+- id: misp-db-evidence-bundle-integrity
+  status: implemented
+  source: docs/aces/inventory/misp-db/evidence
+  method: evidence-sha256sums.txt hashes every committed evidence file except the manifest itself.
+  realized_evidence:
+  - path: evidence/evidence-sha256sums.txt
+  - path: evidence/captured-at-utc.txt
+  ledger_fact_ids:
+  - misp-db.capture.toolchain-baseline
+- id: misp-db-sdl-runtime-correspondence
+  status: implemented
+  source: scenarios/techvault.sdl.yaml nodes.techvault.misp-db
+  method: tests/test_misp_db_inventory.py parses ACES SDL and asserts image, runtime, listener, package, CVE, identity, database,
+    content, and relationship counts.
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/mariadb-state.txt
+  - path: evidence/trivy-vulnerability-list.json
+  ledger_fact_ids:
+  - misp-db.runtime.container-policy
+  - misp-db.runtime.service-listeners
+  - misp-db.database.service
+  - misp-db.database.databases-schemas-tables
+  - misp-db.database.table-cardinalities
+  - misp-db.runtime.vulnerability-scan
+- id: misp-db-scope-and-redaction-caveats
+  status: implemented
+  source: docs/aces/inventory/misp-db/evidence/capture-limits.txt
+  method: README and tests assert non-destructive capture scope, secret redaction, Syft normalization, unavailable osquery
+    tables, and database auth material caveats.
+  realized_evidence:
+  - path: evidence/capture-limits.txt
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  ledger_fact_ids:
+  - misp-db.capture.toolchain-baseline
+  - misp-db.runtime.filesystem-inventory
+  - misp-db.database.roles
+facts:
+- id: misp-db.capture.toolchain-baseline
+  category: capture
+  summary: Capture used digest-pinned Trivy, Syft, and osquery images, recorded Docker/Compose versions, and recorded explicit
+    capture limits.
+  evidence:
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-compose-version.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/syft-version.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/capture-limits.txt
+  - path: evidence/evidence-sha256sums.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: runtime_contract
+    checked_surfaces:
+    - runtime_contract
+    fields:
+    - docs/aces/inventory/misp-db/capture-evidence.sh
+    - docs/aces/inventory/misp-db/evidence/capture-limits.txt
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+    caveat: Scanner and runtime observations are time-sensitive evidence from the current-running lab, not immutable clean-reset
+      proof.
+- id: misp-db.image.identity-provenance
+  category: image
+  summary: MariaDB resolved to the captured upstream image digest and Ubuntu Jammy image metadata.
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-buildx-imagetools.image.txt
+  - path: evidence/docker-buildx-imagetools.image.raw.json
+  - path: evidence/osquery-docker-images.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.source.name
+    - nodes.techvault.misp-db.source.version
+    - nodes.techvault.misp-db.os_version
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.image.history-layers
+  category: image
+  summary: Docker history and Trivy layer metadata are encoded as upstream-image build provenance.
+  evidence:
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/trivy-vulnerabilities.json.gz
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.source.build.instructions
+    - nodes.techvault.misp-db.source.build.layers
+    - nodes.techvault.misp-db.source.build.config
+    - nodes.techvault.misp-db.source.build.attestation
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.compose.service-contract
+  category: compose
+  summary: Compose declares aptl-misp-db, image mariadb:10.11, healthcheck, memory limit, data volume, redacted fixture env,
+    and security-net address.
+  evidence:
+  - path: evidence/compose-service.misp-db.json
+  - path: evidence/source-checksums.txt
+  - path: evidence/docker-compose-version.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db
+    - infrastructure.misp-db
+    - conditions.misp-db-ready
+    - features.techvault-misp-db-service
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.source.realization-inputs
+  category: source
+  summary: Local docker-compose.yml checksum is captured as the local realization input for the upstream MariaDB image.
+  evidence:
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.source.build.source_inputs
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.runtime.container-policy
+  category: runtime
+  summary: Docker runtime policy captures restart behavior, memory limits, namespaces, privileged/read-only flags, health,
+    log driver, and runtime name.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-logs.misp-db.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.container
+    - nodes.techvault.misp-db.runtime.operational_policy
+    - nodes.techvault.misp-db.runtime.health
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.network.identity
+  category: network
+  summary: MISP DB is attached to security-net at 172.20.0.17 with Docker aliases, DNS names, MAC address, and no host-published
+    ports.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/participant-discovery.misp.txt
+  - path: evidence/participant-discovery.kali.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.network.endpoints
+    - nodes.techvault.misp-db.runtime.network.published_ports
+    - infrastructure.misp-db
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.runtime.mounts-volume
+  category: runtime
+  summary: Runtime mount table and Docker volume inspect record overlay/pseudo mounts plus aptl_misp_db_data at /var/lib/mysql.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-volume.misp-db-data.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.mounts
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.runtime.filesystem-inventory
+  category: filesystem
+  summary: The SDL encodes the compressed filesystem manifest and checksum surface for MariaDB config and data-volume paths.
+  evidence:
+  - path: evidence/filesystem-tree.txt.gz
+  - path: evidence/filesystem-checksums.txt.xz
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.filesystem_inventory
+    - content.techvault.misp-db-data-directory
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+    caveat: Secret-bearing database authorization files are represented by path/metadata and selected safe checksums; raw
+      table contents are not captured.
+- id: misp-db.runtime.process-tree
+  category: runtime
+  summary: Runtime process evidence captures PID 1 mariadbd as mysql.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-processes.json
+  - path: evidence/docker-top.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.processes
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.runtime.service-listeners
+  category: runtime
+  summary: 'ACES #431 listener fields encode wildcard MariaDB TCP, the MariaDB Unix socket, and Docker embedded DNS listeners.'
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/participant-discovery.misp.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.services
+    - nodes.techvault.misp-db.runtime.service_listeners
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+    caveat: Docker embedded DNS listener ports are backend-generated and encoded as node-local runtime listeners, not MariaDB
+      application services.
+- id: misp-db.runtime.environment
+  category: runtime
+  summary: Runtime environment includes MariaDB image defaults, MISP database/user variables, runtime HOME/HOSTNAME/PWD, and
+    redacted password values.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/compose-service.misp-db.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.environment
+    - features.techvault-misp-db-service.environment
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.runtime.local-identity
+  category: identity
+  summary: Local passwd/group inventory records 20 users, 40 groups, and no sudo rules for the container.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.local_identity
+    - accounts.misp-db-local-root
+    - accounts.misp-db-local-mysql
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.application.software-versions
+  category: runtime
+  summary: MariaDB server/client versions, entrypoint file, and config manifests are captured and encoded.
+  evidence:
+  - path: evidence/language-manifests.txt
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/os-packages.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.software_components
+    - nodes.techvault.misp-db.runtime.dependency_manifests
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.runtime.package-inventory
+  category: runtime
+  summary: dpkg package inventory captures 151 installed OS packages.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/osquery-apt-sources.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.packages
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.runtime.vulnerability-scan
+  category: runtime
+  summary: Trivy captured 100 vulnerability findings and severity counts for the MariaDB image.
+  evidence:
+  - path: evidence/trivy-vulnerabilities.json.gz
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-version.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.package_vulnerabilities
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+    caveat: Vulnerability scanner output is time-sensitive and tied to the captured Trivy version/database state.
+- id: misp-db.runtime.sbom-toolchain
+  category: runtime
+  summary: Required Trivy CycloneDX and useful-optional Syft CycloneDX SBOMs are captured; Syft output is deterministically
+    normalized.
+  evidence:
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/syft-version.json
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.packages
+    - nodes.techvault.misp-db.runtime.software_components
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+    caveat: SBOMs are retained as evidence; SDL package fields use dpkg and scanner-derived summaries rather than embedding
+      full CycloneDX documents.
+- id: misp-db.runtime.osquery-baseline
+  category: runtime
+  summary: osquery captured processes, listeners, host-side Docker container/image rows, apt sources, and unavailable Linux
+    application/program table status.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.processes
+    - nodes.techvault.misp-db.runtime.service_listeners
+    - nodes.techvault.misp-db.runtime.network
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+    caveat: installed_applications and programs tables are unavailable in the digest-pinned Linux osquery image and are recorded
+      as capture limits.
+- id: misp-db.database.service
+  category: database
+  summary: MariaDB 10.11.16 exposes the MySQL wire protocol on TCP 3306 and /run/mysqld/mysqld.sock.
+  evidence:
+  - path: evidence/mariadb-state.txt
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-listening-ports.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.database_services.misp-mariadb
+    - nodes.techvault.misp-db.runtime.database_services.misp-mariadb.listeners
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.database.databases-schemas-tables
+  category: database
+  summary: MariaDB reports five databases and 235 captured table entries across the misp, mysql, and sys schemas.
+  evidence:
+  - path: evidence/mariadb-state.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.database_services.misp-mariadb.databases
+    - nodes.techvault.misp-db.runtime.database_services.misp-mariadb.databases.misp.schemas.misp-schema.tables
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+    caveat: information_schema and performance_schema were observed as databases, but the bounded schema query did not enumerate
+      their table rows.
+- id: misp-db.database.roles
+  category: database
+  summary: MariaDB reports seven user/host roles with plugin, admin privilege booleans, and authentication-string presence
+    metadata.
+  evidence:
+  - path: evidence/mariadb-state.txt
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.database_services.misp-mariadb.roles
+    - accounts.misp-db-role-misp
+    - accounts.misp-db-role-root
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+    caveat: Raw authentication strings are omitted; per-engine privilege booleans are preserved in role descriptions while
+      portable login/type/origin fields remain structured.
+- id: misp-db.database.settings
+  category: database
+  summary: SHOW GLOBAL VARIABLES captures 15 MariaDB runtime settings including port, datadir, socket, sql_mode, and max_connections.
+  evidence:
+  - path: evidence/mariadb-state.txt
+  - path: evidence/language-manifests.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-db.runtime.database_services.misp-mariadb.settings
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.database.table-cardinalities
+  category: content
+  summary: MISP database table cardinalities are encoded as a content dataset with count tags for every captured MISP table.
+  evidence:
+  - path: evidence/mariadb-state.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: content
+    checked_surfaces:
+    - content
+    fields:
+    - content.techvault.misp-db-table-cardinalities
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+    caveat: MariaDB TABLE_ROWS values are storage-engine estimates/current snapshot observations, not immutable semantic event
+      counts.
+- id: misp-db.participant-discovery
+  category: relationship
+  summary: MISP resolves and reaches MISP DB on TCP 3306 and verifies SELECT VERSION(), DATABASE(); Kali cannot reach the
+    security-net address.
+  evidence:
+  - path: evidence/participant-discovery.misp.txt
+  - path: evidence/participant-discovery.kali.txt
+  aces:
+    disposition: encoded
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    fields:
+    - relationships.misp-connects-mariadb
+    - nodes.techvault.misp-db.runtime.service_listeners.mariadb-3306-ipv4
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
+- id: misp-db.relationship.misp
+  category: relationship
+  summary: MISP points at misp-db using MYSQL_HOST, database misp, user misp, and a redacted password.
+  evidence:
+  - path: evidence/compose-service.misp-db.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/mariadb-state.txt
+  - path: evidence/participant-discovery.misp.txt
+  aces:
+    disposition: encoded
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    fields:
+    - relationships.misp-connects-mariadb
+    - relationships.misp-connects-mariadb.database_access
+    rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.

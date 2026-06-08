@@ -1,0 +1,326 @@
+[
+  {
+    "Id": "a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d",
+    "Created": "2026-05-23T06:18:32.004050981Z",
+    "Path": "/entrypoint.sh",
+    "Args": [],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2958276,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-23T06:18:45.133745984Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-05-25T21:29:09.034492381+02:00",
+            "End": "2026-05-25T21:29:09.092892356+02:00",
+            "ExitCode": 0,
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\" href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n        <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\" id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\" name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
+          },
+          {
+            "Start": "2026-05-25T21:29:24.094404597+02:00",
+            "End": "2026-05-25T21:29:24.14637939+02:00",
+            "ExitCode": 0,
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\" href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n        <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\" id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\" name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
+          },
+          {
+            "Start": "2026-05-25T21:29:39.147372792+02:00",
+            "End": "2026-05-25T21:29:39.194184252+02:00",
+            "ExitCode": 0,
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\" href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n        <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\" id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\" name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
+          },
+          {
+            "Start": "2026-05-25T21:29:54.195471779+02:00",
+            "End": "2026-05-25T21:29:54.248260228+02:00",
+            "ExitCode": 0,
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\" href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n        <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\" id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\" name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
+          },
+          {
+            "Start": "2026-05-25T21:30:09.249361445+02:00",
+            "End": "2026-05-25T21:30:09.297577746+02:00",
+            "ExitCode": 0,
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - TechVault Solutions</title>\n    <link rel=\"stylesheet\" href=\"/static/style.css\">\n</head>\n<body>\n    \n    <main class=\"container\">\n        \n        \n        \n        \n<div class=\"login-container\">\n    <div class=\"login-box\">\n        <h1>TechVault Solutions</h1>\n        <p class=\"subtitle\">Customer Portal</p>\n        <form method=\"POST\" action=\"/login\">\n            <div class=\"form-group\">\n                <label for=\"username\">Username</label>\n                <input type=\"text\" id=\"username\" name=\"username\" required autofocus>\n            </div>\n            <div class=\"form-group\">\n                <label for=\"password\">Password</label>\n                <input type=\"password\" id=\"password\" name=\"password\" required>\n            </div>\n            <button type=\"submit\" class=\"btn-primary\">Sign In</button>\n        </form>\n        <p class=\"footer-text\">Securing your digital assets since 2019</p>\n    </div>\n</div>\n\n    </main>\n    <!-- Built with Flask 3.1.0 | TechVault Solutions v2.4.1 -->\n</body>\n</html>"
+          }
+        ]
+      }
+    },
+    "Image": "sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a",
+    "ResolvConfPath": "/var/lib/docker/containers/a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d/hostname",
+    "HostsPath": "/var/lib/docker/containers/a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d/hosts",
+    "LogPath": "/var/lib/docker/containers/a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d/a44db23d6b836d520798280fe2071034c5455d8a360f465defd8aef190bdfa1d-json.log",
+    "Name": "/aptl-webapp",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "aptl_webapp_logs:/var/log/gunicorn:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-dmz",
+      "PortBindings": {
+        "8080/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "8080"
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": [
+        "CAP_NET_ADMIN"
+      ],
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 536870912,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 1073741824,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_webapp_logs",
+        "Source": "/var/lib/docker/volumes/aptl_webapp_logs/_data",
+        "Destination": "/var/log/gunicorn",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "webapp",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "8080/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "AGENT_NAME=aptl-webapp-agent",
+        "DB_PASSWORD=<REDACTED-DB-PASSWORD>",
+        "SIEM_IP=172.20.2.30",
+        "DB_USER=techvault",
+        "LOG_FORMAT=syslog",
+        "DB_HOST=172.20.2.11",
+        "DB_PORT=5432",
+        "FLASK_ENV=production",
+        "WAZUH_MANAGER=wazuh.manager",
+        "DB_NAME=techvault",
+        "LOG_PATHS=/var/log/gunicorn/access.log",
+        "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG=C.UTF-8",
+        "GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D",
+        "PYTHON_VERSION=3.11.15",
+        "PYTHON_SHA256=272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625",
+        "DEBIAN_FRONTEND=noninteractive",
+        "FLASK_APP=app.py"
+      ],
+      "Cmd": null,
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "curl -sf http://localhost:8080/ || exit 1"
+        ],
+        "Interval": 15000000000,
+        "Timeout": 5000000000,
+        "StartPeriod": 30000000000,
+        "Retries": 5
+      },
+      "Image": "aptl-webapp",
+      "Volumes": null,
+      "WorkingDir": "/app",
+      "Entrypoint": [
+        "/entrypoint.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "f1402ceeb8cb72124b95472af3771d9a4e8acfe770a36bf4453415a0bd35be75",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "db:service_healthy:false",
+        "com.docker.compose.image": "sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "webapp",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "605b0320e3e93a0355ff95016483ef3f6db284dca75f35c6b3cd02c28640b4a5",
+      "SandboxKey": "/var/run/docker/netns/605b0320e3e9",
+      "Ports": {
+        "8080/tcp": null
+      },
+      "Networks": {
+        "aptl_aptl-dmz": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.1.20"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-webapp",
+            "webapp"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "3b7c4e642d7ebef4866bf953ff0b04bd39affb9639881b4938cdcb8a9dc09c16",
+          "EndpointID": "6b81cde8f5594cb393a381b1d44bcdb5cb9003030006fee7b71fbc5a448a6115",
+          "Gateway": "",
+          "IPAddress": "172.20.1.20",
+          "MacAddress": "52:22:28:53:33:ca",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-webapp",
+            "webapp",
+            "a44db23d6b83"
+          ]
+        },
+        "aptl_aptl-internal": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.2.25"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-webapp",
+            "webapp"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
+          "EndpointID": "421aab27768dc6c78437c1b0de55e1940646b1c722111453771cb40c4c2fe17a",
+          "Gateway": "",
+          "IPAddress": "172.20.2.25",
+          "MacAddress": "82:52:09:8b:9d:79",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-webapp",
+            "webapp",
+            "a44db23d6b83"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:787ef35d2547887c17ff3c914f6592ec002164216c24e002feb5287473b429a9",
+      "size": 4082,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

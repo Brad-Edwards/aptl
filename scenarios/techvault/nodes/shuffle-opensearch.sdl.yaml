@@ -1,0 +1,26 @@
+name: techvault-node-shuffle-opensearch
+nodes:
+  shuffle-opensearch:
+    type: vm
+    description: 'Shuffle SOAR OpenSearch datastore companion service stub; it backs all
+      shuffle-backend persistence. A full steady-state inventory is future SOC-companion work,
+      so only the relationship-anchoring identity and service surface are encoded here.'
+    source:
+      name: opensearchproject/opensearch
+      version: '2.14.0'
+      build: null
+    resources: null
+    os: linux
+    os_version: ''
+    features: {}
+    conditions: {}
+    injects: {}
+    vulnerabilities: []
+    roles: {}
+    services:
+    - port: 9200
+      protocol: tcp
+      name: opensearch
+      description: OpenSearch REST/transport API consumed by shuffle-backend over HTTPS with basic auth.
+    asset_value: null
+    runtime: null

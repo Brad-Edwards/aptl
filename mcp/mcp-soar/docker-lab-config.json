@@ -14,72 +14,68 @@
     "network_subnet": "172.20.0.0/24"
   },
   "api": {
-    "baseUrl": "http://localhost:5001",
+    "baseUrl": "https://localhost:3443",
     "auth": {
       "type": "apikey",
       "header": "Authorization",
       "apiKey": "Bearer ${SHUFFLE_API_KEY}"
     },
     "timeout": 30000,
-    "verify_ssl": false,
+    "verify_ssl": true,
+    "ca_cert_path": "../../config/soc_certs/lab-ca.pem",
     "default_headers": {
       "Content-Type": "application/json"
     }
   },
   "queries": {
     "list_workflows": {
-      "url": "http://localhost:5001/api/v1/workflows",
+      "url": "https://localhost:3443/api/v1/workflows",
       "method": "GET",
       "auth": {
         "type": "apikey",
         "header": "Authorization",
         "apiKey": "Bearer ${SHUFFLE_API_KEY}"
       },
-      "verify_ssl": false,
       "description": "List all available SOAR workflows/playbooks. Returns workflow names, triggers, and status."
     },
     "get_workflow": {
-      "url": "http://localhost:5001/api/v1/workflows/{workflow_id}",
+      "url": "https://localhost:3443/api/v1/workflows/{workflow_id}",
       "method": "GET",
       "auth": {
         "type": "apikey",
         "header": "Authorization",
         "apiKey": "Bearer ${SHUFFLE_API_KEY}"
       },
-      "verify_ssl": false,
       "description": "Get details of a specific workflow. Example: {\"params\": {\"workflow_id\": \"abc-123\"}}"
     },
     "execute_workflow": {
-      "url": "http://localhost:5001/api/v1/workflows/{workflow_id}/execute",
+      "url": "https://localhost:3443/api/v1/workflows/{workflow_id}/execute",
       "method": "POST",
       "auth": {
         "type": "apikey",
         "header": "Authorization",
         "apiKey": "Bearer ${SHUFFLE_API_KEY}"
       },
-      "verify_ssl": false,
       "description": "Execute a SOAR workflow/playbook. Pass execution arguments in body. Example: {\"params\": {\"workflow_id\": \"abc-123\"}, \"body\": {\"execution_argument\": {\"alert_id\": \"wazuh-12345\", \"src_ip\": \"172.20.4.30\"}}}"
     },
     "list_executions": {
-      "url": "http://localhost:5001/api/v1/workflows/{workflow_id}/executions",
+      "url": "https://localhost:3443/api/v1/workflows/{workflow_id}/executions",
       "method": "GET",
       "auth": {
         "type": "apikey",
         "header": "Authorization",
         "apiKey": "Bearer ${SHUFFLE_API_KEY}"
       },
-      "verify_ssl": false,
       "description": "List recent executions of a workflow. Shows status, timing, and results. Example: {\"params\": {\"workflow_id\": \"abc-123\"}}"
     },
     "search_workflows": {
-      "url": "http://localhost:5001/api/v1/workflows/search",
+      "url": "https://localhost:3443/api/v1/workflows/search",
       "method": "POST",
       "auth": {
         "type": "apikey",
         "header": "Authorization",
         "apiKey": "Bearer ${SHUFFLE_API_KEY}"
       },
-      "verify_ssl": false,
       "description": "Search workflows by query. Example: {\"body\": {\"query\": \"alert\"}}"
     }
   }

@@ -1,0 +1,196 @@
+--wazuh-control-info--
+WAZUH_VERSION="v4.12.0"
+WAZUH_REVISION="rc1"
+WAZUH_TYPE="agent"
+--wazuh-control-status--
+wazuh-modulesd is running...
+wazuh-logcollector is running...
+wazuh-syscheckd is running...
+wazuh-agentd is running...
+wazuh-execd is running...
+--ossec-conf--
+<ossec_config>
+  <client>
+    <server>
+      <address>wazuh.manager</address>
+      <port>1514</port>
+      <protocol>tcp</protocol>
+    </server>
+    <config-profile>aptl-db-agent</config-profile>
+    <notify_time>10</notify_time>
+    <time-reconnect>60</time-reconnect>
+    <auto_restart>yes</auto_restart>
+    <crypto_method>aes</crypto_method>
+  </client>
+
+  <client_buffer>
+    <disabled>no</disabled>
+    <queue_size>5000</queue_size>
+    <events_per_second>500</events_per_second>
+  </client_buffer>
+
+  <!-- log shipping: rendered at start by entrypoint -->
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/logs/pg_log/postgresql.log</location>
+  </localfile>
+
+  <logging>
+    <log_format>plain</log_format>
+  </logging>
+</ossec_config>
+--agentd-state--
+# State file for wazuh-agentd
+
+# Agent status:
+# - pending:      waiting to get connected.
+# - connected:    connection established with manager in the last 10 seconds.
+# - disconnected: connection lost or no ACK received in the last 60 seconds.
+status='connected'
+
+# Last time a keepalive was sent
+last_keepalive='2026-06-06 03:45:05'
+
+# Last time a control message was received
+last_ack='2026-06-06 03:45:05'
+
+# Number of generated events
+msg_count='358326'
+
+# Number of messages (events + control messages) sent to the manager
+msg_sent='478351'
+
+# Number of events currently buffered
+# Empty if anti-flooding mechanism is disabled
+msg_buffer='0'
+--client-keys-presence--
+client.keys present: 1 line(s), 87 bytes (content withheld)
+005 aptl-db-agent any
+--active-response-whitelist--
+# Active-response source-IP whitelist (issue #249, ADR-021).
+#
+# The aptl-firewall-drop wrapper consults this file before applying any
+# Wazuh AR drop. Source IPs listed here are exempt from `firewall-drop`
+# regardless of which rule fires — blue can detect+alert on these
+# sources but cannot drop them.
+#
+# Why kali's three lab IPs are here:
+#   purple-team continuity. Without the carve-out, the moment blue
+#   wires firewall-drop against any rule kali's recon hits (port scan,
+#   web probe, brute force), kali's IP goes on every target's iptables
+#   and red can't operate in iter N+1. That ends the exercise after
+#   one iter — degenerate equilibrium. The whitelist forces blue to
+#   author granular rules (per-pattern, per-payload, per-behavior)
+#   rather than the coarse "ban the source" shortcut. See ADR-021 for
+#   the architectural rationale and #252 for the orchestrator-side
+#   complement.
+#
+# Format: one IPv4 address per line. `#` lines and blank lines are
+# ignored. The wrapper uses `grep -Fxq` so the match is exact on a
+# single line — no CIDR support here. Add entries for new kali
+# interfaces if the lab topology grows.
+#
+# Installed on each Wazuh agent image at build time at:
+#   /var/ossec/etc/lists/active-response-whitelist (read-only)
+# The wrapper runs on the agent, so the file ships in each agent's
+# image rather than being mounted on the manager. To update the
+# whitelist, edit this file and rebuild the affected agent images via
+# `aptl lab stop -v && aptl lab start`. See ADR-021 for why we deploy
+# at image build time rather than via a runtime mount.
+
+172.20.4.30
+172.20.1.30
+172.20.2.35
+--active-response-bin--
+total 304
+drwxr-x--- 2 root wazuh  4096 May 21 09:01 .
+drwxr-x--- 3 root wazuh  4096 May 21 09:01 ..
+-rwxr-xr-x 1 root wazuh  6627 May 21 09:01 aptl-firewall-drop
+-rwxr-x--- 1 root wazuh 21656 Apr 30  2025 default-firewall-drop
+-rwxr-x--- 1 root wazuh 19296 Apr 30  2025 disable-account
+-rwxr-x--- 1 root wazuh 21656 Apr 30  2025 firewall-drop
+-rwxr-x--- 1 root wazuh 19304 Apr 30  2025 firewalld-drop
+-rwxr-x--- 1 root wazuh 19864 Apr 30  2025 host-deny
+-rwxr-x--- 1 root wazuh 17896 Apr 30  2025 ip-customblock
+-rwxr-x--- 1 root wazuh 19296 Apr 30  2025 ipfw
+-rwxr-x--- 1 root wazuh 17144 Apr 30  2025 kaspersky
+-rwxr-x--- 1 root wazuh 14491 Apr 30  2025 kaspersky.py
+-rwxr-x--- 1 root wazuh 19288 Apr 30  2025 npf
+-rwxr-x--- 1 root wazuh 19992 Apr 30  2025 pf
+-rwxr-x--- 1 root wazuh 16896 Apr 30  2025 restart-wazuh
+-rwxr-x--- 1 root wazuh   695 Apr 30  2025 restart.sh
+-rwxr-x--- 1 root wazuh 17912 Apr 30  2025 route-null
+-rwxr-x--- 1 root wazuh 19280 Apr 30  2025 wazuh-slack
+--monitored-log-source--
+-rw------- 1 70 70 40096575 Jun  6 03:45 /logs/pg_log/postgresql.log
+--internal-options--
+analysisd.default_timeframe=360
+analysisd.stats_maxdiff=999000
+analysisd.stats_mindiff=1250
+analysisd.stats_percent_diff=150
+analysisd.fts_list_size=32
+analysisd.fts_min_size_for_str=14
+analysisd.log_fw=1
+analysisd.decoder_order_size=256
+analysisd.geoip_jsonout=0
+analysisd.label_cache_maxage=10
+analysisd.show_hidden_labels=0
+analysisd.rlimit_nofile=458752
+analysisd.min_rotate_interval=600
+analysisd.event_threads=0
+analysisd.syscheck_threads=0
+analysisd.syscollector_threads=0
+analysisd.rootcheck_threads=0
+analysisd.sca_threads=0
+analysisd.hostinfo_threads=0
+analysisd.winevt_threads=0
+analysisd.rule_matching_threads=0
+analysisd.dbsync_threads=0
+analysisd.decode_event_queue_size=16384
+analysisd.decode_syscheck_queue_size=16384
+analysisd.decode_syscollector_queue_size=16384
+analysisd.decode_rootcheck_queue_size=16384
+analysisd.decode_sca_queue_size=16384
+analysisd.decode_hostinfo_queue_size=16384
+analysisd.decode_winevt_queue_size=16384
+analysisd.decode_output_queue_size=16384
+analysisd.archives_queue_size=16384
+analysisd.statistical_queue_size=16384
+analysisd.alerts_queue_size=16384
+analysisd.firewall_queue_size=16384
+analysisd.fts_queue_size=16384
+analysisd.dbsync_queue_size=16384
+analysisd.upgrade_queue_size=16384
+analysisd.state_interval=5
+logcollector.loop_timeout=2
+logcollector.open_attempts=0
+logcollector.remote_commands=0
+logcollector.vcheck_files=64
+logcollector.max_lines=10000
+logcollector.max_files=1000
+logcollector.sock_fail_time=300
+logcollector.input_threads=4
+logcollector.queue_size=1024
+logcollector.sample_log_length=64
+logcollector.rlimit_nofile=1100
+logcollector.force_reload=0
+logcollector.reload_interval=64
+logcollector.reload_delay=1000
+logcollector.exclude_files_interval=86400
+logcollector.state_interval=60
+logcollector.ip_update_interval=60
+remoted.recv_counter_flush=128
+remoted.comp_average_printout=19999
+remoted.verify_msg_id=0
+remoted.pass_empty_keyfile=1
+remoted.sender_pool=8
+# local_internal_options.conf
+#
+# This file should be handled with care. It contains
+# run time modifications that can affect the use
+# of OSSEC. Only change it if you know what you
+# are doing. Look first at ossec.conf
+# for most of the things you want to change.
+#
+# This file will not be overwritten during upgrades.

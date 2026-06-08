@@ -1,0 +1,10 @@
+4a366442d72a2cd11e5d3f44977c5415c50ca2fd822883e14ccbc2afaa65b1d9  /srv/shares/engineering/deployments/README.md
+4830319c1205cebdf51c139c0496f7e8ed27304acaafb8c4aa9b61f5bcade8e6  /srv/shares/engineering/deployments/deploy.sh
+f5365990a73bd9e2160e4ac151a65bf4c19fc5f5becba4b828a9ffeb2b7ce79e  /srv/shares/finance/reports/q3-revenue.csv
+2a88894cf3d3c74ecdbce5eaa25fd39b05c5406ec88adfddd98f10c90d0f23fd  /srv/shares/hr/employees/directory.csv
+369a29418de741ef026090c81c6475f1c7e4b9740fa24d4e76a1af450878f2cc  /srv/shares/it-backups/db_backup_20240115.sql
+491627d3143ea4c1f8048dc8929ae0bfb0782d86d7b3c4ab36fe4a7e2fa97bab  /srv/shares/it-backups/keys/README
+ea52d072bc59efebd2a02c01916efe098ada0065f86ea224f2d7c6247c8c888b  /srv/shares/public/welcome.txt
+7b70bc64197cb51970709a7b3719955d09bcfe2e4b645c4793635b2966c79414  /srv/shares/shared/meeting-notes-q3.txt
+bc2ea9704988a87ac19fc1ce5092e3c03e3efe25a08bddb242623acaaafb70b1  /srv/shares/shared/user-flag.txt
+cdf50ce20d4a965ab60e6137301aa3a17c69a1e53917f8a0297dc7728d8e498b  /srv/shares/shared/wifi-passwords.txt

@@ -1,0 +1,180 @@
+--os-release--
+NAME="Alpine Linux"
+ID=alpine
+VERSION_ID=3.23.4
+PRETTY_NAME="Alpine Linux v3.23"
+HOME_URL="https://alpinelinux.org/"
+BUG_REPORT_URL="https://gitlab.alpinelinux.org/alpine/aports/-/issues"
+--id--
+uid=0(root) gid=0(root) groups=0(root),0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),10(wheel),11(floppy),20(dialout),26(tape),27(video)
+--uname--
+Linux db.techvault.local 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 Linux
+--environment--
+DOCKER_PG_LLVM_DEPS=llvm19-dev 		clang19
+GOSU_VERSION=1.19
+HOME=/root
+HOSTNAME=db.techvault.local
+LANG=en_US.utf8
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PGDATA=/var/lib/postgresql/data
+PG_MAJOR=16
+PG_SHA256=dc2ddbbd245c0265a689408e3d2f2f3f9ba2da96bd19318214b313cdd9797287
+PG_VERSION=16.13
+POSTGRES_DB=techvault
+POSTGRES_PASSWORD=<REDACTED-SCENARIO-FIXTURE>
+POSTGRES_USER=techvault
+PWD=/
+SHLVL=1
+--listen--
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+tcp        0      0 127.0.0.11:43141        0.0.0.0:*               LISTEN      -
+tcp        0      0 0.0.0.0:5432            0.0.0.0:*               LISTEN      -
+tcp        0      0 :::5432                 :::*                    LISTEN      -
+--processes--
+PID   PPID  USER     STAT COMMAND          COMMAND
+    1     0 postgres S    postgres         postgres -c logging_collector=on -c log_directory=pg_log -c log_filename=postgresql.log -c log_statement=all -c log_connections=on -c log_disconnections=on
+   27     1 postgres S    postgres         postgres: logger
+   28     1 postgres S    postgres         postgres: checkpointer
+   29     1 postgres S    postgres         postgres: background writer
+   31     1 postgres S    postgres         postgres: walwriter
+   32     1 postgres S    postgres         postgres: autovacuum launcher
+   33     1 postgres S    postgres         postgres: logical replication launcher
+--capabilities--
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	00000000a80425fb
+CapAmb:	0000000000000000
+--mounts--
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/46570/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/209/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/208/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/207/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/206/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/205/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/121/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/115/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/100/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/90/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/69/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/46584/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/46584/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /docker-entrypoint-initdb.d type ext4 (ro,relatime)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+/dev/md2 on /var/lib/postgresql/data type ext4 (rw,relatime)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
+--users--
+root:x:0:0:root:/root:/bin/sh
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+lp:x:4:7:lp:/var/spool/lpd:/sbin/nologin
+sync:x:5:0:sync:/sbin:/bin/sync
+shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+halt:x:7:0:halt:/sbin:/sbin/halt
+mail:x:8:12:mail:/var/mail:/sbin/nologin
+news:x:9:13:news:/usr/lib/news:/sbin/nologin
+uucp:x:10:14:uucp:/var/spool/uucppublic:/sbin/nologin
+cron:x:16:16:cron:/var/spool/cron:/sbin/nologin
+ftp:x:21:21::/var/lib/ftp:/sbin/nologin
+sshd:x:22:22:sshd:/dev/null:/sbin/nologin
+games:x:35:35:games:/usr/games:/sbin/nologin
+ntp:x:123:123:NTP:/var/empty:/sbin/nologin
+guest:x:405:100:guest:/dev/null:/sbin/nologin
+nobody:x:65534:65534:nobody:/:/sbin/nologin
+postgres:x:70:70::/var/lib/postgresql:/bin/sh
+--groups--
+root:x:0:root
+bin:x:1:root,bin,daemon
+daemon:x:2:root,bin,daemon
+sys:x:3:root,bin
+adm:x:4:root,daemon
+tty:x:5:
+disk:x:6:root
+lp:x:7:lp
+kmem:x:9:
+wheel:x:10:root
+floppy:x:11:root
+mail:x:12:mail
+news:x:13:news
+uucp:x:14:uucp
+cron:x:16:cron
+audio:x:18:
+cdrom:x:19:
+dialout:x:20:root
+ftp:x:21:
+sshd:x:22:
+input:x:23:
+tape:x:26:root
+video:x:27:root
+netdev:x:28:
+kvm:x:34:kvm
+games:x:35:
+shadow:x:42:
+www-data:x:82:
+users:x:100:games
+ntp:x:123:
+abuild:x:300:
+utmp:x:406:
+ping:x:999:
+nogroup:x:65533:
+nobody:x:65534:
+postgres:x:70:postgres
+--sudo--
+--postgres-version--
+postgres (PostgreSQL) 16.13
+psql (PostgreSQL) 16.13
+PostgreSQL 16.13
+--postgres-settings--
+config_file=/var/lib/postgresql/data/postgresql.conf
+data_directory=/var/lib/postgresql/data
+hba_file=/var/lib/postgresql/data/pg_hba.conf
+ident_file=/var/lib/postgresql/data/pg_ident.conf
+listen_addresses=*
+log_connections=on
+log_directory=pg_log
+log_disconnections=on
+log_filename=postgresql.log
+log_statement=all
+logging_collector=on
+port=5432
+--databases--
+postgres
+techvault
+template0
+template1
+--roles--
+pg_checkpoint:false:false:false:false
+pg_create_subscription:false:false:false:false
+pg_database_owner:false:false:false:false
+pg_execute_server_program:false:false:false:false
+pg_monitor:false:false:false:false
+pg_read_all_data:false:false:false:false
+pg_read_all_settings:false:false:false:false
+pg_read_all_stats:false:false:false:false
+pg_read_server_files:false:false:false:false
+pg_signal_backend:false:false:false:false
+pg_stat_scan_tables:false:false:false:false
+pg_use_reserved_connections:false:false:false:false
+pg_write_all_data:false:false:false:false
+pg_write_server_files:false:false:false:false
+techvault:true:true:true:true
+--tables--
+public.api_keys
+public.audit_log
+public.backup_config
+public.comments
+public.customers
+public.files
+public.sessions
+public.users

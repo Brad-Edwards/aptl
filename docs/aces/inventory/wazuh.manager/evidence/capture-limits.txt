@@ -1,0 +1,8 @@
+- This capture used the existing running lab as authorized by the user on 2026-05-29 and did not run aptl lab stop -v && aptl lab start; it is a non-destructive frozen steady-state observation, not clean-lab rebuild proof.
+- Raw Wazuh API credentials, indexer credentials, cluster keys, API tokens, and private key material are intentionally absent from committed evidence; paths, metadata, redacted setting names, and safe hashes are retained where permitted.
+- The Wazuh manager image does not include ss, netstat, ip, or mount; runtime evidence uses Docker inspect/network records and /proc/net/* listener fallback where in-container tooling is unavailable.
+- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; component identity remains and filesystem provenance is captured separately.
+- Trivy and Syft CycloneDX SBOM evidence is committed as deterministic gzip-compressed minified JSON to satisfy the repository's added-file size gate; compression is lossless.
+- osquery apt_sources was not applicable for the Amazon Linux Wazuh manager target.
+- osquery installed_applications was unavailable in the digest-pinned Linux osquery scanner image.
+- osquery programs was unavailable in the digest-pinned Linux osquery scanner image.

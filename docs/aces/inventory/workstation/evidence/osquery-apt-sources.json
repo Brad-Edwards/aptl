@@ -1,0 +1,9 @@
+{
+  "table": "apt_sources",
+  "query": "select * from apt_sources order by name;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery Linux image",
+  "status": "not_applicable",
+  "reason": "apt_sources is Debian/Ubuntu-specific and does not describe the Rocky Linux workstation target; RPM repository state is captured by os-packages.txt and filesystem evidence under /etc/yum.repos.d through the image/SBOM surfaces.",
+  "rows": []
+}

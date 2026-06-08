@@ -1,0 +1,288 @@
+name: techvault-features
+features:
+  techvault-postgres-service:
+    name: ''
+    type: service
+    source:
+      name: postgres
+      version: '16.13'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - POSTGRES_DB=techvault
+    - POSTGRES_USER=techvault
+    - POSTGRES_PASSWORD=techvault_db_pass
+  techvault-webapp-service:
+    name: ''
+    type: service
+    source:
+      name: flask-gunicorn-techvault
+      version: '*'
+      build: null
+    dependencies:
+    - techvault.webapp-wazuh-agent
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - DB_HOST=172.20.2.11
+    - DB_PORT=5432
+    - DB_NAME=techvault
+    - DB_USER=techvault
+    - DB_PASSWORD=techvault_db_pass
+    - FLASK_ENV=production
+  webapp-rsyslog-forwarding:
+    name: ''
+    type: configuration
+    source:
+      name: containers/webapp/entrypoint.sh
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - SIEM_IP=172.20.2.30
+    - LOG_FORMAT=syslog
+    - LOG_PATHS=/var/log/gunicorn/access.log
+  webapp-wazuh-agent:
+    name: ''
+    type: artifact
+    source:
+      name: containers/_wazuh-agent
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /opt/aptl/wazuh
+    description: ''
+    environment: []
+  techvault-fileshare-service:
+    name: ''
+    type: service
+    source:
+      name: samba
+      version: 4.15.13-Ubuntu
+      build: null
+    dependencies:
+    - techvault.fileshare-wazuh-agent
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - SIEM_IP=172.20.0.10
+    - WAZUH_MANAGER=wazuh.manager
+    - AGENT_NAME=aptl-fileshare-agent
+    - LOG_PATHS=/var/log/samba/log.samba-bgqd,/var/log/samba/log.*
+    - LOG_FORMAT=syslog
+  fileshare-rsyslog-forwarding:
+    name: ''
+    type: configuration
+    source:
+      name: containers/fileshare/setup-shares.sh
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - SIEM_IP=172.20.0.10
+    - LOG_FORMAT=syslog
+    - LOG_PATHS=/var/log/samba/log.samba-bgqd,/var/log/samba/log.*
+  fileshare-wazuh-agent:
+    name: ''
+    type: artifact
+    source:
+      name: containers/_wazuh-agent
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /opt/aptl/wazuh
+    description: ''
+    environment: []
+  techvault-mailserver-service:
+    name: ''
+    type: service
+    source:
+      name: docker-mailserver
+      version: v15.1.0
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - ENABLE_SPAMASSASSIN=0
+    - ENABLE_CLAMAV=0
+    - ENABLE_FAIL2BAN=0
+    - ENABLE_POSTGREY=0
+    - ENABLE_SASLAUTHD=0
+    - ONE_DIR=1
+    - OVERRIDE_HOSTNAME=mail.techvault.local
+    - PERMIT_DOCKER=network
+    - SSL_TYPE=
+  techvault-ad-domain-service:
+    name: ''
+    type: service
+    source:
+      name: samba
+      version: 4.15.13-Ubuntu
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - SAMBA_DOMAIN=TECHVAULT
+    - SAMBA_REALM=TECHVAULT.LOCAL
+    - SAMBA_ADMIN_PASSWORD=Admin123!
+    - DNS_FORWARDER=172.20.1.22
+  ad-rsyslog-forwarding:
+    name: ''
+    type: configuration
+    source:
+      name: containers/ad/setup-ad.sh
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - SIEM_IP=172.20.2.30
+    - LOG_FORMAT=syslog
+    - LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd
+  ad-wazuh-agent:
+    name: ''
+    type: artifact
+    source:
+      name: containers/_wazuh-agent
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /opt/aptl/wazuh
+    description: ''
+    environment: []
+  workstation-credential-artifacts:
+    name: ''
+    type: artifact
+    source:
+      name: containers/workstation/setup-workstation.sh
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /home/dev-user
+    description: Participant-visible workstation credential and onboarding artifacts represented by metadata, checksums, and
+      secret-fixture classification.
+    environment: []
+  victim-rsyslog-forwarding:
+    name: ''
+    type: configuration
+    source:
+      name: containers/base/scripts/entrypoint-base.sh
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /etc/rsyslog.d/90-forward.conf
+    description: ''
+    environment:
+    - SIEM_IP=172.20.2.30
+    - SIEM_PORT=514
+    - LOG_FORMAT=syslog
+  victim-wazuh-agent:
+    name: ''
+    type: artifact
+    source:
+      name: containers/victim/install-wazuh.sh
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /var/ossec
+    description: Wazuh package/configuration is present; observed service-manager state records the unit inactive/dead.
+    environment:
+    - WAZUH_MANAGER=172.20.2.30
+  victim-falco-agent:
+    name: ''
+    type: artifact
+    source:
+      name: containers/victim/install-falco.sh
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /etc/falco
+    description: Falco package/configuration is present; observed service-manager state records Falco units disabled/inactive.
+    environment: []
+  techvault-dns-service:
+    name: ''
+    type: service
+    source:
+      name: bind9
+      version: 9.18.39-0ubuntu0.22.04.3
+      build: null
+    dependencies:
+    - techvault.dns-wazuh-agent
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - LOG_PATHS=/var/log/named/query.log,/var/log/named/default.log
+    - LOG_FORMAT=syslog
+    - WAZUH_MANAGER=wazuh.manager
+    - AGENT_NAME=aptl-dns-agent
+  dns-wazuh-agent:
+    name: ''
+    type: artifact
+    source:
+      name: containers/_wazuh-agent
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /opt/aptl/wazuh
+    description: ''
+    environment: []
+  techvault-misp-service:
+    name: ''
+    type: service
+    source:
+      name: ghcr.io/misp/misp-docker/misp-core
+      version: 2.5.36
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: ''
+    description: ''
+    environment:
+    - MYSQL_HOST=misp-db
+    - MYSQL_DATABASE=misp
+    - MYSQL_USER=misp
+    - MYSQL_PASSWORD=<redacted>
+    - REDIS_HOST=misp-redis
+    - ADMIN_KEY=<redacted>
+  techvault-misp-db-service:
+    name: ''
+    type: service
+    source:
+      name: mariadb
+      version: 10.11.16
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: ''
+    description: MISP MariaDB companion service configured by docker-compose.yml.
+    environment:
+    - MYSQL_DATABASE=misp
+    - MYSQL_USER=misp
+    - MYSQL_PASSWORD=<redacted>
+    - MYSQL_ROOT_PASSWORD=<redacted>

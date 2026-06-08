@@ -109,12 +109,20 @@ Each step reports its status and fails the entire sequence on error, with a clea
 
 ### Security Guardrail: Project-Rooted Credential Writes
 
-Wazuh credential synchronization is part of lab startup and writes only the
-known in-repository config files under `config/wazuh_dashboard/` and
-`config/wazuh_cluster/`. The synchronization API should own construction of
-those known relative paths from the caller's `project_dir`, resolve the target,
-and reject any path that is not contained by the resolved project root before
-reading or writing.
+> **Superseded in part by [ADR-028](adr-028-runtime-rendered-service-config.md)
+> (issue #200).** Credential synchronization no longer writes back over the
+> checked-in `config/` files — those are source-owned templates. The
+> credentialized result is now *rendered* into the ignored `.aptl/config/`
+> state tree (`0700` dirs / `0600` files, atomic write), and `docker-compose.yml`
+> mounts that rendered copy. The project-rooting boundary below still applies,
+> now to *both* the source template path and the rendered output path.
+
+Wazuh credential synchronization is part of lab startup. The synchronization API
+owns construction of the canonical project-relative source path (under
+`config/wazuh_dashboard/` and `config/wazuh_cluster/`) and the canonical
+project-relative rendered output path (under `.aptl/config/`) from the caller's
+`project_dir`, resolves each target, and rejects any path that is not contained
+by the resolved project root before reading or writing.
 
 Do not expose arbitrary caller-provided output paths for these credential
 writers. If future startup steps need to write project-owned files, keep the

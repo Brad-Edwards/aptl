@@ -1,0 +1,4 @@
+6f57d5ff3dc4a988161be4a7e7cd19b511d2b7e715ebdc76cd504bfb3496b975  docker-compose.yml
+e8a1f0fcefccfdeff501126230e1e7f8a6cacf7e53bc5176ee0ecc1125935699  scripts/seed-misp.sh
+4a115aea994ac91007a13e3a6fb80c40485e6fdc26323b8caabb52a6be348f3a  config/soc_certs/misp/server.pem
+b2a4e0a9099d60d221cf169a6f640d2edf28d62f1f7f23df6e2f4650ce5dea58  config/soc_certs/lab-ca.pem

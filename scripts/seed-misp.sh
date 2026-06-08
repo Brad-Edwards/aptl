@@ -26,9 +26,22 @@ set -euo pipefail
 # Configuration
 # ---------------------------------------------------------------------------
 MISP_URL="${MISP_URL:-https://localhost:8443}"
+# SEC-006 / ADR-034: MISP now serves a lab-CA-signed certificate.
+# The seed script verifies against the lab CA bundle by default; the
+# previous ``-k`` (insecure) flag was a workaround for self-signed
+# MISP certs and is no longer the right posture.
+MISP_CACERT="${MISP_CACERT:-${APTL_PROJECT_DIR:-.}/config/soc_certs/lab-ca.pem}"
 EVENT_INFO="APTL Lab - Known Threat Actors"
 
-CURL_OPTS=(-ks --max-time 30)
+if [ -f "$MISP_CACERT" ]; then
+    CURL_OPTS=(-s --cacert "$MISP_CACERT" --max-time 30)
+else
+    # Fallback for environments without the lab CA materialized (e.g.
+    # CI smoke tests against a separately-managed MISP). Stays insecure
+    # rather than failing closed because the script's contract is
+    # best-effort seeding.
+    CURL_OPTS=(-ks --max-time 30)
+fi
 
 # ---------------------------------------------------------------------------
 # Preflight checks — default to ADMIN_KEY from docker-compose.yml

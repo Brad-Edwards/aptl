@@ -21,6 +21,7 @@ from aptl.core.snapshot import (
     _get_wazuh_rules_snapshot,
     _get_network_snapshots,
 )
+from aptl.utils.redaction import REDACTED
 
 
 def _backend_with_exec(exec_responses: dict[tuple, MagicMock]) -> MagicMock:
@@ -137,6 +138,64 @@ class TestDataclasses:
         assert d["wazuh_rules"]["total_rules"] == 100
         assert d["networks"][0]["subnet"] == "172.20.0.0/16"
         assert d["config_hashes"]["aptl.json"] == "abc123def456"
+
+    def test_range_snapshot_to_dict_redacts_service_credentials(self):
+        # Synthetic placeholder — real lab defaults are not embedded in
+        # this test fixture.
+        synthetic_creds = "PLACEHOLDER_USER/PLACEHOLDER_PASSWORD"
+        snap = RangeSnapshot(
+            services=[
+                ServiceEndpoint(
+                    name="Wazuh Dashboard",
+                    url="https://localhost:443",
+                    host="localhost",
+                    port=443,
+                    protocol="https",
+                    credentials=synthetic_creds,
+                ),
+            ],
+        )
+        out = snap.to_dict()
+        # Diagnostic structure preserved...
+        assert out["services"][0]["name"] == "Wazuh Dashboard"
+        assert out["services"][0]["port"] == 443
+        # ...credentials are not.
+        assert out["services"][0]["credentials"] == REDACTED
+
+    def test_range_snapshot_to_dict_preserves_ssh_key_path(self):
+        snap = RangeSnapshot(
+            ssh=[
+                SSHEndpoint(
+                    name="Victim",
+                    host="localhost",
+                    port=2022,
+                    user="labadmin",
+                    key_path="~/.ssh/aptl_lab_key",
+                    command="ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022",
+                ),
+            ],
+        )
+        out = snap.to_dict()
+        assert out["ssh"][0]["key_path"] == "~/.ssh/aptl_lab_key"
+
+    def test_range_snapshot_to_dict_redacts_credential_value_class(self):
+        # Stand in for the real `_get_service_endpoints` map using
+        # synthetic placeholders (real lab defaults are not embedded in
+        # this fixture). The redactor must scrub every credential-shaped
+        # value out of the JSON-serialized snapshot before it lands in
+        # `aptl lab status --json` or any future archive writer.
+        synthetic = (
+            "PLACEHOLDER_USER_A/PLACEHOLDER_PASSWORD_A",
+            "PLACEHOLDER_USER_B/PLACEHOLDER_PASSWORD_B!",
+        )
+        snap = RangeSnapshot(
+            services=[ServiceEndpoint(credentials=v) for v in synthetic],
+        )
+        serialized = json.dumps(snap.to_dict())
+        for token in synthetic:
+            assert token not in serialized, (
+                f"credential placeholder {token!r} leaked into snapshot JSON"
+            )
 
     def test_range_snapshot_json_roundtrip(self):
         snap = RangeSnapshot(
@@ -275,27 +334,8 @@ class TestGetContainerSnapshots:
 class TestGetWazuhRulesSnapshot:
     """Tests for _get_wazuh_rules_snapshot with mocked backend."""
 
-    def _exec_responder(self, mapping):
-        def _exec(container, cmd, *, timeout=None):
-            cmd_str = " ".join(cmd)
-            for key, value in mapping.items():
-                if key in cmd_str:
-                    return MagicMock(returncode=0, stdout=value + "\n", stderr="")
-            return MagicMock(returncode=1, stdout="", stderr="")
-        return _exec
-
     def test_parses_rule_counts(self):
         backend = MagicMock()
-        backend.container_exec.side_effect = self._exec_responder({
-            "ruleset/rules": "3500",
-            "etc/rules" + " -name": "15",  # find -name on etc/rules
-            "ls /var/ossec/etc/rules": "/var/ossec/etc/rules/local_rules.xml\n/var/ossec/etc/rules/ssh_rules.xml",
-            "ruleset/decoders": "800",
-            "etc/decoders": "3",
-        })
-        # The above naive substring matching can collide (etc/rules
-        # appears in two of the wazuh shell commands). Use a more
-        # robust mapping based on the exact command shape:
 
         def _exec(container, cmd, *, timeout=None):
             cmd_str = " ".join(cmd)
@@ -329,8 +369,16 @@ class TestGetWazuhRulesSnapshot:
             returncode=0, stdout="not-a-number\n", stderr=""
         )
         snap = _get_wazuh_rules_snapshot(backend)
+        # All four count fields share the same `isdigit()` guard.
+        # Assert every one so a decoder-specific regression cannot slip
+        # past a rules-only assertion. `custom_rule_files` follows a
+        # different parser (`Path(...).name`) and is not subject to the
+        # same guard, so it is exercised by `test_handles_empty_output`
+        # instead.
         assert snap.total_rules == 0
         assert snap.custom_rules == 0
+        assert snap.total_decoders == 0
+        assert snap.custom_decoders == 0
 
     def test_handles_empty_output(self):
         backend = MagicMock()
@@ -339,6 +387,9 @@ class TestGetWazuhRulesSnapshot:
         )
         snap = _get_wazuh_rules_snapshot(backend)
         assert snap.total_rules == 0
+        assert snap.custom_rules == 0
+        assert snap.total_decoders == 0
+        assert snap.custom_decoders == 0
         assert snap.custom_rule_files == []
 
 
@@ -430,6 +481,8 @@ class TestCaptureSnapshot:
                 name="aptl-victim",
                 image="aptl/victim:latest",
                 status="Up 5 minutes",
+                networks={"aptl_aptl-internal": "172.20.2.20"},
+                ports=[],
             ),
         ]
         mock_wazuh.return_value = WazuhRulesSnapshot(total_rules=100)
@@ -448,9 +501,11 @@ class TestCaptureSnapshot:
         assert snap.wazuh_rules.total_rules == 100
         assert len(snap.networks) == 1
         assert "aptl.json" in snap.config_hashes
-        # SSH endpoints derived from running containers
+        # SSH endpoints address the target by container IP — internal-only
+        # targets publish no host port (issue #293).
         assert len(snap.ssh) == 1
-        assert snap.ssh[0].port == 2022
+        assert snap.ssh[0].host == "172.20.2.20"
+        assert snap.ssh[0].port == 22
 
     @patch("aptl.core.snapshot._get_network_snapshots")
     @patch("aptl.core.snapshot._get_wazuh_rules_snapshot")
@@ -459,7 +514,9 @@ class TestCaptureSnapshot:
     def test_capture_snapshot_serializable(
         self, mock_sw, mock_containers, mock_wazuh, mock_networks, tmp_path
     ):
-        mock_sw.return_value = SoftwareVersions()
+        from datetime import datetime
+
+        mock_sw.return_value = SoftwareVersions(python_version="3.11.5")
         mock_containers.return_value = []
         mock_wazuh.return_value = WazuhRulesSnapshot()
         mock_networks.return_value = []
@@ -467,8 +524,12 @@ class TestCaptureSnapshot:
         snap = capture_snapshot(config_dir=tmp_path, backend=MagicMock())
         serialized = json.dumps(snap.to_dict())
         loaded = json.loads(serialized)
-        assert "timestamp" in loaded
-        assert "software" in loaded
-        assert "containers" in loaded
-        assert "services" in loaded
-        assert "ssh" in loaded
+        # Concrete values, not just key existence: a regression where
+        # capture_snapshot stops wiring mock-supplied data into the
+        # snapshot would now fail this test instead of silently passing
+        # against a default `RangeSnapshot()`.
+        assert datetime.fromisoformat(loaded["timestamp"])  # valid ISO-8601
+        assert loaded["software"]["python_version"] == "3.11.5"
+        assert loaded["containers"] == []
+        assert loaded["services"] == []
+        assert loaded["ssh"] == []

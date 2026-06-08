@@ -1,0 +1,95 @@
+[
+  {
+    "Id": "sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f",
+    "RepoTags": [
+      "aptl-workstation:latest"
+    ],
+    "RepoDigests": [
+      "aptl-workstation@sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2026-05-19T23:44:34.617790306+02:00",
+    "Config": {
+      "ExposedPorts": {
+        "22/tcp": {}
+      },
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "INSTALL_WAZUH=true",
+        "INSTALL_FALCO=true",
+        "INSTALL_XSIAM=false"
+      ],
+      "Entrypoint": [
+        "/usr/local/bin/entrypoint.sh"
+      ],
+      "Cmd": [
+        "/usr/sbin/init"
+      ],
+      "Volumes": {
+        "/home": {},
+        "/var/log": {}
+      },
+      "WorkingDir": "/",
+      "Labels": {
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.service": "workstation",
+        "com.docker.compose.version": "5.1.3"
+      },
+      "ArgsEscaped": true
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 241100829,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:44343de3ea1d3f71f143967c71a91df76138a17a21ac56642f3c0f2a64b07dce",
+        "sha256:45582058a8454dbcae87e574efdc14bb5b6ed17e963af741e2162d271f78ca38",
+        "sha256:ced84c09347aaba9d7f689f16d8582c1b9eb4401095fe9f360124cf5a50278c7",
+        "sha256:c363b965164fae03b0d163e1c42d9b82bc5115a325978e52096b939ca9ae4962",
+        "sha256:b2f4f1eca4b50ec7c237757101628bee67a72acc5ba319e3bffb4010d7cdada1",
+        "sha256:2d469970ef27b1a772d830c6410d162676459f47a10a15c60dba29792a7f73a0",
+        "sha256:adac17a4d3bedb3830fa3af1ebf663955d0abf70654e49182fc685e33e0782b7",
+        "sha256:ca985232303ef7e51d864b776fc563041cfd06fe9a40395a38e8bea527a36765",
+        "sha256:44126b9aa8864896ba2c6411812a9aea705d894f401318ef1f37e3658b4c3998",
+        "sha256:7a623ae9d9597c204e77e4b948cf3f1be3ee6468b7f95ade2736ec9a3c23cf86",
+        "sha256:056047d40c7275018087a7fd7418f6b9485ba830691bb8a9e95225cfd66675b0",
+        "sha256:31bc7db06fd67ff8c5f8e5df5b37a514dc0c218cad095ea1db4ed4c0648fa494",
+        "sha256:021e91cb07cd77d4dc84894657075a89338948a02ab84c4fe729cccd1f662f79",
+        "sha256:47cd6dceba304003ad13c007d898f71bf8ac5ab990ac67e0e36c4576e310514c",
+        "sha256:73713f74086a6d4704612b747d352c215b6619ff9ed68fcf7152e2f0676e08f1",
+        "sha256:488e9f55ddfb957e1b16c38a71744170bf98d2ab6ac3b64dd2ff75d2d90b3b10",
+        "sha256:fffb708ff94244da093c06bb2c50dd3d5ef37c84e6a290eccc44ea888df77d0b",
+        "sha256:c53fe21ba269c1fd37066d6867ed3940fd1c8e0fe3a403b87d473b03b1e78d29",
+        "sha256:fe91d7606ccbabf29723180c18ab051ee96572a48ba2ffaf09aca13f60d002fc",
+        "sha256:bbe27a21d9d3bfefb1af3a672f95eb451de689e291e57b3f98df3cdd3d255531",
+        "sha256:6045a22a1277cdfbb4b6c583a823dafacf208c6136e0075197005bc2d91b4a7d",
+        "sha256:371a836f91dc6989c27cb172be23d8516bee7456a63463f1040ec06918749691",
+        "sha256:2270f93eff10c821bb31ed94698e44c8ed4c8d8f19263f815e4bb2334ed8930a",
+        "sha256:466c663a6ab341519ed8246064b28f204c9d612b537f81f11669f50b8f7ab63e",
+        "sha256:61488b0abbea5803a6c584666af7fe178e846a52f9475ba687ae45cfe2e3caaa",
+        "sha256:7729590af0f06bcf8a91b7eb56b20248eebb674abc386b5904e45c256cb147f4",
+        "sha256:f25be6cdba58779a30a3f8a47f8c6a6ac854da0484111fe6afb973a370732266",
+        "sha256:264fb52dbe299fc59433d3b3040a3ac49ff18bc9deedc29aecd62bc174d8e67a",
+        "sha256:23172104b1c8f46e905dfd8fe0379158cb2ab5c6593e46fb43c581ba5a9ccca3",
+        "sha256:4ff511e2ba1f97983d21588645ec3a88679cf06063107f4e1e478d27b06664f3"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-05-23T06:17:09.637739476Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f",
+      "size": 856
+    },
+    "Identity": {
+      "Build": [
+        {
+          "Ref": "s2nrkkddwkvo3rxi5nq4fir30",
+          "CreatedAt": "2026-05-23T08:17:09.759366629+02:00"
+        }
+      ]
+    }
+  }
+]

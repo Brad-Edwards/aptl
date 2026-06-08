@@ -108,3 +108,81 @@ This supports the reverse engineering container (Ubuntu/bash) and future Windows
 - Session timeout tuning: Too short drops sessions mid-task; too long wastes resources. The 10-minute default was chosen based on observed agent interaction patterns but may need adjustment.
 - Buffer trimming can lose important early output from long-running commands. The 10,000/5,000 line limits were set based on typical command output sizes.
 - The v4.6.7 stranded-callers bug showed that cleanup paths must be exhaustively tested — any code path that closes a session must reject all pending promises.
+
+## Update (2026-05-12): Contract hardening guardrails
+
+Issue #215 asks for SSH session usage and cleanup contracts. The runtime
+session contract lives in `mcp/aptl-mcp-common/src/ssh.ts`, not in
+`src/aptl/core/ssh.py`, which only owns local lab key generation and public-key
+distribution. Contract hardening for command execution must therefore protect
+`PersistentSession.executeCommand()`, `PersistentSession.close()/cleanup()`,
+and `SSHConnectionManager.executeInSession()/closeSession()/disconnectAll()`.
+Do not add a parallel Python session manager or treat key generation contracts
+as satisfying the persistent-session cleanup guarantee.
+
+The invariant to preserve is:
+
+- Commands may be accepted only while the target session is initialized,
+  has an open shell, and is active in the manager's session map.
+- Every session close path, timeout path, shell close event, manager removal,
+  and process shutdown must leave the session inactive, clear keepalive/session
+  and per-command timers, reject the in-flight command, and reject every queued
+  command exactly once.
+- Contract failures must use the existing `SSHError`/MCP error response path
+  and remain safe for `traceToolCall()`/redaction. They must not introduce a
+  second exception hierarchy, second tool response envelope, or raw secret
+  logging path.
+- The MCP JSON Schema tool definitions and `LabConfig`/`getTargetCredentials`
+  remain the input/config validation boundary. Do not duplicate those shapes in
+  ad hoc validators.
+- Changes under `mcp/aptl-mcp-common` must extend the existing vitest SSH
+  coverage and rebuild dependent MCP packages, because all SSH-based MCP
+  servers consume the same session implementation.
+
+If a future Python SSH session layer is introduced, it must first be designed
+as a distinct control-plane boundary. The existing `src/aptl/core/ssh.py`
+module should remain limited to key material lifecycle unless a separate ADR
+expands its ownership.
+
+## Update (2026-05-18): Effective session-mode metadata
+
+`session_command` callers may override raw execution per command, but omitting
+`raw` means "use the session default", not "normal mode". The effective mode is
+therefore a runtime SSH-session fact, not a caller-argument fact.
+
+Implementations that expose command outcomes across the MCP boundary must:
+
+- Surface the effective command mode in the `session_command` result envelope as
+  `session_mode: "raw" | "normal"` using the existing `SessionMode` vocabulary.
+- Keep `list_sessions` / session metadata `mode` as the creation-time session
+  default for diagnostics; do not treat it as proof that a particular command
+  used that mode when a per-command override was supplied.
+- Preserve the existing `SSHError` and MCP response-envelope paths. A mode
+  metadata addition must not introduce a second error hierarchy, a parallel
+  session DTO, or ad hoc validation outside the JSON Schema plus
+  `assertSessionIdContract` ingress boundary.
+- Treat raw-mode `code: 0` as an unknown-outcome transport artifact. Downstream
+  observability must consume the effective mode metadata rather than inferring
+  success from that code.
+
+## Update (2026-05-18): Awaitable remote-close boundary
+
+Issue #304 changes the close contract: local cleanup and `shell.end()` are not
+proof that the remote shell wrapper has exited. The persistent-session close
+boundary must now resolve only after the SSH channel's remote `close` event has
+fired, or after a bounded timeout has logged a warning.
+
+Guardrails:
+
+- Keep the ownership model in `mcp/aptl-mcp-common/src/ssh.ts`: `closed` means
+  cleanup invariants passed and remote close was observed (or the bounded
+  timeout path completed visibly). `error` remains the broken-session path.
+- Preserve the existing `SSHError` and MCP response-envelope behavior. Do not
+  add a second exception hierarchy, close DTO, or handler-specific error shape.
+- Reject in-flight and queued commands during local cleanup; do not wait for the
+  remote close event before unblocking callers whose command promises are being
+  torn down.
+- Keep capture harvest in `mcp/aptl-mcp-common/src/captures.ts` and tool-level
+  orchestration in `handlers.ts`. The SSH layer owns channel lifecycle only.
+- The extensibility seam is the internal close timeout constant, not a new MCP
+  tool argument or config-file key.

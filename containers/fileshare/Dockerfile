@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     net-tools \
     iptables \
     supervisor \
+    openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # In-process Wazuh agent (replaces wazuh-sidecar-fileshare; #248).

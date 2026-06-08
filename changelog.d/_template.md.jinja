@@ -1,0 +1,29 @@
+{# Custom Markdown template for towncrier that produces the repo's
+   Keep a Changelog format:
+
+       ## [X.Y.Z] - YYYY-MM-DD
+
+       ### Section
+
+       - bullet text (#issue)
+
+   `versiondata` carries name/version/date; `definitions` is the
+   configured fragment types in declaration order; `sections[""][type]`
+   is the dict of {bullet text: [issue suffixes]} for that type. -#}
+## [{{ versiondata.version }}] - {{ versiondata.date }}
+
+{% for section, _ in sections.items() %}
+{% if sections[section] %}
+{% for category, _ in definitions.items() if category in sections[section] %}
+### {{ definitions[category]["name"] }}
+
+{% for text, values in sections[section][category].items() %}
+- {{ text }}{{ " " if values else "" }}{{ values | join(" ") }}
+{% endfor %}
+
+{% endfor %}
+{% else %}
+No significant changes.
+
+{% endif %}
+{% endfor %}

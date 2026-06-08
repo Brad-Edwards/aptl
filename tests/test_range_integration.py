@@ -26,6 +26,7 @@ from tests.helpers import (
     DB_IP,
     FILESHARE_IP,
     KALI_DMZ_IP,
+    LAB_CA_PATH,
     LIVE_LAB,
     MISP_API_KEY,
     MISP_URL,
@@ -41,6 +42,7 @@ from tests.helpers import (
     docker_exec,
     kali_exec,
     mcp_call_tool,
+    mcp_jsonrpc,
     mcp_server_cmd,
     mcp_tool_text,
     mcp_tools_list,
@@ -330,7 +332,7 @@ class TestSOCTools:
                 "value": KALI_DMZ_IP,
                 "type": "ip-src",
             },
-            insecure=True,
+            ca_cert_path=LAB_CA_PATH,
         )
         attrs = data.get("response", {}).get("Attribute", [])
         assert len(attrs) > 0, (
@@ -350,7 +352,7 @@ class TestSOCTools:
                 "type": "ip-src",
                 "includeCorrelations": True,
             },
-            insecure=True,
+            ca_cert_path=LAB_CA_PATH,
         )
         attrs = data.get("response", {}).get("Attribute", [])
         assert len(attrs) > 0, (
@@ -500,6 +502,15 @@ class TestFullLoop:
         _require_misp_key()
         _require_thehive_key()
 
+        # Capture the test start time so step 7 can filter TheHive
+        # cases to those created during THIS run, not pre-existing
+        # ones from earlier test invocations (test-quality review
+        # cycle 1 finding-5: previously a pre-existing case would
+        # satisfy `len(case_list) > 0` even when the workflow
+        # ABORTed).
+        from datetime import datetime, timezone
+        test_started_at_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+
         # 1. SQLi from Kali to webapp
         kali_exec(
             "curl -sf 'http://172.20.1.20:8080/login"
@@ -537,7 +548,7 @@ class TestFullLoop:
             auth_header=MISP_API_KEY,
             method="POST",
             body={"value": src_ip, "type": "ip-src"},
-            insecure=True,
+            ca_cert_path=LAB_CA_PATH,
         )
         misp_attrs = misp_data.get(
             "response", {},
@@ -588,6 +599,7 @@ class TestFullLoop:
 
         # 6. Poll Shuffle for completion
         deadline = time.monotonic() + 120
+        status_data: dict = {}
         while time.monotonic() < deadline:
             time.sleep(5)
             try:
@@ -603,8 +615,18 @@ class TestFullLoop:
                     break
             except (AssertionError, json.JSONDecodeError):
                 pass
+        # Workflow MUST complete successfully — without this
+        # assertion an ABORTED/FAILED workflow could still satisfy
+        # step 7 if pre-existing TheHive cases were around
+        # (test-quality review cycle 1 finding-5).
+        assert status_data.get("status") == "FINISHED", (
+            f"Shuffle workflow must reach FINISHED before TheHive check; "
+            f"got: {status_data.get('status')!r}"
+        )
 
-        # 7. Verify TheHive has a case
+        # 7. Verify TheHive has a case CREATED BY THIS RUN. Filter
+        # by createdAt > test_started_at_ms so stale cases from
+        # prior runs cannot satisfy the assertion (cycle 1 finding-5).
         cases = curl_json(
             f"{THEHIVE_URL}/api/v1/query",
             auth_header=f"Bearer {THEHIVE_API_KEY}",
@@ -615,7 +637,7 @@ class TestFullLoop:
                     {"_name": "sort", "_fields": [
                         {"_createdAt": "desc"},
                     ]},
-                    {"_name": "page", "from": 0, "to": 5},
+                    {"_name": "page", "from": 0, "to": 20},
                 ],
             },
         )
@@ -623,8 +645,14 @@ class TestFullLoop:
             cases if isinstance(cases, list)
             else cases.get("data", [])
         )
-        assert len(case_list) > 0, (
-            "No cases in TheHive after workflow execution"
+        fresh_cases = [
+            c for c in case_list
+            if isinstance(c, dict)
+            and c.get("_createdAt", 0) >= test_started_at_ms
+        ]
+        assert len(fresh_cases) > 0, (
+            f"No TheHive cases created during this run "
+            f"(since {test_started_at_ms}); total recent={len(case_list)}"
         )
 
     def test_wazuh_webhook_triggers_shuffle(self):
@@ -777,8 +805,31 @@ class TestScenarioHarness:
             )
             time.sleep(1)
 
-        # 3. Wait for alerts to be indexed
-        time.sleep(60)
+        # 3. Wait for the brute-force detection to fire. Test-quality
+        # review cycle 1 T-005: previously the test slept 60s then
+        # moved straight to stop/cleanup with no assertion that the
+        # 'live detection' the test name advertises actually fired.
+        # A broken Wazuh rule / decoder / log-forwarding gap would
+        # leave the scenario lifecycle green here while detection was
+        # silently dead. Pin the contract by querying for rule 5763
+        # (SSH brute force) — the same rule the active-response test
+        # asserts is wired into ossec.conf.
+        hit = wait_for_alert(
+            {
+                "bool": {
+                    "must": [
+                        {"match": {"rule.id": "5763"}},
+                        {"range": {
+                            "timestamp": {"gte": "now-3m"},
+                        }},
+                    ]
+                }
+            },
+            timeout=180,
+        )
+        assert hit.get("rule", {}).get("id") == "5763", (
+            f"Expected SSH brute-force alert (rule 5763), got: {hit.get('rule')}"
+        )
 
         # 4. Stop and verify run was assembled
         result = _aptl("stop")
@@ -1019,13 +1070,15 @@ class TestAttackPaths:
 # -------------------------------------------------------------------
 
 
-# Wazuh custom rule files that MUST be loaded for the prime scenario
+# Wazuh custom rule files that MUST be loaded for the prime scenario.
+# `kali_redteam_rules.xml` was removed under ADR-033 (OBS-003 non-
+# contamination): red-team activity must not bleed into the blue
+# defensive stack's awareness via the SIEM. See ADR-027 amendment.
 REQUIRED_WAZUH_RULES = [
     "webapp_rules.xml",
     "ad_rules.xml",
     "database_rules.xml",
     "suricata_rules.xml",
-    "kali_redteam_rules.xml",
     "falco_rules.xml",
 ]
 
@@ -1243,13 +1296,17 @@ class TestDefensiveStack:
         )
 
     def test_wazuh_decoders_for_enterprise(self):
-        """Custom decoders are mounted for enterprise log sources."""
+        """Custom decoders are mounted for enterprise log sources.
+
+        ``kali_decoders.xml`` was removed under ADR-033 (OBS-003 non-
+        contamination): red activity must not be ingested by the
+        defensive stack.
+        """
         result = docker_exec(
             "aptl-wazuh-manager",
             "ls /var/ossec/etc/decoders/",
         )
-        for decoder in ["kali_decoders.xml",
-                        "postgresql_decoders.xml",
+        for decoder in ["postgresql_decoders.xml",
                         "samba_decoders.xml"]:
             assert decoder in result.stdout, (
                 f"Decoder {decoder} not mounted"
@@ -1367,3 +1424,152 @@ class TestCTFFlags:
                 f"{container} root.txt has perms {perms}, "
                 f"expected 600"
             )
+
+
+# -------------------------------------------------------------------
+# Section 12: MCP harvest race window (#304)
+# -------------------------------------------------------------------
+
+
+@LIVE_LAB
+class TestMCPSessionHarvest:
+    """Per-session harvest is complete and not truncated.
+
+    #304 acceptance: after `PersistentSession.close()` awaits the remote
+    SSH channel close, the kali-side `script(1)` typescript that the
+    wrapper's EXIT trap flushes must be fully present in the host-side
+    harvest. We mark the end of the session with a known terminator and
+    assert it appears intact in the harvested typescript.
+
+    The whole flow runs through ONE MCP-server process so the harvest is
+    invoked by the real `close_session` handler — `mcp_call_tool` spawns
+    per call and would tear the server down between create and close.
+    """
+
+    def test_typescript_ends_with_terminator(self, tmp_path):
+        import json as _json
+        import secrets
+
+        # Unique per-run id satisfying SESSION_ID_SCHEMA
+        # ('^[A-Za-z0-9_][A-Za-z0-9._-]*$'). The previous fixed id used `#`,
+        # which the schema rejects — the wrapper would reroute to anon-* and
+        # the test would assert against the wrong path. Unique-per-run also
+        # avoids matching stale captures from prior failed runs.
+        unique = secrets.token_hex(6)
+        session_id = f"harvest_304_test_{unique}"
+        terminator = f"APTL_HARVEST_TERMINATOR_{unique}"
+
+        # Bring up the lab's MCP server, open an interactive session,
+        # run a command that emits the terminator, then close. The
+        # close handler triggers harvest from the kali container's
+        # capture volume into .aptl/runs/<run>/kali-side/<session>/.
+        init = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "aptl-test", "version": "1.0.0"},
+            },
+        }
+        initialized = {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        }
+        open_session = {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "kali_interactive_session",
+                "arguments": {
+                    "session_id": session_id,
+                    "timeout_ms": 60000,
+                },
+            },
+        }
+        emit_terminator = {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "kali_session_command",
+                "arguments": {
+                    "session_id": session_id,
+                    "command": f"echo {terminator}",
+                    "timeout": 10000,
+                },
+            },
+        }
+        close = {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "kali_close_session",
+                "arguments": {"session_id": session_id},
+            },
+        }
+
+        responses = mcp_jsonrpc(
+            "kali-ssh",
+            [init, initialized, open_session, emit_terminator, close],
+            timeout=90,
+        )
+
+        # Sanity check JSON-RPC transport AND the inner success envelope —
+        # these MCP handlers report operational failures inside the text
+        # body as `success: false` rather than as JSON-RPC errors. A
+        # transport-clean response with `success: false` would otherwise
+        # produce false confidence about the harvest race fix.
+        by_id = {r.get("id"): r for r in responses if "id" in r}
+        for call_id in (2, 3, 4):
+            resp = by_id.get(call_id)
+            assert resp is not None, f"missing response for id={call_id}"
+            assert "error" not in resp, (
+                f"MCP transport error on id={call_id}: {resp.get('error')}"
+            )
+            content = resp.get("result", {}).get("content", [])
+            assert content, f"empty content for id={call_id}"
+            body = _json.loads(content[0]["text"])
+            assert body.get("success") is True, (
+                f"tool id={call_id} body reports failure: {body}"
+            )
+
+        # Locate the harvested typescript. The harvest lands under
+        # .aptl/runs/<run_id>/kali-side/<session_id>/. The unique-per-run
+        # session_id guarantees we match only captures from this run.
+        import glob
+        from pathlib import Path
+
+        repo_root = Path(__file__).resolve().parent.parent
+        candidates = glob.glob(
+            str(
+                repo_root / ".aptl" / "runs" / "*" / "kali-side"
+                / session_id / "**" / "typescript*"
+            ),
+            recursive=True,
+        )
+        assert candidates, (
+            "No harvested typescript for the test session — harvest "
+            "may have run before remote close, or the kali capture "
+            "wrapper did not produce a typescript."
+        )
+
+        # Read every candidate (PTY + raw typescript variants) and
+        # assert at least one contains the unique terminator intact.
+        found_in_any = False
+        for path in candidates:
+            try:
+                contents = Path(path).read_bytes()
+            except OSError:
+                continue
+            if terminator.encode() in contents:
+                found_in_any = True
+                break
+        assert found_in_any, (
+            f"Terminator '{terminator}' not found in any harvested "
+            f"typescript — capture was truncated. Candidates: "
+            f"{candidates}"
+        )

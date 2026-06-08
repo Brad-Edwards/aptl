@@ -107,9 +107,15 @@ class DeploymentConfig(BaseModel):
 
 
 class AptlConfig(BaseModel):
-    """Top-level APTL configuration."""
+    """Top-level APTL configuration.
 
-    model_config = ConfigDict(extra="ignore")
+    `extra="forbid"` matches every nested model and enforces ADR-025:
+    `aptl.json` is a strict first-party schema at every level, so
+    unknown top-level keys (typos, dead sections) are validation
+    errors rather than silent drift.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     lab: LabSettings = LabSettings(name="aptl")
     containers: ContainerSettings = ContainerSettings()
@@ -141,6 +147,16 @@ def load_config(path: Path) -> AptlConfig:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON in {path}: {e}") from e
+
+    # `AptlConfig(**data)` raises TypeError when `data` is a non-mapping
+    # JSON top-level (int, float, str, bool, null, list). Classify that
+    # into the documented `ValueError` contract so callers doing
+    # `except (FileNotFoundError, ValueError)` see a consistent shape.
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Config root must be a JSON object, got "
+            f"{type(data).__name__}: {path}"
+        )
 
     log.debug("Loaded config from %s", path)
     return AptlConfig(**data)

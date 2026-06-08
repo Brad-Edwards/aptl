@@ -261,13 +261,19 @@ class TestCollectSuricataEve:
 class TestCollectTheHiveCases:
     """Tests for TheHive case collection."""
 
-    def test_returns_empty_without_api_key(self):
+    @patch("aptl.core.collectors._curl_json")
+    def test_returns_empty_without_api_key(self, mock_curl):
+        """Missing API key short-circuits the collector BEFORE any HTTP
+        call. Mock `_curl_json` and assert it was never invoked — a
+        regression where the collector fires an unauthenticated request
+        would otherwise still return [] and slip through."""
         result = collect_thehive_cases(
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
             api_key="",
         )
         assert result == []
+        mock_curl.assert_not_called()
 
     @patch("aptl.core.collectors._curl_json")
     def test_returns_cases(self, mock_curl):
@@ -325,13 +331,16 @@ class TestCollectTheHiveCases:
 class TestCollectMISPEvents:
     """Tests for MISP event collection."""
 
-    def test_returns_empty_without_api_key(self):
+    @patch("aptl.core.collectors._curl_json")
+    def test_returns_empty_without_api_key(self, mock_curl):
+        """Missing API key must short-circuit BEFORE any HTTP call."""
         result = collect_misp_events(
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
             api_key="",
         )
         assert result == []
+        mock_curl.assert_not_called()
 
     @patch("aptl.core.collectors._curl_json")
     def test_returns_events(self, mock_curl):
@@ -383,13 +392,16 @@ class TestCollectMISPEvents:
 class TestCollectShuffleExecutions:
     """Tests for Shuffle execution collection."""
 
-    def test_returns_empty_without_api_key(self):
+    @patch("aptl.core.collectors._curl_json")
+    def test_returns_empty_without_api_key(self, mock_curl):
+        """Missing API key must short-circuit BEFORE any HTTP call."""
         result = collect_shuffle_executions(
             "2025-01-01T00:00:00+00:00",
             "2025-01-01T23:59:59+00:00",
             api_key="",
         )
         assert result == []
+        mock_curl.assert_not_called()
 
     @patch("aptl.core.collectors._curl_json")
     def test_returns_empty_on_failure(self, mock_curl):
@@ -401,3 +413,154 @@ class TestCollectShuffleExecutions:
             api_key="test-key",
         )
         assert result == []
+
+
+class TestSocCollectorTLSPosture:
+    """SEC-006 / ADR-034: SOC stack collectors must verify TLS against
+    the lab-managed CA, NOT pass ``insecure=True``. The Wazuh indexer
+    collector stays ``insecure=True`` — that's SEC-004 territory and
+    explicitly out of SEC-006 scope per ADR-034 § Decision.
+    """
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_misp_collector_verifies_against_lab_ca_by_default(self, mock_curl):
+        """Both the TLS posture AND the return-value contract: a
+        bug that flipped insecure=False correctly but then failed to
+        return the parsed response (the collector's actual job) would
+        otherwise slip through a mock-only assertion."""
+        mock_curl.return_value = {
+            "response": [{"Event": {"id": "1", "timestamp": "1735689600"}}],
+        }
+
+        result = collect_misp_events(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
+            api_key="test-key",
+        )
+
+        kwargs = mock_curl.call_args[1]
+        assert kwargs.get("insecure") is False, (
+            "MISP collector must verify TLS by default; "
+            "ADR-034 forbids insecure=True for SOC stack consumers"
+        )
+        assert kwargs.get("ca_cert_path"), (
+            "MISP collector must pass ca_cert_path so curl can validate "
+            "against the lab CA"
+        )
+        # End-to-end return-value check: the collector must surface the
+        # parsed response, not silently swallow it.
+        assert len(result) == 1
+        assert result[0]["Event"]["id"] == "1"
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_thehive_collector_verifies_against_lab_ca_by_default(self, mock_curl):
+        mock_curl.return_value = [{"_id": "case-tls-1"}]
+
+        result = collect_thehive_cases(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
+            api_key="test-key",
+        )
+
+        kwargs = mock_curl.call_args[1]
+        assert kwargs.get("insecure", False) is False
+        assert kwargs.get("ca_cert_path")
+        # Return value must propagate, not collapse.
+        assert result == [{"_id": "case-tls-1"}]
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_thehive_collector_uses_https_url_by_default(self, mock_curl):
+        mock_curl.return_value = [{"_id": "case-https-1"}]
+
+        result = collect_thehive_cases(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
+            api_key="test-key",
+        )
+
+        url = mock_curl.call_args[0][0]
+        assert url.startswith("https://"), (
+            "TheHive collector must use HTTPS by default; "
+            "the lab CA chain only signs HTTPS surfaces"
+        )
+        assert result == [{"_id": "case-https-1"}]
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_shuffle_collector_verifies_against_lab_ca_by_default(self, mock_curl):
+        mock_curl.return_value = [
+            {
+                "execution_id": "ex-1",
+                "started_at": "2025-01-01T12:00:00+00:00",
+            }
+        ]
+
+        result = collect_shuffle_executions(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
+            api_key="test-key",
+        )
+
+        kwargs = mock_curl.call_args[1]
+        assert kwargs.get("insecure", False) is False
+        assert kwargs.get("ca_cert_path")
+        # Return value must contain the in-window execution; the
+        # collector filters by start time after the HTTP call.
+        assert len(result) == 1
+        assert result[0]["execution_id"] == "ex-1"
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_shuffle_collector_uses_https_url_by_default(self, mock_curl):
+        mock_curl.return_value = [
+            {
+                "execution_id": "ex-https",
+                "started_at": "2025-01-01T12:00:00+00:00",
+            }
+        ]
+
+        result = collect_shuffle_executions(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
+            api_key="test-key",
+        )
+
+        url = mock_curl.call_args[0][0]
+        assert url.startswith("https://"), (
+            "Shuffle collector must use HTTPS by default; "
+            "the lab CA chain only signs HTTPS surfaces"
+        )
+        assert len(result) == 1
+        assert result[0]["execution_id"] == "ex-https"
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_wazuh_collector_stays_insecure_per_sec_004_scope(self, mock_curl):
+        """Regression: SEC-004's rejectUnauthorized:false allowance covers
+        Wazuh inter-component traffic. SEC-006 narrows it for the SOC
+        stack but explicitly does NOT touch the Wazuh chain. Flipping the
+        Wazuh indexer collector to verify-on here would be SEC-006 scope
+        creep."""
+        from aptl.core.collectors import collect_wazuh_alerts
+        mock_curl.return_value = {"hits": {"hits": []}}
+
+        collect_wazuh_alerts(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
+        )
+
+        kwargs = mock_curl.call_args[1]
+        # SEC-004 territory — stays insecure=True.
+        assert kwargs.get("insecure") is True
+
+    @patch("aptl.core.collectors._curl_json")
+    def test_explicit_ca_cert_path_override_is_honored(self, mock_curl):
+        """An operator passing an explicit ``ca_cert_path`` (e.g. for an
+        out-of-tree CA bundle) wins over the env / default."""
+        mock_curl.return_value = {"response": []}
+
+        collect_misp_events(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
+            api_key="test-key",
+            ca_cert_path="/custom/path/ca.pem",
+        )
+
+        assert mock_curl.call_args[1]["ca_cert_path"] == "/custom/path/ca.pem"

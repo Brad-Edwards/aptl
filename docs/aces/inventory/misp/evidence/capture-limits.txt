@@ -1,0 +1,8 @@
+- Compose service evidence was extracted from docker-compose.yml with yq because the full local compose project has an unrelated invalid dependency reference that prevents docker compose config from rendering.
+- Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof.
+- Full source tree and volume filesystem evidence is captured as compressed manifests. SDL encodes load-bearing participant-visible paths and structured runtime surfaces directly; byte-identical rebuild proof remains out of scope for this inventory issue.
+- Private key file content and secret-bearing config values are not captured or hashed as raw values; their path, mount, ownership, mode, and redaction classification are captured instead.
+- config/soc_certs/misp/server.key is mounted by the container but intentionally omitted from source-checksums.txt because it is private key material.
+- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; filesystem provenance is captured in filesystem-tree.txt.gz and filesystem-checksums.txt.xz.
+- osquery installed_applications table unavailable in the digest-pinned Linux scanner image.
+- osquery programs table unavailable in the digest-pinned Linux scanner image.

@@ -1,0 +1,933 @@
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 1417 1772860178 /docker-entrypoint-initdb.d/patch-rule-path.py
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517140 /etc/filebeat
+regular file -rw-r--r-- 644 0 root 0 root 297349 1610489403 /etc/filebeat/fields.yml
+regular file -rw-r--r-- 644 0 root 0 root 91838 1610489403 /etc/filebeat/filebeat.reference.yml
+regular file -rw-r--r-- 644 0 root 0 root 1007 1779517140 /etc/filebeat/filebeat.yml
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517112 /etc/filebeat/modules.d
+regular file -rw-r--r-- 644 0 root 0 root 476 1610489420 /etc/filebeat/modules.d/apache.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 281 1610489420 /etc/filebeat/modules.d/auditd.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 965 1610489420 /etc/filebeat/modules.d/elasticsearch.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 377 1610489420 /etc/filebeat/modules.d/haproxy.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 652 1610489420 /etc/filebeat/modules.d/icinga.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 471 1610489420 /etc/filebeat/modules.d/iis.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 399 1610489420 /etc/filebeat/modules.d/kafka.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 294 1610489420 /etc/filebeat/modules.d/kibana.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 472 1610489420 /etc/filebeat/modules.d/logstash.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 297 1610489420 /etc/filebeat/modules.d/mongodb.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 472 1610489420 /etc/filebeat/modules.d/mysql.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 288 1610489420 /etc/filebeat/modules.d/nats.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 784 1610489420 /etc/filebeat/modules.d/nginx.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 496 1610489420 /etc/filebeat/modules.d/osquery.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 306 1610489420 /etc/filebeat/modules.d/postgresql.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 567 1610489420 /etc/filebeat/modules.d/redis.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 267 1610489420 /etc/filebeat/modules.d/santa.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 478 1610489420 /etc/filebeat/modules.d/system.yml.disabled
+regular file -rw-r--r-- 644 0 root 0 root 303 1610489420 /etc/filebeat/modules.d/traefik.yml.disabled
+regular file -rw------- 600 0 root 0 root 84309 0 /etc/filebeat/wazuh-template.json
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 1704 1763356180 /etc/ssl/filebeat.key
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 1257 1763356180 /etc/ssl/filebeat.pem
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 1204 1763356180 /etc/ssl/root-ca.pem
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 1007 1772872319 /tmp/filebeat-override.yml
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517160 /var/lib/filebeat
+regular empty file -rw------- 600 0 root 0 root 0 1779517160 /var/lib/filebeat/filebeat.lock
+regular file -rw------- 600 0 root 0 root 48 1779517160 /var/lib/filebeat/meta.json
+directory drwxr-x--- 750 0 root 0 root 4096 1779517160 /var/lib/filebeat/registry
+directory drwxr-x--- 750 0 root 0 root 4096 1779967271 /var/lib/filebeat/registry/filebeat
+regular file -rw------- 600 0 root 0 root 577 1779967271 /var/lib/filebeat/registry/filebeat/234588.json
+regular file -rw------- 600 0 root 0 root 47 1779967271 /var/lib/filebeat/registry/filebeat/active.dat
+regular file -rw------- 600 0 root 0 root 8098142 1780015962 /var/lib/filebeat/registry/filebeat/log.json
+regular file -rw------- 600 0 root 0 root 15 1779517160 /var/lib/filebeat/registry/filebeat/meta.json
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1779517137 /var/ossec/active-response/bin
+regular file -rwxr-x--- 750 0 root 999 wazuh 22952 1746010404 /var/ossec/active-response/bin/default-firewall-drop
+regular file -rwxr-x--- 750 0 root 999 wazuh 18840 1746010404 /var/ossec/active-response/bin/disable-account
+regular file -rwxr-x--- 750 0 root 999 wazuh 22952 1746010404 /var/ossec/active-response/bin/firewall-drop
+regular file -rwxr-x--- 750 0 root 999 wazuh 18848 1746010404 /var/ossec/active-response/bin/firewalld-drop
+regular file -rwxr-x--- 750 0 root 999 wazuh 22968 1746010404 /var/ossec/active-response/bin/host-deny
+regular file -rwxr-x--- 750 0 root 999 wazuh 18856 1746010404 /var/ossec/active-response/bin/ip-customblock
+regular file -rwxr-x--- 750 0 root 999 wazuh 18840 1746010404 /var/ossec/active-response/bin/ipfw
+regular file -rwxr-x--- 750 0 root 999 wazuh 18824 1746010404 /var/ossec/active-response/bin/kaspersky
+regular file -rwxr-x--- 750 0 root 999 wazuh 14491 1746010404 /var/ossec/active-response/bin/kaspersky.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 18832 1746010404 /var/ossec/active-response/bin/npf
+regular file -rwxr-x--- 750 0 root 999 wazuh 22960 1746010404 /var/ossec/active-response/bin/pf
+regular file -rwxr-x--- 750 0 root 999 wazuh 18832 1746010404 /var/ossec/active-response/bin/restart-wazuh
+regular file -rwxr-x--- 750 0 root 999 wazuh 695 1746010404 /var/ossec/active-response/bin/restart.sh
+regular file -rwxr-x--- 750 0 root 999 wazuh 18840 1746010404 /var/ossec/active-response/bin/route-null
+regular file -rwxr-x--- 750 0 root 999 wazuh 18824 1746010404 /var/ossec/active-response/bin/wazuh-slack
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1779517137 /var/ossec/agentless
+regular file -rwxr-x--- 750 0 root 999 wazuh 2453 1746010404 /var/ossec/agentless/main.exp
+regular file -rwxr-x--- 750 0 root 999 wazuh 2406 1746010404 /var/ossec/agentless/register_host.sh
+regular file -rwxr-x--- 750 0 root 999 wazuh 1476 1746010404 /var/ossec/agentless/ssh.exp
+regular file -rwxr-x--- 750 0 root 999 wazuh 5283 1746010404 /var/ossec/agentless/ssh_asa-fwsmconfig_diff
+regular file -rwxr-x--- 750 0 root 999 wazuh 5403 1746010404 /var/ossec/agentless/ssh_foundry_diff
+regular file -rwxr-x--- 750 0 root 999 wazuh 898 1746010404 /var/ossec/agentless/ssh_generic_diff
+regular file -rwxr-x--- 750 0 root 999 wazuh 1091 1746010404 /var/ossec/agentless/ssh_integrity_check_bsd
+regular file -rwxr-x--- 750 0 root 999 wazuh 1099 1746010404 /var/ossec/agentless/ssh_integrity_check_linux
+regular file -rwxr-x--- 750 0 root 999 wazuh 1616 1746010404 /var/ossec/agentless/ssh_nopass.exp
+regular file -rwxr-x--- 750 0 root 999 wazuh 5265 1746010404 /var/ossec/agentless/ssh_pixconfig_diff
+regular file -rwxr-x--- 750 0 root 999 wazuh 915 1746010404 /var/ossec/agentless/sshlogin.exp
+regular file -rwxr-x--- 750 0 root 999 wazuh 1381 1746010404 /var/ossec/agentless/su.exp
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1779517149 /var/ossec/api/configuration
+regular file -rw-rw---- 660 0 root 999 wazuh 1938 1746010421 /var/ossec/api/configuration/api.yaml
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1779517167 /var/ossec/api/configuration/security
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 36 1779517156 /var/ossec/api/configuration/security/installation_uid
+regular file -rw-r----- 640 999 wazuh 999 wazuh 384 1779517167 /var/ossec/api/configuration/security/private_key.pem
+regular file -rw-r----- 640 999 wazuh 999 wazuh 268 1779517167 /var/ossec/api/configuration/security/public_key.pem
+regular file -rw-r----- 640 999 wazuh 999 wazuh 102400 1779517149 /var/ossec/api/configuration/security/rbac.db
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1779517152 /var/ossec/api/configuration/ssl
+regular file -r-------- 400 999 wazuh 999 wazuh 1233 1779517152 /var/ossec/api/configuration/ssl/server.crt
+regular file -r-------- 400 999 wazuh 999 wazuh 1708 1779517152 /var/ossec/api/configuration/ssl/server.key
+directory drwxrwx--- 770 999 wazuh 999 wazuh 4096 1779517274 /var/ossec/etc
+regular file -rw-r----- 640 0 root 999 wazuh 632 1779517274 /var/ossec/etc/client.keys
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1779517136 /var/ossec/etc/decoders
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 815 1746010405 /var/ossec/etc/decoders/local_decoder.xml
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 381 1772860178 /var/ossec/etc/decoders/postgresql_decoders.xml
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 349 1772860178 /var/ossec/etc/decoders/samba_decoders.xml
+regular file -rw-r----- 640 0 root 999 wazuh 14480 1746010404 /var/ossec/etc/internal_options.conf
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1779517150 /var/ossec/etc/lists
+directory drwxrwx--- 770 999 wazuh 999 wazuh 4096 1779517150 /var/ossec/etc/lists/amazon
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 10206 1746010405 /var/ossec/etc/lists/amazon/aws-eventnames
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 19888 1779517150 /var/ossec/etc/lists/amazon/aws-eventnames.cdb
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 62 1746010405 /var/ossec/etc/lists/amazon/aws-sources
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 107 1746010405 /var/ossec/etc/lists/audit-keys
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 2265 1779517150 /var/ossec/etc/lists/audit-keys.cdb
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 892 1746010405 /var/ossec/etc/lists/security-eventchannel
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 6461 1779517150 /var/ossec/etc/lists/security-eventchannel.cdb
+regular file -rw-r----- 640 0 root 999 wazuh 320 1746010404 /var/ossec/etc/local_internal_options.conf
+regular file -rw-r----- 640 0 root 999 wazuh 114 1755118836 /var/ossec/etc/localtime
+regular file -rw-rw---- 660 0 root 999 wazuh 14011 1779517139 /var/ossec/etc/ossec.conf
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1779517112 /var/ossec/etc/rootcheck
+regular file -rw-rw---- 660 0 root 999 wazuh 28411 1746010405 /var/ossec/etc/rootcheck/cis_apache2224_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 12576 1746010405 /var/ossec/etc/rootcheck/cis_debian_linux_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 7609 1746010405 /var/ossec/etc/rootcheck/cis_mysql5-6_community_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 10297 1746010405 /var/ossec/etc/rootcheck/cis_mysql5-6_enterprise_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 35781 1746010405 /var/ossec/etc/rootcheck/cis_rhel5_linux_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 33870 1746010405 /var/ossec/etc/rootcheck/cis_rhel6_linux_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 36957 1746010405 /var/ossec/etc/rootcheck/cis_rhel7_linux_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 17658 1746010405 /var/ossec/etc/rootcheck/cis_rhel_linux_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 34376 1746010405 /var/ossec/etc/rootcheck/cis_sles11_linux_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 35081 1746010405 /var/ossec/etc/rootcheck/cis_sles12_linux_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 94877 1746010405 /var/ossec/etc/rootcheck/cis_win2012r2_domainL1_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 28006 1746010405 /var/ossec/etc/rootcheck/cis_win2012r2_domainL2_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 100530 1746010405 /var/ossec/etc/rootcheck/cis_win2012r2_memberL1_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 376002 1746010405 /var/ossec/etc/rootcheck/cis_win2012r2_memberL2_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 16174 1746010405 /var/ossec/etc/rootcheck/rootkit_files.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 5547 1746010405 /var/ossec/etc/rootcheck/rootkit_trojans.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 4466 1746010405 /var/ossec/etc/rootcheck/system_audit_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 3285 1746010405 /var/ossec/etc/rootcheck/system_audit_ssh.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 5214 1746010405 /var/ossec/etc/rootcheck/win_applications_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 4277 1746010405 /var/ossec/etc/rootcheck/win_audit_rcl.txt
+regular file -rw-rw---- 660 0 root 999 wazuh 7300 1746010405 /var/ossec/etc/rootcheck/win_malware_rcl.txt
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1779517136 /var/ossec/etc/rules
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 3115 1771339123 /var/ossec/etc/rules/ad_rules.xml
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 2341 1772860178 /var/ossec/etc/rules/database_rules.xml
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 1883 1772925991 /var/ossec/etc/rules/falco_rules.xml
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 497 1746010405 /var/ossec/etc/rules/local_rules.xml
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 3442 1771339123 /var/ossec/etc/rules/suricata_rules.xml
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 3318 1772860178 /var/ossec/etc/rules/webapp_rules.xml
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1779517150 /var/ossec/etc/shared
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 76 1746010423 /var/ossec/etc/shared/agent-template.conf
+regular file -rw-r----- 640 0 root 999 wazuh 228 1779517155 /var/ossec/etc/shared/ar.conf
+directory drwxrwx--- 770 999 wazuh 999 wazuh 4096 1779517156 /var/ossec/etc/shared/default
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 76 1746010423 /var/ossec/etc/shared/default/agent.conf
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 28411 1746010423 /var/ossec/etc/shared/default/cis_apache2224_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 12576 1746010423 /var/ossec/etc/shared/default/cis_debian_linux_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 7609 1746010423 /var/ossec/etc/shared/default/cis_mysql5-6_community_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 10297 1746010423 /var/ossec/etc/shared/default/cis_mysql5-6_enterprise_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 35781 1746010423 /var/ossec/etc/shared/default/cis_rhel5_linux_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 33870 1746010423 /var/ossec/etc/shared/default/cis_rhel6_linux_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 36957 1746010423 /var/ossec/etc/shared/default/cis_rhel7_linux_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 17658 1746010423 /var/ossec/etc/shared/default/cis_rhel_linux_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 34376 1746010423 /var/ossec/etc/shared/default/cis_sles11_linux_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 35081 1746010423 /var/ossec/etc/shared/default/cis_sles12_linux_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 94877 1746010423 /var/ossec/etc/shared/default/cis_win2012r2_domainL1_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 28006 1746010423 /var/ossec/etc/shared/default/cis_win2012r2_domainL2_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 100530 1746010423 /var/ossec/etc/shared/default/cis_win2012r2_memberL1_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 376002 1746010423 /var/ossec/etc/shared/default/cis_win2012r2_memberL2_rcl.txt
+regular file -rw-r--r-- 644 999 wazuh 999 wazuh 899300 1779517156 /var/ossec/etc/shared/default/merged.mg
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 16174 1746010423 /var/ossec/etc/shared/default/rootkit_files.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 5547 1746010423 /var/ossec/etc/shared/default/rootkit_trojans.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 4466 1746010423 /var/ossec/etc/shared/default/system_audit_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 3285 1746010423 /var/ossec/etc/shared/default/system_audit_ssh.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 5214 1746010423 /var/ossec/etc/shared/default/win_applications_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 4277 1746010423 /var/ossec/etc/shared/default/win_audit_rcl.txt
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 7300 1746010423 /var/ossec/etc/shared/default/win_malware_rcl.txt
+regular file -rw-r----- 640 0 root 0 root 1164 1756728178 /var/ossec/etc/sslmanager.cert
+regular file -rw-r----- 640 0 root 0 root 1704 1756728178 /var/ossec/etc/sslmanager.key
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517137 /var/ossec/integrations
+regular file -rwxr-xr-x 755 1000 UNKNOWN 1000 UNKNOWN 304 1772866350 /var/ossec/integrations/custom-shuffle
+regular file -rwxr-x--- 750 0 root 999 wazuh 1045 1746010423 /var/ossec/integrations/maltiverse
+regular file -rwxr-x--- 750 0 root 999 wazuh 20124 1746010405 /var/ossec/integrations/maltiverse.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 1045 1746010423 /var/ossec/integrations/pagerduty
+regular file -rwxr-x--- 750 0 root 999 wazuh 6449 1746010405 /var/ossec/integrations/pagerduty.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 1045 1746010423 /var/ossec/integrations/shuffle
+regular file -rwxr-x--- 750 0 root 999 wazuh 7249 1746010405 /var/ossec/integrations/shuffle.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 1045 1746010423 /var/ossec/integrations/slack
+regular file -rwxr-x--- 750 0 root 999 wazuh 6835 1746010405 /var/ossec/integrations/slack.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 1045 1746010423 /var/ossec/integrations/virustotal
+regular file -rwxr-x--- 750 0 root 999 wazuh 10691 1746010405 /var/ossec/integrations/virustotal.py
+directory drwxrwx--- 770 999 wazuh 999 wazuh 4096 1780012812 /var/ossec/logs
+regular empty file -rw-rw---- 660 999 wazuh 999 wazuh 0 1756728177 /var/ossec/logs/active-responses.log
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1780012803 /var/ossec/logs/alerts
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779517156 /var/ossec/logs/alerts/2026
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1780012818 /var/ossec/logs/alerts/2026/May
+regular file -rw-r----- 640 999 wazuh 999 wazuh 140401 1779580816 /var/ossec/logs/alerts/2026/May/ossec-alerts-23.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 499 1779580816 /var/ossec/logs/alerts/2026/May/ossec-alerts-23.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 133713 1779580816 /var/ossec/logs/alerts/2026/May/ossec-alerts-23.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 496 1779580816 /var/ossec/logs/alerts/2026/May/ossec-alerts-23.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 116326 1779667217 /var/ossec/logs/alerts/2026/May/ossec-alerts-24.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 623 1779667217 /var/ossec/logs/alerts/2026/May/ossec-alerts-24.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 90429 1779667217 /var/ossec/logs/alerts/2026/May/ossec-alerts-24.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 620 1779667217 /var/ossec/logs/alerts/2026/May/ossec-alerts-24.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 116092 1779753618 /var/ossec/logs/alerts/2026/May/ossec-alerts-25.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 623 1779753618 /var/ossec/logs/alerts/2026/May/ossec-alerts-25.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 91317 1779753618 /var/ossec/logs/alerts/2026/May/ossec-alerts-25.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 620 1779753618 /var/ossec/logs/alerts/2026/May/ossec-alerts-25.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 112652 1779840018 /var/ossec/logs/alerts/2026/May/ossec-alerts-26.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 623 1779840018 /var/ossec/logs/alerts/2026/May/ossec-alerts-26.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 87304 1779840018 /var/ossec/logs/alerts/2026/May/ossec-alerts-26.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 620 1779840018 /var/ossec/logs/alerts/2026/May/ossec-alerts-26.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 107523 1779926418 /var/ossec/logs/alerts/2026/May/ossec-alerts-27.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 623 1779926418 /var/ossec/logs/alerts/2026/May/ossec-alerts-27.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 84475 1779926418 /var/ossec/logs/alerts/2026/May/ossec-alerts-27.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 620 1779926418 /var/ossec/logs/alerts/2026/May/ossec-alerts-27.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 117239 1780012818 /var/ossec/logs/alerts/2026/May/ossec-alerts-28.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 623 1780012818 /var/ossec/logs/alerts/2026/May/ossec-alerts-28.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 91500 1780012818 /var/ossec/logs/alerts/2026/May/ossec-alerts-28.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 620 1780012818 /var/ossec/logs/alerts/2026/May/ossec-alerts-28.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 164464 1780015838 /var/ossec/logs/alerts/2026/May/ossec-alerts-29.json
+regular file -rw-r----- 640 999 wazuh 999 wazuh 87472 1780015838 /var/ossec/logs/alerts/2026/May/ossec-alerts-29.log
+regular file -rw-r----- 640 999 wazuh 999 wazuh 164464 1780015838 /var/ossec/logs/alerts/alerts.json
+regular file -rw-r----- 640 999 wazuh 999 wazuh 87472 1780015838 /var/ossec/logs/alerts/alerts.log
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779580800 /var/ossec/logs/api
+regular file -rw-r--r-- 644 999 wazuh 999 wazuh 16375 1780015965 /var/ossec/logs/api.log
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779580800 /var/ossec/logs/api/2026
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1780012800 /var/ossec/logs/api/2026/May
+regular file -rw-r----- 640 999 wazuh 999 wazuh 11486 1779580800 /var/ossec/logs/api/2026/May/api.log-23.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 14509 1779667200 /var/ossec/logs/api/2026/May/api.log-24.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 14765 1779753600 /var/ossec/logs/api/2026/May/api.log-25.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 14553 1779840000 /var/ossec/logs/api/2026/May/api.log-26.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 14341 1779926400 /var/ossec/logs/api/2026/May/api.log-27.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 14421 1780012800 /var/ossec/logs/api/2026/May/api.log-28.gz
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1780012803 /var/ossec/logs/archives
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779517156 /var/ossec/logs/archives/2026
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1780012818 /var/ossec/logs/archives/2026/May
+regular file -rw-r----- 640 999 wazuh 999 wazuh 3347197 1779580816 /var/ossec/logs/archives/2026/May/ossec-archive-23.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 517 1779580814 /var/ossec/logs/archives/2026/May/ossec-archive-23.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 1337618 1779580813 /var/ossec/logs/archives/2026/May/ossec-archive-23.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 514 1779580812 /var/ossec/logs/archives/2026/May/ossec-archive-23.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 4243006 1779667217 /var/ossec/logs/archives/2026/May/ossec-archive-24.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 641 1779667214 /var/ossec/logs/archives/2026/May/ossec-archive-24.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 1700476 1779667214 /var/ossec/logs/archives/2026/May/ossec-archive-24.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 638 1779667212 /var/ossec/logs/archives/2026/May/ossec-archive-24.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 4274077 1779753618 /var/ossec/logs/archives/2026/May/ossec-archive-25.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 641 1779753615 /var/ossec/logs/archives/2026/May/ossec-archive-25.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 1699495 1779753614 /var/ossec/logs/archives/2026/May/ossec-archive-25.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 638 1779753613 /var/ossec/logs/archives/2026/May/ossec-archive-25.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 4189153 1779840018 /var/ossec/logs/archives/2026/May/ossec-archive-26.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 641 1779840015 /var/ossec/logs/archives/2026/May/ossec-archive-26.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 1707457 1779840014 /var/ossec/logs/archives/2026/May/ossec-archive-26.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 638 1779840013 /var/ossec/logs/archives/2026/May/ossec-archive-26.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 4157255 1779926418 /var/ossec/logs/archives/2026/May/ossec-archive-27.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 641 1779926415 /var/ossec/logs/archives/2026/May/ossec-archive-27.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 1696908 1779926414 /var/ossec/logs/archives/2026/May/ossec-archive-27.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 638 1779926413 /var/ossec/logs/archives/2026/May/ossec-archive-27.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 4234602 1780012818 /var/ossec/logs/archives/2026/May/ossec-archive-28.json.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 641 1780012815 /var/ossec/logs/archives/2026/May/ossec-archive-28.json.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 1718620 1780012814 /var/ossec/logs/archives/2026/May/ossec-archive-28.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 638 1780012813 /var/ossec/logs/archives/2026/May/ossec-archive-28.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 6841963 1780015966 /var/ossec/logs/archives/2026/May/ossec-archive-29.json
+regular file -rw-r----- 640 999 wazuh 999 wazuh 3549869 1780015966 /var/ossec/logs/archives/2026/May/ossec-archive-29.log
+regular file -rw-r----- 640 999 wazuh 999 wazuh 6841963 1780015966 /var/ossec/logs/archives/archives.json
+regular file -rw-r----- 640 999 wazuh 999 wazuh 3549869 1780015966 /var/ossec/logs/archives/archives.log
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1746010423 /var/ossec/logs/cluster
+regular empty file -rw-rw---- 660 999 wazuh 999 wazuh 0 1779517151 /var/ossec/logs/cluster.log
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1780012803 /var/ossec/logs/firewall
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779517156 /var/ossec/logs/firewall/2026
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1780012818 /var/ossec/logs/firewall/2026/May
+regular file -rw-r----- 640 999 wazuh 999 wazuh 396 1779580816 /var/ossec/logs/firewall/2026/May/ossec-firewall-23.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 520 1779667217 /var/ossec/logs/firewall/2026/May/ossec-firewall-24.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 520 1779753618 /var/ossec/logs/firewall/2026/May/ossec-firewall-25.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 520 1779840018 /var/ossec/logs/firewall/2026/May/ossec-firewall-26.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 520 1779926418 /var/ossec/logs/firewall/2026/May/ossec-firewall-27.log.sum
+regular file -rw-r----- 640 999 wazuh 999 wazuh 520 1780012818 /var/ossec/logs/firewall/2026/May/ossec-firewall-28.log.sum
+regular empty file -rw-r----- 640 999 wazuh 999 wazuh 0 1780012803 /var/ossec/logs/firewall/2026/May/ossec-firewall-29.log
+regular empty file -rw-r----- 640 999 wazuh 999 wazuh 0 1780012803 /var/ossec/logs/firewall/firewall.log
+regular empty file -rw-r----- 640 999 wazuh 999 wazuh 0 1756728177 /var/ossec/logs/integrations.log
+regular file -rw-rw---- 660 999 wazuh 999 wazuh 6177359 1780015960 /var/ossec/logs/ossec.log
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779580810 /var/ossec/logs/wazuh
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779580810 /var/ossec/logs/wazuh/2026
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1780012812 /var/ossec/logs/wazuh/2026/May
+regular file -rw-r----- 640 999 wazuh 999 wazuh 449290 1779580812 /var/ossec/logs/wazuh/2026/May/ossec-23.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 605783 1779667212 /var/ossec/logs/wazuh/2026/May/ossec-24.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 606151 1779753613 /var/ossec/logs/wazuh/2026/May/ossec-25.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 606102 1779840012 /var/ossec/logs/wazuh/2026/May/ossec-26.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 606040 1779926413 /var/ossec/logs/wazuh/2026/May/ossec-27.log.gz
+regular file -rw-r----- 640 999 wazuh 999 wazuh 605764 1780012812 /var/ossec/logs/wazuh/2026/May/ossec-28.log.gz
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517274 /var/ossec/queue
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1746010405 /var/ossec/queue/agentless
+regular file -rw------- 600 0 root 999 wazuh 317 1779517274 /var/ossec/queue/agents-timestamp
+directory drwxrwx--- 770 999 wazuh 999 wazuh 4096 1779517157 /var/ossec/queue/alerts
+directory drwxrwx--- 770 999 wazuh 999 wazuh 4096 1746010423 /var/ossec/queue/cluster
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1780015950 /var/ossec/queue/db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 245760 1779517155 /var/ossec/queue/db/.template.db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 1671168 1780015690 /var/ossec/queue/db/000.db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 4616 1780015929 /var/ossec/queue/db/000.db-journal
+regular file -rw-r----- 640 999 wazuh 999 wazuh 245760 1779537693 /var/ossec/queue/db/001.db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 245760 1779537693 /var/ossec/queue/db/002.db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 245760 1779537693 /var/ossec/queue/db/003.db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 245760 1779537693 /var/ossec/queue/db/004.db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 245760 1779537693 /var/ossec/queue/db/005.db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 245760 1779537693 /var/ossec/queue/db/006.db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 245760 1779537693 /var/ossec/queue/db/007.db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 81920 1780015948 /var/ossec/queue/db/global.db
+regular file -rw-r----- 640 999 wazuh 999 wazuh 16928 1780015950 /var/ossec/queue/db/global.db-journal
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1746010404 /var/ossec/queue/diff
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779517112 /var/ossec/queue/fim
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779517156 /var/ossec/queue/fim/db
+regular file -rw-r----- 640 0 root 999 wazuh 520192 1779992369 /var/ossec/queue/fim/db/fim.db
+regular empty file -rw-r----- 640 0 root 999 wazuh 0 1779992369 /var/ossec/queue/fim/db/fim.db-journal
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779517156 /var/ossec/queue/fts
+regular file -rw-r----- 640 999 wazuh 999 wazuh 345 1779517294 /var/ossec/queue/fts/fts-queue
+regular empty file -rw-r----- 640 999 wazuh 999 wazuh 0 1779517156 /var/ossec/queue/fts/hostinfo
+regular empty file -rw-r----- 640 999 wazuh 999 wazuh 0 1779517156 /var/ossec/queue/fts/ig-queue
+directory drw-rw---- 660 0 root 999 wazuh 4096 1779517158 /var/ossec/queue/indexer
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517157 /var/ossec/queue/indexer/db
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517157 /var/ossec/queue/indexer/db/wazuh-states-vulnerabilities-wazuh.manager
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517157 /var/ossec/queue/indexer/db/wazuh-states-vulnerabilities-wazuh.manager/000004.log
+regular file -rw-r--r-- 644 0 root 0 root 16 1779517157 /var/ossec/queue/indexer/db/wazuh-states-vulnerabilities-wazuh.manager/CURRENT
+regular file -rw-r--r-- 644 0 root 0 root 36 1779517157 /var/ossec/queue/indexer/db/wazuh-states-vulnerabilities-wazuh.manager/IDENTITY
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517157 /var/ossec/queue/indexer/db/wazuh-states-vulnerabilities-wazuh.manager/LOCK
+regular file -rw-r--r-- 644 0 root 0 root 921139 1780015766 /var/ossec/queue/indexer/db/wazuh-states-vulnerabilities-wazuh.manager/LOG
+regular file -rw-r--r-- 644 0 root 0 root 66 1779517157 /var/ossec/queue/indexer/db/wazuh-states-vulnerabilities-wazuh.manager/MANIFEST-000005
+regular file -rw-r--r-- 644 0 root 0 root 7079 1779517157 /var/ossec/queue/indexer/db/wazuh-states-vulnerabilities-wazuh.manager/OPTIONS-000007
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517158 /var/ossec/queue/indexer/wazuh-states-vulnerabilities-wazuh.manager
+regular file -rw-r--r-- 644 0 root 0 root 7978537 1780015909 /var/ossec/queue/indexer/wazuh-states-vulnerabilities-wazuh.manager/000004.log
+regular file -rw-r--r-- 644 0 root 0 root 16 1779517158 /var/ossec/queue/indexer/wazuh-states-vulnerabilities-wazuh.manager/CURRENT
+regular file -rw-r--r-- 644 0 root 0 root 36 1779517158 /var/ossec/queue/indexer/wazuh-states-vulnerabilities-wazuh.manager/IDENTITY
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517158 /var/ossec/queue/indexer/wazuh-states-vulnerabilities-wazuh.manager/LOCK
+regular file -rw-r--r-- 644 0 root 0 root 939254 1780015776 /var/ossec/queue/indexer/wazuh-states-vulnerabilities-wazuh.manager/LOG
+regular file -rw-r--r-- 644 0 root 0 root 66 1779517158 /var/ossec/queue/indexer/wazuh-states-vulnerabilities-wazuh.manager/MANIFEST-000005
+regular file -rw-r--r-- 644 0 root 0 root 7078 1779517158 /var/ossec/queue/indexer/wazuh-states-vulnerabilities-wazuh.manager/OPTIONS-000007
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779517157 /var/ossec/queue/keystore
+regular file -rw-r--r-- 644 0 root 0 root 1129 1779517149 /var/ossec/queue/keystore/000010.sst
+regular file -rw-r--r-- 644 0 root 0 root 1110 1779517149 /var/ossec/queue/keystore/000017.sst
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517157 /var/ossec/queue/keystore/000024.log
+regular file -rw-r--r-- 644 0 root 0 root 16 1779517157 /var/ossec/queue/keystore/CURRENT
+regular file -rw-r--r-- 644 0 root 0 root 36 1779517149 /var/ossec/queue/keystore/IDENTITY
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517149 /var/ossec/queue/keystore/LOCK
+regular file -rw-r--r-- 644 0 root 0 root 32214 1779517157 /var/ossec/queue/keystore/LOG
+regular file -rw-r--r-- 644 0 root 0 root 38148 1779517149 /var/ossec/queue/keystore/LOG.old.1779517149723816
+regular file -rw-r--r-- 644 0 root 0 root 41486 1779517149 /var/ossec/queue/keystore/LOG.old.1779517157552557
+regular file -rw-r--r-- 644 0 root 0 root 32212 1779517157 /var/ossec/queue/keystore/LOG.old.1779517157606828
+regular file -rw-r--r-- 644 0 root 0 root 368 1779517157 /var/ossec/queue/keystore/MANIFEST-000025
+regular file -rw-r--r-- 644 0 root 0 root 11465 1779517157 /var/ossec/queue/keystore/OPTIONS-000023
+regular file -rw-r--r-- 644 0 root 0 root 11465 1779517157 /var/ossec/queue/keystore/OPTIONS-000027
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779517157 /var/ossec/queue/logcollector
+regular file -rw-r--r-- 644 0 root 999 wazuh 122 1780015947 /var/ossec/queue/logcollector/file_status.json
+directory drwxrwx--- 770 999 wazuh 999 wazuh 4096 1779517276 /var/ossec/queue/rids
+regular file -rw-r--r-- 644 999 wazuh 999 wazuh 7 1780015611 /var/ossec/queue/rids/001
+regular file -rw-r--r-- 644 999 wazuh 999 wazuh 7 1780013416 /var/ossec/queue/rids/002
+regular file -rw-r--r-- 644 999 wazuh 999 wazuh 7 1780014140 /var/ossec/queue/rids/003
+regular file -rw-r--r-- 644 999 wazuh 999 wazuh 7 1780014927 /var/ossec/queue/rids/004
+regular file -rw-r--r-- 644 999 wazuh 999 wazuh 8 1780015719 /var/ossec/queue/rids/005
+regular file -rw-r--r-- 644 999 wazuh 999 wazuh 8 1780015867 /var/ossec/queue/rids/006
+regular file -rw-r--r-- 644 999 wazuh 999 wazuh 7 1780015238 /var/ossec/queue/rids/007
+regular file -rw-r--r-- 644 999 wazuh 999 wazuh 8 1780015965 /var/ossec/queue/rids/sender_counter
+directory drwxrwx--- 770 999 wazuh 999 wazuh 4096 1779517158 /var/ossec/queue/router
+directory drwxrwx--- 770 999 wazuh 999 wazuh 4096 1779517201 /var/ossec/queue/sockets
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779517112 /var/ossec/queue/syscollector
+directory drwxr-x--- 750 999 wazuh 999 wazuh 4096 1779517157 /var/ossec/queue/syscollector/db
+regular file -rw-r----- 640 0 root 0 root 155648 1780014390 /var/ossec/queue/syscollector/db/local.db
+regular empty file -rw-r----- 640 0 root 0 root 0 1780014390 /var/ossec/queue/syscollector/db/local.db-journal
+regular file -rw-r----- 640 0 root 999 wazuh 4206 1746010404 /var/ossec/queue/syscollector/norm_config.json
+directory drwxrwx--- 770 999 wazuh 999 wazuh 4096 1779517157 /var/ossec/queue/tasks
+regular file -rw-r----- 640 999 wazuh 999 wazuh 57344 1779517157 /var/ossec/queue/tasks/tasks.db
+directory drw-rw---- 660 0 root 999 wazuh 4096 1779517185 /var/ossec/queue/vd
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517202 /var/ossec/queue/vd/delayed
+regular file -rw-r--r-- 644 0 root 0 root 9974857 1780015906 /var/ossec/queue/vd/delayed/000008.log
+regular file -rw-r--r-- 644 0 root 0 root 16 1779517202 /var/ossec/queue/vd/delayed/CURRENT
+regular file -rw-r--r-- 644 0 root 0 root 36 1779517185 /var/ossec/queue/vd/delayed/IDENTITY
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517185 /var/ossec/queue/vd/delayed/LOCK
+regular file -rw-r--r-- 644 0 root 0 root 939820 1780015838 /var/ossec/queue/vd/delayed/LOG
+regular file -rw-r--r-- 644 0 root 0 root 27297 1779517185 /var/ossec/queue/vd/delayed/LOG.old.1779517202276598
+regular file -rw-r--r-- 644 0 root 0 root 96 1779517202 /var/ossec/queue/vd/delayed/MANIFEST-000009
+regular file -rw-r--r-- 644 0 root 0 root 7079 1779517185 /var/ossec/queue/vd/delayed/OPTIONS-000007
+regular file -rw-r--r-- 644 0 root 0 root 7079 1779517202 /var/ossec/queue/vd/delayed/OPTIONS-000011
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517185 /var/ossec/queue/vd/event
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517185 /var/ossec/queue/vd/event/000004.log
+regular file -rw-r--r-- 644 0 root 0 root 16 1779517185 /var/ossec/queue/vd/event/CURRENT
+regular file -rw-r--r-- 644 0 root 0 root 36 1779517185 /var/ossec/queue/vd/event/IDENTITY
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517185 /var/ossec/queue/vd/event/LOCK
+regular file -rw-r--r-- 644 0 root 0 root 27288 1779517185 /var/ossec/queue/vd/event/LOG
+regular file -rw-r--r-- 644 0 root 0 root 66 1779517185 /var/ossec/queue/vd/event/MANIFEST-000005
+regular file -rw-r--r-- 644 0 root 0 root 7078 1779517185 /var/ossec/queue/vd/event/OPTIONS-000007
+directory drwxr-xr-x 755 0 root 0 root 28672 1779980658 /var/ossec/queue/vd/feed
+regular file -rw-r--r-- 644 0 root 0 root 4516 1779517187 /var/ossec/queue/vd/feed/000220.sst
+regular file -rw-r--r-- 644 0 root 0 root 459381 1779517188 /var/ossec/queue/vd/feed/000225.sst
+regular file -rw-r--r-- 644 0 root 0 root 1727 1779517185 /var/ossec/queue/vd/feed/000230.sst
+regular file -rw-r--r-- 644 0 root 0 root 1204 1779517194 /var/ossec/queue/vd/feed/000246.sst
+regular file -rw-r--r-- 644 0 root 0 root 1277 1779517195 /var/ossec/queue/vd/feed/000272.sst
+regular file -rw-r--r-- 644 0 root 0 root 388155 1779517186 /var/ossec/queue/vd/feed/000299.sst
+regular file -rw-r--r-- 644 0 root 0 root 232615 1779517188 /var/ossec/queue/vd/feed/000373.sst
+regular file -rw-r--r-- 644 0 root 0 root 115668 1779517193 /var/ossec/queue/vd/feed/000471.sst
+regular file -rw-r--r-- 644 0 root 0 root 22650 1779517200 /var/ossec/queue/vd/feed/000549.sst
+regular file -rw-r--r-- 644 0 root 0 root 38083 1779517190 /var/ossec/queue/vd/feed/000638.sst
+regular file -rw-r--r-- 644 0 root 0 root 7104 1779517189 /var/ossec/queue/vd/feed/000729.sst
+regular file -rw-r--r-- 644 0 root 0 root 14939 1779517194 /var/ossec/queue/vd/feed/000817.sst
+regular file -rw-r--r-- 644 0 root 0 root 2510 1779517200 /var/ossec/queue/vd/feed/000911.sst
+regular file -rw-r--r-- 644 0 root 0 root 2182 1779517196 /var/ossec/queue/vd/feed/001065.sst
+regular file -rw-r--r-- 644 0 root 0 root 3197 1779517186 /var/ossec/queue/vd/feed/001107.sst
+regular file -rw-r--r-- 644 0 root 0 root 5331 1779517186 /var/ossec/queue/vd/feed/001210.sst
+regular file -rw-r--r-- 644 0 root 0 root 1101 1779517189 /var/ossec/queue/vd/feed/001258.sst
+regular file -rw-r--r-- 644 0 root 0 root 4391 1779517189 /var/ossec/queue/vd/feed/001300.sst
+regular file -rw-r--r-- 644 0 root 0 root 12472253 1779517191 /var/ossec/queue/vd/feed/001372.sst
+regular file -rw-r--r-- 644 0 root 0 root 1596 1779517200 /var/ossec/queue/vd/feed/001373.sst
+regular file -rw-r--r-- 644 0 root 0 root 1769 1779517194 /var/ossec/queue/vd/feed/001415.sst
+regular file -rw-r--r-- 644 0 root 0 root 2076 1779517189 /var/ossec/queue/vd/feed/001459.sst
+regular file -rw-r--r-- 644 0 root 0 root 2877 1779517195 /var/ossec/queue/vd/feed/001525.sst
+regular file -rw-r--r-- 644 0 root 0 root 4851 1779517192 /var/ossec/queue/vd/feed/001558.sst
+regular file -rw-r--r-- 644 0 root 0 root 3587 1779517192 /var/ossec/queue/vd/feed/001625.sst
+regular file -rw-r--r-- 644 0 root 0 root 2761 1779517187 /var/ossec/queue/vd/feed/001626.sst
+regular file -rw-r--r-- 644 0 root 0 root 2571 1779517194 /var/ossec/queue/vd/feed/001682.sst
+regular file -rw-r--r-- 644 0 root 0 root 1261 1779517191 /var/ossec/queue/vd/feed/001700.sst
+regular file -rw-r--r-- 644 0 root 0 root 1371 1779517185 /var/ossec/queue/vd/feed/002526.sst
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517201 /var/ossec/queue/vd/feed/003648.log
+regular file -rw-r--r-- 644 0 root 0 root 67819132 1779517216 /var/ossec/queue/vd/feed/003702.sst
+regular file -rw-r--r-- 644 0 root 0 root 67772944 1779517216 /var/ossec/queue/vd/feed/003703.sst
+regular file -rw-r--r-- 644 0 root 0 root 67811361 1779517217 /var/ossec/queue/vd/feed/003704.sst
+regular file -rw-r--r-- 644 0 root 0 root 67799159 1779517217 /var/ossec/queue/vd/feed/003705.sst
+regular file -rw-r--r-- 644 0 root 0 root 5413162 1779517217 /var/ossec/queue/vd/feed/003706.sst
+regular file -rw-r--r-- 644 0 root 0 root 67836019 1779517225 /var/ossec/queue/vd/feed/003747.sst
+regular file -rw-r--r-- 644 0 root 0 root 67936564 1779517226 /var/ossec/queue/vd/feed/003748.sst
+regular file -rw-r--r-- 644 0 root 0 root 12452671 1779517227 /var/ossec/queue/vd/feed/003751.sst
+regular file -rw-r--r-- 644 0 root 0 root 67269767 1779517228 /var/ossec/queue/vd/feed/003758.sst
+regular file -rw-r--r-- 644 0 root 0 root 67249009 1779517236 /var/ossec/queue/vd/feed/003784.sst
+regular file -rw-r--r-- 644 0 root 0 root 2744 1779525915 /var/ossec/queue/vd/feed/004886.sst
+regular file -rw-r--r-- 644 0 root 0 root 3713 1779525948 /var/ossec/queue/vd/feed/004995.sst
+regular file -rw-r--r-- 644 0 root 0 root 10383 1779526038 /var/ossec/queue/vd/feed/005206.sst
+regular file -rw-r--r-- 644 0 root 0 root 2024 1779526038 /var/ossec/queue/vd/feed/005207.sst
+regular file -rw-r--r-- 644 0 root 0 root 3792 1779526474 /var/ossec/queue/vd/feed/006047.sst
+regular file -rw-r--r-- 644 0 root 0 root 2383960 1779527455 /var/ossec/queue/vd/feed/007707.sst
+regular file -rw-r--r-- 644 0 root 0 root 16471 1779527455 /var/ossec/queue/vd/feed/007709.sst
+regular file -rw-r--r-- 644 0 root 0 root 67785400 1779528086 /var/ossec/queue/vd/feed/008917.sst
+regular file -rw-r--r-- 644 0 root 0 root 66320198 1779528659 /var/ossec/queue/vd/feed/009937.sst
+regular file -rw-r--r-- 644 0 root 0 root 19585927 1779528774 /var/ossec/queue/vd/feed/010176.sst
+regular file -rw-r--r-- 644 0 root 0 root 2410543 1779528782 /var/ossec/queue/vd/feed/010181.sst
+regular file -rw-r--r-- 644 0 root 0 root 4925721 1779528854 /var/ossec/queue/vd/feed/010274.sst
+regular file -rw-r--r-- 644 0 root 0 root 628290 1779528855 /var/ossec/queue/vd/feed/010275.sst
+regular file -rw-r--r-- 644 0 root 0 root 4389935 1779528858 /var/ossec/queue/vd/feed/010280.sst
+regular file -rw-r--r-- 644 0 root 0 root 12486 1779528858 /var/ossec/queue/vd/feed/010281.sst
+regular file -rw-r--r-- 644 0 root 0 root 931999 1779528859 /var/ossec/queue/vd/feed/010282.sst
+regular file -rw-r--r-- 644 0 root 0 root 5868280 1779530154 /var/ossec/queue/vd/feed/012198.sst
+regular file -rw-r--r-- 644 0 root 0 root 1270889 1779530160 /var/ossec/queue/vd/feed/012201.sst
+regular file -rw-r--r-- 644 0 root 0 root 14921 1779530229 /var/ossec/queue/vd/feed/012301.sst
+regular file -rw-r--r-- 644 0 root 0 root 3768 1779530229 /var/ossec/queue/vd/feed/012303.sst
+regular file -rw-r--r-- 644 0 root 0 root 67738868 1779530612 /var/ossec/queue/vd/feed/013066.sst
+regular file -rw-r--r-- 644 0 root 0 root 23261182 1779530612 /var/ossec/queue/vd/feed/013067.sst
+regular file -rw-r--r-- 644 0 root 0 root 67342761 1779531175 /var/ossec/queue/vd/feed/013527.sst
+regular file -rw-r--r-- 644 0 root 0 root 67341622 1779531209 /var/ossec/queue/vd/feed/013546.sst
+regular file -rw-r--r-- 644 0 root 0 root 67403172 1779531240 /var/ossec/queue/vd/feed/013581.sst
+regular file -rw-r--r-- 644 0 root 0 root 5384515 1779531240 /var/ossec/queue/vd/feed/013582.sst
+regular file -rw-r--r-- 644 0 root 0 root 67473639 1779531305 /var/ossec/queue/vd/feed/013654.sst
+regular file -rw-r--r-- 644 0 root 0 root 67268793 1779531323 /var/ossec/queue/vd/feed/013689.sst
+regular file -rw-r--r-- 644 0 root 0 root 67276553 1779531456 /var/ossec/queue/vd/feed/013972.sst
+regular file -rw-r--r-- 644 0 root 0 root 67348522 1779531556 /var/ossec/queue/vd/feed/014187.sst
+regular file -rw-r--r-- 644 0 root 0 root 2824 1779531659 /var/ossec/queue/vd/feed/014523.sst
+regular file -rw-r--r-- 644 0 root 0 root 67222146 1779531693 /var/ossec/queue/vd/feed/014602.sst
+regular file -rw-r--r-- 644 0 root 0 root 27423975 1779531693 /var/ossec/queue/vd/feed/014603.sst
+regular file -rw-r--r-- 644 0 root 0 root 67890238 1779531725 /var/ossec/queue/vd/feed/014671.sst
+regular file -rw-r--r-- 644 0 root 0 root 17572939 1779531725 /var/ossec/queue/vd/feed/014674.sst
+regular file -rw-r--r-- 644 0 root 0 root 67321037 1779531798 /var/ossec/queue/vd/feed/014846.sst
+regular file -rw-r--r-- 644 0 root 0 root 3412073 1779531798 /var/ossec/queue/vd/feed/014848.sst
+regular file -rw-r--r-- 644 0 root 0 root 67242386 1779531904 /var/ossec/queue/vd/feed/015171.sst
+regular file -rw-r--r-- 644 0 root 0 root 3471203 1779532421 /var/ossec/queue/vd/feed/016579.sst
+regular file -rw-r--r-- 644 0 root 0 root 67506631 1779532674 /var/ossec/queue/vd/feed/017224.sst
+regular file -rw-r--r-- 644 0 root 0 root 67516773 1779532675 /var/ossec/queue/vd/feed/017226.sst
+regular file -rw-r--r-- 644 0 root 0 root 67523811 1779532675 /var/ossec/queue/vd/feed/017231.sst
+regular file -rw-r--r-- 644 0 root 0 root 67213546 1779532676 /var/ossec/queue/vd/feed/017232.sst
+regular file -rw-r--r-- 644 0 root 0 root 67228207 1779532694 /var/ossec/queue/vd/feed/017281.sst
+regular file -rw-r--r-- 644 0 root 0 root 2764766 1779532695 /var/ossec/queue/vd/feed/017283.sst
+regular file -rw-r--r-- 644 0 root 0 root 67492294 1779532765 /var/ossec/queue/vd/feed/017417.sst
+regular file -rw-r--r-- 644 0 root 0 root 2570222 1779532765 /var/ossec/queue/vd/feed/017418.sst
+regular file -rw-r--r-- 644 0 root 0 root 67221589 1779532785 /var/ossec/queue/vd/feed/017475.sst
+regular file -rw-r--r-- 644 0 root 0 root 2838056 1779532785 /var/ossec/queue/vd/feed/017477.sst
+regular file -rw-r--r-- 644 0 root 0 root 37024573 1779533326 /var/ossec/queue/vd/feed/018797.sst
+regular file -rw-r--r-- 644 0 root 0 root 67680308 1779533408 /var/ossec/queue/vd/feed/018999.sst
+regular file -rw-r--r-- 644 0 root 0 root 2147382 1779533408 /var/ossec/queue/vd/feed/019000.sst
+regular file -rw-r--r-- 644 0 root 0 root 67416259 1779533530 /var/ossec/queue/vd/feed/019379.sst
+regular file -rw-r--r-- 644 0 root 0 root 2856846 1779533530 /var/ossec/queue/vd/feed/019380.sst
+regular file -rw-r--r-- 644 0 root 0 root 67724512 1779533593 /var/ossec/queue/vd/feed/019558.sst
+regular file -rw-r--r-- 644 0 root 0 root 13950296 1779533593 /var/ossec/queue/vd/feed/019559.sst
+regular file -rw-r--r-- 644 0 root 0 root 67298352 1779533603 /var/ossec/queue/vd/feed/019573.sst
+regular file -rw-r--r-- 644 0 root 0 root 2162750 1779533603 /var/ossec/queue/vd/feed/019574.sst
+regular file -rw-r--r-- 644 0 root 0 root 67195887 1779533603 /var/ossec/queue/vd/feed/019575.sst
+regular file -rw-r--r-- 644 0 root 0 root 67316734 1779533623 /var/ossec/queue/vd/feed/019601.sst
+regular file -rw-r--r-- 644 0 root 0 root 1687672 1779533623 /var/ossec/queue/vd/feed/019602.sst
+regular file -rw-r--r-- 644 0 root 0 root 67425112 1779533667 /var/ossec/queue/vd/feed/019660.sst
+regular file -rw-r--r-- 644 0 root 0 root 11132756 1779533667 /var/ossec/queue/vd/feed/019661.sst
+regular file -rw-r--r-- 644 0 root 0 root 67199759 1779533685 /var/ossec/queue/vd/feed/019681.sst
+regular file -rw-r--r-- 644 0 root 0 root 67770248 1779533696 /var/ossec/queue/vd/feed/019698.sst
+regular file -rw-r--r-- 644 0 root 0 root 65122599 1779533696 /var/ossec/queue/vd/feed/019699.sst
+regular file -rw-r--r-- 644 0 root 0 root 67321258 1779533702 /var/ossec/queue/vd/feed/019706.sst
+regular file -rw-r--r-- 644 0 root 0 root 966532 1779533702 /var/ossec/queue/vd/feed/019707.sst
+regular file -rw-r--r-- 644 0 root 0 root 67291599 1779533971 /var/ossec/queue/vd/feed/020073.sst
+regular file -rw-r--r-- 644 0 root 0 root 67228032 1779534165 /var/ossec/queue/vd/feed/020491.sst
+regular file -rw-r--r-- 644 0 root 0 root 67261518 1779534248 /var/ossec/queue/vd/feed/020606.sst
+regular file -rw-r--r-- 644 0 root 0 root 7374597 1779534249 /var/ossec/queue/vd/feed/020607.sst
+regular file -rw-r--r-- 644 0 root 0 root 67416387 1779534646 /var/ossec/queue/vd/feed/021616.sst
+regular file -rw-r--r-- 644 0 root 0 root 67193899 1779534812 /var/ossec/queue/vd/feed/022021.sst
+regular file -rw-r--r-- 644 0 root 0 root 3094858 1779534812 /var/ossec/queue/vd/feed/022022.sst
+regular file -rw-r--r-- 644 0 root 0 root 67311759 1779534991 /var/ossec/queue/vd/feed/022361.sst
+regular file -rw-r--r-- 644 0 root 0 root 34441856 1779534991 /var/ossec/queue/vd/feed/022365.sst
+regular file -rw-r--r-- 644 0 root 0 root 67228252 1779535195 /var/ossec/queue/vd/feed/022806.sst
+regular file -rw-r--r-- 644 0 root 0 root 9713821 1779535196 /var/ossec/queue/vd/feed/022808.sst
+regular file -rw-r--r-- 644 0 root 0 root 2680898 1779535196 /var/ossec/queue/vd/feed/022810.sst
+regular file -rw-r--r-- 644 0 root 0 root 20776 1779535223 /var/ossec/queue/vd/feed/022848.sst
+regular file -rw-r--r-- 644 0 root 0 root 562828 1779535226 /var/ossec/queue/vd/feed/022855.sst
+regular file -rw-r--r-- 644 0 root 0 root 67414731 1779535246 /var/ossec/queue/vd/feed/022909.sst
+regular file -rw-r--r-- 644 0 root 0 root 8423 1779535280 /var/ossec/queue/vd/feed/022965.sst
+regular file -rw-r--r-- 644 0 root 0 root 5090 1779535280 /var/ossec/queue/vd/feed/022966.sst
+regular file -rw-r--r-- 644 0 root 0 root 2435 1779535281 /var/ossec/queue/vd/feed/022972.sst
+regular file -rw-r--r-- 644 0 root 0 root 1853 1779535281 /var/ossec/queue/vd/feed/022973.sst
+regular file -rw-r--r-- 644 0 root 0 root 68071876 1779535338 /var/ossec/queue/vd/feed/023062.sst
+regular file -rw-r--r-- 644 0 root 0 root 67341300 1779535339 /var/ossec/queue/vd/feed/023063.sst
+regular file -rw-r--r-- 644 0 root 0 root 1218 1779535374 /var/ossec/queue/vd/feed/023144.sst
+regular file -rw-r--r-- 644 0 root 0 root 19121832 1779535382 /var/ossec/queue/vd/feed/023160.sst
+regular file -rw-r--r-- 644 0 root 0 root 1390 1779535867 /var/ossec/queue/vd/feed/024105.sst
+regular file -rw-r--r-- 644 0 root 0 root 12311179 1779535887 /var/ossec/queue/vd/feed/024189.sst
+regular file -rw-r--r-- 644 0 root 0 root 40835 1779535902 /var/ossec/queue/vd/feed/024244.sst
+regular file -rw-r--r-- 644 0 root 0 root 1469407 1779536159 /var/ossec/queue/vd/feed/024925.sst
+regular file -rw-r--r-- 644 0 root 0 root 15067 1779536219 /var/ossec/queue/vd/feed/025127.sst
+regular file -rw-r--r-- 644 0 root 0 root 378839 1779536219 /var/ossec/queue/vd/feed/025129.sst
+regular file -rw-r--r-- 644 0 root 0 root 67252304 1779536232 /var/ossec/queue/vd/feed/025155.sst
+regular file -rw-r--r-- 644 0 root 0 root 3750239 1779536232 /var/ossec/queue/vd/feed/025156.sst
+regular file -rw-r--r-- 644 0 root 0 root 1072 1779536376 /var/ossec/queue/vd/feed/025678.sst
+regular file -rw-r--r-- 644 0 root 0 root 5934835 1779536428 /var/ossec/queue/vd/feed/025838.sst
+regular file -rw-r--r-- 644 0 root 0 root 67470400 1779536434 /var/ossec/queue/vd/feed/025859.sst
+regular file -rw-r--r-- 644 0 root 0 root 3295 1779536445 /var/ossec/queue/vd/feed/025877.sst
+regular file -rw-r--r-- 644 0 root 0 root 2116 1779536448 /var/ossec/queue/vd/feed/025884.sst
+regular file -rw-r--r-- 644 0 root 0 root 1541 1779536504 /var/ossec/queue/vd/feed/026040.sst
+regular file -rw-r--r-- 644 0 root 0 root 67439777 1779536534 /var/ossec/queue/vd/feed/026091.sst
+regular file -rw-r--r-- 644 0 root 0 root 67310352 1779536565 /var/ossec/queue/vd/feed/026143.sst
+regular file -rw-r--r-- 644 0 root 0 root 6964514 1779536565 /var/ossec/queue/vd/feed/026144.sst
+regular file -rw-r--r-- 644 0 root 0 root 67394797 1779536626 /var/ossec/queue/vd/feed/026207.sst
+regular file -rw-r--r-- 644 0 root 0 root 35948819 1779536658 /var/ossec/queue/vd/feed/026243.sst
+regular file -rw-r--r-- 644 0 root 0 root 66135436 1779536721 /var/ossec/queue/vd/feed/026311.sst
+regular file -rw-r--r-- 644 0 root 0 root 66972848 1779536811 /var/ossec/queue/vd/feed/026401.sst
+regular file -rw-r--r-- 644 0 root 0 root 1168553 1779536932 /var/ossec/queue/vd/feed/026576.sst
+regular file -rw-r--r-- 644 0 root 0 root 12501 1779536934 /var/ossec/queue/vd/feed/026580.sst
+regular file -rw-r--r-- 644 0 root 0 root 6677 1779536934 /var/ossec/queue/vd/feed/026582.sst
+regular file -rw-r--r-- 644 0 root 0 root 67203763 1779537050 /var/ossec/queue/vd/feed/026722.sst
+regular file -rw-r--r-- 644 0 root 0 root 67338941 1779537068 /var/ossec/queue/vd/feed/026738.sst
+regular file -rw-r--r-- 644 0 root 0 root 4246225 1779537068 /var/ossec/queue/vd/feed/026739.sst
+regular file -rw-r--r-- 644 0 root 0 root 66066021 1779537084 /var/ossec/queue/vd/feed/026757.sst
+regular file -rw-r--r-- 644 0 root 0 root 67285734 1779537133 /var/ossec/queue/vd/feed/026811.sst
+regular file -rw-r--r-- 644 0 root 0 root 23362839 1779537134 /var/ossec/queue/vd/feed/026812.sst
+regular file -rw-r--r-- 644 0 root 0 root 63922746 1779537134 /var/ossec/queue/vd/feed/026813.sst
+regular file -rw-r--r-- 644 0 root 0 root 67581855 1779537172 /var/ossec/queue/vd/feed/026849.sst
+regular file -rw-r--r-- 644 0 root 0 root 410735 1779537172 /var/ossec/queue/vd/feed/026850.sst
+regular file -rw-r--r-- 644 0 root 0 root 67190476 1779537194 /var/ossec/queue/vd/feed/026876.sst
+regular file -rw-r--r-- 644 0 root 0 root 6331644 1779537194 /var/ossec/queue/vd/feed/026877.sst
+regular file -rw-r--r-- 644 0 root 0 root 67274215 1779537226 /var/ossec/queue/vd/feed/026909.sst
+regular file -rw-r--r-- 644 0 root 0 root 15537948 1779537226 /var/ossec/queue/vd/feed/026910.sst
+regular file -rw-r--r-- 644 0 root 0 root 61427255 1779537269 /var/ossec/queue/vd/feed/027006.sst
+regular file -rw-r--r-- 644 0 root 0 root 57561 1779537270 /var/ossec/queue/vd/feed/027008.sst
+regular file -rw-r--r-- 644 0 root 0 root 1235 1779537273 /var/ossec/queue/vd/feed/027016.sst
+regular file -rw-r--r-- 644 0 root 0 root 1101 1779537273 /var/ossec/queue/vd/feed/027017.sst
+regular file -rw-r--r-- 644 0 root 0 root 10345867 1779537273 /var/ossec/queue/vd/feed/027021.sst
+regular file -rw-r--r-- 644 0 root 0 root 3007817 1779537278 /var/ossec/queue/vd/feed/027024.sst
+regular file -rw-r--r-- 644 0 root 0 root 20112989 1779537279 /var/ossec/queue/vd/feed/027032.sst
+regular file -rw-r--r-- 644 0 root 0 root 6051736 1779537279 /var/ossec/queue/vd/feed/027034.sst
+regular file -rw-r--r-- 644 0 root 0 root 27568465 1779537312 /var/ossec/queue/vd/feed/027183.sst
+regular file -rw-r--r-- 644 0 root 0 root 18320 1779537312 /var/ossec/queue/vd/feed/027184.sst
+regular file -rw-r--r-- 644 0 root 0 root 221655 1779537320 /var/ossec/queue/vd/feed/027197.sst
+regular file -rw-r--r-- 644 0 root 0 root 72701 1779537320 /var/ossec/queue/vd/feed/027198.sst
+regular file -rw-r--r-- 644 0 root 0 root 67143452 1779537323 /var/ossec/queue/vd/feed/027214.sst
+regular file -rw-r--r-- 644 0 root 0 root 3783 1779537324 /var/ossec/queue/vd/feed/027218.sst
+regular file -rw-r--r-- 644 0 root 0 root 1822 1779537324 /var/ossec/queue/vd/feed/027220.sst
+regular file -rw-r--r-- 644 0 root 0 root 1152 1779537352 /var/ossec/queue/vd/feed/027293.sst
+regular file -rw-r--r-- 644 0 root 0 root 1109 1779537352 /var/ossec/queue/vd/feed/027294.sst
+regular file -rw-r--r-- 644 0 root 0 root 1238 1779537358 /var/ossec/queue/vd/feed/027308.sst
+regular file -rw-r--r-- 644 0 root 0 root 567865 1779537387 /var/ossec/queue/vd/feed/027395.sst
+regular file -rw-r--r-- 644 0 root 0 root 173494 1779537387 /var/ossec/queue/vd/feed/027396.sst
+regular file -rw-r--r-- 644 0 root 0 root 16664 1779537387 /var/ossec/queue/vd/feed/027398.sst
+regular file -rw-r--r-- 644 0 root 0 root 6763 1779537387 /var/ossec/queue/vd/feed/027399.sst
+regular file -rw-r--r-- 644 0 root 0 root 12399472 1779537388 /var/ossec/queue/vd/feed/027409.sst
+regular file -rw-r--r-- 644 0 root 0 root 1238 1779537400 /var/ossec/queue/vd/feed/027482.sst
+regular file -rw-r--r-- 644 0 root 0 root 49433656 1779537463 /var/ossec/queue/vd/feed/027584.sst
+regular file -rw-r--r-- 644 0 root 0 root 59877510 1779537463 /var/ossec/queue/vd/feed/027585.sst
+regular file -rw-r--r-- 644 0 root 0 root 56529042 1779537464 /var/ossec/queue/vd/feed/027586.sst
+regular file -rw-r--r-- 644 0 root 0 root 67253822 1779537467 /var/ossec/queue/vd/feed/027598.sst
+regular file -rw-r--r-- 644 0 root 0 root 1103083 1779537467 /var/ossec/queue/vd/feed/027599.sst
+regular file -rw-r--r-- 644 0 root 0 root 985398 1779537476 /var/ossec/queue/vd/feed/027615.sst
+regular file -rw-r--r-- 644 0 root 0 root 276167 1779537476 /var/ossec/queue/vd/feed/027617.sst
+regular file -rw-r--r-- 644 0 root 0 root 18353912 1779537514 /var/ossec/queue/vd/feed/027691.sst
+regular file -rw-r--r-- 644 0 root 0 root 4223719 1779537516 /var/ossec/queue/vd/feed/027693.sst
+regular file -rw-r--r-- 644 0 root 0 root 5926403 1779537517 /var/ossec/queue/vd/feed/027697.sst
+regular file -rw-r--r-- 644 0 root 0 root 1392824 1779537517 /var/ossec/queue/vd/feed/027699.sst
+regular file -rw-r--r-- 644 0 root 0 root 59460 1779537518 /var/ossec/queue/vd/feed/027714.sst
+regular file -rw-r--r-- 644 0 root 0 root 17351 1779537519 /var/ossec/queue/vd/feed/027715.sst
+regular file -rw-r--r-- 644 0 root 0 root 2069683 1779537519 /var/ossec/queue/vd/feed/027716.sst
+regular file -rw-r--r-- 644 0 root 0 root 650478 1779537519 /var/ossec/queue/vd/feed/027717.sst
+regular file -rw-r--r-- 644 0 root 0 root 1270 1779537519 /var/ossec/queue/vd/feed/027718.sst
+regular file -rw-r--r-- 644 0 root 0 root 61456 1779537529 /var/ossec/queue/vd/feed/027744.sst
+regular file -rw-r--r-- 644 0 root 0 root 120473498 1779537534 /var/ossec/queue/vd/feed/027768.sst
+regular file -rw-r--r-- 644 0 root 0 root 49712073 1779537534 /var/ossec/queue/vd/feed/027769.sst
+regular file -rw-r--r-- 644 0 root 0 root 50665378 1779537534 /var/ossec/queue/vd/feed/027770.sst
+regular file -rw-r--r-- 644 0 root 0 root 51040004 1779537535 /var/ossec/queue/vd/feed/027771.sst
+regular file -rw-r--r-- 644 0 root 0 root 56306722 1779537535 /var/ossec/queue/vd/feed/027772.sst
+regular file -rw-r--r-- 644 0 root 0 root 82541647 1779537535 /var/ossec/queue/vd/feed/027773.sst
+regular file -rw-r--r-- 644 0 root 0 root 50378812 1779537536 /var/ossec/queue/vd/feed/027774.sst
+regular file -rw-r--r-- 644 0 root 0 root 78470871 1779537536 /var/ossec/queue/vd/feed/027775.sst
+regular file -rw-r--r-- 644 0 root 0 root 67688042 1779537542 /var/ossec/queue/vd/feed/027782.sst
+regular file -rw-r--r-- 644 0 root 0 root 48562916 1779537542 /var/ossec/queue/vd/feed/027784.sst
+regular file -rw-r--r-- 644 0 root 0 root 1152 1779537547 /var/ossec/queue/vd/feed/027790.sst
+regular file -rw-r--r-- 644 0 root 0 root 1109 1779537547 /var/ossec/queue/vd/feed/027791.sst
+regular file -rw-r--r-- 644 0 root 0 root 92760 1779537553 /var/ossec/queue/vd/feed/027795.sst
+regular file -rw-r--r-- 644 0 root 0 root 67371040 1779537559 /var/ossec/queue/vd/feed/027816.sst
+regular file -rw-r--r-- 644 0 root 0 root 44538883 1779537559 /var/ossec/queue/vd/feed/027817.sst
+regular file -rw-r--r-- 644 0 root 0 root 17994717 1779537583 /var/ossec/queue/vd/feed/027858.sst
+regular file -rw-r--r-- 644 0 root 0 root 11937 1779537583 /var/ossec/queue/vd/feed/027861.sst
+regular file -rw-r--r-- 644 0 root 0 root 4283 1779537583 /var/ossec/queue/vd/feed/027862.sst
+regular file -rw-r--r-- 644 0 root 0 root 7004 1779537587 /var/ossec/queue/vd/feed/027871.sst
+regular file -rw-r--r-- 644 0 root 0 root 43488759 1779537587 /var/ossec/queue/vd/feed/027873.sst
+regular file -rw-r--r-- 644 0 root 0 root 19219 1779537587 /var/ossec/queue/vd/feed/027875.sst
+regular file -rw-r--r-- 644 0 root 0 root 70599251 1779537588 /var/ossec/queue/vd/feed/027876.sst
+regular file -rw-r--r-- 644 0 root 0 root 68610561 1779537588 /var/ossec/queue/vd/feed/027879.sst
+regular file -rw-r--r-- 644 0 root 0 root 73570558 1779537589 /var/ossec/queue/vd/feed/027880.sst
+regular file -rw-r--r-- 644 0 root 0 root 67733068 1779537589 /var/ossec/queue/vd/feed/027883.sst
+regular file -rw-r--r-- 644 0 root 0 root 67728607 1779537590 /var/ossec/queue/vd/feed/027884.sst
+regular file -rw-r--r-- 644 0 root 0 root 67660464 1779537590 /var/ossec/queue/vd/feed/027885.sst
+regular file -rw-r--r-- 644 0 root 0 root 23739049 1779537590 /var/ossec/queue/vd/feed/027886.sst
+regular file -rw-r--r-- 644 0 root 0 root 55452710 1779537591 /var/ossec/queue/vd/feed/027887.sst
+regular file -rw-r--r-- 644 0 root 0 root 67268431 1779537592 /var/ossec/queue/vd/feed/027889.sst
+regular file -rw-r--r-- 644 0 root 0 root 36933523 1779537592 /var/ossec/queue/vd/feed/027890.sst
+regular file -rw-r--r-- 644 0 root 0 root 10983593 1779537594 /var/ossec/queue/vd/feed/027894.sst
+regular file -rw-r--r-- 644 0 root 0 root 1620 1779537611 /var/ossec/queue/vd/feed/027918.sst
+regular file -rw-r--r-- 644 0 root 0 root 43712985 1779537612 /var/ossec/queue/vd/feed/027921.sst
+regular file -rw-r--r-- 644 0 root 0 root 7930107 1779537612 /var/ossec/queue/vd/feed/027923.sst
+regular file -rw-r--r-- 644 0 root 0 root 53643904 1779537612 /var/ossec/queue/vd/feed/027925.sst
+regular file -rw-r--r-- 644 0 root 0 root 9546 1779537617 /var/ossec/queue/vd/feed/027926.sst
+regular file -rw-r--r-- 644 0 root 0 root 2822 1779537617 /var/ossec/queue/vd/feed/027927.sst
+regular file -rw-r--r-- 644 0 root 0 root 11080085 1779537620 /var/ossec/queue/vd/feed/027932.sst
+regular file -rw-r--r-- 644 0 root 0 root 58001063 1779537634 /var/ossec/queue/vd/feed/027944.sst
+regular file -rw-r--r-- 644 0 root 0 root 71135558 1779537634 /var/ossec/queue/vd/feed/027945.sst
+regular file -rw-r--r-- 644 0 root 0 root 79551518 1779537643 /var/ossec/queue/vd/feed/027960.sst
+regular file -rw-r--r-- 644 0 root 0 root 53749199 1779537643 /var/ossec/queue/vd/feed/027961.sst
+regular file -rw-r--r-- 644 0 root 0 root 27693472 1779537645 /var/ossec/queue/vd/feed/027963.sst
+regular file -rw-r--r-- 644 0 root 0 root 56553015 1779537651 /var/ossec/queue/vd/feed/027974.sst
+regular file -rw-r--r-- 644 0 root 0 root 67913006 1779537653 /var/ossec/queue/vd/feed/027978.sst
+regular file -rw-r--r-- 644 0 root 0 root 65544433 1779537654 /var/ossec/queue/vd/feed/027983.sst
+regular file -rw-r--r-- 644 0 root 0 root 443884 1779537654 /var/ossec/queue/vd/feed/027987.sst
+regular file -rw-r--r-- 644 0 root 0 root 67791570 1779537658 /var/ossec/queue/vd/feed/027995.sst
+regular file -rw-r--r-- 644 0 root 0 root 1273 1779537658 /var/ossec/queue/vd/feed/027998.sst
+regular file -rw-r--r-- 644 0 root 0 root 2931609 1779537658 /var/ossec/queue/vd/feed/028002.sst
+regular file -rw-r--r-- 644 0 root 0 root 49572827 1779537662 /var/ossec/queue/vd/feed/028006.sst
+regular file -rw-r--r-- 644 0 root 0 root 55458 1779537666 /var/ossec/queue/vd/feed/028015.sst
+regular file -rw-r--r-- 644 0 root 0 root 65425588 1779537668 /var/ossec/queue/vd/feed/028020.sst
+regular file -rw-r--r-- 644 0 root 0 root 51882303 1779537668 /var/ossec/queue/vd/feed/028021.sst
+regular file -rw-r--r-- 644 0 root 0 root 15415637 1779537670 /var/ossec/queue/vd/feed/028025.sst
+regular file -rw-r--r-- 644 0 root 0 root 79198486 1779537670 /var/ossec/queue/vd/feed/028026.sst
+regular file -rw-r--r-- 644 0 root 0 root 67273230 1779537670 /var/ossec/queue/vd/feed/028027.sst
+regular file -rw-r--r-- 644 0 root 0 root 67334995 1779537671 /var/ossec/queue/vd/feed/028028.sst
+regular file -rw-r--r-- 644 0 root 0 root 53311501 1779537671 /var/ossec/queue/vd/feed/028029.sst
+regular file -rw-r--r-- 644 0 root 0 root 58532539 1779537674 /var/ossec/queue/vd/feed/028031.sst
+regular file -rw-r--r-- 644 0 root 0 root 40186792 1779537674 /var/ossec/queue/vd/feed/028032.sst
+regular file -rw-r--r-- 644 0 root 0 root 19543674 1779537674 /var/ossec/queue/vd/feed/028034.sst
+regular file -rw-r--r-- 644 0 root 0 root 7175978 1779537678 /var/ossec/queue/vd/feed/028035.sst
+regular file -rw-r--r-- 644 0 root 0 root 3625237 1779537687 /var/ossec/queue/vd/feed/028049.sst
+regular file -rw-r--r-- 644 0 root 0 root 53159828 1779537688 /var/ossec/queue/vd/feed/028052.sst
+regular file -rw-r--r-- 644 0 root 0 root 1964948 1779537691 /var/ossec/queue/vd/feed/028056.sst
+regular file -rw-r--r-- 644 0 root 0 root 54856330 1779537692 /var/ossec/queue/vd/feed/028058.sst
+regular file -rw-r--r-- 644 0 root 0 root 59733934 1779829318 /var/ossec/queue/vd/feed/028063.sst
+regular file -rw-r--r-- 644 0 root 0 root 105023165 1779829323 /var/ossec/queue/vd/feed/028076.sst
+regular file -rw-r--r-- 644 0 root 0 root 67859268 1779829326 /var/ossec/queue/vd/feed/028081.sst
+regular file -rw-r--r-- 644 0 root 0 root 42756250 1779829327 /var/ossec/queue/vd/feed/028085.sst
+regular file -rw-r--r-- 644 0 root 0 root 45432297 1779829331 /var/ossec/queue/vd/feed/028088.sst
+regular file -rw-r--r-- 644 0 root 0 root 49310 1779829330 /var/ossec/queue/vd/feed/028089.sst
+regular file -rw-r--r-- 644 0 root 0 root 41441510 1779829331 /var/ossec/queue/vd/feed/028093.sst
+regular file -rw-r--r-- 644 0 root 0 root 13514422 1779829331 /var/ossec/queue/vd/feed/028095.sst
+regular file -rw-r--r-- 644 0 root 0 root 21438825 1779829332 /var/ossec/queue/vd/feed/028098.sst
+regular file -rw-r--r-- 644 0 root 0 root 3842735 1779829335 /var/ossec/queue/vd/feed/028101.sst
+regular file -rw-r--r-- 644 0 root 0 root 8080222 1779829340 /var/ossec/queue/vd/feed/028104.sst
+regular file -rw-r--r-- 644 0 root 0 root 9968893 1779829340 /var/ossec/queue/vd/feed/028107.sst
+regular file -rw-r--r-- 644 0 root 0 root 1316737 1779829340 /var/ossec/queue/vd/feed/028108.sst
+regular file -rw-r--r-- 644 0 root 0 root 1218451 1779829340 /var/ossec/queue/vd/feed/028109.sst
+regular file -rw-r--r-- 644 0 root 0 root 15280642 1779829340 /var/ossec/queue/vd/feed/028111.sst
+regular file -rw-r--r-- 644 0 root 0 root 3822992 1779829345 /var/ossec/queue/vd/feed/028116.sst
+regular file -rw-r--r-- 644 0 root 0 root 68237 1779829345 /var/ossec/queue/vd/feed/028118.sst
+regular file -rw-r--r-- 644 0 root 0 root 4152857 1779829345 /var/ossec/queue/vd/feed/028121.sst
+regular file -rw-r--r-- 644 0 root 0 root 11550367 1779829346 /var/ossec/queue/vd/feed/028123.sst
+regular file -rw-r--r-- 644 0 root 0 root 57400128 1779829346 /var/ossec/queue/vd/feed/028128.sst
+regular file -rw-r--r-- 644 0 root 0 root 58272471 1779829347 /var/ossec/queue/vd/feed/028129.sst
+regular file -rw-r--r-- 644 0 root 0 root 54551452 1779829347 /var/ossec/queue/vd/feed/028130.sst
+regular file -rw-r--r-- 644 0 root 0 root 61306980 1779829347 /var/ossec/queue/vd/feed/028131.sst
+regular file -rw-r--r-- 644 0 root 0 root 62421204 1779829351 /var/ossec/queue/vd/feed/028133.sst
+regular file -rw-r--r-- 644 0 root 0 root 47419823 1779829352 /var/ossec/queue/vd/feed/028136.sst
+regular file -rw-r--r-- 644 0 root 0 root 126447 1779829352 /var/ossec/queue/vd/feed/028137.sst
+regular file -rw-r--r-- 644 0 root 0 root 23861409 1779829352 /var/ossec/queue/vd/feed/028139.sst
+regular file -rw-r--r-- 644 0 root 0 root 3242778 1779829352 /var/ossec/queue/vd/feed/028140.sst
+regular file -rw-r--r-- 644 0 root 0 root 48494884 1779829360 /var/ossec/queue/vd/feed/028145.sst
+regular file -rw-r--r-- 644 0 root 0 root 67910038 1779829365 /var/ossec/queue/vd/feed/028151.sst
+regular file -rw-r--r-- 644 0 root 0 root 6737868 1779829365 /var/ossec/queue/vd/feed/028153.sst
+regular file -rw-r--r-- 644 0 root 0 root 28038927 1779829365 /var/ossec/queue/vd/feed/028154.sst
+regular file -rw-r--r-- 644 0 root 0 root 51869182 1779829366 /var/ossec/queue/vd/feed/028157.sst
+regular file -rw-r--r-- 644 0 root 0 root 57139738 1779829366 /var/ossec/queue/vd/feed/028158.sst
+regular file -rw-r--r-- 644 0 root 0 root 52223044 1779829366 /var/ossec/queue/vd/feed/028159.sst
+regular file -rw-r--r-- 644 0 root 0 root 5747 1779829370 /var/ossec/queue/vd/feed/028160.sst
+regular file -rw-r--r-- 644 0 root 0 root 2377 1779829370 /var/ossec/queue/vd/feed/028161.sst
+regular file -rw-r--r-- 644 0 root 0 root 6837939 1779829370 /var/ossec/queue/vd/feed/028162.sst
+regular file -rw-r--r-- 644 0 root 0 root 1472382 1779829377 /var/ossec/queue/vd/feed/028168.sst
+regular file -rw-r--r-- 644 0 root 0 root 61763499 1779829378 /var/ossec/queue/vd/feed/028174.sst
+regular file -rw-r--r-- 644 0 root 0 root 55504636 1779829378 /var/ossec/queue/vd/feed/028175.sst
+regular file -rw-r--r-- 644 0 root 0 root 52707206 1779829378 /var/ossec/queue/vd/feed/028176.sst
+regular file -rw-r--r-- 644 0 root 0 root 3599 1779829381 /var/ossec/queue/vd/feed/028179.sst
+regular file -rw-r--r-- 644 0 root 0 root 321987 1779829381 /var/ossec/queue/vd/feed/028181.sst
+regular file -rw-r--r-- 644 0 root 0 root 7163799 1779829382 /var/ossec/queue/vd/feed/028182.sst
+regular file -rw-r--r-- 644 0 root 0 root 31625702 1779829386 /var/ossec/queue/vd/feed/028186.sst
+regular file -rw-r--r-- 644 0 root 0 root 59179118 1779829387 /var/ossec/queue/vd/feed/028190.sst
+regular file -rw-r--r-- 644 0 root 0 root 104917551 1779829387 /var/ossec/queue/vd/feed/028191.sst
+regular file -rw-r--r-- 644 0 root 0 root 4816707 1779829389 /var/ossec/queue/vd/feed/028192.sst
+regular file -rw-r--r-- 644 0 root 0 root 6639296 1779829390 /var/ossec/queue/vd/feed/028193.sst
+regular file -rw-r--r-- 644 0 root 0 root 68477475 1779829395 /var/ossec/queue/vd/feed/028201.sst
+regular file -rw-r--r-- 644 0 root 0 root 58265542 1779829395 /var/ossec/queue/vd/feed/028202.sst
+regular file -rw-r--r-- 644 0 root 0 root 53886474 1779829395 /var/ossec/queue/vd/feed/028203.sst
+regular file -rw-r--r-- 644 0 root 0 root 63259047 1779829395 /var/ossec/queue/vd/feed/028204.sst
+regular file -rw-r--r-- 644 0 root 0 root 58336983 1779829396 /var/ossec/queue/vd/feed/028205.sst
+regular file -rw-r--r-- 644 0 root 0 root 1173134 1779829396 /var/ossec/queue/vd/feed/028206.sst
+regular file -rw-r--r-- 644 0 root 0 root 7604114 1779829397 /var/ossec/queue/vd/feed/028208.sst
+regular file -rw-r--r-- 644 0 root 0 root 1520 1779829397 /var/ossec/queue/vd/feed/028209.sst
+regular file -rw-r--r-- 644 0 root 0 root 1325 1779829397 /var/ossec/queue/vd/feed/028210.sst
+regular file -rw-r--r-- 644 0 root 0 root 8547227 1779829397 /var/ossec/queue/vd/feed/028212.sst
+regular file -rw-r--r-- 644 0 root 0 root 134324 1779829397 /var/ossec/queue/vd/feed/028213.sst
+regular file -rw-r--r-- 644 0 root 0 root 45745969 1779829398 /var/ossec/queue/vd/feed/028216.sst
+regular file -rw-r--r-- 644 0 root 0 root 7058 1779829398 /var/ossec/queue/vd/feed/028217.sst
+regular file -rw-r--r-- 644 0 root 0 root 53756 1779829401 /var/ossec/queue/vd/feed/028220.sst
+regular file -rw-r--r-- 644 0 root 0 root 3897775 1779829402 /var/ossec/queue/vd/feed/028222.sst
+regular file -rw-r--r-- 644 0 root 0 root 6475902 1779829402 /var/ossec/queue/vd/feed/028225.sst
+regular file -rw-r--r-- 644 0 root 0 root 43842 1779829406 /var/ossec/queue/vd/feed/028227.sst
+regular file -rw-r--r-- 644 0 root 0 root 28170 1779829406 /var/ossec/queue/vd/feed/028228.sst
+regular file -rw-r--r-- 644 0 root 0 root 14841140 1779829406 /var/ossec/queue/vd/feed/028230.sst
+regular file -rw-r--r-- 644 0 root 0 root 27198300 1779829406 /var/ossec/queue/vd/feed/028233.sst
+regular file -rw-r--r-- 644 0 root 0 root 7179908 1779829407 /var/ossec/queue/vd/feed/028234.sst
+regular file -rw-r--r-- 644 0 root 0 root 8548 1779829411 /var/ossec/queue/vd/feed/028236.sst
+regular file -rw-r--r-- 644 0 root 0 root 3548 1779829411 /var/ossec/queue/vd/feed/028237.sst
+regular file -rw-r--r-- 644 0 root 0 root 1549631 1779829411 /var/ossec/queue/vd/feed/028238.sst
+regular file -rw-r--r-- 644 0 root 0 root 158938 1779829411 /var/ossec/queue/vd/feed/028239.sst
+regular file -rw-r--r-- 644 0 root 0 root 191247 1779829411 /var/ossec/queue/vd/feed/028241.sst
+regular file -rw-r--r-- 644 0 root 0 root 67823725 1779829411 /var/ossec/queue/vd/feed/028244.sst
+regular file -rw-r--r-- 644 0 root 0 root 420833 1779829411 /var/ossec/queue/vd/feed/028245.sst
+regular file -rw-r--r-- 644 0 root 0 root 16399 1779829411 /var/ossec/queue/vd/feed/028248.sst
+regular file -rw-r--r-- 644 0 root 0 root 5369407 1779829411 /var/ossec/queue/vd/feed/028250.sst
+regular file -rw-r--r-- 644 0 root 0 root 30946811 1779829412 /var/ossec/queue/vd/feed/028251.sst
+regular file -rw-r--r-- 644 0 root 0 root 67403213 1779829412 /var/ossec/queue/vd/feed/028256.sst
+regular file -rw-r--r-- 644 0 root 0 root 10910435 1779829412 /var/ossec/queue/vd/feed/028257.sst
+regular file -rw-r--r-- 644 0 root 0 root 2675876 1779980628 /var/ossec/queue/vd/feed/028258.sst
+regular file -rw-r--r-- 644 0 root 0 root 942492 1779980629 /var/ossec/queue/vd/feed/028259.sst
+regular file -rw-r--r-- 644 0 root 0 root 5807127 1779980629 /var/ossec/queue/vd/feed/028260.sst
+regular file -rw-r--r-- 644 0 root 0 root 35420 1779980631 /var/ossec/queue/vd/feed/028261.sst
+regular file -rw-r--r-- 644 0 root 0 root 10838500 1779980631 /var/ossec/queue/vd/feed/028263.sst
+regular file -rw-r--r-- 644 0 root 0 root 2076826 1779980631 /var/ossec/queue/vd/feed/028265.sst
+regular file -rw-r--r-- 644 0 root 0 root 5227473 1779980635 /var/ossec/queue/vd/feed/028267.sst
+regular file -rw-r--r-- 644 0 root 0 root 84093 1779980635 /var/ossec/queue/vd/feed/028268.sst
+regular file -rw-r--r-- 644 0 root 0 root 16396 1779980636 /var/ossec/queue/vd/feed/028269.sst
+regular file -rw-r--r-- 644 0 root 0 root 196145 1779980636 /var/ossec/queue/vd/feed/028270.sst
+regular file -rw-r--r-- 644 0 root 0 root 32800753 1779980636 /var/ossec/queue/vd/feed/028273.sst
+regular file -rw-r--r-- 644 0 root 0 root 600843 1779980636 /var/ossec/queue/vd/feed/028277.sst
+regular file -rw-r--r-- 644 0 root 0 root 59345 1779980636 /var/ossec/queue/vd/feed/028278.sst
+regular file -rw-r--r-- 644 0 root 0 root 21417902 1779980636 /var/ossec/queue/vd/feed/028279.sst
+regular file -rw-r--r-- 644 0 root 0 root 3817715 1779980636 /var/ossec/queue/vd/feed/028280.sst
+regular file -rw-r--r-- 644 0 root 0 root 44018219 1779980637 /var/ossec/queue/vd/feed/028281.sst
+regular file -rw-r--r-- 644 0 root 0 root 56732332 1779980637 /var/ossec/queue/vd/feed/028282.sst
+regular file -rw-r--r-- 644 0 root 0 root 55323560 1779980637 /var/ossec/queue/vd/feed/028284.sst
+regular file -rw-r--r-- 644 0 root 0 root 52798033 1779980638 /var/ossec/queue/vd/feed/028285.sst
+regular file -rw-r--r-- 644 0 root 0 root 2959769 1779980638 /var/ossec/queue/vd/feed/028286.sst
+regular file -rw-r--r-- 644 0 root 0 root 67761312 1779980639 /var/ossec/queue/vd/feed/028287.sst
+regular file -rw-r--r-- 644 0 root 0 root 18953688 1779980639 /var/ossec/queue/vd/feed/028288.sst
+regular file -rw-r--r-- 644 0 root 0 root 1255707 1779980640 /var/ossec/queue/vd/feed/028289.sst
+regular file -rw-r--r-- 644 0 root 0 root 1500770 1779980640 /var/ossec/queue/vd/feed/028291.sst
+regular file -rw-r--r-- 644 0 root 0 root 6939639 1779980640 /var/ossec/queue/vd/feed/028292.sst
+regular file -rw-r--r-- 644 0 root 0 root 4237075 1779980640 /var/ossec/queue/vd/feed/028293.sst
+regular file -rw-r--r-- 644 0 root 0 root 27667 1779980641 /var/ossec/queue/vd/feed/028294.sst
+regular file -rw-r--r-- 644 0 root 0 root 4534 1779980641 /var/ossec/queue/vd/feed/028295.sst
+regular file -rw-r--r-- 644 0 root 0 root 786983 1779980641 /var/ossec/queue/vd/feed/028296.sst
+regular file -rw-r--r-- 644 0 root 0 root 7428 1779980641 /var/ossec/queue/vd/feed/028298.sst
+regular file -rw-r--r-- 644 0 root 0 root 31247405 1779980641 /var/ossec/queue/vd/feed/028299.sst
+regular file -rw-r--r-- 644 0 root 0 root 3442 1779980641 /var/ossec/queue/vd/feed/028300.sst
+regular file -rw-r--r-- 644 0 root 0 root 7049 1779980641 /var/ossec/queue/vd/feed/028301.sst
+regular file -rw-r--r-- 644 0 root 0 root 22944 1779980641 /var/ossec/queue/vd/feed/028302.sst
+regular file -rw-r--r-- 644 0 root 0 root 9864472 1779980642 /var/ossec/queue/vd/feed/028305.sst
+regular file -rw-r--r-- 644 0 root 0 root 4709031 1779980642 /var/ossec/queue/vd/feed/028307.sst
+regular file -rw-r--r-- 644 0 root 0 root 73114271 1779980642 /var/ossec/queue/vd/feed/028308.sst
+regular file -rw-r--r-- 644 0 root 0 root 76156294 1779980642 /var/ossec/queue/vd/feed/028309.sst
+regular file -rw-r--r-- 644 0 root 0 root 73349696 1779980643 /var/ossec/queue/vd/feed/028310.sst
+regular file -rw-r--r-- 644 0 root 0 root 157819 1779980643 /var/ossec/queue/vd/feed/028311.sst
+regular file -rw-r--r-- 644 0 root 0 root 1761954 1779980646 /var/ossec/queue/vd/feed/028313.sst
+regular file -rw-r--r-- 644 0 root 0 root 1084024 1779980646 /var/ossec/queue/vd/feed/028314.sst
+regular file -rw-r--r-- 644 0 root 0 root 67867816 1779980647 /var/ossec/queue/vd/feed/028316.sst
+regular file -rw-r--r-- 644 0 root 0 root 49237723 1779980647 /var/ossec/queue/vd/feed/028318.sst
+regular file -rw-r--r-- 644 0 root 0 root 39586631 1779980648 /var/ossec/queue/vd/feed/028319.sst
+regular file -rw-r--r-- 644 0 root 0 root 78628937 1779980648 /var/ossec/queue/vd/feed/028321.sst
+regular file -rw-r--r-- 644 0 root 0 root 11003480 1779980648 /var/ossec/queue/vd/feed/028322.sst
+regular file -rw-r--r-- 644 0 root 0 root 69090695 1779980649 /var/ossec/queue/vd/feed/028323.sst
+regular file -rw-r--r-- 644 0 root 0 root 86459522 1779980649 /var/ossec/queue/vd/feed/028324.sst
+regular file -rw-r--r-- 644 0 root 0 root 43775044 1779980649 /var/ossec/queue/vd/feed/028327.sst
+regular file -rw-r--r-- 644 0 root 0 root 40634786 1779980650 /var/ossec/queue/vd/feed/028329.sst
+regular file -rw-r--r-- 644 0 root 0 root 73247231 1779980650 /var/ossec/queue/vd/feed/028330.sst
+regular file -rw-r--r-- 644 0 root 0 root 63053039 1779980650 /var/ossec/queue/vd/feed/028331.sst
+regular file -rw-r--r-- 644 0 root 0 root 81746913 1779980650 /var/ossec/queue/vd/feed/028332.sst
+regular file -rw-r--r-- 644 0 root 0 root 23348795 1779980650 /var/ossec/queue/vd/feed/028333.sst
+regular file -rw-r--r-- 644 0 root 0 root 1427281 1779980651 /var/ossec/queue/vd/feed/028334.sst
+regular file -rw-r--r-- 644 0 root 0 root 749884 1779980651 /var/ossec/queue/vd/feed/028335.sst
+regular file -rw-r--r-- 644 0 root 0 root 1386902 1779980651 /var/ossec/queue/vd/feed/028336.sst
+regular file -rw-r--r-- 644 0 root 0 root 36362866 1779980651 /var/ossec/queue/vd/feed/028338.sst
+regular file -rw-r--r-- 644 0 root 0 root 290513 1779980651 /var/ossec/queue/vd/feed/028339.sst
+regular file -rw-r--r-- 644 0 root 0 root 94011 1779980652 /var/ossec/queue/vd/feed/028340.sst
+regular file -rw-r--r-- 644 0 root 0 root 150579 1779980652 /var/ossec/queue/vd/feed/028341.sst
+regular file -rw-r--r-- 644 0 root 0 root 48383 1779980652 /var/ossec/queue/vd/feed/028342.sst
+regular file -rw-r--r-- 644 0 root 0 root 158137 1779980652 /var/ossec/queue/vd/feed/028343.sst
+regular file -rw-r--r-- 644 0 root 0 root 400636 1779980652 /var/ossec/queue/vd/feed/028344.sst
+regular file -rw-r--r-- 644 0 root 0 root 19730 1779980652 /var/ossec/queue/vd/feed/028346.sst
+regular file -rw-r--r-- 644 0 root 0 root 67903560 1779980652 /var/ossec/queue/vd/feed/028347.sst
+regular file -rw-r--r-- 644 0 root 0 root 115285 1779980652 /var/ossec/queue/vd/feed/028348.sst
+regular file -rw-r--r-- 644 0 root 0 root 4604 1779980652 /var/ossec/queue/vd/feed/028349.sst
+regular file -rw-r--r-- 644 0 root 0 root 201527 1779980652 /var/ossec/queue/vd/feed/028351.sst
+regular file -rw-r--r-- 644 0 root 0 root 5095 1779980652 /var/ossec/queue/vd/feed/028352.sst
+regular file -rw-r--r-- 644 0 root 0 root 50969666 1779980653 /var/ossec/queue/vd/feed/028356.sst
+regular file -rw-r--r-- 644 0 root 0 root 4659 1779980653 /var/ossec/queue/vd/feed/028357.sst
+regular file -rw-r--r-- 644 0 root 0 root 2088 1779980653 /var/ossec/queue/vd/feed/028358.sst
+regular file -rw-r--r-- 644 0 root 0 root 2690075 1779980653 /var/ossec/queue/vd/feed/028360.sst
+regular file -rw-r--r-- 644 0 root 0 root 21473048 1779980653 /var/ossec/queue/vd/feed/028361.sst
+regular file -rw-r--r-- 644 0 root 0 root 14987364 1779980653 /var/ossec/queue/vd/feed/028362.sst
+regular file -rw-r--r-- 644 0 root 0 root 295878 1779980653 /var/ossec/queue/vd/feed/028363.sst
+regular file -rw-r--r-- 644 0 root 0 root 15329616 1779980653 /var/ossec/queue/vd/feed/028364.sst
+regular file -rw-r--r-- 644 0 root 0 root 9932280 1779980653 /var/ossec/queue/vd/feed/028365.sst
+regular file -rw-r--r-- 644 0 root 0 root 34895195 1779980653 /var/ossec/queue/vd/feed/028366.sst
+regular file -rw-r--r-- 644 0 root 0 root 134526 1779980657 /var/ossec/queue/vd/feed/028367.sst
+regular file -rw-r--r-- 644 0 root 0 root 25990 1779980657 /var/ossec/queue/vd/feed/028368.sst
+regular file -rw-r--r-- 644 0 root 0 root 22109 1779980657 /var/ossec/queue/vd/feed/028369.sst
+regular file -rw-r--r-- 644 0 root 0 root 3141672 1779980657 /var/ossec/queue/vd/feed/028371.sst
+regular file -rw-r--r-- 644 0 root 0 root 10914 1779980657 /var/ossec/queue/vd/feed/028372.sst
+regular file -rw-r--r-- 644 0 root 0 root 135560 1779980657 /var/ossec/queue/vd/feed/028373.sst
+regular file -rw-r--r-- 644 0 root 0 root 4064842 1779980657 /var/ossec/queue/vd/feed/028374.sst
+regular file -rw-r--r-- 644 0 root 0 root 4234975 1779980658 /var/ossec/queue/vd/feed/028375.sst
+regular file -rw-r--r-- 644 0 root 0 root 2988205 1779980658 /var/ossec/queue/vd/feed/028376.sst
+regular file -rw-r--r-- 644 0 root 0 root 1117785 1779980658 /var/ossec/queue/vd/feed/028377.sst
+regular file -rw-r--r-- 644 0 root 0 root 31142067 1779980659 /var/ossec/queue/vd/feed/028378.sst
+regular file -rw-r--r-- 644 0 root 0 root 16 1779517201 /var/ossec/queue/vd/feed/CURRENT
+regular file -rw-r--r-- 644 0 root 0 root 36 1779517186 /var/ossec/queue/vd/feed/IDENTITY
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517194 /var/ossec/queue/vd/feed/LOCK
+regular file -rw-r--r-- 644 0 root 0 root 4205121 1780015828 /var/ossec/queue/vd/feed/LOG
+regular file -rw-r--r-- 644 0 root 0 root 10486247 1779529551 /var/ossec/queue/vd/feed/LOG.old.1779529551218005
+regular file -rw-r--r-- 644 0 root 0 root 10485867 1779531386 /var/ossec/queue/vd/feed/LOG.old.1779531386326080
+regular file -rw-r--r-- 644 0 root 0 root 10485896 1779532374 /var/ossec/queue/vd/feed/LOG.old.1779532374257537
+regular file -rw-r--r-- 644 0 root 0 root 10485875 1779533427 /var/ossec/queue/vd/feed/LOG.old.1779533427692958
+regular file -rw-r--r-- 644 0 root 0 root 10485820 1779534654 /var/ossec/queue/vd/feed/LOG.old.1779534654096264
+regular file -rw-r--r-- 644 0 root 0 root 10485931 1779535920 /var/ossec/queue/vd/feed/LOG.old.1779535920800941
+regular file -rw-r--r-- 644 0 root 0 root 10485971 1779537194 /var/ossec/queue/vd/feed/LOG.old.1779537194520371
+regular file -rw-r--r-- 644 0 root 0 root 10513058 1779672625 /var/ossec/queue/vd/feed/LOG.old.1779673223554138
+regular file -rw-r--r-- 644 0 root 0 root 10501978 1779915627 /var/ossec/queue/vd/feed/LOG.old.1779916224400207
+regular file -rw-r--r-- 644 0 root 0 root 4063046 1779980659 /var/ossec/queue/vd/feed/MANIFEST-003649
+regular file -rw-r--r-- 644 0 root 0 root 438755 1779534108 /var/ossec/queue/vd/feed/OPTIONS-020367
+regular file -rw-r--r-- 644 0 root 0 root 443179 1779534108 /var/ossec/queue/vd/feed/OPTIONS-020369
+directory drwxr-xr-x 755 0 root 0 root 4096 1779980660 /var/ossec/queue/vd/inventory
+regular file -rw-r--r-- 644 0 root 0 root 1394981 1780015966 /var/ossec/queue/vd/inventory/000014.log
+regular file -rw-r--r-- 644 0 root 0 root 16 1779517202 /var/ossec/queue/vd/inventory/CURRENT
+regular file -rw-r--r-- 644 0 root 0 root 36 1779517185 /var/ossec/queue/vd/inventory/IDENTITY
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517185 /var/ossec/queue/vd/inventory/LOCK
+regular file -rw-r--r-- 644 0 root 0 root 1789015 1780015835 /var/ossec/queue/vd/inventory/LOG
+regular file -rw-r--r-- 644 0 root 0 root 73418 1779517185 /var/ossec/queue/vd/inventory/LOG.old.1779517201868866
+regular file -rw-r--r-- 644 0 root 0 root 585 1779980660 /var/ossec/queue/vd/inventory/MANIFEST-000015
+regular file -rw-r--r-- 644 0 root 0 root 15841 1779980660 /var/ossec/queue/vd/inventory/OPTIONS-000027
+regular file -rw-r--r-- 644 0 root 0 root 20243 1779980660 /var/ossec/queue/vd/inventory/OPTIONS-000029
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517158 /var/ossec/queue/vd/reports
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517158 /var/ossec/queue/vd/reports/000004.log
+regular file -rw-r--r-- 644 0 root 0 root 16 1779517158 /var/ossec/queue/vd/reports/CURRENT
+regular file -rw-r--r-- 644 0 root 0 root 36 1779517158 /var/ossec/queue/vd/reports/IDENTITY
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517158 /var/ossec/queue/vd/reports/LOCK
+regular file -rw-r--r-- 644 0 root 0 root 920971 1780015779 /var/ossec/queue/vd/reports/LOG
+regular file -rw-r--r-- 644 0 root 0 root 66 1779517158 /var/ossec/queue/vd/reports/MANIFEST-000005
+regular file -rw-r--r-- 644 0 root 0 root 7078 1779517158 /var/ossec/queue/vd/reports/OPTIONS-000007
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517157 /var/ossec/queue/vd/state_track
+regular file -rw-r--r-- 644 0 root 0 root 324 1779517202 /var/ossec/queue/vd/state_track/000004.log
+regular file -rw-r--r-- 644 0 root 0 root 16 1779517157 /var/ossec/queue/vd/state_track/CURRENT
+regular file -rw-r--r-- 644 0 root 0 root 36 1779517157 /var/ossec/queue/vd/state_track/IDENTITY
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517157 /var/ossec/queue/vd/state_track/LOCK
+regular file -rw-r--r-- 644 0 root 0 root 24122 1779517202 /var/ossec/queue/vd/state_track/LOG
+regular file -rw-r--r-- 644 0 root 0 root 66 1779517202 /var/ossec/queue/vd/state_track/MANIFEST-000005
+regular file -rw-r--r-- 644 0 root 0 root 7079 1779517157 /var/ossec/queue/vd/state_track/OPTIONS-000007
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517201 /var/ossec/queue/vd_updater
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517201 /var/ossec/queue/vd_updater/rocksdb
+directory drwxr-xr-x 755 0 root 0 root 4096 1779517201 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata
+regular file -rw-r--r-- 644 0 root 0 root 1061 1779517201 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata/000012.sst
+regular file -rw-r--r-- 644 0 root 0 root 5852 1780013062 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata/000013.log
+regular file -rw-r--r-- 644 0 root 0 root 16 1779517201 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata/CURRENT
+regular file -rw-r--r-- 644 0 root 0 root 36 1779517201 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata/IDENTITY
+regular empty file -rw-r--r-- 644 0 root 0 root 0 1779517201 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata/LOCK
+regular file -rw-r--r-- 644 0 root 0 root 1520107 1780015831 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata/LOG
+regular file -rw-r--r-- 644 0 root 0 root 58385 1779517201 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata/LOG.old.1779517201608164
+regular file -rw-r--r-- 644 0 root 0 root 379 1779517201 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata/MANIFEST-000014
+regular file -rw-r--r-- 644 0 root 0 root 15891 1779517201 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata/OPTIONS-000011
+regular file -rw-r--r-- 644 0 root 0 root 15891 1779517201 /var/ossec/queue/vd_updater/rocksdb/updater_vulnerability_feed_manager_metadata/OPTIONS-000016
+directory drwxr-xr-x 755 0 root 0 root 4096 1780013062 /var/ossec/queue/vd_updater/tmp
+directory drwxr-xr-x 755 0 root 0 root 4096 1780013062 /var/ossec/queue/vd_updater/tmp/contents
+directory drwxr-xr-x 755 0 root 0 root 4096 1780013062 /var/ossec/queue/vd_updater/tmp/downloads
+directory drwxrwx--- 770 0 root 999 wazuh 4096 1746010404 /var/ossec/var/multigroups
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517137 /var/ossec/wodles
+regular file -rwxr-x--- 750 0 root 999 wazuh 177 1746010423 /var/ossec/wodles/__init__.py
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517137 /var/ossec/wodles/aws
+regular file -rwxr-x--- 750 0 root 999 wazuh 177 1746010423 /var/ossec/wodles/aws/__init__.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 1045 1746010423 /var/ossec/wodles/aws/aws-s3
+regular file -rwxr-x--- 750 0 root 999 wazuh 9995 1746010423 /var/ossec/wodles/aws/aws-s3.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 17575 1746010423 /var/ossec/wodles/aws/aws_tools.py
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517137 /var/ossec/wodles/aws/buckets_s3
+regular file -rwxr-x--- 750 0 root 999 wazuh 640 1746010423 /var/ossec/wodles/aws/buckets_s3/__init__.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 42403 1746010423 /var/ossec/wodles/aws/buckets_s3/aws_bucket.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 1889 1746010423 /var/ossec/wodles/aws/buckets_s3/cloudtrail.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 10519 1746010423 /var/ossec/wodles/aws/buckets_s3/config.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 4356 1746010423 /var/ossec/wodles/aws/buckets_s3/guardduty.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 5729 1746010423 /var/ossec/wodles/aws/buckets_s3/load_balancers.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 9261 1746010423 /var/ossec/wodles/aws/buckets_s3/server_access.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 2841 1746010423 /var/ossec/wodles/aws/buckets_s3/umbrella.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 11323 1746010423 /var/ossec/wodles/aws/buckets_s3/vpcflow.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 3012 1746010423 /var/ossec/wodles/aws/buckets_s3/waf.py
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517137 /var/ossec/wodles/aws/services
+regular file -rwxr-x--- 750 0 root 999 wazuh 344 1746010423 /var/ossec/wodles/aws/services/__init__.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 6222 1746010423 /var/ossec/wodles/aws/services/aws_service.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 25000 1746010423 /var/ossec/wodles/aws/services/cloudwatchlogs.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 6953 1746010423 /var/ossec/wodles/aws/services/inspector.py
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517137 /var/ossec/wodles/aws/subscribers
+regular file -rwxr-x--- 750 0 root 999 wazuh 380 1746010423 /var/ossec/wodles/aws/subscribers/__init__.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 14729 1746010423 /var/ossec/wodles/aws/subscribers/s3_log_handler.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 1825 1746010423 /var/ossec/wodles/aws/subscribers/sqs_message_processor.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 6217 1746010423 /var/ossec/wodles/aws/subscribers/sqs_queue.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 23548 1746010423 /var/ossec/wodles/aws/wazuh_integration.py
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517137 /var/ossec/wodles/azure
+regular file -rwxr-x--- 750 0 root 999 wazuh 1045 1746010423 /var/ossec/wodles/azure/azure-logs
+regular file -rwxr-x--- 750 0 root 999 wazuh 1466 1746010423 /var/ossec/wodles/azure/azure-logs.py
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517138 /var/ossec/wodles/azure/azure_services
+regular empty file -rwxr-x--- 750 0 root 999 wazuh 0 1746010423 /var/ossec/wodles/azure/azure_services/__init__.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 8961 1746010423 /var/ossec/wodles/azure/azure_services/analytics.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 7635 1746010423 /var/ossec/wodles/azure/azure_services/graph.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 10123 1746010423 /var/ossec/wodles/azure/azure_services/storage.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 13823 1746010423 /var/ossec/wodles/azure/azure_utils.py
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517137 /var/ossec/wodles/azure/db
+regular empty file -rwxr-x--- 750 0 root 999 wazuh 0 1746010423 /var/ossec/wodles/azure/db/__init__.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 10600 1746010423 /var/ossec/wodles/azure/db/orm.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 4014 1746010423 /var/ossec/wodles/azure/db/utils.py
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517138 /var/ossec/wodles/docker
+regular file -rwxr-x--- 750 0 root 999 wazuh 1045 1746010423 /var/ossec/wodles/docker/DockerListener
+regular file -rwxr-x--- 750 0 root 999 wazuh 5111 1746010423 /var/ossec/wodles/docker/DockerListener.py
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517138 /var/ossec/wodles/gcloud
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517138 /var/ossec/wodles/gcloud/buckets
+regular file -rwxr-x--- 750 0 root 999 wazuh 1870 1746010423 /var/ossec/wodles/gcloud/buckets/access_logs.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 12735 1746010423 /var/ossec/wodles/gcloud/buckets/bucket.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 4704 1746010423 /var/ossec/wodles/gcloud/exceptions.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 1045 1746010423 /var/ossec/wodles/gcloud/gcloud
+regular file -rwxr-x--- 750 0 root 999 wazuh 4741 1746010423 /var/ossec/wodles/gcloud/gcloud.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 3119 1746010423 /var/ossec/wodles/gcloud/integration.py
+directory drwxr-x--- 750 0 root 999 wazuh 4096 1779517138 /var/ossec/wodles/gcloud/pubsub
+regular file -rwxr-x--- 750 0 root 999 wazuh 6085 1746010423 /var/ossec/wodles/gcloud/pubsub/subscriber.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 4420 1746010423 /var/ossec/wodles/gcloud/tools.py
+regular file -rwxr-x--- 750 0 root 999 wazuh 3567 1746010423 /var/ossec/wodles/utils.py
+regular file -rw-r--r-- 644 1000 UNKNOWN 1000 UNKNOWN 14011 1779517020 /wazuh-config-mount/etc/ossec.conf

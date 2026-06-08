@@ -86,7 +86,9 @@ blue graduates IOCs).
   (sid 1000010), XSS (sid 1000020), Kerberoasting (sid 1000040).
 - `misp/misp-iocs.rules` ships **empty** (header `ioc_count=0`).
   Hash-list sidecars `misp-md5.list`, `misp-sha1.list`,
-  `misp-sha256.list` ship empty too.
+  `misp-sha256.list` ship empty too. These checked-in files are baseline
+  seeds; `aptl lab start` copies them to `.aptl/suricata/rules/misp/`, and the
+  sync service writes generated runtime state there.
 
 **Why it ships this way**
 
@@ -116,8 +118,9 @@ contract*, not a misconfiguration.
 | IDS-only invocation | [`docker-compose.yml:190`](../../docker-compose.yml) |
 | Rule file load order | [`config/suricata/suricata.yaml:97-104`](../../config/suricata/suricata.yaml) |
 | Local alert rules | [`config/suricata/rules/local.rules`](../../config/suricata/rules/local.rules) |
-| MISP-driven rule output | [`config/suricata/rules/misp/misp-iocs.rules`](../../config/suricata/rules/misp/misp-iocs.rules) |
-| Hash-list sidecars | [`config/suricata/rules/misp/`](../../config/suricata/rules/misp/) |
+| MISP baseline seeds | [`config/suricata/rules/misp/`](../../config/suricata/rules/misp/) |
+| MISP generated rule output | `.aptl/suricata/rules/misp/misp-iocs.rules` |
+| Hash-list sidecars | `.aptl/suricata/rules/misp/` |
 
 ---
 
@@ -145,14 +148,20 @@ custom child rules) ships absent.
 |---|---|---|
 | `local_rules.xml` | local overrides | varies |
 | `falco_rules.xml` | Falco runtime behaviour | varies |
-| `kali_redteam_rules.xml` | SSH session boundary events from kali | 1–3 (demoted in v6.3.0) |
 | `ad_rules.xml` | brute force, Kerberoasting, AD enumeration, Domain Admin mods | 3–12 |
 | `webapp_rules.xml` | SQLi, XSS, command injection, brute force | 0–12 |
 | `suricata_rules.xml` | network-side correlation against Suricata alerts | 0–10 |
 | `database_rules.xml` | DB brute force, schema mods, large exports | 5–12 |
 
-- Decoders for kali, postgresql, samba ship at
-  [`config/wazuh_cluster/{kali,postgresql,samba}_decoders.xml`](../../config/wazuh_cluster/).
+`kali_redteam_rules.xml` (the prior "SSH session boundary events
+from kali" row) was removed under ADR-033 (OBS-003
+non-contamination): red activity must not be ingested by the
+defensive stack via the SIEM. Red-side captures live in the
+per-run experimental record under `.aptl/runs/<run_id>/`.
+
+- Decoders for postgresql and samba ship at
+  [`config/wazuh_cluster/{postgresql,samba}_decoders.xml`](../../config/wazuh_cluster/).
+  (`kali_decoders.xml` deleted under ADR-033.)
 - **`zzz_purple_loop.xml` ships absent from the repo by design.** It
   only appears under `.aptl/loop/run-*/iter-NN/` (runtime artifacts
   produced by purple-loop runs). The mechanism is: blue authors XML
@@ -326,7 +335,8 @@ has zero graduated indicators on purpose.
 |---|---|
 | Sync service config | [`src/aptl/services/misp_suricata_sync/config.py`](../../src/aptl/services/misp_suricata_sync/config.py) |
 | Sync service main loop | [`src/aptl/services/misp_suricata_sync/main.py`](../../src/aptl/services/misp_suricata_sync/main.py) |
-| Generated rule output | [`config/suricata/rules/misp/misp-iocs.rules`](../../config/suricata/rules/misp/misp-iocs.rules) |
+| Baseline rule seed | [`config/suricata/rules/misp/misp-iocs.rules`](../../config/suricata/rules/misp/misp-iocs.rules) |
+| Generated rule output | `.aptl/suricata/rules/misp/misp-iocs.rules` |
 | ADR | [ADR-022](../adrs/adr-022-misp-driven-suricata-rules.md) |
 
 ---

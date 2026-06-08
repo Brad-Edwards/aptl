@@ -1,0 +1,289 @@
+[
+  {
+    "name": "kv_password",
+    "input": "password=hunter2",
+    "expected": "password=[REDACTED]"
+  },
+  {
+    "name": "kv_api_key",
+    "input": "api_key: AKIA1234567890",
+    "expected": "api_key: [REDACTED]"
+  },
+  {
+    "name": "kv_access_token_query",
+    "input": "access_token=xyz123&foo=bar",
+    "expected": "access_token=[REDACTED]&foo=bar"
+  },
+  {
+    "name": "authorization_bearer",
+    "input": "Authorization: Bearer abc123def",
+    "expected": "Authorization: Bearer [REDACTED]"
+  },
+  {
+    "name": "authorization_bare",
+    "input": "authorization: secrettokenvalue",
+    "expected": "authorization: [REDACTED]"
+  },
+  {
+    "name": "bare_bearer",
+    "input": "the bearer eyJ0token here",
+    "expected": "the bearer [REDACTED] here"
+  },
+  {
+    "name": "cookie_header",
+    "input": "Cookie: session=abc123; lang=en",
+    "expected": "Cookie: [REDACTED]"
+  },
+  {
+    "name": "set_cookie",
+    "input": "Set-Cookie: connect.sid=SECRETVAL; Path=/",
+    "expected": "Set-Cookie: [REDACTED]"
+  },
+  {
+    "name": "curl_header_not_secret",
+    "input": "curl -H 'Authorization: Bearer xyztok' https://t",
+    "expected": "curl -H 'Authorization: Bearer [REDACTED]' https://t"
+  },
+  {
+    "name": "hydra_short_p",
+    "input": "hydra -p hunter2 ssh://target",
+    "expected": "hydra -p [REDACTED] ssh://target"
+  },
+  {
+    "name": "nmap_port_preserved",
+    "input": "nmap -p 22,80 192.168.1.1",
+    "expected": "nmap -p 22,80 192.168.1.1"
+  },
+  {
+    "name": "nmap_port_range_preserved",
+    "input": "nmap -p 1-1024 host",
+    "expected": "nmap -p 1-1024 host"
+  },
+  {
+    "name": "sshpass_numeric_pw",
+    "input": "sshpass -p 12345 ssh user@host",
+    "expected": "sshpass -p [REDACTED] ssh user@host"
+  },
+  {
+    "name": "cme_ntlm_hash",
+    "input": "crackmapexec smb host -H aad3b435b51404ee:8846f7eaee8fb117",
+    "expected": "crackmapexec smb host -H [REDACTED]"
+  },
+  {
+    "name": "impacket_hashes",
+    "input": "psexec.py alice@dc -hashes :8846f7eaee8fb117b0aab",
+    "expected": "psexec.py alice@dc -hashes [REDACTED]"
+  },
+  {
+    "name": "ldap_bind_pw",
+    "input": "ldapsearch -w secretbind -b dc=corp,dc=local",
+    "expected": "ldapsearch -w [REDACTED] -b dc=corp,dc=local"
+  },
+  {
+    "name": "hydra_wordlist_preserved",
+    "input": "hydra -w wordlist.txt -l admin host",
+    "expected": "hydra -w wordlist.txt -l admin host"
+  },
+  {
+    "name": "impacket_positional",
+    "input": "psexec.py corp/alice:S3cr3t@dc01.lab.local",
+    "expected": "psexec.py corp/alice:[REDACTED]@dc01.lab.local"
+  },
+  {
+    "name": "impacket_positional_colon_pw",
+    "input": "wmiexec.py alice:p:w@host",
+    "expected": "wmiexec.py alice:[REDACTED]@host"
+  },
+  {
+    "name": "impacket_quoted_pw",
+    "input": "impacket-wmiexec admin:\"p@ss w0rd\"@host",
+    "expected": "impacket-wmiexec admin:[REDACTED]@host"
+  },
+  {
+    "name": "impacket_not_a_tool_segment",
+    "input": "echo hello:world@notatool",
+    "expected": "echo hello:world@notatool"
+  },
+  {
+    "name": "smbclient_userpass",
+    "input": "smbclient -U admin%passw0rd //host/share",
+    "expected": "smbclient -U [REDACTED] //host/share"
+  },
+  {
+    "name": "nxc_basic_auth_userpass",
+    "input": "nxc smb host -u admin:Adm1nValue",
+    "expected": "nxc smb host -u [REDACTED]"
+  },
+  {
+    "name": "url_userinfo",
+    "input": "https://user:p4ssword@host.example/path",
+    "expected": "https://user:[REDACTED]@host.example/path"
+  },
+  {
+    "name": "pem_block",
+    "input": "key: -----BEGIN RSA PRIVATE KEY-----\nMIIabc123\n-----END RSA PRIVATE KEY-----",
+    "expected": "key: -----BEGIN RSA PRIVATE KEY-----[REDACTED]-----END RSA PRIVATE KEY-----"
+  },
+  {
+    "name": "plain_text_unchanged",
+    "input": "the quick brown fox jumps over",
+    "expected": "the quick brown fox jumps over"
+  },
+  {
+    "name": "echo_dash_p_preserved",
+    "input": "echo '-p' hunter2",
+    "expected": "echo '-p' hunter2"
+  },
+  {
+    "name": "date_utc_not_basic_auth",
+    "input": "date -u +%Y:%m",
+    "expected": "date -u +%Y:%m"
+  },
+  {
+    "name": "dict_password",
+    "input": {
+      "password": "hunter2",
+      "host": "dc01",
+      "port": 55000
+    },
+    "expected": {
+      "password": "[REDACTED]",
+      "host": "dc01",
+      "port": 55000
+    }
+  },
+  {
+    "name": "dict_nested",
+    "input": {
+      "outer": {
+        "token": "abc",
+        "ok": true,
+        "n": 3
+      }
+    },
+    "expected": {
+      "outer": {
+        "token": "[REDACTED]",
+        "ok": true,
+        "n": 3
+      }
+    }
+  },
+  {
+    "name": "dict_safe_key_path",
+    "input": {
+      "ssh_key_path": "/home/u/.ssh/id_rsa"
+    },
+    "expected": {
+      "ssh_key_path": "/home/u/.ssh/id_rsa"
+    }
+  },
+  {
+    "name": "dict_sensitive_value_passthrough",
+    "input": {
+      "secret": 12345,
+      "flag": null,
+      "on": true
+    },
+    "expected": {
+      "secret": "[REDACTED]",
+      "flag": null,
+      "on": true
+    }
+  },
+  {
+    "name": "dict_command_value",
+    "input": {
+      "cmd": "psexec.py corp/bob:pw@dc"
+    },
+    "expected": {
+      "cmd": "psexec.py corp/bob:[REDACTED]@dc"
+    }
+  },
+  {
+    "name": "list_argv_pair_flag",
+    "input": [
+      "--password",
+      "hunter2",
+      "--host",
+      "dc"
+    ],
+    "expected": [
+      "--password",
+      "[REDACTED]",
+      "--host",
+      "dc"
+    ]
+  },
+  {
+    "name": "list_argv_hydra_short_p",
+    "input": [
+      "hydra",
+      "-p",
+      "secret",
+      "ssh://t"
+    ],
+    "expected": [
+      "hydra",
+      "-p",
+      "[REDACTED]",
+      "ssh://t"
+    ]
+  },
+  {
+    "name": "list_mixed",
+    "input": [
+      "plain",
+      {
+        "token": "x"
+      },
+      7,
+      true,
+      null
+    ],
+    "expected": [
+      "plain",
+      {
+        "token": "[REDACTED]"
+      },
+      7,
+      true,
+      null
+    ]
+  },
+  {
+    "name": "json_in_string",
+    "input": "{\"password\":\"x\",\"user\":\"alice\"}",
+    "expected": "{\"password\":\"[REDACTED]\",\"user\":\"alice\"}"
+  },
+  {
+    "name": "scalar_int",
+    "input": 12345,
+    "expected": 12345
+  },
+  {
+    "name": "scalar_bool",
+    "input": true,
+    "expected": true
+  },
+  {
+    "name": "scalar_null",
+    "input": null,
+    "expected": null
+  },
+  {
+    "name": "empty_string",
+    "input": "",
+    "expected": ""
+  },
+  {
+    "name": "empty_dict",
+    "input": {},
+    "expected": {}
+  },
+  {
+    "name": "empty_list",
+    "input": [],
+    "expected": []
+  }
+]

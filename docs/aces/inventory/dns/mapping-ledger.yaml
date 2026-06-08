@@ -1,0 +1,447 @@
+schema_version: 1
+asset:
+  id: dns
+  scenario: TechVault
+  aptl_issue: 336
+  aces_methodology_issue: 353
+  source_class: custom-build
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence: []
+    limits:
+    - This first-party local image was captured from the local Docker daemon. No registry-visible OCI, in-toto, or SLSA attestation was available for the mutable local tag at capture time.
+correspondence_checks:
+- id: dns-node-source-correspondence
+  status: planned
+  source: nodes.techvault.dns.source
+  realized_evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/source-checksums.txt
+  - path: evidence/docker-history.image.txt
+  ledger_fact_ids:
+  - dns.image.identity
+  - dns.build.recipe
+  method: Compare the ACES source name/version and source.build provenance in scenarios/techvault.sdl.yaml against the realized local image digest, Docker build history, and containers/dns/ source-package checksums captured in this bundle.
+  limit: 'Planned because issue #336 records the current steady-state asset spec; this branch does not rerun the lab for a live equivalence proof.'
+- id: dns-runtime-correspondence
+  status: planned
+  source: nodes.techvault.dns.runtime
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/filesystem-tree.txt
+  - path: evidence/osquery-listening-ports.json
+  ledger_fact_ids:
+  - dns.network.identity
+  - dns.transport.listeners
+  - dns.healthcheck
+  - dns.runtime.mount-table
+  - dns.runtime.filesystem-inventory
+  - dns.runtime.primary-process
+  - dns.runtime.supervised-process-set
+  - dns.runtime.environment-policy
+  - dns.runtime.container-policy
+  - dns.runtime.local-identity-database
+  - dns.runtime.package-inventory
+  - dns.runtime.vulnerability-scan
+  method: Re-run the encoded scenario from ACES SDL, recapture runtime evidence, and compare network, health, mount, filesystem, process, environment, container host/security, identity, package, vulnerability, and optional osquery surfaces against this ledger.
+  limit: Planned because this issue records the frozen steady-state ACES spec and evidence, not a destructive clean-lab equivalence run.
+- id: dns-logical-state-correspondence
+  status: planned
+  source: nodes.techvault.dns.runtime.dns_services.techvault-bind
+  realized_evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/filesystem-checksums.txt
+  - path: evidence/source-checksums.txt
+  - path: evidence/language-manifests.txt
+  ledger_fact_ids:
+  - dns.service.implementation
+  - dns.resolver-policy
+  - dns.zone.forward
+  - dns.zone.reverse
+  - dns.zone.dynamic-update-transfer
+  method: Recapture BIND version, named-checkconf output, named-checkzone output, and AXFR results and compare typed resolver policy, zone files, transfer observation, and RRsets against the ACES DNS runtime service model.
+  limit: Planned because this issue records the snapshot DNS logical state rather than a fresh runtime equivalence proof.
+notes:
+- Capture used the already-running local aptl-dns container on 2026-05-28. `aptl lab stop -v && aptl lab start` was not run, so this is a non-destructive current-baseline capture rather than clean-lab rebuild proof.
+- 'Brad-Edwards/aces#426 / PR #427 is consumed; current ACES dev provides runtime.dns_services for typed DNS resolver, zone, RRset, and record-state inventory.'
+- No known ACES expressivity blocker remains for the catalogued DNS steady-state inventory facts. Localhost-only AXFR probing is recorded as a correspondence caveat, not a schema gap.
+facts:
+- id: dns.image.identity
+  category: provenance
+  summary: The asset uses first-party local image aptl-dns:latest, captured as aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75.
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.source.name
+    - nodes.techvault.dns.source.version
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.build.recipe
+  category: provenance
+  summary: The image is a custom build from containers/dns/Dockerfile on base ubuntu:22.04 with copied DNS zone/config files and shared in-process Wazuh agent sources.
+  evidence:
+  - path: evidence/compose-service.dns.json
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.source.build.base_image
+    - nodes.techvault.dns.source.build.dockerfile_path
+    - nodes.techvault.dns.source.build.instructions
+    - nodes.techvault.dns.source.build.layers
+    - nodes.techvault.dns.source.build.copied_sources
+    - nodes.techvault.dns.source.build.config
+    - nodes.techvault.dns.source.build.source_inputs
+    - nodes.techvault.dns.source.build.attestation
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.os.version
+  category: runtime-configuration
+  summary: The realized runtime OS is Ubuntu 22.04.5 LTS (Jammy Jellyfish).
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-inspect.image.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.os
+    - nodes.techvault.dns.os_version
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.network.identity
+  category: network
+  summary: The service is attached to dmz-net at 172.20.1.22, internal-net at 172.20.2.27, and security-net at 172.20.0.25 with Docker aliases aptl-dns and dns and hostname ns1.techvault.local.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-network.aptl-dmz.json
+  - path: evidence/docker-network.aptl-internal.json
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/compose-service.dns.json
+  aces:
+    disposition: encoded
+    surface: infrastructure
+    fields:
+    - infrastructure.dns
+    - nodes.techvault.dns.runtime.network.endpoints
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.transport.listeners
+  category: service-surface
+  summary: BIND listens on TCP/UDP 53 on localhost and the dmz/internal/security container addresses; Docker publishes host port 5353 for TCP and UDP.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/compose-service.dns.json
+  aces:
+    disposition: encoded
+    surface: nodes.services
+    fields:
+    - nodes.techvault.dns.services
+    - nodes.techvault.dns.runtime.network.published_ports
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.settings
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.healthcheck
+  category: runtime-configuration
+  summary: Compose declares a healthcheck using dig @localhost techvault.local SOA +short with 15s interval, 5s timeout, 5 retries, and 30s start period; Docker inspect observed healthy SOA responses.
+  evidence:
+  - path: evidence/compose-service.dns.json
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded
+    surface: conditions
+    fields:
+    - conditions.dns-soa-ready
+    - nodes.techvault.dns.conditions
+    - nodes.techvault.dns.runtime.health
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.runtime.mount-table
+  category: runtime-configuration
+  summary: The realized container exposes overlay root, proc/sys/tmpfs pseudo-filesystems, Docker-managed resolver/hostname/hosts files, and the named volume aptl_dns_logs at /var/log/named.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-volume.dns-logs.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.mounts
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.runtime.filesystem-inventory
+  category: runtime-configuration
+  summary: Filesystem evidence records BIND config, authored zones, supervisor config, Wazuh agent files, generated ossec.conf, and /var/log/named query/default logs with modes, owners, sizes, and checksums where file content is stable.
+  evidence:
+  - path: evidence/filesystem-tree.txt
+  - path: evidence/filesystem-checksums.txt
+  - path: evidence/source-checksums.txt
+  - path: evidence/language-manifests.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.filesystem_inventory
+    - content.dns-file-etc-bind-named-conf
+    - content.dns-file-etc-bind-zones-techvault-local-zone
+    - content.dns-file-etc-bind-zones-172-20-rev
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.runtime.primary-process
+  category: runtime-configuration
+  summary: PID 1 runs supervisord as root with command /usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-top.txt
+  - path: evidence/osquery-processes.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.processes
+    rationale: >
+      ACES PR #458 removed the singular runtime.process field. The PID 1
+      supervisord identity (role: primary, user: root, command:
+      /usr/bin/python3 /usr/bin/supervisord -n -c
+      /etc/supervisor/supervisord.conf) is now carried as an entry in
+      runtime.processes. NOTE: dns is one of the inventories whose
+      processes[] list previously omitted PID 1 entirely (the singular
+      runtime.process field was the only encoding), so the migration
+      explicitly adds the supervisord entry rather than relying on it
+      already being there. The full BIND + in-process Wazuh agent process
+      set continues under the same field on the supervised-process-set
+      fact (now 9 entries: named + 7 wazuh daemons + supervisord).
+- id: dns.runtime.supervised-process-set
+  category: runtime-configuration
+  summary: Supervisord manages named and the in-process Wazuh process family including wazuh-execd, wazuh-agentd, wazuh-syscheckd, wazuh-logcollector, wazuh-modulesd, and the wrapper tail process.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-top.txt
+  - path: evidence/osquery-processes.json
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.processes
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.runtime.environment-policy
+  category: runtime-configuration
+  summary: Runtime environment records Wazuh manager/agent name, named log paths, syslog format, hostname, PATH, HOME, PWD, and DEBIAN_FRONTEND.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/compose-service.dns.json
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.environment
+    - features.techvault-dns-service.environment
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.runtime.container-policy
+  category: runtime-configuration
+  summary: Docker inspect records entrypoint/command, restart/resource policy, CAP_NET_ADMIN, namespace/security posture, logging, shm size, and default masked/read-only container paths.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/compose-service.dns.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.container
+    - nodes.techvault.dns.runtime.operational_policy
+    - nodes.techvault.dns.runtime.linux_capabilities
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.runtime.local-identity-database
+  category: runtime-configuration
+  summary: getent passwd/group evidence records 22 local users and 43 groups including bind and wazuh service accounts.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: accounts
+    fields:
+    - nodes.techvault.dns.runtime.local_identity
+    - accounts.dns-local-bind
+    - accounts.dns-local-wazuh
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.runtime.package-inventory
+  category: runtime-configuration
+  summary: Runtime package inventory records 187 dpkg packages, BIND/Dig/Supervisor dependency manifests, and CycloneDX SBOMs from Trivy and Syft.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-sbom.cyclonedx.json
+  - path: evidence/syft-sbom.cyclonedx.json
+  - path: evidence/syft-version.json
+  - path: evidence/language-manifests.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.packages
+    - nodes.techvault.dns.runtime.dependency_manifests
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.runtime.vulnerability-scan
+  category: runtime-configuration
+  summary: 'Trivy vulnerability scan found 80 package findings: 22 LOW and 58 MEDIUM at capture time.'
+  evidence:
+  - path: evidence/trivy-vulnerabilities.json.gz
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/trivy-sbom.cyclonedx.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.package_vulnerabilities
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.service.implementation
+  category: dns-runtime
+  summary: The DNS service implementation is BIND 9.18.39-0ubuntu0.22.04.3-Ubuntu, managed by supervisord and backed by /etc/bind/named.conf.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/language-manifests.txt
+  - path: evidence/filesystem-tree.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.implementation
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.version
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.configuration_file_refs
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.resolver-policy
+  category: dns-runtime
+  summary: named.conf enables recursion for 172.20.0.0/16, forwards to 8.8.8.8 and 8.8.4.4, enables query/default logging, and disables DNSSEC validation.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/source-checksums.txt
+  - path: evidence/filesystem-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.resolver_policy
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.settings
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.zone.forward
+  category: dns-runtime
+  summary: 'AXFR captured the techvault.local primary forward zone: SOA, NS, MX, five AD SRV RRsets, and 26 A-record RRsets with TTL 86400.'
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/source-checksums.txt
+  - path: evidence/filesystem-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.zones.techvault-local
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.zone.reverse
+  category: dns-runtime
+  summary: 'AXFR captured the 20.172.in-addr.arpa primary reverse zone: SOA, NS, and fourteen PTR RRsets with TTL 86400.'
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/source-checksums.txt
+  - path: evidence/filesystem-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.zones.reverse-20-172
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.zone.dynamic-update-transfer
+  category: dns-runtime
+  summary: Both zones declare allow-update none; localhost AXFR succeeded during capture while wider transfer ACLs were not separately probed.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.dynamic_update
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.zones.*.transfer
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+    caveat: AXFR was observed from localhost only; this issue did not separately probe non-local clients for allow-transfer behavior.
+- id: dns.runtime.logging-relationship
+  category: relationships
+  summary: The DNS container writes named query/default logs under /var/log/named and runs the shared Wazuh agent configured to collect those paths for the SOC stack.
+  evidence:
+  - path: evidence/compose-service.dns.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-volume.dns-logs.json
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: relationships
+    fields:
+    - relationships.dns-forwards-wazuh
+    - relationships.dns-forwards-wazuh.forwarding_edge
+    - nodes.techvault.dns.runtime.forwarding_agents
+    - features.dns-wazuh-agent
+    - nodes.techvault.dns.runtime.dns_services.techvault-bind.log_file_refs
+    rationale: >
+      ACES PR #458 introduced typed relationship payloads alongside the new
+      node-scoped runtime.forwarding_agents family. The dns→wazuh-manager
+      relationship now carries a forwarding_edge.forwarder_ref pointing at
+      the in-process dns-wazuh-agent (per ADR-020); the legacy
+      properties.protocol="syslog-and-wazuh-agent" + log_paths prose is
+      retired. The named query/default log_file_refs on the BIND
+      dns_services entry continue to anchor the source-log evidence side
+      of the relationship.
+- id: dns.runtime.osquery-baseline
+  category: assurance
+  summary: 'The capture attempted the optional osquery baseline: processes, listening_ports, docker_containers, docker_images, and apt_sources were captured; installed_applications and programs were unavailable in the pinned Linux osquery scanner image.'
+  evidence:
+  - path: evidence/osquery-version.txt
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    fields:
+    - nodes.techvault.dns.runtime.processes
+    - nodes.techvault.dns.runtime.network
+    - nodes.techvault.dns.runtime.container
+    rationale: Current ACES SDL has a typed surface for this captured fact; evidence remains provenance, not a substitute for SDL encoding.
+- id: dns.capture.toolchain-baseline
+  category: assurance
+  summary: The bundle records capture time, Docker/Compose versions, evidence checksums, digest-pinned Trivy/Syft/osquery tool versions, Syft normalization, and non-destructive capture limits.
+  evidence:
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-compose-version.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/syft-version.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/evidence-sha256sums.txt
+  - path: evidence/capture-limits.txt
+  - path: evidence/syft-sbom.cyclonedx.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    fields:
+    - docs.aces.inventory.dns
+    rationale: The README and mapping ledger encode the proof boundary and link the evidence bundle to the SDL fields.
+    caveat: Scanner results and already-running-lab observations are time-sensitive evidence; the bundle is not a destructive clean-lab rebuild proof.

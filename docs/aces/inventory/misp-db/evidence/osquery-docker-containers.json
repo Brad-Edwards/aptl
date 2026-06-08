@@ -1,0 +1,34 @@
+{
+  "table": "docker_containers",
+  "query": "select id, name, image, image_id, command, created, state, status, pid, path, config_entrypoint, started_at, finished_at, privileged, security_options, readonly_rootfs, cgroup_namespace, ipc_namespace, mnt_namespace, net_namespace, pid_namespace, user_namespace, uts_namespace from docker_containers where name=\"/aptl-misp-db\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "cgroup_namespace": "",
+      "command": "docker-entrypoint.sh mariadbd",
+      "config_entrypoint": "docker-entrypoint.sh",
+      "created": "1779517109",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "id": "1574ba5c2bb24a249ffe94f8181ddb9ac33655518416af53707a74ece6173cbf",
+      "image": "mariadb:10.11",
+      "image_id": "407fccb51e710f34752c1a3ef9b936d1f55f38d4ac7fa043b3759742d266fd9a",
+      "ipc_namespace": "",
+      "mnt_namespace": "",
+      "name": "/aptl-misp-db",
+      "net_namespace": "",
+      "path": "docker-entrypoint.sh",
+      "pid": "2955532",
+      "pid_namespace": "",
+      "privileged": "0",
+      "readonly_rootfs": "0",
+      "security_options": "",
+      "started_at": "2026-05-23T06:18:34.462268335Z",
+      "state": "running",
+      "status": "Up 12 days (healthy)",
+      "user_namespace": "",
+      "uts_namespace": ""
+    }
+  ]
+}

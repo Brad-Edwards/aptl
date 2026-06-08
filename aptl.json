@@ -16,17 +16,5 @@
     "run_storage": {
         "backend": "local",
         "local_path": "./runs"
-    },
-    "edr_agents": {
-        "victim": ["wazuh", "falco"],
-        "kali": ["wazuh"],
-        "reverse": ["wazuh", "falco"],
-        "default": ["wazuh", "falco"]
-    },
-    "agent_configs": {
-        "xsiam": {
-            "installer_path": "/files/Brad-Lab-Report_sh.tar.gz",
-            "tenant_id": ""
-        }
     }
 }

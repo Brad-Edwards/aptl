@@ -1,0 +1,44 @@
+{
+  "profiles": [
+    "soc"
+  ],
+  "image": "jasonish/suricata:7.0",
+  "container_name": "aptl-suricata",
+  "hostname": "suricata",
+  "restart": "unless-stopped",
+  "cap_add": [
+    "NET_ADMIN",
+    "NET_RAW",
+    "SYS_NICE"
+  ],
+  "volumes": [
+    "./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml",
+    "./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules",
+    "suricata_logs:/var/log/suricata",
+    "suricata_command_socket:/var/run/suricata",
+    "./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw"
+  ],
+  "command": [
+    "-c",
+    "/etc/suricata/suricata.yaml",
+    "--pcap"
+  ],
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "1g"
+      }
+    }
+  },
+  "networks": {
+    "aptl-dmz": {
+      "ipv4_address": "172.20.1.50"
+    },
+    "aptl-internal": {
+      "ipv4_address": "172.20.2.50"
+    },
+    "aptl-security": {
+      "ipv4_address": "172.20.0.50"
+    }
+  }
+}

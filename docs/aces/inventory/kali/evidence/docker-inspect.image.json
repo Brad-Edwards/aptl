@@ -1,0 +1,86 @@
+[
+    {
+        "Id": "sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9",
+        "RepoTags": [
+            "aptl-kali:latest"
+        ],
+        "RepoDigests": [
+            "aptl-kali@sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9"
+        ],
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-05-22T07:38:57.553557376+02:00",
+        "Config": {
+            "User": "root",
+            "ExposedPorts": {
+                "22/tcp": {}
+            },
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "LANG=C.UTF-8",
+                "DEBIAN_FRONTEND=noninteractive",
+                "TZ=UTC"
+            ],
+            "Entrypoint": [
+                "/entrypoint.sh"
+            ],
+            "WorkingDir": "/home/kali",
+            "Labels": {
+                "com.docker.compose.project": "aptl",
+                "com.docker.compose.service": "kali",
+                "com.docker.compose.version": "5.1.3",
+                "io.buildah.version": "1.43.1",
+                "org.opencontainers.image.authors": "Kali Developers <devel@kali.org>",
+                "org.opencontainers.image.created": "2026-05-17T04:04:52Z",
+                "org.opencontainers.image.description": "Official Kali Linux container image for 2026.1",
+                "org.opencontainers.image.revision": "4d1ddb93",
+                "org.opencontainers.image.source": "https://gitlab.com/kalilinux/build-scripts/kali-docker",
+                "org.opencontainers.image.title": "Kali Linux (2026.1 branch)",
+                "org.opencontainers.image.url": "https://www.kali.org/",
+                "org.opencontainers.image.vendor": "OffSec",
+                "org.opencontainers.image.version": "2026.1"
+            }
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 1909929716,
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:3059c5e48e9bf2ceb51d8542f5b81c62edf6f50fef72c94d0b387814edfe29f3",
+                "sha256:45cd9d5e1cff863f1707205090242cc301f6c178fc1924af4edf85aa774beb0a",
+                "sha256:36222fddb690c0802b092dac99d1d90c70ec8e8b4d6e6e6ed97fed251f494279",
+                "sha256:a39ec36f5f73c588a232b636605459087b86407012fe438e0879f8964526192c",
+                "sha256:545f1c21f6df389d4bec116bb6781ab217fd6b6285a3f0e076b4d1b60405745f",
+                "sha256:c4eec2b02f16a53ed129fa5f5fdd94d60397123cf0e51894f2efe7c7e58e7626",
+                "sha256:9cf107a92b97109695f655de84f6409c610353f95124197c03846534de051509",
+                "sha256:a979f017be42989fef58a71a912e37ed413bd7c776005bbd149b750f30231dfb",
+                "sha256:e03fb3962e27f77db9ef860fd96536d9a3110f45380fff51075dd00ed2ff3161",
+                "sha256:ee13f6fd09e25dab5202bbbba8541bd59469095662207254f5059d493f9c2045",
+                "sha256:a9d61aa0968e38d417bd73c0eeaedea40b9f0838a110e6b55262fc90582674a1",
+                "sha256:d7620349965bc5a991abb42faedd0edb5ea0603f1be43373444fc6ff48c16051",
+                "sha256:ba4c7d787f8a3d34518d14e7b7daaf78aa44382b4e5373a4096e6b11c1aae423",
+                "sha256:393d74e4f7eb9066638236ee180b7535f3d0e9334f119833fea4c74a8ccc4b65",
+                "sha256:24a2a07bc8630eefab6b3450f8744865559bc8ba9e8d786a8e9313b5c9a1e570",
+                "sha256:18fe8951adec95902ddf51eb92cb08cbd78efb614c295d1c13cb64136c084371",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                "sha256:b760458522afdfc791a616674c33b55aa9693513d9fef6ab4c8437075c6edb6a"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "2026-05-22T05:42:18.292205771Z"
+        },
+        "Descriptor": {
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "digest": "sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9",
+            "size": 856
+        },
+        "Identity": {
+            "Build": [
+                {
+                    "Ref": "v3d8r1e8fz6et677lo7ncclfp",
+                    "CreatedAt": "2026-05-22T07:43:22.551535279+02:00"
+                }
+            ]
+        }
+    }
+]

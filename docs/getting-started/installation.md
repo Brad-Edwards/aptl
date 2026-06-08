@@ -18,7 +18,15 @@ If you need to run steps individually:
 1. Generate SSH keys: `./scripts/generate-ssh-keys.sh`
 2. Set vm.max_map_count (Linux/WSL2): `sudo sysctl -w vm.max_map_count=262144`
 3. Generate SSL certificates: `docker compose -f generate-indexer-certs.yml run --rm generator`
-4. Start lab: `docker compose --profile wazuh --profile victim --profile kali up --build -d`
+4. Start lab: `aptl lab start`
+
+> Step 4 must be `aptl lab start`, not a raw `docker compose up`: `aptl lab
+> start` also renders the credentialized Wazuh config from the checked-in
+> templates into the gitignored `.aptl/config/` tree (ADR-028), which the
+> manager and dashboard containers bind-mount. There is no standalone command
+> for that render, so `docker compose --profile wazuh ... up` on a fresh
+> checkout fails at the `.aptl/config/...` bind mounts. (Once a lab has been
+> started, raw `docker compose up -d` reuses the already-rendered config.)
 
 ## MCP Integration
 

@@ -1,0 +1,5 @@
+This db inventory captures the local aptl-db container as observed in the already-running lab on this branch. It did not run `aptl lab stop -v && aptl lab start`, because that operation destroys Docker volumes and current lab state. Treat the bundle as a frozen post-start steady-state observation, not as proof of byte-identical clean-lab rebuildability.
+
+The filesystem inventory records the PostgreSQL data volume and mounted initialization scripts visible at steady state. It does not claim full root filesystem equivalence for every Alpine base-image path outside those catalogued surfaces.
+
+Vulnerability evidence is scanner state tied to the Trivy version/database available during capture. Treat package CVEs as time-sensitive observations, not permanent facts about the asset.

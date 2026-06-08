@@ -50,6 +50,12 @@ Captured at the start of each run for reproducibility. Contains:
 | `networks[]` | Docker network name, subnet, gateway, connected containers |
 | `config_hashes` | SHA-256 of `aptl.json`, `docker-compose.yml`, `.env` |
 
+Snapshots and trace exports must not contain live credentials, API keys, bearer
+tokens, cookies, JWTs, private key material, or default lab passwords. Redact at
+the common serialization/tracing boundary before writing JSON or OTel span
+attributes; do not rely on archive location, file permissions, or export
+controls as the primary protection.
+
 ## CLI Commands
 
 ```bash

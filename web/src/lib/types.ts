@@ -15,11 +15,41 @@ export interface LabStatus {
 	error: string | null;
 }
 
-/** Lab action response (start/stop). */
+/** Stable wire strings from `aptl.core.lab_types.StartupOutcome` (ADR-030). */
+export type StartupOutcome =
+	| 'ready'
+	| 'degraded_usable'
+	| 'degraded_unusable'
+	| 'failed';
+
+/** Stable wire strings from `aptl.core.lab_types.DiagnosticImpact` (ADR-030). */
+export type DiagnosticImpact = 'cosmetic' | 'telemetry' | 'capability' | 'readiness';
+
+/** Stable wire strings from `aptl.core.lab_types.DiagnosticSeverity` (ADR-030). */
+export type DiagnosticSeverity = 'info' | 'warning' | 'error';
+
+/** A structured note emitted by one startup step (ADR-030). */
+export interface StartupDiagnostic {
+	step: string;
+	impact: DiagnosticImpact;
+	severity: DiagnosticSeverity;
+	message: string;
+	component?: string;
+	operator_action?: string;
+}
+
+/** Lab action response (start/stop).
+ *
+ *  `outcome` and `diagnostics` carry ADR-030's structured partial-readiness
+ *  classification. Both are optional: older API builds (or `/lab/stop`,
+ *  which has no degraded state today) may omit them.
+ */
 export interface LabActionResponse {
 	success: boolean;
 	message: string;
 	error: string | null;
+	outcome?: StartupOutcome | null;
+	diagnostics?: StartupDiagnostic[];
 }
 
 /** Scenario summary for listing. */

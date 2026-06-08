@@ -4,13 +4,22 @@
 # Notes directory
 notes/
 
-# Scenario runtime state
+# Project runtime state: scenario session/trace state, red-team capture,
+# and the credentialized service config rendered from the config/ templates
+# at `aptl lab start` (ADR-028).
 .aptl/
+
+# Lab-managed CA + per-service certificates generated at `aptl lab start`
+# (SEC-006 / ADR-034). The CA private key and server private keys are
+# control-plane secrets under ADR-029 — never committed.
+config/soc_certs/
 
 # Claude Code harness — local-only bookkeeping (wakeup-loop locks, etc.)
 .claude/*.lock
 .claude/scheduled_tasks.lock
 
+# Ground Control local tool caches.
+.gc/sonar/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

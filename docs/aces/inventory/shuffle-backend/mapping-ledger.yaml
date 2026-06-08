@@ -1,0 +1,628 @@
+schema_version: 1
+asset:
+  id: shuffle-backend
+  scenario: TechVault
+  aptl_issue: 360
+  aces_methodology_issue: 353
+  source_class: upstream-image
+  proof_scope: completion-inventory
+provenance:
+  image_digest: ghcr.io/shuffle/shuffle-backend@sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d
+  attestation:
+    status: captured
+    verification_status: not_verified
+    standards:
+      - OCI image index
+      - in-toto
+      - SLSA provenance
+    predicate_types:
+      - https://slsa.dev/provenance/v0.2
+    evidence:
+      - path: evidence/docker-buildx-imagetools.image.txt
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+      - path: evidence/docker-buildx-imagetools.attestation-amd64.raw.json
+    limits:
+      - >
+        This inventory captured registry-visible attestation manifests but did
+        not cryptographically verify signatures, transparency-log inclusion, or
+        builder identity. The upstream Shuffle backend image is a third-party
+        artifact; first-party SBOM/provenance verification remains out of scope
+        for an upstream-image asset pass.
+notes:
+  - >
+    This is the SCN-010 / issue #360 completion-grade steady-state inventory for
+    the TechVault shuffle-backend container. It supersedes the #353 methodology
+    smoke pass; the image digest is unchanged from that pass, but the runtime,
+    application, identity, platform, and relationship surfaces are now fully
+    captured and encoded in scenarios/techvault/nodes/shuffle-backend.sdl.yaml.
+  - >
+    Capture used the already-running aptl project per operator direction and did
+    not run aptl lab stop -v && aptl lab start; the bundle is steady-state
+    observation of the current-running lab, not clean-reset rebuild proof.
+  - >
+    No ACES expressivity gap remains for the catalogued shuffle-backend
+    steady-state facts. The current runtime families (filesystem_inventory,
+    service_listeners, local_identity, identity_authorities, platform_applications
+    with platform_kind soar, applications, software_components,
+    package_vulnerabilities, and platform_application upstream_bindings) cover
+    every in-scope observable; every fact is encoded.
+  - >
+    Shuffle persistent state lives in the shuffle-opensearch datastore
+    (OpenSearch 2.14.0), not in the aptl_shuffle_data volume, which is empty at
+    steady state. Application state was captured through the Shuffle backend HTTP
+    API and OpenSearch _cat/indices, with apikey/password/session fields redacted.
+  - >
+    Inbound consumers of this backend (the shuffle-orborus worker on
+    http://shuffle-backend:5001, the shuffle-frontend nginx proxy, and the Wazuh
+    custom-shuffle alert integration) are observed but owned by future
+    SOC-companion inventories; only the shuffle-opensearch datastore relationship
+    is encoded by this asset pass.
+  - >
+    The ledger is validated by the Pydantic schema exposed through
+    `aptl aces-inventory schema`; schema violations fail
+    `aptl aces-inventory validate`.
+correspondence_checks:
+  - id: shuffle-backend-evidence-bundle-integrity
+    status: implemented
+    source: docs/aces/inventory/shuffle-backend/evidence
+    method: >
+      evidence-sha256sums.txt hashes every committed evidence file except the
+      manifest itself; tests/test_shuffle_backend_inventory.py recomputes and
+      compares each digest and asserts every evidence file is covered.
+    realized_evidence:
+      - path: evidence/evidence-sha256sums.txt
+      - path: evidence/captured-at-utc.txt
+      - path: evidence/docker-version.json
+      - path: evidence/docker-compose-version.json
+    ledger_fact_ids:
+      - shuffle-backend.capture.toolchain-baseline
+  - id: shuffle-backend-sdl-runtime-correspondence
+    status: implemented
+    source: scenarios/techvault/nodes/shuffle-backend.sdl.yaml nodes.techvault.shuffle-backend
+    method: >
+      tests/test_shuffle_backend_inventory.py parses the composed TechVault SDL
+      and asserts image identity, OS, runtime mounts, docker-socket control
+      interface, process identity, package, software-component, CVE, local
+      identity, listener, environment, identity-authority, application-route,
+      platform-application, and relationship facts against the committed evidence.
+    realized_evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/shuffle-state.txt
+      - path: evidence/trivy-vulnerability-list.json
+      - path: evidence/os-packages.txt
+      - path: evidence/filesystem-tree.txt.gz
+    ledger_fact_ids:
+      - shuffle-backend.runtime.container-policy
+      - shuffle-backend.runtime.service-listeners
+      - shuffle-backend.runtime.process-identity
+      - shuffle-backend.application.routes
+      - shuffle-backend.application.local-authorization
+      - shuffle-backend.application.platform-state
+      - shuffle-backend.runtime.vulnerability-scan
+      - shuffle-backend.runtime.package-inventory
+      - shuffle-backend.runtime.filesystem-inventory
+  - id: shuffle-backend-scope-and-redaction-caveats
+    status: implemented
+    source: docs/aces/inventory/shuffle-backend/evidence/capture-limits.txt
+    method: >
+      README and tests assert non-destructive capture scope, secret redaction
+      (apikey/passwords), Syft normalization, unavailable osquery tables, the
+      empty data volume vs OpenSearch-backed state, and Compose extraction
+      caveats.
+    realized_evidence:
+      - path: evidence/capture-limits.txt
+      - path: evidence/docker-volume.shuffle-data.json
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-programs.json
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/docker-logs.shuffle-backend.txt
+    ledger_fact_ids:
+      - shuffle-backend.capture.toolchain-baseline
+      - shuffle-backend.runtime.data-mount
+      - shuffle-backend.runtime.osquery-baseline
+  - id: shuffle-backend-opensearch-relationship-correspondence
+    status: implemented
+    source: scenarios/techvault/sections/relationships.sdl.yaml shuffle-backend-connects-opensearch
+    method: >
+      tests/test_shuffle_backend_inventory.py asserts the OpenSearch datastore
+      relationship and platform-application upstream_binding against the captured
+      Shuffle state and compose environment.
+    realized_evidence:
+      - path: evidence/shuffle-state.txt
+      - path: evidence/compose-service.shuffle-backend.json
+    ledger_fact_ids:
+      - shuffle-backend.relationship.opensearch
+      - shuffle-backend.companion-boundary
+facts:
+  - id: shuffle-backend.capture.toolchain-baseline
+    category: capture
+    summary: >
+      Capture used digest-pinned Trivy 0.70.0, Syft, and osquery images, recorded
+      Docker/Compose versions and capture time, and recorded explicit capture
+      limits and an evidence checksum manifest.
+    evidence:
+      - path: evidence/captured-at-utc.txt
+      - path: evidence/docker-version.json
+      - path: evidence/docker-compose-version.json
+      - path: evidence/trivy-version.txt
+      - path: evidence/syft-version.json
+      - path: evidence/osquery-version.txt
+      - path: evidence/capture-limits.txt
+      - path: evidence/evidence-sha256sums.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: runtime_contract
+      checked_surfaces: [runtime_contract]
+      fields:
+        - docs/aces/inventory/shuffle-backend/capture-evidence.sh
+        - docs/aces/inventory/shuffle-backend/evidence/capture-limits.txt
+      caveat: >
+        Scanner and runtime observations are time-sensitive evidence from the
+        current-running lab, not immutable clean-reset proof.
+      rationale: >
+        The bundle records capture tooling, pinned scanner digests, and limits as
+        methodology evidence alongside the ACES SDL encoding.
+  - id: shuffle-backend.image.identity-provenance
+    category: image
+    summary: >
+      The asset uses upstream image ghcr.io/shuffle/shuffle-backend:latest,
+      resolved to digest sha256:271b38ba...3e178d, with Alpine 3.22.2 image
+      metadata and a captured but unverified SLSA provenance attestation manifest.
+    evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/compose-service.shuffle-backend.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/docker-buildx-imagetools.image.txt
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+      - path: evidence/docker-buildx-imagetools.attestation-amd64.raw.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.source.name
+        - nodes.techvault.shuffle-backend.source.version
+        - nodes.techvault.shuffle-backend.source.build.attestation
+        - nodes.techvault.shuffle-backend.os
+        - nodes.techvault.shuffle-backend.os_version
+      rationale: >
+        ACES node source is a provider-neutral artifact reference carrying the
+        immutable image digest as the version pin; build.attestation preserves the
+        captured registry attestation status.
+  - id: shuffle-backend.image.history-layers
+    category: image
+    summary: >
+      Docker history and image rootfs layer metadata are encoded as
+      upstream-image build provenance.
+    evidence:
+      - path: evidence/docker-history.image.txt
+      - path: evidence/docker-history.image.jsonl
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/trivy-vulnerabilities.json.gz
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.source.build.instructions
+        - nodes.techvault.shuffle-backend.source.build.layers
+        - nodes.techvault.shuffle-backend.source.build.config
+      rationale: >
+        ACES node source.build carries the upstream image history instructions,
+        rootfs layers, and config snapshot.
+  - id: shuffle-backend.compose.service-contract
+    category: compose
+    summary: >
+      Compose declares aptl-shuffle-backend, profile soc, the aptl_shuffle_data
+      volume and docker.sock bind, 8 SHUFFLE_* environment variables (3 secret),
+      restart unless_stopped, a 1GiB memory limit, and no host port publication
+      (intra-cluster only per SEC-006/ADR-034).
+    evidence:
+      - path: evidence/compose-service.shuffle-backend.json
+      - path: evidence/source-checksums.txt
+      - path: evidence/docker-compose-version.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes, infrastructure]
+      fields:
+        - nodes.techvault.shuffle-backend
+        - nodes.techvault.shuffle-backend.runtime.operational_policy
+        - infrastructure.shuffle-backend
+      rationale: >
+        Authored backend intent (image, mounts, env, restart/memory policy,
+        network attachment) is encoded on the ACES node and infrastructure surface.
+  - id: shuffle-backend.runtime.container-policy
+    category: runtime
+    summary: >
+      Docker runtime policy captures restart unless_stopped, a 1GiB memory limit,
+      runc runtime, namespace modes, root PID 1, the absent healthcheck
+      (health=null, no compose healthcheck declared), and container config.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/docker-top.txt
+      - path: evidence/docker-logs.shuffle-backend.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.container
+        - nodes.techvault.shuffle-backend.runtime.operational_policy
+        - nodes.techvault.shuffle-backend.runtime.health
+      rationale: >
+        ACES runtime container/operational_policy/health fields encode realized
+        Docker policy; health is explicitly null because no healthcheck is declared.
+  - id: shuffle-backend.network.identity-publication
+    category: network
+    summary: >
+      shuffle-backend is attached to techvault.security-net at 172.20.0.20 with
+      aliases aptl-shuffle-backend and shuffle-backend and no host-published
+      ports.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-network.aptl-security.json
+      - path: evidence/participant-discovery.kali.txt
+      - path: evidence/participant-discovery.shuffle-orborus.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes, infrastructure]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.network.endpoints
+        - infrastructure.shuffle-backend
+      rationale: >
+        ACES node runtime network and infrastructure fields encode the static IP,
+        aliases, DNS names, and backend realization metadata.
+  - id: shuffle-backend.api.listener
+    category: service-surface
+    summary: >
+      The Shuffle backend API is exposed on TCP 5001 and the runtime listener is
+      bound to IPv6 wildcard :::5001 (HTTP, plaintext intra-cluster).
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/osquery-listening-ports.json
+    aces:
+      disposition: encoded
+      surface: nodes.services
+      checked_surfaces: [nodes, nodes.services]
+      fields:
+        - nodes.techvault.shuffle-backend.services
+      rationale: ACES node service bindings model exposed network services by port.
+  - id: shuffle-backend.runtime.service-listeners
+    category: runtime
+    summary: >
+      Runtime listeners are encoded as the wildcard Shuffle API on :::5001 plus
+      the two Docker embedded DNS sockets (TCP and UDP on 127.0.0.11).
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/osquery-listening-ports.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      checked_surfaces: [nodes, nodes.services]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.service_listeners
+      caveat: >
+        Docker embedded DNS listener ports are backend-generated and encoded as
+        node-local runtime listeners, not Shuffle application services.
+      rationale: >
+        ACES runtime.service_listeners express scope/protocol for the API and the
+        node-local Docker DNS sockets observed in the network namespace.
+  - id: shuffle-backend.runtime.data-mount
+    category: runtime
+    summary: >
+      The named volume aptl_shuffle_data is mounted at /shuffle-database and
+      encoded as a typed runtime mount; it is empty at steady state because
+      Shuffle persistence lives in the OpenSearch datastore.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-volume.shuffle-data.json
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.mounts
+      rationale: >
+        ACES runtime mount fields encode volume-backed node-local persistence
+        directly.
+  - id: shuffle-backend.docker.socket
+    category: runtime
+    summary: >
+      The container has a writable Docker socket bind /var/run/docker.sock
+      (rw) encoded as both a runtime mount and a local control interface.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/compose-service.shuffle-backend.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.mounts
+        - nodes.techvault.shuffle-backend.runtime.local_control_interfaces.shuffle-backend-docker-socket
+      rationale: >
+        The writable Docker control socket is a load-bearing trust surface; it is
+        carried as the local_control_interface shuffle-backend-docker-socket while
+        the bind also appears under runtime.mounts.
+  - id: shuffle-backend.runtime.process-identity
+    category: runtime
+    summary: >
+      PID 1 runs ./shufflebackend (a 119,680,431-byte Go binary) as root with
+      working directory /app.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/docker-top.txt
+      - path: evidence/osquery-processes.json
+      - path: evidence/docker-inspect.image.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.processes
+      rationale: >
+        The PID 1 shufflebackend identity (role: primary, user: root,
+        working_directory: /app, command: ./shufflebackend) is the first entry of
+        runtime.processes.
+  - id: shuffle-backend.runtime.environment
+    category: runtime
+    summary: >
+      Runtime environment encodes the 8 compose-declared SHUFFLE_* variables plus
+      the image-default PATH; SHUFFLE_DEFAULT_APIKEY, SHUFFLE_DEFAULT_PASSWORD,
+      and SHUFFLE_OPENSEARCH_PASSWORD are redacted.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/compose-service.shuffle-backend.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.environment
+      rationale: >
+        ACES runtime.environment carries each variable with a value_classification;
+        secret values are recorded as redacted with empty value strings.
+  - id: shuffle-backend.runtime.local-identity
+    category: runtime
+    summary: >
+      Local passwd/group inventory records 17 users and 35 groups for the Alpine
+      runtime.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes, accounts]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.local_identity
+      rationale: ACES runtime.local_identity encodes container-local users and groups.
+  - id: shuffle-backend.runtime.filesystem-inventory
+    category: runtime
+    summary: >
+      The SDL encodes 16 curated load-bearing filesystem paths; the full
+      filesystem tree (2293 entries) and checksum surface (1309 checksummed files)
+      are retained as compressed evidence manifests.
+    evidence:
+      - path: evidence/filesystem-tree.txt.gz
+      - path: evidence/filesystem-checksums.txt.xz
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.filesystem_inventory
+      caveat: >
+        The SDL encodes curated participant-visible paths; the full tree and
+        checksum manifests are retained as compressed evidence rather than inlined.
+      rationale: >
+        ACES runtime.filesystem_inventory encodes the load-bearing paths with
+        metadata, stability, and sensitivity.
+  - id: shuffle-backend.runtime.package-inventory
+    category: runtime
+    summary: >
+      The runtime image contains 21 Alpine apk OS packages and a Go go.mod
+      dependency manifest; no Python, pip, Node, npm, or Go compiler is present.
+    evidence:
+      - path: evidence/os-packages.txt
+      - path: evidence/language-manifests.txt
+      - path: evidence/trivy-sbom.cyclonedx.json.gz
+      - path: evidence/osquery-apt-sources.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.packages
+        - nodes.techvault.shuffle-backend.runtime.dependency_manifests
+      rationale: >
+        ACES runtime.packages and dependency_manifests encode the apk packages and
+        the Go module manifest.
+  - id: shuffle-backend.application.software-components
+    category: application
+    summary: >
+      The 157 Go modules embedded in the backend binary are encoded as runtime
+      software components, sourced from the trivy/syft go-module SBOM catalogue.
+    evidence:
+      - path: evidence/syft-sbom.cyclonedx.json.gz
+      - path: evidence/trivy-sbom.cyclonedx.json.gz
+      - path: evidence/language-manifests.txt
+      - path: evidence/syft-version.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.software_components
+      rationale: >
+        ACES runtime.software_components encode the Go module dependency table; the
+        Go toolchain is absent in-image so the SBOM go-module catalogue is the
+        authoritative source.
+  - id: shuffle-backend.application.routes
+    category: application
+    summary: >
+      The Shuffle REST API surface is encoded with the unauthenticated
+      /api/v1/health endpoint and the Bearer-API-key /api/v1/workflows, /apps, and
+      /users routes.
+    evidence:
+      - path: evidence/shuffle-state.txt
+      - path: evidence/docker-inspect.container.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.applications.shuffle-backend-api.routes
+      rationale: >
+        ACES runtime.applications routes encode observed method, path, and auth
+        requirement for the Shuffle API.
+  - id: shuffle-backend.application.local-authorization
+    category: identity
+    summary: >
+      The Shuffle org (default, id 08b070b1-...), the single admin user (id
+      c98f23e2-..., role admin, active, unverified), and the seeded admin API-key
+      metadata are encoded as a runtime identity authority; raw secret material is
+      redacted.
+    evidence:
+      - path: evidence/shuffle-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes, accounts]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.identity_authorities.shuffle-local-authorization
+      rationale: >
+        ACES runtime.identity_authorities encode the Shuffle organisation, user,
+        and API-key subjects with redacted secret material.
+  - id: shuffle-backend.application.platform-state
+    category: application
+    summary: >
+      Shuffle SOAR platform state encodes the org, 8 installed workflow-apps, a
+      313-entry OpenAPI app catalogue, 934 workflow executions (dominated by the
+      periodic self-test workflow), 0 operator-authored workflows, and 933 org
+      files; platform_kind is soar.
+    evidence:
+      - path: evidence/shuffle-state.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.platform_applications.shuffle-soar
+        - nodes.techvault.shuffle-backend.runtime.platform_applications.shuffle-soar.content_objects
+        - nodes.techvault.shuffle-backend.runtime.platform_applications.shuffle-soar.organizations
+      rationale: >
+        ACES runtime.platform_applications with platform_kind soar encode the
+        Shuffle org, installed apps, app catalogue, executions, and file store as
+        typed content objects.
+  - id: shuffle-backend.runtime.vulnerability-scan
+    category: runtime
+    summary: >
+      Trivy 0.70.0 reported 90 package vulnerability findings: 3 critical, 36
+      high, 25 medium, 23 low, and 3 unknown.
+    evidence:
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-vulnerabilities.json.gz
+      - path: evidence/trivy-vulnerability-counts.json
+      - path: evidence/trivy-vulnerability-list.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      checked_surfaces: [nodes, vulnerabilities]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.package_vulnerabilities
+      caveat: >
+        Vulnerability scanner output is time-sensitive and tied to the captured
+        Trivy 0.70.0 version and advisory-database state.
+      rationale: >
+        ACES runtime.package_vulnerabilities preserve package, version, advisory,
+        severity, scanner, image digest, and scan-time semantics.
+  - id: shuffle-backend.runtime.osquery-baseline
+    category: runtime
+    summary: >
+      osquery captured container processes and listeners (container PID/network
+      namespace) and host-side Docker container/image rows; apt_sources,
+      installed_applications, and programs are recorded as unavailable for this
+      Alpine target / Linux scanner image.
+    evidence:
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-programs.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      checked_surfaces: [nodes, runtime_contract]
+      fields:
+        - nodes.techvault.shuffle-backend.runtime.processes
+        - nodes.techvault.shuffle-backend.runtime.service_listeners
+        - nodes.techvault.shuffle-backend.runtime.network
+      caveat: >
+        apt_sources (not meaningful for apk), installed_applications, and programs
+        tables are unavailable in the digest-pinned Linux osquery image and are
+        recorded as capture limits.
+      rationale: >
+        osquery corroborates the runtime process, listener, and network surfaces
+        from inside the container namespaces.
+  - id: shuffle-backend.relationship.opensearch
+    category: relationship
+    summary: >
+      shuffle-backend persists all org/user/workflow/app/execution state in the
+      shuffle-opensearch datastore (OpenSearch 2.14.0) over https:9200 with basic
+      auth and TLS verification disabled.
+    evidence:
+      - path: evidence/shuffle-state.txt
+      - path: evidence/compose-service.shuffle-backend.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: relationships
+      checked_surfaces: [relationships, nodes]
+      fields:
+        - relationships.shuffle-backend-connects-opensearch
+        - nodes.techvault.shuffle-backend.runtime.platform_applications.shuffle-soar.upstream_bindings.shuffle-opensearch-index
+      caveat: >
+        TLS verification is disabled (SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true) and
+        the OpenSearch password is redacted; the datastore is a minimal companion
+        stub node owned by future SOC-companion inventory work.
+      rationale: >
+        The datastore dependency is encoded as both a relationships edge and a
+        platform_application upstream_binding to shuffle-opensearch.
+  - id: shuffle-backend.companion-boundary
+    category: scope
+    summary: >
+      shuffle-opensearch is encoded as a minimal relationship-target stub; the
+      inbound shuffle-orborus worker, shuffle-frontend proxy, and Wazuh
+      custom-shuffle alert integration are observed but owned by future
+      SOC-companion inventories.
+    evidence:
+      - path: evidence/compose-service.shuffle-backend.json
+      - path: evidence/participant-discovery.shuffle-orborus.txt
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      checked_surfaces: [nodes, infrastructure, relationships]
+      fields:
+        - nodes.techvault.shuffle-opensearch
+        - relationships.shuffle-backend-connects-opensearch
+      caveat: >
+        Stub depth is intentionally bounded to anchor the shuffle-backend
+        datastore relationship; full companion service inventories are future
+        SOC-companion work.
+      rationale: >
+        The shuffle-opensearch node carries only the relationship-anchoring
+        identity and service surface for this asset pass.

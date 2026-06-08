@@ -1,0 +1,6 @@
+# Belt-and-suspenders against changelog merge conflicts. The fragment
+# workflow (`towncrier`, `changelog.d/`) is the primary fix, but release
+# collation and any straggler hand-edits still touch CHANGELOG.md.
+# `union` concatenates both sides of append-only conflicts instead of
+# producing conflict markers. See `changelog.d/README.md`.
+CHANGELOG.md merge=union

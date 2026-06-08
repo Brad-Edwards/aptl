@@ -12,10 +12,13 @@ dependencies = [
     "pydantic>=2.0.0",
     "rich>=13.0.0",
     "PyYAML>=6.0",
+    "icontract>=2.6.0,<3.0",
     "opentelemetry-api>=1.33.0",
     "opentelemetry-sdk>=1.33.0",
     "opentelemetry-exporter-otlp-proto-http>=1.33.0",
     "opentelemetry-semantic-conventions>=0.54b0",
+    "cryptography>=42.0.0",
+    "aces-sdl @ git+https://github.com/Brad-Edwards/aces.git@dev#subdirectory=implementations/python",
 ]
 
 [project.scripts]
@@ -38,16 +41,53 @@ dev = [
     "coverage>=7.0.0",
     "httpx>=0.27.0",
     "hypothesis>=6.0.0",
+    "ruff>=0.15.0",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.ruff]
+# Lint only the Python control-plane source. Tests, generated files, and
+# the (TypeScript) MCP / web trees are out of scope for this check.
+src = ["src"]
+
+[tool.ruff.lint]
+# Intentionally narrow: this is a *complexity* gate, not a style linter —
+# `C901` (McCabe cyclomatic complexity) is the only rule enabled, so the
+# check fails a god-method without churning the codebase on style. Widen
+# the rule set deliberately if/when the team wants more from ruff.
+select = ["C901"]
+
+[tool.ruff.lint.mccabe]
+# A function over this many independent paths is the "god method" this
+# gate exists to stop. Matches SonarCloud's default cognitive-complexity
+# threshold (15); ratchet down over time as the backlog shrinks.
+max-complexity = 15
+
+[tool.ruff.lint.per-file-ignores]
+# Known-large modules with a backlog of over-threshold functions — see
+# ADR-010 § Complexity backlog for the specific functions and their
+# scores. C901 is suppressed for these *whole files* until they're
+# broken up (rather than carving out each `def` with `# noqa`, which
+# would touch the files and make SonarCloud's PR analysis re-surface
+# their pre-existing complexity debt as "new"). New code should not go
+# into these files; everything else under `src/` is gated. Delete a file
+# from this list as soon as `ruff check src/<file>` passes without it.
+"src/aptl/core/runtime/compiler.py" = ["C901"]
+"src/aptl/core/runtime/planner.py" = ["C901"]
+"src/aptl/core/sdl/parser.py" = ["C901"]
+"src/aptl/core/sdl/validator.py" = ["C901"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
 markers = [
     "fuzz: property-based fuzz tests (run with: pytest -m fuzz)",
+    "integration: tests that spawn subprocesses or read/write the filesystem; runnable by default but selectable via `pytest -m integration` or `pytest -m 'not integration'`",
 ]
 addopts = "-m 'not fuzz'"
 

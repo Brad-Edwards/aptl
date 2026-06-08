@@ -9,15 +9,16 @@
  * trace_id as scenario lifecycle spans from the Python CLI.
  */
 
-import { readFileSync, existsSync, statSync } from 'fs';
-import { join, resolve } from 'path';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { context, trace, Tracer, Context, SpanStatusCode, SpanKind } from '@opentelemetry/api';
 import { Resource } from '@opentelemetry/resources';
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { NodeTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
+
+import { redact } from './redaction.js';
 
 let provider: NodeTracerProvider | null = null;
 
@@ -133,7 +134,7 @@ export function loadParentContext(): Context | undefined {
     const spanContext = {
       traceId: data.trace_id,
       spanId: data.span_id,
-      traceFlags: parseInt(data.trace_flags, 16),
+      traceFlags: Number.parseInt(data.trace_flags, 16),
       isRemote: true,
     };
 
@@ -194,23 +195,39 @@ export async function traceToolCall<T>(
         'gen_ai.operation.name': 'execute_tool',
         'gen_ai.tool.name': toolName,
         'gen_ai.agent.name': serverName,
-        'aptl.tool.arguments': truncateAttr(args),
+        // Redact before truncating so the marker is never split mid-token.
+        'aptl.tool.arguments': truncateAttr(redact(args)),
       },
     },
     parentContext,
     async (span) => {
       try {
         const result = await handler();
-        span.setAttribute('aptl.tool.response', truncateAttr(result));
+        span.setAttribute('aptl.tool.response', truncateAttr(redact(result)));
         span.setStatus({ code: SpanStatusCode.OK });
         return result;
       } catch (err) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: err instanceof Error ? err.message : String(err),
-        });
+        const rawMessage = err instanceof Error ? err.message : String(err);
+        // Error messages and stack traces from MCP tools regularly carry
+        // the offending command line / response body / token verbatim.
+        // Redact via the same boundary helper before they land in span
+        // status, recordException event, or exported attributes.
+        const safeMessage = String(redact(rawMessage));
+        span.setStatus({ code: SpanStatusCode.ERROR, message: safeMessage });
         if (err instanceof Error) {
-          span.recordException(err);
+          // Build the OTel `exception` event manually rather than calling
+          // `span.recordException(err)` so the auto-populated
+          // `exception.message` / `exception.stacktrace` attributes go
+          // through the same redactor.
+          const safeStack = err.stack ? String(redact(err.stack)) : undefined;
+          const eventAttrs: Record<string, string> = {
+            'exception.type': err.name || 'Error',
+            'exception.message': safeMessage,
+          };
+          if (safeStack !== undefined) {
+            eventAttrs['exception.stacktrace'] = safeStack;
+          }
+          span.addEvent('exception', eventAttrs);
         }
         throw err;
       } finally {

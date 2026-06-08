@@ -1,0 +1,282 @@
+--os-release--
+PRETTY_NAME="Ubuntu 22.04.5 LTS"
+NAME="Ubuntu"
+VERSION_ID="22.04"
+VERSION="22.04.5 LTS (Jammy Jellyfish)"
+VERSION_CODENAME=jammy
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=jammy
+--id--
+uid=0(root) gid=0(root) groups=0(root)
+--pwd--
+/
+--uname--
+Linux files.techvault.local 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+--capabilities-pid1--
+CapInh:	0000000000000000
+CapPrm:	00000000a80435fb
+CapEff:	00000000a80435fb
+CapBnd:	00000000a80435fb
+CapAmb:	0000000000000000
+--environment--
+AGENT_NAME=aptl-fileshare-agent
+DEBIAN_FRONTEND=noninteractive
+HOME=/root
+HOSTNAME=files.techvault.local
+LOG_FORMAT=syslog
+LOG_PATHS=/var/log/samba/log.samba-bgqd,/var/log/samba/log.*
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PWD=/
+SIEM_IP=172.20.0.10
+WAZUH_MANAGER=wazuh.manager
+--listeners--
+sh: 20: ss: not found
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+tcp        0      0 0.0.0.0:139             0.0.0.0:*               LISTEN      61/smbd
+tcp        0      0 0.0.0.0:445             0.0.0.0:*               LISTEN      61/smbd
+tcp        0      0 127.0.0.11:42355        0.0.0.0:*               LISTEN      -
+tcp6       0      0 :::139                  :::*                    LISTEN      61/smbd
+tcp6       0      0 :::445                  :::*                    LISTEN      61/smbd
+udp        0      0 127.0.0.11:42158        0.0.0.0:*                           -
+--mounts--
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51136/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31645/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31644/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31643/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31642/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31641/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31640/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31639/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31638/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31637/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31636/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31635/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31634/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31540/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51157/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51157/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /srv/shares type ext4 (rw,relatime)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+/dev/md2 on /var/log/samba type ext4 (rw,relatime)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
+--users--
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+games:x:5:60:games:/usr/games:/usr/sbin/nologin
+man:x:6:12:man:/var/cache/man:/usr/sbin/nologin
+lp:x:7:7:lp:/var/spool/lpd:/usr/sbin/nologin
+mail:x:8:8:mail:/var/mail:/usr/sbin/nologin
+news:x:9:9:news:/var/spool/news:/usr/sbin/nologin
+uucp:x:10:10:uucp:/var/spool/uucp:/usr/sbin/nologin
+proxy:x:13:13:proxy:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+backup:x:34:34:backup:/var/backups:/usr/sbin/nologin
+list:x:38:38:Mailing List Manager:/var/list:/usr/sbin/nologin
+irc:x:39:39:ircd:/run/ircd:/usr/sbin/nologin
+gnats:x:41:41:Gnats Bug-Reporting System (admin):/var/lib/gnats:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+_apt:x:100:65534::/nonexistent:/usr/sbin/nologin
+messagebus:x:101:102::/nonexistent:/usr/sbin/nologin
+syslog:x:102:103::/home/syslog:/usr/sbin/nologin
+wazuh:x:103:106::/var/ossec:/sbin/nologin
+svc-fileshare:x:1000:1000::/home/svc-fileshare:/bin/sh
+--groups--
+root:x:0:
+daemon:x:1:
+bin:x:2:
+sys:x:3:
+adm:x:4:syslog
+tty:x:5:
+disk:x:6:
+lp:x:7:
+mail:x:8:
+news:x:9:
+uucp:x:10:
+man:x:12:
+proxy:x:13:
+kmem:x:15:
+dialout:x:20:
+fax:x:21:
+voice:x:22:
+cdrom:x:24:
+floppy:x:25:
+tape:x:26:
+sudo:x:27:
+audio:x:29:
+dip:x:30:
+www-data:x:33:
+backup:x:34:
+operator:x:37:
+list:x:38:
+irc:x:39:
+src:x:40:
+gnats:x:41:
+shadow:x:42:
+utmp:x:43:
+video:x:44:
+sasl:x:45:
+plugdev:x:46:
+staff:x:50:
+games:x:60:
+users:x:100:
+nogroup:x:65534:
+crontab:x:101:
+messagebus:x:102:
+syslog:x:103:
+rdma:x:104:
+sambashare:x:105:
+wazuh:x:106:
+svc-fileshare:x:1000:
+--samba-shares--
+
+	Sharename       Type      Comment
+	---------       ----      -------
+	Public          Disk      Public Share - Anyone can access
+	Engineering     Disk      Engineering Team Files
+	Finance         Disk      Financial Documents
+	HR              Disk      HR Documents
+	Shared          Disk      Company Shared Drive
+	IPC$            IPC       IPC Service (TechVault File Server)
+SMB1 disabled -- no workgroup available
+--samba-config-shares--
+[global]
+	log file = /var/log/samba/log.%m
+	logging = file
+	map to guest = Bad User
+	max log size = 1000
+	realm = TECHVAULT.LOCAL
+	security = USER
+	server role = standalone server
+	server string = TechVault File Server
+	workgroup = TECHVAULT
+	idmap config * : backend = tdb
+
+
+[Public]
+	comment = Public Share - Anyone can access
+	guest ok = Yes
+	path = /srv/shares/public
+	read only = No
+
+
+[Engineering]
+	comment = Engineering Team Files
+	path = /srv/shares/engineering
+	read only = No
+	valid users = @Engineering
+
+
+[Finance]
+	comment = Financial Documents
+	path = /srv/shares/finance
+	read only = No
+	valid users = @Finance
+
+
+[HR]
+	comment = HR Documents
+	path = /srv/shares/hr
+	read only = No
+	valid users = @HR
+
+
+[IT-Backups]
+	browseable = No
+	comment = IT Backup Files
+	path = /srv/shares/it-backups
+	read only = No
+	valid users = @IT-Admins
+
+
+[Shared]
+	comment = Company Shared Drive
+	guest ok = Yes
+	path = /srv/shares/shared
+	read only = No
+--samba-users--
+---------------
+Unix username:        nobody
+NT username:
+Account Flags:        [U          ]
+User SID:             S-1-5-21-214444308-4060190868-1613949656-501
+Primary Group SID:    S-1-5-21-214444308-4060190868-1613949656-513
+Full Name:            nobody
+Home Directory:
+HomeDir Drive:        (null)
+Logon Script:
+Profile Path:
+Domain:               FILES
+Account desc:
+Workstations:
+Munged dial:
+Logon time:           0
+Logoff time:          never
+Kickoff time:         never
+Password last set:    0
+Password can change:  0
+Password must change: 0
+Last bad password   : 0
+Bad password count  : 0
+Logon hours         : FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+---------------
+Unix username:        svc-fileshare
+NT username:
+Account Flags:        [U          ]
+User SID:             S-1-5-21-214444308-4060190868-1613949656-1000
+Primary Group SID:    S-1-5-21-214444308-4060190868-1613949656-513
+Full Name:
+Home Directory:       \\FILES\svc-fileshare
+HomeDir Drive:
+Logon Script:
+Profile Path:         \\FILES\svc-fileshare\profile
+Domain:               FILES
+Account desc:
+Workstations:
+Munged dial:
+Logon time:           0
+Logoff time:          Wed, 06 Feb 2036 15:06:39 UTC
+Kickoff time:         Wed, 06 Feb 2036 15:06:39 UTC
+Password last set:    Sat, 23 May 2026 06:18:36 UTC
+Password can change:  Sat, 23 May 2026 06:18:36 UTC
+Password must change: never
+Last bad password   : 0
+Bad password count  : 0
+Logon hours         : FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+--supervisor--
+rsyslog                          RUNNING   pid 60, uptime 2 days, 20:33:00
+samba                            RUNNING   pid 61, uptime 2 days, 20:33:00
+wazuh-agent                      RUNNING   pid 423, uptime 2 days, 20:32:06
+--process-tree--
+    PID    PPID USER     COMMAND
+      1       0 root     /usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
+     60       1 syslog   /usr/sbin/rsyslogd -n
+     61       1 root     /usr/sbin/smbd --foreground --no-process-group --debug-stdout
+     70      61 root     /usr/sbin/smbd --foreground --no-process-group --debug-stdout
+     71      61 root     /usr/sbin/smbd --foreground --no-process-group --debug-stdout
+     72      61 root     /usr/lib/x86_64-linux-gnu/samba/samba-bgqd --ready-signal-fd=43 --parent-watch-fd=9 --debuglevel=0 -F
+    423       1 root     /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
+    469       1 root     /var/ossec/bin/wazuh-execd
+    484       1 wazuh    /var/ossec/bin/wazuh-agentd
+    506       1 root     /var/ossec/bin/wazuh-syscheckd
+    516       1 root     /var/ossec/bin/wazuh-logcollector
+    537       1 root     /var/ossec/bin/wazuh-modulesd
+    607     423 root     tail -F /var/ossec/logs/ossec.log
+ 198485     423 root     sleep 5
+ 198605       0 root     sh -lc    set -eu   redact_env() {     sed -E "s/^(APTL_FLAG_KEY|WAZUH_PASSWORD|WAZUH_REGISTRATION_PASSWORD|WAZUH_API_PASSWORD)=.*/\1=<REDACTED-\1>/" \       | sed "s/<REDACTED-APTL_FLAG_KEY>/<REDACTED-APTL-FLAG-KEY>/;s/<REDACTED-WAZUH_PASSWORD>/<REDACTED-WAZUH-PASSWORD>/;s/<REDACTED-WAZUH_REGISTRATION_PASSWORD>/<REDACTED-WAZUH-REGISTRATION-PASSWORD>/;s/<REDACTED-WAZUH_API_PASSWORD>/<REDACTED-WAZUH-API-PASSWORD>/"   }   echo --os-release--   cat /etc/os-release   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   echo --environment--   env | sort | redact_env   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --mounts--   mount | sed -n "1,160p"   echo --users--   getent passwd | sed -n "1,220p"   echo --groups--   getent group | sed -n "1,220p"   echo --samba-shares--   smbclient -L localhost -N || true   echo --samba-config-shares--   testparm -s 2>/dev/null | sed -n "/^\\[/,\$p" || true   echo --samba-users--   pdbedit -L -v 2>/dev/null | sed -E "s/(NT password|LM password):.*/\1:<REDACTED>/" || true   echo --supervisor--   supervisorctl status || true   echo --process-tree--   ps -eo pid,ppid,user,args || true
+ 198640  198605 root     ps -eo pid,ppid,user,args

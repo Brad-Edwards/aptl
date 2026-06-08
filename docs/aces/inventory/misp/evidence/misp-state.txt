@@ -1,0 +1,161 @@
+--misp-version--
+{"major":2, "minor":5, "hotfix":36}
+--app-config-summary--
+/var/www/MISP/app/Config/bootstrap.php	7321	<REDACTED-SECRET-FILE-DIGEST>
+/var/www/MISP/app/Config/config.php	5434	<REDACTED-SECRET-FILE-DIGEST>
+/var/www/MISP/app/Config/database.php	1810	<REDACTED-SECRET-FILE-DIGEST>
+/var/www/MISP/app/Config/email.php	1481	<REDACTED-SECRET-FILE-DIGEST>
+--db-users--
+id	email	org_id	role_id	change_pw	disabled	termsaccepted	external_auth_required	notification_daily	notification_weekly	notification_monthly
+1	admin@admin.test	1	1	0	0	0	0	0	0	0
+--db-organisations--
+id	name	uuid	local	type	nationality	sector
+1	ADMIN	052bf1c2-322f-4468-95f9-54ffb05faccb	1	ADMIN
+--db-roles--
+id	name	perm_add	perm_modify	perm_modify_org	perm_publish	perm_delegate	perm_sync	perm_admin	perm_audit	perm_full	perm_auth	perm_site_admin	perm_tagger	perm_template	perm_sharing_group	perm_tag_editor	perm_sighting	perm_object_template	perm_galaxy_editor	perm_warninglist	perm_analyst_data	perm_skip_otp	default_role	restricted_to_site_admin
+1	admin	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	1	0	0	0
+2	Org Admin	1	1	1	1	1	0	1	1	0	1	0	1	1	1	1	1	0	1	0	1	0	0	0
+3	User	1	1	1	0	0	0	0	1	0	1	0	1	0	0	0	1	0	1	0	1	0	1	0
+4	Publisher	1	1	1	1	1	0	0	1	0	1	0	1	0	0	0	1	0	1	0	1	0	0	0
+5	Sync user	1	1	1	1	1	1	0	1	0	1	0	1	0	1	1	1	0	1	0	1	0	0	0
+6	Read Only	0	0	0	0	0	0	0	1	0	1	0	0	0	0	0	0	0	0	0	0	0	0	0
+--db-auth-keys--
+id	uuid	user_id	created	expiration	read_only	comment	allowed_ips
+2	1ab62418-77fb-4f99-a503-19dde721a291	1	1779517174	0	0		NULL
+--db-admin-settings--
+id	setting	value
+1	db_version	146
+8	fix_login	2026-05-23 06:19:07
+9	default_role	3
+10	clean_db	0
+12	update_progress	{"commands":["ALTER TABLE `logs` ADD  `ip` varchar(45) COLLATE utf8_bin DEFAULT NULL;"],"results":["Issues executing the SQL query for `addIPLogging`. The returned error is: \nSQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'ip'","Successfully indexed events -> first_publication","Successfully indexed event_report_tags -> tag_id","Successfully executed the SQL query for 131","Successfully executed the SQL query for 131","Successfully executed the SQL query for 131","Successfully executed the SQL query for 131","Successfully executed the SQL query for 131"],"time":{"started":["2026-05-23 06:21:46","2026-05-23 06:21:46","2026-05-23 06:19:16","2026-05-23 06:19:12","2026-05-23 06:19:12","2026-05-23 06:19:12","2026-05-23 06:19:12","2026-05-23 06:19:12","2026-05-23 06:19:12"],"elapsed":["00:00:00","00:00:00","00:00:00","00:00:00","00:00:00","00:00:00","00:00:00","00:00:00"]},"current":1,"total":1,"failed_num":[0],"toward_db_version":"addIPLogging","preTestSuccess":true}
+13	update_fail_number	0
+--db-content-counts--
+table_name	count
+events	0
+attributes	0
+objects	0
+tags	5
+taxonomies	165
+galaxies	112
+galaxy_clusters	49300
+warninglists	122
+feeds	2
+sharing_groups	0
+object_templates	388
+--db-schema-sample--
+Tables_in_misp
+access_logs
+admin_settings
+allowedlist
+analyst_data_blocklists
+attachment_scans
+attr_value_counts
+attribute_tags
+attributes
+audit_logs
+auth_keys
+bookmarks
+bruteforces
+cake_sessions
+cerebrates
+collection_elements
+collections
+correlation_exclusions
+correlation_rules
+correlation_values
+correlations
+cryptographic_keys
+dashboards
+decaying_model_mappings
+decaying_models
+default_correlations
+event_blocklists
+event_delegations
+event_graph
+event_locks
+event_report_tags
+event_report_template_variables
+event_reports
+event_tags
+events
+favourite_tags
+feeds
+fuzzy_correlate_ssdeep
+galaxies
+galaxy_cluster_blocklists
+galaxy_cluster_relation_tags
+galaxy_cluster_relations
+galaxy_clusters
+galaxy_elements
+inbox
+jobs
+logs
+news
+no_acl_correlations
+notes
+noticelist_entries
+noticelists
+notification_logs
+object_references
+object_relationships
+object_template_elements
+object_templates
+objects
+opinions
+org_blocklists
+organisations
+over_correlating_values
+posts
+regexp
+relationships
+rest_client_histories
+roles
+scheduled_tasks
+servers
+shadow_attribute_correlations
+shadow_attributes
+sharing_group_blueprints
+sharing_group_orgs
+sharing_group_servers
+sharing_groups
+sighting_blocklists
+sightingdb_orgs
+sightingdbs
+sightings
+system_settings
+tag_collection_tags
+tag_collections
+tags
+tasks
+taxii_servers
+taxonomies
+taxonomy_entries
+taxonomy_predicates
+template_element_attributes
+template_element_files
+template_element_texts
+template_elements
+template_tags
+templates
+threads
+threat_levels
+user_login_profiles
+user_settings
+users
+warninglist_entries
+warninglist_types
+warninglists
+workflow_blueprints
+workflows
+--http-login--
+status=200	content_type=text/html; charset=UTF-8	size=7884
+--http-api-restsearch--
+status=200	content_type=application/json; charset=UTF-8	size=17
+{
+  "response_type": "object",
+  "keys": [
+    "response"
+  ],
+  "length": null
+}

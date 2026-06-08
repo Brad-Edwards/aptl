@@ -1,14 +1,55 @@
 """API response models for the APTL web interface."""
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+
+from aptl.core.lab_types import StartupDiagnostic
+
+# Closed-set ADR-030 wire strings. Mirroring the enums as ``Literal``
+# unions keeps the wire schema closed for FastAPI / OpenAPI clients
+# without forcing them to import the Python core types.
+StartupOutcomeLiteral = Literal[
+    "ready", "degraded_usable", "degraded_unusable", "failed"
+]
+DiagnosticImpactLiteral = Literal[
+    "cosmetic", "telemetry", "capability", "readiness"
+]
+DiagnosticSeverityLiteral = Literal["info", "warning", "error"]
 
 
 class HealthResponse(BaseModel):
     """Health check response."""
 
     status: str = "ok"
+
+
+class StartupDiagnosticModel(BaseModel):
+    """API projection of :class:`aptl.core.lab_types.StartupDiagnostic`.
+
+    Mirrors the dataclass field-by-field. String values (``impact``,
+    ``severity``) carry the stable wire strings from the core enums —
+    keep ``web/src/lib/types.ts`` aligned (ADR-030 anti-pattern: never
+    reclassify a core result in the API or web layer).
+    """
+
+    step: str
+    impact: DiagnosticImpactLiteral
+    severity: DiagnosticSeverityLiteral
+    message: str
+    component: str = ""
+    operator_action: str = ""
+
+    @classmethod
+    def from_dataclass(cls, diag: StartupDiagnostic) -> "StartupDiagnosticModel":
+        return cls(
+            step=diag.step,
+            impact=diag.impact.value,
+            severity=diag.severity.value,
+            message=diag.message,
+            component=diag.component,
+            operator_action=diag.operator_action,
+        )
 
 
 class ContainerInfo(BaseModel):
@@ -71,11 +112,18 @@ class LabStatusResponse(BaseModel):
 
 
 class LabActionResponse(BaseModel):
-    """Response for POST /api/lab/start and POST /api/lab/stop."""
+    """Response for POST /api/lab/start and POST /api/lab/stop.
+
+    ``outcome`` and ``diagnostics`` carry the ADR-030 structured
+    classification. They are optional/default-empty so older clients
+    that only consume ``{success, message, error}`` keep working.
+    """
 
     success: bool
     message: str = ""
     error: Optional[str] = None
+    outcome: Optional[StartupOutcomeLiteral] = None
+    diagnostics: list[StartupDiagnosticModel] = Field(default_factory=list)
 
 
 class KillActionResponse(BaseModel):

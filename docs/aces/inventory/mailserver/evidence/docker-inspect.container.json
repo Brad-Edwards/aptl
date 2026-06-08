@@ -1,0 +1,365 @@
+[
+  {
+    "Id": "d195b7bed1a9642033f18d1b411a567e9c31bfddd3dc55ce2b4afc76c8425e52",
+    "Created": "2026-05-28T06:01:41.358316617Z",
+    "Path": "/usr/bin/dumb-init",
+    "Args": [
+      "--",
+      "supervisord",
+      "-c",
+      "/etc/supervisor/supervisord.conf"
+    ],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2272961,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-28T06:01:43.934976649Z",
+      "FinishedAt": "0001-01-01T00:00:00Z"
+    },
+    "Image": "sha256:af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a",
+    "ResolvConfPath": "/var/lib/docker/containers/d195b7bed1a9642033f18d1b411a567e9c31bfddd3dc55ce2b4afc76c8425e52/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/d195b7bed1a9642033f18d1b411a567e9c31bfddd3dc55ce2b4afc76c8425e52/hostname",
+    "HostsPath": "/var/lib/docker/containers/d195b7bed1a9642033f18d1b411a567e9c31bfddd3dc55ce2b4afc76c8425e52/hosts",
+    "LogPath": "/var/lib/docker/containers/d195b7bed1a9642033f18d1b411a567e9c31bfddd3dc55ce2b4afc76c8425e52/d195b7bed1a9642033f18d1b411a567e9c31bfddd3dc55ce2b4afc76c8425e52-json.log",
+    "Name": "/aptl-mailserver",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "aptl_mailserver_data:/var/mail:rw",
+        "aptl_mailserver_state:/var/mail-state:rw",
+        "aptl_mailserver_logs:/var/log/mail:rw",
+        "/home/atomik/src/aptl3/containers/mailserver/setup.sh:/tmp/setup.sh:ro"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-dmz",
+      "PortBindings": {
+        "143/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "143"
+          }
+        ],
+        "25/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "25"
+          }
+        ],
+        "587/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "587"
+          }
+        ],
+        "993/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "993"
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 536870912,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 1073741824,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_mailserver_data",
+        "Source": "/var/lib/docker/volumes/aptl_mailserver_data/_data",
+        "Destination": "/var/mail",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_mailserver_state",
+        "Source": "/var/lib/docker/volumes/aptl_mailserver_state/_data",
+        "Destination": "/var/mail-state",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_mailserver_logs",
+        "Source": "/var/lib/docker/volumes/aptl_mailserver_logs/_data",
+        "Destination": "/var/log/mail",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl3/containers/mailserver/setup.sh",
+        "Destination": "/tmp/setup.sh",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      }
+    ],
+    "Config": {
+      "Hostname": "mail.techvault.local",
+      "Domainname": "techvault.local",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "110/tcp": {},
+        "143/tcp": {},
+        "25/tcp": {},
+        "4190/tcp": {},
+        "465/tcp": {},
+        "587/tcp": {},
+        "993/tcp": {},
+        "995/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "SSL_TYPE=",
+        "DMS_DEBUG=0",
+        "OVERRIDE_HOSTNAME=mail.techvault.local",
+        "SIEM_IP=172.20.0.10",
+        "ENABLE_FAIL2BAN=0",
+        "ENABLE_SASLAUTHD=0",
+        "PERMIT_DOCKER=network",
+        "ONE_DIR=1",
+        "ENABLE_SPAMASSASSIN=0",
+        "ENABLE_POSTGREY=0",
+        "ENABLE_CLAMAV=0",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "FETCHMAIL_POLL=300",
+        "POSTGREY_AUTO_WHITELIST_CLIENTS=5",
+        "POSTGREY_DELAY=300",
+        "POSTGREY_MAX_AGE=35",
+        "POSTGREY_TEXT=Delayed by Postgrey",
+        "SASLAUTHD_MECH_OPTIONS=",
+        "DMS_RELEASE=v15.1.0"
+      ],
+      "Cmd": [
+        "supervisord",
+        "-c",
+        "/etc/supervisor/supervisord.conf"
+      ],
+      "Image": "ghcr.io/docker-mailserver/docker-mailserver:latest",
+      "Volumes": null,
+      "WorkingDir": "/",
+      "Entrypoint": [
+        "/usr/bin/dumb-init",
+        "--"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "4f1b41296306aa50a17040fe91a4f813529c37ac7793b77d10618e4b8f89dd21",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "",
+        "com.docker.compose.image": "sha256:af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl3/docker-compose.yml",
+        "com.docker.compose.project.environment_file": "/home/atomik/src/aptl/.env",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl3",
+        "com.docker.compose.service": "mailserver",
+        "com.docker.compose.version": "5.1.3",
+        "org.opencontainers.image.authors": "The Docker Mailserver Organization on GitHub",
+        "org.opencontainers.image.description": "A fullstack but simple mail server (SMTP, IMAP, LDAP, Anti-spam, Anti-virus, etc.). Only configuration files, no SQL database.",
+        "org.opencontainers.image.documentation": "https://github.com/docker-mailserver/docker-mailserver/blob/master/README.md",
+        "org.opencontainers.image.licenses": "MIT",
+        "org.opencontainers.image.revision": "060bf9a47443382fb7e37f30d6ab9709b4b8aeab",
+        "org.opencontainers.image.source": "https://github.com/docker-mailserver/docker-mailserver",
+        "org.opencontainers.image.title": "docker-mailserver",
+        "org.opencontainers.image.url": "https://github.com/docker-mailserver",
+        "org.opencontainers.image.vendor": "The Docker Mailserver Organization",
+        "org.opencontainers.image.version": "v15.1.0"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "0e9fa7813d12db9782711179e65a2889916bb3321f18461acde9fb64e527f4b7",
+      "SandboxKey": "<REDACTED>",
+      "Ports": {
+        "110/tcp": null,
+        "143/tcp": null,
+        "25/tcp": null,
+        "4190/tcp": null,
+        "465/tcp": null,
+        "587/tcp": null,
+        "993/tcp": null,
+        "995/tcp": null
+      },
+      "Networks": {
+        "aptl_aptl-dmz": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.1.21"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-mailserver",
+            "mailserver"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "3b7c4e642d7ebef4866bf953ff0b04bd39affb9639881b4938cdcb8a9dc09c16",
+          "EndpointID": "ee23b4e43237302f9b95e36edbcfbe425a2e83846c5d3aaf3086799dbd18ba2f",
+          "Gateway": "",
+          "IPAddress": "172.20.1.21",
+          "MacAddress": "f6:63:c6:bb:42:a9",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-mailserver",
+            "mailserver",
+            "d195b7bed1a9",
+            "mail.techvault.local"
+          ]
+        },
+        "aptl_aptl-internal": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.2.26"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-mailserver",
+            "mailserver"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
+          "EndpointID": "4ae32c0249dc381fa0537b16845f21d70c52cfbc5dac8b5fc61a05d97d5a4bec",
+          "Gateway": "",
+          "IPAddress": "172.20.2.26",
+          "MacAddress": "b2:66:04:e3:65:0c",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-mailserver",
+            "mailserver",
+            "d195b7bed1a9",
+            "mail.techvault.local"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:c341669e6cbb012c34e8c4a86af27d6415bed485e0a2b66fb18c9ed60a4c4302",
+      "size": 11214,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

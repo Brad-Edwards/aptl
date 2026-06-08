@@ -109,11 +109,21 @@ def validate_required_env(
 
 
 # Variables that, if present in .env, must not be the example placeholder.
-# These are values that consumers (MISP server, MCPs, sync service) accept
-# without their own placeholder check, so a fall-through here can land an
-# operator in a lab where MISP itself runs with the documented placeholder
-# as its admin API key.
+# Two reasons a var lands here:
+#   - Consumers (MISP server, MCPs, sync service) accept the value without
+#     their own placeholder check, so a fall-through would run the lab with
+#     the documented placeholder as a real credential.
+#   - The value is rendered verbatim into a generated service config file at
+#     `aptl lab start` (ADR-028): `API_PASSWORD` → the Wazuh Dashboard
+#     `wazuh.yml`, `WAZUH_CLUSTER_KEY` → `wazuh_manager.conf`'s `<cluster>`
+#     block. ADR-028 requires every value rendered from `.env` to go through
+#     this check, so a fresh `.env` copied from `.env.example` fails before
+#     any placeholder secret reaches a generated file.
+# `WAZUH_CLUSTER_KEY` is optional; an absent/empty value is not a placeholder
+# and is allowed (clustering ships disabled), only an example marker fails.
 _NO_PLACEHOLDER_VARS = (
+    "API_PASSWORD",
+    "WAZUH_CLUSTER_KEY",
     "MISP_API_KEY",
     "THEHIVE_SECRET",
     "SHUFFLE_API_KEY",

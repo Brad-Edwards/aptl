@@ -1,0 +1,93 @@
+[
+  {
+    "Id": "sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310",
+    "RepoTags": [
+      "aptl-victim:latest"
+    ],
+    "RepoDigests": [
+      "aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2026-05-10T08:02:51.760881976+02:00",
+    "Config": {
+      "ExposedPorts": {
+        "22/tcp": {},
+        "514/tcp": {}
+      },
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "INSTALL_WAZUH=true",
+        "INSTALL_FALCO=true",
+        "INSTALL_XSIAM=false"
+      ],
+      "Entrypoint": [
+        "/usr/local/bin/entrypoint.sh"
+      ],
+      "Cmd": [
+        "/usr/sbin/init"
+      ],
+      "Volumes": {
+        "/home": {},
+        "/var/log": {}
+      },
+      "WorkingDir": "/",
+      "Labels": {
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.service": "victim",
+        "com.docker.compose.version": "5.1.3"
+      },
+      "ArgsEscaped": true
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 216225385,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:44343de3ea1d3f71f143967c71a91df76138a17a21ac56642f3c0f2a64b07dce",
+        "sha256:9bec3ae9df78ccd66c22f7719e41100d2d721a6775de0be3641b29ac529660ca",
+        "sha256:2ed2d92f9e8e97e4a08634d759736119a1fa53dc6d646eba9664dcc40af4becd",
+        "sha256:af89827de85a0c69b02f4e2c637c6ec9ac311bbc0b1a7a35ce71a42e09df3084",
+        "sha256:3d994731d6f88dee580c6a7623d5d339d36083206b28c8e5051240e3d23172f6",
+        "sha256:94a0062453a9837bb22966017e39df1869e491c90ae953f9c9b6c59cb2e2ec27",
+        "sha256:57583985b4ae6074dccbfd9dac5bcfbd508734d6de08422483325b3f04f35c55",
+        "sha256:c593f376a73b60b4c98238f22148b46b02ba2cbd52f4fa6cbfb82353e794f634",
+        "sha256:62bb5d8e8d45aa49a0fcf1a3f62970ea6e44c06eb347728af1c16bf11a070ed3",
+        "sha256:26dca3071eae9df35a981cb93ba4e09f39dd15529f741c3700ba5636b3979989",
+        "sha256:2eaef7673a5c4a1e064369b5da5c06404ebd97df3b5aadf740702a9a924add32",
+        "sha256:a98a717f258b39fc6659bc43479d9d92134d988f203bf8f8cf220d09dd37fcd7",
+        "sha256:a641c0150a9c03ccbd982b6cfc368387e1e35cec6b594ba729326295ae090949",
+        "sha256:9b26ec129f7e311faa799c1c9c3a26a991eb8a4b8bfcdd4a07c522e96545c979",
+        "sha256:6ba5d78c8d8dc5c66df10a5a120ae0fb95a972cc17d38a1da86ab0f64854dbde",
+        "sha256:28558d9492de58e5d97fb40f39a949cdb0b8d1fead21c4a6666a83de8c3dba94",
+        "sha256:c5924f8abdbfdb8be37e14d54fc84930eed2f71a016baa6defd68e3c631fb405",
+        "sha256:b26526a9397d53ce28819868508e9f063eda85d2cd0f24b63657e9e829053e91",
+        "sha256:9fe72eaab130ab6879a566cc9b19aa931dfb29b18bacbdb3c250263916f87a74",
+        "sha256:6a4348bc9e9d99ea59e7016f79ccdd17040fbeec93d82593e2f8a043d35809d6",
+        "sha256:f716049386678be3a81c533d316acd9fec49b7056f107bd243d61cd93ac37bf5",
+        "sha256:ac11aa80062a56cdc5cc7af675e3edfec8b084e2f8f5ff6ae1ee44ba21921220",
+        "sha256:a35a2ad3c2feeb81ab281b285ada507b22c644a51ffa89983458bbbb3708fcab",
+        "sha256:5479902c38a3daee3a95c4dfb9b95dc69abc59f1493bbebe77d6dd00f046ec0f",
+        "sha256:e98af3bd8841ce390ad0a47ff2e15075b95918397a38b0c57400b7f7f0caf382",
+        "sha256:a362dfdd597567cfac9504069ee6f9f6f08550204c964b87189625464d56fed1",
+        "sha256:b3f63c70739df730728a1865c76369a31f6c09b9655cd6e7df93f96bb272dba0"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-05-23T06:17:08.192992104Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310",
+      "size": 856
+    },
+    "Identity": {
+      "Build": [
+        {
+          "Ref": "ldqmyjw75ihfnmim85kn02k6h",
+          "CreatedAt": "2026-05-23T08:17:08.64342348+02:00"
+        }
+      ]
+    }
+  }
+]

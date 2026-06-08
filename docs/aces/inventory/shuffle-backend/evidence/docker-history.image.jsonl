@@ -1,0 +1,11 @@
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:25:07+01:00","CreatedBy":"CMD [\"./shufflebackend\"]","CreatedSince":"3 months ago","ID":"sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d","Size":"0B"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:25:07+01:00","CreatedBy":"EXPOSE [5001/tcp]","CreatedSince":"3 months ago","ID":"\u003cmissing\u003e","Size":"0B"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:25:07+01:00","CreatedBy":"WORKDIR /app","CreatedSince":"3 months ago","ID":"\u003cmissing\u003e","Size":"4.1kB"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:25:07+01:00","CreatedBy":"COPY /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt # buildkit","CreatedSince":"3 months ago","ID":"\u003cmissing\u003e","Size":"242kB"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:25:07+01:00","CreatedBy":"COPY /app_gen/ /app_gen # buildkit","CreatedSince":"3 months ago","ID":"\u003cmissing\u003e","Size":"65.5kB"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:25:07+01:00","CreatedBy":"COPY /app_sdk/ /app_sdk # buildkit","CreatedSince":"3 months ago","ID":"\u003cmissing\u003e","Size":"209kB"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:25:07+01:00","CreatedBy":"COPY /app/ /app # buildkit","CreatedSince":"3 months ago","ID":"\u003cmissing\u003e","Size":"120MB"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:21:45+01:00","CreatedBy":"RUN /bin/sh -c apk add --no-cache libstdc++ # buildkit","CreatedSince":"3 months ago","ID":"\u003cmissing\u003e","Size":"3.02MB"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:21:44+01:00","CreatedBy":"RUN /bin/sh -c apk add --no-cache libc6-compat # buildkit","CreatedSince":"3 months ago","ID":"\u003cmissing\u003e","Size":"221kB"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2025-10-08T13:04:56+02:00","CreatedBy":"CMD [\"/bin/sh\"]","CreatedSince":"7 months ago","ID":"\u003cmissing\u003e","Size":"0B"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2025-10-08T13:04:56+02:00","CreatedBy":"ADD alpine-minirootfs-3.22.2-x86_64.tar.gz / # buildkit","CreatedSince":"7 months ago","ID":"\u003cmissing\u003e","Size":"8.99MB"}

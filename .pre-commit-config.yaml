@@ -1,27 +1,70 @@
 fail_fast: true
 
+# `local.rules` is operator-authored source and `misp-iocs.rules` is a
+# tracked seed; both belong under normal validation. The Suricata
+# container, however, bind-mounts them and writes back as the remapped
+# `systemd-network` UID 998, which only blocks the two pre-commit hooks
+# that need `rb+` (read-write binary) access on the host. Those two
+# hooks carry a per-hook `exclude:` so other hooks (yaml/json checks,
+# private-key detection, etc.) still inspect the rule sources.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^config/suricata/rules/.*\.rules$
       - id: end-of-file-fixer
+        exclude: ^config/suricata/rules/.*\.rules$
       - id: check-yaml
         args: [--unsafe]
       - id: check-json
       - id: check-added-large-files
         args: [--maxkb=500]
+        # Scenario SDL inventories are authored evidence surfaces and can
+        # exceed 500 KB without being accidental binary/blob additions.
+        exclude: ^scenarios/.*\.sdl\.yaml$
       - id: check-merge-conflict
       - id: detect-private-key
-        exclude: ^tests/
+        # `tests/` historically holds private-key-shaped fixtures.
+        # `mcp/aptl-mcp-common/{src,tests}/redaction.{ts,test.ts}` and
+        # `src/aptl/utils/redaction.py` (+ its test) intentionally embed
+        # PEM block markers — they implement and verify masking of those
+        # markers, not real key material.
+        exclude: |
+          (?x)^(
+            tests/.*|
+            mcp/aptl-mcp-common/src/redaction\.ts|
+            mcp/aptl-mcp-common/tests/redaction\.test\.ts|
+            src/aptl/utils/redaction\.py
+          )$
 
-  # Test suites — mirror the three CI test jobs in .github/workflows/checks.yml.
-  # Each hook is gated by a `files:` regex so a commit that doesn't touch a
-  # given language's surface skips that suite. `pre-commit run --all-files`
-  # (and CI) still runs everything because every repo file matches at least
-  # one regex collectively.
+  # Local hooks: a Python complexity gate, then the three test suites
+  # (which mirror the CI test jobs in .github/workflows/checks.yml). Each
+  # hook is gated by a `files:` regex so a commit that doesn't touch a
+  # given surface skips that hook; `pre-commit run --all-files` (and CI)
+  # still runs everything because every repo file matches at least one
+  # regex collectively. The complexity hook runs first so a god-method
+  # fails fast, before the slower test suites (fail_fast: true).
   - repo: local
     hooks:
+      - id: ruff-complexity
+        name: Python complexity gate (ruff C901)
+        # Hard, repo-wide gate on per-function cyclomatic complexity —
+        # config in pyproject [tool.ruff.lint.mccabe] (max-complexity).
+        # Only C901 is enabled (see [tool.ruff.lint] select): this is a
+        # complexity guard, not a style linter. `language: python` with
+        # `additional_dependencies` so the hook is self-contained — it
+        # installs its own ruff and does NOT need the project's .venv (the
+        # CI pre-commit job only `pip install pre-commit`s, no project
+        # deps). `pass_filenames: false`: always lints all of src/, not
+        # just the changed files.
+        entry: ruff
+        args: [check, src/]
+        language: python
+        additional_dependencies: ["ruff>=0.15.0"]
+        pass_filenames: false
+        files: ^(src/.*\.py|pyproject\.toml)$
+
       - id: pytest
         name: Python tests (pytest)
         # Prefer the repo's .venv (so contributors don't need to activate it
@@ -38,6 +81,20 @@ repos:
         language: system
         pass_filenames: false
         files: ^mcp/aptl-mcp-common/
+
+      - id: vitest-mcp-red
+        name: MCP TypeScript tests (mcp-red vitest)
+        # mcp-red consumes aptl-mcp-common via a `file:` dependency. npm
+        # copies the build artifact at install time, so any common change
+        # must propagate to mcp-red's node_modules before vitest runs.
+        # `npm install` (no package arg) re-resolves dependencies from
+        # this package.json, which honours the local `file:` entry — using
+        # `npm install <pkg>` would treat it as a registry package spec
+        # and could mutate the manifest/lockfile.
+        entry: bash -c 'cd mcp/aptl-mcp-common && { [ -d node_modules ] || npm install --silent; } && npm run build --silent && cd ../mcp-red && rm -rf node_modules/aptl-mcp-common && npm install --no-audit --no-fund --silent && npx vitest run'
+        language: system
+        pass_filenames: false
+        files: ^mcp/(aptl-mcp-common|mcp-red)/
 
       - id: vitest-web
         name: Web frontend tests (vitest)

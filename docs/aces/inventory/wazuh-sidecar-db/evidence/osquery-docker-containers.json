@@ -1,0 +1,34 @@
+{
+  "table": "docker_containers",
+  "query": "select id, name, image, image_id, command, created, state, status, pid, path, config_entrypoint, started_at, finished_at, privileged, security_options, readonly_rootfs, cgroup_namespace, ipc_namespace, mnt_namespace, net_namespace, pid_namespace, user_namespace, uts_namespace from docker_containers where name=\"/aptl-wazuh-sidecar-db\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "cgroup_namespace": "",
+      "command": "/opt/aptl/wazuh/wazuh-agent.sh",
+      "config_entrypoint": "/opt/aptl/wazuh/wazuh-agent.sh",
+      "created": "1779517112",
+      "finished_at": "2026-05-23T06:19:34.048728112Z",
+      "id": "404b16989dedfed41b2fff56be2831b526b8ac73c98cf46813f237bbff04fa88",
+      "image": "aptl-wazuh-sidecar:local",
+      "image_id": "de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3",
+      "ipc_namespace": "",
+      "mnt_namespace": "",
+      "name": "/aptl-wazuh-sidecar-db",
+      "net_namespace": "",
+      "path": "/opt/aptl/wazuh/wazuh-agent.sh",
+      "pid": "2971966",
+      "pid_namespace": "",
+      "privileged": "0",
+      "readonly_rootfs": "0",
+      "security_options": "",
+      "started_at": "2026-05-23T06:19:34.588602747Z",
+      "state": "running",
+      "status": "Up 13 days",
+      "user_namespace": "",
+      "uts_namespace": ""
+    }
+  ]
+}

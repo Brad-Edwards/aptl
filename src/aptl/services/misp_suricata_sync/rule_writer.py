@@ -32,9 +32,15 @@ def write_if_changed(target: Path, content: str) -> bool:
 
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(target.suffix + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as fh:
-        fh.write(content)
-        fh.flush()
-        os.fsync(fh.fileno())
-    tmp.replace(target)
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(content)
+            fh.flush()
+            os.fsync(fh.fileno())
+        tmp.replace(target)
+    except BaseException:
+        # Don't leave a stale temp file behind if the write or the
+        # rename fails (e.g. a directory sitting at the target path).
+        tmp.unlink(missing_ok=True)
+        raise
     return True

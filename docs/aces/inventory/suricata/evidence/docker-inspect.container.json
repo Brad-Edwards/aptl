@@ -1,0 +1,351 @@
+[
+  {
+    "Id": "23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22",
+    "Created": "2026-05-23T06:18:29.914756753Z",
+    "Path": "/docker-entrypoint.sh",
+    "Args": [
+      "-c",
+      "/etc/suricata/suricata.yaml",
+      "--pcap"
+    ],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2955413,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-23T06:18:34.345672175Z",
+      "FinishedAt": "0001-01-01T00:00:00Z"
+    },
+    "Image": "sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d",
+    "ResolvConfPath": "/var/lib/docker/containers/23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22/hostname",
+    "HostsPath": "/var/lib/docker/containers/23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22/hosts",
+    "LogPath": "/var/lib/docker/containers/23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22/23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22-json.log",
+    "Name": "/aptl-suricata",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "/home/atomik/src/aptl/config/suricata/suricata.yaml:/etc/suricata/suricata.yaml:rw",
+        "/home/atomik/src/aptl/config/suricata/rules/local.rules:/etc/suricata/rules/local.rules:rw",
+        "aptl_suricata_logs:/var/log/suricata:rw",
+        "aptl_suricata_command_socket:/var/run/suricata:rw",
+        "/home/atomik/src/aptl/.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-dmz",
+      "PortBindings": {},
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": [
+        "CAP_NET_ADMIN",
+        "CAP_NET_RAW",
+        "CAP_SYS_NICE"
+      ],
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 1073741824,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 2147483648,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "1878036baebb5f308f43968b0fe4ec140e1379c89aad90c6ef9afc5128e887a0",
+        "Source": "/var/lib/docker/volumes/1878036baebb5f308f43968b0fe4ec140e1379c89aad90c6ef9afc5128e887a0/_data",
+        "Destination": "/var/lib/suricata",
+        "Driver": "local",
+        "Mode": "",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/suricata/suricata.yaml",
+        "Destination": "/etc/suricata/suricata.yaml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/suricata/rules/local.rules",
+        "Destination": "/etc/suricata/rules/local.rules",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_suricata_logs",
+        "Source": "/var/lib/docker/volumes/aptl_suricata_logs/_data",
+        "Destination": "/var/log/suricata",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_suricata_command_socket",
+        "Source": "/var/lib/docker/volumes/aptl_suricata_command_socket/_data",
+        "Destination": "/var/run/suricata",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/.aptl/suricata/rules/misp",
+        "Destination": "/var/lib/suricata/rules/misp",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "81c498ffea76b3b20a83b93b20621c0b9801fba1dba6a2d7a3f72b4f391b135f",
+        "Source": "/var/lib/docker/volumes/81c498ffea76b3b20a83b93b20621c0b9801fba1dba6a2d7a3f72b4f391b135f/_data",
+        "Destination": "/etc/suricata",
+        "Driver": "local",
+        "Mode": "",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "suricata",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG=C.utf8"
+      ],
+      "Cmd": [
+        "-c",
+        "/etc/suricata/suricata.yaml",
+        "--pcap"
+      ],
+      "Image": "jasonish/suricata:7.0",
+      "Volumes": {
+        "/etc/suricata": {},
+        "/var/lib/suricata": {},
+        "/var/log/suricata": {},
+        "/var/run/suricata": {}
+      },
+      "WorkingDir": "/",
+      "Entrypoint": [
+        "/docker-entrypoint.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "8022e7992b9cfd5f33eec82f933df50beb679d94ffc6965082b09735ce1f2c0c",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "",
+        "com.docker.compose.image": "sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "suricata",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "73bd8917862626c5bcc986d2b34733558f94377745e61c96edef7a9f6c5547a8",
+      "SandboxKey": "<REDACTED>",
+      "Ports": {},
+      "Networks": {
+        "aptl_aptl-dmz": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.1.50"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-suricata",
+            "suricata"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "3b7c4e642d7ebef4866bf953ff0b04bd39affb9639881b4938cdcb8a9dc09c16",
+          "EndpointID": "f71a0b2a10b9b524038cdd82cc550fdc32e3580199762516ef35f4a63ac7ec35",
+          "Gateway": "",
+          "IPAddress": "172.20.1.50",
+          "MacAddress": "82:aa:07:a7:db:d9",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-suricata",
+            "suricata",
+            "23dec623baa3"
+          ]
+        },
+        "aptl_aptl-internal": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.2.50"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-suricata",
+            "suricata"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
+          "EndpointID": "693b4226ec8213d28b2000a89cb63996c4574afcb220f3d5ed82ad818e501065",
+          "Gateway": "",
+          "IPAddress": "172.20.2.50",
+          "MacAddress": "8a:d4:10:7e:60:b4",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-suricata",
+            "suricata",
+            "23dec623baa3"
+          ]
+        },
+        "aptl_aptl-security": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.0.50"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-suricata",
+            "suricata"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "f531b4053fbcb648b918f085d69e46dafd1ff77ac87da71976a05a8369f06598",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.50",
+          "MacAddress": "fe:d7:53:72:ef:4f",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-suricata",
+            "suricata",
+            "23dec623baa3"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:55ae7fef86005b7b27d6cec79e3b10a95f6986271a848efca524d2c60f2440f0",
+      "size": 2409,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

@@ -1,0 +1,82 @@
+--server--
+redis_version:7.4.8
+redis_git_sha1:00000000
+redis_build_id:dc3fdca8addf42ba
+redis_mode:standalone
+os:Linux 6.8.0-117-generic x86_64
+arch_bits:64
+multiplexing_api:epoll
+run_id:50777b7cd400db3f815f8e661b862ee72adce5d1
+tcp_port:6379
+server_time_usec:1780793911633988
+uptime_in_seconds:1276797
+executable:/data/redis-server
+config_file:
+io_threads_active:0
+--keyspace--
+db0:keys=125,expires=125,avg_ttl=1811760,subexpiry=0
+db1:keys=9,expires=9,avg_ttl=82898900,subexpiry=0
+db13:keys=22,expires=3,avg_ttl=11979926089,subexpiry=0
+--persistence--
+loading:0
+rdb_changes_since_last_save:43
+rdb_bgsave_in_progress:0
+rdb_last_save_time:1780793229
+rdb_last_bgsave_status:ok
+rdb_saves:731
+aof_enabled:0
+aof_rewrite_in_progress:0
+aof_last_bgrewrite_status:ok
+--memory--
+used_memory_human:1.71M
+maxmemory:0
+maxmemory_human:0B
+maxmemory_policy:noeviction
+mem_allocator:jemalloc-5.3.0
+--clients--
+connected_clients:25
+cluster_connections:0
+maxclients:10000
+blocked_clients:22
+--replication--
+role:master
+connected_slaves:0
+--config--
+save	3600 1 300 100 60 10000
+appendonly	no
+appendfsync	everysec
+maxmemory	0
+maxmemory-policy	noeviction
+dir	/data
+dbfilename	dump.rdb
+bind	* -::*
+protected-mode	no
+port	6379
+databases	16
+tcp-keepalive	300
+tcp-backlog	511
+timeout	0
+loglevel	notice
+logfile
+daemonize	no
+io-threads	1
+rdbcompression	yes
+rdbchecksum	yes
+--acl-whoami--
+default
+--acl-list--
+user default on sanitize-payload #ca7e5f014bb04ceadef8fff8259a0ae557402bda21c58bd1743e053d5895cc0a ~* &* +@all
+--acl-cat-count--
+21
+--command-count--
+250
+--datatype-census--
+--db0--
+    125 string
+--db1--
+      9 string
+--db13--
+     16 zset
+      4 string
+      1 set
+      1 hash

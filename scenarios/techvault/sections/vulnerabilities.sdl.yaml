@@ -1,0 +1,191 @@
+name: techvault-vulnerabilities
+vulnerabilities:
+  webapp-sqli-login:
+    name: SQL injection in login
+    description: Login form interpolates username into SQL.
+    technical: true
+    class: CWE-89
+  webapp-sqli-search:
+    name: SQL injection in search
+    description: Customer and user search paths interpolate query text into SQL.
+    technical: true
+    class: CWE-89
+  webapp-command-injection:
+    name: Command injection in ping tool
+    description: The ping tool passes user input to a shell command.
+    technical: true
+    class: CWE-78
+  webapp-reflected-xss:
+    name: Reflected XSS
+    description: Search query content is reflected into HTML.
+    technical: true
+    class: CWE-79
+  webapp-stored-xss:
+    name: Stored XSS
+    description: Comment content is stored and rendered without sanitization.
+    technical: true
+    class: CWE-79
+  webapp-idor-files:
+    name: File IDOR
+    description: File metadata API lacks ownership checks.
+    technical: true
+    class: CWE-639
+  webapp-idor-users:
+    name: User IDOR
+    description: User API lacks authorization checks and exposes API keys.
+    technical: true
+    class: CWE-639
+  webapp-admin-authz-bypass:
+    name: Admin authorization bypass
+    description: Admin panel checks only for an authenticated session and does not enforce an admin role.
+    technical: true
+    class: CWE-862
+  webapp-backup-secret-disclosure:
+    name: Backup secret disclosure
+    description: Admin panel renders backup access key and secret key fields from backup_config.
+    technical: true
+    class: CWE-200
+  webapp-env-disclosure:
+    name: Exposed environment file
+    description: The /.env route discloses database and JWT configuration.
+    technical: true
+    class: CWE-200
+  webapp-debug-disclosure:
+    name: Debug information disclosure
+    description: The /debug route discloses application and database metadata.
+    technical: true
+    class: CWE-200
+  webapp-weak-jwt:
+    name: Weak JWT secret and no expiry
+    description: JWT tokens use a weak shared secret and no expiration.
+    technical: true
+    class: CWE-347
+  webapp-unrestricted-upload:
+    name: Unrestricted file upload
+    description: Upload path lacks type and size validation.
+    technical: true
+    class: CWE-434
+  webapp-upload-path-traversal:
+    name: Upload path traversal
+    description: Upload handler saves the submitted filename directly below /tmp/uploads.
+    technical: true
+    class: CWE-22
+  webapp-api-rate-limit-missing:
+    name: Missing API rate limit
+    description: Customer search API has no rate limiting.
+    technical: true
+    class: CWE-770
+  webapp-hardcoded-secret:
+    name: Hardcoded Flask secret
+    description: Flask secret key is hardcoded in application source.
+    technical: true
+    class: CWE-798
+  webapp-verbose-error-disclosure:
+    name: Verbose error disclosure
+    description: Login query and generic server error handling can expose internal exception details.
+    technical: true
+    class: CWE-209
+  fileshare-guest-writable-shares:
+    name: Guest-writable SMB shares
+    description: Public and Shared SMB shares allow guest read/write access to participant-visible company data.
+    technical: true
+    class: CWE-732
+  fileshare-hardcoded-deployment-credentials:
+    name: Hardcoded deployment credentials
+    description: Engineering deployment script contains database, AWS, and SSH deployment credential material as scenario
+      fixtures.
+    technical: true
+    class: CWE-798
+  fileshare-hr-pii-disclosure:
+    name: HR PII disclosure on file share
+    description: HR employee directory contains salary and SSN-last-four fixture data on the fileshare.
+    technical: true
+    class: CWE-200
+  fileshare-financial-data-disclosure:
+    name: Financial data disclosure on file share
+    description: Finance revenue report fixture data is present on the fileshare.
+    technical: true
+    class: CWE-200
+  fileshare-wifi-password-disclosure:
+    name: WiFi password disclosure on shared drive
+    description: Shared drive contains office, guest, and server-room WiFi password fixture data.
+    technical: true
+    class: CWE-200
+  fileshare-weak-samba-service-account:
+    name: Weak Samba service account password
+    description: svc-fileshare is provisioned with a guessable participant-visible fixture password.
+    technical: true
+    class: CWE-521
+  ad-weak-password-jessica:
+    name: Weak AD password for jessica.williams
+    description: The jessica.williams domain user is intentionally provisioned with a very weak fixture password.
+    technical: true
+    class: CWE-521
+  ad-seasonal-password-michael:
+    name: Seasonal AD password for michael.thompson
+    description: The michael.thompson domain user is intentionally provisioned with a guessable seasonal fixture password.
+    technical: true
+    class: CWE-521
+  ad-contractor-overprivileged:
+    name: Over-privileged contractor AD account
+    description: The contractor.temp account remains enabled and is a member of VPN-Users, Remote-Desktop, Engineering, and
+      Domain Users.
+    technical: true
+    class: CWE-266
+  ad-former-employee-enabled:
+    name: Former employee account still enabled
+    description: The former.employee account is intentionally still enabled despite being marked as stale.
+    technical: true
+    class: CWE-269
+  ad-kerberoast-svc-sql:
+    name: Kerberoastable SQL service account
+    description: The svc-sql account has MSSQLSvc SPNs and a non-expiring fixture password.
+    technical: true
+    class: CWE-522
+  ad-kerberoast-svc-web:
+    name: Kerberoastable web service account
+    description: The svc-web account has an HTTP SPN and a non-expiring fixture password.
+    technical: true
+    class: CWE-522
+  ad-domain-admin-svc-backup:
+    name: Domain Admin backup service account
+    description: The svc-backup service account is intentionally a member of Domain Admins.
+    technical: true
+    class: CWE-266
+  ad-domain-admin-devops:
+    name: DevOps account with Domain Admin membership
+    description: The emily.chen user is intentionally over-privileged with Domain Admin membership.
+    technical: true
+    class: CWE-266
+  workstation-bash-history-credential-disclosure:
+    name: Bash history credential disclosure
+    description: dev-user bash history contains commands with reusable credentials and internal target references. Raw values
+      are redacted from evidence and represented as secret fixtures.
+    technical: true
+    class: CWE-522
+  workstation-pgpass-credential-disclosure:
+    name: PostgreSQL password file disclosure
+    description: dev-user .pgpass contains TechVault database credentials as a participant-visible fixture.
+    technical: true
+    class: CWE-522
+  workstation-hardcoded-app-secrets:
+    name: Hardcoded application and cloud secrets
+    description: Workstation project artifacts include hardcoded webapp, database, JWT, API, and example cloud credential
+      material as secret fixtures.
+    technical: true
+    class: CWE-798
+  workstation-passwordless-private-key:
+    name: Passwordless SSH private key
+    description: dev-user has a passwordless SSH private key fixture and host references for lateral movement paths.
+    technical: true
+    class: CWE-522
+  workstation-nopasswd-sudo:
+    name: Passwordless sudo grant
+    description: dev-user and labadmin have NOPASSWD sudo grants in /etc/sudoers.d.
+    technical: true
+    class: CWE-269
+  victim-nopasswd-sudo:
+    name: Passwordless sudo grant
+    description: labadmin has a NOPASSWD sudo grant in /etc/sudoers.d/labadmin.
+    technical: true
+    class: CWE-269

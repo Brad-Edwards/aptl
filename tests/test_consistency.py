@@ -86,6 +86,62 @@ class TestComposeConsistency:
             )
         )
 
+    def test_misp_suricata_rules_mount_generated_state(self, compose_config):
+        """Runtime-written MISP rule artifacts must not mount checked-in config."""
+        services = compose_config["services"]
+
+        suricata_volumes = services["suricata"]["volumes"]
+        sync_volumes = services["misp-suricata-sync"]["volumes"]
+
+        assert (
+            "./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw"
+            in suricata_volumes
+        )
+        assert (
+            "./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw"
+            in sync_volumes
+        )
+        assert not any(
+            volume.startswith("./config/suricata/rules/misp:")
+            for volume in suricata_volumes + sync_volumes
+        )
+
+        assert (
+            "RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules"
+            in services["misp-suricata-sync"]["environment"]
+        )
+
+
+class TestKaliContainerLifecycle:
+    """Issue #293 / ADR-033 §2: the kali container must reap children and
+    its healthcheck must reflect the usable surface, not just port 22."""
+
+    def test_kali_service_runs_under_init_reaper(self, compose_config):
+        """The kali service must set `init: true` so Docker injects an
+        init/reaper (docker-init / tini) as PID 1. Without it the
+        entrypoint's `exec sleep infinity` is PID 1 and cannot reap
+        orphaned children — the zombie defect in issue #293."""
+        kali = compose_config["services"]["kali"]
+        assert kali.get("init") is True, (
+            "kali service must set `init: true` (ADR-033 §2): PID 1 must "
+            "reap children, otherwise red-team-spawned background processes "
+            "zombie out (issue #293)."
+        )
+
+    def test_kali_healthcheck_is_not_bare_port_probe(self, compose_config):
+        """The kali healthcheck must not be the port-22-only probe — that
+        masks a failed boot-time child behind an open SSH port
+        (ADR-033 §2). It must invoke the readiness healthcheck script."""
+        kali = compose_config["services"]["kali"]
+        test = kali.get("healthcheck", {}).get("test")
+        assert test, "kali service must define a healthcheck"
+        joined = " ".join(test) if isinstance(test, list) else str(test)
+        assert "aptl-healthcheck.sh" in joined, (
+            "kali healthcheck must invoke /usr/local/bin/aptl-healthcheck.sh, "
+            f"which verifies sshd + the ForceCommand wrapper + the boot "
+            f"readiness marker — not just an open port; got: {test!r}"
+        )
+
 
 class TestCodeReferencesMatchCompose:
     """Ensure docker exec references in code match actual container_name values."""

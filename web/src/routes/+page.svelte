@@ -2,22 +2,30 @@
 	import { labStatus, labLoading } from '$lib/stores/lab';
 	import { startLab, stopLab } from '$lib/api';
 	import ContainerGrid from '$lib/components/ContainerGrid.svelte';
+	import LabStartNotice from '$lib/components/LabStartNotice.svelte';
 	import ScenarioCard from '$lib/components/ScenarioCard.svelte';
-	import type { ScenarioSummary } from '$lib/types';
+	import type { LabActionResponse, ScenarioSummary } from '$lib/types';
 
 	let { data }: { data: { scenarios: ScenarioSummary[] } } = $props();
 
 	let actionPending = $state(false);
 	let actionError = $state('');
+	/** Last /api/lab/start response — populated for both success and
+	 *  failure so the UI can render ADR-030 partial-readiness data
+	 *  (outcome + diagnostics), not only the legacy success boolean. */
+	let startResult = $state<LabActionResponse | null>(null);
 
 	async function handleStart() {
 		actionPending = true;
 		actionError = '';
+		startResult = null;
 		try {
-			const result = await startLab();
-			if (!result.success) {
-				actionError = result.error || 'Lab start failed';
-			}
+			// `LabStartNotice` owns the structured rendering for every
+			// non-trivial start outcome (ready-with-diagnostics,
+			// degraded_usable, degraded_unusable, failed). `actionError`
+			// is reserved for fetch/transport failures so the same error
+			// text never renders twice (codex review #202 cycle 3).
+			startResult = await startLab();
 		} catch (err) {
 			actionError = String(err);
 		} finally {
@@ -28,6 +36,7 @@
 	async function handleStop() {
 		actionPending = true;
 		actionError = '';
+		startResult = null;
 		try {
 			const result = await stopLab();
 			if (!result.success) {
@@ -83,6 +92,8 @@
 				{actionError}
 			</div>
 		{/if}
+
+		<LabStartNotice result={startResult} />
 
 		{#if $labStatus.error != null && !actionError}
 			<div

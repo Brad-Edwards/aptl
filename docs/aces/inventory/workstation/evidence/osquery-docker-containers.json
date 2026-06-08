@@ -1,0 +1,34 @@
+{
+  "table": "docker_containers",
+  "query": "select id, name, image, image_id, command, created, state, status, pid, path, config_entrypoint, started_at, finished_at, privileged, security_options, readonly_rootfs, cgroup_namespace, ipc_namespace, mnt_namespace, net_namespace, pid_namespace, user_namespace, uts_namespace from docker_containers where name=\"/aptl-workstation\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "cgroup_namespace": "",
+      "command": "/usr/local/bin/entrypoint.sh /usr/sbin/init",
+      "config_entrypoint": "/usr/local/bin/entrypoint.sh",
+      "created": "1779517112",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "id": "bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7",
+      "image": "aptl-workstation",
+      "image_id": "7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f",
+      "ipc_namespace": "",
+      "mnt_namespace": "",
+      "name": "/aptl-workstation",
+      "net_namespace": "",
+      "path": "/usr/local/bin/entrypoint.sh",
+      "pid": "2966060",
+      "pid_namespace": "",
+      "privileged": "0",
+      "readonly_rootfs": "0",
+      "security_options": "seccomp:unconfined",
+      "started_at": "2026-05-23T06:19:17.813717549Z",
+      "state": "running",
+      "status": "Up 2 days (healthy)",
+      "user_namespace": "",
+      "uts_namespace": ""
+    }
+  ]
+}

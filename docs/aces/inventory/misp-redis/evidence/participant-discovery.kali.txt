@@ -1,0 +1,6 @@
+--dns--
+--tcp6379-ip--
+172.20.0.3: inverse host lookup failed: Host name lookup failure
+(UNKNOWN) [172.20.0.3] 6379 (redis) : Network is unreachable
+--tcp6379-name--
+misp-redis: forward host lookup failed: Host name lookup failure : Resource temporarily unavailable

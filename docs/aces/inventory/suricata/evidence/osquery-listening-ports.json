@@ -1,0 +1,57 @@
+{
+  "table": "listening_ports",
+  "query": "select port, protocol, address, pid, socket, path from listening_ports order by port, protocol, pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-suricata network namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "address": "",
+      "path": "/var/run/suricata//suricata-command.socket",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/run/suricata//suricata-command.socket",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "42817",
+      "protocol": "6",
+      "socket": "170220014"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "42817",
+      "protocol": "6",
+      "socket": "170220014"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "58130",
+      "protocol": "17",
+      "socket": "170220013"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "58130",
+      "protocol": "17",
+      "socket": "170220013"
+    }
+  ]
+}

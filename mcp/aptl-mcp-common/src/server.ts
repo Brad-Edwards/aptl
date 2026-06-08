@@ -24,9 +24,74 @@ import { generateAPIToolDefinitions } from './tools/api-definitions.js';
 import { generateAPIToolHandlers, type APIToolHandler, type APIToolContext } from './tools/api-handlers.js';
 
 /**
- * Create and configure an MCP server with the provided lab configuration
+ * Information passed to a `postToolHook` after a tool call resolves or rejects.
  */
-export function createMCPServer(labConfig: LabConfig) {
+export interface PostToolHookInfo {
+  toolName: string;
+  args: Record<string, unknown>;
+  result?: unknown;
+  durationMs: number;
+  error?: Error;
+}
+
+/**
+ * Hook fired after every MCP tool call. May return a Promise — async SIEM
+ * transports (HTTP shipping, queued buffer flushes) are first-class. The
+ * server awaits the returned promise inside its own try/catch, so a
+ * rejected promise becomes a stderr diagnostic, not an unhandled rejection,
+ * and the tool response is never disturbed (per ADR-027 best-effort
+ * guarantee).
+ */
+export type PostToolHook = (info: PostToolHookInfo) => void | Promise<void>;
+
+export interface CreateMCPServerOptions {
+  postToolHook?: PostToolHook;
+  /**
+   * Maximum milliseconds to wait for an async `postToolHook` before the
+   * tool response is returned anyway. Prevents a slow/hung SIEM transport
+   * from blocking command execution (ADR-027 best-effort guarantee).
+   * Defaults to 2000 ms; set to 0 to disable the timeout.
+   */
+  postToolHookTimeoutMs?: number;
+}
+
+/**
+ * Create and configure an MCP server with the provided lab configuration.
+ *
+ * `options.postToolHook` is fired once per tool call (success or error). It is
+ * the extension point ADR-027 reserves for SIEM-event emission attached to MCP
+ * command execution; common itself never imports red-team logic.
+ */
+const DEFAULT_HOOK_TIMEOUT_MS = 2000;
+
+async function runHookWithTimeout(
+  hook: PostToolHook,
+  info: PostToolHookInfo,
+  timeoutMs: number,
+): Promise<void> {
+  const ret = hook(info);
+  if (!ret || typeof ret.then !== 'function') return;
+  if (timeoutMs <= 0) {
+    await ret;
+    return;
+  }
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<void>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`postToolHook timeout after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+  });
+  try {
+    await Promise.race([ret, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOptions = {}) {
+  const { postToolHook } = options;
+  const hookTimeoutMs = options.postToolHookTimeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS;
   // Initialize clients and OTel tracing based on config
   const sshManager = labConfig.containers ? new SSHConnectionManager() : null;
   const httpClient = labConfig.api ? new HTTPClient(labConfig.api) : null;
@@ -90,7 +155,7 @@ export function createMCPServer(labConfig: LabConfig) {
       context = {
         httpClient,
         labConfig,
-      } as APIToolContext;
+      };
     } else {
       // SSH tool context
       if (!sshManager) {
@@ -99,11 +164,47 @@ export function createMCPServer(labConfig: LabConfig) {
       context = {
         sshManager,
         labConfig,
-      } as ToolContext;
+      };
     }
 
-    // Context is narrowed to the correct type above based on tool name
-    return traceToolCall(name, labConfig.server.name, args ?? {}, () => (handler as any)(args ?? {}, context));
+    const safeArgs: Record<string, unknown> = args ?? {};
+    const t0 = Date.now();
+    try {
+      // Context is narrowed to the correct type above based on tool name
+      const result = await traceToolCall<{ content: { type: string; text: string }[] }>(
+        name,
+        labConfig.server.name,
+        safeArgs,
+        () => (handler as any)(safeArgs, context),
+      );
+      if (postToolHook) {
+        // Fire-and-forget: telemetry must NEVER add latency to the tool
+        // response. Errors and timeouts are logged to stderr so a bad
+        // hook is observable without blocking. The hook timeout still
+        // applies to the lifetime of the in-flight task — we don't
+        // await it on the response path.
+        void runHookWithTimeout(
+          postToolHook,
+          { toolName: name, args: safeArgs, result, durationMs: Date.now() - t0 },
+          hookTimeoutMs,
+        ).catch((hookErr) => {
+          console.error('[MCP] postToolHook error:', hookErr);
+        });
+      }
+      return result;
+    } catch (err) {
+      if (postToolHook) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        void runHookWithTimeout(
+          postToolHook,
+          { toolName: name, args: safeArgs, durationMs: Date.now() - t0, error },
+          hookTimeoutMs,
+        ).catch((hookErr) => {
+          console.error('[MCP] postToolHook error:', hookErr);
+        });
+      }
+      throw err;
+    }
   });
 
   // Setup graceful shutdown handlers (once per process)
@@ -118,23 +219,27 @@ export function createMCPServer(labConfig: LabConfig) {
 
       // Setup graceful shutdown only once
       if (!handlersSetup) {
-        process.on('SIGINT', async () => {
-          console.error('[MCP] Shutting down gracefully...');
+        const gracefulShutdown = async (signal: string): Promise<void> => {
+          console.error(`[MCP] Shutting down gracefully (${signal})...`);
           await shutdownTracing();
           if (sshManager) {
-            await sshManager.disconnectAll();
+            // disconnectAll now propagates SSHError on teardown contract
+            // failures so callers can detect unclean shutdown. The signal
+            // handler still needs to exit; log the failure non-zero rather
+            // than letting an unhandled rejection terminate Node abruptly.
+            try {
+              await sshManager.disconnectAll();
+            } catch (err) {
+              console.error('[MCP] disconnectAll failed during shutdown:', err);
+              process.exit(1);
+              return;
+            }
           }
           process.exit(0);
-        });
+        };
 
-        process.on('SIGTERM', async () => {
-          console.error('[MCP] Shutting down gracefully...');
-          await shutdownTracing();
-          if (sshManager) {
-            await sshManager.disconnectAll();
-          }
-          process.exit(0);
-        });
+        process.on('SIGINT', () => { void gracefulShutdown('SIGINT'); });
+        process.on('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
 
         handlersSetup = true;
       }

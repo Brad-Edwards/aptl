@@ -1,0 +1,7 @@
+- Compose service evidence was extracted from docker-compose.yml with yq because the full local compose project can include profile-dependent services outside this asset scope.
+- Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof.
+- Full data-volume filesystem evidence is captured as compressed manifests. SDL encodes participant-visible database, listener, package, runtime, and filesystem surfaces directly; byte-identical rebuild proof remains out of scope for this inventory issue.
+- MariaDB mysql.global_priv table files and other mysql system credential stores are represented by path/metadata but are excluded from checksum capture to avoid publishing password-hash fingerprints.
+- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; filesystem provenance is captured in filesystem-tree.txt.gz and filesystem-checksums.txt.xz.
+- osquery installed_applications table unavailable in the digest-pinned Linux scanner image.
+- osquery programs table unavailable in the digest-pinned Linux scanner image.

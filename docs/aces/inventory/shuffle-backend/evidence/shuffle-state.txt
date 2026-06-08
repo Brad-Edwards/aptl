@@ -1,0 +1,274 @@
+--backend-health--
+{
+  "success": true,
+  "self_test_run_status": "FINISHED",
+  "self_test_workflow_id": "05a2f423-080f-4c3d-bad2-ed7474138487",
+  "self_test_delete": true,
+  "self_test_run": true
+}
+--opensearch-info--
+{
+  "cluster_name": "docker-cluster",
+  "version": "2.14.0",
+  "distribution": "opensearch",
+  "lucene": "9.10.0"
+}
+--opensearch-indices--
+index                        health docs.count store.size
+.opendistro_security         green          10     78.3kb
+.opensearch-observability    green           0       208b
+.plugins-ml-config           green           1      3.9kb
+app_revisions                yellow        312     21.1mb
+datastore_category-000001    yellow          1      5.7kb
+datastore_ngram-000001       yellow          1      5.4kb
+environments-000001          yellow          1    781.2kb
+files                        yellow        933    600.7kb
+notifications-000001         yellow          0       624b
+openapi3                     yellow        313     10.8mb
+org_cache-000001             yellow          2     27.6kb
+org_cache_revisions-000001   yellow        934    760.4kb
+org_statistics-000001        yellow          0       624b
+organizations                yellow          1    596.1kb
+platform_health              yellow        312    554.4kb
+security-auditlog-2026.05.23 yellow         63    215.6kb
+shuffle_logs-000001          yellow          0       624b
+users                        yellow          1    334.2kb
+workflow-000001              yellow          0      1.8mb
+workflow_revisions-000001    yellow          0       624b
+workflowapp-000001           yellow          8      1.7mb
+workflowexecution-000001     yellow        934       35mb
+workflowqueue-shuffle        yellow          0     76.4kb
+--workflows-summary--
+{
+  "count": 0,
+  "workflows": []
+}
+--apps-summary--
+{
+  "count": 6,
+  "apps": [
+    {
+      "name": "Shuffle AI",
+      "app_version": "1.1.0",
+      "is_valid": true,
+      "generated": false,
+      "activated": true,
+      "action_count": 6,
+      "categories": [
+        "AI",
+        "LLM",
+        "Shuffle"
+      ]
+    },
+    {
+      "name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "is_valid": true,
+      "generated": false,
+      "activated": true,
+      "action_count": 53,
+      "categories": [
+        "Other"
+      ]
+    },
+    {
+      "name": "Sigma",
+      "app_version": "1.0.0",
+      "is_valid": true,
+      "generated": false,
+      "activated": false,
+      "action_count": 1,
+      "categories": [
+        "SIEM"
+      ]
+    },
+    {
+      "name": "Yara",
+      "app_version": "1.0.0",
+      "is_valid": true,
+      "generated": false,
+      "activated": false,
+      "action_count": 5,
+      "categories": [
+        "Intel"
+      ]
+    },
+    {
+      "name": "email",
+      "app_version": "1.3.0",
+      "is_valid": true,
+      "generated": false,
+      "activated": false,
+      "action_count": 8,
+      "categories": [
+        "communication"
+      ]
+    },
+    {
+      "name": "http",
+      "app_version": "1.4.0",
+      "is_valid": true,
+      "generated": false,
+      "activated": true,
+      "action_count": 8,
+      "categories": [
+        "Other",
+        "HTTP"
+      ]
+    }
+  ]
+}
+--users-summary--
+{
+  "count": 1,
+  "users": [
+    {
+      "id": "c98f23e2-5fd4-4907-9bef-5cd8d46fc8ca",
+      "username": "admin",
+      "role": "admin",
+      "active": true,
+      "verified": false,
+      "org_count": 1
+    }
+  ]
+}
+--opensearch-organizations--
+{
+  "total": 1,
+  "organizations": [
+    {
+      "child_orgs": null,
+      "role": "",
+      "org": "default",
+      "creator_org": "",
+      "name": "default",
+      "id": "08b070b1-0ffd-4990-8b0f-ae1596d6121c",
+      "manager_orgs": null,
+      "region": "",
+      "users": [
+        {
+          "role": "admin",
+          "username": "admin"
+        }
+      ]
+    }
+  ]
+}
+--opensearch-users--
+{
+  "total": 1,
+  "users": [
+    {
+      "role": "admin",
+      "verified": false,
+      "active": true,
+      "id": "c98f23e2-5fd4-4907-9bef-5cd8d46fc8ca",
+      "username": "admin"
+    }
+  ]
+}
+--opensearch-workflowapps--
+{
+  "total": 8,
+  "apps": [
+    {
+      "app_version": "1.1.0",
+      "public": true,
+      "generated": false,
+      "is_valid": true,
+      "name": "Shuffle AI",
+      "categories": [
+        "AI",
+        "LLM",
+        "Shuffle"
+      ],
+      "sharing": true,
+      "activated": false
+    },
+    {
+      "app_version": "1.1.0",
+      "public": true,
+      "generated": false,
+      "is_valid": true,
+      "name": "Shuffle Subflow",
+      "categories": [
+        "Trigger"
+      ],
+      "sharing": true,
+      "activated": false
+    },
+    {
+      "app_version": "1.0.0",
+      "public": true,
+      "generated": false,
+      "is_valid": true,
+      "name": "Shuffle Subflow",
+      "categories": [
+        "Trigger"
+      ],
+      "sharing": true,
+      "activated": false
+    },
+    {
+      "app_version": "1.2.0",
+      "public": true,
+      "generated": false,
+      "is_valid": true,
+      "name": "Shuffle Tools",
+      "categories": [
+        "Other"
+      ],
+      "sharing": true,
+      "activated": false
+    },
+    {
+      "app_version": "1.0.0",
+      "public": true,
+      "generated": false,
+      "is_valid": true,
+      "name": "Sigma",
+      "categories": [
+        "SIEM"
+      ],
+      "sharing": true,
+      "activated": false
+    },
+    {
+      "app_version": "1.0.0",
+      "public": true,
+      "generated": false,
+      "is_valid": true,
+      "name": "Yara",
+      "categories": [
+        "Intel"
+      ],
+      "sharing": true,
+      "activated": false
+    },
+    {
+      "app_version": "1.3.0",
+      "public": true,
+      "generated": false,
+      "is_valid": true,
+      "name": "email",
+      "categories": [
+        "communication"
+      ],
+      "sharing": true,
+      "activated": false
+    },
+    {
+      "app_version": "1.4.0",
+      "public": true,
+      "generated": false,
+      "is_valid": true,
+      "name": "http",
+      "categories": [
+        "Other",
+        "HTTP"
+      ],
+      "sharing": true,
+      "activated": false
+    }
+  ]
+}

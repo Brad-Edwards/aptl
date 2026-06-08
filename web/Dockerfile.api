@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install Docker CLI via official APT repo (not curl|sh)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl gnupg && \
+    apt-get install -y --no-install-recommends ca-certificates curl git gnupg && \
     install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
     chmod a+r /etc/apt/keyrings/docker.asc && \
@@ -18,7 +18,10 @@ RUN apt-get update && \
 # Install Python deps
 COPY pyproject.toml .
 COPY src/ src/
-RUN pip install --no-cache-dir ".[web]"
+RUN pip install --no-cache-dir ".[web]" && \
+    apt-get purge -y git && \
+    apt-get autoremove -y && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 8400
 

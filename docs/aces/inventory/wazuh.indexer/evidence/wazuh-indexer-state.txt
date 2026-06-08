@@ -1,0 +1,1375 @@
+--cluster-health--
+{
+  "cluster_name" : "opensearch",
+  "status" : "green",
+  "timed_out" : false,
+  "number_of_nodes" : 1,
+  "number_of_data_nodes" : 1,
+  "discovered_master" : true,
+  "discovered_cluster_manager" : true,
+  "active_primary_shards" : 102,
+  "active_shards" : 102,
+  "relocating_shards" : 0,
+  "initializing_shards" : 0,
+  "unassigned_shards" : 0,
+  "delayed_unassigned_shards" : 0,
+  "number_of_pending_tasks" : 0,
+  "number_of_in_flight_fetch" : 0,
+  "task_max_waiting_in_queue_millis" : 0,
+  "active_shards_percent_as_number" : 100.0
+}
+--cluster-stats-summary--
+{"cluster_name":"opensearch","cluster_uuid":"u-vGl1n0Q7e-SKz1tWvb-w","status":"green","indices":{"count":42,"shards":{"total":102,"primaries":102},"docs":{"count":1053842},"store":{"size_in_bytes":1391460626}},"nodes":{"count":{"total":1,"cluster_manager":1,"coordinating_only":0,"data":1,"ingest":1,"master":1,"remote_cluster_client":1,"search":0},"versions":["2.19.1"],"os":{"mem":{"total_in_bytes":2147483648}}}}--cluster-settings--
+{
+  "persistent" : {
+    "plugins" : {
+      "index_state_management" : {
+        "template_migration" : {
+          "control" : "-1"
+        }
+      }
+    }
+  },
+  "transient" : { }
+}
+--nodes-local-summary--
+{
+  "cluster_name" : "opensearch",
+  "nodes" : {
+    "5N5vnFZERhu2OYBxv5Lo8Q" : {
+      "name" : "wazuh.indexer",
+      "transport_address" : "172.20.0.12:9300",
+      "host" : "172.20.0.12",
+      "ip" : "172.20.0.12",
+      "version" : "2.19.1",
+      "build_type" : "rpm",
+      "build_hash" : "dae2bfc93896178873b43cdf4781f183c72b238f",
+      "roles" : [
+        "cluster_manager",
+        "data",
+        "ingest",
+        "remote_cluster_client"
+      ],
+      "attributes" : {
+        "shard_indexing_pressure_enabled" : "true"
+      },
+      "settings" : {
+        "path" : {
+          "data" : [
+            "/var/lib/wazuh-indexer"
+          ],
+          "logs" : "/var/log/wazuh-indexer",
+          "home" : "/usr/share/wazuh-indexer"
+        },
+        "discovery" : {
+          "type" : "single-node"
+        },
+        "http" : {
+          "compression" : "false",
+          "type" : "org.opensearch.security.http.SecurityHttpServerTransport",
+          "port" : "9200-9299",
+          "type.default" : "netty4"
+        },
+        "transport" : {
+          "tcp" : {
+            "port" : "9300-9399"
+          },
+          "type" : "org.opensearch.security.ssl.http.netty.SecuritySSLNettyTransport",
+          "type.default" : "netty4"
+        },
+        "network" : {
+          "host" : "0.0.0.0"
+        }
+      },
+      "process" : {
+        "id" : 1,
+        "mlockall" : false
+      },
+      "jvm" : {
+        "version" : "21.0.6",
+        "vm_name" : "OpenJDK 64-Bit Server VM",
+        "vm_vendor" : "Eclipse Adoptium",
+        "mem" : {
+          "heap_init_in_bytes" : 1073741824,
+          "heap_max_in_bytes" : 1073741824
+        }
+      },
+      "transport" : {
+        "publish_address" : "172.20.0.12:9300"
+      },
+      "http" : {
+        "publish_address" : "172.20.0.12:9200"
+      }
+    }
+  }
+}
+--cat-nodes--
+ip          name          node.role master version heap.percent ram.percent load_1m
+172.20.0.12 wazuh.indexer dimr      *      2.19.1            36          87    4.21
+--cat-indices--
+[{"health":"green","status":"open","index":".kibana_1","uuid":"EC_4iu_SRhGvgE1F4itc5Q","pri":"1","rep":"0","docs.count":"0","docs.deleted":"0","store.size":"208b","creation.date.string":"2026-05-23T06:19:26.806Z"},{"health":"green","status":"open","index":".opendistro_security","uuid":"__o30MqzS42FjwicBr6g9w","pri":"1","rep":"0","docs.count":"10","docs.deleted":"0","store.size":"79kb","creation.date.string":"2026-05-23T06:18:55.684Z"},{"health":"green","status":"open","index":".opensearch-observability","uuid":"pU8SYLDESSeeZ06nIVJxug","pri":"1","rep":"0","docs.count":"0","docs.deleted":"0","store.size":"208b","creation.date.string":"2026-05-23T06:18:54.639Z"},{"health":"green","status":"open","index":".plugins-ml-config","uuid":"31QbTXSUTw2U_neEErngNA","pri":"1","rep":"0","docs.count":"1","docs.deleted":"0","store.size":"4kb","creation.date.string":"2026-05-23T06:19:14.512Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.05.23","uuid":"YSYUSnR7Tp-r1AUlWjxsUw","pri":"3","rep":"0","docs.count":"4535","docs.deleted":"0","store.size":"2.1mb","creation.date.string":"2026-05-23T06:19:23.113Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.05.24","uuid":"4cWoaAslQJyknAUME_cFIQ","pri":"3","rep":"0","docs.count":"5916","docs.deleted":"0","store.size":"2.2mb","creation.date.string":"2026-05-24T00:09:22.443Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.05.25","uuid":"Q6q0BPldQbSCpIse7MBWLg","pri":"3","rep":"0","docs.count":"5936","docs.deleted":"0","store.size":"2.1mb","creation.date.string":"2026-05-25T00:09:42.950Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.05.26","uuid":"cxrifan_RzKEkXwVvSUc8w","pri":"3","rep":"0","docs.count":"5866","docs.deleted":"0","store.size":"2.2mb","creation.date.string":"2026-05-26T00:09:55.304Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.05.27","uuid":"Nv9ZEvzXRBa53WeZW__uEA","pri":"3","rep":"0","docs.count":"5854","docs.deleted":"0","store.size":"2.1mb","creation.date.string":"2026-05-27T00:00:08.900Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.05.28","uuid":"SDOLdMGwT52IStajlLmnvA","pri":"3","rep":"0","docs.count":"5905","docs.deleted":"0","store.size":"2.2mb","creation.date.string":"2026-05-28T00:00:23.157Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.05.29","uuid":"84x7RJzRSW2AkMGBTqU3sw","pri":"3","rep":"0","docs.count":"5928","docs.deleted":"0","store.size":"2.2mb","creation.date.string":"2026-05-29T00:00:44.590Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.05.30","uuid":"85aB4EltSK6RRI-FOY2Uhg","pri":"3","rep":"0","docs.count":"5861","docs.deleted":"0","store.size":"1.9mb","creation.date.string":"2026-05-30T00:00:55.085Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.05.31","uuid":"rF4CcRT2RSu9FPAd4619Tg","pri":"3","rep":"0","docs.count":"5887","docs.deleted":"0","store.size":"2.1mb","creation.date.string":"2026-05-31T00:01:12.911Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.06.01","uuid":"Rut6_oHjSJ2wbkDzz3PGJA","pri":"3","rep":"0","docs.count":"5853","docs.deleted":"0","store.size":"2mb","creation.date.string":"2026-06-01T00:01:33.375Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.06.02","uuid":"IgMtywQ_TqSNuxQnzOVK0g","pri":"3","rep":"0","docs.count":"5845","docs.deleted":"0","store.size":"2mb","creation.date.string":"2026-06-02T00:01:45.801Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.06.03","uuid":"iKeB9X4qQM6LAk81FCTuMA","pri":"3","rep":"0","docs.count":"5858","docs.deleted":"0","store.size":"2.1mb","creation.date.string":"2026-06-03T00:01:57.347Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.06.04","uuid":"HOr15VrvQ8-Tah_GbM7uqg","pri":"3","rep":"0","docs.count":"5844","docs.deleted":"0","store.size":"1.9mb","creation.date.string":"2026-06-04T00:02:17.948Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.06.05","uuid":"Q_Z8vrqpROy3unfcUXxlMw","pri":"3","rep":"0","docs.count":"5865","docs.deleted":"0","store.size":"2mb","creation.date.string":"2026-06-05T00:02:29.600Z"},{"health":"green","status":"open","index":"wazuh-alerts-4.x-2026.06.06","uuid":"sKm3DX1dSHyIMvEZsnMm7Q","pri":"3","rep":"0","docs.count":"938","docs.deleted":"0","store.size":"648.3kb","creation.date.string":"2026-06-06T00:02:52.076Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.05.23","uuid":"di3r6LvvR7eQbv1lpmgpJA","pri":"3","rep":"0","docs.count":"50946","docs.deleted":"0","store.size":"68.8mb","creation.date.string":"2026-05-23T06:19:21.940Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.05.24","uuid":"4g5uomPoSeeG_84zL2wq_Q","pri":"3","rep":"0","docs.count":"68616","docs.deleted":"0","store.size":"92.5mb","creation.date.string":"2026-05-24T00:00:03.573Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.05.25","uuid":"kBkGQmPwTdSPVwgH9E0FGg","pri":"3","rep":"0","docs.count":"68832","docs.deleted":"0","store.size":"92.4mb","creation.date.string":"2026-05-25T00:00:02.298Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.05.26","uuid":"llyudOQxSjmdhLR9MMOHXA","pri":"3","rep":"0","docs.count":"68937","docs.deleted":"0","store.size":"92.1mb","creation.date.string":"2026-05-26T00:00:06.631Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.05.27","uuid":"29_RK7fOQkKy1OeOWChh-w","pri":"3","rep":"0","docs.count":"68408","docs.deleted":"0","store.size":"91.6mb","creation.date.string":"2026-05-27T00:00:07.718Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.05.28","uuid":"s0fv6XlzTEuJNcP4RikTQg","pri":"3","rep":"0","docs.count":"68993","docs.deleted":"0","store.size":"92.4mb","creation.date.string":"2026-05-28T00:00:05.253Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.05.29","uuid":"tmU2NL6HQpS8O_F3lOevJA","pri":"3","rep":"0","docs.count":"68703","docs.deleted":"0","store.size":"92.3mb","creation.date.string":"2026-05-29T00:00:05.080Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.05.30","uuid":"BoJqRQ_STr2cKHqTKiz1ig","pri":"3","rep":"0","docs.count":"68880","docs.deleted":"0","store.size":"93.3mb","creation.date.string":"2026-05-30T00:00:05.342Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.05.31","uuid":"DZSYlg6kTxGWWwcLCoQ3HQ","pri":"3","rep":"0","docs.count":"68615","docs.deleted":"0","store.size":"91.2mb","creation.date.string":"2026-05-31T00:00:04.274Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.06.01","uuid":"EnfroEm0SWG7AL2VwocQcQ","pri":"3","rep":"0","docs.count":"68354","docs.deleted":"0","store.size":"93.2mb","creation.date.string":"2026-06-01T00:00:01.847Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.06.02","uuid":"7suuqLuRSfmBRuPl5mCPBQ","pri":"3","rep":"0","docs.count":"68305","docs.deleted":"0","store.size":"91.4mb","creation.date.string":"2026-06-02T00:00:03.726Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.06.03","uuid":"RjLohu1mQJ-lUW6C--buuQ","pri":"3","rep":"0","docs.count":"68386","docs.deleted":"0","store.size":"94.3mb","creation.date.string":"2026-06-03T00:00:07.540Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.06.04","uuid":"ASI9um4JSiS_Tejkm__7jw","pri":"3","rep":"0","docs.count":"68316","docs.deleted":"0","store.size":"92.7mb","creation.date.string":"2026-06-04T00:00:13.923Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.06.05","uuid":"Y1S6FI35RXabEJUbxksUAg","pri":"3","rep":"0","docs.count":"68920","docs.deleted":"0","store.size":"91.8mb","creation.date.string":"2026-06-05T00:00:02.536Z"},{"health":"green","status":"open","index":"wazuh-archives-4.x-2026.06.06","uuid":"RaFQxuBuQfOok4aoLewJBg","pri":"3","rep":"0","docs.count":"10956","docs.deleted":"0","store.size":"17.3mb","creation.date.string":"2026-06-06T00:00:05.498Z"},{"health":"green","status":"open","index":"wazuh-monitoring-2026.21w","uuid":"Y2BXYIFYTbiRxwXtFBg-rg","pri":"1","rep":"0","docs.count":"1168","docs.deleted":"0","store.size":"806.4kb","creation.date.string":"2026-05-23T06:19:28.720Z"},{"health":"green","status":"open","index":"wazuh-monitoring-2026.22w","uuid":"6BYEAIs_QeuZJFqN5dvoAg","pri":"1","rep":"0","docs.count":"4704","docs.deleted":"0","store.size":"1.3mb","creation.date.string":"2026-05-25T00:00:01.170Z"},{"health":"green","status":"open","index":"wazuh-monitoring-2026.23w","uuid":"YkRkznUAQX2aAA24fTQ5mQ","pri":"1","rep":"0","docs.count":"3465","docs.deleted":"0","store.size":"1.4mb","creation.date.string":"2026-06-01T00:00:00.517Z"},{"health":"green","status":"open","index":"wazuh-states-vulnerabilities-wazuh.manager","uuid":"OSRyQnz1RF-E0R-f8hHnPg","pri":"1","rep":"0","docs.count":"0","docs.deleted":"0","store.size":"208b","creation.date.string":"2026-05-23T06:19:18.580Z"},{"health":"green","status":"open","index":"wazuh-statistics-2026.21w","uuid":"9rLKEO2_Sw2-ImbyClK3jA","pri":"1","rep":"0","docs.count":"995","docs.deleted":"0","store.size":"690.3kb","creation.date.string":"2026-05-23T06:20:00.548Z"},{"health":"green","status":"open","index":"wazuh-statistics-2026.22w","uuid":"Rf7ev6YvRlGvmcwBPY7aaA","pri":"1","rep":"0","docs.count":"4026","docs.deleted":"0","store.size":"1.4mb","creation.date.string":"2026-05-25T00:00:01.031Z"},{"health":"green","status":"open","index":"wazuh-statistics-2026.23w","uuid":"4mUg72JATim5mYghmQtAuw","pri":"1","rep":"0","docs.count":"2960","docs.deleted":"0","store.size":"2.5mb","creation.date.string":"2026-06-01T00:00:00.361Z"}]--cat-templates--
+[{"name":"wazuh","index_patterns":"[wazuh-alerts-4.x-*, wazuh-archives-4.x-*]","order":"0","version":"1"},{"name":"wazuh-agent","index_patterns":"[wazuh-monitoring-*]","order":"0","version":null},{"name":"wazuh-states-vulnerabilities-wazuh.manager_template","index_patterns":"[wazuh-states-vulnerabilities-*]","order":"1","version":null},{"name":"wazuh-statistics","index_patterns":"[wazuh-statistics-*]","order":"0","version":null}]--cat-plugins--
+[{"name":"wazuh.indexer","component":"opensearch-alerting","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-anomaly-detection","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-asynchronous-search","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-cross-cluster-replication","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-geospatial","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-index-management","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-job-scheduler","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-knn","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-ml","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-neural-search","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-notifications","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-notifications-core","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-observability","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-performance-analyzer","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-reports-scheduler","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-security","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-security-analytics","version":"2.19.1.0"},{"name":"wazuh.indexer","component":"opensearch-sql","version":"2.19.1.0"}]--security-config-summary--
+{
+  "config" : {
+    "dynamic" : {
+      "authc" : {
+        "jwt_auth_domain" : {
+          "http_enabled" : false,
+          "order" : 0,
+          "http_authenticator" : {
+            "challenge" : false,
+            "type" : "jwt"
+          },
+          "authentication_backend" : {
+            "type" : "noop"
+          }
+        },
+        "ldap" : {
+          "http_enabled" : false,
+          "order" : 5,
+          "http_authenticator" : {
+            "challenge" : false,
+            "type" : "basic"
+          },
+          "authentication_backend" : {
+            "type" : "ldap"
+          }
+        },
+        "basic_internal_auth_domain" : {
+          "http_enabled" : true,
+          "order" : 4,
+          "http_authenticator" : {
+            "challenge" : true,
+            "type" : "basic"
+          },
+          "authentication_backend" : {
+            "type" : "intern"
+          }
+        },
+        "proxy_auth_domain" : {
+          "http_enabled" : false,
+          "order" : 3,
+          "http_authenticator" : {
+            "challenge" : false,
+            "type" : "proxy"
+          },
+          "authentication_backend" : {
+            "type" : "noop"
+          }
+        },
+        "clientcert_auth_domain" : {
+          "http_enabled" : false,
+          "order" : 2,
+          "http_authenticator" : {
+            "challenge" : false,
+            "type" : "clientcert"
+          },
+          "authentication_backend" : {
+            "type" : "noop"
+          }
+        },
+        "kerberos_auth_domain" : {
+          "http_enabled" : false,
+          "order" : 6,
+          "http_authenticator" : {
+            "challenge" : true,
+            "type" : "kerberos"
+          },
+          "authentication_backend" : {
+            "type" : "noop"
+          }
+        }
+      },
+      "authz" : {
+        "roles_from_another_ldap" : {
+          "http_enabled" : false,
+          "authorization_backend" : {
+            "type" : "ldap"
+          }
+        },
+        "roles_from_myldap" : {
+          "http_enabled" : false,
+          "authorization_backend" : {
+            "type" : "ldap"
+          }
+        }
+      }
+    }
+  }
+}
+--security-roles--
+{
+  "security_analytics_ack_alerts" : {
+    "reserved" : true,
+    "hidden" : false,
+    "cluster_permissions" : [
+      "cluster:admin/opensearch/securityanalytics/alerts/*"
+    ],
+    "index_permissions" : [ ],
+    "tenant_permissions" : [ ],
+    "static" : false
+  },
+  "kibana_user" : {
+    "reserved" : true,
+    "hidden" : false,
+    "description" : "Provide the minimum permissions for a kibana user",
+    "cluster_permissions" : [
+      "cluster_composite_ops"
+    ],
+    "index_permissions" : [
+      {
+        "index_patterns" : [
+          ".kibana",
+          ".kibana-6",
+          ".kibana_*",
+          ".opensearch_dashboards",
+          ".opensearch_dashboards-6",
+          ".opensearch_dashboards_*"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "read",
+          "delete",
+          "manage",
+          "index"
+        ]
+      },
+      {
+        "index_patterns" : [
+          ".tasks",
+          ".management-beats",
+          "*:.tasks",
+          "*:.management-beats"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "indices_all"
+        ]
+      }
+    ],
+    "tenant_permissions" : [ ],
+    "static" : true
+  },
+  "snapshot_management_read_access" : {
+    "reserved" : true,
+    "hidden" : false,
+    "cluster_permissions" : [
+      "cluster:admin/opensearch/snapshot_management/policy/get",
+      "cluster:admin/opensearch/snapshot_management/policy/search",
+      "cluster:admin/opensearch/snapshot_management/policy/explain",
+      "cluster:admin/repository/get",
+      "cluster:admin/snapshot/get"
+    ],
+    "index_permissions" : [ ],
+    "tenant_permissions" : [ ],
+    "static" : false
+  },
+  "all_access" : {
+    "reserved" : true,
+    "hidden" : false,
+    "description" : "Allow full access to all indices and all cluster APIs",
+    "cluster_permissions" : [
+      "*"
+    ],
+    "index_permissions" : [
+      {
+        "index_patterns" : [
+          "*"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "*"
+        ]
+      }
+    ],
+    "tenant_permissions" : [
+      {
+        "tenant_patterns" : [
+          "*"
+        ],
+        "allowed_actions" : [
+          "kibana_all_write"
+        ]
+      }
+    ],
+    "static" : true
+  },
+  "manage_snapshots" : {
+    "reserved" : true,
+    "hidden" : false,
+    "description" : "Provide the minimum permissions for managing snapshots",
+    "cluster_permissions" : [
+      "manage_snapshots"
+    ],
+    "index_permissions" : [
+      {
+        "index_patterns" : [
+          "*"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "indices:data/write/index",
+          "indices:admin/create"
+        ]
+      }
+    ],
+    "tenant_permissions" : [ ],
+    "static" : true
+  },
+  "logstash" : {
+    "reserved" : true,
+    "hidden" : false,
+    "description" : "Provide the minimum permissions for logstash and beats",
+    "cluster_permissions" : [
+      "cluster_monitor",
+      "cluster_composite_ops",
+      "indices:admin/template/get",
+      "indices:admin/template/put",
+      "cluster:admin/ingest/pipeline/put",
+      "cluster:admin/ingest/pipeline/get"
+    ],
+    "index_permissions" : [
+      {
+        "index_patterns" : [
+          "logstash-*",
+          "ecs-logstash-*"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "crud",
+          "create_index"
+        ]
+      },
+      {
+        "index_patterns" : [
+          "*beat*"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "crud",
+          "create_index"
+        ]
+      }
+    ],
+    "tenant_permissions" : [ ],
+    "static" : true
+  },
+  "security_analytics_read_access" : {
+    "reserved" : true,
+    "hidden" : false,
+    "cluster_permissions" : [
+      "cluster:admin/opensearch/securityanalytics/alerts/get",
+      "cluster:admin/opensearch/securityanalytics/correlations/findings",
+      "cluster:admin/opensearch/securityanalytics/correlations/list",
+      "cluster:admin/opensearch/securityanalytics/detector/get",
+      "cluster:admin/opensearch/securityanalytics/detector/search",
+      "cluster:admin/opensearch/securityanalytics/findings/get",
+      "cluster:admin/opensearch/securityanalytics/mapping/get",
+      "cluster:admin/opensearch/securityanalytics/mapping/view/get",
+      "cluster:admin/opensearch/securityanalytics/rule/get",
+      "cluster:admin/opensearch/securityanalytics/rule/search"
+    ],
+    "index_permissions" : [ ],
+    "tenant_permissions" : [ ],
+    "static" : false
+  },
+  "security_analytics_full_access" : {
+    "reserved" : true,
+    "hidden" : false,
+    "cluster_permissions" : [
+      "cluster:admin/opensearch/securityanalytics/alerts/*",
+      "cluster:admin/opensearch/securityanalytics/correlations/*",
+      "cluster:admin/opensearch/securityanalytics/detector/*",
+      "cluster:admin/opensearch/securityanalytics/findings/*",
+      "cluster:admin/opensearch/securityanalytics/mapping/*",
+      "cluster:admin/opensearch/securityanalytics/rule/*"
+    ],
+    "index_permissions" : [
+      {
+        "index_patterns" : [
+          "*"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "indices:admin/mapping/put",
+          "indices:admin/mappings/get"
+        ]
+      }
+    ],
+    "tenant_permissions" : [ ],
+    "static" : false
+  },
+  "security_rest_api_full_access" : {
+    "reserved" : true,
+    "hidden" : false,
+    "cluster_permissions" : [
+      "restapi:admin/actiongroups",
+      "restapi:admin/allowlist",
+      "restapi:admin/config/update",
+      "restapi:admin/internalusers",
+      "restapi:admin/nodesdn",
+      "restapi:admin/roles",
+      "restapi:admin/rolesmapping",
+      "restapi:admin/ssl/certs/info",
+      "restapi:admin/ssl/certs/reload",
+      "restapi:admin/tenants"
+    ],
+    "index_permissions" : [ ],
+    "tenant_permissions" : [ ],
+    "static" : false
+  },
+  "kibana_read_only" : {
+    "reserved" : true,
+    "hidden" : false,
+    "cluster_permissions" : [ ],
+    "index_permissions" : [ ],
+    "tenant_permissions" : [ ],
+    "static" : false
+  },
+  "snapshot_management_full_access" : {
+    "reserved" : true,
+    "hidden" : false,
+    "cluster_permissions" : [
+      "cluster:admin/opensearch/snapshot_management/*",
+      "cluster:admin/opensearch/notifications/feature/publish",
+      "cluster:admin/repository/*",
+      "cluster:admin/snapshot/*"
+    ],
+    "index_permissions" : [ ],
+    "tenant_permissions" : [ ],
+    "static" : false
+  },
+  "readall" : {
+    "reserved" : true,
+    "hidden" : false,
+    "description" : "Provide the minimum permissions for to readall indices",
+    "cluster_permissions" : [
+      "cluster_composite_ops_ro"
+    ],
+    "index_permissions" : [
+      {
+        "index_patterns" : [
+          "*"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "read"
+        ]
+      }
+    ],
+    "tenant_permissions" : [ ],
+    "static" : true
+  },
+  "security_rest_api_access" : {
+    "reserved" : true,
+    "hidden" : false,
+    "cluster_permissions" : [ ],
+    "index_permissions" : [ ],
+    "tenant_permissions" : [ ],
+    "static" : false
+  },
+  "kibana_server" : {
+    "reserved" : true,
+    "hidden" : false,
+    "description" : "Provide the minimum permissions for the Kibana server",
+    "cluster_permissions" : [
+      "cluster_monitor",
+      "cluster_composite_ops",
+      "manage_point_in_time",
+      "indices:admin/template*",
+      "indices:admin/index_template*",
+      "indices:data/read/scroll*"
+    ],
+    "index_permissions" : [
+      {
+        "index_patterns" : [
+          ".kibana",
+          ".opensearch_dashboards"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "indices_all"
+        ]
+      },
+      {
+        "index_patterns" : [
+          ".kibana-6",
+          ".opensearch_dashboards-6"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "indices_all"
+        ]
+      },
+      {
+        "index_patterns" : [
+          ".kibana_*",
+          ".opensearch_dashboards_*"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "indices_all"
+        ]
+      },
+      {
+        "index_patterns" : [
+          ".tasks"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "indices_all"
+        ]
+      },
+      {
+        "index_patterns" : [
+          ".management-beats*"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "indices_all"
+        ]
+      },
+      {
+        "index_patterns" : [
+          "*"
+        ],
+        "fls" : [ ],
+        "masked_fields" : [ ],
+        "allowed_actions" : [
+          "indices:admin/aliases*"
+        ]
+      }
+    ],
+    "tenant_permissions" : [ ],
+    "static" : true
+  }
+}
+--security-rolesmapping--
+{
+  "manage_snapshots" : {
+    "hosts" : [ ],
+    "users" : [ ],
+    "reserved" : true,
+    "hidden" : false,
+    "backend_roles" : [
+      "snapshotrestore"
+    ],
+    "and_backend_roles" : [ ]
+  },
+  "logstash" : {
+    "hosts" : [ ],
+    "users" : [ ],
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "logstash"
+    ],
+    "and_backend_roles" : [ ]
+  },
+  "manage_wazuh_index" : {
+    "hosts" : [ ],
+    "users" : [
+      "kibanaserver"
+    ],
+    "reserved" : true,
+    "hidden" : false,
+    "backend_roles" : [ ],
+    "and_backend_roles" : [ ]
+  },
+  "own_index" : {
+    "hosts" : [ ],
+    "users" : [
+      "*"
+    ],
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [ ],
+    "and_backend_roles" : [ ],
+    "description" : "Allow full access to an index named like the username"
+  },
+  "kibana_user" : {
+    "hosts" : [ ],
+    "users" : [ ],
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "kibanauser"
+    ],
+    "and_backend_roles" : [ ],
+    "description" : "Maps kibanauser to kibana_user"
+  },
+  "all_access" : {
+    "hosts" : [ ],
+    "users" : [ ],
+    "reserved" : true,
+    "hidden" : false,
+    "backend_roles" : [
+      "admin"
+    ],
+    "and_backend_roles" : [ ],
+    "description" : "Maps admin to all_access"
+  },
+  "readall" : {
+    "hosts" : [ ],
+    "users" : [ ],
+    "reserved" : true,
+    "hidden" : false,
+    "backend_roles" : [
+      "readall"
+    ],
+    "and_backend_roles" : [ ]
+  },
+  "kibana_server" : {
+    "hosts" : [ ],
+    "users" : [
+      "kibanaserver"
+    ],
+    "reserved" : true,
+    "hidden" : false,
+    "backend_roles" : [ ],
+    "and_backend_roles" : [ ]
+  }
+}
+--security-internalusers-shape--
+{
+  "logstash" : {
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "logstash"
+    ],
+    "attributes" : { },
+    "description" : "Demo logstash user",
+    "opendistro_security_roles" : [ ]
+  },
+  "snapshotrestore" : {
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "snapshotrestore"
+    ],
+    "attributes" : { },
+    "description" : "Demo snapshotrestore user",
+    "opendistro_security_roles" : [ ]
+  },
+  "admin" : {
+    "reserved" : true,
+    "hidden" : false,
+    "backend_roles" : [
+      "admin"
+    ],
+    "attributes" : { },
+    "description" : "Demo admin user",
+    "opendistro_security_roles" : [ ]
+  },
+  "kibanaserver" : {
+    "reserved" : true,
+    "hidden" : false,
+    "backend_roles" : [ ],
+    "attributes" : { },
+    "description" : "Demo kibanaserver user",
+    "opendistro_security_roles" : [ ]
+  },
+  "kibanaro" : {
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "kibanauser",
+      "readall"
+    ],
+    "attributes" : {
+      "attribute1" : "value1",
+      "attribute2" : "value2",
+      "attribute3" : "value3"
+    },
+    "description" : "Demo kibanaro user",
+    "opendistro_security_roles" : [ ]
+  },
+  "readall" : {
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "readall"
+    ],
+    "attributes" : { },
+    "description" : "Demo readall user",
+    "opendistro_security_roles" : [ ]
+  }
+}
+--opensearch-yml--
+network.host: "0.0.0.0"
+node.name: "wazuh.indexer"
+path.data: /var/lib/wazuh-indexer
+path.logs: /var/log/wazuh-indexer
+discovery.type: single-node
+http.port: 9200-9299
+transport.tcp.port: 9300-9399
+compatibility.override_main_response_version: true
+plugins.security.ssl.http.pemcert_filepath: /usr/share/wazuh-indexer/certs/wazuh.indexer.pem
+plugins.security.ssl.http.pemkey_filepath: /usr/share/wazuh-indexer/certs/wazuh.indexer.key
+plugins.security.ssl.http.pemtrustedcas_filepath: /usr/share/wazuh-indexer/certs/root-ca.pem
+plugins.security.ssl.transport.pemcert_filepath: /usr/share/wazuh-indexer/certs/wazuh.indexer.pem
+plugins.security.ssl.transport.pemkey_filepath: /usr/share/wazuh-indexer/certs/wazuh.indexer.key
+plugins.security.ssl.transport.pemtrustedcas_filepath: /usr/share/wazuh-indexer/certs/root-ca.pem
+plugins.security.ssl.http.enabled: true
+plugins.security.ssl.transport.enforce_hostname_verification: false
+plugins.security.ssl.transport.resolve_hostname: false
+plugins.security.authcz.admin_dn:
+- "CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US"
+plugins.security.check_snapshot_restore_write_privileges: true
+plugins.security.enable_snapshot_restore_privilege: true
+plugins.security.nodes_dn:
+- "CN=wazuh.indexer,OU=Wazuh,O=Wazuh,L=California,C=US"
+plugins.security.restapi.roles_enabled:
+- "all_access"
+- "security_rest_api_access"
+plugins.security.system_indices.enabled: true
+plugins.security.system_indices.indices: [".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-results*", ".opendistro-anomaly-detector*", ".opendistro-anomaly-checkpoints", ".opendistro-anomaly-detection-state", ".opendistro-reports-*", ".opendistro-notifications-*", ".opendistro-notebooks", ".opensearch-observability", ".opendistro-asynchronous-search-response*", ".replication-metadata-store"]
+plugins.security.allow_default_init_securityindex: true
+cluster.routing.allocation.disk.threshold_enabled: false
+--internal-users-yml--
+---
+# This is the internal user database
+# The hash value is a bcrypt hash and can be generated with plugin/tools/hash.sh
+
+_meta:
+  type: "internalusers"
+  config_version: 2
+
+# Define your internal users here
+
+## Demo users
+
+admin:
+  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  reserved: true
+  backend_roles:
+  - "admin"
+  description: "Demo admin user"
+
+kibanaserver:
+  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  reserved: true
+  description: "Demo kibanaserver user"
+
+kibanaro:
+  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  reserved: false
+  backend_roles:
+  - "kibanauser"
+  - "readall"
+  attributes:
+    attribute1: "value1"
+    attribute2: "value2"
+    attribute3: "value3"
+  description: "Demo kibanaro user"
+
+logstash:
+  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  reserved: false
+  backend_roles:
+  - "logstash"
+  description: "Demo logstash user"
+
+readall:
+  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  reserved: false
+  backend_roles:
+  - "readall"
+  description: "Demo readall user"
+
+snapshotrestore:
+  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  reserved: false
+  backend_roles:
+  - "snapshotrestore"
+  description: "Demo snapshotrestore user"
+--roles-yml--
+_meta:
+  type: "roles"
+  config_version: 2
+
+# Restrict users so they can only view visualization and dashboard on OpenSearchDashboards
+kibana_read_only:
+  reserved: true
+
+# The security REST API access role is used to assign specific users access to change the security settings through the REST API.
+security_rest_api_access:
+  reserved: true
+
+security_rest_api_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'restapi:admin/actiongroups'
+    - 'restapi:admin/allowlist'
+    - 'restapi:admin/config/update'
+    - 'restapi:admin/internalusers'
+    - 'restapi:admin/nodesdn'
+    - 'restapi:admin/roles'
+    - 'restapi:admin/rolesmapping'
+    - 'restapi:admin/ssl/certs/info'
+    - 'restapi:admin/ssl/certs/reload'
+    - 'restapi:admin/tenants'
+
+# Allows users to view monitors, destinations and alerts
+alerting_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opendistro/alerting/alerts/get'
+    - 'cluster:admin/opendistro/alerting/destination/get'
+    - 'cluster:admin/opendistro/alerting/monitor/get'
+    - 'cluster:admin/opendistro/alerting/monitor/search'
+    - 'cluster:admin/opensearch/alerting/findings/get'
+    - 'cluster:admin/opensearch/alerting/workflow/get'
+    - 'cluster:admin/opensearch/alerting/workflow_alerts/get'
+
+# Allows users to view and acknowledge alerts
+alerting_ack_alerts:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opendistro/alerting/alerts/*'
+    - 'cluster:admin/opendistro/alerting/chained_alerts/*'
+    - 'cluster:admin/opendistro/alerting/workflow_alerts/*'
+
+# Allows users to use all alerting functionality
+alerting_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster_monitor'
+    - 'cluster:admin/opendistro/alerting/*'
+    - 'cluster:admin/opensearch/alerting/*'
+    - 'cluster:admin/opensearch/notifications/feature/publish'
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - 'indices_monitor'
+        - 'indices:admin/aliases/get'
+        - 'indices:admin/mappings/get'
+
+# Allow users to read Anomaly Detection detectors and results
+anomaly_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opendistro/ad/detector/info'
+    - 'cluster:admin/opendistro/ad/detector/search'
+    - 'cluster:admin/opendistro/ad/detectors/get'
+    - 'cluster:admin/opendistro/ad/result/search'
+    - 'cluster:admin/opendistro/ad/tasks/search'
+    - 'cluster:admin/opendistro/ad/detector/validate'
+    - 'cluster:admin/opendistro/ad/result/topAnomalies'
+
+# Allows users to use all Anomaly Detection functionality
+anomaly_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster_monitor'
+    - 'cluster:admin/opendistro/ad/*'
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - 'indices_monitor'
+        - 'indices:admin/aliases/get'
+        - 'indices:admin/mappings/get'
+
+# Allow users to execute read only k-NN actions
+knn_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/knn_search_model_action'
+    - 'cluster:admin/knn_get_model_action'
+    - 'cluster:admin/knn_stats_action'
+
+# Allow users to use all k-NN functionality
+knn_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/knn_training_model_action'
+    - 'cluster:admin/knn_training_job_router_action'
+    - 'cluster:admin/knn_training_job_route_decision_info_action'
+    - 'cluster:admin/knn_warmup_action'
+    - 'cluster:admin/knn_delete_model_action'
+    - 'cluster:admin/knn_remove_model_from_cache_action'
+    - 'cluster:admin/knn_update_model_graveyard_action'
+    - 'cluster:admin/knn_search_model_action'
+    - 'cluster:admin/knn_get_model_action'
+    - 'cluster:admin/knn_stats_action'
+
+# Allow users to execute read only ip2geo datasource action
+ip2geo_datasource_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/geospatial/datasource/get'
+
+# Allow users to use all ip2geo datasource action
+ip2geo_datasource_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/geospatial/datasource/*'
+
+# Allows users to read Notebooks
+notebooks_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opendistro/notebooks/list'
+    - 'cluster:admin/opendistro/notebooks/get'
+
+# Allows users to all Notebooks functionality
+notebooks_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opendistro/notebooks/create'
+    - 'cluster:admin/opendistro/notebooks/update'
+    - 'cluster:admin/opendistro/notebooks/delete'
+    - 'cluster:admin/opendistro/notebooks/get'
+    - 'cluster:admin/opendistro/notebooks/list'
+
+# Allows users to read observability objects
+observability_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/observability/get'
+
+# Allows users to all Observability functionality
+observability_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/observability/create'
+    - 'cluster:admin/opensearch/observability/update'
+    - 'cluster:admin/opensearch/observability/delete'
+    - 'cluster:admin/opensearch/observability/get'
+
+# Allows users to all PPL functionality
+ppl_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/ppl'
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - 'indices:admin/mappings/get'
+        - 'indices:data/read/search*'
+        - 'indices:monitor/settings/get'
+
+# Allows users to read and download Reports
+reports_instances_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opendistro/reports/instance/list'
+    - 'cluster:admin/opendistro/reports/instance/get'
+    - 'cluster:admin/opendistro/reports/menu/download'
+
+# Allows users to read and download Reports and Report-definitions
+reports_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opendistro/reports/definition/get'
+    - 'cluster:admin/opendistro/reports/definition/list'
+    - 'cluster:admin/opendistro/reports/instance/list'
+    - 'cluster:admin/opendistro/reports/instance/get'
+    - 'cluster:admin/opendistro/reports/menu/download'
+
+# Allows users to all Reports functionality
+reports_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opendistro/reports/definition/create'
+    - 'cluster:admin/opendistro/reports/definition/update'
+    - 'cluster:admin/opendistro/reports/definition/on_demand'
+    - 'cluster:admin/opendistro/reports/definition/delete'
+    - 'cluster:admin/opendistro/reports/definition/get'
+    - 'cluster:admin/opendistro/reports/definition/list'
+    - 'cluster:admin/opendistro/reports/instance/list'
+    - 'cluster:admin/opendistro/reports/instance/get'
+    - 'cluster:admin/opendistro/reports/menu/download'
+
+# Allows users to use all asynchronous-search functionality
+asynchronous_search_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opendistro/asynchronous_search/*'
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - 'indices:data/read/search*'
+
+# Allows users to read stored asynchronous-search results
+asynchronous_search_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opendistro/asynchronous_search/get'
+
+# Allows user to use all index_management actions - ism policies, rollups, transforms
+index_management_full_access:
+  reserved: true
+  cluster_permissions:
+    - "cluster:admin/opendistro/ism/*"
+    - "cluster:admin/opendistro/rollup/*"
+    - "cluster:admin/opendistro/transform/*"
+    - "cluster:admin/opensearch/controlcenter/lron/*"
+    - "cluster:admin/opensearch/notifications/channels/get"
+    - "cluster:admin/opensearch/notifications/feature/publish"
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - 'indices:admin/opensearch/ism/*'
+
+# Allows users to use all cross cluster replication functionality at leader cluster
+cross_cluster_replication_leader_full_access:
+  reserved: true
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - "indices:admin/plugins/replication/index/setup/validate"
+        - "indices:data/read/plugins/replication/changes"
+        - "indices:data/read/plugins/replication/file_chunk"
+
+# Allows users to use all cross cluster replication functionality at follower cluster
+cross_cluster_replication_follower_full_access:
+  reserved: true
+  cluster_permissions:
+    - "cluster:admin/plugins/replication/autofollow/update"
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - "indices:admin/plugins/replication/index/setup/validate"
+        - "indices:data/write/plugins/replication/changes"
+        - "indices:admin/plugins/replication/index/start"
+        - "indices:admin/plugins/replication/index/pause"
+        - "indices:admin/plugins/replication/index/resume"
+        - "indices:admin/plugins/replication/index/stop"
+        - "indices:admin/plugins/replication/index/update"
+        - "indices:admin/plugins/replication/index/status_check"
+
+# Allows users to use all cross cluster search functionality at remote cluster
+cross_cluster_search_remote_full_access:
+  reserved: true
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - 'indices:admin/shards/search_shards'
+        - 'indices:data/read/search'
+
+# Allow users to read ML stats/models/tasks
+ml_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/ml/stats/nodes'
+    - 'cluster:admin/opensearch/ml/model_groups/search'
+    - 'cluster:admin/opensearch/ml/models/get'
+    - 'cluster:admin/opensearch/ml/models/search'
+    - 'cluster:admin/opensearch/ml/tasks/get'
+    - 'cluster:admin/opensearch/ml/tasks/search'
+
+# Allows users to use all ML functionality
+ml_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster_monitor'
+    - 'cluster:admin/opensearch/ml/*'
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - 'indices_monitor'
+
+# Allows users to use all Notifications functionality
+notifications_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/notifications/*'
+
+# Allows users to read Notifications config/channels
+notifications_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/notifications/configs/get'
+    - 'cluster:admin/opensearch/notifications/features'
+    - 'cluster:admin/opensearch/notifications/channels/get'
+
+# Allows users to use all snapshot management functionality
+snapshot_management_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/snapshot_management/*'
+    - 'cluster:admin/opensearch/notifications/feature/publish'
+    - 'cluster:admin/repository/*'
+    - 'cluster:admin/snapshot/*'
+
+# Allows users to see snapshots, repositories, and snapshot management policies
+snapshot_management_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/snapshot_management/policy/get'
+    - 'cluster:admin/opensearch/snapshot_management/policy/search'
+    - 'cluster:admin/opensearch/snapshot_management/policy/explain'
+    - 'cluster:admin/repository/get'
+    - 'cluster:admin/snapshot/get'
+
+# Allows user to use point in time functionality
+point_in_time_full_access:
+  reserved: true
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - 'manage_point_in_time'
+
+# Allows users to see security analytics detectors and others
+security_analytics_read_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/securityanalytics/alerts/get'
+    - 'cluster:admin/opensearch/securityanalytics/correlations/findings'
+    - 'cluster:admin/opensearch/securityanalytics/correlations/list'
+    - 'cluster:admin/opensearch/securityanalytics/detector/get'
+    - 'cluster:admin/opensearch/securityanalytics/detector/search'
+    - 'cluster:admin/opensearch/securityanalytics/findings/get'
+    - 'cluster:admin/opensearch/securityanalytics/mapping/get'
+    - 'cluster:admin/opensearch/securityanalytics/mapping/view/get'
+    - 'cluster:admin/opensearch/securityanalytics/rule/get'
+    - 'cluster:admin/opensearch/securityanalytics/rule/search'
+
+# Allows users to use all security analytics functionality
+security_analytics_full_access:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/securityanalytics/alerts/*'
+    - 'cluster:admin/opensearch/securityanalytics/correlations/*'
+    - 'cluster:admin/opensearch/securityanalytics/detector/*'
+    - 'cluster:admin/opensearch/securityanalytics/findings/*'
+    - 'cluster:admin/opensearch/securityanalytics/mapping/*'
+    - 'cluster:admin/opensearch/securityanalytics/rule/*'
+  index_permissions:
+    - index_patterns:
+        - '*'
+      allowed_actions:
+        - 'indices:admin/mapping/put'
+        - 'indices:admin/mappings/get'
+
+# Allows users to view and acknowledge alerts
+security_analytics_ack_alerts:
+  reserved: true
+  cluster_permissions:
+    - 'cluster:admin/opensearch/securityanalytics/alerts/*'
+
+# Wazuh monitoring and statistics index permissions
+manage_wazuh_index:
+  reserved: true
+  hidden: false
+  cluster_permissions: []
+  index_permissions:
+  - index_patterns:
+    - "wazuh-*"
+    dls: ""
+    fls: []
+    masked_fields: []
+    allowed_actions:
+    - "read"
+    - "delete"
+    - "manage"
+    - "index"
+  tenant_permissions: []
+  static: false
+--roles-mapping-yml--
+---
+# In this file users, backendroles and hosts can be mapped to Open Distro Security roles.
+# Permissions for Opendistro roles are configured in roles.yml
+
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+
+# Define your roles mapping here
+
+## Default roles mapping
+
+all_access:
+  reserved: true
+  hidden: false
+  backend_roles:
+  - "admin"
+  hosts: []
+  users: []
+  and_backend_roles: []
+  description: "Maps admin to all_access"
+
+own_index:
+  reserved: false
+  hidden: false
+  backend_roles: []
+  hosts: []
+  users:
+  - "*"
+  and_backend_roles: []
+  description: "Allow full access to an index named like the username"
+
+logstash:
+  reserved: false
+  hidden: false
+  backend_roles:
+  - "logstash"
+  hosts: []
+  users: []
+  and_backend_roles: []
+
+readall:
+  reserved: true
+  hidden: false
+  backend_roles:
+  - "readall"
+  hosts: []
+  users: []
+  and_backend_roles: []
+
+manage_snapshots:
+  reserved: true
+  hidden: false
+  backend_roles:
+  - "snapshotrestore"
+  hosts: []
+  users: []
+  and_backend_roles: []
+
+kibana_server:
+  reserved: true
+  hidden: false
+  backend_roles: []
+  hosts: []
+  users:
+  - "kibanaserver"
+  and_backend_roles: []
+
+kibana_user:
+  reserved: false
+  hidden: false
+  backend_roles:
+  - "kibanauser"
+  hosts: []
+  users: []
+  and_backend_roles: []
+  description: "Maps kibanauser to kibana_user"
+
+# Wazuh monitoring and statistics index permissions
+manage_wazuh_index:
+  reserved: true
+  hidden: false
+  backend_roles: []
+  hosts: []
+  users:
+  - "kibanaserver"
+  and_backend_roles: []--action-groups-yml--
+_meta:
+  type: "actiongroups"
+  config_version: 2
+--jvm-options--
+## JVM configuration
+
+################################################################
+## IMPORTANT: JVM heap size
+################################################################
+##
+## You should always set the min and max JVM heap
+## size to the same value. For example, to set
+## the heap to 4 GB, set:
+##
+##
+## See https://opensearch.org/docs/opensearch/install/important-settings/
+## for more information
+##
+################################################################
+
+# Xms represents the initial size of total heap space
+# Xmx represents the maximum size of total heap space
+
+
+################################################################
+## Expert settings
+################################################################
+##
+## All settings below this section are considered
+## expert settings. Don't tamper with them unless
+## you understand what you are doing
+##
+################################################################
+
+## GC configuration
+8-10:-XX:+UseConcMarkSweepGC
+8-10:-XX:CMSInitiatingOccupancyFraction=75
+8-10:-XX:+UseCMSInitiatingOccupancyOnly
+
+## G1GC Configuration
+# NOTE: G1 GC is only supported on JDK version 10 or later
+# to use G1GC, uncomment the next two lines and update the version on the
+# following three lines to your version of the JDK
+# 10:-XX:-UseConcMarkSweepGC
+# 10:-XX:-UseCMSInitiatingOccupancyOnly
+11-:-XX:+UseG1GC
+11-:-XX:G1ReservePercent=25
+11-:-XX:InitiatingHeapOccupancyPercent=30
+
+## JVM temporary directory
+-Djava.io.tmpdir=${OPENSEARCH_TMPDIR}
+
+## heap dumps
+
+# generate a heap dump when an allocation from the Java heap fails
+# heap dumps are created in the working directory of the JVM
+-XX:+HeapDumpOnOutOfMemoryError
+
+# specify an alternative path for heap dumps; ensure the directory exists and
+# has sufficient space
+-XX:HeapDumpPath=/var/lib/wazuh-indexer
+
+# specify an alternative path for JVM fatal error logs
+-XX:ErrorFile=/var/log/wazuh-indexer/hs_err_pid%p.log
+
+## JDK 8 GC logging
+8:-XX:+PrintGCDetails
+8:-XX:+PrintGCDateStamps
+8:-XX:+PrintTenuringDistribution
+8:-XX:+PrintGCApplicationStoppedTime
+8:-Xloggc:/var/log/wazuh-indexer/gc.log
+8:-XX:+UseGCLogFileRotation
+8:-XX:NumberOfGCLogFiles=32
+8:-XX:GCLogFileSize=64m
+
+# JDK 9+ GC logging
+9-:-Xlog:gc*,gc+age=trace,safepoint:file=/var/log/wazuh-indexer/gc.log:utctime,pid,tags:filecount=32,filesize=64m
+
+# Explicitly allow security manager (https://bugs.openjdk.java.net/browse/JDK-8270380)
+18-:-Djava.security.manager=allow
+
+# JDK 20+ Incubating Vector Module for SIMD optimizations;
+# disabling may reduce performance on vector optimized lucene
+20:--add-modules=jdk.incubator.vector
+
+# HDFS ForkJoinPool.common() support by SecurityManager
+-Djava.util.concurrent.ForkJoinPool.common.threadFactory=org.opensearch.secure_sm.SecuredForkJoinWorkerThreadFactory
+
+## OpenSearch Performance Analyzer
+-Dclk.tck=100
+-Djdk.attach.allowAttachSelf=true
+-Djava.security.policy=file:///usr/share/wazuh-indexer/opensearch-performance-analyzer/opensearch_security.policy
+--add-opens=jdk.attach/sun.tools.attach=ALL-UNNAMED

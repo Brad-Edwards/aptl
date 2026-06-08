@@ -1,0 +1,79 @@
+[
+  {
+    "Id": "sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7",
+    "RepoTags": [
+      "wazuh/wazuh-dashboard:4.12.0"
+    ],
+    "RepoDigests": [
+      "wazuh/wazuh-dashboard@sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2025-09-01T12:05:36.776991813Z",
+    "Config": {
+      "User": "wazuh-dashboard",
+      "ExposedPorts": {
+        "443/tcp": {}
+      },
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "USER=wazuh-dashboard",
+        "GROUP=wazuh-dashboard",
+        "NAME=wazuh-dashboard",
+        "INSTALL_DIR=/usr/share/wazuh-dashboard",
+        "PATTERN=",
+        "CHECKS_PATTERN=",
+        "CHECKS_TEMPLATE=",
+        "CHECKS_API=",
+        "CHECKS_SETUP=",
+        "APP_TIMEOUT=",
+        "API_SELECTOR=",
+        "IP_SELECTOR=",
+        "IP_IGNORE=",
+        "WAZUH_MONITORING_ENABLED=",
+        "WAZUH_MONITORING_FREQUENCY=",
+        "WAZUH_MONITORING_SHARDS=",
+        "WAZUH_MONITORING_REPLICAS="
+      ],
+      "Entrypoint": [
+        "/entrypoint.sh"
+      ],
+      "WorkingDir": "/usr/share/wazuh-dashboard"
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 410347438,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:3ad05f16deb4834f12b2e9194e45fda60e7583caf0ab3f512d773e1962d3ab83",
+        "sha256:5e6606d5baf92e71e456d14d1a9ee47287f7c8e45857f86cc84c3f7fec3081a2",
+        "sha256:eddbe59c5df835d41c404c204494d3b53d7e6d195d5e36a0f72460efcaf4e202",
+        "sha256:4fdb0977266ce325147664f5e715ccdcf445a070e2cd3c315a554d64aa1bd82e",
+        "sha256:e72fcc8ba217ad36634ae0395d8641ce9fcb01d8f98f5901ef7e455eb9aacdb5",
+        "sha256:75223129663109b408245ed4cead4cae1c7bdfb7a2dadc06e147522ef17e2ee2",
+        "sha256:06675b062c25d8818e87a9a4781601e7bcd8e6cd320b4eda13a9f21c3af4a47b",
+        "sha256:7478c98ba6d76f22398b4c6cb65e2b04665b4ee0622f62f1b19fc7563d68339e",
+        "sha256:6c502db0fdacec52da8eb383da313a5b9210b2b131444887b1334e34b7e10a91",
+        "sha256:7bab687c3635d5998e52313f0345caf8ac64e854e0da2b90fd179d5266aeb0ef",
+        "sha256:96fd01a17b554811cc0ddcd8ab651a1acc3f66f1f48643e4df0944d7aa7b2d57",
+        "sha256:b653319e7d33d3ede884047579b6e4c76d12b063ff4efa68e3e51fe5afba1953",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-05-23T06:17:04.03128224Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7",
+      "size": 3024
+    },
+    "Identity": {
+      "Pull": [
+        {
+          "Repository": "docker.io/wazuh/wazuh-dashboard"
+        }
+      ]
+    }
+  }
+]

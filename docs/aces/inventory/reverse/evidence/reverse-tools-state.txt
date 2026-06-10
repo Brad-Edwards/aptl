@@ -17,11 +17,13 @@ llvm-objdump -> /usr/bin/llvm-objdump
 java -> /usr/bin/java
 --labadmin-local-bin--
 total 8
-drwxrwxr-x 2 labadmin labadmin 4096 Jun 10 05:02 .
+drwxrwxr-x 2 labadmin labadmin 4096 Jun 10 14:28 .
 drwxrwxr-x 4 labadmin labadmin 4096 Jun 10 05:02 ..
-lrwxrwxrwx 1 labadmin labadmin   48 Jun 10 05:02 floss -> /home/labadmin/.local/pipx/venvs/floss/bin/floss
+lrwxrwxrwx 1 labadmin labadmin   52 Jun 10 14:28 capa -> /home/labadmin/.local/pipx/venvs/flare-capa/bin/capa
+lrwxrwxrwx 1 labadmin labadmin   54 Jun 10 14:28 floss -> /home/labadmin/.local/pipx/venvs/flare-floss/bin/floss
 --pipx-venvs--
-floss
+flare-capa
+flare-floss
 --workspace--
 --analyze-helper--
 --radare2-install--

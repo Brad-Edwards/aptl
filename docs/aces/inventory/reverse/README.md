@@ -11,7 +11,7 @@ custom Ubuntu 22.04 systemd container (profile `reverse`) running `sshd`
 (published to the host as **2027 -> 22**), `rsyslog`, an in-process **Wazuh
 agent** and **Falco** (modern eBPF), and a first-boot-installed toolchain
 (**radare2** built from source, **YARA**, **UPX**, **osslsigncode**, **OpenJDK
-17**, and a pipx-installed `floss`). It is inventoried as the participant node
+17**, and pipx-installed **flare-floss** + **flare-capa**). It is inventoried as the participant node
 `nodes.techvault.reverse`. Both log-forwarding paths (Wazuh agent + rsyslog)
 are encoded as node-level `forwarding_agents`; the realized Wazuh edge is
 `relationships.reverse-forwards-wazuh`.
@@ -46,14 +46,14 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Base image | `ubuntu:22.04` (shared APTL base layer) |
 | Runtime OS | Ubuntu 22.04.5 LTS |
 | Init | systemd (PID 1), `cgroup: host` |
-| Analysis toolchain | radare2 (source build), YARA, UPX, osslsigncode, OpenJDK 17, pipx `floss` — **first-boot, writable layer** |
+| Analysis toolchain | radare2 (source build), YARA, UPX, osslsigncode, OpenJDK 17, pipx `flare-floss` 3.1.1 + `flare-capa` 9.4.0 — **first-boot, writable layer** |
 | Agents | in-process Wazuh agent 4.12.0 + Falco (modern eBPF) + rsyslog forwarder |
 | Reachable participant ports | SSH `22` (published to host `2027`); Falco gRPC `8765` (security-net only) |
 | Network identity | `security-net` 172.20.0.27 (only network) |
 | Capabilities | default Docker set **+ CAP_SYS_ADMIN / CAP_SYS_NICE / CAP_SYS_RESOURCE** (systemd), seccomp:unconfined |
 | Memory limit | 2 GiB |
 | Package inventory | 506 dpkg packages (running-container state) |
-| Trivy vulnerability findings | 67 image-layer findings: 32 low, 35 medium |
+| Trivy vulnerability findings | 77 image-layer findings: 1 high, 37 medium, 39 low |
 | Local identity | 27 users, 48 groups; labadmin has a NOPASSWD sudo grant |
 
 ## Evidence Bundle
@@ -123,10 +123,13 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
 - The RE toolchain + Wazuh/Falco agents are first-boot writable-layer installs,
   so the image-layer scanners do not see them; runtime state is in
   `os-packages.txt` / `language-manifests.txt` / `reverse-tools-state.txt`.
-- The pipx `floss` distribution is PyPI `floss 0.1.0` — **not** the intended
-  FireEye/Mandiant `flare-floss` string solver (the install script installs the
-  name-squatted package). Captured as the realized state; reported as an
-  install-script defect.
+- The FLARE Python tools are the correct pinned distributions `flare-floss`
+  3.1.1 and `flare-capa` 9.4.0. This was **corrected in this PR** (SCN-010 #338):
+  the initial capture found `setup-reverse-tools.sh` installing the bare PyPI
+  `floss` (an unrelated academic fault-localization tool — analyzed as
+  non-malicious: a pure-Python wheel with no install-time code) and `capa`
+  unpinned. The script now installs the pinned `flare-floss`/`flare-capa` with
+  loud failure handling, and this bundle was re-captured from the corrected box.
 - The filesystem manifest excludes the radare2 source/build tree, pipx venv
   payloads, and `~/.cache` (toolchain payload evidenced by the package/SBOM
   surfaces).

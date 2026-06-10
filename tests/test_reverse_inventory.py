@@ -32,9 +32,9 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 IMAGE_ID = "sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192"
 IMAGE_DIGEST = "aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192"
 RUNTIME_PACKAGE_COUNT = 506
-TRIVY_FINDING_COUNT = 67
-FILESYSTEM_TREE_ROW_COUNT = 221
-SDL_FILESYSTEM_ENTRY_COUNT = 221
+TRIVY_FINDING_COUNT = 77
+FILESYSTEM_TREE_ROW_COUNT = 264
+SDL_FILESYSTEM_ENTRY_COUNT = 264
 LOCAL_IDENTITY_USER_COUNT = 27
 LOCAL_IDENTITY_GROUP_COUNT = 48
 DOCKER_HISTORY_ROW_COUNT = 35
@@ -273,7 +273,7 @@ def test_reverse_runtime_evidence_counts():
 
 def test_reverse_trivy_counts_match_severity_breakdown():
     counts = {row["severity"]: row["count"] for row in _json_file("trivy-vulnerability-counts.json")}
-    assert counts == {"LOW": 32, "MEDIUM": 35}
+    assert counts == {"HIGH": 1, "MEDIUM": 37, "LOW": 39}
     assert sum(counts.values()) == TRIVY_FINDING_COUNT
 
 
@@ -299,6 +299,26 @@ def test_reverse_first_boot_state_records_toolchain():
     state = (EVIDENCE_DIR / "reverse-tools-state.txt").read_text(encoding="utf-8")
     assert "/usr/local/bin/radare2" in state
     assert ".reverse_tools_installed" in state
+
+
+def test_reverse_installs_correct_flare_distributions(legacy_scenario):
+    # The FLARE tools must be the Mandiant distributions flare-floss / flare-capa,
+    # NOT the unrelated bare `floss` / `capa` PyPI projects.
+    lang = (EVIDENCE_DIR / "language-manifests.txt").read_text(encoding="utf-8")
+    assert "flare-floss 3.1.1" in lang
+    assert "flare-capa 9.4.0" in lang
+
+    components = {c["component_id"]: c for c in legacy_scenario["nodes"]["reverse"]["runtime"]["software_components"]}
+    assert components["flare-floss"]["version"] == "3.1.1"
+    assert components["flare-capa"]["version"] == "9.4.0"
+    assert components["flare-floss"]["package_manager"] == "pipx"
+
+    # The fixed install script pins the correct distribution names.
+    script = (PROJECT_ROOT / "containers" / "reverse" / "setup-reverse-tools.sh").read_text(encoding="utf-8")
+    assert "pipx install flare-floss==3.1.1" in script
+    assert "pipx install flare-capa==9.4.0" in script
+    assert "pipx install floss" not in script
+    assert "pipx install capa" not in script
 
 
 def test_techvault_sdl_encodes_reverse_node(legacy_scenario):

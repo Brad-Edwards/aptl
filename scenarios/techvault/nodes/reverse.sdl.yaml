@@ -5,9 +5,9 @@ nodes:
     description: 'TechVault reverse-engineering workbench (compose service reverse, container aptl-reverse, profile reverse,
       image aptl-reverse:local). Ubuntu 22.04 systemd container running sshd (published to the host as 2027->22), rsyslog,
       an in-process Wazuh agent and Falco, and a first-boot-installed malware-analysis toolchain (radare2, YARA, UPX, osslsigncode,
-      OpenJDK 17, pipx floss). Inventoried at experiment grade under docs/aces/inventory/reverse/ (SCN-010 issue #338). Family:
-      target. Both log-forwarding paths (Wazuh agent + rsyslog) are encoded as node-level forwarding_agents; the realized
-      wazuh edge is relationships.reverse-forwards-wazuh.'
+      OpenJDK 17, and pipx-installed flare-floss + flare-capa). Inventoried at experiment grade under docs/aces/inventory/reverse/
+      (SCN-010 issue #338). Family: target. Both log-forwarding paths (Wazuh agent + rsyslog) are encoded as node-level forwarding_agents;
+      the realized wazuh edge is relationships.reverse-forwards-wazuh.'
     source:
       name: aptl-reverse
       version: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
@@ -399,7 +399,7 @@ nodes:
         - identifier: containers-reverse-setup-reverse-tools-sh
           source_path: containers/reverse/setup-reverse-tools.sh
           destination_path: ''
-          checksum: ae654a25e0eac19efd2840ea91808eea32f5a7b4c220c3cd1621266ddb06a591
+          checksum: 595f65ea91fd4b32b3fd31eced9fab41065251328e34eabba4d79e4a17212b4b
           checksum_algorithm: sha256
           description: ''
         - identifier: containers-reverse-reverse-tools-install-service
@@ -450,9 +450,9 @@ nodes:
           and docker buildx imagetools inspect fails (see capture-limits.txt). Build context is ./containers; the Dockerfile
           builds the reverse-engineering workbench on the shared Ubuntu 22.04 base layer (systemd, sshd, rsyslog, the APTL
           wazuh/falco bootstrap, and the first-boot reverse-tools-install unit). The reverse-engineering toolchain (radare2
-          from source, YARA, UPX, osslsigncode, OpenJDK 17, pipx floss) and the Wazuh/Falco agents are installed on first
-          boot into the writable layer and are therefore NOT present in these image layers; runtime package state is captured
-          by os-packages.txt and language-manifests.txt.
+          from source, YARA, UPX, osslsigncode, OpenJDK 17, pipx flare-floss + flare-capa) and the Wazuh/Falco agents are
+          installed on first boot into the writable layer and are therefore NOT present in these image layers; runtime package
+          state is captured by os-packages.txt and language-manifests.txt.
     resources: null
     os: linux
     os_version: Ubuntu 22.04.5 LTS
@@ -1057,6 +1057,86 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
+      - path: /root/.sigstore/root/tuf.db/LOCK
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 0
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf.db/LOG
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 1007
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets/signing_config.v0.2.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 1034
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets/signing_config_rekor_v2.v0.2.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 1230
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf.db/000002.log
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 12921
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
       - path: /etc/ssh/ssh_host_dsa_key
         entry_type: file
         presence: present
@@ -1073,7 +1153,7 @@ nodes:
         stability: stable
         sensitivity: operator_secret
         description: ''
-      - path: /var/log/falco_events.json
+      - path: /root/.sigstore/root/tuf.db/CURRENT
         entry_type: file
         presence: present
         owner_user: root
@@ -1081,12 +1161,108 @@ nodes:
         uid: 0
         gid: 0
         mode: '600'
-        size: 22701710
+        size: 16
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: log
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf.db/CURRENT.bak
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 16
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets/artifact.pub
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 177
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets/ctfe.pub
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 177
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets/ctfe_2022.pub
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 178
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets/rekor.pub
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 178
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets/signing_config.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 219
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
         sensitivity: plain
         description: ''
       - path: /etc/ssh/ssh_host_rsa_key
@@ -1105,6 +1281,38 @@ nodes:
         stability: stable
         sensitivity: operator_secret
         description: ''
+      - path: /var/log/falco_events.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 26966651
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: log
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf.db/MANIFEST-000003
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 41
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
       - path: /etc/ssh/ssh_host_ed25519_key
         entry_type: file
         presence: present
@@ -1121,6 +1329,22 @@ nodes:
         stability: stable
         sensitivity: operator_secret
         description: ''
+      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 50
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
       - path: /etc/ssh/ssh_host_ecdsa_key
         entry_type: file
         presence: present
@@ -1136,6 +1360,86 @@ nodes:
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
         sensitivity: operator_secret
+        description: ''
+      - path: /root/.sigstore/root/targets/trusted_root.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 6787
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/targets/trusted_root.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 6787
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets/fulcio_v1.crt.pem
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 740
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets/fulcio.crt.pem
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 744
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets/fulcio_intermediate_v1.crt.pem
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '600'
+        size: 789
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
         description: ''
       - path: /var/ossec/etc/shared/cis_win2012r2_memberL1_rcl.txt
         entry_type: file
@@ -1585,22 +1889,6 @@ nodes:
         stability: stable
         sensitivity: plain
         description: ''
-      - path: /var/log/syslog
-        entry_type: file
-        presence: present
-        owner_user: syslog
-        owner_group: adm
-        uid: 105
-        gid: 4
-        mode: '640'
-        size: 1072845
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: log
-        sensitivity: plain
-        description: ''
       - path: /var/log/kern.log
         entry_type: file
         presence: present
@@ -1609,7 +1897,23 @@ nodes:
         uid: 105
         gid: 4
         mode: '640'
-        size: 14447
+        size: 27571
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: log
+        sensitivity: plain
+        description: ''
+      - path: /var/log/syslog
+        entry_type: file
+        presence: present
+        owner_user: syslog
+        owner_group: adm
+        uid: 105
+        gid: 4
+        mode: '640'
+        size: 3533987
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
@@ -1625,7 +1929,7 @@ nodes:
         uid: 105
         gid: 4
         mode: '640'
-        size: 5193
+        size: 9190
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
@@ -1705,7 +2009,7 @@ nodes:
         uid: 1000
         gid: 1000
         mode: '644'
-        size: 23924
+        size: 30289
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
@@ -1994,6 +2298,22 @@ nodes:
         gid: 0
         mode: '644'
         size: 1733
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/snapshot.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '644'
+        size: 1760
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
@@ -2321,6 +2641,38 @@ nodes:
         stability: stable
         sensitivity: plain
         description: ''
+      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/timestamp.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '644'
+        size: 449
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/targets.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '644'
+        size: 4942
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
       - path: /etc/ssh/moduli
         entry_type: file
         presence: present
@@ -2367,6 +2719,22 @@ nodes:
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: log
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/root.json
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '644'
+        size: 5630
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
         sensitivity: plain
         description: ''
       - path: /etc/ssh/ssh_host_rsa_key.pub
@@ -2641,7 +3009,7 @@ nodes:
         stability: generated
         sensitivity: plain
         description: ''
-      - path: /home/labadmin/.local/pipx/venvs/floss/pipx_metadata.json
+      - path: /home/labadmin/.local/pipx/venvs/flare-floss/pipx_metadata.json
         entry_type: file
         presence: present
         owner_user: labadmin
@@ -2649,7 +3017,7 @@ nodes:
         uid: 1000
         gid: 1000
         mode: '664'
-        size: 2589
+        size: 2263
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
@@ -2657,7 +3025,7 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_05.02.13_1.log
+      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.28.31.log
         entry_type: file
         presence: present
         owner_user: labadmin
@@ -2665,7 +3033,39 @@ nodes:
         uid: 1000
         gid: 1000
         mode: '664'
-        size: 3375
+        size: 2965
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.28.12.log
+        entry_type: file
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '664'
+        size: 2976
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/venvs/flare-capa/pipx_metadata.json
+        entry_type: file
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '664'
+        size: 3134
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
@@ -2737,7 +3137,7 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_05.02.13.log
+      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.24.12.log
         entry_type: file
         presence: present
         owner_user: labadmin
@@ -2745,7 +3145,71 @@ nodes:
         uid: 1000
         gid: 1000
         mode: '664'
-        size: 468
+        size: 386
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.28.46.log
+        entry_type: file
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '664'
+        size: 386
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.29.43.log
+        entry_type: file
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '664'
+        size: 386
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.32.23.log
+        entry_type: file
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '664'
+        size: 386
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.28.11.log
+        entry_type: file
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '664'
+        size: 657
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
@@ -2769,7 +3233,23 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
-      - path: /home/labadmin/.local/pipx/venvs/floss/pyvenv.cfg
+      - path: /home/labadmin/.local/pipx/venvs/flare-capa/pyvenv.cfg
+        entry_type: file
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '664'
+        size: 71
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/venvs/flare-floss/pyvenv.cfg
         entry_type: file
         presence: present
         owner_user: labadmin
@@ -3010,6 +3490,102 @@ nodes:
         sensitivity: plain
         description: ''
       - path: /root
+        entry_type: directory
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '700'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore
+        entry_type: directory
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '700'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root
+        entry_type: directory
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '700'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/targets
+        entry_type: directory
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '700'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev
+        entry_type: directory
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '700'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/targets
+        entry_type: directory
+        presence: present
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '700'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: ''
+      - path: /root/.sigstore/root/tuf.db
         entry_type: directory
         presence: present
         owner_user: root
@@ -3809,7 +4385,7 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
-      - path: /home/labadmin/.local/pipx/venvs/floss
+      - path: /home/labadmin/.local/pipx/venvs/flare-capa
         entry_type: directory
         presence: present
         owner_user: labadmin
@@ -3825,7 +4401,7 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
-      - path: /home/labadmin/.local/pipx/venvs/floss/bin
+      - path: /home/labadmin/.local/pipx/venvs/flare-capa/bin
         entry_type: directory
         presence: present
         owner_user: labadmin
@@ -3841,7 +4417,7 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
-      - path: /home/labadmin/.local/pipx/venvs/floss/include
+      - path: /home/labadmin/.local/pipx/venvs/flare-capa/include
         entry_type: directory
         presence: present
         owner_user: labadmin
@@ -3857,7 +4433,87 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
-      - path: /home/labadmin/.local/pipx/venvs/floss/lib
+      - path: /home/labadmin/.local/pipx/venvs/flare-capa/lib
+        entry_type: directory
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '775'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/venvs/flare-floss
+        entry_type: directory
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '775'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/venvs/flare-floss/bin
+        entry_type: directory
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '775'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/venvs/flare-floss/include
+        entry_type: directory
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '775'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/venvs/flare-floss/lib
+        entry_type: directory
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '775'
+        size: 4096
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/pipx/venvs/flare-floss/share
         entry_type: directory
         presence: present
         owner_user: labadmin
@@ -3921,7 +4577,7 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
-      - path: /home/labadmin/.local/pipx/venvs/floss/lib64
+      - path: /home/labadmin/.local/pipx/venvs/flare-capa/lib64
         entry_type: symlink
         presence: present
         owner_user: labadmin
@@ -3937,6 +4593,38 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
+      - path: /home/labadmin/.local/pipx/venvs/flare-floss/lib64
+        entry_type: symlink
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '777'
+        size: 3
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
+      - path: /home/labadmin/.local/bin/capa
+        entry_type: symlink
+        presence: present
+        owner_user: labadmin
+        owner_group: labadmin
+        uid: 1000
+        gid: 1000
+        mode: '777'
+        size: 52
+        content_digest: ''
+        digest_algorithm: ''
+        source_path: ''
+        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
+        stability: volume_backed
+        sensitivity: plain
+        description: ''
       - path: /home/labadmin/.local/bin/floss
         entry_type: symlink
         presence: present
@@ -3945,7 +4633,7 @@ nodes:
         uid: 1000
         gid: 1000
         mode: '777'
-        size: 48
+        size: 54
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
@@ -4805,32 +5493,32 @@ nodes:
         status: healthy
         failing_streak: 0
         log:
-        - start: '2026-06-10T07:28:15.882927109+02:00'
-          end: '2026-06-10T07:28:15.94287311+02:00'
+        - start: '2026-06-10T16:31:07.980386461+02:00'
+          end: '2026-06-10T16:31:08.040076173+02:00'
           exit_code: 0
           output: "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=40,fd=3))   \nLISTEN 0\
             \      128             [::]:22            [::]:*    users:((\"sshd\",pid=40,fd=4))   \n"
           output_redacted: false
-        - start: '2026-06-10T07:28:30.943597186+02:00'
-          end: '2026-06-10T07:28:31.011661029+02:00'
+        - start: '2026-06-10T16:31:23.040411337+02:00'
+          end: '2026-06-10T16:31:23.097587729+02:00'
           exit_code: 0
           output: "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=40,fd=3))   \nLISTEN 0\
             \      128             [::]:22            [::]:*    users:((\"sshd\",pid=40,fd=4))   \n"
           output_redacted: false
-        - start: '2026-06-10T07:28:46.013024984+02:00'
-          end: '2026-06-10T07:28:46.0817144+02:00'
+        - start: '2026-06-10T16:31:38.097977311+02:00'
+          end: '2026-06-10T16:31:38.158161746+02:00'
           exit_code: 0
           output: "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=40,fd=3))   \nLISTEN 0\
             \      128             [::]:22            [::]:*    users:((\"sshd\",pid=40,fd=4))   \n"
           output_redacted: false
-        - start: '2026-06-10T07:29:01.0833067+02:00'
-          end: '2026-06-10T07:29:01.14734429+02:00'
+        - start: '2026-06-10T16:31:53.158758885+02:00'
+          end: '2026-06-10T16:31:53.210581629+02:00'
           exit_code: 0
           output: "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=40,fd=3))   \nLISTEN 0\
             \      128             [::]:22            [::]:*    users:((\"sshd\",pid=40,fd=4))   \n"
           output_redacted: false
-        - start: '2026-06-10T07:29:16.148132838+02:00'
-          end: '2026-06-10T07:29:16.212189366+02:00'
+        - start: '2026-06-10T16:32:08.211483146+02:00'
+          end: '2026-06-10T16:32:08.26060162+02:00'
           exit_code: 0
           output: "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=40,fd=3))   \nLISTEN 0\
             \      128             [::]:22            [::]:*    users:((\"sshd\",pid=40,fd=4))   \n"
@@ -10501,6 +11189,28 @@ nodes:
         - /usr/bin/java
         hashes: []
         description: OpenJDK 17 JRE for Ghidra headless (future integration).
+      - component_id: flare-floss
+        name: FLARE Obfuscated String Solver (flare-floss)
+        version: 3.1.1
+        component_type: application
+        provenance: package_manager
+        package_manager: pipx
+        installed_paths:
+        - /home/labadmin/.local/bin/floss
+        hashes: []
+        description: Mandiant FLARE Obfuscated String Solver; pipx-installed for labadmin on first boot from the PyPI distribution
+          flare-floss (NOT the unrelated `floss` project). Pinned to 3.1.1.
+      - component_id: flare-capa
+        name: FLARE capa (flare-capa)
+        version: 9.4.0
+        component_type: application
+        provenance: package_manager
+        package_manager: pipx
+        installed_paths:
+        - /home/labadmin/.local/bin/capa
+        hashes: []
+        description: Mandiant FLARE capability-identification tool; pipx-installed for labadmin on first boot from the PyPI
+          distribution flare-capa (NOT the unrelated `capa` project). Pinned to 9.4.0.
       dependency_manifests: []
       package_vulnerabilities:
       - id: CVE-2026-27456
@@ -10509,7 +11219,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
         scanner_version: 'Version: 0.70.0'
@@ -10520,7 +11230,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-34969
         scanner_version: 'Version: 0.70.0'
@@ -10531,7 +11241,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
         scanner_version: 'Version: 0.70.0'
@@ -10542,7 +11252,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
         scanner_version: 'Version: 0.70.0'
@@ -10553,7 +11263,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-29481
         scanner_version: 'Version: 0.70.0'
@@ -10564,7 +11274,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4046
         scanner_version: 'Version: 0.70.0'
@@ -10575,7 +11285,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5435
         scanner_version: 'Version: 0.70.0'
@@ -10586,7 +11296,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6238
         scanner_version: 'Version: 0.70.0'
@@ -10597,7 +11307,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4046
         scanner_version: 'Version: 0.70.0'
@@ -10608,7 +11318,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5435
         scanner_version: 'Version: 0.70.0'
@@ -10619,7 +11329,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6238
         scanner_version: 'Version: 0.70.0'
@@ -10630,7 +11340,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-34969
         scanner_version: 'Version: 0.70.0'
@@ -10641,7 +11351,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-1352
         scanner_version: 'Version: 0.70.0'
@@ -10652,7 +11362,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-1376
         scanner_version: 'Version: 0.70.0'
@@ -10663,7 +11373,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-66382
         scanner_version: 'Version: 0.70.0'
@@ -10674,7 +11384,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
         scanner_version: 'Version: 0.70.0'
@@ -10685,7 +11395,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 1.9.4-3ubuntu3.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-41989
         scanner_version: 'Version: 0.70.0'
@@ -10696,7 +11406,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-2236
         scanner_version: 'Version: 0.70.0'
@@ -10707,7 +11417,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-33845
         scanner_version: 'Version: 0.70.0'
@@ -10718,7 +11428,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-33846
         scanner_version: 'Version: 0.70.0'
@@ -10729,7 +11439,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3832
         scanner_version: 'Version: 0.70.0'
@@ -10740,7 +11450,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3833
         scanner_version: 'Version: 0.70.0'
@@ -10751,7 +11461,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42009
         scanner_version: 'Version: 0.70.0'
@@ -10762,7 +11472,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42010
         scanner_version: 'Version: 0.70.0'
@@ -10773,7 +11483,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42011
         scanner_version: 'Version: 0.70.0'
@@ -10784,7 +11494,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42012
         scanner_version: 'Version: 0.70.0'
@@ -10795,7 +11505,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42013
         scanner_version: 'Version: 0.70.0'
@@ -10806,7 +11516,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42014
         scanner_version: 'Version: 0.70.0'
@@ -10817,7 +11527,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42015
         scanner_version: 'Version: 0.70.0'
@@ -10828,7 +11538,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5260
         scanner_version: 'Version: 0.70.0'
@@ -10839,7 +11549,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-5222
         scanner_version: 'Version: 0.70.0'
@@ -10850,7 +11560,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 5.2.5-2ubuntu1.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34743
         scanner_version: 'Version: 0.70.0'
@@ -10861,7 +11571,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
         scanner_version: 'Version: 0.70.0'
@@ -10872,7 +11582,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
         scanner_version: 'Version: 0.70.0'
@@ -10883,7 +11593,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
         scanner_version: 'Version: 0.70.0'
@@ -10894,7 +11604,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
         scanner_version: 'Version: 0.70.0'
@@ -10905,7 +11615,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
         scanner_version: 'Version: 0.70.0'
@@ -10916,7 +11626,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-41409
         scanner_version: 'Version: 0.70.0'
@@ -10927,7 +11637,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2017-11164
         scanner_version: 'Version: 0.70.0'
@@ -10938,7 +11648,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
         scanner_version: 'Version: 0.70.0'
@@ -10949,7 +11659,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
         scanner_version: 'Version: 0.70.0'
@@ -10960,9 +11670,119 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45447
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: high
+        scanner: trivy
+        image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+        scan_time: '2026-06-10T14:32:21Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45447
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34182
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+        scan_time: '2026-06-10T14:32:21Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34182
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45445
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+        scan_time: '2026-06-10T14:32:21Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45445
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34180
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+        scan_time: '2026-06-10T14:32:21Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34180
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42766
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+        scan_time: '2026-06-10T14:32:21Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42766
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42767
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+        scan_time: '2026-06-10T14:32:21Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42767
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42770
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+        scan_time: '2026-06-10T14:32:21Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42770
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45446
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+        scan_time: '2026-06-10T14:32:21Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45446
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-7383
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+        scan_time: '2026-06-10T14:32:21Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-7383
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-9076
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+        scan_time: '2026-06-10T14:32:21Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-9076
         scanner_version: 'Version: 0.70.0'
         scanner_database: ''
       - id: CVE-2022-27943
@@ -10971,7 +11791,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
         scanner_version: 'Version: 0.70.0'
@@ -10982,7 +11802,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
         scanner_version: 'Version: 0.70.0'
@@ -10993,7 +11813,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
         scanner_version: 'Version: 0.70.0'
@@ -11004,7 +11824,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 249.11-0ubuntu3.21
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40226
         scanner_version: 'Version: 0.70.0'
@@ -11015,7 +11835,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: 249.11-0ubuntu3.21
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-7008
         scanner_version: 'Version: 0.70.0'
@@ -11026,7 +11846,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
         scanner_version: 'Version: 0.70.0'
@@ -11037,7 +11857,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
         scanner_version: 'Version: 0.70.0'
@@ -11048,7 +11868,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-4899
         scanner_version: 'Version: 0.70.0'
@@ -11059,7 +11879,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-29383
         scanner_version: 'Version: 0.70.0'
@@ -11070,7 +11890,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
         scanner_version: 'Version: 0.70.0'
@@ -11081,7 +11901,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
         scanner_version: 'Version: 0.70.0'
@@ -11092,7 +11912,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
         scanner_version: 'Version: 0.70.0'
@@ -11103,7 +11923,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
         scanner_version: 'Version: 0.70.0'
@@ -11114,7 +11934,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
         scanner_version: 'Version: 0.70.0'
@@ -11125,7 +11945,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-29383
         scanner_version: 'Version: 0.70.0'
@@ -11136,7 +11956,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
         scanner_version: 'Version: 0.70.0'
@@ -11147,7 +11967,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
         scanner_version: 'Version: 0.70.0'
@@ -11158,7 +11978,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
         scanner_version: 'Version: 0.70.0'
@@ -11169,7 +11989,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
         scanner_version: 'Version: 0.70.0'
@@ -11180,7 +12000,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
         scanner_version: 'Version: 0.70.0'
@@ -11191,7 +12011,7 @@ nodes:
         severity: low
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
         scanner_version: 'Version: 0.70.0'
@@ -11202,7 +12022,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-45582
         scanner_version: 'Version: 0.70.0'
@@ -11213,7 +12033,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5704
         scanner_version: 'Version: 0.70.0'
@@ -11224,7 +12044,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
         scanner_version: 'Version: 0.70.0'
@@ -11235,7 +12055,7 @@ nodes:
         severity: medium
         scanner: trivy
         image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
-        scan_time: '2026-06-10T05:29:30Z'
+        scan_time: '2026-06-10T14:32:21Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-31879
         scanner_version: 'Version: 0.70.0'

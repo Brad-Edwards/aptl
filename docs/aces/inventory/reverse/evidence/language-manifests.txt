@@ -3,7 +3,9 @@ Python 3.10.12
 --pipx-list--
 venvs are in /home/labadmin/.local/pipx/venvs
 apps are exposed on your $PATH at /home/labadmin/.local/bin
-   package floss 0.1.0, installed using Python 3.10.12
+   package flare-capa 9.4.0, installed using Python 3.10.12
+    - capa
+   package flare-floss 3.1.1, installed using Python 3.10.12
     - floss
 --java--
 openjdk version "17.0.19" 2026-04-21
@@ -28,7 +30,8 @@ Ubuntu LLVM version 14.0.0
 
   Optimized build.
 --capa--
-capa not on PATH
+/home/labadmin/.local/bin/capa
+capa 9.4.0
 --falco--
 Error: Error reading config file (/etc/falco/falco.yaml): engine.kind 'modern_bpf' is not a valid kind.
 --wazuh--

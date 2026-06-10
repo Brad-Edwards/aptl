@@ -104,16 +104,16 @@ wazuh-execd is running...
 status='connected'
 
 # Last time a keepalive was sent
-last_keepalive='2026-06-10 05:29:25'
+last_keepalive='2026-06-10 14:32:15'
 
 # Last time a control message was received
-last_ack='2026-06-10 05:29:25'
+last_ack='2026-06-10 14:32:15'
 
 # Number of generated events
-msg_count='9521'
+msg_count='13547'
 
 # Number of messages (events + control messages) sent to the manager
-msg_sent='9702'
+msg_sent='16985'
 
 # Number of events currently buffered
 # Empty if anti-flooding mechanism is disabled

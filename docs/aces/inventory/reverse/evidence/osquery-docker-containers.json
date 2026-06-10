@@ -26,7 +26,7 @@
       "security_options": "seccomp:unconfined",
       "started_at": "2026-06-10T04:58:48.290590469Z",
       "state": "running",
-      "status": "Up 31 minutes (healthy)",
+      "status": "Up 10 hours (healthy)",
       "user_namespace": "",
       "uts_namespace": ""
     }

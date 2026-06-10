@@ -15,7 +15,7 @@ Wazuh agent_control. Agent information:
    Client version:      Wazuh v4.12.0
    Configuration hash:  ab73af41699f13fdd81903b5f23d8d00
    Shared file hash:    cb5dc59d195320bb20b6039a519a8c0e
-   Last keep alive:     1781069365
+   Last keep alive:     1781101935
 
    Syscheck last started at:  Wed Jun 10 04:59:46 2026
    Syscheck last ended at:    Wed Jun 10 04:59:47 2026

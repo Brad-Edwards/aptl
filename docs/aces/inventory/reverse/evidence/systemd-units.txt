@@ -117,7 +117,7 @@ x11-common.service                     masked          enabled
 --service-status--
 ● reverse-tools-install.service - Install Reverse Engineering Tools Lab Services on First Boot
      Loaded: loaded (/etc/systemd/system/reverse-tools-install.service; enabled; vendor preset: enabled)
-     Active: active (exited) since Wed 2026-06-10 05:02:27 UTC; 27min ago
+     Active: active (exited) since Wed 2026-06-10 05:02:27 UTC; 9h ago
     Process: 41 ExecStart=/opt/purple-team/scripts/install-all.sh (code=exited, status=0/SUCCESS)
    Main PID: 41 (code=exited, status=0/SUCCESS)
         CPU: 6min 58.815s
@@ -135,15 +135,15 @@ Jun 10 05:02:27 reverse-host systemd[1]: Finished Install Reverse Engineering To
 
 ● rsyslog.service - System Logging Service
      Loaded: loaded (/lib/systemd/system/rsyslog.service; enabled; vendor preset: enabled)
-     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 30min ago
+     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 9h ago
 TriggeredBy: ● syslog.socket
        Docs: man:rsyslogd(8)
              man:rsyslog.conf(5)
              https://www.rsyslog.com/doc/
    Main PID: 34 (rsyslogd)
       Tasks: 4 (limit: 23154)
-     Memory: 1.7M
-        CPU: 687ms
+     Memory: 4.3M
+        CPU: 2.323s
      CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/rsyslog.service
              └─34 /usr/sbin/rsyslogd -n -iNONE
 
@@ -156,7 +156,7 @@ Jun 10 04:58:48 reverse-host rsyslogd[34]: [origin software="rsyslogd" swVersion
 
 ● ssh.service - OpenBSD Secure Shell server
      Loaded: loaded (/lib/systemd/system/ssh.service; enabled; vendor preset: enabled)
-     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 30min ago
+     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 9h ago
        Docs: man:sshd(8)
              man:sshd_config(5)
    Main PID: 40 (sshd)
@@ -173,7 +173,7 @@ Jun 10 04:58:48 reverse-host systemd[1]: Started OpenBSD Secure Shell server.
 
 ● systemd-journald.service - Journal Service
      Loaded: loaded (/lib/systemd/system/systemd-journald.service; static)
-     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 30min ago
+     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 9h ago
 TriggeredBy: ● systemd-journald-dev-log.socket
              ○ systemd-journald-audit.socket
              ● systemd-journald.socket
@@ -182,8 +182,8 @@ TriggeredBy: ● systemd-journald-dev-log.socket
    Main PID: 33 (systemd-journal)
      Status: "Processing requests..."
       Tasks: 1 (limit: 23154)
-     Memory: 10.0M
-        CPU: 1.143s
+     Memory: 26.1M
+        CPU: 4.905s
      CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service
              └─33 /lib/systemd/systemd-journald
 
@@ -200,7 +200,7 @@ Jun 10 05:01:50 reverse-host systemd-journald[33]: Forwarding to syslog missed 1
 
 ● systemd-user-sessions.service - Permit User Sessions
      Loaded: loaded (/lib/systemd/system/systemd-user-sessions.service; enabled; vendor preset: enabled)
-     Active: active (exited) since Wed 2026-06-10 04:58:48 UTC; 30min ago
+     Active: active (exited) since Wed 2026-06-10 04:58:48 UTC; 9h ago
        Docs: man:systemd-user-sessions.service(8)
    Main PID: 36 (code=exited, status=0/SUCCESS)
         CPU: 3ms
@@ -210,10 +210,10 @@ Jun 10 04:58:48 reverse-host systemd[1]: Finished Permit User Sessions.
 
 ● wazuh-agent.service - Wazuh agent
      Loaded: loaded (/lib/systemd/system/wazuh-agent.service; enabled; vendor preset: enabled)
-     Active: active (running) since Wed 2026-06-10 04:59:25 UTC; 30min ago
+     Active: active (running) since Wed 2026-06-10 04:59:25 UTC; 9h ago
       Tasks: 43 (limit: 23154)
-     Memory: 25.5M
-        CPU: 13.195s
+     Memory: 26.0M
+        CPU: 30.123s
      CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/wazuh-agent.service
              ├─4640 /var/ossec/bin/wazuh-execd
              ├─4687 /var/ossec/bin/wazuh-agentd
@@ -234,40 +234,44 @@ Jun 10 04:59:25 reverse-host systemd[1]: Started Wazuh agent.
 
 ● falco-modern-bpf.service - Falco: Container Native Runtime Security with modern ebpf
      Loaded: loaded (/lib/systemd/system/falco-modern-bpf.service; enabled; vendor preset: enabled)
-     Active: active (running) since Wed 2026-06-10 04:59:14 UTC; 30min ago
+     Active: active (running) since Wed 2026-06-10 04:59:14 UTC; 9h ago
        Docs: https://falco.org/docs/
    Main PID: 3243 (falco)
       Tasks: 31 (limit: 23154)
-     Memory: 122.6M
-        CPU: 3min 5.148s
+     Memory: 127.1M
+        CPU: 20min 57.964s
      CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/falco-modern-bpf.service
              └─3243 /usr/bin/falco -o engine.kind=modern_ebpf
 
-Jun 10 05:29:08 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
-Jun 10 05:29:08 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '2811058': can't get table entry: get_entry found no element at given key
-Jun 10 05:29:13 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
-Jun 10 05:29:13 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '2811391': can't get table entry: get_entry found no element at given key
-Jun 10 05:29:18 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
-Jun 10 05:29:18 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '2811592': can't get table entry: get_entry found no element at given key
-Jun 10 05:29:24 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
-Jun 10 05:29:24 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '2811873': can't get table entry: get_entry found no element at given key
-Jun 10 05:29:29 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
-Jun 10 05:29:29 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '2812103': can't get table entry: get_entry found no element at given key
+Jun 10 14:31:58 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
+Jun 10 14:31:58 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4165279': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:04 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:04 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4165824': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:09 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:09 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4166075': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:14 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:14 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4166328': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:19 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4166662': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:19 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
 
 ● falcoctl-artifact-follow.service - Falcoctl Artifact Follow: automatic artifacts update service
      Loaded: loaded (/lib/systemd/system/falcoctl-artifact-follow.service; disabled; vendor preset: enabled)
-     Active: active (running) since Wed 2026-06-10 04:59:14 UTC; 30min ago
+     Active: active (running) since Wed 2026-06-10 04:59:14 UTC; 9h ago
        Docs: https://falco.org/docs/
    Main PID: 3244 (falcoctl)
-      Tasks: 14 (limit: 23154)
-     Memory: 16.1M
-        CPU: 189ms
+      Tasks: 21 (limit: 23154)
+     Memory: 20.4M
+        CPU: 2.345s
      CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/falcoctl-artifact-follow.service
              └─3244 /usr/bin/falcoctl artifact follow --allowed-types=rulesfile
 
-Jun 10 04:59:14 reverse-host systemd[1]: Started Falcoctl Artifact Follow: automatic artifacts update service.
-Jun 10 04:59:14 reverse-host falcoctl[3244]: 2026-06-10 04:59:14 INFO  Creating follower
-Jun 10 04:59:14 reverse-host falcoctl[3244]:                       ├ artifact: falco-rules:5
-Jun 10 04:59:14 reverse-host falcoctl[3244]:                       └ check every: 168h0m0s
-Jun 10 04:59:14 reverse-host falcoctl[3244]: 2026-06-10 04:59:14 INFO  Starting follower
 Jun 10 04:59:14 reverse-host falcoctl[3244]:                       └ artifact: ghcr.io/falcosecurity/rules/falco-rules:5
+Jun 10 09:13:59 reverse-host falcoctl[3244]: 2026-06-10 09:13:59 INFO  Found new artifact version
+Jun 10 09:13:59 reverse-host falcoctl[3244]:                       ├ followerName: ghcr.io/falcosecurity/rules/falco-rules:5
+Jun 10 09:13:59 reverse-host falcoctl[3244]:                       └ tag: 5
+Jun 10 09:14:04 reverse-host falcoctl[3244]: 2026-06-10 09:14:04 INFO  Artifact correctly installed
+Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ followerName: ghcr.io/falcosecurity/rules/falco-rules:5
+Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ artifactName: ghcr.io/falcosecurity/rules/falco-rules:5
+Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ type: rulesfile
+Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ digest: sha256:36d143c0ae2d5569da0274ea6bef188bac02b95abe51e44cfff16f38d3d6b9e0
+Jun 10 09:14:04 reverse-host falcoctl[3244]:                       └ directory: /etc/falco

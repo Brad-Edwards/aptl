@@ -29,7 +29,7 @@ notes:
 - The reverse profile container required three pre-existing service-definition fixes on the same branch before it would boot
   to steady state (cgroup:host, /run/lock tmpfs for Ubuntu systemd under AppArmor docker-default, and a 2g memory limit; the
   original 512m OOM-killed the first-boot radare2 source build). These are committed as separate fix commits.
-- The RE toolchain (radare2 from source, YARA, UPX, osslsigncode, OpenJDK 17, pipx floss) and the Wazuh/Falco agents are installed
+- The RE toolchain (radare2 from source, YARA, UPX, osslsigncode, OpenJDK 17, pipx flare-floss + flare-capa) and the Wazuh/Falco agents are installed
   on FIRST BOOT into the container's writable layer, so the image-layer scanners (Trivy/Syft) do not see them; runtime package/component
   state is captured by os-packages.txt, language-manifests.txt, and reverse-tools-state.txt.
 - The Wazuh agent registration name is runtime-generated (reverse-$(hostname)-$(date +%s)); the manager-side agents[] enumeration
@@ -93,8 +93,8 @@ correspondence_checks:
 - id: reverse-first-boot-and-redaction-caveats
   status: implemented
   source: docs/aces/inventory/reverse/evidence/capture-limits.txt
-  method: README and tests assert non-destructive capture scope, the writable-layer first-boot install boundary, the floss
-    name-squat finding, key redaction, the scoped filesystem manifest, and unavailable osquery tables.
+  method: README and tests assert non-destructive capture scope, the writable-layer first-boot install boundary, the corrected
+    FLARE tool install (flare-floss/flare-capa), key redaction, the scoped filesystem manifest, and unavailable osquery tables.
   realized_evidence:
   - path: evidence/capture-limits.txt
   - path: evidence/filesystem-sensitive-paths.txt
@@ -182,7 +182,7 @@ facts:
 - id: reverse.provisioning.first-boot
   category: provisioning
   summary: The reverse-tools-install systemd oneshot runs on first boot, compiling radare2 from source and pipx-installing
-    floss; the toolchain + Wazuh/Falco agents live in the writable layer, NOT the image, so image scanners do not see them.
+    flare-floss + flare-capa; the toolchain + Wazuh/Falco agents live in the writable layer, NOT the image, so image scanners do not see them.
   evidence:
   - path: evidence/reverse-tools-state.txt
   - path: evidence/docker-logs.reverse.txt
@@ -200,7 +200,9 @@ facts:
       install provenance is the source-checksummed scripts.
     caveat: The image-layer scanners (Trivy/Syft) see only committed layers; the writable-layer toolchain (radare2 build,
       wazuh-agent, falco, pipx venvs) is captured by os-packages.txt + language-manifests.txt + reverse-tools-state.txt instead.
-      The pipx 'floss' is the name-squatted PyPI floss 0.1.0, not flare-floss (recorded as a limit + reported upstream).
+      The FLARE Python tools are the correct pinned distributions flare-floss==3.1.1 and flare-capa==9.4.0 (encoded as
+      software_components), corrected in SCN-010 (#338) after the initial capture found the unrelated bare 'floss' package
+      (an academic fault-localization tool, analyzed as non-malicious; a pure wheel, no install-time code).
 - id: reverse.compose.service-contract
   category: compose
   summary: Compose declares aptl-reverse, profile reverse, image aptl-reverse:local, cgroup:host, 2g memory, SYS_ADMIN/SYS_NICE/SYS_RESOURCE
@@ -394,7 +396,7 @@ facts:
       subset. apt_sources via osquery is the host-side vantage; the target apt config is in apt-repositories.txt.
 - id: reverse.runtime.vulnerability-scan
   category: runtime
-  summary: Trivy captured 67 image-layer vulnerability findings (32 low, 35 medium); the writable-layer toolchain is out of
+  summary: Trivy captured 77 image-layer vulnerability findings (1 high, 37 medium, 39 low); the writable-layer toolchain is out of
     image-scan scope.
   evidence:
   - path: evidence/trivy-vulnerabilities.json.gz

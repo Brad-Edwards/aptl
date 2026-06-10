@@ -9,7 +9,7 @@ set -euo pipefail
 # sshd (published to the host as 2027->22), rsyslog forwarding to the Wazuh
 # manager, a Wazuh agent, Falco (modern eBPF), and a first-boot-installed
 # reverse-engineering toolchain (radare2 from source, YARA, binutils/LLVM,
-# UPX, osslsigncode, OpenJDK 17, pipx-installed "floss").
+# UPX, osslsigncode, OpenJDK 17, pipx-installed flare-floss + flare-capa).
 #
 # The image is a local custom build, not a registry artifact, so build
 # provenance is the repo Dockerfile + build-context inputs (source-checksums.txt),
@@ -90,7 +90,7 @@ date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 record_limit "This capture used the already-running local lab and did not run aptl lab stop -v && aptl lab start; it is a frozen steady-state observation, not a clean-lab rebuild proof."
 record_limit "The reverse profile container was started for this inventory after fixing three pre-existing service-definition bugs on the same branch (missing cgroup: host, missing /run/lock tmpfs for Ubuntu systemd under AppArmor docker-default, and a 512m memory limit that OOM-killed the first-boot radare2 source build, raised to 2g). The first OOM-killed boot registered Wazuh agent id 008 (reverse-host, now Disconnected) before the container was recreated; the active registration is agent id 009 with a runtime-generated collision-suffixed name. Both rows are visible in observer-discovery.wazuh-manager.txt; the stale 008 row is local lab-state debris, not part of the asset spec."
 record_limit "The host-mounted operator private key material under /keys is catalogued by path metadata only; /keys/aptl_lab_key content is an operator-secret boundary. SSH host private keys and /var/ossec/etc/client.keys are metadata-only with content excluded from checksums (ADR-029)."
-record_limit "The pipx-installed 'floss' distribution is PyPI package floss 0.1.0 — NOT the intended FireEye/Mandiant flare-floss string solver (setup-reverse-tools.sh installs the name-squatted 'floss' package). Captured as the realized state; the install-script defect is reported separately."
+record_limit "The reverse-engineering Python tools are pipx-installed for labadmin from the Mandiant/FLARE PyPI distributions flare-floss==3.1.1 and flare-capa==9.4.0 (the correct names; the bare 'floss'/'capa' PyPI names are unrelated projects). This was corrected in SCN-010 #338: the initial capture found the bare 'floss' package (an unrelated spectrum-based fault-localization tool, analyzed as non-malicious) installed by an unpinned setup-reverse-tools.sh; the script was fixed to install the pinned flare- distributions and the box re-captured."
 
 docker version --format json | jq . > "$OUT/docker-version.json"
 docker compose version --format json | jq . > "$OUT/docker-compose-version.json"

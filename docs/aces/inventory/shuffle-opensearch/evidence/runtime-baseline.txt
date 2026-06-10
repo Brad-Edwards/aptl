@@ -1,0 +1,164 @@
+--os-release--
+NAME="Amazon Linux"
+VERSION="2023"
+ID="amzn"
+ID_LIKE="fedora"
+VERSION_ID="2023"
+PLATFORM_ID="platform:al2023"
+PRETTY_NAME="Amazon Linux 2023.4.20240611"
+ANSI_COLOR="0;33"
+CPE_NAME="cpe:2.3:o:amazon:amazon_linux:2023"
+HOME_URL="https://aws.amazon.com/linux/amazon-linux-2023/"
+DOCUMENTATION_URL="https://docs.aws.amazon.com/linux/"
+SUPPORT_URL="https://aws.amazon.com/premiumsupport/"
+BUG_REPORT_URL="https://github.com/amazonlinux/amazon-linux-2023"
+VENDOR_NAME="AWS"
+VENDOR_URL="https://aws.amazon.com/"
+SUPPORT_END="2028-03-15"
+--id--
+uid=1000(opensearch) gid=1000(opensearch) groups=1000(opensearch)
+--pwd--
+/usr/share/opensearch
+--uname--
+Linux e1eb785c281a 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+--environment--
+ eval ${which_declare} ) | /usr/bin/which --tty-only --read-alias --read-functions --show-tilde --show-dot "$@"
+BASH_FUNC_which%%=() {  ( alias;
+HISTCONTROL=ignoredups
+HISTSIZE=1000
+HOME=/usr/share/opensearch
+HOSTNAME=
+JAVA_HOME=/usr/share/opensearch/jdk
+LD_LIBRARY_PATH=:/usr/share/opensearch/plugins/opensearch-knn/lib
+LOGNAME=opensearch
+MAIL=/var/spool/mail/opensearch
+OPENSEARCH_INITIAL_ADMIN_PASSWORD=<REDACTED>
+OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/share/opensearch/jdk/bin:/usr/share/opensearch/bin:/usr/share/opensearch/jdk/bin
+PWD=/usr/share/opensearch
+SHLVL=1
+USER=opensearch
+_=/usr/bin/env
+discovery.type=single-node
+which_declare=declare -f
+}
+--listeners--
+sh: line 14: ss: command not found
+sh: line 14: netstat: command not found
+  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 0B00007F:A4AD 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 612397202 2 0000000000000000 100 0 0 10 0
+  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
+37396: 0B00007F:8AA7 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 612397201 2 0000000000000000 0
+  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
+--outbound-connections--
+sh: line 16: ss: command not found
+sh: line 16: netstat: command not found
+  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 0B00007F:A4AD 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 612397202 2 0000000000000000 100 0 0 10 0
+  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+--mounts--
+--users--
+root:x:0:0:root:/root:/bin/bash
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+adm:x:3:4:adm:/var/adm:/sbin/nologin
+lp:x:4:7:lp:/var/spool/lpd:/sbin/nologin
+sync:x:5:0:sync:/sbin:/bin/sync
+shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+halt:x:7:0:halt:/sbin:/sbin/halt
+mail:x:8:12:mail:/var/spool/mail:/sbin/nologin
+operator:x:11:0:operator:/root:/sbin/nologin
+games:x:12:100:games:/usr/games:/sbin/nologin
+ftp:x:14:50:FTP User:/var/ftp:/sbin/nologin
+nobody:x:65534:65534:Kernel Overflow User:/:/sbin/nologin
+opensearch:x:1000:1000::/usr/share/opensearch:/bin/bash
+--groups--
+root:x:0:
+bin:x:1:
+daemon:x:2:
+sys:x:3:
+adm:x:4:
+tty:x:5:
+disk:x:6:
+lp:x:7:
+mem:x:8:
+kmem:x:9:
+wheel:x:10:
+cdrom:x:11:
+mail:x:12:
+man:x:15:
+dialout:x:18:
+floppy:x:19:
+games:x:20:
+tape:x:33:
+video:x:39:
+ftp:x:50:
+lock:x:54:
+audio:x:63:
+users:x:100:
+nobody:x:65534:
+opensearch:x:1000:
+--sudoers--
+--process-tree--
+1 /bin/bash ./opensearch-docker-entrypoint.sh opensearch
+226 bash bin/opensearch-keystore has-passwd --silent
+230 /usr/share/opensearch/jdk/bin/java -Xshare:auto -Xms4m -Xmx64m -XX:+UseSerialGC -Dopensearch.cgroups.hierarchy.override=/ -Xms512m -Xmx512m -Dopensearch.path.home=/usr/share/opensearch -Dopensearch.path.conf=/usr/share/opensearch/config -Dopensearch.distribution.type=tar -cp /usr/share/opensearch/lib/*:/usr/share/opensearch/lib/tools/keystore-cli/* org.opensearch.common.settings.KeyStoreCli has-passwd --silent
+435 sh -lc
+  set -eu
+  printf "%s\n" --os-release--
+  cat /etc/os-release 2>/dev/null || true
+  printf "%s\n" --id--
+  id
+  printf "%s\n" --pwd--
+  pwd
+  printf "%s\n" --uname--
+  uname -a
+  printf "%s\n" --environment--
+  env | sort
+  printf "%s\n" --listeners--
+  (ss -lntup || netstat -lntup || cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 || true) 2>&1
+  printf "%s\n" --outbound-connections--
+  (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1
+  printf "%s\n" --mounts--
+  mount | sed -n "1,220p"
+  printf "%s\n" --users--
+  getent passwd | sed -n "1,260p" || true
+  printf "%s\n" --groups--
+  getent group | sed -n "1,260p" || true
+  printf "%s\n" --sudoers--
+  (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --process-tree--
+  (ps -eo pid,ppid,user,args 2>/dev/null || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
+  true
+
+473 sh -lc
+  set -eu
+  printf "%s\n" --os-release--
+  cat /etc/os-release 2>/dev/null || true
+  printf "%s\n" --id--
+  id
+  printf "%s\n" --pwd--
+  pwd
+  printf "%s\n" --uname--
+  uname -a
+  printf "%s\n" --environment--
+  env | sort
+  printf "%s\n" --listeners--
+  (ss -lntup || netstat -lntup || cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 || true) 2>&1
+  printf "%s\n" --outbound-connections--
+  (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1
+  printf "%s\n" --mounts--
+  mount | sed -n "1,220p"
+  printf "%s\n" --users--
+  getent passwd | sed -n "1,260p" || true
+  printf "%s\n" --groups--
+  getent group | sed -n "1,260p" || true
+  printf "%s\n" --sudoers--
+  (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --process-tree--
+  (ps -eo pid,ppid,user,args 2>/dev/null || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
+  true
+
+86 /usr/share/opensearch/jdk/bin/java -Xshare:auto -Xms4m -Xmx64m -XX:+UseSerialGC -Dlog4j.configurationFile=/usr/share/opensearch/config/opensearch-performance-analyzer/log4j2.xml -Xms64M -Xmx64M -XX:+UseSerialGC -XX:CICompilerCount=1 -XX:-TieredCompilation -XX:InitialCodeCacheSize=4096 -XX:MaxRAM=400m -Dopensearch.path.home=/usr/share/opensearch -Dopensearch.path.conf=/usr/share/opensearch/config -Dopensearch.distribution.type=tar -cp /usr/share/opensearch/lib/*:/usr/share/opensearch/performance-analyzer-rca/lib/* org.opensearch.performanceanalyzer.PerformanceAnalyzerApp
+88 bash /usr/share/opensearch/bin/opensearch -Ediscovery.type=single-node

@@ -888,6 +888,17 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #350 thehive application inventory pass (application family, upstream strangebee/thehive:5.4 image). The SDL encodes the catalogued registry image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, the JVM process, environment, container command, security-net endpoint with the 9000:9000 published HTTPS port, the 9000 HTTPS listener, the TheHive 5.4.11 web/REST application surface (Play/Scalligraph, /api/status route), and the realized thehive-connects-cassandra CQL edge. TheHive's realized backends are Cassandra (data) + LOCAL Lucene (search index, index.search.backend=lucene); the deployed thehive-es is NOT used by TheHive (the --es-hostnames arg is inert), so no thehive->es relationship is encoded. The Play application secret (--secret) is a committed scenario fixture kept verbatim on the container command; the generated HTTPS keystore + password are operator secrets, withheld. No known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
+  - id: scen.techvault.shuffle-opensearch-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.shuffle-opensearch + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.shuffle-opensearch (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, network, service_listeners, datastore_services) + relationships.shuffle-backend-connects-opensearch
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/shuffle-opensearch/ + tests/test_shuffle_opensearch_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #356 shuffle-opensearch datastore inventory pass (datastore family, upstream opensearchproject/opensearch:2.14.0 image), promoting the prior node stub to a fully inventoried participant node. The SDL encodes the catalogued registry image identity/recipe, rpm packages, Trivy CVEs, filesystem manifest, local identity, the entrypoint + OpenSearch JVM + performance-analyzer processes, environment, security-net endpoint (no host-published ports), the 9200 REST + 9300 transport + 9600 perf-analyzer listeners, and the OpenSearch search_index datastore_service (engine opensearch 2.14.0, single-node docker-cluster, all 24 index partitions, all 24 captured index mappings, security-enabled transport, discovery/security/heap settings). The Security plugin is enabled; OPENSEARCH_INITIAL_ADMIN_PASSWORD is a committed scenario fixture kept verbatim. shuffle-backend is the sole consumer (relationships.shuffle-backend-connects-opensearch). No known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
   - id: compose.profile.reverse
     surface: docker_compose_topology
     legacy_source: "docker-compose.yml (profile: reverse)"

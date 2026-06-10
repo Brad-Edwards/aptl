@@ -1353,7 +1353,6 @@ nodes:
             maxmemory 0 (unbounded by Redis, bounded only by the 128 MiB container memory limit).
         pubsub_channels: []
         queues_streams: []
-        engine_plugins: []
         transport_security:
           transport_security_id: misp_redis_transport
           mode: none

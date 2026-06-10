@@ -1,0 +1,15 @@
+{
+  "table": "docker_images",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%elasticsearch%\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "created": "1740042659",
+      "id": "f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1",
+      "size_bytes": "1050281832",
+      "tags": "docker.elastic.co/elasticsearch/elasticsearch:7.17.28"
+    }
+  ]
+}

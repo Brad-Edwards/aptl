@@ -1,0 +1,306 @@
+[
+  {
+    "Id": "65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af",
+    "Created": "2026-05-23T06:18:29.91144204Z",
+    "Path": "/bin/tini",
+    "Args": [
+      "--",
+      "/usr/local/bin/docker-entrypoint.sh",
+      "eswrapper"
+    ],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 2955936,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-05-23T06:18:34.718613531Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-06-10T07:19:05.688667423+02:00",
+            "End": "2026-06-10T07:19:05.747687205+02:00",
+            "ExitCode": 0,
+            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"green\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":1,\"active_shards\":1,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":0,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":100.0}"
+          },
+          {
+            "Start": "2026-06-10T07:19:35.749369618+02:00",
+            "End": "2026-06-10T07:19:35.822518738+02:00",
+            "ExitCode": 0,
+            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"green\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":1,\"active_shards\":1,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":0,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":100.0}"
+          },
+          {
+            "Start": "2026-06-10T07:20:05.823514588+02:00",
+            "End": "2026-06-10T07:20:05.87537267+02:00",
+            "ExitCode": 0,
+            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"green\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":1,\"active_shards\":1,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":0,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":100.0}"
+          },
+          {
+            "Start": "2026-06-10T07:20:35.876955467+02:00",
+            "End": "2026-06-10T07:20:35.935767471+02:00",
+            "ExitCode": 0,
+            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"green\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":1,\"active_shards\":1,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":0,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":100.0}"
+          },
+          {
+            "Start": "2026-06-10T07:21:05.936995414+02:00",
+            "End": "2026-06-10T07:21:06.026350489+02:00",
+            "ExitCode": 0,
+            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"green\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":1,\"active_shards\":1,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":0,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":100.0}"
+          }
+        ]
+      }
+    },
+    "Image": "sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1",
+    "ResolvConfPath": "/var/lib/docker/containers/65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af/hostname",
+    "HostsPath": "/var/lib/docker/containers/65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af/hosts",
+    "LogPath": "/var/lib/docker/containers/65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af/65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af-json.log",
+    "Name": "/aptl-thehive-es",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "aptl_thehive_es_data:/usr/share/elasticsearch/data:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-security",
+      "PortBindings": {},
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 1073741824,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 2147483648,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_thehive_es_data",
+        "Source": "/var/lib/docker/volumes/aptl_thehive_es_data/_data",
+        "Destination": "/usr/share/elasticsearch/data",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "65c13c0e3ff5",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "9200/tcp": {},
+        "9300/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "discovery.type=single-node",
+        "xpack.security.enabled=false",
+        "ES_JAVA_OPTS=-Xms512m -Xmx512m",
+        "PATH=/usr/share/elasticsearch/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "ELASTIC_CONTAINER=true"
+      ],
+      "Cmd": [
+        "eswrapper"
+      ],
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "curl -sf http://localhost:9200/_cluster/health || exit 1"
+        ],
+        "Interval": 30000000000,
+        "Timeout": 10000000000,
+        "StartPeriod": 300000000000,
+        "Retries": 15
+      },
+      "Image": "docker.elastic.co/elasticsearch/elasticsearch:7.17.28",
+      "Volumes": null,
+      "WorkingDir": "/usr/share/elasticsearch",
+      "Entrypoint": [
+        "/bin/tini",
+        "--",
+        "/usr/local/bin/docker-entrypoint.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "bd0b9dcd2a22d22dd650a3e00026696519c42e7a9115d6951dce2d181090c752",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "",
+        "com.docker.compose.image": "sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "thehive-es",
+        "com.docker.compose.version": "5.1.3",
+        "org.label-schema.build-date": "2025-02-20T09:05:31.349013687Z",
+        "org.label-schema.license": "Elastic-License-2.0",
+        "org.label-schema.name": "Elasticsearch",
+        "org.label-schema.schema-version": "1.0",
+        "org.label-schema.url": "https://www.elastic.co/products/elasticsearch",
+        "org.label-schema.usage": "https://www.elastic.co/guide/en/elasticsearch/reference/index.html",
+        "org.label-schema.vcs-ref": "139cb5a961d8de68b8e02c45cc47f5289a3623af",
+        "org.label-schema.vcs-url": "https://github.com/elastic/elasticsearch",
+        "org.label-schema.vendor": "Elastic",
+        "org.label-schema.version": "7.17.28",
+        "org.opencontainers.image.created": "2025-02-20T09:05:31.349013687Z",
+        "org.opencontainers.image.documentation": "https://www.elastic.co/guide/en/elasticsearch/reference/index.html",
+        "org.opencontainers.image.licenses": "Elastic-License-2.0",
+        "org.opencontainers.image.ref.name": "ubuntu",
+        "org.opencontainers.image.revision": "139cb5a961d8de68b8e02c45cc47f5289a3623af",
+        "org.opencontainers.image.source": "https://github.com/elastic/elasticsearch",
+        "org.opencontainers.image.title": "Elasticsearch",
+        "org.opencontainers.image.url": "https://www.elastic.co/products/elasticsearch",
+        "org.opencontainers.image.vendor": "Elastic",
+        "org.opencontainers.image.version": "7.17.28"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "0ced452f16d8661d4a49269d21ef7e55abd96c34cd0bbceb310f2a25ccbee2c9",
+      "SandboxKey": "<REDACTED>",
+      "Ports": {
+        "9200/tcp": null,
+        "9300/tcp": null
+      },
+      "Networks": {
+        "aptl_aptl-security": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": [
+            "aptl-thehive-es",
+            "thehive-es"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "8cd9a3f3b446bc9209e4f3f82e457c2fd6e869cd93e85dc5656c44d1ea99d5e6",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.4",
+          "MacAddress": "6e:90:06:ed:1e:39",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-thehive-es",
+            "thehive-es",
+            "65c13c0e3ff5"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:5496dd095a610571a02c362cd5f60ddd29a2cac5225d52f953241a5189871356",
+      "size": 1888,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

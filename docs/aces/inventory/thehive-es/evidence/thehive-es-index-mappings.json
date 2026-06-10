@@ -1,0 +1,85 @@
+{
+    "cluster_name": "docker-cluster",
+    "cluster_uuid": "YG-I79ZXRJO0X4l7x3DozA",
+    "metadata": {
+        "cluster_uuid": "YG-I79ZXRJO0X4l7x3DozA",
+        "cluster_uuid_committed": false,
+        "cluster_coordination": {
+            "term": 1,
+            "last_committed_config": [
+                "Q6NTOUABQH6zfRtSYg_9Dw"
+            ],
+            "last_accepted_config": [
+                "Q6NTOUABQH6zfRtSYg_9Dw"
+            ],
+            "voting_config_exclusions": []
+        },
+        "templates": {},
+        "indices": {
+            ".geoip_databases": {
+                "version": 4,
+                "mapping_version": 1,
+                "settings_version": 1,
+                "aliases_version": 1,
+                "routing_num_shards": 1024,
+                "state": "open",
+                "settings": {
+                    "index": {
+                        "routing": {
+                            "allocation": {
+                                "include": {
+                                    "_tier_preference": "data_content"
+                                }
+                            }
+                        },
+                        "number_of_shards": "1",
+                        "auto_expand_replicas": "0-1",
+                        "provided_name": ".geoip_databases",
+                        "creation_date": "1779517134967",
+                        "number_of_replicas": "0",
+                        "uuid": "l_-gud0iT3G25IXqqGUfPg",
+                        "version": {
+                            "created": "7172899"
+                        }
+                    }
+                },
+                "mappings": {
+                    "_doc": {
+                        "_meta": {
+                            "version": "7.17.28"
+                        },
+                        "dynamic": "strict",
+                        "properties": {
+                            "data": {
+                                "type": "binary"
+                            },
+                            "name": {
+                                "type": "keyword"
+                            },
+                            "chunk": {
+                                "type": "integer"
+                            }
+                        }
+                    }
+                },
+                "aliases": [],
+                "primary_terms": {
+                    "0": 1
+                },
+                "in_sync_allocations": {
+                    "0": [
+                        "rFnx4jBJQHKetKNRvEMvFQ"
+                    ]
+                },
+                "rollover_info": {},
+                "system": true,
+                "timestamp_range": {
+                    "unknown": true
+                }
+            }
+        },
+        "index-graveyard": {
+            "tombstones": []
+        }
+    }
+}

@@ -79,8 +79,8 @@ correspondence_checks:
 notes:
   - Capture used the existing running local aptl project as authorized by the user on 2026-06-05 and did not reset the lab.
   - INDEXER_USERNAME / INDEXER_PASSWORD were sourced from the lab .env at capture time and passed only via docker exec environment variables; the raw values are never written to evidence, and redact_stream remains the final defence against accidental leakage of credentials, bcrypt hashes, bearer tokens, and TLS private keys.
-  - ACES runtime.datastore_services (`RuntimeDatastoreService` with engine=OPENSEARCH and data_model=SEARCH_INDEX) is consumed for the typed indexer cluster identity, node membership/roles, partition shard geometry, persistence, transport_security, settings, and plugin/template NAMES.
-  - "Three catalogued surfaces are blocked on ACES expressivity gaps and are NOT forced into SDL prose - they live in evidence and are recorded as blocked_by_aces_gap facts. (1) Per-index and cluster cardinality/size/identity (uuid, doc count, deleted count, store size, creation date, open/closed status) blocked on Brad-Edwards/aces#468. (2) Structured index field mappings and template bodies blocked on Brad-Edwards/aces#469. (3) Datastore node engine provenance (version, build hash, per-plugin versions, JVM heap, http/transport publish addresses) blocked on Brad-Edwards/aces#470. This issue stays open until those ACES surfaces land and the SDL is updated."
+  - ACES runtime.datastore_services (`RuntimeDatastoreService` with engine=OPENSEARCH and data_model=SEARCH_INDEX) is consumed for the typed indexer cluster identity + aggregate cardinality, node membership/roles + engine provenance + per-plugin versions + endpoint topology, per-index partition shard geometry + cardinality, per-family structured mappings + template bodies, transport_security, and settings.
+  - "All three formerly-blocked datastore surfaces are now encoded: ACES #468 (per-index and cluster cardinality/size/identity - uuid, doc count, deleted count, store size, creation date, open/closed status), ACES #469 (structured index field mappings and template bodies), and ACES #470 (node engine provenance - version, build hash, typed per-plugin versions, JVM heap, http/transport publish endpoints) shipped to aces dev and are consumed via typed fields. No known ACES expressivity gap remains."
   - The SDL build-history strings normalize braced shell parameter syntax to shell-equivalent unbraced syntax because ACES reserves ${...} for scenario variables; raw history remains in evidence.
 facts:
   - id: wazuh-indexer.image.identity
@@ -300,89 +300,88 @@ facts:
       rationale: ACES runtime package vulnerabilities encode scanner-derived package finding IDs, affected package versions, severities, fixed versions, and scan provenance.
   - id: wazuh-indexer.datastore.cluster-identity
     category: datastore
-    summary: The single-node OpenSearch 2.19.1 cluster has cluster_name "opensearch", status green, single-node discovery, and native protocol version 2.19.1. (The cluster_uuid and aggregate node/shard/doc/store totals are a separate blocked fact - see wazuh-indexer.datastore.cluster-cardinality.)
+    summary: The single-node OpenSearch 2.19.1 cluster has cluster_name "opensearch", status green, single-node discovery, and native protocol version 2.19.1. (The cluster_uuid and aggregate node/shard/doc/store totals are the sibling wazuh-indexer.datastore.cluster-cardinality fact, now encoded via ACES #468.)
     evidence:
       - path: evidence/wazuh-indexer-state.txt
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: nodes
       fields:
         - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer
         - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.cluster
-      caveat: RuntimeDatastoreCluster encodes name/health/discovery_mode/native_protocol_version only. The cluster_uuid, node count, and aggregate shard/doc/store totals have no typed field and are blocked on Brad-Edwards/aces#468.
-      rationale: ACES runtime_datastore RuntimeDatastoreCluster supplies the cluster identity and health under engine=OPENSEARCH and data_model=SEARCH_INDEX; aggregate cardinality/size is not typeable today.
+      rationale: ACES runtime_datastore RuntimeDatastoreCluster supplies the cluster identity and health under engine=OPENSEARCH and data_model=SEARCH_INDEX; the cluster uuid and aggregate cardinality/size are the sibling cluster-cardinality fact.
   - id: wazuh-indexer.datastore.cluster-cardinality
     category: datastore
     summary: The cluster exposes cluster_uuid u-vGl1n0Q7e-SKz1tWvb-w, 1 node, 102 total shards (102 primaries, 0 replicas), 1,053,842 documents, and ~1.39 GB store at snapshot time.
     evidence:
       - path: evidence/wazuh-indexer-state.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - runtime_contract
-      why_not_current_surfaces: RuntimeDatastoreCluster has no uuid, node_count, or aggregate doc_count/store_size_bytes/shard-total fields; the only place these fit today is free-text description, which is the prose-forcing this inventory must avoid. RuntimeDatastoreService carries no aggregate cardinality either.
-      gap_issue:
-        tracker: Brad-Edwards/aces
-        number: 468
-        url: https://github.com/Brad-Edwards/aces/issues/468
-      rationale: Cluster identity (uuid) and aggregate cardinality/size are participant-observable via _cluster/stats but have no typed ACES home; recorded as evidence and blocked on the linked ACES issue rather than forced into prose.
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.cluster.uuid
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.cluster.node_count
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.cluster.shard_total
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.cluster.shard_primaries
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.cluster.doc_count
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.cluster.store_size_bytes
+      rationale: ACES #468 added RuntimeDatastoreCluster.uuid/node_count/shard_total/shard_primaries/doc_count/store_size_bytes; the cluster identity + aggregate cardinality/size observed via _cluster/stats are now typed.
   - id: wazuh-indexer.datastore.node-membership
     category: datastore
-    summary: The cluster has one node (name wazuh.indexer) holding the cluster_manager + data + ingest roles (remote_cluster_client maps to the OPEN 'other' role tail), transport address 172.20.0.12:9300. (Engine version/build/heap/publish-address provenance is a separate blocked fact - see wazuh-indexer.datastore.node-provenance.)
+    summary: The cluster has one node (name wazuh.indexer) holding the cluster_manager + data + ingest roles (remote_cluster_client maps to the OPEN 'other' role tail), transport address 172.20.0.12:9300. (Engine version/build/heap/publish-address provenance is the sibling wazuh-indexer.datastore.node-provenance fact, now encoded via ACES #470.)
     evidence:
       - path: evidence/wazuh-indexer-state.txt
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: nodes
       fields:
         - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes
-      caveat: RuntimeDatastoreNode encodes node_id/name/roles/is_coordinator/address only. Engine version, build_hash, per-plugin versions, JVM heap, and the http/transport publish-address split have no typed field and are blocked on Brad-Edwards/aces#470.
-      rationale: ACES RuntimeDatastoreNode + RuntimeDatastoreNodeRole vocab supplies the node identity and role set; engine provenance is not typeable today.
+      rationale: ACES RuntimeDatastoreNode + RuntimeDatastoreNodeRole vocab supplies the node identity and role set; engine provenance, JVM heap, per-plugin versions, and endpoint topology are the sibling node-provenance fact.
   - id: wazuh-indexer.datastore.node-provenance
     category: datastore
     summary: The OpenSearch node reports engine version 2.19.1, build_type rpm, build_hash dae2bfc93896178873b43cdf4781f183c72b238f, JVM heap 1 GiB init / 1 GiB max with mlockall, http publish 172.20.0.12:9200, transport publish 172.20.0.12:9300, and 18 plugins each with their own 2.19.1.0 version.
     evidence:
       - path: evidence/wazuh-indexer-state.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - runtime_contract
-      why_not_current_surfaces: RuntimeDatastoreNode has no engine version/build_hash/heap/publish-address fields, and RuntimeDatastoreService.engine_plugins is a name-only list[str] that drops per-plugin version. node.runtime.packages records OS/SBOM packages, not OpenSearch engine plugin bundles.
-      gap_issue:
-        tracker: Brad-Edwards/aces
-        number: 470
-        url: https://github.com/Brad-Edwards/aces/issues/470
-      rationale: Engine provenance and per-plugin versions are observable via _nodes/_local and _cat/plugins but have no typed ACES home; recorded as evidence and blocked on the linked ACES issue.
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes.0.engine_version
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes.0.build_hash
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes.0.build_type
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes.0.heap_init_bytes
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes.0.heap_max_bytes
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes.0.memory_locked
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes.0.endpoints
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes.0.plugins
+      rationale: ACES #470 added RuntimeDatastoreNode engine provenance (version/build_hash/build_type), JVM heap posture, typed RuntimeDatastoreEnginePlugin (per-plugin version), and RuntimeDatastoreNodeEndpoint (client/peer publish split); all observed via _nodes/_local and _cat/plugins are now typed.
   - id: wazuh-indexer.datastore.partition-geometry
     category: datastore
     summary: The cluster carries 41 index partitions (wazuh-alerts-4.x-* daily, wazuh-archives-4.x-* daily, wazuh-monitoring-2026.*w weekly, wazuh-statistics-2026.*w weekly, wazuh-states-vulnerabilities-wazuh.manager, plus the bootstrap system indices .kibana / .kibana_1 / .opendistro_security / .opensearch-observability / .plugins-ml-config). Each partition's name, kind=index, primary/replica shard counts, and health are encoded.
     evidence:
       - path: evidence/wazuh-indexer-state.txt
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: nodes
       fields:
         - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.partitions
-      caveat: RuntimeDatastorePartition (kind=index) encodes name/shard_count/replica_count/health only. Per-index uuid/doc-count/deleted-count/store-size/creation-date/open-closed status (Brad-Edwards/aces#468) and the structured field mapping (Brad-Edwards/aces#469) have no typed field and are separate blocked facts.
-      rationale: ACES RuntimeDatastorePartition with kind=INDEX models the OpenSearch index shard geometry; per-index cardinality/size/identity and structured mappings are not typeable today.
+      rationale: ACES RuntimeDatastorePartition with kind=INDEX models the OpenSearch index shard geometry; per-index cardinality/size/identity is the partition-cardinality fact and structured mappings are the index-mappings fact.
   - id: wazuh-indexer.datastore.partition-cardinality
     category: datastore
     summary: Each of the 41 indices exposes its own uuid, doc count, deleted-doc count, store size, creation date, and open/closed status (e.g. wazuh-archives-4.x-2026.05.28 uuid s0fv6XlzTEuJ..., 68993 docs, 0 deleted, 92.4mb, open, created 2026-05-28).
     evidence:
       - path: evidence/wazuh-indexer-state.txt
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - runtime_contract
-      why_not_current_surfaces: RuntimeDatastorePartition has no uuid/doc_count/doc_count_deleted/store_size_bytes/creation_date/open_closed_status field; datatype_census is a dict[str,int] for key-value datatype censuses, semantically distinct from a search-index document count. The only place these fit today is free-text description.
-      gap_issue:
-        tracker: Brad-Edwards/aces
-        number: 468
-        url: https://github.com/Brad-Edwards/aces/issues/468
-      rationale: Per-index cardinality, size, and identity are observable via _cat/indices but have no typed ACES home; recorded as evidence and blocked on the linked ACES issue rather than forced into prose.
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.partitions.0.uuid
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.partitions.0.doc_count
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.partitions.0.doc_count_deleted
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.partitions.0.store_size_bytes
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.partitions.0.creation_timestamp
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.partitions.0.open_closed_status
+      rationale: ACES #468 added per-RuntimeDatastorePartition uuid/doc_count/doc_count_deleted/store_size_bytes/creation_timestamp/open_closed_status; each index's cardinality/size/identity from _cat/indices is now typed (store_size_bytes derived from the human-rounded _cat size).
   - id: wazuh-indexer.datastore.index-mappings
     category: datastore
     summary: Every index carries a structured field mapping (wazuh-archives-4.x-* up to 947 leaf fields, wazuh-alerts-4.x-* ~670 leaf, .kibana_1 132 leaf, with typed date/keyword/ip/geo_point/object fields, dynamic policy, and dynamic_templates), seeded by four index templates (wazuh, wazuh-agent, wazuh-statistics, wazuh-states-vulnerabilities-wazuh.manager_template) whose bodies carry index_patterns + settings + mappings.
@@ -391,16 +390,12 @@ facts:
       - path: evidence/wazuh-indexer-family-mappings.json.gz
       - path: evidence/wazuh-indexer-index-mappings-census.json
     aces:
-      disposition: blocked_by_aces_gap
-      checked_surfaces:
-        - nodes
-        - runtime_contract
-      why_not_current_surfaces: RuntimeDatastoreService.mappings/templates/aliases are name-only list[str] and cannot hold a field-to-type schema or a template body; RuntimeDatastorePartition carries no mapping sub-model. The relational fold has a structured DatabaseSchema but the search-datastore spine has no analog. The template NAMES are encoded on RuntimeDatastoreService.templates; the structured bodies are blocked.
-      gap_issue:
-        tracker: Brad-Edwards/aces
-        number: 469
-        url: https://github.com/Brad-Edwards/aces/issues/469
-      rationale: Structured index mappings and template bodies are the index data contract (field schema, dynamic policy); they are observable via _mapping and _template but have no typed ACES home and are blocked on the linked ACES issue. Template/index names are encoded; bodies are evidence-only pending ACES.
+      disposition: encoded
+      surface: nodes
+      fields:
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.mappings
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.templates
+      rationale: ACES #469 added RuntimeDatastoreMapping (per-family schema geometry, field-type census, dynamic policy, schema digest) and structured RuntimeDatastoreTemplate (index_patterns, settings_summary, template digest); the index data contract observed via _mapping and _template is now typed.
   - id: wazuh-indexer.datastore.persistence
     category: datastore
     summary: OpenSearch persistence is rooted at path.home=/usr/share/wazuh-indexer with path.data=/var/lib/wazuh-indexer (backed by the wazuh-indexer-data named volume) and path.logs=/var/log/wazuh-indexer; no path.repo is configured (no snapshot repository registered).
@@ -443,12 +438,11 @@ facts:
     evidence:
       - path: evidence/wazuh-indexer-state.txt
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: nodes
       fields:
-        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.engine_plugins
-      caveat: Plugin NAMES are encoded on RuntimeDatastoreService.engine_plugins (list[str]); the per-plugin VERSION (all 2.19.1.0) is dropped by the name-only list and is blocked on Brad-Edwards/aces#470 with the rest of the node engine provenance.
-      rationale: The installed-plugin name set is the node's capability surface and is encodable today; per-plugin version is not.
+        - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.nodes.0.plugins
+      rationale: ACES #470 replaced the name-only RuntimeDatastoreService.engine_plugins with typed per-node RuntimeDatastoreEnginePlugin entries carrying name + version; all 18 plugins and their 2.19.1.0 versions are now typed.
   - id: wazuh-indexer.identity.internal-users
     category: identity
     summary: internal_users.yml declares six built-in OpenSearch Security internal users - admin (reserved, backend_role admin), kibanaserver (reserved), kibanaro (backend_roles kibanauser+readall, three demo attributes), logstash (backend_role logstash), readall (backend_role readall), snapshotrestore (backend_role snapshotrestore). All bcrypt hashes are <REDACTED-INDEXER-INTERNAL-USER-HASH>; reserved/hidden flags and role memberships are recorded.

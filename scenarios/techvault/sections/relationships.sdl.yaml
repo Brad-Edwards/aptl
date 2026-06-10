@@ -425,6 +425,24 @@ relationships:
     forwarding_edge: null
     service_integration: null
     proxy_upstream: null
+  thehive-connects-cassandra:
+    type: connects_to
+    source: techvault.thehive
+    target: techvault.thehive-cassandra
+    description: 'TheHive persists its primary case/alert data in Cassandra over the CQL native transport (TCP/9042),
+      configured via the --cql-hostnames thehive-cassandra container argument. The thehive keyspace (RF 1) holds the
+      application data. This is TheHive''s active datastore; its search index is local Lucene (not thehive-es).'
+    properties:
+      protocol: cql
+      port: '9042'
+      backend: cassandra
+      keyspace: thehive
+      vantage: aptl-thehive
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
   misp-suricata-sync-queries-misp-api:
     type: connects_to
     source: techvault.misp-suricata-sync

@@ -99,6 +99,8 @@ imports:
   namespace: techvault
 - source: local:techvault/nodes/thehive-es.sdl.yaml
   namespace: techvault
+- source: local:techvault/nodes/thehive-cassandra.sdl.yaml
+  namespace: techvault
 - source: local:techvault/nodes/wazuh-dashboard.sdl.yaml
   namespace: techvault
 - source: local:techvault/nodes/webapp.sdl.yaml

@@ -1,0 +1,44 @@
+--nodetool-status--
+Datacenter: datacenter1
+=======================
+Status=Up/Down
+|/ State=Normal/Leaving/Joining/Moving
+--  Address     Load      Tokens  Owns (effective)  Host ID                               Rack
+UN  172.20.0.5  3.42 MiB  16      100.0%            fd42dafe-8cb7-45a8-b969-f17fb342f3be  rack1
+
+--nodetool-info--
+ID                     : fd42dafe-8cb7-45a8-b969-f17fb342f3be
+Gossip active          : true
+Native Transport active: true
+Load                   : 3.42 MiB
+Generation No          : 1779517122
+Uptime (seconds)       : 1551703
+Heap Memory (MB)       : 328.58 / 499.25
+Off Heap Memory (MB)   : 0.02
+Data Center            : datacenter1
+Rack                   : rack1
+Exceptions             : 0
+Key Cache              : entries 3560, size 289.54 KiB, capacity 24 MiB, 327414 hits, 331095 requests, 0.989 recent hit rate, 14400 save period in seconds
+Row Cache              : entries 0, size 0 bytes, capacity 0 bytes, 0 hits, 0 requests, NaN recent hit rate, 0 save period in seconds
+Counter Cache          : entries 0, size 0 bytes, capacity 12 MiB, 0 hits, 0 requests, NaN recent hit rate, 7200 save period in seconds
+Network Cache          : size 8 MiB, overflow size: 0 bytes, capacity 31 MiB
+Percent Repaired       : 100.0%
+Token                  : (invoke with -T/--tokens to see all 16 tokens)
+--cqlsh-describe-cluster--
+
+Cluster: thehive
+Partitioner: Murmur3Partitioner
+Snitch: DynamicEndpointSnitch
+
+--cqlsh-describe-keyspaces--
+
+system       system_distributed  system_traces  system_virtual_schema
+system_auth  system_schema       system_views   thehive
+
+--cqlsh-system-local--
+
+ cluster_name | release_version
+--------------+-----------------
+      thehive |          4.1.11
+
+(1 rows)

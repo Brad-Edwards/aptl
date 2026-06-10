@@ -165,6 +165,17 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #337 victim inventory pass. The SDL encodes the catalogued generic victim image, build, runtime, filesystem, identity, package/CVE, SSH, sudo-policy weakness, Wazuh relationship, and systemd service-manager unit-state facts. No known remaining ACES expressivity blocker for the catalogued victim steady-state inventory.
 
+  - id: scen.techvault.reverse-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.reverse + features + vulnerabilities + accounts + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.reverse (source/build, runtime mounts, processes, environment, linux_capabilities, container, health, local_identity, network, ssh_servers, forwarding_agents, service_manager_units, packages, package_vulnerabilities, filesystem_inventory, software_components) + features.reverse-* + vulnerabilities.reverse-nopasswd-sudo + accounts.reverse-local-* + relationships.reverse-forwards-wazuh
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/reverse/ + tests/test_reverse_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #338 reverse-engineering workbench inventory pass (target family, full Ubuntu 22.04 systemd archetype following the victim/workstation precedents). The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, mount table, filesystem manifest, local identity (27 users / 48 groups), process set, environment, SYS_ADMIN/SYS_NICE/SYS_RESOURCE capability add, security-net endpoint with the 2027->22 published SSH port, sshd policy, the in-process Wazuh agent + rsyslog forwarders, the systemd unit-file enumeration, the NOPASSWD-sudo weakness, and the first-boot-installed RE toolchain as runtime software_components. Both forwarders are node-level forwarding_agents resolved by the reverse-forwards-wazuh edge; the manager-side agents[] enumeration is intentionally not extended because the agent registration name is runtime-generated. Required three pre-existing reverse-profile boot fixes (cgroup:host, /run/lock tmpfs, 2g memory) committed separately. No known remaining ACES expressivity blocker for the catalogued reverse steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
   - id: scen.techvault.fileshare-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml

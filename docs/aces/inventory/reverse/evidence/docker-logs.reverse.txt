@@ -1,0 +1,12 @@
+=== Purple Team Lab Reverse Engineering Container Starting ===
+Container hostname: reverse-host
+Container IP: 172.20.0.27
+Setting up labadmin SSH access...
+Found SSH key file at /keys/aptl_lab_key.pub
+Labadmin SSH key configured successfully
+Configuring rsyslog to forward to Wazuh at 172.20.0.10...
+Rsyslog forwarding configured to Wazuh at 172.20.0.10:514
+Rsyslog not yet running, will be started by systemd
+WAZUH_MANAGER set to 172.20.0.10
+=== Common initialization complete ===
+=== Reverse engineering container initialization complete ===

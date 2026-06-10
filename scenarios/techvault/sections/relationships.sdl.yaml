@@ -123,6 +123,32 @@ relationships:
     forwarding_edge: null
     service_integration: null
     proxy_upstream: null
+  reverse-forwards-wazuh:
+    type: connects_to
+    source: techvault.reverse
+    target: techvault.wazuh-manager
+    description: 'The reverse node forwards log telemetry to the SOC stack via an in-process Wazuh agent (wazuh-agentd dials
+      the manager on TCP/1514, enrollment TCP/1515) and rsyslog. The manager agent_control shows the agent Active; the
+      registration name is runtime-generated (reverse-$(hostname)-$(date +%s), id 009 in the SCN-010 #338 capture), so the
+      manager-side agents[] enumeration is intentionally not extended for this node (see docs/aces/inventory/reverse/).'
+    properties:
+      protocol: wazuh-agent
+      port: '1514'
+      vantage: aptl-wazuh-manager
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: reverse-wazuh-agent
+      target_listener_role: agent_event_ingestion
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: tcp
+      crypto_method: aes
+      parse_format: unknown
+      description: 'Resolves to the reverse-wazuh-agent runtime forwarding agent on the reverse node; crypto_method aes from
+        the rendered ossec.conf, enrollment on TCP/1515, event shipping on TCP/1514.'
+    service_integration: null
+    proxy_upstream: null
   webapp-forwards-wazuh:
     type: connects_to
     source: techvault.webapp

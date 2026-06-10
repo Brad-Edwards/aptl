@@ -6,13 +6,17 @@ to the realized `aptl-thehive-es` container at the established granularity bar
 (issue #330 depth), following the wazuh-indexer datastore precedent (same
 Elasticsearch/OpenSearch family).
 
-`thehive-es` is TheHive's **Elasticsearch search-index backend**: upstream
+`thehive-es` is the **deployed-but-inactive Elasticsearch** companion in TheHive's soc stack: upstream
 `docker.elastic.co/elasticsearch/elasticsearch:7.17.28`, single-node, with
-`xpack.security` disabled. TheHive uses it for full-text/search indices; the
-primary case/alert data lives in Cassandra (`thehive-cassandra`). It is
+`xpack.security` disabled. The realized TheHive config uses **local Lucene**
+indexing (`index.search.backend = lucene`, directory `/data/index`), so this ES
+is **not** TheHive's active index backend — it holds only the system
+`.geoip_databases` index and TheHive holds no outbound connection to it. Primary
+case/alert data lives in Cassandra (`thehive-cassandra`). It is
 inventoried as the participant datastore node `nodes.techvault.thehive-es`.
-Reached only on security-net by the thehive node
-(`relationships.thehive-connects-es`); ports 9200/9300 are not host-published.
+On security-net only; ports 9200/9300 are not host-published. There is **no
+thehive→es data connection** (index-backend is lucene), so no such relationship
+is encoded.
 **No known ACES expressivity gap remains** for the catalogued steady-state
 facts.
 
@@ -24,9 +28,9 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 > **Near-gap, resolved without distortion.** The ACES `search_index` datastore
 > profile mandates at least one structured mapping manifest. At steady state the
 > only index is the ES-internal `.geoip_databases` system index, whose
-> `_mapping`/`_field_caps` APIs return a reserved-access error, and TheHive has
-> not yet created its own search indices (they are created lazily; primary data
-> is in Cassandra). Rather than fabricate a mapping or distort the `data_model`,
+> `_mapping`/`_field_caps` APIs return a reserved-access error, and TheHive
+> creates no indices here at all (it uses local Lucene; primary data is in
+> Cassandra). Rather than fabricate a mapping or distort the `data_model`,
 > the real field schema (`data`/`name`/`chunk`) was captured via the operator
 > `_cluster/state/metadata` vantage and encoded faithfully. No ACES issue was
 > required.
@@ -45,7 +49,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Runtime OS | Ubuntu 20.04.6 LTS |
 | Engine | Elasticsearch 7.17.28 (lucene 8.11.3), single-node, `xpack.security` disabled |
 | Cluster | `docker-cluster` (uuid `YG-I79ZXRJO0X4l7x3DozA`), health green, 1 node |
-| Indices | `.geoip_databases` only (system index) at the snapshot |
+| Indices | `.geoip_databases` only (ES-internal system index); **no TheHive indices** (TheHive uses local Lucene) |
 | Reachable participant ports | none host-published; 9200 (REST/HTTP) + 9300 (transport) on security-net |
 | Network identity | `security-net` 172.20.0.4 (only network) |
 | Memory limit | 1 GiB (`ES_JAVA_OPTS -Xms512m -Xmx512m`) |
@@ -127,5 +131,6 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
 - It does not prove byte-identical re-buildability; it provides the ground truth
   a future equivalence checker compares against.
 - It does not cover behaviour over time or attack-induced transitions; any state
-  present at the snapshot point is in scope. TheHive's own search indices are
-  created lazily during use and are out of steady-state scope.
+  present at the snapshot point is in scope. With `index.search.backend = lucene`,
+  TheHive does not create indices in this ES at all; the `--es-hostnames` arg is
+  inert under the realized config.

@@ -4,9 +4,11 @@ nodes:
     type: vm
     description: 'TechVault TheHive Elasticsearch search-index datastore (compose service thehive-es, container aptl-thehive-es,
       image docker.elastic.co/elasticsearch/elasticsearch:7.17.28). Single-node ES 7.17 with xpack.security disabled; serves
-      TheHive''s search indices (primary data is in Cassandra). Inventoried at experiment grade under docs/aces/inventory/thehive-es/
-      (SCN-010 issue #352). Reached only on security-net by the thehive node (relationships.thehive-connects-es); 9200/9300
-      are not host-published.'
+      TheHive''s deployed Elasticsearch companion. NOTE: the realized TheHive config uses local Lucene indexing (index.search.backend=lucene,
+      /data/index), so this ES is NOT TheHive''s active index backend — TheHive holds no outbound connection to it and creates
+      no indices in it (the --es-hostnames arg is inert); it holds only the ES-internal system .geoip_databases index. Primary
+      data is in Cassandra. Inventoried at experiment grade under docs/aces/inventory/thehive-es/ (SCN-010 issue #352). security-net
+      only; 9200/9300 are not host-published; no thehive->es relationship is encoded.'
     source:
       name: docker.elastic.co/elasticsearch/elasticsearch
       version: docker.elastic.co/elasticsearch/elasticsearch@sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1
@@ -9991,7 +9993,7 @@ nodes:
           open_closed_status: open
           health: green
           description: System geoip ingest database index — the only index present at the steady-state snapshot (TheHive stores
-            its data in Cassandra; ES holds search indices created during use).
+            its data in Cassandra and local Lucene for search; this ES is deployed but unused for indexing).
         mappings:
         - mapping_id: mapping-geoip-databases
           name: .geoip_databases
@@ -10008,8 +10010,8 @@ nodes:
           dynamic_template_count: 0
           description: System-reserved geoip ingest-database index. Its _mapping/_field_caps APIs return a reserved-access
             error; the field schema (data/name/chunk) was captured via the operator _cluster/state/metadata vantage. The only
-            index present at the steady-state snapshot — TheHive creates its own search indices lazily during use (primary
-            data is in Cassandra).
+            index present at the steady-state snapshot — TheHive uses local Lucene (index.search.backend=lucene), so it creates
+            NO indices in this ES; primary data is in Cassandra.
         templates: []
         transport_security:
           transport_security_id: techvault-thehive-es-transport
@@ -10054,8 +10056,10 @@ nodes:
           provenance: runtime_default
           classification: plain
           description: Default transport port.
-        description: TheHive's Elasticsearch search-index backend (engine elasticsearch 7.17.28). TheHive uses it for full-text/search
-          indices; primary case/alert data lives in Cassandra. Single-node, security disabled.
+        description: Deployed Elasticsearch 7.17.28 companion in TheHive's soc stack. The realized TheHive config uses local
+          Lucene (index.search.backend=lucene, /data/index), so this ES is NOT TheHive's active index backend — no TheHive
+          indices exist here, only the ES-internal system .geoip_databases. Primary case/alert data lives in Cassandra.
+          Single-node, security disabled.
       packages:
       - manager: dpkg
         name: adduser

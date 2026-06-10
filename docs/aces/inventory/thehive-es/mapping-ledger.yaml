@@ -22,7 +22,7 @@ provenance:
 notes:
 - Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v &&
   aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof.
-- 'SCN-010 issue #352 inventories the TheHive Elasticsearch search-index backend as nodes.techvault.thehive-es (datastore
+- 'SCN-010 issue #352 inventories the deployed TheHive Elasticsearch companion as nodes.techvault.thehive-es (datastore
   family, upstream Elastic registry image). Every catalogued observable maps to a current ACES surface (datastore_services
   search_index profile). No known ACES expressivity gap remains for the catalogued thehive-es steady-state facts.'
 - 'Near-gap resolved without distortion: the search_index profile mandates >=1 structured mapping manifest, but the only steady-state
@@ -30,7 +30,7 @@ notes:
   the data_model, the real field schema was captured via the operator _cluster/state/metadata vantage and encoded faithfully.
   No ACES issue needed.'
 - 'xpack.security.enabled=false: the REST (9200) and transport (9300) ports carry no TLS or auth; security-net compose isolation
-  is the only control. Reached by the thehive node (relationships.thehive-connects-es).'
+  is the only control. NOTE: the realized TheHive config uses local Lucene (index.search.backend=lucene, directory /data/index), so thehive-es is NOT the active TheHive index backend — TheHive holds no outbound connection to it and creates no indices in it (the --es-hostnames arg is inert); thehive-es holds only the ES-internal system .geoip_databases index. No thehive->es relationship is encoded.'
 correspondence_checks:
 - id: thehive-es-evidence-bundle-integrity
   status: implemented
@@ -408,5 +408,4 @@ facts:
       partition, mapping, transport_security, and settings facts directly.
     caveat: At steady state the only index is the ES-internal .geoip_databases system index; its _mapping/_field_caps APIs
       return a reserved-access error, so the field schema (data/name/chunk; binary/keyword/integer) was captured via the operator
-      _cluster/state/metadata vantage. TheHive creates its own search indices lazily during use (primary data is in Cassandra),
-      so no participant-created index mappings exist pre-attack. xpack.security is disabled (no TLS/auth on 9200/9300).
+      _cluster/state/metadata vantage. TheHive does NOT create indices in this ES (index.search.backend=lucene; primary data is in Cassandra and search index is local Lucene), so no TheHive index mappings exist here — only the ES-internal system index. xpack.security is disabled (no TLS/auth on 9200/9300).

@@ -246,12 +246,12 @@ docker exec "$CONTAINER" sh -lc '
 # .geoip_databases system index; its _mapping and _field_caps APIs return a
 # reserved-access error, so the field schema is captured from the operator
 # _cluster/state/metadata vantage (which does expose system-index mappings).
-# TheHive creates its own search indices lazily during use; primary case/alert
+# TheHive uses local Lucene (index.search.backend=lucene), so it creates no
 # data lives in Cassandra, so no participant-created indices exist pre-attack.
 docker exec "$CONTAINER" curl -s "http://localhost:9200/_cluster/state/metadata/.geoip_databases" 2>/dev/null \
   | jq . > "$OUT/thehive-es-index-mappings.json" 2>&1 || \
   docker exec "$CONTAINER" curl -s "http://localhost:9200/_cluster/state/metadata/.geoip_databases" > "$OUT/thehive-es-index-mappings.json"
-record_limit "Only the ES-internal .geoip_databases system index exists at steady state (TheHive creates search indices lazily; primary data is in Cassandra). Its _mapping/_field_caps APIs return a reserved-access error, so the field schema (data/name/chunk) was captured via the operator _cluster/state/metadata vantage in thehive-es-index-mappings.json. No participant-created index mappings exist to capture."
+record_limit "Only the ES-internal .geoip_databases system index exists at steady state (TheHive uses local Lucene, index.search.backend=lucene, so it creates no indices in this ES; primary data is in Cassandra). Its _mapping/_field_caps APIs return a reserved-access error, so the field schema (data/name/chunk) was captured via the operator _cluster/state/metadata vantage in thehive-es-index-mappings.json. No participant-created index mappings exist to capture."
 
 # Attacker vantage: kali. Elasticsearch is on security-net only and publishes
 # no host ports; record what an in-range attacker can resolve/reach on 9200.

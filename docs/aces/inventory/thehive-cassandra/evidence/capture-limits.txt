@@ -1,0 +1,10 @@
+- compose-service.thehive-cassandra.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project.
+- Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof.
+- thehive_cassandra_data volume contents (/var/lib/cassandra: commitlog, data, hints, saved_caches) are runtime database state and out of manifest scope; only top-level directory rows are recorded in filesystem-tree.txt.gz. Schema-level database state is captured in cassandra-state.txt instead.
+- source-checksums.txt covers only docker-compose.yml; the thehive-cassandra service has no repo-authored bind files (configuration is upstream-image defaults plus compose environment).
+- filesystem-tree.txt.gz scopes the manifest to the application surfaces (/etc/cassandra config, /opt/cassandra install, /etc/os-release) plus top-level directory rows for the volume-backed /var/lib/cassandra tree, excluding __pycache__ bytecode; volume runtime data content is out of manifest scope.
+- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; filesystem provenance is captured in filesystem-tree.txt.gz and filesystem-checksums.txt.xz.
+- Trivy and Syft CycloneDX SBOM evidence is committed as deterministic gzip-compressed minified JSON to satisfy the repository's added-file size gate; compression is lossless.
+- osquery installed_applications table unavailable in the digest-pinned Linux scanner image.
+- osquery programs table unavailable in the digest-pinned Linux scanner image.
+- osquery apt_sources reflects the host-side scanner vantage; the target rootfs Debian apt state is captured directly in os-packages.txt.

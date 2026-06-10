@@ -1,0 +1,440 @@
+schema_version: 1
+asset:
+  id: thehive
+  scenario: TechVault
+  aptl_issue: 350
+  aces_methodology_issue: 353
+  source_class: upstream-registry-image-application
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: strangebee/thehive@sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence:
+    - path: evidence/docker-buildx-imagetools.image.raw.json
+    - path: evidence/docker-inspect.image.json
+    limits:
+    - Upstream StrangeBee registry image; identity is the pinned RepoDigest. No registry-visible OCI/in-toto/SLSA attestation
+      is published for this tag.
+notes:
+- Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v &&
+  aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof.
+- 'SCN-010 issue #350 inventories the TheHive SOC case-management application as nodes.techvault.thehive (application family,
+  upstream strangebee/thehive:5.4 image). Every catalogued observable maps to a current ACES surface. No known ACES expressivity
+  gap remains for the catalogued thehive steady-state facts.'
+- TheHive's realized backends are Cassandra (primary data, CQL/9042, relationships.thehive-connects-cassandra) and a LOCAL
+  Lucene search index (index.search.backend=lucene, the thehive_index volume at /opt/thp/thehive/index). The deployed thehive-es
+  is NOT used by TheHive (the --es-hostnames arg is inert under the lucene backend), so no thehive->es relationship is encoded.
+- The Play application secret (--secret aptl-thehive-lab-secret-key-2024-purple) is a committed scenario fixture (present
+  in docker-compose.yml), encoded verbatim on the container command per the secret-fixture policy. The generated HTTPS keystore
+  (/etc/thehive/keystore.p12) and its password (HTTPS_KEYSTORE_PASSWORD env_file) are operator secrets, withheld (metadata/empty
+  value only).
+- HTTPS is terminated in-container on 9000 using the lab-CA-signed keystore.p12; the authored application.conf overlay (config/thehive/application.conf)
+  enables it. Published to the host as 9000:9000.
+correspondence_checks:
+- id: thehive-evidence-bundle-integrity
+  status: implemented
+  source: docs/aces/inventory/thehive/evidence
+  method: evidence-sha256sums.txt hashes every committed evidence file except the manifest; tests/test_thehive_inventory.py
+    recomputes and compares.
+  realized_evidence:
+  - path: evidence/evidence-sha256sums.txt
+  - path: evidence/captured-at-utc.txt
+  ledger_fact_ids:
+  - thehive.capture.toolchain-baseline
+- id: thehive-sdl-runtime-correspondence
+  status: implemented
+  source: nodes.techvault.thehive.runtime
+  method: tests/test_thehive_inventory.py parses the ACES SDL and asserts image, package, CVE, filesystem, identity, process,
+    environment, listener, application, and published-port counts/values against the evidence.
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/thehive-state.txt
+  ledger_fact_ids:
+  - thehive.runtime.container-host-config
+  - thehive.runtime.package-inventory
+  - thehive.runtime.vulnerability-scan
+  - thehive.runtime.local-identity
+  - thehive.application.thehive-web
+- id: thehive-connection-and-secret-correspondence
+  status: implemented
+  source: scenarios/techvault.sdl.yaml relationships.thehive-connects-cassandra + runtime.container.command
+  method: README and tests assert the realized thehive->cassandra CQL edge, the local-Lucene index (no thehive->es), and the
+    committed --secret fixture on the container command.
+  realized_evidence:
+  - path: evidence/thehive-state.txt
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/compose-service.thehive.json
+  ledger_fact_ids:
+  - thehive.relationship.connects-cassandra
+  - thehive.secret.play-application-secret
+  - thehive.runtime.service-listener
+- id: thehive-scope-and-redaction-caveats
+  status: implemented
+  source: docs/aces/inventory/thehive/evidence/capture-limits.txt
+  method: README and tests assert non-destructive capture scope, the data/index volume manifest exclusion, the keystore/password
+    redaction, and unavailable osquery tables.
+  realized_evidence:
+  - path: evidence/capture-limits.txt
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-volume.thehive_data.json
+  - path: evidence/docker-volume.thehive_index.json
+  - path: evidence/docker-history.image.txt
+  - path: evidence/language-manifests.txt
+  - path: evidence/participant-discovery.kali.txt
+  ledger_fact_ids:
+  - thehive.capture.toolchain-baseline
+  - thehive.runtime.filesystem-inventory
+  - thehive.runtime.environment
+  - thehive.runtime.osquery-baseline
+  - thehive.network.identity
+facts:
+- id: thehive.capture.toolchain-baseline
+  category: capture
+  summary: Capture used digest-pinned Trivy, Syft, and osquery images, recorded Docker/Compose versions, capture time, and
+    explicit capture limits.
+  evidence:
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-compose-version.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/syft-version.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/capture-limits.txt
+  - path: evidence/evidence-sha256sums.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: runtime_contract
+    checked_surfaces:
+    - runtime_contract
+    fields:
+    - docs/aces/inventory/thehive/capture-evidence.sh
+    - docs/aces/inventory/thehive/evidence/capture-limits.txt
+    rationale: Current ACES SDL runtime fields carry this catalogued thehive fact directly.
+    caveat: Scanner/runtime observations are time-sensitive evidence from the current-running lab, not clean-reset proof.
+- id: thehive.image.identity-provenance
+  category: image
+  summary: The app resolves to the upstream registry image strangebee/thehive:5.4 (pinned RepoDigest); Debian 12 base.
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-buildx-imagetools.image.raw.json
+  - path: evidence/docker-buildx-imagetools.image.txt
+  - path: evidence/osquery-docker-images.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.source.name
+    - nodes.techvault.thehive.source.version
+    - nodes.techvault.thehive.os_version
+    rationale: Current ACES SDL node source fields carry the upstream registry image identity directly.
+- id: thehive.image.build-recipe
+  category: image
+  summary: The build recipe (instructions/layers from docker history, default config, absent attestation) is encoded as upstream-image
+    provenance.
+  evidence:
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.source.build.instructions
+    - nodes.techvault.thehive.source.build.layers
+    - nodes.techvault.thehive.source.build.config
+    - nodes.techvault.thehive.source.build.attestation
+    rationale: Current ACES SDL node build fields carry the history-reconstructed recipe directly.
+- id: thehive.compose.service-contract
+  category: compose
+  summary: Compose declares aptl-thehive, image strangebee/thehive:5.4, the --secret/--cql-hostnames/--index-backend lucene/--es-hostnames
+    command, JVM_OPTS + HTTPS_KEYSTORE_PASSWORD env, two data volumes + three binds (keystore.p12, application.conf, lab-ca.pem),
+    1g memory, depends_on cassandra+es, security-net 172.20.0.18, and the 9000:9000 published port.
+  evidence:
+  - path: evidence/compose-service.thehive.json
+  - path: evidence/docker-compose-version.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.container
+    - nodes.techvault.thehive.runtime.environment
+    - nodes.techvault.thehive.runtime.mounts
+    - nodes.techvault.thehive.runtime.network.published_ports
+    rationale: Current ACES SDL node runtime fields carry the compose contract directly.
+- id: thehive.runtime.container-host-config
+  category: runtime
+  summary: Docker runtime policy captures restart, 1 GiB memory, namespaces, masked/read-only paths, no added capabilities,
+    runc runtime, and the command bearing the Play application secret.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-logs.thehive.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.container
+    - nodes.techvault.thehive.runtime.operational_policy
+    - nodes.techvault.thehive.runtime.linux_capabilities
+    rationale: Current ACES SDL node runtime fields carry this catalogued fact directly.
+- id: thehive.network.identity
+  category: network
+  summary: The app is on security-net at 172.20.0.18 and publishes HTTPS to the host as 9000:9000; the published port is the
+    only host-reachable surface.
+  evidence:
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/participant-discovery.kali.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.network.endpoints
+    - nodes.techvault.thehive.runtime.network.published_ports
+    rationale: Current ACES SDL node network fields carry the realized endpoint and published-port facts directly.
+- id: thehive.runtime.service-listener
+  category: runtime
+  summary: TheHive listens on TCP/9000 (HTTPS; Play https.port, http disabled), published to the host.
+  evidence:
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/thehive-state.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.service_listeners
+    - nodes.techvault.thehive.services
+    rationale: Current ACES SDL node service_listeners + services carry the listener fact directly.
+- id: thehive.runtime.mounts
+  category: runtime
+  summary: 'Two named volumes (thehive_data, thehive_index — the LOCAL Lucene search index) plus three binds: the generated
+    keystore.p12 (operator secret, metadata only), the authored application.conf overlay, and the lab CA pem.'
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-volume.thehive_data.json
+  - path: evidence/docker-volume.thehive_index.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.mounts
+    rationale: Current ACES SDL node runtime.mounts carries the volume + bind mounts directly.
+- id: thehive.runtime.filesystem-inventory
+  category: filesystem
+  summary: The TheHive install tree, the authored application.conf, the lab CA, and os-release are encoded with checksums
+    for stable files; the data/index volumes are excluded; the keystore is metadata-only (operator secret).
+  evidence:
+  - path: evidence/filesystem-tree.txt.gz
+  - path: evidence/filesystem-checksums.txt.xz
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.filesystem_inventory
+    rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
+    caveat: The data/index volume contents are excluded from the manifest (top-level rows only). /etc/thehive/keystore.p12
+      (generated HTTPS keystore) is metadata-only with content excluded (operator secret, ADR-029).
+- id: thehive.runtime.process-set
+  category: runtime
+  summary: PID 1 is the TheHive JVM (Play/Scalligraph on Amazon Corretto 11); a single long-lived java process under the entrypoint.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-top.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.processes
+    rationale: Current ACES SDL node runtime.processes carries the captured process set directly.
+- id: thehive.runtime.environment
+  category: runtime
+  summary: Runtime environment is five variables (JVM_OPTS, HTTPS_KEYSTORE_PASSWORD, PATH, JAVA_HOME, LANG).
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.environment
+    rationale: Current ACES SDL node runtime.environment carries the captured variables directly.
+    caveat: HTTPS_KEYSTORE_PASSWORD is a generated keystore password (env_file config/soc_certs/thehive/keystore.p12.password,
+      created at lab start) — classified operator_secret with its value omitted/withheld (ADR-029). The Play application secret
+      is carried separately on the container command as a committed scenario fixture (see runtime.container).
+- id: thehive.runtime.local-identity
+  category: identity
+  summary: Local passwd/group inventory records 19 users and 39 groups (stock Debian 12 + the thehive service account); no
+    sudo rules.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.local_identity
+    rationale: Current ACES SDL node runtime.local_identity carries the local identity surface directly.
+- id: thehive.application.thehive-web
+  category: application
+  summary: TheHive 5.4.11 (Play 3.0.x / Scalligraph 5.4.11-1) SOC case-management web app + REST API over HTTPS/9000; authType
+    key/session/basic/local; backed by Cassandra (data) and local Lucene (search). Encoded as a runtime application with the
+    observed /api/status route.
+  evidence:
+  - path: evidence/thehive-state.txt
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.applications
+    - nodes.techvault.thehive.runtime.software_components
+    rationale: Current ACES SDL node runtime.applications carries the TheHive web app surface (framework, base_path, routes)
+      directly.
+- id: thehive.secret.play-application-secret
+  category: secret
+  summary: The Play application secret is a committed scenario fixture (--secret aptl-thehive-lab-secret-key-2024-purple)
+    carried on the container command; it is present in docker-compose.yml and kept (not redacted).
+  evidence:
+  - path: evidence/compose-service.thehive.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.container.command
+    rationale: The Play application secret is a deliberate, committed lab fixture (a reproduction input present in docker-compose.yml);
+      it is encoded as part of the container command per the secret-fixture policy (kept, not redacted).
+    caveat: This is a scenario-fixture secret (committed in docker-compose.yml), not a real operator secret; it is retained
+      verbatim. The separate generated HTTPS keystore password is the operator secret and is withheld.
+- id: thehive.runtime.package-inventory
+  category: runtime
+  summary: dpkg package inventory captures 126 installed OS packages from the strangebee/thehive Debian 12 base.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/osquery-apt-sources.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.packages
+    rationale: Current ACES SDL node runtime.packages carries the dpkg inventory directly.
+- id: thehive.runtime.vulnerability-scan
+  category: runtime
+  summary: Trivy captured 376 image-layer vulnerability findings (9 critical, 58 high, 152 medium, 156 low, 1 unknown).
+  evidence:
+  - path: evidence/trivy-vulnerabilities.json.gz
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-version.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.package_vulnerabilities
+    rationale: Current ACES SDL node runtime.package_vulnerabilities carries the per-CVE findings directly.
+    caveat: Scanner output is time-sensitive and tied to the captured Trivy version/database state.
+- id: thehive.runtime.sbom-toolchain
+  category: runtime
+  summary: Required Trivy CycloneDX and useful-optional Syft CycloneDX SBOMs are captured; Syft output is deterministically
+    normalized.
+  evidence:
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/syft-version.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.packages
+    - nodes.techvault.thehive.runtime.software_components
+    rationale: SDL package fields use dpkg + scanner-derived summaries; full CycloneDX docs retained as evidence.
+    caveat: SBOMs retained as evidence; SDL package fields do not embed the full CycloneDX documents.
+- id: thehive.runtime.osquery-baseline
+  category: runtime
+  summary: osquery captured processes, listeners, host-side Docker container/image rows, apt sources, and the unavailable
+    Linux application/program table status.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive.runtime.processes
+    - nodes.techvault.thehive.runtime.service_listeners
+    rationale: Current ACES SDL node fields carry the osquery-derived baseline directly.
+    caveat: installed_applications and programs tables are unavailable in the digest-pinned Linux osquery image (recorded
+      as capture limits).
+- id: thehive.relationship.connects-cassandra
+  category: relationship
+  summary: TheHive connects to thehive-cassandra over CQL/9042 (--cql-hostnames thehive-cassandra) for its primary case/alert
+    data in the thehive keyspace; encoded as the thehive-connects-cassandra edge.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/thehive-state.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    - nodes
+    fields:
+    - relationships.thehive-connects-cassandra
+    rationale: The realized TheHive->Cassandra CQL connection is encoded as a typed connects_to relationship.
+    caveat: TheHive's index backend is local Lucene (index.search.backend=lucene), NOT the deployed thehive-es; there is no
+      thehive->es connection and no such relationship is encoded. The Cassandra connection is the active datastore path; the
+      cassandra.yaml authenticator was not captured.

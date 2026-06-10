@@ -1,0 +1,13 @@
+--java-version--
+openjdk 22.0.2 2024-07-16
+OpenJDK Runtime Environment (build 22.0.2+9-70)
+OpenJDK 64-Bit Server VM (build 22.0.2+9-70, mixed mode, sharing)
+--elasticsearch-version--
+/usr/share/elasticsearch/lib/elasticsearch-7.17.28.jar
+--pip-npm-presence--
+java absent
+python3 absent
+pip absent
+pip3 absent
+node absent
+npm absent

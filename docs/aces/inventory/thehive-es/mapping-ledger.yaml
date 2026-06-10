@@ -1,0 +1,411 @@
+schema_version: 1
+asset:
+  id: thehive-es
+  scenario: TechVault
+  aptl_issue: 352
+  aces_methodology_issue: 353
+  source_class: upstream-registry-image-datastore
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: docker.elastic.co/elasticsearch/elasticsearch@sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence:
+    - path: evidence/docker-buildx-imagetools.image.raw.json
+    - path: evidence/docker-inspect.image.json
+    limits:
+    - Upstream Elastic registry image; identity is the pinned RepoDigest (docker-buildx-imagetools.image.raw.json). No registry-visible
+      OCI/in-toto/SLSA attestation is published by Elastic for this tag.
+notes:
+- Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v &&
+  aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof.
+- 'SCN-010 issue #352 inventories the deployed TheHive Elasticsearch companion as nodes.techvault.thehive-es (datastore
+  family, upstream Elastic registry image). Every catalogued observable maps to a current ACES surface (datastore_services
+  search_index profile). No known ACES expressivity gap remains for the catalogued thehive-es steady-state facts.'
+- 'Near-gap resolved without distortion: the search_index profile mandates >=1 structured mapping manifest, but the only steady-state
+  index (.geoip_databases) is ES-system-reserved and refuses _mapping/_field_caps. Rather than fabricate a mapping or distort
+  the data_model, the real field schema was captured via the operator _cluster/state/metadata vantage and encoded faithfully.
+  No ACES issue needed.'
+- 'xpack.security.enabled=false: the REST (9200) and transport (9300) ports carry no TLS or auth; security-net compose isolation
+  is the only control. NOTE: the realized TheHive config uses local Lucene (index.search.backend=lucene, directory /data/index), so thehive-es is NOT the active TheHive index backend — TheHive holds no outbound connection to it and creates no indices in it (the --es-hostnames arg is inert); thehive-es holds only the ES-internal system .geoip_databases index. No thehive->es relationship is encoded.'
+correspondence_checks:
+- id: thehive-es-evidence-bundle-integrity
+  status: implemented
+  source: docs/aces/inventory/thehive-es/evidence
+  method: evidence-sha256sums.txt hashes every committed evidence file except the manifest; tests/test_thehive_es_inventory.py
+    recomputes and compares.
+  realized_evidence:
+  - path: evidence/evidence-sha256sums.txt
+  - path: evidence/captured-at-utc.txt
+  ledger_fact_ids:
+  - thehive-es.capture.toolchain-baseline
+- id: thehive-es-sdl-runtime-correspondence
+  status: implemented
+  source: nodes.techvault.thehive-es.runtime
+  method: tests/test_thehive_es_inventory.py parses the ACES SDL and asserts image, package, CVE, filesystem, identity, process,
+    environment, listener, and datastore counts/values against the evidence.
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/elasticsearch-state.txt
+  ledger_fact_ids:
+  - thehive-es.runtime.container-host-config
+  - thehive-es.runtime.package-inventory
+  - thehive-es.runtime.vulnerability-scan
+  - thehive-es.runtime.local-identity
+  - thehive-es.datastore.elasticsearch-service
+- id: thehive-es-datastore-mapping-correspondence
+  status: implemented
+  source: nodes.techvault.thehive-es.runtime.datastore_services
+  method: README and tests assert the ES datastore engine/version/cluster/partition and the geoip mapping captured via the
+    _cluster/state operator vantage.
+  realized_evidence:
+  - path: evidence/elasticsearch-state.txt
+  - path: evidence/thehive-es-index-mappings.json
+  ledger_fact_ids:
+  - thehive-es.datastore.elasticsearch-service
+  - thehive-es.runtime.service-listeners
+- id: thehive-es-scope-and-redaction-caveats
+  status: implemented
+  source: docs/aces/inventory/thehive-es/evidence/capture-limits.txt
+  method: README and tests assert non-destructive capture scope, the data-volume manifest exclusion, the system-index mapping
+    vantage, and unavailable osquery tables.
+  realized_evidence:
+  - path: evidence/capture-limits.txt
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-volume.thehive_es_data.json
+  - path: evidence/docker-history.image.txt
+  - path: evidence/language-manifests.txt
+  ledger_fact_ids:
+  - thehive-es.capture.toolchain-baseline
+  - thehive-es.runtime.filesystem-inventory
+  - thehive-es.runtime.osquery-baseline
+  - thehive-es.datastore.elasticsearch-service
+facts:
+- id: thehive-es.capture.toolchain-baseline
+  category: capture
+  summary: Capture used digest-pinned Trivy, Syft, and osquery images, recorded Docker/Compose versions, capture time, and
+    explicit capture limits.
+  evidence:
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-compose-version.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/syft-version.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/capture-limits.txt
+  - path: evidence/evidence-sha256sums.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: runtime_contract
+    checked_surfaces:
+    - runtime_contract
+    fields:
+    - docs/aces/inventory/thehive-es/capture-evidence.sh
+    - docs/aces/inventory/thehive-es/evidence/capture-limits.txt
+    rationale: Current ACES SDL runtime fields carry this catalogued thehive-es fact directly.
+    caveat: Scanner/runtime observations are time-sensitive evidence from the current-running lab, not clean-reset proof.
+- id: thehive-es.image.identity-provenance
+  category: image
+  summary: The datastore resolves to the upstream registry image docker.elastic.co/elasticsearch/elasticsearch:7.17.28 (pinned
+    RepoDigest); Ubuntu 20.04.6 base.
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-buildx-imagetools.image.raw.json
+  - path: evidence/docker-buildx-imagetools.image.txt
+  - path: evidence/osquery-docker-images.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.source.name
+    - nodes.techvault.thehive-es.source.version
+    - nodes.techvault.thehive-es.os_version
+    rationale: Current ACES SDL node source fields carry the upstream registry image identity directly.
+- id: thehive-es.image.build-recipe
+  category: image
+  summary: The build recipe (instructions/layers from docker history, default config, absent attestation) is encoded as upstream-image
+    provenance.
+  evidence:
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.source.build.instructions
+    - nodes.techvault.thehive-es.source.build.layers
+    - nodes.techvault.thehive-es.source.build.config
+    - nodes.techvault.thehive-es.source.build.attestation
+    rationale: Current ACES SDL node build fields carry the history-reconstructed recipe directly.
+- id: thehive-es.compose.service-contract
+  category: compose
+  summary: Compose declares aptl-thehive-es, image elasticsearch:7.17.28, discovery.type=single-node, xpack.security.enabled=false,
+    ES_JAVA_OPTS heap, the thehive_es_data volume, 1g memory, and security-net 172.20.0.4 (no host-published ports).
+  evidence:
+  - path: evidence/compose-service.thehive-es.json
+  - path: evidence/docker-compose-version.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.environment
+    - nodes.techvault.thehive-es.runtime.operational_policy
+    - nodes.techvault.thehive-es.runtime.mounts
+    - nodes.techvault.thehive-es.runtime.network
+    rationale: Current ACES SDL node runtime fields carry the compose contract directly.
+- id: thehive-es.runtime.container-host-config
+  category: runtime
+  summary: Docker runtime policy captures restart, 1 GiB memory, namespaces, masked/read-only paths, no added capabilities,
+    and runc runtime.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-logs.thehive-es.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.container
+    - nodes.techvault.thehive-es.runtime.operational_policy
+    - nodes.techvault.thehive-es.runtime.linux_capabilities
+    rationale: Current ACES SDL node runtime fields carry this catalogued fact directly.
+- id: thehive-es.network.identity
+  category: network
+  summary: The datastore is attached to security-net only at 172.20.0.4; 9200/9300 are NOT host-published; kali (other subnets)
+    cannot route to it.
+  evidence:
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/participant-discovery.kali.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.network.endpoints
+    - nodes.techvault.thehive-es.runtime.network.published_ports
+    rationale: Current ACES SDL node network fields carry the realized endpoint and no-published-port facts directly.
+- id: thehive-es.runtime.service-listeners
+  category: runtime
+  summary: Elasticsearch listens on TCP/9200 (REST, HTTP — security disabled) and TCP/9300 (transport); both security-net
+    only.
+  evidence:
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/elasticsearch-state.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.service_listeners
+    - nodes.techvault.thehive-es.services
+    rationale: Current ACES SDL node service_listeners + services carry the listener facts directly.
+- id: thehive-es.runtime.mounts
+  category: runtime
+  summary: The thehive_es_data named volume is mounted at /usr/share/elasticsearch/data; the runtime mount table and volume
+    inspect record it.
+  evidence:
+  - path: evidence/docker-volume.thehive_es_data.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.mounts
+    rationale: Current ACES SDL node runtime.mounts carries the data-volume mount directly.
+- id: thehive-es.runtime.filesystem-inventory
+  category: filesystem
+  summary: The Elasticsearch install tree (bin, config, modules, jdk) and os-release are encoded with checksums for stable
+    files; the data volume is excluded.
+  evidence:
+  - path: evidence/filesystem-tree.txt.gz
+  - path: evidence/filesystem-checksums.txt.xz
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.filesystem_inventory
+    rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
+    caveat: The /usr/share/elasticsearch/data volume content (runtime index state) is excluded from the manifest (top-level
+      rows only); index state is captured in elasticsearch-state.txt + the datastore mappings instead.
+- id: thehive-es.runtime.process-set
+  category: runtime
+  summary: PID 1 is tini, execing the Elastic docker-entrypoint; the JVM (eswrapper) and the x-pack ML native controller are
+    the steady-state processes.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-top.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.processes
+    rationale: Current ACES SDL node runtime.processes carries the captured process set directly.
+- id: thehive-es.runtime.environment
+  category: runtime
+  summary: Runtime environment is five variables (discovery.type, xpack.security.enabled, ES_JAVA_OPTS, PATH, ELASTIC_CONTAINER);
+    no secret-bearing values.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.environment
+    rationale: Current ACES SDL node runtime.environment carries the captured variables directly.
+- id: thehive-es.runtime.local-identity
+  category: identity
+  summary: Local passwd/group inventory records 20 users and 40 groups (stock Ubuntu 20.04 + the elasticsearch service account
+    uid 1000); no sudo rules.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.local_identity
+    rationale: Current ACES SDL node runtime.local_identity carries the local identity surface directly.
+- id: thehive-es.application.software-versions
+  category: runtime
+  summary: Elasticsearch 7.17.28 (lucene 8.11.3) is the application component; identified from the cluster root API and the
+    install tree.
+  evidence:
+  - path: evidence/language-manifests.txt
+  - path: evidence/elasticsearch-state.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.software_components
+    rationale: Current ACES SDL node runtime.software_components carries the ES version directly.
+- id: thehive-es.runtime.package-inventory
+  category: runtime
+  summary: dpkg package inventory captures 128 installed OS packages from the Elastic Ubuntu 20.04 base.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/osquery-apt-sources.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.packages
+    rationale: Current ACES SDL node runtime.packages carries the dpkg inventory directly.
+- id: thehive-es.runtime.vulnerability-scan
+  category: runtime
+  summary: Trivy captured 94 image-layer vulnerability findings (23 high, 55 medium, 16 low).
+  evidence:
+  - path: evidence/trivy-vulnerabilities.json.gz
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-version.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.package_vulnerabilities
+    rationale: Current ACES SDL node runtime.package_vulnerabilities carries the per-CVE findings directly.
+    caveat: Scanner output is time-sensitive and tied to the captured Trivy version/database state.
+- id: thehive-es.runtime.sbom-toolchain
+  category: runtime
+  summary: Required Trivy CycloneDX and useful-optional Syft CycloneDX SBOMs are captured; Syft output is deterministically
+    normalized.
+  evidence:
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/syft-version.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.packages
+    - nodes.techvault.thehive-es.runtime.software_components
+    rationale: SDL package fields use dpkg + scanner-derived summaries; full CycloneDX docs retained as evidence.
+    caveat: SBOMs retained as evidence; SDL package fields do not embed the full CycloneDX documents.
+- id: thehive-es.runtime.osquery-baseline
+  category: runtime
+  summary: osquery captured processes, listeners, host-side Docker container/image rows, apt sources, and the unavailable
+    Linux application/program table status.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.processes
+    - nodes.techvault.thehive-es.runtime.service_listeners
+    rationale: Current ACES SDL node fields carry the osquery-derived baseline directly.
+    caveat: installed_applications and programs tables are unavailable in the digest-pinned Linux osquery image (recorded
+      as capture limits).
+- id: thehive-es.datastore.elasticsearch-service
+  category: datastore
+  summary: 'The ES search-index datastore is encoded: engine elasticsearch 7.17.28, single-node cluster docker-cluster (green),
+    the node with its role set, the .geoip_databases index partition, the captured index mapping, security-disabled transport,
+    and the discovery/security/heap settings.'
+  evidence:
+  - path: evidence/elasticsearch-state.txt
+  - path: evidence/thehive-es-index-mappings.json
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-es.runtime.datastore_services
+    rationale: Current ACES SDL node runtime.datastore_services (search_index profile) carries the engine, cluster, node,
+      partition, mapping, transport_security, and settings facts directly.
+    caveat: At steady state the only index is the ES-internal .geoip_databases system index; its _mapping/_field_caps APIs
+      return a reserved-access error, so the field schema (data/name/chunk; binary/keyword/integer) was captured via the operator
+      _cluster/state/metadata vantage. TheHive does NOT create indices in this ES (index.search.backend=lucene; primary data is in Cassandra and search index is local Lucene), so no TheHive index mappings exist here — only the ES-internal system index. xpack.security is disabled (no TLS/auth on 9200/9300).

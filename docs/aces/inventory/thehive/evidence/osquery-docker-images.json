@@ -1,0 +1,15 @@
+{
+  "table": "docker_images",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%strangebee/thehive%\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "created": "1768902835",
+      "id": "ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13",
+      "size_bytes": "1402683693",
+      "tags": "strangebee/thehive:5.4"
+    }
+  ]
+}

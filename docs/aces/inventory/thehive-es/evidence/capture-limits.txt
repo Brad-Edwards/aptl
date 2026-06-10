@@ -1,0 +1,13 @@
+- compose-service.thehive-es.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project.
+- Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof.
+- thehive_es_data volume contents (/usr/share/elasticsearch/data) are runtime index state and out of manifest scope; only top-level directory rows are recorded in filesystem-tree.txt.gz. Index-level state is captured in elasticsearch-state.txt instead.
+- /usr/share/elasticsearch/config/elasticsearch.keystore is the entrypoint-generated service keystore (bootstrap seed): recorded as path/metadata only with sensitivity=operator_secret in filesystem-tree.txt.gz and excluded from filesystem-checksums.txt.xz.
+- /usr/share/elasticsearch/modules and plugins are recorded as manifest listing rows only (no per-file checksums); module jar content integrity is evidenced by the registry image digest and the SBOMs. The plugins directory is empty in this image.
+- The Elasticsearch image does not include ss or netstat; listener and connection evidence falls back to raw /proc/net/tcp,tcp6,udp tables, complemented by docker top and osquery namespace-sharing evidence.
+- source-checksums.txt covers only docker-compose.yml; the thehive-es service has no repo-authored bind files (configuration is upstream-image defaults plus compose environment).
+- filesystem-tree.txt.gz scopes the manifest to the application surfaces (/usr/share/elasticsearch config, bin, modules and plugins listings, /etc/os-release) plus top-level directory rows for the volume-backed data tree; volume runtime data content and runtime logs are out of manifest scope.
+- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; filesystem provenance is captured in filesystem-tree.txt.gz and filesystem-checksums.txt.xz.
+- Trivy and Syft CycloneDX SBOM evidence is committed as deterministic gzip-compressed minified JSON to satisfy the repository's added-file size gate; compression is lossless.
+- osquery installed_applications table unavailable in the digest-pinned Linux scanner image.
+- osquery programs table unavailable in the digest-pinned Linux scanner image.
+- osquery apt_sources reflects the host-side scanner vantage; the target rootfs Ubuntu apt state is captured directly in os-packages.txt.

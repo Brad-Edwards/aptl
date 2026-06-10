@@ -1,0 +1,74 @@
+[
+  {
+    "Id": "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13",
+    "RepoTags": [
+      "strangebee/thehive:5.4"
+    ],
+    "RepoDigests": [
+      "strangebee/thehive@sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2026-01-20T09:53:55.010861904Z",
+    "Config": {
+      "User": "thehive",
+      "ExposedPorts": {
+        "9000/tcp": {}
+      },
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto",
+        "LANG=C.UTF-8"
+      ],
+      "Entrypoint": [
+        "/opt/thehive/entrypoint"
+      ],
+      "WorkingDir": "/opt/thehive",
+      "Labels": {
+        "org.opencontainers.image.authors": "contact@strangebee.com",
+        "org.opencontainers.image.created": "2026-01-18T01:58:53.129Z",
+        "org.opencontainers.image.description": "",
+        "org.opencontainers.image.licenses": "",
+        "org.opencontainers.image.revision": "61d5647542675ab3f0b8296f38bbb7f64caba9d1",
+        "org.opencontainers.image.source": "https://github.com/StrangeBee/TheHive",
+        "org.opencontainers.image.title": "TheHive",
+        "org.opencontainers.image.url": "https://github.com/StrangeBee/TheHive",
+        "org.opencontainers.image.vendor": "StrangeBee",
+        "org.opencontainers.image.version": "latest"
+      },
+      "ArgsEscaped": true
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 571399284,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:e0e6002570470d87b99366522e2deadfd07fd6abb0c481198c1e336f9117e5a6",
+        "sha256:bedf215d08b2a6893d88e88b5daf024ed3f6076449b48c8fe502daf53bbc2e8c",
+        "sha256:d92a535ed615baa965edb1529f31ebba569766ec8ea830b695eef5fb1cd7f2b0",
+        "sha256:1635961c0b693ede72762bcb4cfbf84866ae6920c1d1290826b78096a668290b",
+        "sha256:4bc292ba46aae2aa30e30ae943235d6ff4e2e9f1e7853685a022aad6c2ba4d13",
+        "sha256:dd1a63ee99e90e7efd8d8c5b49acc60d6d13e172209ce19ddfc789901b72c018",
+        "sha256:ca9a6a90cd925ccdfb3c8ac2054bad94f94cb9941ae0c5f7e25ed8bcff1d0a67",
+        "sha256:5a2c0b661184ac86ec92cad257828f00f6103f165227927a834b10d3389d02ad",
+        "sha256:4a871fac40d5f59f49aa60a1fd78abed5ff34fb0117e0a6b7f784b1d0912e5b7",
+        "sha256:9162d21aecb8ace95666b3fd0e6227760efc04c26077c4203057781cdba87d98"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-04-29T04:08:56.171071167Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13",
+      "size": 1609
+    },
+    "Identity": {
+      "Pull": [
+        {
+          "Repository": "docker.io/strangebee/thehive"
+        }
+      ]
+    }
+  }
+]

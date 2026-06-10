@@ -1,0 +1,73 @@
+{
+  "table": "listening_ports",
+  "query": "select port, protocol, address, pid, socket, path from listening_ports order by port, protocol, pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-thehive-es network namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "9200",
+      "protocol": "6",
+      "socket": "170243217"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "9200",
+      "protocol": "6",
+      "socket": "170243217"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "9300",
+      "protocol": "6",
+      "socket": "170248216"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "9300",
+      "protocol": "6",
+      "socket": "170248216"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "36659",
+      "protocol": "6",
+      "socket": "170211160"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "36659",
+      "protocol": "6",
+      "socket": "170211160"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "38439",
+      "protocol": "17",
+      "socket": "170211159"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "38439",
+      "protocol": "17",
+      "socket": "170211159"
+    }
+  ]
+}

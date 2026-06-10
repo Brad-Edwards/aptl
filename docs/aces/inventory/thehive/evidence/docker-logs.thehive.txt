@@ -1,0 +1,500 @@
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (300 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (400 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (500 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (600 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (700 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (800 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (900 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (1000 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (1100 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (1200 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (1300 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (1400 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (1500 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (1600 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (1700 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (1800 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (1900 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (2000 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (2100 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (2200 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (2300 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (2400 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (2500 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (2600 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (2700 / 1069)
+[[37minfo[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] Running dedup checks on Tag (2800 / 1069)
+[[33mwarn[0m] o.t.t.s.TagIntegrityCheck [0f25a3640d047ded] There are too many false positives during deduplicate process. If you see this message several times, you probably have index issue and you should reindex the data.
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of deduplication of Tag:
+  duplicate: 0
+  duration: 4099
+[[37minfo[0m] o.t.t.s.UserIntegrityCheck [0f25a3640d047ded] Starting User integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of User
+[[37minfo[0m] o.t.t.s.UserIntegrityCheck [0f25a3640d047ded] Running global checks on User (0 / 3)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of User:
+  duration: 39
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of CaseTemplate
+[[37minfo[0m] o.t.t.s.CaseTemplateIntegrityCheck [0f25a3640d047ded] Starting CaseTemplate integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of CaseTemplate:
+  duration: 9
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Data
+[[37minfo[0m] o.t.t.s.DataIntegrityCheck [0f25a3640d047ded] Starting Data integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Data:
+  duration: 4
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Case
+[[37minfo[0m] o.t.t.s.CaseIntegrityCheck [0f25a3640d047ded] Starting Case integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Case:
+  duration: 9
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Alert
+[[37minfo[0m] o.t.t.s.AlertIntegrityCheck [0f25a3640d047ded] Starting Alert integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Alert:
+  duration: 10
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of deduplication of Alert
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of deduplication of Alert:
+  duplicate: 0
+  duration: 6
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Task
+[[37minfo[0m] o.t.t.s.TaskIntegrityCheck [0f25a3640d047ded] Starting Task integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Task:
+  duration: 9
+[[37minfo[0m] o.t.t.s.ObservableIntegrityCheck [0f25a3640d047ded] Starting Observable integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Observable
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Observable:
+  duration: 9
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Log
+[[37minfo[0m] o.t.t.s.LogIntegrityCheck [0f25a3640d047ded] Starting Log integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Log:
+  duration: 4
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of AttachmentHash
+[[37minfo[0m] o.t.t.s.AttachmentHashIntegrityCheck [0f25a3640d047ded] Starting AttachmentHash integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of AttachmentHash:
+  duration: 4
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Role
+[[37minfo[0m] o.t.t.s.RoleIntegrityCheck [0f25a3640d047ded] Starting Role integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.RoleIntegrityCheck [0f25a3640d047ded] Running global checks on Role (0 / 2)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Role:
+  rolesWithoutProfiles: 0
+  rolesWithoutOrgs: 0
+  duration: 32
+[[37minfo[0m] o.t.t.s.ShareIntegrityCheck [0f25a3640d047ded] Starting Share integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Share
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Share:
+  duration: 4
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Procedure
+[[37minfo[0m] o.t.t.s.ProcedureIntegrityCheck [0f25a3640d047ded] Starting Procedure integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Procedure:
+  duration: 7
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Pattern
+[[37minfo[0m] o.t.t.s.PatternIntegrityCheck [0f25a3640d047ded] Starting Pattern integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.PatternIntegrityCheck [0f25a3640d047ded] Running global checks on Pattern (0 / 707)
+[[37minfo[0m] o.t.t.s.PatternIntegrityCheck [0f25a3640d047ded] Running global checks on Pattern (100 / 707)
+[[37minfo[0m] o.t.t.s.PatternIntegrityCheck [0f25a3640d047ded] Running global checks on Pattern (200 / 707)
+[[37minfo[0m] o.t.t.s.PatternIntegrityCheck [0f25a3640d047ded] Running global checks on Pattern (300 / 707)
+[[37minfo[0m] o.t.t.s.PatternIntegrityCheck [0f25a3640d047ded] Running global checks on Pattern (400 / 707)
+[[37minfo[0m] o.t.t.s.PatternIntegrityCheck [0f25a3640d047ded] Running global checks on Pattern (500 / 707)
+[[37minfo[0m] o.t.t.s.PatternIntegrityCheck [0f25a3640d047ded] Running global checks on Pattern (600 / 707)
+[[37minfo[0m] o.t.t.s.PatternIntegrityCheck [0f25a3640d047ded] Running global checks on Pattern (700 / 707)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Pattern:
+  pattern-tactics-links-duplicates: 0
+  duration: 1122
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of ResetPasswordToken
+[[37minfo[0m] o.t.t.e.s.ResetPasswordIntegrityCheck [0f25a3640d047ded] Starting ResetPasswordToken integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of ResetPasswordToken:
+  duration: 4
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Job
+[[37minfo[0m] o.t.t.c.c.s.JobIntegrityCheck [0f25a3640d047ded] Starting Job integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Job:
+  duration: 8
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] Start of global check of Action
+[[37minfo[0m] o.t.t.c.c.s.ActionIntegrityCheck [0f25a3640d047ded] Starting Action integrity check (time limit is 5 minutes)
+[[37minfo[0m] o.t.t.s.IntegrityCheck [0f25a3640d047ded] End of global check of Action:
+  duration: 4
+[[37minfo[0m] o.t.s.AccessLogFilter [373a7183ab43eaf2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2497fd30c580fb2f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [91bf6af050f5dfa9] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7925e7c1f4d1dad7] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [867ee32efd4083c5] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [ba7c2ebdfb6a8bf8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [28be0931d0e05740] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [378704f162e7fe7c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d324086d41e78f62] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9f0614426e9c6a82] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [861900ad2e3a645b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9cccab0d4ce5af1b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e28e1cd0a45293b1] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.t.c.m.s.MispActor [4b282e7b75e21253] MISP synchronisation is complete
+[[37minfo[0m] o.t.s.AccessLogFilter [884db43bea27e0bc] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f8a912c46d73cc55] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [4ad5d959a87eec36] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c1993c31a31e9b4d] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [52d0996bde25ce7c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a8040d05b61d896b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [4bfc0c2a1993f1b7] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [444f924301b4be86] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9ac600fe535db4b3] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [80a78666576ea821] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [216924d4db5cb726] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3af65d86491f3cf4] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [133169b02518c828] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [06d12377eee3b4f2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3f7b59d3ee7eb820] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9d8b39e10fe351e9] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [54bc680c89514350] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5507507fe18d0425] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [0e6e91b81a60e308] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5c0a739f760984da] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [4a34352a96f8d16e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a2f87e9f43a0054b] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [56f2669cfae3001b] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f17266ecd4589b36] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2c3d9cc86a688565] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c90a7028522333b4] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [93dc243571e648b0] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [be28588e016a3839] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [638c7a62be15800f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3236015175d0838e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [aa60523eacca58c8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [dbbecea77adc60a0] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [94dbb06b53f555c5] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [136c60c5e5848dbe] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b791439db6433818] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e5a9dc3d04e93e9f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2238808298ec5d44] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7e0875ed8e794046] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [af428370c41c8dd8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9520ca3c0596bcab] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [90274cf7d99447e7] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e86245b62817c7ce] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7595f0f6bccad533] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [6d1a64e3b3bc699e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9014f14da2b35afe] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [649aa8fbf4c2c8d2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [8e29e186fb1564be] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [70c3870c3756798d] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [46f0d3657c9dd095] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d335d93d0ef0c8b4] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e17bf53932e58730] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [bb3e69228df14d29] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [262d8f462ecde00f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [6b4fd8d9f283af46] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [ec380781ea679826] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [8a41486bf737d605] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [141c56c9f0dc53e2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3ebdba1038b85de1] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [690f8b8d09d8af3f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f9351ecdadaa001d] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [587de80ea8bc5152] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2ffab77f4c18e3f3] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c70213c169d34fdf] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9ac620c89c9b9453] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2ebc40c327c4a63c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [fa11d520ab289917] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f516df6ecf63cfeb] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c511d35c0de7a2b6] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2b2f0e44324514be] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [de5ae41d7348cb6c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [04003f8f23c5a85a] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [16403b4d46217e66] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f2cfed2fb145d92e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [abd56157c6f05c83] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [91abcc95b80e29dd] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [0451a6d9a38c2d55] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a3b52c23721ea538] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [05a3d130ac4f1408] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e64eb71b92f9bf4d] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c4b9d5ada7c8a91e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [19fe4c6e5434cff4] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7a1b71602ff5d5fc] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b340a52f7e78edf3] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [aae2d31f718712c5] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [45cd6cad231cc4bb] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3294b9f2ec87c425] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [bffb3e178541d3a4] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [498b50d33c78984b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [17c870b4e74e6164] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [91d7190735b86abb] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [24826111b6b010e8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9a4dd5cd31b249cd] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [db4806bb60222bd7] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [64b786018654500c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d757595c91ce25cd] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d8d5548d8e8240d7] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9b85f0b914ba6446] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9b0558026e84a7e4] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [fdf6148ee1e24d02] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [ef63974ce1394483] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [45c36a39c79154ed] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f40b38080548a70c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c90d039b93b09e48] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [afbbaa818c542495] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2714280f87c8361e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [088f9cd53ad89f48] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5297a37566f468e2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [56e417cd28e37912] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e9ff550dac56bab0] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [fd20e426b2978148] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c38229a7f4b2d8e6] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [4167752bc2bcaa43] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [bb6f56aa6bd348d0] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [74c9feddd83c243b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b74d887737e9794b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c16c67514294fb30] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9f7c30f60fdb6203] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a6cd52e390227e65] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [19235e350402f961] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.t.c.m.s.MispActor [4b282e7b75e21253] MISP synchronisation is complete
+[[37minfo[0m] o.t.s.AccessLogFilter [72d89fc969d2ace2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3687a67937165664] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [ba20c7d63ec11a99] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [333d3876fdebfb45] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [817aae2382212755] 127.0.0.1 GET /api/status took 4ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [10587d5aca9b5b45] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [fcc7102e01321371] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [8e7be1706aa6193a] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [ccb5509eaf68db6b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a7b90369f3d60624] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7647a9b55b7bd063] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [1eadf6814ae34a79] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3dd9d46ec802d7c1] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [743adceef47dafb3] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [eda7f5e5f3dd24dd] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [4d6d3f1242f15b8a] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [20306c8a663733e0] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [96af91928b9dc7e1] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e5ab2cc5e18841ab] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5de6fd7cdaa1766d] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a208118e65055d62] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a15173666e1b5c07] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [978c459c2f8d960f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [fdf260b1f283f12b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b6808c89c926e45e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c6eb3be3d8a098c6] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [65eb849ea05402df] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [89a643018b1d0956] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [8d803a19aab69c69] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [bbe32ebc2602fe2f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7bd52010be378cb7] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [ae9b1af094132326] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [941b069d23b044e1] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [0bbc1679bc4aa7d3] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [4acbd3d6a9d1167e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7011b8eea536c11a] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2010c7b210527431] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [00a6a7da8c7a62bf] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7638916f8159d87a] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [39a788e3268a9143] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [af2846a1b48f9c3e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5900fe14a0141213] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b8065155f419274e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [afe8a4d767a57cf0] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [1520d20f88595b9f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [1cb38f14b17d96ce] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [6a144c55690c4614] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b6df0cb2caf049d0] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [0c274e37e088f968] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d6059f843d422149] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c245ee3c42d02f2e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e0e7eaf621e0b24f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f0a780a02bc207ce] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5e00488703d551da] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [365d3c26d3274f89] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [bebd7b35975e164a] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [04e3c9164e68d527] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [8663ce484761f636] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9ddd0d6b6e36e915] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [39e72f38b21ec9d7] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [fff2bd0c4d8df430] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [976e366a7aa93d4d] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [47aa36951773b60c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e86595311f1c5889] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a9c382875e0dcc0d] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f23125c0b653552b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9f85f7bcd95aa9f4] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5af191d62798fe3e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [78d93e1a2b3ac617] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [8dbcf5852aa5f06e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a58fcd7ec836e21e] 13.58.137.1 GET / took 1ms and returned 200
+[[37minfo[0m] o.t.s.AccessLogFilter [1b03c64da79815d0] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e9f2e1fafe51b2b3] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a6dae6d270740c2b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [31c1042acd88b1c3] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [941dfe125f60fae5] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [18dfb8dbc535e7ac] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [61e31560fcb52684] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9a01098373c829e6] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [ee60413bd91112d2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [6fd5cb77025ca0d4] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3db70bc5e569e9ba] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [58c439b4f0774b65] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [33819821257b65e8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [6a0959dfc4e5b9b6] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.c.Entrypoint [ba8807aea2c80e3d] - in - 172.20.0.1 POST /api/v1/login
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [ba8807aea2c80e3d] license is invalid: The license is expired (valid from Wed Jun 10 02:21:18 UTC 2026 until Wed Jun 10 02:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.auth [ba8807aea2c80e3d] Accepted password for admin@thehive.local
+[[37minfo[0m] o.t.s.AccessLogFilter [ba8807aea2c80e3d] 172.20.0.1 POST /api/v1/login took 273ms and returned 200 596 bytes
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [15e559a726d335ff] license is invalid: The license is expired (valid from Wed Jun 10 02:21:18 UTC 2026 until Wed Jun 10 02:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.c.Entrypoint (admin@thehive.local@admin) [15e559a726d335ff] 172.20.0.1 POST /api/v1/query
+[[37minfo[0m] o.t.s.AccessLogFilter (admin@thehive.local@admin) [15e559a726d335ff] 172.20.0.1 POST /api/v1/query took 10ms and returned 200
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [c60d1991d33b19ec] license is invalid: The license is expired (valid from Wed Jun 10 02:21:18 UTC 2026 until Wed Jun 10 02:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.c.Entrypoint (admin@thehive.local@admin) [c60d1991d33b19ec] 172.20.0.1 POST /api/v1/query
+[[37minfo[0m] o.t.s.AccessLogFilter (admin@thehive.local@admin) [c60d1991d33b19ec] 172.20.0.1 POST /api/v1/query took 11ms and returned 200
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [c805bd1d1e012ea0] license is invalid: The license is expired (valid from Wed Jun 10 02:21:18 UTC 2026 until Wed Jun 10 02:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.c.Entrypoint (admin@thehive.local@admin) [c805bd1d1e012ea0] 172.20.0.1 POST /api/v1/user/~7766032/key/renew
+[[37minfo[0m] o.t.s.AccessLogFilter (admin@thehive.local@admin) [c805bd1d1e012ea0] 172.20.0.1 POST /api/v1/user/~7766032/key/renew took 155ms and returned 200 32 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5c9d4213fa5b1bb5] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f0a7703ae5891f1a] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [211233fd80183cec] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d66ca2d4f2f2bde3] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [68e9d74707fe0b61] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [6e8a6e67132c9501] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.t.e.s.LicenseActor [] Reloading license
+[[31merror[0m] o.t.t.e.s.LicenseSrv [b732fe6ab9a30647] No license set as current was found in database
+[[37minfo[0m] o.t.t.e.s.LicenseSrv [b732fe6ab9a30647] trial platinum loaded license for 15 days
+[[33mwarn[0m] o.t.t.e.s.LicenseSrv [b732fe6ab9a30647] trial license has already expired
+[[37minfo[0m] o.t.t.s.CapabilitySrv [] set license no-license|No|Regular
+[[37minfo[0m] o.t.s.AccessLogFilter [8762d8c2bee488d2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [452e38d00246eacc] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [43b5e1c132b1fc28] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [61d01ff1cf37cf65] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [442e9c1ce0cd0ff5] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b4b5a964499ce216] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [bae081c25efced47] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c433aafc50a8ab33] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [dc39a3c4198f178e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d6ce37f8c1db5d3c] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7a11d887365cccd0] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [bdfb72a824d29293] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [624b8284e23333e4] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [669b9b21db7ddf25] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7dc040ea292830c1] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [30aa768d05b58560] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c5b09e9b032d0357] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [fc9aef591450b7dc] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2ce14fb1ae800a79] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [6b94c94bb206f446] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d3c0d4fdcf0a23f0] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [664f71e7f1fd8079] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [28bedeabbe59cbbc] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [ac3f8e181dc7ba44] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7eadfaee25e94de8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [dfd600f7ac424a7e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [096eead7c68a6a62] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b2d515c785a0c72c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [89858c9e36dfdf0e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [64e26a552e5e2bba] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.t.c.m.s.MispActor [4b282e7b75e21253] MISP synchronisation is complete
+[[37minfo[0m] o.t.s.AccessLogFilter [b3e1aaf979a2dd8f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [27cddc03e86904be] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a3de686d3f6208b6] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [ccfd8e1ff12c48e2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [cf52f3c88a15211b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [18ed0d8a257c00d8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [61b7ca5880ca7067] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b5704d8fba364bdc] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [69b38f324c74a074] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7e4fccbed195ca39] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2af528b21c366572] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [763f45922bdfd8b2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [4fd43be7fd1b8c45] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e1df2b28d0aaf340] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f2ae39c93edec2f7] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c842efda1cae6af8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [90a9d9629d69fdff] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [4979c239ab8c4dcc] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [73a250243610c257] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [748b9993a08778ee] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [f29368082a4958e9] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [38bc91f43304b851] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a65b2f4976c97e5c] 66.132.172.100 GET / took 0ms and returned 200
+[[33mwarn[0m] o.a.p.a.ActorSystemImpl [] Illegal request, responding with status '501 Not Implemented': Unsupported HTTP method: PRI
+[[37minfo[0m] o.t.s.AccessLogFilter [b95123746bdba2a2] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [48ab8aca6d78f9bc] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [cde48ecb03d80b93] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [866731d6f2ba3bcb] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [cca0dbfd6afb4ab6] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [e71620d2e4786149] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [fe60987f3d583948] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [410244c57336645f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9f7d285df2d02f54] 66.132.172.100 GET /.well-known/security.txt took 0ms and returned 200
+[[37minfo[0m] o.t.s.AccessLogFilter [46a0d3f88bc6e76a] 66.132.172.100 GET /static/icon.png took 0ms and returned 200 4651 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d217f76b1ba35a0e] 66.132.172.100 GET /favicon.ico took 0ms and returned 200
+[[37minfo[0m] o.t.s.AccessLogFilter [0afef1979b1fee72] 66.132.172.100 GET /5e01b0umi889 took 1ms and returned 200
+[[37minfo[0m] o.t.s.AccessLogFilter [1ad98255afacfb3e] 66.132.172.100 GET /favicon.ico took 1ms and returned 200
+[[37minfo[0m] o.t.s.AccessLogFilter [b9b9903e3999bb9f] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [1467e869df33937b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.c.Entrypoint [a41aec3f3ca9fd23] - in - 172.20.0.1 POST /api/v1/login
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [a41aec3f3ca9fd23] license is invalid: The license is expired (valid from Wed Jun 10 04:21:18 UTC 2026 until Wed Jun 10 04:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.auth [a41aec3f3ca9fd23] Accepted password for admin@thehive.local
+[[37minfo[0m] o.t.s.AccessLogFilter [a41aec3f3ca9fd23] 172.20.0.1 POST /api/v1/login took 375ms and returned 200 596 bytes
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [9a3f1d8cd854c40d] license is invalid: The license is expired (valid from Wed Jun 10 04:21:18 UTC 2026 until Wed Jun 10 04:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.c.Entrypoint (admin@thehive.local@admin) [9a3f1d8cd854c40d] 172.20.0.1 POST /api/v1/query
+[[37minfo[0m] o.t.s.AccessLogFilter (admin@thehive.local@admin) [9a3f1d8cd854c40d] 172.20.0.1 POST /api/v1/query took 8ms and returned 200
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [09f816c48a0ccaef] license is invalid: The license is expired (valid from Wed Jun 10 04:21:18 UTC 2026 until Wed Jun 10 04:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.c.Entrypoint (admin@thehive.local@admin) [09f816c48a0ccaef] 172.20.0.1 POST /api/v1/query
+[[37minfo[0m] o.t.s.AccessLogFilter (admin@thehive.local@admin) [09f816c48a0ccaef] 172.20.0.1 POST /api/v1/query took 9ms and returned 200
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [7399c68956ae6b79] license is invalid: The license is expired (valid from Wed Jun 10 04:21:18 UTC 2026 until Wed Jun 10 04:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.c.Entrypoint (admin@thehive.local@admin) [7399c68956ae6b79] 172.20.0.1 POST /api/v1/user/~7766032/key/renew
+[[37minfo[0m] o.t.s.AccessLogFilter (admin@thehive.local@admin) [7399c68956ae6b79] 172.20.0.1 POST /api/v1/user/~7766032/key/renew took 182ms and returned 200 32 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [793502ad61b0cd17] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [96a35af59984a38d] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5b06e0fb3f6b1883] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [521ed0fa83be8a15] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d4b5c0b82cade6fe] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [0aa751a4b0624f86] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c07c8f5c3194ddaf] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [304f3adbc8311d0b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [1fa4658e5323923e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2d29cd7998e28729] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a6d5228fc4877316] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [1c7c84689570a6f6] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [fdcedae4506740c4] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b6dc04a51a093688] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.c.Entrypoint [10a29dd9c583ad2f] - in - 172.20.0.1 POST /api/v1/login
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [10a29dd9c583ad2f] license is invalid: The license is expired (valid from Wed Jun 10 04:21:18 UTC 2026 until Wed Jun 10 04:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.auth [10a29dd9c583ad2f] Accepted password for admin@thehive.local
+[[37minfo[0m] o.t.s.AccessLogFilter [10a29dd9c583ad2f] 172.20.0.1 POST /api/v1/login took 305ms and returned 200 596 bytes
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [58a561382e11b695] license is invalid: The license is expired (valid from Wed Jun 10 04:21:18 UTC 2026 until Wed Jun 10 04:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.c.Entrypoint (admin@thehive.local@admin) [58a561382e11b695] 172.20.0.1 POST /api/v1/query
+[[37minfo[0m] o.t.s.AccessLogFilter (admin@thehive.local@admin) [58a561382e11b695] 172.20.0.1 POST /api/v1/query took 9ms and returned 200
+[[33mwarn[0m] o.t.t.s.CapabilitySrv [4672319155d2341a] license is invalid: The license is expired (valid from Wed Jun 10 04:21:18 UTC 2026 until Wed Jun 10 04:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.c.Entrypoint (admin@thehive.local@admin) [4672319155d2341a] 172.20.0.1 POST /api/v1/query
+[[37minfo[0m] o.t.s.AccessLogFilter (admin@thehive.local@admin) [4672319155d2341a] 172.20.0.1 POST /api/v1/query took 10ms and returned 200
+[[33mwarn[0m] o.t.t.s.CapabilitySrv (admin@thehive.local@admin) [4b74d1a5b2017043] license is invalid: The license is expired (valid from Wed Jun 10 04:21:18 UTC 2026 until Wed Jun 10 04:21:18 UTC 2026)
+[[37minfo[0m] o.t.s.c.Entrypoint (admin@thehive.local@admin) [4b74d1a5b2017043] 172.20.0.1 POST /api/v1/user/~7766032/key/renew
+[[37minfo[0m] o.t.s.AccessLogFilter (admin@thehive.local@admin) [4b74d1a5b2017043] 172.20.0.1 POST /api/v1/user/~7766032/key/renew took 184ms and returned 200 32 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [bfc8b38577a577a9] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2c221b753cc1aa8b] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c9a84af1a00a4f29] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [0552fa90e9ffb0ad] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3c3b44782e4e0e94] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5954b72967c1eee9] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [fa8485418e844f78] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [11a7ae6aa9ef8e0c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [55f2dbe034ac7980] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [2a0a60aa6bbeb211] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [0a399ee61d24b828] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [610ea70bb6e51ed8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [305ebbb0ba5ad567] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7494563336b6cba7] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [01c16280df116780] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [06502f430b728e41] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [9c752321d7d067bb] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [95b77389f043565c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [89f738e0dbfaca21] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [cbc39a4762048b68] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3fe34f9b302fafcd] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [57b542c5501de358] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [62ecac9bcdce066e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [78f1abb3bc60d0df] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [1c23d1dfb8ebd095] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [a49bcb528f726bc9] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [b66638ea53b721e7] 127.0.0.1 GET /api/status took 3ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [5729c30d68b7c47e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d9bc1a37a6e2f934] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [c97b34842133d1e8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [909acbf04090a69c] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [77e508bf545996d8] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [405bce5ec48f8e4e] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [d6073df745b4988a] 127.0.0.1 GET /api/status took 1ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [7263fc823158c992] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes
+[[37minfo[0m] o.t.s.AccessLogFilter [3a8549a8dc8978fe] 127.0.0.1 GET /api/status took 0ms and returned 200 284 bytes

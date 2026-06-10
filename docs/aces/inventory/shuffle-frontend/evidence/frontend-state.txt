@@ -1,0 +1,259 @@
+--nginx-version--
+nginx version: nginx/1.29.3
+--nginx-config-test--
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+--nginx-config-dump--
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+# configuration file /etc/nginx/nginx.conf:
+user nobody nogroup;
+worker_processes auto;          # auto-detect number of logical CPU cores
+
+events {
+	worker_connections 512;       # set the max number of simultaneous connections (per worker process)
+}
+
+http {
+	client_max_body_size 250M;
+
+	include mime.types;
+
+	# thanks stackoverflow http://stackoverflow.com/a/5132440/2406040
+	gzip  on;
+	gzip_http_version 1.1;
+	gzip_vary on;
+	gzip_comp_level 6;
+	gzip_proxied any;
+	gzip_types text/plain text/css application/json application/javascript application/x-javascript text/javascript text/xml application/xml application/rss+xml application/atom+xml application/rdf+xml;
+
+	# make sure gzip does not lose large gzipped js or css files
+	# see http://blog.leetsoft.com/2007/07/25/nginx-gzip-ssl.html
+	gzip_buffers 16 8k;
+
+	# Disable gzip for certain browsers.
+	gzip_disable "MSIE [1-6].(?!.*SV1)";
+
+	server {
+		listen         80;
+		server_name    "localhost";
+
+		#location /static/js/* {
+		#	# avoid clickjacking
+		#	add_header X-Frame-Options DENY;
+		#	add_header X-Content-Type-Options nosniff;
+		#	add_header ;
+		#	# block MIME sniffing
+
+		#	# security headers
+		#	add_header X-XSS-Protection "1; mode=block";
+		#	# add_header Content-Security-Policy "default-src 'self'";
+		#	add_header Referrer-Policy "no-referrer";
+		#	server_tokens off;
+
+		#	root /usr/share/nginx/html;
+		#	gzip_static on;
+		#	expires 1y;
+		#	add_header Cache-Control public;
+		#	add_header ETag "";
+		#	try_files $uri /index.html;
+		#}
+
+		location / {
+			# avoid clickjacking
+			add_header X-Frame-Options DENY;
+			# block MIME sniffing
+			add_header X-Content-Type-Options nosniff;
+
+			# security headers
+			add_header X-XSS-Protection "1; mode=block";
+			# add_header Content-Security-Policy "default-src 'self'";
+			add_header Referrer-Policy "no-referrer";
+			server_tokens off;
+
+			root /usr/share/nginx/html;
+			gzip_static on;
+			expires 1y;
+			add_header Cache-Control public;
+			add_header ETag "";
+			try_files $uri /index.html;
+		}
+
+		location ~ /api/v(1|2) {
+			proxy_pass http://shuffle-backend:5001;
+			proxy_buffering off;
+			proxy_http_version 1.1;
+
+			proxy_connect_timeout 900;
+			proxy_send_timeout 900;
+			proxy_read_timeout 900;
+			send_timeout 900;
+		}
+
+	}
+
+	server {
+		listen              443 ssl;
+		server_name         "localhost";
+		ssl_certificate     fullchain.cert.pem;
+		ssl_certificate_key privkey.pem;
+		ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;
+		ssl_ciphers         HIGH:!aNULL:!MD5;
+
+		location / {
+			# avoid clickjacking
+			add_header X-Frame-Options DENY;
+			# block MIME sniffing
+			add_header X-Content-Type-Options nosniff;
+
+			# security headers
+			add_header X-XSS-Protection "1; mode=block";
+			# add_header Content-Security-Policy "default-src 'self'";
+			add_header Referrer-Policy "no-referrer";
+			server_tokens off;
+
+			root /usr/share/nginx/html;
+			gzip_static on;
+			expires 1y;
+			add_header Cache-Control public;
+			add_header ETag "";
+			try_files $uri /index.html;
+		}
+
+		# Get the hostname from environment here?
+		location ~ /api/v(1|2) {
+			proxy_pass http://shuffle-backend:5001;
+
+			proxy_buffering off;
+			proxy_http_version 1.1;
+
+			proxy_connect_timeout 900;
+			proxy_send_timeout 900;
+			proxy_read_timeout 900;
+			send_timeout 900;
+		}
+	}
+}
+
+# configuration file /etc/nginx/mime.types:
+
+types {
+    text/html                                        html htm shtml;
+    text/css                                         css;
+    text/xml                                         xml;
+    image/gif                                        gif;
+    image/jpeg                                       jpeg jpg;
+    application/javascript                           js;
+    application/atom+xml                             atom;
+    application/rss+xml                              rss;
+
+    text/mathml                                      mml;
+    text/plain                                       txt;
+    text/vnd.sun.j2me.app-descriptor                 jad;
+    text/vnd.wap.wml                                 wml;
+    text/x-component                                 htc;
+
+    image/avif                                       avif;
+    image/png                                        png;
+    image/svg+xml                                    svg svgz;
+    image/tiff                                       tif tiff;
+    image/vnd.wap.wbmp                               wbmp;
+    image/webp                                       webp;
+    image/x-icon                                     ico;
+    image/x-jng                                      jng;
+    image/x-ms-bmp                                   bmp;
+
+    font/woff                                        woff;
+    font/woff2                                       woff2;
+
+    application/java-archive                         jar war ear;
+    application/json                                 json;
+    application/mac-binhex40                         hqx;
+    application/msword                               doc;
+    application/pdf                                  pdf;
+    application/postscript                           ps eps ai;
+    application/rtf                                  rtf;
+    application/vnd.apple.mpegurl                    m3u8;
+    application/vnd.google-earth.kml+xml             kml;
+    application/vnd.google-earth.kmz                 kmz;
+    application/vnd.ms-excel                         xls;
+    application/vnd.ms-fontobject                    eot;
+    application/vnd.ms-powerpoint                    ppt;
+    application/vnd.oasis.opendocument.graphics      odg;
+    application/vnd.oasis.opendocument.presentation  odp;
+    application/vnd.oasis.opendocument.spreadsheet   ods;
+    application/vnd.oasis.opendocument.text          odt;
+    application/vnd.openxmlformats-officedocument.presentationml.presentation
+                                                     pptx;
+    application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+                                                     xlsx;
+    application/vnd.openxmlformats-officedocument.wordprocessingml.document
+                                                     docx;
+    application/vnd.wap.wmlc                         wmlc;
+    application/wasm                                 wasm;
+    application/x-7z-compressed                      7z;
+    application/x-cocoa                              cco;
+    application/x-java-archive-diff                  jardiff;
+    application/x-java-jnlp-file                     jnlp;
+    application/x-makeself                           run;
+    application/x-perl                               pl pm;
+    application/x-pilot                              prc pdb;
+    application/x-rar-compressed                     rar;
+    application/x-redhat-package-manager             rpm;
+    application/x-sea                                sea;
+    application/x-shockwave-flash                    swf;
+    application/x-stuffit                            sit;
+    application/x-tcl                                tcl tk;
+    application/x-x509-ca-cert                       der pem crt;
+    application/x-xpinstall                          xpi;
+    application/xhtml+xml                            xhtml;
+    application/xspf+xml                             xspf;
+    application/zip                                  zip;
+
+    application/octet-stream                         bin exe dll;
+    application/octet-stream                         deb;
+    application/octet-stream                         dmg;
+    application/octet-stream                         iso img;
+    application/octet-stream                         msi msp msm;
+
+    audio/midi                                       mid midi kar;
+    audio/mpeg                                       mp3;
+    audio/ogg                                        ogg;
+    audio/x-m4a                                      m4a;
+    audio/x-realaudio                                ra;
+
+    video/3gpp                                       3gpp 3gp;
+    video/mp2t                                       ts;
+    video/mp4                                        mp4;
+    video/mpeg                                       mpeg mpg;
+    video/quicktime                                  mov;
+    video/webm                                       webm;
+    video/x-flv                                      flv;
+    video/x-m4v                                      m4v;
+    video/x-mng                                      mng;
+    video/x-ms-asf                                   asx asf;
+    video/x-ms-wmv                                   wmv;
+    video/x-msvideo                                  avi;
+}
+
+--listening-sockets--
+sh: 1: ss: not found
+sh: 1: netstat: not found
+  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 00000000:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170233461 1 0000000000000000 100 0 0 10 0
+   1: 00000000:01BB 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170233462 1 0000000000000000 100 0 0 10 0
+   2: 0B00007F:9BA7 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170255528 2 0000000000000000 100 0 0 10 0
+   3: 0100007F:01BB 0100007F:A19C 06 00000000:00000000 03:00000F6A 00000000     0        0 0 3 0000000000000000
+   4: 0100007F:A156 0100007F:01BB 06 00000000:00000000 03:000003AB 00000000     0        0 0 3 0000000000000000
+  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+--https-localhost-443-status--
+https_status=200
+--http-localhost-80-status--
+http_status=200
+--tls-cert-subject-and-dates--
+* SSL connection using TLSv1.2 / ECDHE-RSA-AES256-GCM-SHA384 / x25519 / RSASSA-PSS
+*  subject: O=APTL; CN=aptl-shuffle-frontend
+*  start date: May 18 02:06:43 2026 GMT
+*  expire date: May 17 02:06:43 2031 GMT
+*  issuer: O=APTL; CN=APTL Lab Local CA
+< Expires: Thu, 10 Jun 2027 18:22:44 GMT

@@ -1,0 +1,26 @@
+Name:      ghcr.io/shuffle/shuffle-frontend:latest
+MediaType: application/vnd.oci.image.index.v1+json
+Digest:    sha256:4d700a6f0822cb081822bd2fa6c633080553bdd4313aed2c4bdce75b87e82836
+
+Manifests:
+  Name:        ghcr.io/shuffle/shuffle-frontend:latest@sha256:b57041d63496bc2917a3c28757a3e96422120c6f9624c8fad3e7c359baf23d92
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/amd64
+
+  Name:        ghcr.io/shuffle/shuffle-frontend:latest@sha256:b0fff99b9aae4f4900761dd788d2d9813ed9eed50629cfb0069005637b098f9d
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/arm64
+
+  Name:        ghcr.io/shuffle/shuffle-frontend:latest@sha256:251d1ad41863a1bfc3f21bf96130005baae019dc7e295c0ffb34071b6bd5e136
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations:
+    vnd.docker.reference.digest: sha256:b57041d63496bc2917a3c28757a3e96422120c6f9624c8fad3e7c359baf23d92
+    vnd.docker.reference.type:   attestation-manifest
+
+  Name:        ghcr.io/shuffle/shuffle-frontend:latest@sha256:eab8202a84dc857ee979d8e7ef06e70329131c342561eab366523a9910a206a4
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations:
+    vnd.docker.reference.digest: sha256:b0fff99b9aae4f4900761dd788d2d9813ed9eed50629cfb0069005637b098f9d
+    vnd.docker.reference.type:   attestation-manifest

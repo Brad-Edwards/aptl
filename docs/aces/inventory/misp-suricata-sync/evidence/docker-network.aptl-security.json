@@ -1,0 +1,208 @@
+[
+  {
+    "Name": "aptl_aptl-security",
+    "Id": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+    "Created": "2026-05-21T18:36:39.328766489+02:00",
+    "Scope": "local",
+    "Driver": "bridge",
+    "EnableIPv4": true,
+    "EnableIPv6": false,
+    "IPAM": {
+      "Driver": "default",
+      "Options": null,
+      "Config": [
+        {
+          "Subnet": "172.20.0.0/24",
+          "Gateway": "172.20.0.1"
+        }
+      ]
+    },
+    "Internal": false,
+    "Attachable": false,
+    "Ingress": false,
+    "ConfigFrom": {
+      "Network": ""
+    },
+    "ConfigOnly": false,
+    "Options": {},
+    "Labels": {
+      "com.docker.compose.config-hash": "19b319acee741ec839b7ac3cc9bf5f2a4deb1d2c3d58d65a46437bbb1eeaab1d",
+      "com.docker.compose.network": "aptl-security",
+      "com.docker.compose.project": "aptl",
+      "com.docker.compose.version": "5.1.3"
+    },
+    "Containers": {
+      "1574ba5c2bb24a249ffe94f8181ddb9ac33655518416af53707a74ece6173cbf": {
+        "Name": "aptl-misp-db",
+        "EndpointID": "16c627c6f35a90e618081014ff0ca0715aec52c1999dcb38b97caef2ca822acb",
+        "MacAddress": "92:10:31:d6:8d:68",
+        "IPv4Address": "172.20.0.17/24",
+        "IPv6Address": ""
+      },
+      "23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22": {
+        "Name": "aptl-suricata",
+        "EndpointID": "f531b4053fbcb648b918f085d69e46dafd1ff77ac87da71976a05a8369f06598",
+        "MacAddress": "fe:d7:53:72:ef:4f",
+        "IPv4Address": "172.20.0.50/24",
+        "IPv6Address": ""
+      },
+      "3dc2564de3ddba2431a6b3a0aeced293363d73825ed0271798b153b27af01dd7": {
+        "Name": "aptl-shuffle-frontend",
+        "EndpointID": "4e52e88e28c274d4dd2c42983582271c41dfc828a327dde266e9e273b13dde04",
+        "MacAddress": "22:55:6d:62:d3:1b",
+        "IPv4Address": "172.20.0.21/24",
+        "IPv6Address": ""
+      },
+      "3ee8e93f293ba3e8d5ebae58992c340265d79a9c8c840e85fd6f50273538259f": {
+        "Name": "aptl-thehive",
+        "EndpointID": "831d69a1869f8e1dfcb83673f5010440f9e3a213331ae3e575e6df72167cc880",
+        "MacAddress": "9e:dc:d0:3e:8d:c5",
+        "IPv4Address": "172.20.0.18/24",
+        "IPv6Address": ""
+      },
+      "404b16989dedfed41b2fff56be2831b526b8ac73c98cf46813f237bbff04fa88": {
+        "Name": "aptl-wazuh-sidecar-db",
+        "EndpointID": "91095e1ea27cc849b878dd7d193e011f89db78749798b4d426d5272a081c6b45",
+        "MacAddress": "9e:19:75:cf:5f:48",
+        "IPv4Address": "172.20.0.35/24",
+        "IPv6Address": ""
+      },
+      "45f5c73dd16061bc9b4f27ed4b4911ee707cf1b348c9ce6ec2cdd0333b26914a": {
+        "Name": "aptl-misp-redis",
+        "EndpointID": "7279ec3c7c60b8bbb3dcbcda88d0cd762c7681f3c6cd1aa023dcd092d6f0ea14",
+        "MacAddress": "92:11:52:ea:7d:44",
+        "IPv4Address": "172.20.0.3/24",
+        "IPv6Address": ""
+      },
+      "50c9dab972af1c3ae4b91598fceef4eda08df6545bf44b832f13cbb0b2c76d24": {
+        "Name": "aptl-wazuh-indexer",
+        "EndpointID": "1eb3bb0e2a5be86233852f0b592b0a1819c4b6fbaf7406e91e8c87d29fcf178e",
+        "MacAddress": "ae:4b:7d:21:1f:d2",
+        "IPv4Address": "172.20.0.12/24",
+        "IPv6Address": ""
+      },
+      "6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe": {
+        "Name": "aptl-misp",
+        "EndpointID": "f409670052bafc8156295ba9726eece73f5c59596fcc9c3bfbbccbc469ed1e6a",
+        "MacAddress": "86:fa:65:cd:e7:af",
+        "IPv4Address": "172.20.0.16/24",
+        "IPv6Address": ""
+      },
+      "65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af": {
+        "Name": "aptl-thehive-es",
+        "EndpointID": "8cd9a3f3b446bc9209e4f3f82e457c2fd6e869cd93e85dc5656c44d1ea99d5e6",
+        "MacAddress": "6e:90:06:ed:1e:39",
+        "IPv4Address": "172.20.0.4/24",
+        "IPv6Address": ""
+      },
+      "6c2af9a97f898958c921de97255cf617c5e92e45d11265898da9b61f6eb8a0ed": {
+        "Name": "aptl-wazuh-sidecar-suricata",
+        "EndpointID": "179bd493f4770c9289c363036cf35c11b44e065ce3d400b09387a6640c78b31d",
+        "MacAddress": "6e:3a:b1:ae:03:5e",
+        "IPv4Address": "172.20.0.36/24",
+        "IPv6Address": ""
+      },
+      "7a0689d6ee54b643fba6d88e1fe2419a9de0833d79bebba12ccdc102f20b12e9": {
+        "Name": "aptl-wazuh-manager",
+        "EndpointID": "0c62d4d57a01c10d77ee0c7b66417375c74d8ef03e7a989ab3c57b66c38cd518",
+        "MacAddress": "9e:fe:e4:f4:76:54",
+        "IPv4Address": "172.20.0.10/24",
+        "IPv6Address": ""
+      },
+      "89b491aa2172e28413ed23d3aa11257b11d23cab0adcec050cbcc6804007e5a9": {
+        "Name": "aptl-reverse",
+        "EndpointID": "b2a5b7e8b19e8d605f4515feffd9f366917366599a51c5f0fc08d2f051dddd1b",
+        "MacAddress": "be:d5:d8:e7:63:89",
+        "IPv4Address": "172.20.0.27/24",
+        "IPv6Address": ""
+      },
+      "b51ef8f59d741ab520cac4a561c536956c8d094ab1a97efbdd44073eeb4fe71f": {
+        "Name": "aptl-cortex",
+        "EndpointID": "37e13e84898148cf4f45007e5060bf4f745fd6a71be8f924515833275ff32460",
+        "MacAddress": "aa:84:55:53:7d:b6",
+        "IPv4Address": "172.20.0.22/24",
+        "IPv6Address": ""
+      },
+      "b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa": {
+        "Name": "aptl-shuffle-backend",
+        "EndpointID": "d4294cfc69dd529f1d3d826007ac7fc22c76094148e61be663ac8bf9d1752e22",
+        "MacAddress": "12:03:45:c0:31:dd",
+        "IPv4Address": "172.20.0.20/24",
+        "IPv6Address": ""
+      },
+      "baf593babfd4c17e3133cb5a1b05d356b66b6166e59a3bd1192678b23d0c8425": {
+        "Name": "aptl-thehive-cassandra",
+        "EndpointID": "cc2baef19a8c4f2b6dd7798d848b54cb73da88e7a1d8079b67e4bc39b8f7e56c",
+        "MacAddress": "e6:c8:39:71:62:0c",
+        "IPv4Address": "172.20.0.5/24",
+        "IPv6Address": ""
+      },
+      "c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7": {
+        "Name": "aptl-wazuh-dashboard",
+        "EndpointID": "20430152a65e828de2388ba941a29d8e3d837b692290217cb7ec7e641ba329ff",
+        "MacAddress": "9a:ac:f7:25:27:95",
+        "IPv4Address": "172.20.0.11/24",
+        "IPv6Address": ""
+      },
+      "cad789f14bfce945bb8f7326673a71b9c215e1bea4d6e37032726747ae7cca84": {
+        "Name": "aptl-otel-collector",
+        "EndpointID": "445f7a21aa8b6ca03a557326987667271855cb47472433b62ef8def7c58456f3",
+        "MacAddress": "c6:1f:49:20:eb:03",
+        "IPv4Address": "172.20.0.53/24",
+        "IPv6Address": ""
+      },
+      "cae4c1cf9e6cee79118d95837a3aca4e40f307ca661d418971a53d923973633f": {
+        "Name": "aptl-shuffle-orborus",
+        "EndpointID": "017ec486227ae01ac147e78b3df72857d4d0e53c64ee3de6b964ba6e6213baf1",
+        "MacAddress": "8a:51:5f:67:89:f8",
+        "IPv4Address": "172.20.0.6/24",
+        "IPv6Address": ""
+      },
+      "ceed7fcfb8cfb21a8c5b8d18d801946bf8057dcaa1dc9f4507319ae33aad323d": {
+        "Name": "aptl-dns",
+        "EndpointID": "5d23550a01131bf2d9bdae8c31002c3848de46d7851ff4303660343979103cc9",
+        "MacAddress": "36:a4:19:0b:50:e3",
+        "IPv4Address": "172.20.0.25/24",
+        "IPv6Address": ""
+      },
+      "e1eb785c281a38818b7659df835f1afc8817f1f6c67d2ccb47a0c9e2c098163e": {
+        "Name": "aptl-shuffle-opensearch",
+        "EndpointID": "d4c38951f71d7db45f3ee1d1b85afd042093535901696ec70eeeb26977768df6",
+        "MacAddress": "6a:2f:5a:b3:b9:39",
+        "IPv4Address": "172.20.0.2/24",
+        "IPv6Address": ""
+      },
+      "ec7a3226d061d9607301e051d025bf5b4938af587c07ba35eee9692b54ccfef1": {
+        "Name": "aptl-tempo",
+        "EndpointID": "d02f1f7a62469f987fb174f6db7b327bda10c67dc5a064154397537cac1f23ec",
+        "MacAddress": "7e:67:6d:ee:9b:2b",
+        "IPv4Address": "172.20.0.51/24",
+        "IPv6Address": ""
+      },
+      "f83fc422fdaeb411d2a4714eba0dd0b76fcfe3d264f2aa73e7b151026ed3fc6b": {
+        "Name": "aptl-grafana-otel",
+        "EndpointID": "e1c668e2d0b69adae2ac8057eee53013ac7c64d4f915dd3100a287c7e607b023",
+        "MacAddress": "a2:dd:c0:b0:a9:fd",
+        "IPv4Address": "172.20.0.52/24",
+        "IPv6Address": ""
+      },
+      "f93b9d4e28659e3645e8d982f1e54aae7bf555fd65317a3ede095a79ba181140": {
+        "Name": "aptl-misp-suricata-sync",
+        "EndpointID": "c2e7c9057e44f3738c59729144ddb56b9ad8c7d7ec9d16a1e20d8b6c618bde9d",
+        "MacAddress": "12:17:77:43:59:eb",
+        "IPv4Address": "172.20.0.19/24",
+        "IPv6Address": ""
+      }
+    },
+    "Status": {
+      "IPAM": {
+        "Subnets": {
+          "172.20.0.0/24": {
+            "IPsInUse": 26,
+            "DynamicIPsAvailable": 230
+          }
+        }
+      }
+    }
+  }
+]

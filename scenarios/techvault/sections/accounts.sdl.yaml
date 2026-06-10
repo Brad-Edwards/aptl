@@ -2835,3 +2835,219 @@ accounts:
     shell: /sbin/nologin
     home: /var/ossec
     disabled: true
+  misp-suricata-sync-local-root:
+    username: root
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: root
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /root
+    disabled: false
+  misp-suricata-sync-local-daemon:
+    username: daemon
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: daemon
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/sbin
+    disabled: true
+  misp-suricata-sync-local-bin:
+    username: bin
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: bin
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  misp-suricata-sync-local-sys:
+    username: sys
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sys
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /dev
+    disabled: true
+  misp-suricata-sync-local-sync:
+    username: sync
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sync
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /bin
+    disabled: false
+  misp-suricata-sync-local-games:
+    username: games
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: games
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/games
+    disabled: true
+  misp-suricata-sync-local-man:
+    username: man
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: man
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/cache/man
+    disabled: true
+  misp-suricata-sync-local-lp:
+    username: lp
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: lp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  misp-suricata-sync-local-mail:
+    username: mail
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: mail
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/mail
+    disabled: true
+  misp-suricata-sync-local-news:
+    username: news
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: news
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/news
+    disabled: true
+  misp-suricata-sync-local-uucp:
+    username: uucp
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: uucp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/uucp
+    disabled: true
+  misp-suricata-sync-local-proxy:
+    username: proxy
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: proxy
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  misp-suricata-sync-local-www-data:
+    username: www-data
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: www-data
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/www
+    disabled: true
+  misp-suricata-sync-local-backup:
+    username: backup
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: backup
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/backups
+    disabled: true
+  misp-suricata-sync-local-list:
+    username: list
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: Mailing List Manager
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/list
+    disabled: true
+  misp-suricata-sync-local-irc:
+    username: irc
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ircd
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/ircd
+    disabled: true
+  misp-suricata-sync-local-_apt:
+    username: _apt
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: _apt
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  misp-suricata-sync-local-nobody:
+    username: nobody
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: nobody
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true

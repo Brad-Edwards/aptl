@@ -1,0 +1,504 @@
+schema_version: 1
+asset:
+  id: misp-suricata-sync
+  scenario: TechVault
+  aptl_issue: 349
+  aces_methodology_issue: 353
+  source_class: local-custom-build-integration-service
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence:
+    - path: evidence/docker-buildx-imagetools.image.err
+    - path: evidence/docker-inspect.image.json
+    limits:
+    - aptl-misp-suricata-sync:latest is a locally built image with no registry manifest, so docker buildx imagetools inspect
+      failed (see docker-buildx-imagetools.image.err) and no registry-visible OCI/in-toto/SLSA attestation could be captured.
+      Image identity is the local config ID in docker-inspect.image.json plus the build recipe in source-checksums.txt.
+notes:
+- Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v &&
+  aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof.
+- 'SCN-010 issue #349 replaces the docker-compose-derived node stub with the fully inventoried participant node nodes.techvault.misp-suricata-sync.
+  Every catalogued observable maps to a current ACES surface: image/build/packages/CVEs/filesystem/identity/runtime on the
+  node, and the MISP-API + Suricata-handoff behaviour on typed relationship edges. No known ACES expressivity gap remains
+  for the catalogued misp-suricata-sync steady-state facts.'
+- MISP_API_KEY is the lab MISP admin API key — the same secret_fixture value already disclosed on nodes.techvault.misp (ADMIN_KEY).
+  It is redacted from committed evidence (ADR-029) and carried with its value only in the SDL secret-fixture encoding.
+- /var/run/suricata is the suricata asset's command-socket volume and /var/lib/suricata/rules/misp is a shared host bind;
+  the socket and the suricata-owned hash-list files are recorded here as path/metadata with cross-references to the suricata
+  asset inventory.
+- Rules generation is alert-only per ADR-019 (Suricata stays IDS); the generated misp-iocs.rules held ioc_count=0 at the capture
+  snapshot.
+correspondence_checks:
+- id: misp-suricata-sync-evidence-bundle-integrity
+  status: implemented
+  source: docs/aces/inventory/misp-suricata-sync/evidence
+  method: evidence-sha256sums.txt hashes every committed evidence file except the manifest itself; tests/test_misp_suricata_sync_inventory.py
+    recomputes and compares.
+  realized_evidence:
+  - path: evidence/evidence-sha256sums.txt
+  - path: evidence/captured-at-utc.txt
+  ledger_fact_ids:
+  - misp-suricata-sync.capture.toolchain-baseline
+- id: misp-suricata-sync-sdl-runtime-correspondence
+  status: implemented
+  source: scenarios/techvault.sdl.yaml nodes.techvault.misp-suricata-sync
+  method: tests/test_misp_suricata_sync_inventory.py parses the ACES SDL and asserts image, build, package, CVE, filesystem,
+    identity, process, environment, capability, and network counts/values against the evidence.
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/language-manifests.txt
+  ledger_fact_ids:
+  - misp-suricata-sync.runtime.container-policy
+  - misp-suricata-sync.runtime.package-inventory
+  - misp-suricata-sync.runtime.vulnerability-scan
+  - misp-suricata-sync.runtime.local-identity
+  - misp-suricata-sync.application.software-versions
+- id: misp-suricata-sync-integration-relationship-correspondence
+  status: implemented
+  source: scenarios/techvault.sdl.yaml relationships misp-suricata-sync-queries-misp-api + misp-suricata-sync-updates-suricata-rules
+  method: README and tests assert the realized MISP API edge and the Suricata rules/socket handoff (suricata-side observer
+    confirms the same rules file and command socket).
+  realized_evidence:
+  - path: evidence/sync-service-state.txt
+  - path: evidence/observer-discovery.suricata.txt
+  - path: evidence/participant-discovery.kali.txt
+  ledger_fact_ids:
+  - misp-suricata-sync.relationship.queries-misp-api
+  - misp-suricata-sync.relationship.updates-suricata-rules
+  - misp-suricata-sync.service.sync-behavior
+- id: misp-suricata-sync-scope-and-redaction-caveats
+  status: implemented
+  source: docs/aces/inventory/misp-suricata-sync/evidence/capture-limits.txt
+  method: README and tests assert non-destructive capture scope, MISP_API_KEY/GPG_KEY redaction, the scoped filesystem manifest,
+    missing ss/netstat, and unavailable osquery tables.
+  realized_evidence:
+  - path: evidence/capture-limits.txt
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  ledger_fact_ids:
+  - misp-suricata-sync.capture.toolchain-baseline
+  - misp-suricata-sync.runtime.filesystem-inventory
+  - misp-suricata-sync.runtime.service-listeners
+  - misp-suricata-sync.secret.misp-api-key-fixture
+facts:
+- id: misp-suricata-sync.capture.toolchain-baseline
+  category: capture
+  summary: Capture used digest-pinned Trivy, Syft, and osquery images, recorded Docker/Compose versions, capture time, and
+    explicit capture limits.
+  evidence:
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-compose-version.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/syft-version.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/capture-limits.txt
+  - path: evidence/evidence-sha256sums.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: runtime_contract
+    checked_surfaces:
+    - runtime_contract
+    fields:
+    - docs/aces/inventory/misp-suricata-sync/capture-evidence.sh
+    - docs/aces/inventory/misp-suricata-sync/evidence/capture-limits.txt
+    rationale: Current ACES SDL runtime/profile fields carry this catalogued misp-suricata-sync fact directly.
+    caveat: Scanner and runtime observations are time-sensitive evidence from the current-running lab, not immutable clean-reset
+      proof.
+- id: misp-suricata-sync.image.identity-provenance
+  category: image
+  summary: The sync service resolves to the local image config ID aptl-misp-suricata-sync@sha256:f2e12bfa... on Debian 13
+    (trixie); no registry digest exists for the local build.
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-buildx-imagetools.image.err
+  - path: evidence/osquery-docker-images.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.source.name
+    - nodes.techvault.misp-suricata-sync.source.version
+    - nodes.techvault.misp-suricata-sync.os_version
+    rationale: Current ACES SDL node source fields carry the local-build image identity directly.
+- id: misp-suricata-sync.image.build-recipe
+  category: image
+  summary: The Dockerfile instructions (7 authored), 16 BuildKit history layers, default config, and absent attestation are
+    encoded as local-build provenance.
+  evidence:
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/docker-inspect.image.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.source.build.instructions
+    - nodes.techvault.misp-suricata-sync.source.build.layers
+    - nodes.techvault.misp-suricata-sync.source.build.config
+    - nodes.techvault.misp-suricata-sync.source.build.attestation
+    rationale: Current ACES SDL node build fields carry this catalogued fact directly.
+- id: misp-suricata-sync.source.build-inputs
+  category: source
+  summary: The packaging metadata (pyproject.toml) and the eight executed aptl.services.misp_suricata_sync sources are recorded
+    with sha256 checksums; the Dockerfile COPYs the entire repo src/ tree.
+  evidence:
+  - path: evidence/source-checksums.txt
+  - path: evidence/filesystem-checksums.txt.xz
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.source.build.source_inputs
+    rationale: Current ACES SDL build source_inputs carry the executed-package build inputs and their checksums directly.
+    caveat: source_inputs enumerate pyproject.toml plus the executed service package, not every file of the full src/ copy;
+      the in-image copy is evidenced by the filesystem manifest under /app and the installed site-packages tree.
+- id: misp-suricata-sync.compose.service-contract
+  category: compose
+  summary: Compose declares aptl-misp-suricata-sync, a local build, ten env vars (MISP_API_KEY as an interpolation template),
+    128m memory limit, the socket volume + two binds, depends_on misp healthy / suricata started, and security-net address
+    172.20.0.19.
+  evidence:
+  - path: evidence/compose-service.misp-suricata-sync.json
+  - path: evidence/docker-compose-version.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - relationships
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.environment
+    - nodes.techvault.misp-suricata-sync.runtime.operational_policy
+    - nodes.techvault.misp-suricata-sync.runtime.mounts
+    rationale: Current ACES SDL node runtime fields carry the compose contract directly.
+- id: misp-suricata-sync.runtime.container-policy
+  category: runtime
+  summary: Docker runtime policy captures restart unless-stopped, 128 MiB memory, namespaces, masked/read-only paths, no added
+    capabilities, log driver, and runc runtime.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-logs.misp-suricata-sync.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.container
+    - nodes.techvault.misp-suricata-sync.runtime.operational_policy
+    rationale: Current ACES SDL node runtime container/operational_policy fields carry this catalogued fact directly.
+- id: misp-suricata-sync.network.identity
+  category: network
+  summary: The service is attached to security-net only at 172.20.0.19 with Docker aliases/DNS names/MAC, publishes no host
+    ports, and is unreachable from the kali participant vantage.
+  evidence:
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/participant-discovery.kali.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.network.endpoints
+    - nodes.techvault.misp-suricata-sync.runtime.network.published_ports
+    rationale: Current ACES SDL node network fields carry the realized endpoint and no-published-port facts directly.
+- id: misp-suricata-sync.runtime.mounts-volume
+  category: runtime
+  summary: 'Three mounts: the shared suricata_command_socket volume rw at /var/run/suricata, the .aptl/suricata/rules/misp
+    host bind rw at /var/lib/suricata/rules/misp, and the lab CA pem ro at /etc/lab-ca/lab-ca.pem.'
+  evidence:
+  - path: evidence/docker-volume.suricata_command_socket.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.mounts
+    rationale: Current ACES SDL node runtime.mounts carries the volume and bind mounts directly.
+    caveat: ACES models the shared socket volume as a node mount with the volume name as source; there is no typed cross-node
+      volume-ownership reference, consistent with the sidecar inventory precedent. The socket itself belongs to the suricata
+      asset.
+- id: misp-suricata-sync.runtime.filesystem-inventory
+  category: filesystem
+  summary: The /app build copy, installed aptl package, console script, lab CA input, rules handoff directory (with the generated
+    misp-iocs.rules and the suricata-owned hash lists), command socket, and os-release are encoded with checksums for stable
+    files.
+  evidence:
+  - path: evidence/filesystem-tree.txt.gz
+  - path: evidence/filesystem-checksums.txt.xz
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.filesystem_inventory
+    rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
+    caveat: The manifest is scoped to application surfaces; __pycache__ bytecode and third-party site-packages trees are excluded
+      (SBOM + pip list evidence the dependency closure). The hash-list sidecar files are the suricata asset's authored content,
+      visible via the shared bind.
+- id: misp-suricata-sync.runtime.process-tree
+  category: runtime
+  summary: PID 1 is the single python3.11 aptl-misp-suricata-sync process (root); no supervisor, no worker pool.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-processes.json
+  - path: evidence/docker-top.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.processes
+    rationale: Current ACES SDL node runtime.processes carries the captured single-process tree directly.
+- id: misp-suricata-sync.runtime.service-listeners
+  category: runtime
+  summary: The service exposes no network listener; osquery (container netns) shows only the Docker embedded DNS resolver.
+  evidence:
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.service_listeners
+    - nodes.techvault.misp-suricata-sync.runtime.network.published_ports
+    rationale: Current ACES SDL node fields carry the no-network-listener fact directly (empty service_listeners + empty published_ports).
+    caveat: ss/netstat are not installed in the image, so the listener fact is sourced from container-namespace osquery; the
+      only sockets are the backend-generated Docker DNS resolver.
+- id: misp-suricata-sync.runtime.environment
+  category: runtime
+  summary: Runtime environment is ten compose variables (sync loop config plus MISP_API_KEY) and five image variables (PATH,
+    LANG, GPG_KEY, PYTHON_VERSION, PYTHON_SHA256).
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.environment
+    rationale: Current ACES SDL node runtime.environment carries the captured variables directly.
+    caveat: MISP_API_KEY and GPG_KEY are redacted in committed evidence (ADR-029) and carried with their values only as SDL
+      secret fixtures; MISP_API_KEY equals the ADMIN_KEY fixture already disclosed on nodes.techvault.misp.
+- id: misp-suricata-sync.runtime.linux-capabilities
+  category: runtime
+  summary: PID 1 holds the default Docker capability set (00000000a80425fb); no cap_add. The service runs as root for host-bind
+    ownership compatibility, not for added kernel capabilities.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.linux_capabilities
+    rationale: Current ACES SDL node runtime.linux_capabilities carries the effective capability mask directly.
+- id: misp-suricata-sync.runtime.local-identity
+  category: identity
+  summary: Local passwd/group inventory records 18 users and 38 groups (stock Debian 13 slim set; no added service account),
+    no sudo rules.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - accounts
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.local_identity
+    rationale: Current ACES SDL node runtime.local_identity carries the local identity surface directly.
+- id: misp-suricata-sync.application.software-versions
+  category: runtime
+  summary: aptl 0.1.0 (pip; console script aptl-misp-suricata-sync) on CPython 3.11.15 are the application components; 62
+    pip distributions form the dependency closure.
+  evidence:
+  - path: evidence/language-manifests.txt
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.software_components
+    rationale: Current ACES SDL node runtime.software_components carries the service and interpreter versions directly.
+- id: misp-suricata-sync.runtime.package-inventory
+  category: runtime
+  summary: dpkg package inventory captures 110 installed OS packages from the python:3.11-slim base plus curl/ca-certificates.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/osquery-apt-sources.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.packages
+    rationale: Current ACES SDL node runtime.packages carries the dpkg inventory directly.
+- id: misp-suricata-sync.runtime.vulnerability-scan
+  category: runtime
+  summary: Trivy captured 220 vulnerability findings (2 critical, 19 high, 73 medium, 125 low, 1 unknown) for the image.
+  evidence:
+  - path: evidence/trivy-vulnerabilities.json.gz
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-version.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.package_vulnerabilities
+    rationale: Current ACES SDL node runtime.package_vulnerabilities carries the per-CVE findings directly.
+    caveat: Vulnerability scanner output is time-sensitive and tied to the captured Trivy version/database state.
+- id: misp-suricata-sync.runtime.sbom-toolchain
+  category: runtime
+  summary: Required Trivy CycloneDX and useful-optional Syft CycloneDX SBOMs are captured; Syft output is deterministically
+    normalized.
+  evidence:
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/syft-version.json
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.packages
+    - nodes.techvault.misp-suricata-sync.runtime.software_components
+    rationale: Current ACES SDL node fields use dpkg + pip + scanner-derived summaries; full CycloneDX docs are retained as
+      evidence.
+    caveat: SBOMs are retained as evidence; SDL package fields do not embed the full CycloneDX documents.
+- id: misp-suricata-sync.runtime.osquery-baseline
+  category: runtime
+  summary: osquery captured processes, listeners, host-side Docker container/image rows, apt sources, and the unavailable
+    Linux application/program table status.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.processes
+    - nodes.techvault.misp-suricata-sync.runtime.service_listeners
+    - nodes.techvault.misp-suricata-sync.runtime.network
+    rationale: Current ACES SDL node fields carry the osquery-derived runtime baseline directly.
+    caveat: installed_applications and programs tables are unavailable in the digest-pinned Linux osquery image and are recorded
+      as capture limits.
+- id: misp-suricata-sync.service.sync-behavior
+  category: runtime
+  summary: The sync loop pulls aptl:enforce-tagged indicators every 300s, writes alert-only rules (ADR-019, sid_base 99000000)
+    to misp-iocs.rules, and reloads Suricata over the unix socket; ioc_count=0 at the snapshot.
+  evidence:
+  - path: evidence/sync-service-state.txt
+  - path: evidence/docker-logs.misp-suricata-sync.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - relationships
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.processes
+    - nodes.techvault.misp-suricata-sync.runtime.environment
+    - nodes.techvault.misp-suricata-sync.runtime.filesystem_inventory
+    rationale: The sync behaviour is carried by the node's process/environment/filesystem facts plus the typed relationship
+      edges; the generated rules file is a runtime_created filesystem entry.
+- id: misp-suricata-sync.relationship.queries-misp-api
+  category: relationship
+  summary: The service reaches the MISP HTTPS API at https://misp (TCP/443), verifies TLS against the lab CA, and authenticates
+    with the MISP admin API key fixture.
+  evidence:
+  - path: evidence/sync-service-state.txt
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    - nodes
+    fields:
+    - relationships.misp-suricata-sync-queries-misp-api
+    rationale: The realized service-to-MISP API edge is encoded as a typed relationship with auth_method api_key and lab CA
+      verification.
+- id: misp-suricata-sync.relationship.updates-suricata-rules
+  category: relationship
+  summary: The service hands rules to the suricata node via the shared rules bind and triggers reloads via the shared unix-command
+    socket (suricata side confirms the same file and socket).
+  evidence:
+  - path: evidence/sync-service-state.txt
+  - path: evidence/observer-discovery.suricata.txt
+  - path: evidence/docker-volume.suricata_command_socket.json
+  aces:
+    disposition: encoded
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    - nodes
+    fields:
+    - relationships.misp-suricata-sync-updates-suricata-rules
+    rationale: The realized IOC-enforcement handoff is encoded as a typed relationship carrying the socket and rules paths.
+- id: misp-suricata-sync.secret.misp-api-key-fixture
+  category: secret
+  summary: MISP_API_KEY equals the lab MISP admin API key already disclosed as a secret_fixture on nodes.techvault.misp (ADMIN_KEY);
+    evidence is redacted, the SDL carries the fixture value.
+  evidence:
+  - path: evidence/capture-limits.txt
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.misp-suricata-sync.runtime.environment
+    rationale: The scenario-fixture API key is encoded with its value per the repo secret-fixture policy (deliberate lab credential,
+      reproduction input).
+    caveat: Committed evidence redacts the value (ADR-029); the SDL secret_fixture entry is the canonical disclosed copy,
+      identical to the misp node's ADMIN_KEY.

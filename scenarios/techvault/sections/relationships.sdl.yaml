@@ -403,13 +403,37 @@ relationships:
     type: connects_to
     source: techvault.misp-suricata-sync
     target: nodes.techvault.misp.runtime.applications.misp-web
-    description: The MISP-to-Suricata sync service resolves the MISP container, reaches TCP 443/80, and verifies the MISP
-      TLS certificate with the lab CA before using the API key supplied out of band.
+    description: 'The MISP-to-Suricata sync service resolves the MISP container, reaches TCP 443/80, and verifies the MISP
+      TLS certificate with the lab CA before authenticating with the MISP admin API key (the secret_fixture value disclosed
+      on nodes.techvault.misp runtime environment, carried on this node as MISP_API_KEY). As of SCN-010 issue #349 the sync
+      service is inventoried as the participant node nodes.techvault.misp-suricata-sync; the lab-CA trust input and the
+      sync loop are evidenced by docs/aces/inventory/misp-suricata-sync/ (sync-service-state.txt, docker-logs).'
     properties:
       protocol: https
       port: '443'
       auth_method: api_key
       tls_verification: lab_ca
+      vantage: aptl-misp-suricata-sync
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  misp-suricata-sync-updates-suricata-rules:
+    type: connects_to
+    source: techvault.misp-suricata-sync
+    target: techvault.suricata
+    description: 'Realized IOC-enforcement handoff edge (SCN-010 issue #349): every SYNC_INTERVAL_SECONDS (300) the sync
+      service atomically rewrites /var/lib/suricata/rules/misp/misp-iocs.rules (alert-only rules per ADR-019, sid_base
+      99000000, tag filter aptl:enforce) on the shared host bind (.aptl/suricata/rules/misp) and triggers a Suricata rule
+      reload over the shared suricata_command_socket unix socket (/var/run/suricata/suricata-command.socket, owned by the
+      suricata service account uid/gid 998). The suricata node consumes the same directory as authored content; the rules
+      file held ioc_count=0 at the capture snapshot. Evidenced by sync-service-state.txt and
+      observer-discovery.suricata.txt in docs/aces/inventory/misp-suricata-sync/.'
+    properties:
+      protocol: unix-socket
+      socket_path: /var/run/suricata/suricata-command.socket
+      rules_path: /var/lib/suricata/rules/misp/misp-iocs.rules
       vantage: aptl-misp-suricata-sync
     database_access: null
     mail_access: null

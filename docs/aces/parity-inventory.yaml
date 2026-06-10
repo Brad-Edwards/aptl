@@ -132,6 +132,17 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #344 wazuh-sidecar-suricata log-forwarder inventory pass, following the #343 wazuh-sidecar-db precedent (same aptl-wazuh-sidecar:local image). Promotes the off-node Wazuh sidecar for the suricata node from a docker-compose-only forwarding_agents stub to the fully inventoried participant node nodes.techvault.wazuh-sidecar-suricata. The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, processes, environment, default-capability set (no CAP_NET_ADMIN), security-net endpoint, no-network-listener posture, and wazuh-agent software component; the cross-node forwarding behaviour stays in the scenario-level forwarding_agents registry (Brad-Edwards/aces#460), enriched from the captured ossec.conf (EVE JSON localfile, queue 5000/eps 500/aes/reconnect 60s), and is resolved by the suricata-logs-forwarded-wazuh and wazuh-sidecar-suricata-forwards-wazuh-manager relationship edges. No known remaining ACES expressivity blocker for the catalogued wazuh-sidecar-suricata steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
+  - id: scen.techvault.misp-suricata-sync-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.misp-suricata-sync + relationships + accounts
+    category: aces_sdl
+    aces_target: nodes.techvault.misp-suricata-sync (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, linux_capabilities, network, software_components) + relationships.misp-suricata-sync-queries-misp-api + relationships.misp-suricata-sync-updates-suricata-rules
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/misp-suricata-sync/ + tests/test_misp_suricata_sync_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #349 misp-suricata-sync integration-service inventory pass. Replaces the docker-compose-derived node stub with the fully inventoried participant node nodes.techvault.misp-suricata-sync. The SDL encodes the catalogued local-build image identity/recipe (python:3.11-slim base, pip-installed aptl 0.1.0), dpkg packages, Trivy CVEs, the scoped filesystem manifest (build copy, installed package, console script, lab CA input, rules handoff, command socket), local identity, the single-process sync loop, the fifteen-variable environment (MISP_API_KEY carried as the secret_fixture value already disclosed on nodes.techvault.misp ADMIN_KEY), default-capability set, security-net endpoint, and no-network-listener posture. The realized integration is typed as the misp-suricata-sync-queries-misp-api edge (https, lab CA, api_key auth) and the new misp-suricata-sync-updates-suricata-rules edge (shared rules bind + unix-command socket reload, alert-only per ADR-019). No known remaining ACES expressivity blocker for the catalogued misp-suricata-sync steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
   - id: scen.techvault.workstation-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml

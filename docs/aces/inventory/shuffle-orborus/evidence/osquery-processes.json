@@ -1,0 +1,63 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-shuffle-orborus PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "./orborus",
+      "gid": "0",
+      "name": "orborus",
+      "path": "/orborus",
+      "pid": "1",
+      "start_time": "1779517135",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "timeout",
+      "path": "",
+      "pid": "49",
+      "start_time": "1780639165",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "timeout",
+      "path": "",
+      "pid": "62",
+      "start_time": "1780639532",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "timeout",
+      "path": "",
+      "pid": "75",
+      "start_time": "1780639754",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "timeout",
+      "path": "",
+      "pid": "88",
+      "start_time": "1780639877",
+      "uid": "0"
+    },
+    {
+      "cmdline": "",
+      "gid": "0",
+      "name": "timeout",
+      "path": "",
+      "pid": "311",
+      "start_time": "1781115887",
+      "uid": "0"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "table": "programs",
+  "query": "select * from programs;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery Linux image",
+  "status": "unavailable",
+  "reason": "osquery table programs is not present in the Linux osquery registry for the digest-pinned osquery 4.9.0 scanner image",
+  "rows": []
+}

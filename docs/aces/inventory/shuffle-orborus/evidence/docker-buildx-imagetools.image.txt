@@ -1,0 +1,3 @@
+Name:      ghcr.io/shuffle/shuffle-orborus:latest
+MediaType: application/vnd.docker.distribution.manifest.v2+json
+Digest:    sha256:94e61e7916aea28351fce3851f26f14fb85204f1567a8807d137321418366dba

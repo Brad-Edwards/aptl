@@ -93,6 +93,10 @@ imports:
   namespace: techvault
 - source: local:techvault/nodes/shuffle-opensearch.sdl.yaml
   namespace: techvault
+- source: local:techvault/nodes/shuffle-frontend.sdl.yaml
+  namespace: techvault
+- source: local:techvault/nodes/shuffle-orborus.sdl.yaml
+  namespace: techvault
 - source: local:techvault/nodes/wazuh-manager.sdl.yaml
   namespace: techvault
 - source: local:techvault/nodes/wazuh-indexer.sdl.yaml

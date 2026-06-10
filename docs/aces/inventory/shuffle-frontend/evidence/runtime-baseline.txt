@@ -1,0 +1,214 @@
+--os-release--
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+NAME="Debian GNU/Linux"
+VERSION_ID="13"
+VERSION="13 (trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_FULL=13.2
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+--id--
+uid=0(root) gid=0(root) groups=0(root)
+--pwd--
+/
+--uname--
+Linux 3dc2564de3dd 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 GNU/Linux
+--environment--
+BACKEND_HOSTNAME=shuffle-backend
+DYNPKG_RELEASE=1~trixie
+HOME=/root
+HOSTNAME=3dc2564de3dd
+NGINX_VERSION=1.29.3
+NJS_RELEASE=1~trixie
+NJS_VERSION=0.9.4
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PKG_RELEASE=1~trixie
+PWD=/
+--listeners--
+sh: 14: ss: not found
+sh: 14: netstat: not found
+  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 00000000:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170233461 1 0000000000000000 100 0 0 10 0
+   1: 00000000:01BB 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170233462 1 0000000000000000 100 0 0 10 0
+   2: 0B00007F:9BA7 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170255528 2 0000000000000000 100 0 0 10 0
+   3: 0100007F:01BB 0100007F:A19C 06 00000000:00000000 03:00000F94 00000000     0        0 0 3 0000000000000000
+   4: 0100007F:A156 0100007F:01BB 06 00000000:00000000 03:000003D5 00000000     0        0 0 3 0000000000000000
+  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
+65416: 0B00007F:E7F5 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 170255527 2 0000000000000000 0
+  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
+--outbound-connections--
+sh: 16: ss: not found
+sh: 16: netstat: not found
+  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 00000000:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170233461 1 0000000000000000 100 0 0 10 0
+   1: 00000000:01BB 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170233462 1 0000000000000000 100 0 0 10 0
+   2: 0B00007F:9BA7 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170255528 2 0000000000000000 100 0 0 10 0
+   3: 0100007F:01BB 0100007F:A19C 06 00000000:00000000 03:00000F90 00000000     0        0 0 3 0000000000000000
+   4: 0100007F:A156 0100007F:01BB 06 00000000:00000000 03:000003D1 00000000     0        0 0 3 0000000000000000
+  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+--mounts--
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51171/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/314/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/311/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/307/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/296/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/291/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/283/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/281/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/279/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/277/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/276/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/275/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/274/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/273/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/270/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/269/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/262/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/58/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51178/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51178/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+/dev/md2 on /etc/nginx/fullchain.cert.pem type ext4 (ro,relatime)
+/dev/md2 on /etc/nginx/privkey.pem type ext4 (ro,relatime)
+/dev/md2 on /etc/lab-ca/lab-ca.pem type ext4 (ro,relatime)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
+--users--
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+games:x:5:60:games:/usr/games:/usr/sbin/nologin
+man:x:6:12:man:/var/cache/man:/usr/sbin/nologin
+lp:x:7:7:lp:/var/spool/lpd:/usr/sbin/nologin
+mail:x:8:8:mail:/var/mail:/usr/sbin/nologin
+news:x:9:9:news:/var/spool/news:/usr/sbin/nologin
+uucp:x:10:10:uucp:/var/spool/uucp:/usr/sbin/nologin
+proxy:x:13:13:proxy:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+backup:x:34:34:backup:/var/backups:/usr/sbin/nologin
+list:x:38:38:Mailing List Manager:/var/list:/usr/sbin/nologin
+irc:x:39:39:ircd:/run/ircd:/usr/sbin/nologin
+_apt:x:42:65534::/nonexistent:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+nginx:x:101:101:nginx user:/nonexistent:/bin/false
+--groups--
+root:x:0:
+daemon:x:1:
+bin:x:2:
+sys:x:3:
+adm:x:4:
+tty:x:5:
+disk:x:6:
+lp:x:7:
+mail:x:8:
+news:x:9:
+uucp:x:10:
+man:x:12:
+proxy:x:13:
+kmem:x:15:
+dialout:x:20:
+fax:x:21:
+voice:x:22:
+cdrom:x:24:
+floppy:x:25:
+tape:x:26:
+sudo:x:27:
+audio:x:29:
+dip:x:30:
+www-data:x:33:
+backup:x:34:
+operator:x:37:
+list:x:38:
+irc:x:39:
+src:x:40:
+shadow:x:42:
+utmp:x:43:
+video:x:44:
+sasl:x:45:
+plugdev:x:46:
+staff:x:50:
+games:x:60:
+users:x:100:
+nogroup:x:65534:
+nginx:x:101:
+--sudoers--
+--process-tree--
+sh: 26: ps: not found
+1 nginx: master process nginx -g daemon off;
+10 nginx: worker process
+11 nginx: worker process
+12 nginx: worker process
+13 nginx: worker process
+14 nginx: worker process
+15 nginx: worker process
+16 nginx: worker process
+17 nginx: worker process
+18 nginx: worker process
+19 nginx: worker process
+20 nginx: worker process
+21 nginx: worker process
+22 nginx: worker process
+23 nginx: worker process
+372512 sh -lc
+  set -eu
+  printf "%s\n" --os-release--
+  cat /etc/os-release 2>/dev/null || true
+  printf "%s\n" --id--
+  id
+  printf "%s\n" --pwd--
+  pwd
+  printf "%s\n" --uname--
+  uname -a
+  printf "%s\n" --environment--
+  env | sort
+  printf "%s\n" --listeners--
+  (ss -lntup || netstat -lntup || cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 || true) 2>&1
+  printf "%s\n" --outbound-connections--
+  (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1
+  printf "%s\n" --mounts--
+  mount | sed -n "1,220p"
+  printf "%s\n" --users--
+  getent passwd | sed -n "1,260p" || true
+  printf "%s\n" --groups--
+  getent group | sed -n "1,260p" || true
+  printf "%s\n" --sudoers--
+  (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --process-tree--
+  (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
+
+372538 sh -lc
+  set -eu
+  printf "%s\n" --os-release--
+  cat /etc/os-release 2>/dev/null || true
+  printf "%s\n" --id--
+  id
+  printf "%s\n" --pwd--
+  pwd
+  printf "%s\n" --uname--
+  uname -a
+  printf "%s\n" --environment--
+  env | sort
+  printf "%s\n" --listeners--
+  (ss -lntup || netstat -lntup || cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 || true) 2>&1
+  printf "%s\n" --outbound-connections--
+  (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1
+  printf "%s\n" --mounts--
+  mount | sed -n "1,220p"
+  printf "%s\n" --users--
+  getent passwd | sed -n "1,260p" || true
+  printf "%s\n" --groups--
+  getent group | sed -n "1,260p" || true
+  printf "%s\n" --sudoers--
+  (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --process-tree--
+  (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
+
+8 nginx: worker process
+9 nginx: worker process

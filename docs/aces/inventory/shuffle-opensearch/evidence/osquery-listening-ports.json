@@ -1,0 +1,89 @@
+{
+  "table": "listening_ports",
+  "query": "select port, protocol, address, pid, socket, path from listening_ports order by port, protocol, pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-shuffle-opensearch network namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "9200",
+      "protocol": "6",
+      "socket": "612404504"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "9200",
+      "protocol": "6",
+      "socket": "612404504"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "9300",
+      "protocol": "6",
+      "socket": "612387706"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "9300",
+      "protocol": "6",
+      "socket": "612387706"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "9600",
+      "protocol": "6",
+      "socket": "612377362"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "9600",
+      "protocol": "6",
+      "socket": "612377362"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "35495",
+      "protocol": "17",
+      "socket": "612397201"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "35495",
+      "protocol": "17",
+      "socket": "612397201"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "42157",
+      "protocol": "6",
+      "socket": "612397202"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "42157",
+      "protocol": "6",
+      "socket": "612397202"
+    }
+  ]
+}

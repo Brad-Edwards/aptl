@@ -14,12 +14,12 @@ uid=0(root) gid=0(root) groups=0(root)
 --pwd--
 /
 --uname--
-Linux 3dc2564de3dd 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 GNU/Linux
+Linux 216ed3a32aca 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 GNU/Linux
 --environment--
 BACKEND_HOSTNAME=shuffle-backend
 DYNPKG_RELEASE=1~trixie
 HOME=/root
-HOSTNAME=3dc2564de3dd
+HOSTNAME=216ed3a32aca
 NGINX_VERSION=1.29.3
 NJS_RELEASE=1~trixie
 NJS_VERSION=0.9.4
@@ -30,27 +30,29 @@ PWD=/
 sh: 14: ss: not found
 sh: 14: netstat: not found
   sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
-   0: 00000000:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170233461 1 0000000000000000 100 0 0 10 0
-   1: 00000000:01BB 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170233462 1 0000000000000000 100 0 0 10 0
-   2: 0B00007F:9BA7 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170255528 2 0000000000000000 100 0 0 10 0
-   3: 0100007F:01BB 0100007F:A19C 06 00000000:00000000 03:00000F94 00000000     0        0 0 3 0000000000000000
-   4: 0100007F:A156 0100007F:01BB 06 00000000:00000000 03:000003D5 00000000     0        0 0 3 0000000000000000
+   0: 00000000:01BB 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 617404422 1 0000000000000000 100 0 0 10 0
+   1: 00000000:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 617404421 1 0000000000000000 100 0 0 10 0
+   2: 0B00007F:86F1 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 617395171 2 0000000000000000 100 0 0 10 0
+   3: 0100007F:01BB 0100007F:811A 06 00000000:00000000 03:000016B9 00000000     0        0 0 3 0000000000000000
+   4: 0100007F:A214 0100007F:01BB 06 00000000:00000000 03:00000AF9 00000000     0        0 0 3 0000000000000000
+   5: 0100007F:01BB 0100007F:ACD6 06 00000000:00000000 03:00000000 00000000     0        0 0 3 0000000000000000
   sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
    sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
-65416: 0B00007F:E7F5 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 170255527 2 0000000000000000 0
+48949: 0B00007F:DDD9 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 617395170 2 0000000000000000 0
   sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
 --outbound-connections--
 sh: 16: ss: not found
 sh: 16: netstat: not found
   sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
-   0: 00000000:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170233461 1 0000000000000000 100 0 0 10 0
-   1: 00000000:01BB 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170233462 1 0000000000000000 100 0 0 10 0
-   2: 0B00007F:9BA7 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 170255528 2 0000000000000000 100 0 0 10 0
-   3: 0100007F:01BB 0100007F:A19C 06 00000000:00000000 03:00000F90 00000000     0        0 0 3 0000000000000000
-   4: 0100007F:A156 0100007F:01BB 06 00000000:00000000 03:000003D1 00000000     0        0 0 3 0000000000000000
+   0: 00000000:01BB 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 617404422 1 0000000000000000 100 0 0 10 0
+   1: 00000000:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 617404421 1 0000000000000000 100 0 0 10 0
+   2: 0B00007F:86F1 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 617395171 2 0000000000000000 100 0 0 10 0
+   3: 0100007F:01BB 0100007F:811A 06 00000000:00000000 03:000016B6 00000000     0        0 0 3 0000000000000000
+   4: 0100007F:A214 0100007F:01BB 06 00000000:00000000 03:00000AF6 00000000     0        0 0 3 0000000000000000
+   5: 0100007F:01BB 0100007F:ACD6 06 00000000:00000000 03:00000000 00000000     0        0 0 3 0000000000000000
   sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51171/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/314/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/311/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/307/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/296/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/291/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/283/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/281/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/279/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/277/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/276/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/275/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/274/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/273/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/270/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/269/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/262/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/58/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51178/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51178/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/104132/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/314/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/311/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/307/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/296/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/291/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/283/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/281/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/279/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/277/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/276/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/275/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/274/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/273/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/270/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/269/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/262/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/58/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/104133/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/104133/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -61,9 +63,9 @@ shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
 /dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
 /dev/md2 on /etc/hostname type ext4 (rw,relatime)
 /dev/md2 on /etc/hosts type ext4 (rw,relatime)
-/dev/md2 on /etc/nginx/fullchain.cert.pem type ext4 (ro,relatime)
 /dev/md2 on /etc/nginx/privkey.pem type ext4 (ro,relatime)
 /dev/md2 on /etc/lab-ca/lab-ca.pem type ext4 (ro,relatime)
+/dev/md2 on /etc/nginx/fullchain.cert.pem type ext4 (ro,relatime)
 proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
 proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
 proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
@@ -139,8 +141,17 @@ users:x:100:
 nogroup:x:65534:
 nginx:x:101:
 --sudoers--
+--pid1-capabilities--
+CapInh:	0000000000000000
+CapPrm:	00000000a80425fb
+CapEff:	00000000a80425fb
+CapBnd:	00000000a80425fb
+CapAmb:	0000000000000000
+NoNewPrivs:	0
+Seccomp:	2
+Seccomp_filters:	1
 --process-tree--
-sh: 26: ps: not found
+sh: 28: ps: not found
 1 nginx: master process nginx -g daemon off;
 10 nginx: worker process
 11 nginx: worker process
@@ -156,7 +167,7 @@ sh: 26: ps: not found
 21 nginx: worker process
 22 nginx: worker process
 23 nginx: worker process
-372512 sh -lc
+293 sh -lc
   set -eu
   printf "%s\n" --os-release--
   cat /etc/os-release 2>/dev/null || true
@@ -180,10 +191,12 @@ sh: 26: ps: not found
   getent group | sed -n "1,260p" || true
   printf "%s\n" --sudoers--
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --pid1-capabilities--
+  grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
 
-372538 sh -lc
+319 sh -lc
   set -eu
   printf "%s\n" --os-release--
   cat /etc/os-release 2>/dev/null || true
@@ -207,6 +220,8 @@ sh: 26: ps: not found
   getent group | sed -n "1,260p" || true
   printf "%s\n" --sudoers--
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --pid1-capabilities--
+  grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
 

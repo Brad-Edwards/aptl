@@ -304,10 +304,20 @@ def test_techvault_sdl_encodes_shuffle_frontend_node(legacy_scenario):
     assert endpoint["ip_address"] == "172.20.0.21"
     published = {(p["host_port"], p["container_port"]) for p in network["published_ports"]}
     assert (3443, 443) in published
-    assert (3001, 3001) in published
+    assert (3001, 80) in published
+    assert (3001, 3001) not in published  # pre-#405 dead mapping must stay gone
 
-    listener_ports = {listener["port"] for listener in runtime["service_listeners"]}
-    assert {80, 443} == listener_ports
+    wildcard_ports = {l["port"] for l in runtime["service_listeners"] if l["scope"] == "wildcard"}
+    assert {80, 443} == wildcard_ports
+    dns_listeners = [l for l in runtime["service_listeners"] if l["scope"] == "loopback_only"]
+    assert {l["address"] for l in dns_listeners} == {"127.0.0.11"}
+    assert {l["protocol"] for l in dns_listeners} == {"tcp", "udp"}
+
+    # PID 1 capability set is evidence-derived (/proc/1/status CapEff, Docker default 14).
+    caps = runtime["linux_capabilities"]
+    assert "00000000a80425fb" in caps["description"]
+    assert len(caps["effective"]) == 14
+    assert "CAP_SYS_ADMIN" not in caps["effective"]
 
     proc_names = {p["name"] for p in runtime["processes"]}
     assert {"nginx", "nginx-worker"} == proc_names

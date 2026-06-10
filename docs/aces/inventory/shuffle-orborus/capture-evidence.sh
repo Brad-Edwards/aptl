@@ -192,6 +192,25 @@ docker exec "$CONTAINER" sh -lc "
       done
 " | awk '{gsub(/\\t/,"\t"); print}' > "$OUT/filesystem-tree.txt"
 
+# Full rootfs manifest retained as evidence (backend-pattern); the SDL encodes
+# the curated application-surface rows from filesystem-tree.txt above.
+docker exec "$CONTAINER" sh -lc '
+  set -eu
+  find / -xdev \( -type f -o -type d -o -type l -o -type s -o -type p \) -print \
+    | sort -u \
+    | while IFS= read -r path; do
+        stability=stable
+        sensitivity=plain
+        case "$path" in
+          /run/*|/tmp/*|/var/run/*|/var/tmp/*|/root/*) stability=runtime_created ;;
+        esac
+        case "$path" in
+          /etc/*shadow*|/etc/*gshadow*) sensitivity=operator_secret ;;
+        esac
+        stat -c "%F\t%A\t%a\t%u\t%U\t%g\t%G\t%s\t%Y\t${stability}\t${sensitivity}\t%n" "$path" 2>/dev/null || true
+      done
+' | awk '{gsub(/\\t/,"\t"); print}' | gzip -n > "$OUT/filesystem-tree-full.txt.gz"
+
 docker exec "$CONTAINER" sh -lc "
   set -eu
   for root in $FS_ROOTS; do
@@ -201,7 +220,7 @@ docker exec "$CONTAINER" sh -lc "
     | sort -zu \
     | xargs -0 -r sha256sum
 " > "$OUT/filesystem-checksums.txt"
-record_limit "filesystem-tree.txt and filesystem-checksums.txt scope the manifest to the orborus application surface (the /orborus Go binary, the image-shipped /orborus.go source, and /etc/os-release). The rest of the minimal Alpine rootfs is out of manifest scope (covered by os-packages.txt and the SBOMs). The host /var/run/docker.sock bind is a socket on the host, not part of the container rootfs manifest, and is captured in docker-inspect.container.json and orborus-state.txt."
+record_limit "filesystem-tree.txt and filesystem-checksums.txt scope the curated manifest (and the SDL filesystem_inventory rows) to the orborus application surface (the /orborus Go binary, the image-shipped /orborus.go source, and /etc/os-release); the FULL Alpine rootfs manifest is retained as evidence in filesystem-tree-full.txt.gz (no per-file checksums beyond the curated set; rootfs integrity is evidenced by the registry image digest and the SBOMs). The host /var/run/docker.sock bind is a socket on the host, not part of the container rootfs manifest, and is captured in docker-inspect.container.json and orborus-state.txt."
 
 # --- Runtime baseline --------------------------------------------------------
 # Alpine orborus image has netstat but no ss; listeners/connections use
@@ -230,6 +249,8 @@ docker exec "$CONTAINER" sh -lc '
   getent group | sed -n "1,260p" || true
   printf "%s\n" --sudoers--
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --pid1-capabilities--
+  grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args 2>/dev/null || ps -ef || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
 ' | redact_stream > "$OUT/runtime-baseline.txt"

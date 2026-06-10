@@ -502,7 +502,10 @@ services:
       # in-container nginx config overlay terminates TLS using the
       # lab-CA-signed cert.
       - "3443:443"
-      - "3001:3001"
+      # Host port 3001 → container 80 (HTTP). The in-container nginx
+      # listens on 80/443 only; the previous 3001:3001 mapping pointed at
+      # a port nothing listens on (issue #405).
+      - "3001:80"
     environment:
       - BACKEND_HOSTNAME=shuffle-backend
     volumes:

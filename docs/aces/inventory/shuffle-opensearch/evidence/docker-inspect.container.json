@@ -13,42 +13,42 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 797480,
+      "Pid": 1782283,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-06-10T18:34:56.835687212Z",
-      "FinishedAt": "2026-06-10T18:34:56.518966521Z",
+      "StartedAt": "2026-06-10T23:24:25.851748963Z",
+      "FinishedAt": "2026-06-10T23:24:25.411196378Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-06-10T20:35:42.218301529+02:00",
-            "End": "2026-06-10T20:35:42.296503895+02:00",
+            "Start": "2026-06-11T01:27:11.565448641+02:00",
+            "End": "2026-06-11T01:27:11.665781048+02:00",
             "ExitCode": 0,
             "Output": "{\n  \"name\" : \"e1eb785c281a\",\n  \"cluster_name\" : \"docker-cluster\",\n  \"cluster_uuid\" : \"smPCS7KBQYWuyqcH7AWKCg\",\n  \"version\" : {\n    \"distribution\" : \"opensearch\",\n    \"number\" : \"2.14.0\",\n    \"build_type\" : \"tar\",\n    \"build_hash\" : \"aaa555453f4713d652b52436874e11ba258d8f03\",\n    \"build_date\" : \"2024-05-09T18:51:00.973564994Z\",\n    \"build_snapshot\" : false,\n    \"lucene_version\" : \"9.10.0\",\n    \"minimum_wire_compatibility_version\" : \"7.10.0\",\n    \"minimum_index_compatibility_version\" : \"7.0.0\"\n  },\n  \"tagline\" : \"The OpenSearch Project: https://opensearch.org/\"\n}\n"
           },
           {
-            "Start": "2026-06-10T20:36:12.296933323+02:00",
-            "End": "2026-06-10T20:36:12.365749103+02:00",
+            "Start": "2026-06-11T01:27:41.667205566+02:00",
+            "End": "2026-06-11T01:27:41.753612899+02:00",
             "ExitCode": 0,
             "Output": "{\n  \"name\" : \"e1eb785c281a\",\n  \"cluster_name\" : \"docker-cluster\",\n  \"cluster_uuid\" : \"smPCS7KBQYWuyqcH7AWKCg\",\n  \"version\" : {\n    \"distribution\" : \"opensearch\",\n    \"number\" : \"2.14.0\",\n    \"build_type\" : \"tar\",\n    \"build_hash\" : \"aaa555453f4713d652b52436874e11ba258d8f03\",\n    \"build_date\" : \"2024-05-09T18:51:00.973564994Z\",\n    \"build_snapshot\" : false,\n    \"lucene_version\" : \"9.10.0\",\n    \"minimum_wire_compatibility_version\" : \"7.10.0\",\n    \"minimum_index_compatibility_version\" : \"7.0.0\"\n  },\n  \"tagline\" : \"The OpenSearch Project: https://opensearch.org/\"\n}\n"
           },
           {
-            "Start": "2026-06-10T20:36:42.366550112+02:00",
-            "End": "2026-06-10T20:36:42.432192075+02:00",
+            "Start": "2026-06-11T01:28:11.755653321+02:00",
+            "End": "2026-06-11T01:28:11.864274255+02:00",
             "ExitCode": 0,
             "Output": "{\n  \"name\" : \"e1eb785c281a\",\n  \"cluster_name\" : \"docker-cluster\",\n  \"cluster_uuid\" : \"smPCS7KBQYWuyqcH7AWKCg\",\n  \"version\" : {\n    \"distribution\" : \"opensearch\",\n    \"number\" : \"2.14.0\",\n    \"build_type\" : \"tar\",\n    \"build_hash\" : \"aaa555453f4713d652b52436874e11ba258d8f03\",\n    \"build_date\" : \"2024-05-09T18:51:00.973564994Z\",\n    \"build_snapshot\" : false,\n    \"lucene_version\" : \"9.10.0\",\n    \"minimum_wire_compatibility_version\" : \"7.10.0\",\n    \"minimum_index_compatibility_version\" : \"7.0.0\"\n  },\n  \"tagline\" : \"The OpenSearch Project: https://opensearch.org/\"\n}\n"
           },
           {
-            "Start": "2026-06-10T20:37:12.433130673+02:00",
-            "End": "2026-06-10T20:37:12.496677344+02:00",
+            "Start": "2026-06-11T01:28:41.865935904+02:00",
+            "End": "2026-06-11T01:28:41.934606684+02:00",
             "ExitCode": 0,
             "Output": "{\n  \"name\" : \"e1eb785c281a\",\n  \"cluster_name\" : \"docker-cluster\",\n  \"cluster_uuid\" : \"smPCS7KBQYWuyqcH7AWKCg\",\n  \"version\" : {\n    \"distribution\" : \"opensearch\",\n    \"number\" : \"2.14.0\",\n    \"build_type\" : \"tar\",\n    \"build_hash\" : \"aaa555453f4713d652b52436874e11ba258d8f03\",\n    \"build_date\" : \"2024-05-09T18:51:00.973564994Z\",\n    \"build_snapshot\" : false,\n    \"lucene_version\" : \"9.10.0\",\n    \"minimum_wire_compatibility_version\" : \"7.10.0\",\n    \"minimum_index_compatibility_version\" : \"7.0.0\"\n  },\n  \"tagline\" : \"The OpenSearch Project: https://opensearch.org/\"\n}\n"
           },
           {
-            "Start": "2026-06-10T20:37:42.497509338+02:00",
-            "End": "2026-06-10T20:37:42.56337837+02:00",
+            "Start": "2026-06-11T01:29:11.935991935+02:00",
+            "End": "2026-06-11T01:29:12.016960752+02:00",
             "ExitCode": 0,
             "Output": "{\n  \"name\" : \"e1eb785c281a\",\n  \"cluster_name\" : \"docker-cluster\",\n  \"cluster_uuid\" : \"smPCS7KBQYWuyqcH7AWKCg\",\n  \"version\" : {\n    \"distribution\" : \"opensearch\",\n    \"number\" : \"2.14.0\",\n    \"build_type\" : \"tar\",\n    \"build_hash\" : \"aaa555453f4713d652b52436874e11ba258d8f03\",\n    \"build_date\" : \"2024-05-09T18:51:00.973564994Z\",\n    \"build_snapshot\" : false,\n    \"lucene_version\" : \"9.10.0\",\n    \"minimum_wire_compatibility_version\" : \"7.10.0\",\n    \"minimum_index_compatibility_version\" : \"7.0.0\"\n  },\n  \"tagline\" : \"The OpenSearch Project: https://opensearch.org/\"\n}\n"
           }
@@ -61,7 +61,7 @@
     "HostsPath": "/var/lib/docker/containers/e1eb785c281a38818b7659df835f1afc8817f1f6c67d2ccb47a0c9e2c098163e/hosts",
     "LogPath": "/var/lib/docker/containers/e1eb785c281a38818b7659df835f1afc8817f1f6c67d2ccb47a0c9e2c098163e/e1eb785c281a38818b7659df835f1afc8817f1f6c67d2ccb47a0c9e2c098163e-json.log",
     "Name": "/aptl-shuffle-opensearch",
-    "RestartCount": 6,
+    "RestartCount": 8,
     "Driver": "overlayfs",
     "Platform": "linux",
     "MountLabel": "",
@@ -249,8 +249,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "b60538a88178dd00c06303307c9d87b09afb8e7defd0d8103a3ddc22bb0c979c",
-      "SandboxKey": "/var/run/docker/netns/b60538a88178",
+      "SandboxID": "1eca2301608c942d45788a74d4ba0fcdf558f3e358caecfb9f2e3e731f392308",
+      "SandboxKey": "/var/run/docker/netns/1eca2301608c",
       "Ports": {
         "9200/tcp": null,
         "9300/tcp": null,
@@ -268,10 +268,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "d434bf711830cc393e91189fafbcbab02d90632d2104ab2d96bc94312f38692d",
+          "EndpointID": "52f773a460e0f1c8222a0a69d912e57d65d1feee7e784f7779269ed14598f302",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.2",
-          "MacAddress": "92:64:ac:ab:77:0e",
+          "MacAddress": "66:7d:36:37:28:71",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",

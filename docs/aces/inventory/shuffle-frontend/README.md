@@ -10,12 +10,13 @@ established granularity bar (issue #330 depth).
 13) that serves the pre-built React single-page app and reverse-proxies
 `/api/v1|v2` to `shuffle-backend:5001`. It is inventoried as the participant
 application node `nodes.techvault.shuffle-frontend`. On security-net
-172.20.0.21; nginx HTTP/80 + HTTPS/443 are published to the host as `3001:3001`
-and `3443:443`. **No known ACES expressivity gap remains** for the catalogued
+172.20.0.21; nginx HTTP/80 is published to the host as `3001:80` and HTTPS/443
+as `3443:443` (the pre-#405 `3001:3001` mapping published a container port with
+no listener and was corrected). **No known ACES expressivity gap remains** for the catalogued
 steady-state facts.
 
 This capture is non-destructive. It used the already-running local `aptl`
-project (soc profile) on 2026-06-10 and **did not run
+project (soc profile) on 2026-06-11 and **did not run
 `aptl lab stop -v && aptl lab start`**. Treat this bundle as a frozen
 observation of that local steady state, **not as clean-lab rebuild proof**.
 
@@ -38,7 +39,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Runtime OS | Debian GNU/Linux 13 (trixie) |
 | Application | nginx 1.29.3 + pre-built static React SPA (no node runtime) |
 | Reverse proxy | `/api/v1\|v2` → `http://shuffle-backend:5001` |
-| Reachable participant ports | nginx HTTP `80` (host `3001`) + HTTPS `443` (host `3443`) |
+| Reachable participant ports | nginx HTTP `80` (host `3001:80`) + HTTPS `443` (host `3443:443`) |
 | Network identity | `security-net` 172.20.0.21 (only network) |
 | Package inventory | 150 dpkg packages |
 | Trivy vulnerability findings | 392 image-layer findings: 7 critical, 64 high, 138 medium, 182 low, 1 unknown |
@@ -86,7 +87,7 @@ evidence files above.
 | --- | --- |
 | Image / build / packages / CVEs / filesystem / identity / runtime / network | `nodes.techvault.shuffle-frontend` |
 | Shuffle web UI (nginx + React SPA, routes) | `nodes.techvault.shuffle-frontend.runtime.applications` |
-| HTTP / HTTPS listeners | `nodes.techvault.shuffle-frontend.runtime.service_listeners` (80, 443) |
+| HTTP / HTTPS listeners + Docker embedded-DNS loopback sockets | `nodes.techvault.shuffle-frontend.runtime.service_listeners` (80, 443 wildcard; 127.0.0.11 loopback_only) |
 | `/api` reverse-proxy to backend | `relationships.shuffle-frontend-proxies-backend` |
 
 All 18 catalogued facts in `mapping-ledger.yaml` are `encoded` /

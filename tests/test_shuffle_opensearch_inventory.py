@@ -42,7 +42,7 @@ DOCKER_HISTORY_ROW_COUNT = 24
 RUNTIME_PROCESS_COUNT = 3
 RUNTIME_ENV_COUNT = 6
 INDEX_COUNT = 24
-LEDGER_FACT_COUNT = 18
+LEDGER_FACT_COUNT = 20
 
 REQUIRED_EVIDENCE_FILES = {
     "capture-limits.txt",
@@ -270,7 +270,7 @@ def test_shuffle_opensearch_runtime_evidence_counts():
 
 def test_shuffle_opensearch_trivy_counts_match_severity_breakdown():
     counts = {row["severity"]: row["count"] for row in _json_file("trivy-vulnerability-counts.json")}
-    assert counts == {"CRITICAL": 2, "HIGH": 157, "MEDIUM": 231, "LOW": 20}
+    assert counts == {"CRITICAL": 2, "HIGH": 180, "MEDIUM": 210, "LOW": 18}
     assert sum(counts.values()) == TRIVY_FINDING_COUNT
 
 
@@ -314,8 +314,40 @@ def test_techvault_sdl_encodes_shuffle_opensearch_node(legacy_scenario):
     assert endpoint["network"] == "security-net"
     assert endpoint["ip_address"] == "172.20.0.2"
 
-    listener_ports = {listener["port"] for listener in runtime["service_listeners"]}
-    assert {9200, 9300, 9600} == listener_ports
+    wildcard_ports = {l["port"] for l in runtime["service_listeners"] if l["scope"] == "wildcard"}
+    assert {9200, 9300, 9600} == wildcard_ports
+    dns_listeners = [l for l in runtime["service_listeners"] if l["scope"] == "loopback_only"]
+    assert {l["address"] for l in dns_listeners} == {"127.0.0.11"}
+    assert {l["protocol"] for l in dns_listeners} == {"tcp", "udp"}
+
+    # The data volume holding ALL OpenSearch index state is a typed runtime mount.
+    volume_mounts = [m for m in runtime["mounts"] if m["source_kind"] == "volume"]
+    assert [(m["target"], m["source"], m["read_only"]) for m in volume_mounts] == [
+        ("/usr/share/opensearch/data", "aptl_shuffle_opensearch_data", False)
+    ]
+
+    # PID 1 capability set is evidence-derived: the non-root JVM holds an EMPTY effective set.
+    caps = runtime["linux_capabilities"]
+    assert caps["effective"] == []
+    assert "CapEff=0000000000000000" in caps["description"]
+    baseline = (EVIDENCE_DIR / "runtime-baseline.txt").read_text(encoding="utf-8")
+    assert "CapEff:\t0000000000000000" in baseline
+
+    # Embedded Maven catalogue (445 libs + the OpenSearch application row).
+    components = runtime["software_components"]
+    assert len(components) == 446
+    libs = [c for c in components if c["component_type"] == "library"]
+    assert len(libs) == 445
+    assert all(c["provenance"] == "sbom" and c["package_manager"] == "maven" for c in libs)
+
+    # Security-plugin internal users are an identity authority.
+    authorities = runtime["identity_authorities"]
+    assert len(authorities) == 1
+    authority = authorities[0]
+    assert authority["identity_authority_id"] == "opensearch-security-internal-users"
+    subject_names = {s["name"] for s in authority["subjects"]}
+    assert "admin" in subject_names
+    assert len(authority["subjects"]) == 7
 
     env = {item["name"]: item for item in runtime["environment"]}
     assert env["OPENSEARCH_INITIAL_ADMIN_PASSWORD"]["value_classification"] == "secret_fixture"

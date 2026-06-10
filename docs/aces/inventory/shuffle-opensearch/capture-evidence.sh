@@ -307,13 +307,15 @@ docker exec "$CONTAINER" sh -lc '
   printf "%s\n" --outbound-connections--
   (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1
   printf "%s\n" --mounts--
-  mount | sed -n "1,220p"
+  (mount 2>/dev/null | grep . || sed -e "s|^\([^ ]*\) \([^ ]*\) \([^ ]*\) \([^ ]*\).*|\1 on \2 type \3 (\4)|" /proc/self/mounts) | sed -n "1,220p"
   printf "%s\n" --users--
   getent passwd | sed -n "1,260p" || true
   printf "%s\n" --groups--
   getent group | sed -n "1,260p" || true
   printf "%s\n" --sudoers--
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --pid1-capabilities--
+  grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args 2>/dev/null || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
   true
@@ -361,8 +363,13 @@ except Exception as e:
   print(\"plugins parse error:\", e)" 2>&1
   echo --transport-and-http-listeners--
   curl -ks -u "$cred" "https://localhost:9200/_nodes/_local/http,transport?filter_path=nodes.*.http.publish_address,nodes.*.http.bound_address,nodes.*.transport.publish_address,nodes.*.transport.bound_address&pretty" 2>&1
+  echo --security-internalusers--
+  curl -ks -u "$cred" "https://localhost:9200/_plugins/_security/api/internalusers?pretty" 2>&1
+  echo --security-rolesmapping--
+  curl -ks -u "$cred" "https://localhost:9200/_plugins/_security/api/rolesmapping?pretty" 2>&1
   true
 ' | redact_stream > "$OUT/opensearch-state.txt"
+record_limit "opensearch-state.txt captures the Security-plugin internal user database (_plugins/_security/api/internalusers) and roles mappings from the operator-credentialed REST vantage; bcrypt password hashes of the committed fixture credential are scenario content and retained per the repo secret-fixture policy."
 
 # --- Per-index mappings ------------------------------------------------------
 # For each non-system index, capture /<index>/_mapping. For system-reserved
@@ -398,7 +405,7 @@ except Exception:
   echo "}"
   true
 ' | redact_stream | jq -S . > "$OUT/shuffle-opensearch-index-mappings.json"
-record_limit "shuffle-opensearch-index-mappings.json captures per-index _mapping bodies for every index returned by _cat/indices, tagging each with the vantage used (_mapping for accessible indices; the operator _cluster/state/metadata vantage as a fallback for any reserved/system index whose _mapping returns a security_exception). ACES mappings/templates surfaces are name-only list[str] and cannot encode these structured field schemas (blocked surface)."
+record_limit "shuffle-opensearch-index-mappings.json captures per-index _mapping bodies for every index returned by _cat/indices, tagging each with the vantage used (_mapping for accessible indices; the operator _cluster/state/metadata vantage as a fallback for any reserved/system index whose _mapping returns a security_exception). The structured field schemas are encoded as ACES datastore mapping manifests (field counts, type census, schema digest per aces#468-470); the raw _mapping bodies remain evidence-only."
 
 # --- Participant-vantage discovery: kali ------------------------------------
 # OpenSearch is on security-net only (DHCP) and publishes no host ports; the IP

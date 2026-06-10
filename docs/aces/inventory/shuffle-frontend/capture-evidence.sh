@@ -221,6 +221,8 @@ docker exec "$CONTAINER" sh -lc '
   getent group | sed -n "1,260p" || true
   printf "%s\n" --sudoers--
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --pid1-capabilities--
+  grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
 ' | redact_stream > "$OUT/runtime-baseline.txt"

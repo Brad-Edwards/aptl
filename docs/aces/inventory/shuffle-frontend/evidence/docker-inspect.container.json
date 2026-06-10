@@ -1,7 +1,7 @@
 [
   {
-    "Id": "3dc2564de3ddba2431a6b3a0aeced293363d73825ed0271798b153b27af01dd7",
-    "Created": "2026-05-23T06:18:32.685512207Z",
+    "Id": "216ed3a32aca5dcca1256fe22a7d7a741fc9b9eae32fd5d68cbf9422a97e470c",
+    "Created": "2026-06-10T23:19:20.784330179Z",
     "Path": "/entrypoint.sh",
     "Args": [
       "nginx",
@@ -15,42 +15,42 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2960080,
+      "Pid": 1745904,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:56.082439661Z",
+      "StartedAt": "2026-06-10T23:19:22.401430269Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-06-10T20:20:23.524681313+02:00",
-            "End": "2026-06-10T20:20:23.585166603+02:00",
+            "Start": "2026-06-11T01:19:57.725225064+02:00",
+            "End": "2026-06-11T01:19:57.782249377+02:00",
             "ExitCode": 0,
             "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"shortcut icon\" href=\"/favicon.ico\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1, shrink-to-fit=no\"\n    />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <link rel=\"manifest\" href=\"/manifest.json\" />\n    <title>Shuffle</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DMZBEHv2.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Bxl6IZFs.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
           },
           {
-            "Start": "2026-06-10T20:20:53.585585739+02:00",
-            "End": "2026-06-10T20:20:53.651902458+02:00",
+            "Start": "2026-06-11T01:20:27.783310088+02:00",
+            "End": "2026-06-11T01:20:27.855460059+02:00",
             "ExitCode": 0,
             "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"shortcut icon\" href=\"/favicon.ico\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1, shrink-to-fit=no\"\n    />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <link rel=\"manifest\" href=\"/manifest.json\" />\n    <title>Shuffle</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DMZBEHv2.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Bxl6IZFs.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
           },
           {
-            "Start": "2026-06-10T20:21:23.652598763+02:00",
-            "End": "2026-06-10T20:21:23.71251447+02:00",
+            "Start": "2026-06-11T01:20:57.85635815+02:00",
+            "End": "2026-06-11T01:20:57.914143782+02:00",
             "ExitCode": 0,
             "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"shortcut icon\" href=\"/favicon.ico\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1, shrink-to-fit=no\"\n    />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <link rel=\"manifest\" href=\"/manifest.json\" />\n    <title>Shuffle</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DMZBEHv2.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Bxl6IZFs.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
           },
           {
-            "Start": "2026-06-10T20:21:53.712975435+02:00",
-            "End": "2026-06-10T20:21:53.780824807+02:00",
+            "Start": "2026-06-11T01:21:27.914802491+02:00",
+            "End": "2026-06-11T01:21:27.973676687+02:00",
             "ExitCode": 0,
             "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"shortcut icon\" href=\"/favicon.ico\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1, shrink-to-fit=no\"\n    />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <link rel=\"manifest\" href=\"/manifest.json\" />\n    <title>Shuffle</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DMZBEHv2.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Bxl6IZFs.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
           },
           {
-            "Start": "2026-06-10T20:22:23.781340272+02:00",
-            "End": "2026-06-10T20:22:23.845674664+02:00",
+            "Start": "2026-06-11T01:21:57.975520292+02:00",
+            "End": "2026-06-11T01:21:58.049495009+02:00",
             "ExitCode": 0,
             "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"shortcut icon\" href=\"/favicon.ico\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1, shrink-to-fit=no\"\n    />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <link rel=\"manifest\" href=\"/manifest.json\" />\n    <title>Shuffle</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DMZBEHv2.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Bxl6IZFs.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
           }
@@ -58,10 +58,10 @@
       }
     },
     "Image": "sha256:3c471f39c4d0a773ee22ed8575a68579ff08dd7123e94e70a2482973a4cc296f",
-    "ResolvConfPath": "/var/lib/docker/containers/3dc2564de3ddba2431a6b3a0aeced293363d73825ed0271798b153b27af01dd7/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/3dc2564de3ddba2431a6b3a0aeced293363d73825ed0271798b153b27af01dd7/hostname",
-    "HostsPath": "/var/lib/docker/containers/3dc2564de3ddba2431a6b3a0aeced293363d73825ed0271798b153b27af01dd7/hosts",
-    "LogPath": "/var/lib/docker/containers/3dc2564de3ddba2431a6b3a0aeced293363d73825ed0271798b153b27af01dd7/3dc2564de3ddba2431a6b3a0aeced293363d73825ed0271798b153b27af01dd7-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/216ed3a32aca5dcca1256fe22a7d7a741fc9b9eae32fd5d68cbf9422a97e470c/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/216ed3a32aca5dcca1256fe22a7d7a741fc9b9eae32fd5d68cbf9422a97e470c/hostname",
+    "HostsPath": "/var/lib/docker/containers/216ed3a32aca5dcca1256fe22a7d7a741fc9b9eae32fd5d68cbf9422a97e470c/hosts",
+    "LogPath": "/var/lib/docker/containers/216ed3a32aca5dcca1256fe22a7d7a741fc9b9eae32fd5d68cbf9422a97e470c/216ed3a32aca5dcca1256fe22a7d7a741fc9b9eae32fd5d68cbf9422a97e470c-json.log",
     "Name": "/aptl-shuffle-frontend",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -72,9 +72,9 @@
     "ExecIDs": null,
     "HostConfig": {
       "Binds": [
-        "/home/atomik/src/aptl/config/soc_certs/shuffle-frontend/server.pem:/etc/nginx/fullchain.cert.pem:ro",
         "/home/atomik/src/aptl/config/soc_certs/shuffle-frontend/server.key:/etc/nginx/privkey.pem:ro",
-        "/home/atomik/src/aptl/config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro"
+        "/home/atomik/src/aptl/config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro",
+        "/home/atomik/src/aptl/config/soc_certs/shuffle-frontend/server.pem:/etc/nginx/fullchain.cert.pem:ro"
       ],
       "ContainerIDFile": "",
       "LogConfig": {
@@ -83,16 +83,16 @@
       },
       "NetworkMode": "aptl_aptl-security",
       "PortBindings": {
-        "3001/tcp": [
-          {
-            "HostIp": "",
-            "HostPort": "3001"
-          }
-        ],
         "443/tcp": [
           {
             "HostIp": "",
             "HostPort": "3443"
+          }
+        ],
+        "80/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "3001"
           }
         ]
       },
@@ -214,14 +214,13 @@
       }
     ],
     "Config": {
-      "Hostname": "3dc2564de3dd",
+      "Hostname": "216ed3a32aca",
       "Domainname": "",
       "User": "",
       "AttachStdin": false,
       "AttachStdout": true,
       "AttachStderr": true,
       "ExposedPorts": {
-        "3001/tcp": {},
         "443/tcp": {},
         "80/tcp": {}
       },
@@ -259,14 +258,15 @@
         "/entrypoint.sh"
       ],
       "Labels": {
-        "com.docker.compose.config-hash": "781f1bec1bd79aa9bc21fb09749ff357be4af3d66acfc65907df9da87a5ee049",
+        "com.docker.compose.config-hash": "b61d6ad5d307e484d269b2fe8685c2a2ca9156cbdc055229913a746c69ad95e2",
         "com.docker.compose.container-number": "1",
-        "com.docker.compose.depends_on": "shuffle-backend:service_started:false",
+        "com.docker.compose.depends_on": "",
         "com.docker.compose.image": "sha256:3c471f39c4d0a773ee22ed8575a68579ff08dd7123e94e70a2482973a4cc296f",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
         "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
         "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.replace": "aptl-shuffle-frontend",
         "com.docker.compose.service": "shuffle-frontend",
         "com.docker.compose.version": "5.1.3",
         "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
@@ -274,19 +274,9 @@
       "StopSignal": "SIGQUIT"
     },
     "NetworkSettings": {
-      "SandboxID": "94e45f7a5b0226fcbc92a9111eb8a30956eab3aad3010e322fb68268384c2236",
-      "SandboxKey": "/var/run/docker/netns/94e45f7a5b02",
+      "SandboxID": "4366e7d5b7097cd6cb75af13c2db5bc765b565aa57fe0fc74952222595e4d8dc",
+      "SandboxKey": "/var/run/docker/netns/4366e7d5b709",
       "Ports": {
-        "3001/tcp": [
-          {
-            "HostIp": "0.0.0.0",
-            "HostPort": "3001"
-          },
-          {
-            "HostIp": "::",
-            "HostPort": "3001"
-          }
-        ],
         "443/tcp": [
           {
             "HostIp": "0.0.0.0",
@@ -297,7 +287,16 @@
             "HostPort": "3443"
           }
         ],
-        "80/tcp": null
+        "80/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "3001"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "3001"
+          }
+        ]
       },
       "Networks": {
         "aptl_aptl-security": {
@@ -312,10 +311,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "4e52e88e28c274d4dd2c42983582271c41dfc828a327dde266e9e273b13dde04",
+          "EndpointID": "d12a76fd719633683e0667a0f76fc7e285e04402ee22c5e398c2d4d563cc7cba",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.21",
-          "MacAddress": "22:55:6d:62:d3:1b",
+          "MacAddress": "0e:41:62:f0:54:2f",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -323,7 +322,7 @@
           "DNSNames": [
             "aptl-shuffle-frontend",
             "shuffle-frontend",
-            "3dc2564de3dd"
+            "216ed3a32aca"
           ]
         }
       }

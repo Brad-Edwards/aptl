@@ -7,7 +7,7 @@
   "restart": "unless-stopped",
   "ports": [
     "3443:443",
-    "3001:3001"
+    "3001:80"
   ],
   "environment": [
     "BACKEND_HOSTNAME=shuffle-backend"

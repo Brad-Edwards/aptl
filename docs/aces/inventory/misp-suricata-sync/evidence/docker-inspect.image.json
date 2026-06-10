@@ -1,0 +1,64 @@
+[
+  {
+    "Id": "sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e",
+    "RepoTags": [
+      "aptl-misp-suricata-sync:latest"
+    ],
+    "RepoDigests": [
+      "aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2026-05-23T08:17:44.953784955+02:00",
+    "Config": {
+      "Env": [
+        "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG=C.UTF-8",
+        "GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D",
+        "PYTHON_VERSION=3.11.15",
+        "PYTHON_SHA256=272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625"
+      ],
+      "Entrypoint": [
+        "aptl-misp-suricata-sync"
+      ],
+      "WorkingDir": "/app",
+      "Labels": {
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.service": "misp-suricata-sync",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 114201128,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:219a998c60509502b47b97f1158067d5dd62640d2d689560d32cfd5594f6bc40",
+        "sha256:98df1ca0e575d9026c1abd12994fad3c14effa4558d50b6961fd586930956b26",
+        "sha256:bffa3c30a00bb534b2e3637bd26d9a75e095172be7d0b33924f1a61bf6cb2120",
+        "sha256:89bfb82659d056dd4ef25b8b3f99c7a97874083d86d92924e931ffa2fb7c7861",
+        "sha256:323eb9311846722470f94332df2d3a10b99658aac4c39624f1fe6ae3ee49d32f",
+        "sha256:dc1b01f6b7228ddca8df73c90239cfb0c55a3f3f5d571bff8edaeea4fc8949f3",
+        "sha256:9632fe7a7363c825bfe943fd6532e5afc9994610c232ef550770a37f2dae95c3",
+        "sha256:5473a54ecbee25f3e5d13390bcac20b9e191b9c015cbcf75f8c1b26ffd9ca2ec",
+        "sha256:87bbc7895e09b6fe07a317c0572bbafc91f2b6cf0091e8503c698c173b23af1f"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-05-23T06:17:51.013940318Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e",
+      "size": 856
+    },
+    "Identity": {
+      "Build": [
+        {
+          "Ref": "zqytksanrfpp93kb2xm7yeuap",
+          "CreatedAt": "2026-05-23T08:17:52.967446472+02:00"
+        }
+      ]
+    }
+  }
+]

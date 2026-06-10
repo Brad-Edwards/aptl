@@ -1,0 +1,277 @@
+UNIT FILE                              STATE           VENDOR PRESET
+apt-daily-upgrade.service              static          -
+apt-daily.service                      static          -
+autovt@.service                        alias           -
+binfmt-support.service                 enabled         enabled
+console-getty.service                  enabled-runtime disabled
+container-getty@.service               static          -
+cryptdisks-early.service               masked          enabled
+cryptdisks.service                     masked          enabled
+dbus-org.freedesktop.hostname1.service alias           -
+dbus-org.freedesktop.locale1.service   alias           -
+dbus-org.freedesktop.login1.service    alias           -
+dbus-org.freedesktop.resolve1.service  alias           -
+dbus-org.freedesktop.timedate1.service alias           -
+dbus-org.freedesktop.timesync1.service alias           -
+dbus.service                           static          -
+debug-shell.service                    disabled        disabled
+dmesg.service                          disabled        enabled
+dpkg-db-backup.service                 static          -
+e2scrub@.service                       static          -
+e2scrub_all.service                    static          -
+e2scrub_fail@.service                  static          -
+e2scrub_reap.service                   disabled        enabled
+emergency.service                      static          -
+falco-custom.service                   disabled        enabled
+falco-kmod-inject.service              static          -
+falco-kmod.service                     disabled        enabled
+falco-modern-bpf.service               enabled         enabled
+falco.service                          alias           -
+falcoctl-artifact-follow.service       disabled        enabled
+fstrim.service                         static          -
+getty-static.service                   static          -
+getty@.service                         disabled        enabled
+hwclock.service                        masked          enabled
+initrd-cleanup.service                 static          -
+initrd-parse-etc.service               static          -
+initrd-switch-root.service             static          -
+initrd-udevadm-cleanup-db.service      static          -
+kmod-static-nodes.service              static          -
+kmod.service                           alias           -
+logrotate.service                      static          -
+modprobe@.service                      static          -
+motd-news.service                      static          -
+networkd-dispatcher.service            disabled        enabled
+procps.service                         alias           -
+quotaon.service                        static          -
+rc-local.service                       static          -
+rc.service                             masked          enabled
+rcS.service                            masked          enabled
+rescue.service                         static          -
+reverse-tools-install.service          enabled         enabled
+rsyslog.service                        enabled         enabled
+serial-getty@.service                  disabled        enabled
+ssh.service                            enabled         enabled
+ssh@.service                           static          -
+sshd.service                           alias           -
+sudo.service                           masked          enabled
+syslog.service                         alias           -
+system-update-cleanup.service          static          -
+systemd-ask-password-console.service   static          -
+systemd-ask-password-wall.service      static          -
+systemd-backlight@.service             static          -
+systemd-binfmt.service                 static          -
+systemd-bless-boot.service             static          -
+systemd-boot-check-no-failures.service disabled        disabled
+systemd-boot-system-token.service      static          -
+systemd-exit.service                   static          -
+systemd-fsck-root.service              static          -
+systemd-fsck@.service                  static          -
+systemd-fsckd.service                  static          -
+systemd-halt.service                   static          -
+systemd-hibernate-resume@.service      static          -
+systemd-hibernate.service              static          -
+systemd-hostnamed.service              static          -
+systemd-hybrid-sleep.service           static          -
+systemd-initctl.service                static          -
+systemd-journal-flush.service          static          -
+systemd-journald.service               static          -
+systemd-journald@.service              static          -
+systemd-kexec.service                  static          -
+systemd-localed.service                static          -
+systemd-logind.service                 static          -
+systemd-machine-id-commit.service      static          -
+systemd-modules-load.service           static          -
+systemd-network-generator.service      disabled        enabled
+systemd-networkd-wait-online.service   disabled        disabled
+systemd-networkd.service               disabled        enabled
+systemd-poweroff.service               static          -
+systemd-pstore.service                 disabled        enabled
+systemd-quotacheck.service             static          -
+systemd-random-seed.service            static          -
+systemd-reboot.service                 static          -
+systemd-remount-fs.service             enabled-runtime enabled
+systemd-resolved.service               enabled         enabled
+systemd-rfkill.service                 static          -
+systemd-suspend-then-hibernate.service static          -
+systemd-suspend.service                static          -
+systemd-sysctl.service                 static          -
+systemd-sysext.service                 disabled        enabled
+systemd-sysusers.service               static          -
+systemd-time-wait-sync.service         disabled        disabled
+systemd-timedated.service              static          -
+systemd-timesyncd.service              enabled         enabled
+systemd-tmpfiles-clean.service         static          -
+systemd-tmpfiles-setup-dev.service     static          -
+systemd-tmpfiles-setup.service         static          -
+systemd-update-utmp-runlevel.service   static          -
+systemd-update-utmp.service            static          -
+systemd-user-sessions.service          enabled         enabled
+systemd-volatile-root.service          static          -
+user-runtime-dir@.service              static          -
+user@.service                          static          -
+wazuh-agent.service                    enabled         enabled
+x11-common.service                     masked          enabled
+
+113 unit files listed.
+--service-status--
+● reverse-tools-install.service - Install Reverse Engineering Tools Lab Services on First Boot
+     Loaded: loaded (/etc/systemd/system/reverse-tools-install.service; enabled; vendor preset: enabled)
+     Active: active (exited) since Wed 2026-06-10 05:02:27 UTC; 9h ago
+    Process: 41 ExecStart=/opt/purple-team/scripts/install-all.sh (code=exited, status=0/SUCCESS)
+   Main PID: 41 (code=exited, status=0/SUCCESS)
+        CPU: 6min 58.815s
+
+Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - strings - Extract strings from binaries
+Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - yara - Pattern matching engine
+Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - FLOSS - Advanced string analysis
+Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - CAPA - Capability analysis
+Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - hexdump - Hex viewer
+Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - upx - Packer/unpacker
+Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - osslsigncode - Code signing verification
+Jun 10 05:02:27 reverse-host install-all.sh[3553]: Workspace: /home/labadmin/reverse-workspace
+Jun 10 05:02:27 reverse-host install-all.sh[3553]: Quick start: 'analyze <binary_file>'
+Jun 10 05:02:27 reverse-host systemd[1]: Finished Install Reverse Engineering Tools Lab Services on First Boot.
+
+● rsyslog.service - System Logging Service
+     Loaded: loaded (/lib/systemd/system/rsyslog.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 9h ago
+TriggeredBy: ● syslog.socket
+       Docs: man:rsyslogd(8)
+             man:rsyslog.conf(5)
+             https://www.rsyslog.com/doc/
+   Main PID: 34 (rsyslogd)
+      Tasks: 4 (limit: 23154)
+     Memory: 4.3M
+        CPU: 2.323s
+     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/rsyslog.service
+             └─34 /usr/sbin/rsyslogd -n -iNONE
+
+Jun 10 04:58:48 reverse-host systemd[1]: Starting System Logging Service...
+Jun 10 04:58:48 reverse-host rsyslogd[34]: imuxsock: Acquired UNIX socket '/run/systemd/journal/syslog' (fd 3) from systemd.  [v8.2112.0]
+Jun 10 04:58:48 reverse-host rsyslogd[34]: rsyslogd's groupid changed to 106
+Jun 10 04:58:48 reverse-host systemd[1]: Started System Logging Service.
+Jun 10 04:58:48 reverse-host rsyslogd[34]: rsyslogd's userid changed to 105
+Jun 10 04:58:48 reverse-host rsyslogd[34]: [origin software="rsyslogd" swVersion="8.2112.0" x-pid="34" x-info="https://www.rsyslog.com"] start
+
+● ssh.service - OpenBSD Secure Shell server
+     Loaded: loaded (/lib/systemd/system/ssh.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 9h ago
+       Docs: man:sshd(8)
+             man:sshd_config(5)
+   Main PID: 40 (sshd)
+      Tasks: 1 (limit: 23154)
+     Memory: 1.7M
+        CPU: 18ms
+     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/ssh.service
+             └─40 "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"
+
+Jun 10 04:58:48 reverse-host systemd[1]: Starting OpenBSD Secure Shell server...
+Jun 10 04:58:48 reverse-host sshd[40]: Server listening on 0.0.0.0 port 22.
+Jun 10 04:58:48 reverse-host sshd[40]: Server listening on :: port 22.
+Jun 10 04:58:48 reverse-host systemd[1]: Started OpenBSD Secure Shell server.
+
+● systemd-journald.service - Journal Service
+     Loaded: loaded (/lib/systemd/system/systemd-journald.service; static)
+     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 9h ago
+TriggeredBy: ● systemd-journald-dev-log.socket
+             ○ systemd-journald-audit.socket
+             ● systemd-journald.socket
+       Docs: man:systemd-journald.service(8)
+             man:journald.conf(5)
+   Main PID: 33 (systemd-journal)
+     Status: "Processing requests..."
+      Tasks: 1 (limit: 23154)
+     Memory: 26.1M
+        CPU: 4.905s
+     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service
+             └─33 /lib/systemd/systemd-journald
+
+Jun 10 04:59:14 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 10 04:59:14 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 10 04:59:14 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 10 04:59:14 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 10 05:00:38 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 10 05:00:44 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 10 05:00:44 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 10 05:00:44 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 10 05:01:20 reverse-host systemd-journald[33]: Forwarding to syslog missed 1 messages.
+Jun 10 05:01:50 reverse-host systemd-journald[33]: Forwarding to syslog missed 15 messages.
+
+● systemd-user-sessions.service - Permit User Sessions
+     Loaded: loaded (/lib/systemd/system/systemd-user-sessions.service; enabled; vendor preset: enabled)
+     Active: active (exited) since Wed 2026-06-10 04:58:48 UTC; 9h ago
+       Docs: man:systemd-user-sessions.service(8)
+   Main PID: 36 (code=exited, status=0/SUCCESS)
+        CPU: 3ms
+
+Jun 10 04:58:48 reverse-host systemd[1]: Starting Permit User Sessions...
+Jun 10 04:58:48 reverse-host systemd[1]: Finished Permit User Sessions.
+
+● wazuh-agent.service - Wazuh agent
+     Loaded: loaded (/lib/systemd/system/wazuh-agent.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2026-06-10 04:59:25 UTC; 9h ago
+      Tasks: 43 (limit: 23154)
+     Memory: 26.0M
+        CPU: 30.123s
+     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/wazuh-agent.service
+             ├─4640 /var/ossec/bin/wazuh-execd
+             ├─4687 /var/ossec/bin/wazuh-agentd
+             ├─4752 /var/ossec/bin/wazuh-syscheckd
+             ├─4982 /var/ossec/bin/wazuh-logcollector
+             └─5088 /var/ossec/bin/wazuh-modulesd
+
+Jun 10 04:59:18 reverse-host systemd[1]: Starting Wazuh agent...
+Jun 10 04:59:18 reverse-host env[3427]: Starting Wazuh v4.12.0...
+Jun 10 04:59:19 reverse-host env[3427]: Started wazuh-execd...
+Jun 10 04:59:20 reverse-host env[3427]: Started wazuh-agentd...
+Jun 10 04:59:20 reverse-host env[3477]: 2026/06/10 04:59:20 wazuh-syscheckd: WARNING: The check_unixaudit option is deprecated in favor of the SCA module.
+Jun 10 04:59:21 reverse-host env[3427]: Started wazuh-syscheckd...
+Jun 10 04:59:22 reverse-host env[3427]: Started wazuh-logcollector...
+Jun 10 04:59:23 reverse-host env[3427]: Started wazuh-modulesd...
+Jun 10 04:59:25 reverse-host env[3427]: Completed.
+Jun 10 04:59:25 reverse-host systemd[1]: Started Wazuh agent.
+
+● falco-modern-bpf.service - Falco: Container Native Runtime Security with modern ebpf
+     Loaded: loaded (/lib/systemd/system/falco-modern-bpf.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2026-06-10 04:59:14 UTC; 9h ago
+       Docs: https://falco.org/docs/
+   Main PID: 3243 (falco)
+      Tasks: 31 (limit: 23154)
+     Memory: 127.1M
+        CPU: 20min 57.964s
+     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/falco-modern-bpf.service
+             └─3243 /usr/bin/falco -o engine.kind=modern_ebpf
+
+Jun 10 14:31:58 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
+Jun 10 14:31:58 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4165279': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:04 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:04 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4165824': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:09 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:09 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4166075': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:14 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:14 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4166328': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:19 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4166662': can't get table entry: get_entry found no element at given key
+Jun 10 14:32:19 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
+
+● falcoctl-artifact-follow.service - Falcoctl Artifact Follow: automatic artifacts update service
+     Loaded: loaded (/lib/systemd/system/falcoctl-artifact-follow.service; disabled; vendor preset: enabled)
+     Active: active (running) since Wed 2026-06-10 04:59:14 UTC; 9h ago
+       Docs: https://falco.org/docs/
+   Main PID: 3244 (falcoctl)
+      Tasks: 21 (limit: 23154)
+     Memory: 20.4M
+        CPU: 2.345s
+     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/falcoctl-artifact-follow.service
+             └─3244 /usr/bin/falcoctl artifact follow --allowed-types=rulesfile
+
+Jun 10 04:59:14 reverse-host falcoctl[3244]:                       └ artifact: ghcr.io/falcosecurity/rules/falco-rules:5
+Jun 10 09:13:59 reverse-host falcoctl[3244]: 2026-06-10 09:13:59 INFO  Found new artifact version
+Jun 10 09:13:59 reverse-host falcoctl[3244]:                       ├ followerName: ghcr.io/falcosecurity/rules/falco-rules:5
+Jun 10 09:13:59 reverse-host falcoctl[3244]:                       └ tag: 5
+Jun 10 09:14:04 reverse-host falcoctl[3244]: 2026-06-10 09:14:04 INFO  Artifact correctly installed
+Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ followerName: ghcr.io/falcosecurity/rules/falco-rules:5
+Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ artifactName: ghcr.io/falcosecurity/rules/falco-rules:5
+Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ type: rulesfile
+Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ digest: sha256:36d143c0ae2d5569da0274ea6bef188bac02b95abe51e44cfff16f38d3d6b9e0
+Jun 10 09:14:04 reverse-host falcoctl[3244]:                       └ directory: /etc/falco

@@ -1,0 +1,502 @@
+schema_version: 1
+asset:
+  id: wazuh-sidecar-suricata
+  scenario: TechVault
+  aptl_issue: 344
+  aces_methodology_issue: 353
+  source_class: local-custom-build-forwarding-agent-sidecar
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: aptl-wazuh-sidecar@sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence:
+    - path: evidence/docker-buildx-imagetools.image.err
+    - path: evidence/docker-inspect.image.json
+    limits:
+    - aptl-wazuh-sidecar:local is a locally built image with no registry manifest, so docker buildx imagetools inspect failed
+      (see docker-buildx-imagetools.image.err) and no registry-visible OCI/in-toto/SLSA attestation could be captured. Image
+      identity is the local config ID in docker-inspect.image.json plus the build recipe in source-checksums.txt.
+notes:
+- Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v &&
+  aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof.
+- 'SCN-010 issue #344 promotes the off-node Wazuh sidecar for the suricata node from a docker-compose-only forwarding_agents
+  stub to a fully inventoried participant node nodes.techvault.wazuh-sidecar-suricata, following the #343 wazuh-sidecar-db
+  precedent (same aptl-wazuh-sidecar:local image). Every catalogued observable maps to a current ACES surface: image/build/packages/CVEs/filesystem/identity/runtime
+  on the node, and the cross-node forwarding behaviour on the scenario-level forwarding_agents registry (Brad-Edwards/aces#460).
+  No known ACES expressivity gap remains for the catalogued wazuh-sidecar-suricata steady-state facts.'
+- The aptl-firewall-drop active-response wrapper ships in the image (ADR-021) but the sidecar holds only the default Docker
+  capability set (no CAP_NET_ADMIN), so it cannot run iptables; this present-but-inert posture is encoded on runtime.linux_capabilities
+  and the filesystem_inventory entry, not asserted as a working prevention control.
+- /logs is the suricata container's log directory (shared suricata_logs volume) mounted read-only; its content (eve.json,
+  suricata.log, stats.log, fast.log) is the suricata asset's inventory (docs/aces/inventory/suricata/). Only the monitored
+  log path is recorded here as the agent's tailed source.
+- The agent's manager-registration secret (/var/ossec/etc/client.keys) is represented by path/metadata only; its key material
+  is never emitted (ADR-029).
+correspondence_checks:
+- id: wazuh-sidecar-suricata-evidence-bundle-integrity
+  status: implemented
+  source: docs/aces/inventory/wazuh-sidecar-suricata/evidence
+  method: evidence-sha256sums.txt hashes every committed evidence file except the manifest itself; tests/test_wazuh_sidecar_db_inventory.py
+    recomputes and compares.
+  realized_evidence:
+  - path: evidence/evidence-sha256sums.txt
+  - path: evidence/captured-at-utc.txt
+  ledger_fact_ids:
+  - wazuh-sidecar-suricata.capture.toolchain-baseline
+- id: wazuh-sidecar-suricata-sdl-runtime-correspondence
+  status: implemented
+  source: scenarios/techvault.sdl.yaml nodes.techvault.wazuh-sidecar-suricata
+  method: tests/test_wazuh_sidecar_db_inventory.py parses the ACES SDL and asserts image, build, package, CVE, filesystem,
+    identity, process, environment, capability, network, and forwarding-agent counts/values against the evidence.
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/wazuh-agent-state.txt
+  ledger_fact_ids:
+  - wazuh-sidecar-suricata.runtime.container-policy
+  - wazuh-sidecar-suricata.runtime.package-inventory
+  - wazuh-sidecar-suricata.runtime.vulnerability-scan
+  - wazuh-sidecar-suricata.runtime.local-identity
+  - wazuh-sidecar-suricata.agent.forwarding-spec
+- id: wazuh-sidecar-suricata-forwarding-relationship-correspondence
+  status: implemented
+  source: scenarios/techvault.sdl.yaml relationships + forwarding_agents[aptl-suricata-wazuh-agent]
+  method: README and tests assert the realized sidecar-to-manager forwarding edge (manager agent_control shows agent 006 aptl-suricata-agent
+    Active) and the read-only suricata_logs log source.
+  realized_evidence:
+  - path: evidence/observer-discovery.wazuh-manager.txt
+  - path: evidence/participant-discovery.kali.txt
+  - path: evidence/wazuh-agent-state.txt
+  ledger_fact_ids:
+  - wazuh-sidecar-suricata.agent.connection-state
+  - wazuh-sidecar-suricata.relationship.forwards-manager
+  - wazuh-sidecar-suricata.relationship.reads-suricata-logs
+- id: wazuh-sidecar-suricata-scope-and-redaction-caveats
+  status: implemented
+  source: docs/aces/inventory/wazuh-sidecar-suricata/evidence/capture-limits.txt
+  method: README and tests assert non-destructive capture scope, client.keys redaction, db PGDATA owner/consumer split, Syft
+    normalization, missing ss/netstat, and unavailable osquery tables.
+  realized_evidence:
+  - path: evidence/capture-limits.txt
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  ledger_fact_ids:
+  - wazuh-sidecar-suricata.capture.toolchain-baseline
+  - wazuh-sidecar-suricata.runtime.filesystem-inventory
+  - wazuh-sidecar-suricata.runtime.service-listeners
+facts:
+- id: wazuh-sidecar-suricata.capture.toolchain-baseline
+  category: capture
+  summary: Capture used digest-pinned Trivy, Syft, and osquery images, recorded Docker/Compose versions, capture time, and
+    explicit capture limits.
+  evidence:
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-compose-version.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/syft-version.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/capture-limits.txt
+  - path: evidence/evidence-sha256sums.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: runtime_contract
+    checked_surfaces:
+    - runtime_contract
+    fields:
+    - docs/aces/inventory/wazuh-sidecar-suricata/capture-evidence.sh
+    - docs/aces/inventory/wazuh-sidecar-suricata/evidence/capture-limits.txt
+    rationale: Current ACES SDL runtime/profile fields carry this catalogued wazuh-sidecar-suricata fact directly.
+    caveat: Scanner and runtime observations are time-sensitive evidence from the current-running lab, not immutable clean-reset
+      proof.
+- id: wazuh-sidecar-suricata.image.identity-provenance
+  category: image
+  summary: The sidecar resolves to the local image config ID aptl-wazuh-sidecar@sha256:de74ca15... on Debian 12 (bookworm);
+    no registry digest exists for the local build.
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-buildx-imagetools.image.err
+  - path: evidence/osquery-docker-images.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.source.name
+    - nodes.techvault.wazuh-sidecar-suricata.source.version
+    - nodes.techvault.wazuh-sidecar-suricata.os_version
+    rationale: Current ACES SDL node source fields carry the local-build image identity directly.
+- id: wazuh-sidecar-suricata.image.build-recipe
+  category: image
+  summary: The Dockerfile instructions, history layers, default config, and absent attestation are encoded as local-build
+    provenance.
+  evidence:
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/docker-inspect.image.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.source.build.instructions
+    - nodes.techvault.wazuh-sidecar-suricata.source.build.layers
+    - nodes.techvault.wazuh-sidecar-suricata.source.build.config
+    - nodes.techvault.wazuh-sidecar-suricata.source.build.attestation
+    rationale: Current ACES SDL node build fields carry this catalogued fact directly.
+- id: wazuh-sidecar-suricata.source.build-inputs
+  category: source
+  summary: The five COPY'd build-context inputs (install.sh, wazuh-agent.sh, ossec.conf.template, aptl-firewall-drop.sh, active-response-whitelist)
+    are recorded with sha256 checksums; in-image content matches for the persisted files.
+  evidence:
+  - path: evidence/source-checksums.txt
+  - path: evidence/filesystem-checksums.txt.xz
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.source.build.source_inputs
+    rationale: Current ACES SDL build source_inputs carry the build-context inputs and their checksums directly.
+- id: wazuh-sidecar-suricata.compose.service-contract
+  category: compose
+  summary: Compose declares aptl-wazuh-sidecar-suricata, image aptl-wazuh-sidecar:local, plain forwarding env, 256m memory
+    limit, suricata_logs read-only mount, depends_on wazuh.manager, and security-net address 172.20.0.36.
+  evidence:
+  - path: evidence/compose-service.wazuh-sidecar-suricata.json
+  - path: evidence/docker-compose-version.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - relationships
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.environment
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.operational_policy
+    - forwarding_agents.aptl-suricata-wazuh-agent
+    rationale: Current ACES SDL node + scenario-level forwarding_agents fields carry the compose contract directly.
+- id: wazuh-sidecar-suricata.runtime.container-policy
+  category: runtime
+  summary: Docker runtime policy captures restart unless-stopped, 256 MiB memory, namespaces, masked/read-only paths, no added
+    capabilities, log driver, and runc runtime.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-logs.wazuh-sidecar-suricata.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.container
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.operational_policy
+    rationale: Current ACES SDL node runtime container/operational_policy fields carry this catalogued fact directly.
+- id: wazuh-sidecar-suricata.network.identity
+  category: network
+  summary: The sidecar is attached to security-net only at 172.20.0.36 with Docker aliases/DNS names/MAC, publishes no host
+    ports, and is unreachable from the kali participant vantage.
+  evidence:
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/participant-discovery.kali.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.network.endpoints
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.network.published_ports
+    rationale: Current ACES SDL node network fields carry the realized endpoint and no-published-port facts directly.
+- id: wazuh-sidecar-suricata.runtime.mounts-volume
+  category: runtime
+  summary: The shared aptl_suricata_logs volume (the suricata node's log directory) is mounted read-only at /logs; the runtime
+    mount table and volume inspect record it.
+  evidence:
+  - path: evidence/docker-volume.suricata_logs.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.mounts
+    rationale: Current ACES SDL node runtime.mounts carries the read-only shared-volume mount directly.
+- id: wazuh-sidecar-suricata.runtime.filesystem-inventory
+  category: filesystem
+  summary: The agent install tree, APTL bootstrap scripts, AR wrapper, manager-pushed shared config, apt source/keyring, and
+    the monitored log source are encoded with checksums for stable files.
+  evidence:
+  - path: evidence/filesystem-tree.txt.gz
+  - path: evidence/filesystem-checksums.txt.xz
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.filesystem_inventory
+    rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
+    caveat: client.keys (agent secret) and .ssh are path/metadata only with content withheld; transient logs/queue state are
+      recorded as metadata; the read-only /logs PGDATA content is the db asset's inventory, not duplicated here.
+- id: wazuh-sidecar-suricata.runtime.process-tree
+  category: runtime
+  summary: PID 1 is the bash bootstrap; the steady-state daemon set is wazuh-execd, wazuh-agentd (wazuh user), wazuh-syscheckd,
+    wazuh-logcollector, wazuh-modulesd, plus the ossec.log tail.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-processes.json
+  - path: evidence/docker-top.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.processes
+    rationale: Current ACES SDL node runtime.processes carries the captured process tree directly.
+- id: wazuh-sidecar-suricata.runtime.service-listeners
+  category: runtime
+  summary: The sidecar exposes no network listener; osquery (container netns) shows only wazuh internal unix-domain queue
+    sockets and the Docker embedded DNS resolver.
+  evidence:
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.service_listeners
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.network.published_ports
+    rationale: Current ACES SDL node fields carry the no-network-listener fact directly (empty service_listeners + empty published_ports).
+    caveat: ss/netstat are not installed in the image, so the listener fact is sourced from container-namespace osquery; the
+      only sockets are internal wazuh IPC plus the backend-generated Docker DNS resolver.
+- id: wazuh-sidecar-suricata.runtime.environment
+  category: runtime
+  summary: Runtime environment is four plain compose forwarding variables (WAZUH_MANAGER, AGENT_NAME, LOG_PATHS, LOG_FORMAT)
+    plus image PATH/DEBIAN_FRONTEND; no secret-bearing variables are present.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.environment
+    rationale: Current ACES SDL node runtime.environment carries the captured variables directly.
+- id: wazuh-sidecar-suricata.runtime.linux-capabilities
+  category: runtime
+  summary: PID 1 holds the default Docker capability set (0x...a80425fb); CAP_NET_ADMIN is absent, so the baked-in aptl-firewall-drop
+    active-response wrapper cannot run iptables.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.linux_capabilities
+    rationale: Current ACES SDL node runtime.linux_capabilities carries the effective capability mask directly.
+    caveat: The active-response wrapper is present in the image but inert on this sidecar (no CAP_NET_ADMIN); this is encoded
+      as the capability fact + a filesystem_inventory note, not as a working prevention control.
+- id: wazuh-sidecar-suricata.runtime.local-identity
+  category: identity
+  summary: Local passwd/group inventory records 19 users, 39 groups, no sudo rules, and one added service account (wazuh,
+    uid 100 / gid 101).
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - accounts
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.local_identity
+    - accounts.wazuh-sidecar-suricata-local-root
+    - accounts.wazuh-sidecar-suricata-local-wazuh
+    rationale: Current ACES SDL node runtime.local_identity and the accounts registry carry the local identity surface directly.
+- id: wazuh-sidecar-suricata.application.software-versions
+  category: runtime
+  summary: wazuh-agent 4.12.0 (revision rc1, WAZUH_TYPE=agent) is the sole application component; no language runtime is installed.
+  evidence:
+  - path: evidence/language-manifests.txt
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.software_components
+    rationale: Current ACES SDL node runtime.software_components carries the wazuh-agent version directly.
+- id: wazuh-sidecar-suricata.runtime.package-inventory
+  category: runtime
+  summary: dpkg package inventory captures 114 installed OS packages, including wazuh-agent 4.12.0-1, iptables, jq, and netcat-openbsd.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/osquery-apt-sources.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.packages
+    rationale: Current ACES SDL node runtime.packages carries the dpkg inventory directly.
+- id: wazuh-sidecar-suricata.runtime.vulnerability-scan
+  category: runtime
+  summary: Trivy captured 194 vulnerability findings (5 critical, 17 high, 71 medium, 98 low, 3 unknown) for the image.
+  evidence:
+  - path: evidence/trivy-vulnerabilities.json.gz
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-version.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.package_vulnerabilities
+    rationale: Current ACES SDL node runtime.package_vulnerabilities carries the per-CVE findings directly.
+    caveat: Vulnerability scanner output is time-sensitive and tied to the captured Trivy version/database state.
+- id: wazuh-sidecar-suricata.runtime.sbom-toolchain
+  category: runtime
+  summary: Required Trivy CycloneDX and useful-optional Syft CycloneDX SBOMs are captured; Syft output is deterministically
+    normalized.
+  evidence:
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/syft-version.json
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.packages
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.software_components
+    rationale: Current ACES SDL node fields use dpkg + scanner-derived summaries; full CycloneDX docs are retained as evidence.
+    caveat: SBOMs are retained as evidence; SDL package fields do not embed the full CycloneDX documents.
+- id: wazuh-sidecar-suricata.runtime.osquery-baseline
+  category: runtime
+  summary: osquery captured processes, listeners, host-side Docker container/image rows, apt sources, and the unavailable
+    Linux application/program table status.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.processes
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.service_listeners
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.network
+    rationale: Current ACES SDL node fields carry the osquery-derived runtime baseline directly.
+    caveat: installed_applications and programs tables are unavailable in the digest-pinned Linux osquery image and are recorded
+      as capture limits.
+- id: wazuh-sidecar-suricata.agent.forwarding-spec
+  category: relationship
+  summary: The wazuh-agent tails /logs/eve.json (log_format json), buffers per ossec.conf (queue 5000, eps 500, crypto aes,
+    reconnect 60s), and ships events to wazuh.manager TCP/1514.
+  evidence:
+  - path: evidence/wazuh-agent-state.txt
+  - path: evidence/compose-service.wazuh-sidecar-suricata.json
+  aces:
+    disposition: encoded
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    - nodes
+    fields:
+    - forwarding_agents.aptl-suricata-wazuh-agent.sources
+    - forwarding_agents.aptl-suricata-wazuh-agent.buffer_policy
+    - forwarding_agents.aptl-suricata-wazuh-agent.ship_targets
+    rationale: The scenario-level forwarding_agents registry (Brad-Edwards/aces#460) carries the tailed source, buffer policy,
+      and ship target; now enriched from the captured ossec.conf.
+- id: wazuh-sidecar-suricata.agent.connection-state
+  category: relationship
+  summary: The manager registers the agent as id 005 aptl-suricata-agent, status Active; the agentd state file shows status=connected
+    with events flowing.
+  evidence:
+  - path: evidence/observer-discovery.wazuh-manager.txt
+  - path: evidence/wazuh-agent-state.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    fields:
+    - relationships.wazuh-sidecar-suricata-forwards-wazuh-manager
+    rationale: The realized sidecar-to-manager forwarding edge is encoded as a typed relationship resolving to the forwarding
+      agent.
+    caveat: Connection counters (msg_count/msg_sent/last_keepalive) are time-sensitive runtime telemetry, recorded as evidence
+      rather than encoded as immutable SDL values.
+- id: wazuh-sidecar-suricata.relationship.forwards-manager
+  category: relationship
+  summary: The logical db-log-origin edge and the realized sidecar-to-manager network edge both resolve to the aptl-suricata-wazuh-agent
+    forwarding agent over TCP/1514 with crypto aes and parse_format eve_json.
+  evidence:
+  - path: evidence/wazuh-agent-state.txt
+  - path: evidence/observer-discovery.wazuh-manager.txt
+  - path: evidence/compose-service.wazuh-sidecar-suricata.json
+  aces:
+    disposition: encoded
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    fields:
+    - relationships.suricata-logs-forwarded-wazuh
+    - relationships.wazuh-sidecar-suricata-forwards-wazuh-manager
+    rationale: Current ACES SDL relationships + forwarding_edge fields carry the forwarding relationship directly.
+- id: wazuh-sidecar-suricata.relationship.reads-suricata-logs
+  category: relationship
+  summary: The sidecar reads the suricata container's EVE JSON log read-only via the shared suricata_logs volume; the broader
+    log directory is cross-referenced to the suricata asset inventory.
+  evidence:
+  - path: evidence/docker-volume.suricata_logs.json
+  - path: evidence/wazuh-agent-state.txt
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - relationships
+    fields:
+    - nodes.techvault.wazuh-sidecar-suricata.runtime.mounts
+    rationale: The read-only log source is encoded as a node runtime mount (source aptl_suricata_logs); the forwarding relationship
+      is the suricata-logs-forwarded-wazuh edge.
+    caveat: ACES models the shared-volume read as a node mount with the volume name as source; there is no typed cross-node
+      volume-ownership reference, consistent with the db/misp-db inventory precedent. The log directory content belongs to
+      the suricata asset inventory.

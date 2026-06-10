@@ -313,7 +313,12 @@ def test_techvault_sdl_encodes_suricata_authored_content_and_no_accounts():
     assert "/var/lib/suricata/rules/misp/misp-sha256.list" in paths
 
     # no authored accounts on this node — the suricata user is image-provided
-    assert [k for k in scenario.accounts if "suricata" in k] == []
+    # (the wazuh-sidecar-suricata node's local accounts are a different node;
+    # match on the account's node, not a key substring)
+    assert [
+        k for k, account in scenario.accounts.items()
+        if account.node == "techvault.suricata"
+    ] == []
 
 
 def test_techvault_sdl_compiles_with_suricata_runtime_fields():

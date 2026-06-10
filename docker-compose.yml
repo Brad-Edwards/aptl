@@ -1197,6 +1197,7 @@ services:
     container_name: aptl-reverse
     hostname: reverse-host
     restart: unless-stopped
+    cgroup: host
     networks:
       aptl-security:
         ipv4_address: 172.20.0.27
@@ -1215,6 +1216,7 @@ services:
       - reverse_logs:/var/log
     tmpfs:
       - /run
+      - /run/lock # Ubuntu systemd mounts a nested /run/lock tmpfs itself; AppArmor docker-default denies that mount, so pre-create it
       - /tmp
     security_opt:
       - seccomp:unconfined
@@ -1227,7 +1229,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 2g # first-boot tools install compiles radare2 from source (parallel make); 512m OOM-killed the build
 
   # ==========================================================================
   # WEB UI (web profile)

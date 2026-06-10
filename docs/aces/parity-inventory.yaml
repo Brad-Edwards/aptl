@@ -121,6 +121,28 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #343 wazuh-sidecar-db log-forwarder inventory pass. Promotes the off-node Wazuh sidecar from a docker-compose-only forwarding_agents stub to the fully inventoried participant node nodes.techvault.wazuh-sidecar-db. The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, processes, environment, default-capability set (no CAP_NET_ADMIN), security-net endpoint, no-network-listener posture, and wazuh-agent software component; the cross-node forwarding behaviour stays in the scenario-level forwarding_agents registry (Brad-Edwards/aces#460), enriched from the captured ossec.conf, and is resolved by the db-logs-forwarded-wazuh and wazuh-sidecar-db-forwards-wazuh-manager relationship edges. No known remaining ACES expressivity blocker for the catalogued wazuh-sidecar-db steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
+  - id: scen.techvault.wazuh-sidecar-suricata-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.wazuh-sidecar-suricata + forwarding_agents.aptl-suricata-wazuh-agent + relationships + accounts
+    category: aces_sdl
+    aces_target: nodes.techvault.wazuh-sidecar-suricata (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, linux_capabilities, network, software_components) + forwarding_agents.aptl-suricata-wazuh-agent + relationships + accounts
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/wazuh-sidecar-suricata/ + tests/test_wazuh_sidecar_suricata_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/ + Brad-Edwards/aces#460 consumed"
+    blocking_followup: n/a
+    notes: SCN-010 issue #344 wazuh-sidecar-suricata log-forwarder inventory pass, following the #343 wazuh-sidecar-db precedent (same aptl-wazuh-sidecar:local image). Promotes the off-node Wazuh sidecar for the suricata node from a docker-compose-only forwarding_agents stub to the fully inventoried participant node nodes.techvault.wazuh-sidecar-suricata. The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, processes, environment, default-capability set (no CAP_NET_ADMIN), security-net endpoint, no-network-listener posture, and wazuh-agent software component; the cross-node forwarding behaviour stays in the scenario-level forwarding_agents registry (Brad-Edwards/aces#460), enriched from the captured ossec.conf (EVE JSON localfile, queue 5000/eps 500/aes/reconnect 60s), and is resolved by the suricata-logs-forwarded-wazuh and wazuh-sidecar-suricata-forwards-wazuh-manager relationship edges. No known remaining ACES expressivity blocker for the catalogued wazuh-sidecar-suricata steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
+  - id: scen.techvault.misp-suricata-sync-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.misp-suricata-sync + relationships + accounts
+    category: aces_sdl
+    aces_target: nodes.techvault.misp-suricata-sync (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, linux_capabilities, network, software_components) + relationships.misp-suricata-sync-queries-misp-api + relationships.misp-suricata-sync-updates-suricata-rules
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/misp-suricata-sync/ + tests/test_misp_suricata_sync_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #349 misp-suricata-sync integration-service inventory pass. Replaces the docker-compose-derived node stub with the fully inventoried participant node nodes.techvault.misp-suricata-sync. The SDL encodes the catalogued local-build image identity/recipe (python:3.11-slim base, pip-installed aptl 0.1.0), dpkg packages, Trivy CVEs, the scoped filesystem manifest (build copy, installed package, console script, lab CA input, rules handoff, command socket), local identity, the single-process sync loop, the fifteen-variable environment (MISP_API_KEY carried as the secret_fixture value already disclosed on nodes.techvault.misp ADMIN_KEY), default-capability set, security-net endpoint, and no-network-listener posture. The realized integration is typed as the misp-suricata-sync-queries-misp-api edge (https, lab CA, api_key auth) and the new misp-suricata-sync-updates-suricata-rules edge (shared rules bind + unix-command socket reload, alert-only per ADR-019). No known remaining ACES expressivity blocker for the catalogued misp-suricata-sync steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
   - id: scen.techvault.workstation-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
@@ -142,6 +164,17 @@ rows:
     validation_evidence: "docs/aces/inventory/victim/ + tests/test_victim_inventory.py + scenarios/techvault.sdl.yaml"
     blocking_followup: n/a
     notes: SCN-010 issue #337 victim inventory pass. The SDL encodes the catalogued generic victim image, build, runtime, filesystem, identity, package/CVE, SSH, sudo-policy weakness, Wazuh relationship, and systemd service-manager unit-state facts. No known remaining ACES expressivity blocker for the catalogued victim steady-state inventory.
+
+  - id: scen.techvault.reverse-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.reverse + features + vulnerabilities + accounts + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.reverse (source/build, runtime mounts, processes, environment, linux_capabilities, container, health, local_identity, network, ssh_servers, forwarding_agents, service_manager_units, packages, package_vulnerabilities, filesystem_inventory, software_components) + features.reverse-* + vulnerabilities.reverse-nopasswd-sudo + accounts.reverse-local-* + relationships.reverse-forwards-wazuh
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/reverse/ + tests/test_reverse_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #338 reverse-engineering workbench inventory pass (target family, full Ubuntu 22.04 systemd archetype following the victim/workstation precedents). The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, mount table, filesystem manifest, local identity (27 users / 48 groups), process set, environment, SYS_ADMIN/SYS_NICE/SYS_RESOURCE capability add, security-net endpoint with the 2027->22 published SSH port, sshd policy, the in-process Wazuh agent + rsyslog forwarders, the systemd unit-file enumeration, the NOPASSWD-sudo weakness, and the first-boot-installed RE toolchain as runtime software_components. Both forwarders are node-level forwarding_agents resolved by the reverse-forwards-wazuh edge; the manager-side agents[] enumeration is intentionally not extended because the agent registration name is runtime-generated. Required three pre-existing reverse-profile boot fixes (cgroup:host, /run/lock tmpfs, 2g memory) committed separately. No known remaining ACES expressivity blocker for the catalogued reverse steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
   - id: scen.techvault.fileshare-inventory
     surface: scenarios_yaml

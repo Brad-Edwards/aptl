@@ -1,0 +1,16 @@
+[
+  {
+    "CreatedAt": "2026-06-10T01:31:48+02:00",
+    "Driver": "local",
+    "Labels": {
+      "com.docker.compose.config-hash": "6cd38cc9dbccba4342dd70fb0c3281812de878a8f6d8756724762e4d041e78c4",
+      "com.docker.compose.project": "aptl",
+      "com.docker.compose.version": "5.1.3",
+      "com.docker.compose.volume": "reverse_logs"
+    },
+    "Mountpoint": "/var/lib/docker/volumes/aptl_reverse_logs/_data",
+    "Name": "aptl_reverse_logs",
+    "Options": null,
+    "Scope": "local"
+  }
+]

@@ -1,0 +1,34 @@
+{
+  "table": "docker_containers",
+  "query": "select id, name, image, image_id, command, created, state, status, pid, path, config_entrypoint, started_at, finished_at, privileged, security_options, readonly_rootfs, cgroup_namespace, ipc_namespace, mnt_namespace, net_namespace, pid_namespace, user_namespace, uts_namespace from docker_containers where name=\"/aptl-reverse\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "cgroup_namespace": "",
+      "command": "/usr/local/bin/entrypoint.sh /usr/sbin/init",
+      "config_entrypoint": "/usr/local/bin/entrypoint.sh",
+      "created": "1781067515",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "id": "f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163",
+      "image": "aptl-reverse",
+      "image_id": "7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192",
+      "ipc_namespace": "",
+      "mnt_namespace": "",
+      "name": "/aptl-reverse",
+      "net_namespace": "",
+      "path": "/usr/local/bin/entrypoint.sh",
+      "pid": "2668923",
+      "pid_namespace": "",
+      "privileged": "0",
+      "readonly_rootfs": "0",
+      "security_options": "seccomp:unconfined",
+      "started_at": "2026-06-10T04:58:48.290590469Z",
+      "state": "running",
+      "status": "Up 10 hours (healthy)",
+      "user_namespace": "",
+      "uts_namespace": ""
+    }
+  ]
+}

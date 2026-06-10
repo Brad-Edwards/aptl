@@ -1,0 +1,8 @@
+/keys/aptl_lab_key	operator_private_key	metadata-only
+/keys/aptl_lab_key.pub	public_lab_key	checksum-only
+/keys/authorized_keys	public_lab_key	checksum-only
+/etc/ssh/ssh_host_dsa_key	host_private_key	metadata-only
+/etc/ssh/ssh_host_ecdsa_key	host_private_key	metadata-only
+/etc/ssh/ssh_host_ed25519_key	host_private_key	metadata-only
+/etc/ssh/ssh_host_rsa_key	host_private_key	metadata-only
+/var/ossec/etc/client.keys	wazuh_agent_secret	metadata-only

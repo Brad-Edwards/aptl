@@ -1,0 +1,20 @@
+--rules-file-from-suricata--
+total 24
+drwxr-xr-x 2 suricata suricata 4096 May 23 06:19 .
+drwxr-x--- 3 suricata suricata 4096 May 23 06:18 ..
+-rw-r--r-- 1 root     root      206 May 23 06:19 misp-iocs.rules
+-rw-r--r-- 1 suricata suricata  156 May 23 06:17 misp-md5.list
+-rw-r--r-- 1 suricata suricata  157 May 23 06:17 misp-sha1.list
+-rw-r--r-- 1 suricata suricata  159 May 23 06:17 misp-sha256.list
+# APTL MISP-to-Suricata sync — generated, do not edit by hand.
+# All rules are 'alert' per ADR-019 (Suricata IDS-only).
+# misp_url=https://misp
+# tag_filter=aptl:enforce
+# sid_base=99000000
+--command-socket--
+total 8
+drwxr-xr-x 2 suricata suricata 4096 May 23 06:19 .
+drwxr-xr-x 1 root     root     4096 Apr 28 21:36 ..
+srw-rw---- 1 suricata suricata    0 May 23 06:19 suricata-command.socket
+--suricata-rule-reload-counters--
+L246: Unknown command: show-all-rules

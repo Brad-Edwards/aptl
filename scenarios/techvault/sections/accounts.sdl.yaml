@@ -2607,3 +2607,772 @@ accounts:
     shell: /sbin/nologin
     home: /var/ossec
     disabled: true
+  wazuh-sidecar-suricata-local-root:
+    username: root
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: root
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /root
+    disabled: false
+  wazuh-sidecar-suricata-local-daemon:
+    username: daemon
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: daemon
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/sbin
+    disabled: true
+  wazuh-sidecar-suricata-local-bin:
+    username: bin
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: bin
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  wazuh-sidecar-suricata-local-sys:
+    username: sys
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sys
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /dev
+    disabled: true
+  wazuh-sidecar-suricata-local-sync:
+    username: sync
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sync
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /bin
+    disabled: false
+  wazuh-sidecar-suricata-local-games:
+    username: games
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: games
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/games
+    disabled: true
+  wazuh-sidecar-suricata-local-man:
+    username: man
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: man
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/cache/man
+    disabled: true
+  wazuh-sidecar-suricata-local-lp:
+    username: lp
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: lp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  wazuh-sidecar-suricata-local-mail:
+    username: mail
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: mail
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/mail
+    disabled: true
+  wazuh-sidecar-suricata-local-news:
+    username: news
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: news
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/news
+    disabled: true
+  wazuh-sidecar-suricata-local-uucp:
+    username: uucp
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: uucp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/uucp
+    disabled: true
+  wazuh-sidecar-suricata-local-proxy:
+    username: proxy
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: proxy
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  wazuh-sidecar-suricata-local-www-data:
+    username: www-data
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: www-data
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/www
+    disabled: true
+  wazuh-sidecar-suricata-local-backup:
+    username: backup
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: backup
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/backups
+    disabled: true
+  wazuh-sidecar-suricata-local-list:
+    username: list
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: Mailing List Manager
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/list
+    disabled: true
+  wazuh-sidecar-suricata-local-irc:
+    username: irc
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ircd
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/ircd
+    disabled: true
+  wazuh-sidecar-suricata-local-_apt:
+    username: _apt
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: _apt
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  wazuh-sidecar-suricata-local-nobody:
+    username: nobody
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: nobody
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  wazuh-sidecar-suricata-local-wazuh:
+    username: wazuh
+    node: techvault.wazuh-sidecar-suricata
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: wazuh
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/ossec
+    disabled: true
+  misp-suricata-sync-local-root:
+    username: root
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: root
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /root
+    disabled: false
+  misp-suricata-sync-local-daemon:
+    username: daemon
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: daemon
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/sbin
+    disabled: true
+  misp-suricata-sync-local-bin:
+    username: bin
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: bin
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  misp-suricata-sync-local-sys:
+    username: sys
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sys
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /dev
+    disabled: true
+  misp-suricata-sync-local-sync:
+    username: sync
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: sync
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /bin
+    disabled: false
+  misp-suricata-sync-local-games:
+    username: games
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: games
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/games
+    disabled: true
+  misp-suricata-sync-local-man:
+    username: man
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: man
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/cache/man
+    disabled: true
+  misp-suricata-sync-local-lp:
+    username: lp
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: lp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  misp-suricata-sync-local-mail:
+    username: mail
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: mail
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/mail
+    disabled: true
+  misp-suricata-sync-local-news:
+    username: news
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: news
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/news
+    disabled: true
+  misp-suricata-sync-local-uucp:
+    username: uucp
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: uucp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/uucp
+    disabled: true
+  misp-suricata-sync-local-proxy:
+    username: proxy
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: proxy
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  misp-suricata-sync-local-www-data:
+    username: www-data
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: www-data
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/www
+    disabled: true
+  misp-suricata-sync-local-backup:
+    username: backup
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: backup
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/backups
+    disabled: true
+  misp-suricata-sync-local-list:
+    username: list
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: Mailing List Manager
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/list
+    disabled: true
+  misp-suricata-sync-local-irc:
+    username: irc
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: ircd
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/ircd
+    disabled: true
+  misp-suricata-sync-local-_apt:
+    username: _apt
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: _apt
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  misp-suricata-sync-local-nobody:
+    username: nobody
+    node: techvault.misp-suricata-sync
+    groups: []
+    password_strength: none
+    auth_method: local-file
+    description: nobody
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  reverse-local-root:
+    username: root
+    node: techvault.reverse
+    groups: []
+    password_strength: medium
+    auth_method: local
+    description: root
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /root
+    disabled: false
+  reverse-local-daemon:
+    username: daemon
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: daemon
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/sbin
+    disabled: true
+  reverse-local-bin:
+    username: bin
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: bin
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  reverse-local-sys:
+    username: sys
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: sys
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /dev
+    disabled: true
+  reverse-local-sync:
+    username: sync
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: sync
+    mail: ''
+    spn: ''
+    shell: /bin/sync
+    home: /bin
+    disabled: false
+  reverse-local-games:
+    username: games
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: games
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /usr/games
+    disabled: true
+  reverse-local-man:
+    username: man
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: man
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/cache/man
+    disabled: true
+  reverse-local-lp:
+    username: lp
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: lp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/lpd
+    disabled: true
+  reverse-local-mail:
+    username: mail
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: mail
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/mail
+    disabled: true
+  reverse-local-news:
+    username: news
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: news
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/news
+    disabled: true
+  reverse-local-uucp:
+    username: uucp
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: uucp
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/spool/uucp
+    disabled: true
+  reverse-local-proxy:
+    username: proxy
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: proxy
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /bin
+    disabled: true
+  reverse-local-www-data:
+    username: www-data
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: www-data
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/www
+    disabled: true
+  reverse-local-backup:
+    username: backup
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: backup
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/backups
+    disabled: true
+  reverse-local-list:
+    username: list
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: Mailing List Manager
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/list
+    disabled: true
+  reverse-local-irc:
+    username: irc
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: ircd
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/ircd
+    disabled: true
+  reverse-local-gnats:
+    username: gnats
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: Gnats Bug-Reporting System (admin)
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /var/lib/gnats
+    disabled: true
+  reverse-local-nobody:
+    username: nobody
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: nobody
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  reverse-local-_apt:
+    username: _apt
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: _apt
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  reverse-local-systemd-network:
+    username: systemd-network
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: systemd Network Management
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/systemd
+    disabled: true
+  reverse-local-systemd-resolve:
+    username: systemd-resolve
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: systemd Resolver
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/systemd
+    disabled: true
+  reverse-local-messagebus:
+    username: messagebus
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: messagebus
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    disabled: true
+  reverse-local-systemd-timesync:
+    username: systemd-timesync
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: systemd Time Synchronization
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/systemd
+    disabled: true
+  reverse-local-syslog:
+    username: syslog
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: syslog
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /home/syslog
+    disabled: true
+  reverse-local-sshd:
+    username: sshd
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: sshd
+    mail: ''
+    spn: ''
+    shell: /usr/sbin/nologin
+    home: /run/sshd
+    disabled: true
+  reverse-local-labadmin:
+    username: labadmin
+    node: techvault.reverse
+    groups:
+    - sudo
+    password_strength: medium
+    auth_method: ssh-key+sudo
+    description: Local labadmin account observed in /etc/passwd (NOPASSWD sudo).
+    mail: ''
+    spn: ''
+    shell: /bin/bash
+    home: /home/labadmin
+    disabled: false
+  reverse-local-wazuh:
+    username: wazuh
+    node: techvault.reverse
+    groups: []
+    password_strength: none
+    auth_method: local
+    description: wazuh
+    mail: ''
+    spn: ''
+    shell: /sbin/nologin
+    home: /var/ossec
+    disabled: true

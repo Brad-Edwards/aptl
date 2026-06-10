@@ -1,0 +1,49 @@
+{
+  "profiles": [
+    "soc"
+  ],
+  "build": {
+    "context": ".",
+    "dockerfile": "containers/misp-suricata-sync/Dockerfile"
+  },
+  "container_name": "aptl-misp-suricata-sync",
+  "hostname": "misp-suricata-sync",
+  "restart": "unless-stopped",
+  "environment": [
+    "MISP_URL=https://misp",
+    "MISP_API_KEY=<REDACTED-MISP-API-KEY>",
+    "MISP_VERIFY_SSL=${MISP_VERIFY_SSL:-true}",
+    "MISP_CA_CERT_PATH=${MISP_CA_CERT_PATH:-/etc/lab-ca/lab-ca.pem}",
+    "IOC_TAG_FILTER=aptl:enforce",
+    "SYNC_INTERVAL_SECONDS=300",
+    "RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules",
+    "SURICATA_SOCKET_PATH=/var/run/suricata/suricata-command.socket",
+    "SID_BASE=99000000",
+    "LOG_LEVEL=INFO"
+  ],
+  "volumes": [
+    "suricata_command_socket:/var/run/suricata",
+    "./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw",
+    "./config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro"
+  ],
+  "depends_on": {
+    "misp": {
+      "condition": "service_healthy"
+    },
+    "suricata": {
+      "condition": "service_started"
+    }
+  },
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "128m"
+      }
+    }
+  },
+  "networks": {
+    "aptl-security": {
+      "ipv4_address": "172.20.0.19"
+    }
+  }
+}

@@ -121,6 +121,17 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #343 wazuh-sidecar-db log-forwarder inventory pass. Promotes the off-node Wazuh sidecar from a docker-compose-only forwarding_agents stub to the fully inventoried participant node nodes.techvault.wazuh-sidecar-db. The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, processes, environment, default-capability set (no CAP_NET_ADMIN), security-net endpoint, no-network-listener posture, and wazuh-agent software component; the cross-node forwarding behaviour stays in the scenario-level forwarding_agents registry (Brad-Edwards/aces#460), enriched from the captured ossec.conf, and is resolved by the db-logs-forwarded-wazuh and wazuh-sidecar-db-forwards-wazuh-manager relationship edges. No known remaining ACES expressivity blocker for the catalogued wazuh-sidecar-db steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
+  - id: scen.techvault.wazuh-sidecar-suricata-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.wazuh-sidecar-suricata + forwarding_agents.aptl-suricata-wazuh-agent + relationships + accounts
+    category: aces_sdl
+    aces_target: nodes.techvault.wazuh-sidecar-suricata (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, linux_capabilities, network, software_components) + forwarding_agents.aptl-suricata-wazuh-agent + relationships + accounts
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/wazuh-sidecar-suricata/ + tests/test_wazuh_sidecar_suricata_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/ + Brad-Edwards/aces#460 consumed"
+    blocking_followup: n/a
+    notes: SCN-010 issue #344 wazuh-sidecar-suricata log-forwarder inventory pass, following the #343 wazuh-sidecar-db precedent (same aptl-wazuh-sidecar:local image). Promotes the off-node Wazuh sidecar for the suricata node from a docker-compose-only forwarding_agents stub to the fully inventoried participant node nodes.techvault.wazuh-sidecar-suricata. The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, processes, environment, default-capability set (no CAP_NET_ADMIN), security-net endpoint, no-network-listener posture, and wazuh-agent software component; the cross-node forwarding behaviour stays in the scenario-level forwarding_agents registry (Brad-Edwards/aces#460), enriched from the captured ossec.conf (EVE JSON localfile, queue 5000/eps 500/aes/reconnect 60s), and is resolved by the suricata-logs-forwarded-wazuh and wazuh-sidecar-suricata-forwards-wazuh-manager relationship edges. No known remaining ACES expressivity blocker for the catalogued wazuh-sidecar-suricata steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
   - id: scen.techvault.workstation-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml

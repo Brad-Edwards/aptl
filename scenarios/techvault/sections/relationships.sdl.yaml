@@ -4,19 +4,53 @@ relationships:
     type: connects_to
     source: techvault.suricata
     target: techvault.wazuh-manager
-    description: 'The off-node wazuh-sidecar-suricata container tails Suricata eve.json from the read-only suricata_logs volume and forwards alert telemetry to the SOC stack. Typed forwarding_edge.forwarder_ref resolves into the scenario-level forwarding_agents registry (Brad-Edwards/aces#460); the sidecar is an APTL ADR-020 carve-out (jasonish/suricata:7.0 has no first-party Wazuh package) and is not itself a scenario participant node.'
+    description: 'Logical log-origin edge: the suricata container''s EVE JSON alert stream reaches the SOC stack via the
+      off-node wazuh-sidecar-suricata container, which tails it from the shared suricata_logs volume. Typed
+      forwarding_edge.forwarder_ref resolves into the scenario-level forwarding_agents registry (Brad-Edwards/aces#460).
+      As of SCN-010 issue #344 the sidecar itself is inventoried as the participant node nodes.techvault.wazuh-sidecar-suricata;
+      the realized sidecar-to-manager network edge is wazuh-sidecar-suricata-forwards-wazuh-manager.
+
+      '
     properties: {}
     database_access: null
     mail_access: null
     forwarding_edge:
       forwarder_ref: aptl-suricata-wazuh-agent
-      target_listener_role: other
+      target_listener_role: agent_event_ingestion
       enrollment_identity_ref: ''
       enrollment_identity_classification: none
-      protocol: ''
-      crypto_method: ''
+      protocol: tcp
+      crypto_method: aes
       parse_format: eve_json
-      description: ''
+      description: 'Now evidenced by the wazuh-sidecar-suricata inventory bundle (rendered ossec.conf: server wazuh.manager:1514
+        tcp, crypto aes, localfile json /logs/eve.json).'
+    service_integration: null
+    proxy_upstream: null
+  wazuh-sidecar-suricata-forwards-wazuh-manager:
+    type: connects_to
+    source: techvault.wazuh-sidecar-suricata
+    target: techvault.wazuh-manager
+    description: 'Realized network edge from the wazuh-sidecar-suricata node: its wazuh-agentd dials the manager on TCP/1514
+      and registers via agent-auth. The manager agent_control lists it as agent id 006 aptl-suricata-agent, status Active
+      (evidenced by observer-discovery.wazuh-manager.txt); the agent is currently connected with events flowing
+      (wazuh-agent-state.txt: status=connected). The sidecar publishes no inbound listener and is unreachable from the kali
+      participant vantage (participant-discovery.kali.txt). SCN-010 issue #344.'
+    properties:
+      protocol: wazuh-agent
+      port: '1514'
+      vantage: aptl-wazuh-manager
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: aptl-suricata-wazuh-agent
+      target_listener_role: agent_event_ingestion
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: tcp
+      crypto_method: aes
+      parse_format: eve_json
+      description: 'Resolves to the aptl-suricata-wazuh-agent scenario-level forwarding agent; enrollment on TCP/1515, event
+        shipping on TCP/1514.'
     service_integration: null
     proxy_upstream: null
   db-logs-forwarded-wazuh:

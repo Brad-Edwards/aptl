@@ -909,6 +909,16 @@ rows:
     validation_evidence: "docs/aces/inventory/shuffle-frontend/ + tests/test_shuffle_frontend_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
     blocking_followup: n/a
     notes: SCN-010 issue #354 shuffle-frontend application inventory pass (application family, upstream ghcr.io/shuffle/shuffle-frontend:latest image). The SDL encodes the catalogued registry image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, the nginx master + representative worker process set, environment, security-net endpoint with the 3001:3001 + 3443:443 published ports, the 80 HTTP + 443 HTTPS listeners, the Shuffle web UI application surface (nginx 1.29.3 + static React SPA, SPA-root + /api-proxy routes), and the realized shuffle-frontend-proxies-backend edge (nginx /api/v1|v2 reverse-proxy to shuffle-backend:5001). The nginx TLS private key is an operator secret (metadata only); upstream nginx-image shell var refs in the history-derived instructions are normalized from ${VAR} to $VAR to avoid ACES placeholder collision. No known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+  - id: scen.techvault.shuffle-orborus-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.shuffle-orborus + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.shuffle-orborus (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, network, service_listeners, mounts, local_control_interfaces, software_components) + relationships.orborus-polls-backend
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/shuffle-orborus/ + tests/test_shuffle_orborus_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #355 shuffle-orborus worker-orchestrator inventory pass (orchestration family, upstream ghcr.io/shuffle/shuffle-orborus:latest image, Alpine 3.22). The SDL encodes the catalogued registry image identity/recipe (realized amd64 platform digest; :latest multi-arch index noted), 21 apk packages, 96 Trivy CVEs, the scoped filesystem manifest (/orborus binary, /orborus.go source, /etc/os-release), local identity, the orborus Go-binary PID 1 + representative transient timeout process, environment (12 compose + image-default PATH/SHUFFLE_OPENSEARCH_URL, no secrets), security-net DHCP endpoint with no host-published ports, the backend-generated Docker embedded-DNS loopback listeners (no inbound application listener), 139 embedded Go software components, the writable host /var/run/docker.sock control surface (runtime.mounts bind + local_control_interfaces.shuffle-orborus-docker-socket, host-root-equivalent), and the realized orborus-polls-backend edge (outbound poll to shuffle-backend:5001, ESTABLISHED). The docker.sock host-control surface is expressed by the existing local_control_interfaces surface (shuffle-backend precedent); no new ACES surface was needed and no known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
   - id: compose.profile.reverse
     surface: docker_compose_topology

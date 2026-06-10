@@ -1,0 +1,141 @@
+--os-release--
+NAME="Alpine Linux"
+ID=alpine
+VERSION_ID=3.22.1
+PRETTY_NAME="Alpine Linux v3.22"
+HOME_URL="https://alpinelinux.org/"
+BUG_REPORT_URL="https://gitlab.alpinelinux.org/alpine/aports/-/issues"
+--id--
+uid=0(root) gid=0(root) groups=0(root),0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),10(wheel),11(floppy),20(dialout),26(tape),27(video)
+--pwd--
+/
+--uname--
+Linux shuffle-orborus 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 Linux
+--environment--
+BASE_URL=http://shuffle-backend:5001
+CHARSET=UTF-8
+CLEANUP=false
+DOCKER_API_VERSION=1.44
+ENVIRONMENT_NAME=Shuffle
+HOME=/root
+HOSTNAME=shuffle-orborus
+LANG=C.UTF-8
+LC_COLLATE=C
+ORBORUS_CONTAINER_NAME=aptl-shuffle-orborus
+ORG_ID=Shuffle
+PAGER=less
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PWD=/
+SHLVL=1
+SHUFFLE_APP_SDK_TIMEOUT=300
+SHUFFLE_LOGS_DISABLED=true
+SHUFFLE_OPENSEARCH_URL=https://opensearch:9200
+SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600
+SHUFFLE_SKIP_PIPELINES=true
+SHUFFLE_STATS_DISABLED=true
+SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:latest
+--listeners--
+sh: ss: not found
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+tcp        0      0 127.0.0.11:40651        0.0.0.0:*               LISTEN      -
+udp        0      0 127.0.0.11:58703        0.0.0.0:*                           -
+--outbound-connections--
+sh: ss: not found
+Active Internet connections (w/o servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+tcp        0      0 172.20.0.6:46306        172.20.0.20:5001        ESTABLISHED 1/orborus
+tcp        0      0 172.20.0.6:46800        172.20.0.20:5001        TIME_WAIT   -
+tcp        0      0 172.20.0.6:46812        172.20.0.20:5001        TIME_WAIT   -
+--mounts--
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51170/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/198/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/197/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/56/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51177/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51177/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+tmpfs on /run/docker.sock type tmpfs (rw,nosuid,nodev,noexec,relatime,size=13180520k,mode=755,inode64)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
+--users--
+root:x:0:0:root:/root:/bin/sh
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+lp:x:4:7:lp:/var/spool/lpd:/sbin/nologin
+sync:x:5:0:sync:/sbin:/bin/sync
+shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+halt:x:7:0:halt:/sbin:/sbin/halt
+mail:x:8:12:mail:/var/mail:/sbin/nologin
+news:x:9:13:news:/usr/lib/news:/sbin/nologin
+uucp:x:10:14:uucp:/var/spool/uucppublic:/sbin/nologin
+cron:x:16:16:cron:/var/spool/cron:/sbin/nologin
+ftp:x:21:21::/var/lib/ftp:/sbin/nologin
+sshd:x:22:22:sshd:/dev/null:/sbin/nologin
+games:x:35:35:games:/usr/games:/sbin/nologin
+ntp:x:123:123:NTP:/var/empty:/sbin/nologin
+guest:x:405:100:guest:/dev/null:/sbin/nologin
+nobody:x:65534:65534:nobody:/:/sbin/nologin
+--groups--
+root:x:0:root
+bin:x:1:root,bin,daemon
+daemon:x:2:root,bin,daemon
+sys:x:3:root,bin
+adm:x:4:root,daemon
+tty:x:5:
+disk:x:6:root
+lp:x:7:lp
+kmem:x:9:
+wheel:x:10:root
+floppy:x:11:root
+mail:x:12:mail
+news:x:13:news
+uucp:x:14:uucp
+cron:x:16:cron
+audio:x:18:
+cdrom:x:19:
+dialout:x:20:root
+ftp:x:21:
+sshd:x:22:
+input:x:23:
+tape:x:26:root
+video:x:27:root
+netdev:x:28:
+kvm:x:34:kvm
+games:x:35:
+shadow:x:42:
+www-data:x:82:
+users:x:100:games
+ntp:x:123:
+abuild:x:300:
+utmp:x:406:
+ping:x:999:
+nogroup:x:65533:
+nobody:x:65534:
+--sudoers--
+--process-tree--
+PID   PPID  USER     COMMAND
+    1     0 root     ./orborus
+   49     1 root     [timeout]
+   62     1 root     [timeout]
+   75     1 root     [timeout]
+   88     1 root     [timeout]
+  250     0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 || true) 2>&1   printf "%s\n" --outbound-connections--   (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --sudoers--   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true   printf "%s\n" --process-tree--   (ps -eo pid,ppid,user,args 2>/dev/null || ps -ef || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
+  273   250 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 || true) 2>&1   printf "%s\n" --outbound-connections--   (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --sudoers--   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true   printf "%s\n" --process-tree--   (ps -eo pid,ppid,user,args 2>/dev/null || ps -ef || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
+  274   273 root     ps -eo pid,ppid,user,args

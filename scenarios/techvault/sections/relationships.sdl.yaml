@@ -520,3 +520,23 @@ relationships:
     forwarding_edge: null
     service_integration: null
     proxy_upstream: null
+  orborus-polls-backend:
+    type: connects_to
+    source: techvault.shuffle-orborus
+    target: techvault.shuffle-backend
+    description: 'The Shuffle orborus worker orchestrator polls the shuffle-backend SOAR API over http://shuffle-backend:5001
+      (BASE_URL) for execution jobs; the outbound TCP/5001 connection is ESTABLISHED at capture (orborus PID 1) and compose
+      declares depends_on shuffle-backend. Evidenced by orborus-state.txt (--outbound-target-backend--) and the
+      runtime-baseline.txt outbound connections.'
+    properties:
+      protocol: http
+      port: '5001'
+      base_url: http://shuffle-backend:5001
+      direction: outbound
+      connection_state: ESTABLISHED
+      vantage: aptl-shuffle-orborus
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null

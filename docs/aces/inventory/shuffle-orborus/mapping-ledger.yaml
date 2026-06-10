@@ -1,0 +1,556 @@
+schema_version: 1
+asset:
+  id: shuffle-orborus
+  scenario: TechVault
+  aptl_issue: 355
+  aces_methodology_issue: 353
+  source_class: upstream-registry-image-orchestrator
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: ghcr.io/shuffle/shuffle-orborus@sha256:e74e0246ba3acd0daaa8343e58da859f7908f06b9f51094a9cd9f9ea8cbf7a44
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence:
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+      - path: evidence/docker-buildx-imagetools.image.txt
+      - path: evidence/docker-inspect.image.json
+    limits:
+      - >
+        Upstream Shuffle orborus registry image (:latest tag); identity is the
+        pinned platform RepoDigest sha256:e74e0246...366dba. The :latest tag
+        resolves to a multi-arch image index (digest sha256:94e61e79...8366dba in
+        docker-buildx-imagetools.image.txt); the realized amd64 platform manifest
+        is the digest encoded on the node. No registry-visible OCI/in-toto/SLSA
+        attestation manifest is published for this tag.
+notes:
+  - >
+    This is the SCN-010 / issue #355 steady-state inventory for the TechVault
+    shuffle-orborus container. It applies the ACES-owned asset-inventory
+    methodology to the realized aptl-shuffle-orborus container at the established
+    granularity bar (issue #330 depth); all facts are encoded in
+    scenarios/techvault/nodes/shuffle-orborus.sdl.yaml.
+  - >
+    shuffle-orborus is the Shuffle SOAR worker orchestrator: an Alpine 3.22 image
+    running the /orborus Go static binary as PID 1. It polls shuffle-backend:5001
+    (BASE_URL) for execution jobs and spawns shuffle-worker containers
+    (SHUFFLE_WORKER_IMAGE) by driving the HOST Docker daemon through the
+    bind-mounted /var/run/docker.sock (read-write). It exposes no inbound
+    application listener and publishes no host ports.
+  - >
+    PRIVILEGED HOST-CONTROL SURFACE. The writable docker.sock bind is the
+    dominant trust surface of this asset: full control of the host Docker daemon
+    is host-root-equivalent. It is encoded as both a runtime.mounts bind and the
+    runtime.local_control_interfaces entry shuffle-orborus-docker-socket, and
+    recorded as a first-class capture limit. A compromise of orborus is
+    effectively host-Docker root.
+  - >
+    Capture used the already-running aptl project (soc profile up) per operator
+    direction and did not run aptl lab stop -v && aptl lab start; this bundle is
+    a steady-state observation of the current-running lab, not clean-reset
+    rebuild proof.
+  - >
+    The /orborus Go binary was never executed during capture: invoking it (even
+    with --version) would start the orborus daemon and spawn worker containers
+    via the host docker.sock. Binary identity is captured from file metadata, the
+    image-shipped /orborus.go source, and the trivy/syft go-module SBOM catalogue
+    (139 Go modules encoded as runtime.software_components), not a runtime version
+    flag.
+  - >
+    No ACES expressivity gap remains for the catalogued shuffle-orborus
+    steady-state facts. The current runtime families (mounts,
+    local_control_interfaces, processes, service_listeners, environment,
+    local_identity, filesystem_inventory, packages, software_components,
+    package_vulnerabilities, network) and the relationships surface cover every
+    in-scope observable; every fact is encoded.
+  - >
+    SHUFFLE_OPENSEARCH_URL=https://opensearch:9200 is an image-default environment
+    variable (not declared in the compose service and carrying no embedded
+    credentials); no outbound connection to opensearch was observed at capture, so
+    only the orborus -> shuffle-backend edge is encoded. The shuffle-worker
+    containers orborus spawns, shuffle-backend, and shuffle-opensearch are owned by
+    their own asset passes.
+  - >
+    The ledger is validated by the Pydantic schema exposed through
+    `aptl aces-inventory schema`; schema violations fail
+    `aptl aces-inventory validate`.
+correspondence_checks:
+  - id: shuffle-orborus-evidence-bundle-integrity
+    status: implemented
+    source: docs/aces/inventory/shuffle-orborus/evidence
+    method: >
+      evidence-sha256sums.txt hashes every committed evidence file except the
+      manifest itself; tests/test_shuffle_orborus_inventory.py recomputes and
+      compares each digest and asserts every evidence file is covered.
+    realized_evidence:
+      - path: evidence/evidence-sha256sums.txt
+      - path: evidence/captured-at-utc.txt
+      - path: evidence/docker-version.json
+      - path: evidence/docker-compose-version.json
+    ledger_fact_ids:
+      - shuffle-orborus.capture.toolchain-baseline
+  - id: shuffle-orborus-sdl-runtime-correspondence
+    status: implemented
+    source: scenarios/techvault/nodes/shuffle-orborus.sdl.yaml nodes.techvault.shuffle-orborus
+    method: >
+      tests/test_shuffle_orborus_inventory.py parses the composed TechVault SDL
+      and asserts image identity, OS, runtime mounts, the docker-socket control
+      interface, process identity, package, software-component, CVE, local
+      identity, filesystem, listener, and environment facts against the committed
+      evidence.
+    realized_evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/orborus-state.txt
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-processes.json
+      - path: evidence/trivy-vulnerability-list.json
+      - path: evidence/os-packages.txt
+      - path: evidence/filesystem-tree.txt
+    ledger_fact_ids:
+      - shuffle-orborus.runtime.container-policy
+      - shuffle-orborus.runtime.service-listeners
+      - shuffle-orborus.runtime.process-identity
+      - shuffle-orborus.docker.socket
+      - shuffle-orborus.runtime.vulnerability-scan
+      - shuffle-orborus.runtime.package-inventory
+      - shuffle-orborus.runtime.filesystem-inventory
+      - shuffle-orborus.application.software-components
+  - id: shuffle-orborus-docker-control-and-scope-caveats
+    status: implemented
+    source: docs/aces/inventory/shuffle-orborus/evidence/capture-limits.txt
+    method: >
+      README and tests assert the writable host docker.sock control surface
+      (mount + local_control_interface), non-destructive capture scope, the
+      never-executed binary, the scoped filesystem manifest, Syft normalization,
+      and unavailable osquery tables.
+    realized_evidence:
+      - path: evidence/capture-limits.txt
+      - path: evidence/orborus-state.txt
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-programs.json
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/docker-logs.shuffle-orborus.txt
+    ledger_fact_ids:
+      - shuffle-orborus.docker.socket
+      - shuffle-orborus.capture.toolchain-baseline
+      - shuffle-orborus.runtime.osquery-baseline
+  - id: shuffle-orborus-backend-relationship-correspondence
+    status: implemented
+    source: scenarios/techvault/sections/relationships.sdl.yaml orborus-polls-backend
+    method: >
+      tests/test_shuffle_orborus_inventory.py asserts the outbound orborus ->
+      shuffle-backend polling relationship against the captured BASE_URL,
+      established TCP 5001 connection, and compose depends_on.
+    realized_evidence:
+      - path: evidence/orborus-state.txt
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/compose-service.shuffle-orborus.json
+    ledger_fact_ids:
+      - shuffle-orborus.relationship.backend
+      - shuffle-orborus.companion-boundary
+facts:
+  - id: shuffle-orborus.capture.toolchain-baseline
+    category: capture
+    summary: >
+      Capture used digest-pinned Trivy 0.70.0, Syft, and osquery 4.9.0 images,
+      recorded Docker/Compose versions and capture time, and recorded explicit
+      capture limits and an evidence checksum manifest.
+    evidence:
+      - path: evidence/captured-at-utc.txt
+      - path: evidence/docker-version.json
+      - path: evidence/docker-compose-version.json
+      - path: evidence/trivy-version.txt
+      - path: evidence/syft-version.json
+      - path: evidence/osquery-version.txt
+      - path: evidence/capture-limits.txt
+      - path: evidence/evidence-sha256sums.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: runtime_contract
+      checked_surfaces: [runtime_contract]
+      fields:
+        - docs/aces/inventory/shuffle-orborus/capture-evidence.sh
+        - docs/aces/inventory/shuffle-orborus/evidence/capture-limits.txt
+      caveat: >
+        Scanner and runtime observations are time-sensitive evidence from the
+        current-running lab, not immutable clean-reset proof.
+      rationale: >
+        The bundle records capture tooling, pinned scanner digests, and limits as
+        methodology evidence alongside the ACES SDL encoding.
+  - id: shuffle-orborus.image.identity-provenance
+    category: image
+    summary: >
+      The asset uses upstream image ghcr.io/shuffle/shuffle-orborus:latest,
+      resolved to the realized amd64 platform digest sha256:e74e0246...366dba
+      (the :latest multi-arch index is sha256:94e61e79...8366dba), with Alpine
+      3.22 image metadata and no published attestation manifest.
+    evidence:
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/compose-service.shuffle-orborus.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/docker-buildx-imagetools.image.txt
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-orborus.source.name
+        - nodes.techvault.shuffle-orborus.source.version
+        - nodes.techvault.shuffle-orborus.source.build.attestation
+        - nodes.techvault.shuffle-orborus.os
+        - nodes.techvault.shuffle-orborus.os_version
+      rationale: >
+        ACES node source is a provider-neutral artifact reference carrying the
+        immutable platform image digest as the version pin; build.attestation
+        records the absent attestation status.
+  - id: shuffle-orborus.image.history-layers
+    category: image
+    summary: >
+      Docker history and image rootfs layer metadata are encoded as
+      upstream-image build provenance (3 rootfs layers; the orborus binary layer
+      dominates at ~41 MB).
+    evidence:
+      - path: evidence/docker-history.image.txt
+      - path: evidence/docker-history.image.jsonl
+      - path: evidence/docker-inspect.image.json
+      - path: evidence/docker-buildx-imagetools.image.raw.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-orborus.source.build.instructions
+        - nodes.techvault.shuffle-orborus.source.build.layers
+        - nodes.techvault.shuffle-orborus.source.build.config
+      rationale: >
+        ACES node source.build carries the upstream image history instructions,
+        rootfs layers, and config snapshot.
+  - id: shuffle-orborus.compose.service-contract
+    category: compose
+    summary: >
+      Compose declares aptl-shuffle-orborus, profile soc, the host
+      /var/run/docker.sock bind, 12 SHUFFLE_*/ORBORUS_*/BASE_URL environment
+      variables (none secret), restart unless_stopped, a 256 MiB memory limit,
+      depends_on shuffle-backend, no named volume, and no host port publication.
+    evidence:
+      - path: evidence/compose-service.shuffle-orborus.json
+      - path: evidence/source-checksums.txt
+      - path: evidence/docker-compose-version.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes, infrastructure]
+      fields:
+        - nodes.techvault.shuffle-orborus
+        - nodes.techvault.shuffle-orborus.runtime.operational_policy
+      rationale: >
+        Authored orborus intent (image, docker.sock bind, env, restart/memory
+        policy, network attachment) is encoded on the ACES node.
+  - id: shuffle-orborus.runtime.container-policy
+    category: runtime
+    summary: >
+      Docker runtime policy captures restart unless_stopped, a 256 MiB memory
+      limit, runc runtime, namespace modes, root PID 1, the absent healthcheck
+      (health status none, no compose healthcheck declared), and container config.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/docker-top.txt
+      - path: evidence/docker-logs.shuffle-orborus.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.container
+        - nodes.techvault.shuffle-orborus.runtime.operational_policy
+        - nodes.techvault.shuffle-orborus.runtime.health
+      rationale: >
+        ACES runtime container/operational_policy/health fields encode realized
+        Docker policy; health status is none because no healthcheck is declared.
+  - id: shuffle-orborus.network.identity-publication
+    category: network
+    summary: >
+      shuffle-orborus is attached to techvault.security-net with a DHCP address
+      (172.20.0.6 at capture), aliases aptl-shuffle-orborus and shuffle-orborus,
+      and no host-published ports; from the redteam-net attacker vantage it is
+      network-unreachable.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/docker-network.aptl-security.json
+      - path: evidence/participant-discovery.kali.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes, infrastructure]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.network.endpoints
+        - nodes.techvault.shuffle-orborus.runtime.network.published_ports
+      rationale: >
+        ACES node runtime network fields encode the DHCP endpoint, aliases, DNS
+        names, and the empty published-ports set.
+  - id: shuffle-orborus.runtime.service-listeners
+    category: runtime
+    summary: >
+      shuffle-orborus exposes no inbound application listener; the only sockets in
+      its network namespace are the two backend-generated Docker embedded-DNS
+      resolver sockets on 127.0.0.11 (TCP 40651 and UDP 58703, ephemeral).
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/osquery-listening-ports.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      checked_surfaces: [nodes, nodes.services]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.service_listeners
+      caveat: >
+        The only listeners are the node-local Docker embedded-DNS sockets, which
+        are backend-generated and ephemeral; orborus itself binds no service.
+      rationale: >
+        ACES runtime.service_listeners express scope/protocol for the node-local
+        Docker DNS sockets observed in the network namespace.
+  - id: shuffle-orborus.docker.socket
+    category: runtime
+    summary: >
+      The container bind-mounts the host /var/run/docker.sock read-write
+      (Mode=rw); orborus uses it to drive the host Docker daemon and spawn
+      shuffle-worker containers. This is a host-root-equivalent control surface.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/orborus-state.txt
+      - path: evidence/compose-service.shuffle-orborus.json
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.mounts
+        - nodes.techvault.shuffle-orborus.runtime.local_control_interfaces.shuffle-orborus-docker-socket
+      rationale: >
+        The writable Docker control socket is the load-bearing trust surface of
+        this asset; it is carried as the local_control_interface
+        shuffle-orborus-docker-socket while the bind also appears under
+        runtime.mounts.
+  - id: shuffle-orborus.runtime.process-identity
+    category: runtime
+    summary: >
+      PID 1 runs ./orborus (the /orborus Go static binary) as root with working
+      directory /; transient `timeout` wrappers are spawned by orborus to bound
+      worker/SDK execution (encoded as one representative process with the
+      observed count).
+    evidence:
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/orborus-state.txt
+      - path: evidence/docker-top.txt
+      - path: evidence/osquery-processes.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.processes
+      rationale: >
+        The PID 1 orborus identity (role primary, user root, command ./orborus) is
+        the first entry of runtime.processes; the identical transient timeout
+        wrappers are deduplicated to one representative row with the count noted.
+  - id: shuffle-orborus.runtime.environment
+    category: runtime
+    summary: >
+      Runtime environment encodes the 12 compose-declared variables (BASE_URL,
+      SHUFFLE_*, ORBORUS_CONTAINER_NAME, etc.) plus the image-default PATH and the
+      image-default SHUFFLE_OPENSEARCH_URL; none carry secret values.
+    evidence:
+      - path: evidence/docker-inspect.container.json
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/orborus-state.txt
+      - path: evidence/compose-service.shuffle-orborus.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.environment
+      rationale: >
+        ACES runtime.environment carries each variable with a value_classification
+        and provenance; all orborus values are plain (no credentials are present
+        in the orchestration configuration).
+  - id: shuffle-orborus.runtime.local-identity
+    category: runtime
+    summary: >
+      Local passwd/group inventory records 17 users and 35 groups for the Alpine
+      runtime.
+    evidence:
+      - path: evidence/runtime-baseline.txt
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes, accounts]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.local_identity
+      rationale: ACES runtime.local_identity encodes container-local users and groups.
+  - id: shuffle-orborus.runtime.filesystem-inventory
+    category: runtime
+    summary: >
+      The SDL encodes the curated orborus application surface (the /orborus Go
+      binary, the image-shipped /orborus.go source, and the /etc/os-release
+      symlink); the rest of the minimal Alpine rootfs is out of manifest scope and
+      covered by os-packages.txt and the SBOMs.
+    evidence:
+      - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.filesystem_inventory
+      caveat: >
+        The SDL encodes the curated application-surface paths; the rest of the
+        Alpine rootfs is intentionally out of manifest scope per the capture
+        limits.
+      rationale: >
+        ACES runtime.filesystem_inventory encodes the load-bearing paths with
+        metadata, stability, and sensitivity.
+  - id: shuffle-orborus.runtime.package-inventory
+    category: runtime
+    summary: >
+      The runtime image contains 21 Alpine apk OS packages; no Python, pip, Node,
+      npm, or Go compiler is present (the orborus binary is statically linked).
+    evidence:
+      - path: evidence/os-packages.txt
+      - path: evidence/language-manifests.txt
+      - path: evidence/trivy-sbom.cyclonedx.json.gz
+      - path: evidence/osquery-apt-sources.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.packages
+      rationale: >
+        ACES runtime.packages encode the apk package set with manager, version,
+        and architecture.
+  - id: shuffle-orborus.application.software-components
+    category: application
+    summary: >
+      The 139 Go modules embedded in the /orborus binary (including the main
+      orborus module and github.com/shuffle/shuffle-shared) are encoded as runtime
+      software components, sourced from the trivy/syft go-module SBOM catalogue.
+    evidence:
+      - path: evidence/syft-sbom.cyclonedx.json.gz
+      - path: evidence/trivy-sbom.cyclonedx.json.gz
+      - path: evidence/language-manifests.txt
+      - path: evidence/syft-version.json
+    aces:
+      disposition: encoded
+      surface: nodes
+      checked_surfaces: [nodes]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.software_components
+      rationale: >
+        ACES runtime.software_components encode the Go module dependency table; the
+        Go toolchain is absent in-image so the SBOM go-module catalogue is the
+        authoritative source.
+  - id: shuffle-orborus.runtime.vulnerability-scan
+    category: runtime
+    summary: >
+      Trivy 0.70.0 reported 96 package vulnerability findings: 3 critical, 36
+      high, 32 medium, and 25 low.
+    evidence:
+      - path: evidence/trivy-version.txt
+      - path: evidence/trivy-vulnerabilities.json.gz
+      - path: evidence/trivy-vulnerability-counts.json
+      - path: evidence/trivy-vulnerability-list.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      checked_surfaces: [nodes, vulnerabilities]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.package_vulnerabilities
+      caveat: >
+        Vulnerability scanner output is time-sensitive and tied to the captured
+        Trivy 0.70.0 version and advisory-database state.
+      rationale: >
+        ACES runtime.package_vulnerabilities preserve package, version, advisory,
+        severity, scanner, image digest, and scan-time semantics.
+  - id: shuffle-orborus.runtime.osquery-baseline
+    category: runtime
+    summary: >
+      osquery captured container processes and listeners (container PID/network
+      namespace) and host-side Docker container/image rows; apt_sources,
+      installed_applications, and programs are recorded as unavailable for this
+      Alpine target / Linux scanner image.
+    evidence:
+      - path: evidence/osquery-processes.json
+      - path: evidence/osquery-listening-ports.json
+      - path: evidence/osquery-docker-containers.json
+      - path: evidence/osquery-docker-images.json
+      - path: evidence/osquery-apt-sources.json
+      - path: evidence/osquery-installed-applications.json
+      - path: evidence/osquery-programs.json
+    aces:
+      disposition: encoded_with_caveat
+      surface: nodes
+      checked_surfaces: [nodes, runtime_contract]
+      fields:
+        - nodes.techvault.shuffle-orborus.runtime.processes
+        - nodes.techvault.shuffle-orborus.runtime.service_listeners
+        - nodes.techvault.shuffle-orborus.runtime.network
+      caveat: >
+        apt_sources (not meaningful for apk), installed_applications, and programs
+        tables are unavailable in the digest-pinned Linux osquery image and are
+        recorded as capture limits.
+      rationale: >
+        osquery corroborates the runtime process, listener, and network surfaces
+        from inside the container namespaces.
+  - id: shuffle-orborus.relationship.backend
+    category: relationship
+    summary: >
+      shuffle-orborus polls shuffle-backend over http://shuffle-backend:5001
+      (BASE_URL) for execution jobs; the TCP 5001 connection is ESTABLISHED at
+      capture and compose declares depends_on shuffle-backend.
+    evidence:
+      - path: evidence/orborus-state.txt
+      - path: evidence/runtime-baseline.txt
+      - path: evidence/compose-service.shuffle-orborus.json
+    aces:
+      disposition: encoded
+      surface: relationships
+      checked_surfaces: [relationships, nodes]
+      fields:
+        - relationships.orborus-polls-backend
+      rationale: >
+        The outbound polling dependency is encoded as a relationships edge from
+        shuffle-orborus to shuffle-backend over HTTP/5001.
+  - id: shuffle-orborus.companion-boundary
+    category: scope
+    summary: >
+      The shuffle-worker containers orborus spawns via the host docker.sock,
+      shuffle-backend, and shuffle-opensearch are observed but owned by their own
+      asset passes; only the orborus -> shuffle-backend edge is encoded here.
+    evidence:
+      - path: evidence/orborus-state.txt
+      - path: evidence/compose-service.shuffle-orborus.json
+      - path: evidence/capture-limits.txt
+    aces:
+      disposition: encoded_with_caveat
+      surface: relationships
+      checked_surfaces: [nodes, relationships]
+      fields:
+        - relationships.orborus-polls-backend
+      caveat: >
+        shuffle-worker is a transient on-demand container spawned through the host
+        Docker daemon (SHUFFLE_WORKER_IMAGE) and is not a standing range node;
+        backend and opensearch are encoded by their own passes.
+      rationale: >
+        Scope is bounded to the realized outbound polling edge; worker spawning is
+        captured as the docker.sock control-surface behaviour rather than a
+        standing node relationship.

@@ -1229,7 +1229,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 2g # first-boot tools install compiles radare2 from source (parallel make); 512m OOM-killed the build
 
   # ==========================================================================
   # WEB UI (web profile)

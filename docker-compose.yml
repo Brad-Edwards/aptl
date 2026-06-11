@@ -368,6 +368,7 @@ services:
     # `${?HTTPS_KEYSTORE_PASSWORD}` in the mounted application.conf.
     env_file:
       - ./config/soc_certs/thehive/keystore.p12.password
+      - ./config/cortex/thehive-cortex.env
     volumes:
       - thehive_data:/opt/thp/thehive/data
       - thehive_index:/opt/thp/thehive/index
@@ -384,7 +385,12 @@ services:
       - lucene
       - --es-hostnames
       - "thehive-es"
-      - --no-config-cortex
+      - --cortex-proto
+      - http
+      - --cortex-hostnames
+      - cortex
+      - --cortex-port
+      - "9001"
     healthcheck:
       # `-k` is acceptable for the in-container healthcheck per ADR-034
       # (no shared trust anchor inside the container); external clients
@@ -402,6 +408,8 @@ services:
       thehive-cassandra:
         condition: service_healthy
       thehive-es:
+        condition: service_healthy
+      cortex:
         condition: service_healthy
     networks:
       aptl-security:
@@ -452,6 +460,20 @@ services:
       resources:
         limits:
           memory: 1g
+    networks:
+      aptl-security:
+
+  cortex-index-init:
+    profiles: ["soc"]
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.28
+    container_name: aptl-cortex-index-init
+    restart: "no"
+    entrypoint: ["/bin/sh", "/usr/local/bin/cortex-index-init.sh"]
+    volumes:
+      - ./scripts/cortex-index-init.sh:/usr/local/bin/cortex-index-init.sh:ro
+    depends_on:
+      thehive-es:
+        condition: service_healthy
     networks:
       aptl-security:
 
@@ -607,7 +629,7 @@ services:
     volumes:
       - cortex_data:/opt/cortex/jobs
       - /var/run/docker.sock:/var/run/docker.sock
-      # SEC-006 / ADR-034: ES wiring (`search.host`) + lab-CA mount for
+      # SEC-006 / ADR-034: ES wiring (`search.uri`) + lab-CA mount for
       # outbound trust. The HTTPS keystore is generated under
       # config/soc_certs/cortex/ for future activation; see the
       # application.conf comment for the deferral rationale.
@@ -626,6 +648,8 @@ services:
     depends_on:
       thehive-es:
         condition: service_healthy
+      cortex-index-init:
+        condition: service_completed_successfully
     networks:
       aptl-security:
         ipv4_address: 172.20.0.22

@@ -1,0 +1,23 @@
+{
+  "profiles": [
+    "soc"
+  ],
+  "image": "docker.elastic.co/elasticsearch/elasticsearch:7.17.28",
+  "container_name": "aptl-cortex-index-init",
+  "restart": "no",
+  "entrypoint": [
+    "/bin/sh",
+    "/usr/local/bin/cortex-index-init.sh"
+  ],
+  "volumes": [
+    "./scripts/cortex-index-init.sh:/usr/local/bin/cortex-index-init.sh:ro"
+  ],
+  "depends_on": {
+    "thehive-es": {
+      "condition": "service_healthy"
+    }
+  },
+  "networks": {
+    "aptl-security": null
+  }
+}

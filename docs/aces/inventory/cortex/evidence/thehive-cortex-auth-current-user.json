@@ -1,0 +1,24 @@
+{
+  "organization": "APTL",
+  "name": "APTL Cortex Service Account",
+  "updatedAt": 1781193784454,
+  "roles": [
+    "read",
+    "analyze",
+    "orgadmin"
+  ],
+  "status": "Ok",
+  "createdAt": 1781193783518,
+  "createdBy": "init",
+  "updatedBy": "init",
+  "_type": "user",
+  "_routing": "aptl-svc@cortex.local",
+  "_parent": null,
+  "_id": "aptl-svc@cortex.local",
+  "_seqNo": 2,
+  "_primaryTerm": 1,
+  "id": "aptl-svc@cortex.local",
+  "hasKey": true,
+  "hasPassword": true,
+  "preferences": {}
+}

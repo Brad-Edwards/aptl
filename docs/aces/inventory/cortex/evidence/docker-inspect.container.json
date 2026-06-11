@@ -1,0 +1,333 @@
+[
+  {
+    "Id": "ef853168108e8140ec9f0124baa239b3a296253006a672338e686be1aeab627e",
+    "Created": "2026-06-11T16:00:20.018449961Z",
+    "Path": "/opt/cortex/entrypoint",
+    "Args": [],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 808726,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-06-11T16:00:40.96454567Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-06-11T18:06:22.565129868+02:00",
+            "End": "2026-06-11T18:06:22.63732716+02:00",
+            "ExitCode": 0,
+            "Output": "{\"versions\":{\"Cortex\":\"3.1.8-1\",\"Elastic4Play\":\"1.13.6\",\"Play\":\"2.8.19\",\"Elastic4s\":\"7.17.2\",\"ElasticSearch client\":\"7.17.1\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\"],\"ssoAutoLogin\":false}}"
+          },
+          {
+            "Start": "2026-06-11T18:06:52.638189794+02:00",
+            "End": "2026-06-11T18:06:52.695335981+02:00",
+            "ExitCode": 0,
+            "Output": "{\"versions\":{\"Cortex\":\"3.1.8-1\",\"Elastic4Play\":\"1.13.6\",\"Play\":\"2.8.19\",\"Elastic4s\":\"7.17.2\",\"ElasticSearch client\":\"7.17.1\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\"],\"ssoAutoLogin\":false}}"
+          },
+          {
+            "Start": "2026-06-11T18:07:22.695970373+02:00",
+            "End": "2026-06-11T18:07:22.757343795+02:00",
+            "ExitCode": 0,
+            "Output": "{\"versions\":{\"Cortex\":\"3.1.8-1\",\"Elastic4Play\":\"1.13.6\",\"Play\":\"2.8.19\",\"Elastic4s\":\"7.17.2\",\"ElasticSearch client\":\"7.17.1\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\"],\"ssoAutoLogin\":false}}"
+          },
+          {
+            "Start": "2026-06-11T18:07:52.758714825+02:00",
+            "End": "2026-06-11T18:07:52.816504476+02:00",
+            "ExitCode": 0,
+            "Output": "{\"versions\":{\"Cortex\":\"3.1.8-1\",\"Elastic4Play\":\"1.13.6\",\"Play\":\"2.8.19\",\"Elastic4s\":\"7.17.2\",\"ElasticSearch client\":\"7.17.1\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\"],\"ssoAutoLogin\":false}}"
+          },
+          {
+            "Start": "2026-06-11T18:08:22.817932742+02:00",
+            "End": "2026-06-11T18:08:22.87446969+02:00",
+            "ExitCode": 0,
+            "Output": "{\"versions\":{\"Cortex\":\"3.1.8-1\",\"Elastic4Play\":\"1.13.6\",\"Play\":\"2.8.19\",\"Elastic4s\":\"7.17.2\",\"ElasticSearch client\":\"7.17.1\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\"],\"ssoAutoLogin\":false}}"
+          }
+        ]
+      }
+    },
+    "Image": "sha256:ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b",
+    "ResolvConfPath": "/var/lib/docker/containers/ef853168108e8140ec9f0124baa239b3a296253006a672338e686be1aeab627e/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/ef853168108e8140ec9f0124baa239b3a296253006a672338e686be1aeab627e/hostname",
+    "HostsPath": "/var/lib/docker/containers/ef853168108e8140ec9f0124baa239b3a296253006a672338e686be1aeab627e/hosts",
+    "LogPath": "/var/lib/docker/containers/ef853168108e8140ec9f0124baa239b3a296253006a672338e686be1aeab627e/ef853168108e8140ec9f0124baa239b3a296253006a672338e686be1aeab627e-json.log",
+    "Name": "/aptl-cortex",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "aptl_cortex_data:/opt/cortex/jobs:rw",
+        "/var/run/docker.sock:/var/run/docker.sock:rw",
+        "/home/atomik/src/aptl/config/cortex/application.conf:/etc/cortex/application.conf:ro",
+        "/home/atomik/src/aptl/config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-security",
+      "PortBindings": {
+        "9001/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "9001"
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 536870912,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 1073741824,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_cortex_data",
+        "Source": "/var/lib/docker/volumes/aptl_cortex_data/_data",
+        "Destination": "/opt/cortex/jobs",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/var/run/docker.sock",
+        "Destination": "/var/run/docker.sock",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/cortex/application.conf",
+        "Destination": "/etc/cortex/application.conf",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/soc_certs/lab-ca.pem",
+        "Destination": "/etc/lab-ca/lab-ca.pem",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "11569afcb1bf3ec243159928e7052df14487651562ad014381f875fadcd509e7",
+        "Source": "/var/lib/docker/volumes/11569afcb1bf3ec243159928e7052df14487651562ad014381f875fadcd509e7/_data",
+        "Destination": "/var/lib/docker",
+        "Driver": "local",
+        "Mode": "",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "cortex",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "9001/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "job_directory=/opt/cortex/jobs",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto"
+      ],
+      "Cmd": null,
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "curl -sf http://localhost:9001/api/status || exit 1"
+        ],
+        "Interval": 30000000000,
+        "Timeout": 10000000000,
+        "StartPeriod": 180000000000,
+        "Retries": 15
+      },
+      "Image": "thehiveproject/cortex:3.1.8",
+      "Volumes": {
+        "/var/lib/docker": {}
+      },
+      "WorkingDir": "/opt/cortex",
+      "Entrypoint": [
+        "/opt/cortex/entrypoint"
+      ],
+      "Labels": {
+        "MAINTAINER": "TheHive Project <support@thehive-project.org>",
+        "com.docker.compose.config-hash": "d3818a1e289495c4b02e2753223c267ad84abe469baa0dfd0f9b9dc763909c89",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "cortex-index-init:service_completed_successfully:false,thehive-es:service_healthy:false",
+        "com.docker.compose.image": "sha256:ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "cortex",
+        "com.docker.compose.version": "5.1.3",
+        "repository": "https://github.com/TheHive-Project/TheHive"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "7111d1e47e2f590dd444ed0aa21c926b57f8965d630454b9e2e0abb7ac0ebb49",
+      "SandboxKey": "<REDACTED>",
+      "Ports": {
+        "9001/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "9001"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "9001"
+          }
+        ]
+      },
+      "Networks": {
+        "aptl_aptl-security": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.0.22"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-cortex",
+            "cortex"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "90badae83bbeedfa11194f4d25ab5e3d4de3d8dfd38cc8d81a135b9f84fac94a",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.22",
+          "MacAddress": "06:d3:4c:4f:09:df",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-cortex",
+            "cortex",
+            "ef853168108e"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "digest": "sha256:ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b",
+      "size": 1783,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

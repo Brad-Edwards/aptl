@@ -18,6 +18,26 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="$PROJECT_DIR/.env"
+
+ensure_env_file() {
+    if [ ! -f "$ENV_FILE" ]; then
+        touch "$ENV_FILE"
+        chmod 600 "$ENV_FILE"
+    fi
+}
+
+update_env_var() {
+    local key="$1"
+    local value="$2"
+    ensure_env_file
+    if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+        # update in place using sed; escape | in value (none of ours have it)
+        sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+    else
+        printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+    fi
+}
 
 echo "============================================="
 echo "  APTL Prime Scenario Seed"
@@ -27,14 +47,14 @@ echo ""
 # ---------------------------------------------------------------------------
 # 0. Wait for SOC tools to be healthy
 # ---------------------------------------------------------------------------
-echo "[0/6] Waiting for SOC tools to be healthy..."
+echo "[0/7] Waiting for SOC tools to be healthy..."
 
 # SEC-006 / ADR-034: seed-shuffle.sh now talks to the HTTPS frontend
 # at https://localhost:3443. The readiness gate waits for
 # `aptl-shuffle-frontend` (which has a healthcheck post-SEC-006)
 # rather than the headless `aptl-shuffle-backend` container that
 # Docker reports without a `.State.Health.Status`.
-for svc in aptl-thehive aptl-misp aptl-shuffle-frontend; do
+for svc in aptl-cortex aptl-thehive aptl-misp aptl-shuffle-frontend; do
     max_wait=600
     elapsed=0
     while [ $elapsed -lt $max_wait ]; do
@@ -62,7 +82,7 @@ echo ""
 # ---------------------------------------------------------------------------
 # 1. Provision TheHive API key
 # ---------------------------------------------------------------------------
-echo "[1/6] Provisioning TheHive API key..."
+echo "[1/7] Provisioning TheHive API key..."
 
 if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
     THEHIVE_API_KEY=$("$SCRIPT_DIR/thehive-apikey.sh" 2>/dev/null) || true
@@ -76,21 +96,6 @@ if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
         # The shared aptl-mcp-common library walks up the directory tree from
         # each MCP server's docker-lab-config.json and merges .env defaults
         # under process.env, so the values land in every MCP child process.
-        ENV_FILE="$PROJECT_DIR/.env"
-        if [ ! -f "$ENV_FILE" ]; then
-            touch "$ENV_FILE"
-            chmod 600 "$ENV_FILE"
-        fi
-        update_env_var() {
-            local key="$1"
-            local value="$2"
-            if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
-                # update in place using sed; escape | in value (none of ours have it)
-                sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
-            else
-                printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
-            fi
-        }
         update_env_var THEHIVE_API_KEY "$THEHIVE_API_KEY"
         # MISP and Shuffle use stable defaults baked into the lab; persist them
         # too so future MCP startups read a single canonical source.
@@ -105,10 +110,29 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 2. Wait for Wazuh Indexer to be healthy
+# 2. Provision Cortex API key for TheHive connector
 # ---------------------------------------------------------------------------
 echo ""
-echo "[2/6] Waiting for Wazuh Indexer to be healthy..."
+echo "[2/7] Provisioning Cortex API key..."
+
+if [ -x "$SCRIPT_DIR/cortex-apikey.sh" ]; then
+    CORTEX_API_KEY=$("$SCRIPT_DIR/cortex-apikey.sh") || true
+    if [ -n "$CORTEX_API_KEY" ]; then
+        export CORTEX_API_KEY
+        update_env_var CORTEX_API_KEY "$CORTEX_API_KEY"
+        echo "  Cortex API key provisioned and written to .env (mode 600)"
+    else
+        echo "  WARNING: Could not provision Cortex API key (non-fatal)"
+    fi
+else
+    echo "  SKIP: cortex-apikey.sh not found"
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Wait for Wazuh Indexer to be healthy
+# ---------------------------------------------------------------------------
+echo ""
+echo "[3/7] Waiting for Wazuh Indexer to be healthy..."
 
 INDEXER_URL="${INDEXER_URL:-https://localhost:9200}"
 INDEXER_USER="${INDEXER_USERNAME:-admin}"
@@ -138,10 +162,10 @@ if [ $elapsed -ge $max_wait ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Seed MISP with threat intelligence
+# 4. Seed MISP with threat intelligence
 # ---------------------------------------------------------------------------
 echo ""
-echo "[3/6] Seeding MISP with lab threat intelligence..."
+echo "[4/7] Seeding MISP with lab threat intelligence..."
 
 if [ -x "$SCRIPT_DIR/seed-misp.sh" ]; then
     "$SCRIPT_DIR/seed-misp.sh" || echo "  WARNING: MISP seeding failed (non-fatal)"
@@ -150,10 +174,10 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Seed Shuffle with SOAR workflows
+# 5. Seed Shuffle with SOAR workflows
 # ---------------------------------------------------------------------------
 echo ""
-echo "[4/6] Seeding Shuffle with SOAR workflows..."
+echo "[5/7] Seeding Shuffle with SOAR workflows..."
 
 if [ -x "$SCRIPT_DIR/seed-shuffle.sh" ]; then
     "$SCRIPT_DIR/seed-shuffle.sh" || echo "  WARNING: Shuffle seeding failed (non-fatal)"
@@ -162,10 +186,10 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Configure Wazuh -> Shuffle integration
+# 6. Configure Wazuh -> Shuffle integration
 # ---------------------------------------------------------------------------
 echo ""
-echo "[5/6] Configuring Wazuh -> Shuffle integration..."
+echo "[6/7] Configuring Wazuh -> Shuffle integration..."
 
 WEBHOOK_FILE="/tmp/aptl_shuffle_webhook_url"
 if [ -f "$WEBHOOK_FILE" ]; then
@@ -178,10 +202,10 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Plant workstation SSH key into victim authorized_keys (if needed)
+# 7. Plant workstation SSH key into victim authorized_keys (if needed)
 # ---------------------------------------------------------------------------
 echo ""
-echo "[6/6] Ensuring workstation SSH key is authorized on victim..."
+echo "[7/7] Ensuring workstation SSH key is authorized on victim..."
 
 # Extract the workstation's dev-user public key and add to victim's labadmin
 ws_pubkey=$(docker exec aptl-workstation cat /home/dev-user/.ssh/id_rsa.pub 2>/dev/null) || true
@@ -211,6 +235,7 @@ echo "============================================="
 echo ""
 echo "Seeded state:"
 echo "  - TheHive API key: provisioned (export THEHIVE_API_KEY=${THEHIVE_API_KEY:-not set})"
+echo "  - Cortex API key: provisioned for TheHive connector"
 echo "  - Wazuh Indexer: healthy"
 echo "  - MISP: Kali IOCs and attack patterns"
 echo "  - Shuffle: Alert-to-Case workflow (webhook -> MISP enrichment -> TheHive case)"

@@ -107,6 +107,8 @@ imports:
   namespace: techvault
 - source: local:techvault/nodes/thehive.sdl.yaml
   namespace: techvault
+- source: local:techvault/nodes/cortex.sdl.yaml
+  namespace: techvault
 - source: local:techvault/nodes/wazuh-dashboard.sdl.yaml
   namespace: techvault
 - source: local:techvault/nodes/webapp.sdl.yaml

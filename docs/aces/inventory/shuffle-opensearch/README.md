@@ -18,7 +18,7 @@ not host-published. **No known ACES expressivity gap remains** for the
 catalogued steady-state facts.
 
 This capture is non-destructive. It used the already-running local `aptl`
-project (soc profile) on 2026-06-10 and **did not run
+project (soc profile) on 2026-06-11 and **did not run
 `aptl lab stop -v && aptl lab start`**. Treat this bundle as a frozen
 observation of that local steady state, **not as clean-lab rebuild proof**.
 
@@ -46,8 +46,11 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Network identity | `security-net` 172.20.0.2 (only network) |
 | Memory limit | 1 GiB (`OPENSEARCH_JAVA_OPTS -Xms512m -Xmx512m`) |
 | Package inventory | 110 rpm packages |
-| Trivy vulnerability findings | 410 image-layer findings: 2 critical, 157 high, 231 medium, 20 low |
+| Trivy vulnerability findings | 410 image-layer findings: 2 critical, 180 high, 210 medium, 18 low |
 | Local identity | 14 users, 25 groups, 0 sudo rules |
+| Software components | OpenSearch 2.14.0 + 445 embedded Maven/JAR components (SBOM catalogue) |
+| Security-plugin internal users | 7 (incl. reserved `admin`), captured via `_plugins/_security` REST |
+| PID 1 capabilities | CapEff=0x0 — the non-root JVM holds an EMPTY effective set (CapBnd is the Docker default) |
 
 ## Evidence Bundle
 
@@ -91,10 +94,13 @@ evidence files above.
 | --- | --- |
 | Image / build / packages / CVEs / filesystem / identity / runtime / network | `nodes.techvault.shuffle-opensearch` |
 | OpenSearch datastore (engine, cluster, node, 24 partitions, 24 mappings, transport, settings) | `nodes.techvault.shuffle-opensearch.runtime.datastore_services` (search_index profile) |
-| REST / transport / perf-analyzer listeners | `nodes.techvault.shuffle-opensearch.runtime.service_listeners` (9200, 9300, 9600) |
+| REST / transport / perf-analyzer listeners + Docker embedded-DNS loopback sockets | `nodes.techvault.shuffle-opensearch.runtime.service_listeners` (9200, 9300, 9600 wildcard; 127.0.0.11 loopback_only) |
+| `shuffle_opensearch_data` volume (all index state) | `nodes.techvault.shuffle-opensearch.runtime.mounts` |
+| 445 embedded Maven/JAR components | `nodes.techvault.shuffle-opensearch.runtime.software_components` |
+| Security-plugin internal user database | `nodes.techvault.shuffle-opensearch.runtime.identity_authorities.opensearch-security-internal-users` |
 | Initial admin password | `secret_fixture` value on `runtime.environment` (committed in `docker-compose.yml`) |
 
-All 18 catalogued facts in `mapping-ledger.yaml` are `encoded` /
+All 20 catalogued facts in `mapping-ledger.yaml` are `encoded` /
 `encoded_with_caveat`; none are blocked. No ACES expressivity issue is filed
 because every catalogued participant/agent-observable fact maps to a current
 ACES surface.
@@ -113,7 +119,9 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
   (top-level rows only); index/document state is in the datastore mappings +
   `opensearch-state.txt`.
 - `OPENSEARCH_INITIAL_ADMIN_PASSWORD` is a committed scenario fixture, kept
-  verbatim; mappings were read with admin auth via the `_mapping` API.
+  verbatim; mappings and the Security-plugin internal-user database were read
+  with admin auth via the `_mapping` and `_plugins/_security` APIs (the REST API
+  redacts password hashes server-side).
 - Syft CycloneDX normalized by stripping `syft:location:*` properties.
 - osquery `installed_applications` / `programs` unavailable in the scanner image;
   `apt_sources` not applicable to the Amazon Linux 2023 target.

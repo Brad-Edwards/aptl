@@ -39,18 +39,18 @@
         "IPv4Address": "172.20.0.17/24",
         "IPv6Address": ""
       },
+      "216ed3a32aca5dcca1256fe22a7d7a741fc9b9eae32fd5d68cbf9422a97e470c": {
+        "Name": "aptl-shuffle-frontend",
+        "EndpointID": "d12a76fd719633683e0667a0f76fc7e285e04402ee22c5e398c2d4d563cc7cba",
+        "MacAddress": "0e:41:62:f0:54:2f",
+        "IPv4Address": "172.20.0.21/24",
+        "IPv6Address": ""
+      },
       "23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22": {
         "Name": "aptl-suricata",
         "EndpointID": "f531b4053fbcb648b918f085d69e46dafd1ff77ac87da71976a05a8369f06598",
         "MacAddress": "fe:d7:53:72:ef:4f",
         "IPv4Address": "172.20.0.50/24",
-        "IPv6Address": ""
-      },
-      "3dc2564de3ddba2431a6b3a0aeced293363d73825ed0271798b153b27af01dd7": {
-        "Name": "aptl-shuffle-frontend",
-        "EndpointID": "4e52e88e28c274d4dd2c42983582271c41dfc828a327dde266e9e273b13dde04",
-        "MacAddress": "22:55:6d:62:d3:1b",
-        "IPv4Address": "172.20.0.21/24",
         "IPv6Address": ""
       },
       "3ee8e93f293ba3e8d5ebae58992c340265d79a9c8c840e85fd6f50273538259f": {
@@ -160,8 +160,8 @@
       },
       "e1eb785c281a38818b7659df835f1afc8817f1f6c67d2ccb47a0c9e2c098163e": {
         "Name": "aptl-shuffle-opensearch",
-        "EndpointID": "d434bf711830cc393e91189fafbcbab02d90632d2104ab2d96bc94312f38692d",
-        "MacAddress": "92:64:ac:ab:77:0e",
+        "EndpointID": "52f773a460e0f1c8222a0a69d912e57d65d1feee7e784f7779269ed14598f302",
+        "MacAddress": "66:7d:36:37:28:71",
         "IPv4Address": "172.20.0.2/24",
         "IPv6Address": ""
       },

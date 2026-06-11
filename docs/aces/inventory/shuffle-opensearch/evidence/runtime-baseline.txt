@@ -46,18 +46,44 @@ which_declare=declare -f
 sh: line 14: ss: command not found
 sh: line 14: netstat: command not found
   sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
-   0: 0B00007F:A4AD 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 612397202 2 0000000000000000 100 0 0 10 0
+   0: 0B00007F:AC71 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 619662115 2 0000000000000000 100 0 0 10 0
   sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
    sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
-37396: 0B00007F:8AA7 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 612397201 2 0000000000000000 0
+37107: 0B00007F:AE2C 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 619662114 2 0000000000000000 0
   sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
 --outbound-connections--
 sh: line 16: ss: command not found
 sh: line 16: netstat: command not found
   sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
-   0: 0B00007F:A4AD 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 612397202 2 0000000000000000 100 0 0 10 0
+   0: 0B00007F:AC71 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 619662115 2 0000000000000000 100 0 0 10 0
   sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
 --mounts--
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51135/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/320/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/319/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/318/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/158/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/153/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/144/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/62/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51152/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51152/work,nouserxattr)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (ro,nosuid,nodev,noexec,relatime)
+cgroup on /sys/fs/cgroup type cgroup2 (ro,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
+/dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
+/dev/md2 on /etc/hostname type ext4 (rw,relatime)
+/dev/md2 on /etc/hosts type ext4 (rw,relatime)
+/dev/md2 on /usr/share/opensearch/data type ext4 (rw,relatime)
+proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sys type proc (ro,nosuid,nodev,noexec,relatime)
+proc on /proc/sysrq-trigger type proc (ro,nosuid,nodev,noexec,relatime)
+tmpfs on /proc/acpi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/interrupts type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/kcore type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/keys type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/latency_stats type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /proc/scsi type tmpfs (ro,relatime,inode64)
+tmpfs on /proc/timer_list type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
+tmpfs on /sys/devices/virtual/powercap type tmpfs (ro,relatime,inode64)
+tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
 --users--
 root:x:0:0:root:/root:/bin/bash
 bin:x:1:1:bin:/bin:/sbin/nologin
@@ -100,11 +126,20 @@ users:x:100:
 nobody:x:65534:
 opensearch:x:1000:
 --sudoers--
+--pid1-capabilities--
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	00000000a80425fb
+CapAmb:	0000000000000000
+NoNewPrivs:	0
+Seccomp:	2
+Seccomp_filters:	1
 --process-tree--
 1 /bin/bash ./opensearch-docker-entrypoint.sh opensearch
-226 bash bin/opensearch-keystore has-passwd --silent
-230 /usr/share/opensearch/jdk/bin/java -Xshare:auto -Xms4m -Xmx64m -XX:+UseSerialGC -Dopensearch.cgroups.hierarchy.override=/ -Xms512m -Xmx512m -Dopensearch.path.home=/usr/share/opensearch -Dopensearch.path.conf=/usr/share/opensearch/config -Dopensearch.distribution.type=tar -cp /usr/share/opensearch/lib/*:/usr/share/opensearch/lib/tools/keystore-cli/* org.opensearch.common.settings.KeyStoreCli has-passwd --silent
-435 sh -lc
+218 bash bin/opensearch-keystore has-passwd --silent
+223 /usr/share/opensearch/jdk/bin/java -Xshare:auto -Xms4m -Xmx64m -XX:+UseSerialGC -Dopensearch.cgroups.hierarchy.override=/ -Xms512m -Xmx512m -Dopensearch.path.home=/usr/share/opensearch -Dopensearch.path.conf=/usr/share/opensearch/config -Dopensearch.distribution.type=tar -cp /usr/share/opensearch/lib/*:/usr/share/opensearch/lib/tools/keystore-cli/* org.opensearch.common.settings.KeyStoreCli has-passwd --silent
+436 sh -lc
   set -eu
   printf "%s\n" --os-release--
   cat /etc/os-release 2>/dev/null || true
@@ -121,18 +156,20 @@ opensearch:x:1000:
   printf "%s\n" --outbound-connections--
   (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1
   printf "%s\n" --mounts--
-  mount | sed -n "1,220p"
+  (mount 2>/dev/null | grep . || sed -e "s|^\([^ ]*\) \([^ ]*\) \([^ ]*\) \([^ ]*\).*|\1 on \2 type \3 (\4)|" /proc/self/mounts) | sed -n "1,220p"
   printf "%s\n" --users--
   getent passwd | sed -n "1,260p" || true
   printf "%s\n" --groups--
   getent group | sed -n "1,260p" || true
   printf "%s\n" --sudoers--
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --pid1-capabilities--
+  grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args 2>/dev/null || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
   true
 
-473 sh -lc
+477 sh -lc
   set -eu
   printf "%s\n" --os-release--
   cat /etc/os-release 2>/dev/null || true
@@ -149,16 +186,18 @@ opensearch:x:1000:
   printf "%s\n" --outbound-connections--
   (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1
   printf "%s\n" --mounts--
-  mount | sed -n "1,220p"
+  (mount 2>/dev/null | grep . || sed -e "s|^\([^ ]*\) \([^ ]*\) \([^ ]*\) \([^ ]*\).*|\1 on \2 type \3 (\4)|" /proc/self/mounts) | sed -n "1,220p"
   printf "%s\n" --users--
   getent passwd | sed -n "1,260p" || true
   printf "%s\n" --groups--
   getent group | sed -n "1,260p" || true
   printf "%s\n" --sudoers--
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
+  printf "%s\n" --pid1-capabilities--
+  grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args 2>/dev/null || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
   true
 
-86 /usr/share/opensearch/jdk/bin/java -Xshare:auto -Xms4m -Xmx64m -XX:+UseSerialGC -Dlog4j.configurationFile=/usr/share/opensearch/config/opensearch-performance-analyzer/log4j2.xml -Xms64M -Xmx64M -XX:+UseSerialGC -XX:CICompilerCount=1 -XX:-TieredCompilation -XX:InitialCodeCacheSize=4096 -XX:MaxRAM=400m -Dopensearch.path.home=/usr/share/opensearch -Dopensearch.path.conf=/usr/share/opensearch/config -Dopensearch.distribution.type=tar -cp /usr/share/opensearch/lib/*:/usr/share/opensearch/performance-analyzer-rca/lib/* org.opensearch.performanceanalyzer.PerformanceAnalyzerApp
-88 bash /usr/share/opensearch/bin/opensearch -Ediscovery.type=single-node
+74 /usr/share/opensearch/jdk/bin/java -Xshare:auto -Xms4m -Xmx64m -XX:+UseSerialGC -Dlog4j.configurationFile=/usr/share/opensearch/config/opensearch-performance-analyzer/log4j2.xml -Xms64M -Xmx64M -XX:+UseSerialGC -XX:CICompilerCount=1 -XX:-TieredCompilation -XX:InitialCodeCacheSize=4096 -XX:MaxRAM=400m -Dopensearch.path.home=/usr/share/opensearch -Dopensearch.path.conf=/usr/share/opensearch/config -Dopensearch.distribution.type=tar -cp /usr/share/opensearch/lib/*:/usr/share/opensearch/performance-analyzer-rca/lib/* org.opensearch.performanceanalyzer.PerformanceAnalyzerApp
+75 bash /usr/share/opensearch/bin/opensearch -Ediscovery.type=single-node

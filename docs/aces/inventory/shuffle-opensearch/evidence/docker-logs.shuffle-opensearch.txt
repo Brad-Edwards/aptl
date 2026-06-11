@@ -1,95 +1,12 @@
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.TimedRunnable.doRun(TimedRunnable.java:59) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.ThreadContext$ContextPreservingAbstractRunnable.doRun(ThreadContext.java:913) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
-	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
-	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
-[2026-06-10T18:30:41,207][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflow_revisions-000001/RquNuKk-TfGc2VBXAw5U1A]
-[2026-06-10T18:30:41,213][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
-org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
-	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseDone(AbstractSearchAsyncAction.java:796) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.onShardFailure(AbstractSearchAsyncAction.java:542) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.lambda$performPhaseOnShard$0(AbstractSearchAsyncAction.java:289) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction$2.doRun(AbstractSearchAsyncAction.java:372) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.threadpool.TaskAwareRunnable.doRun(TaskAwareRunnable.java:78) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.TimedRunnable.doRun(TimedRunnable.java:59) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.ThreadContext$ContextPreservingAbstractRunnable.doRun(ThreadContext.java:913) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
-	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
-	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
-[2026-06-10T18:30:41,221][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
-org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
-	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseDone(AbstractSearchAsyncAction.java:796) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.onShardFailure(AbstractSearchAsyncAction.java:542) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.lambda$performPhaseOnShard$0(AbstractSearchAsyncAction.java:289) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction$2.doRun(AbstractSearchAsyncAction.java:372) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.threadpool.TaskAwareRunnable.doRun(TaskAwareRunnable.java:78) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.TimedRunnable.doRun(TimedRunnable.java:59) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.ThreadContext$ContextPreservingAbstractRunnable.doRun(ThreadContext.java:913) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
-	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
-	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
-[2026-06-10T18:30:41,229][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
-org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
-	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseDone(AbstractSearchAsyncAction.java:796) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.onShardFailure(AbstractSearchAsyncAction.java:542) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction.lambda$performPhaseOnShard$0(AbstractSearchAsyncAction.java:289) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.action.search.AbstractSearchAsyncAction$2.doRun(AbstractSearchAsyncAction.java:372) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.threadpool.TaskAwareRunnable.doRun(TaskAwareRunnable.java:78) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.TimedRunnable.doRun(TimedRunnable.java:59) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.ThreadContext$ContextPreservingAbstractRunnable.doRun(ThreadContext.java:913) [opensearch-2.14.0.jar:2.14.0]
-	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
-	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
-	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
-	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
-[2026-06-10T18:30:41,577][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:30:41,715][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflowapp-000001/F50dXqJNRkiheSG-WCo7mQ]
-[2026-06-10T18:30:42,096][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:30:42,210][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[org_statistics-000001/r99IDL8mSP6xZy7Pw4cJbw]
-[2026-06-10T18:30:42,593][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:30:42,728][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[environments-000001/KT5b5gDnRu6l8pmqfspvzg]
-[2026-06-10T18:30:42,733][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[shuffle_logs-000001/wZiV8fuDSbSkpFDSA_RgGA]
-[2026-06-10T18:30:43,198][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:30:43,337][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[notifications-000001/N1uNa8YDSNm6Gr9POrvROg]
-[2026-06-10T18:30:43,736][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:30:43,858][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[org_cache_revisions-000001/ITi3CyFZR2q45KD6hpCRFw]
-[2026-06-10T18:30:44,360][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:30:44,493][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[datastore_ngram-000001/g7YwM_VDQr215Tv2UVO1oQ]
-[2026-06-10T18:30:44,498][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[org_cache-000001/DjH_uVfZRraYoc-xtfEfdg]
-[2026-06-10T18:30:44,972][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:30:45,094][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[security-auditlog-2026.05.23/iTOLQP5jSN6fKblUFxIwhw]
-[2026-06-10T18:30:45,098][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflowexecution-000001/EIZiv50cQe-wmHGE7Hp5pA]
-[2026-06-10T18:30:45,491][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:30:45,607][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.opensearch-observability/LYuCGnkYSpuu2kWAk4PW4g]
-[2026-06-10T18:30:45,612][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.plugins-ml-config/fjTZbWADTVCm3OOKoCpkOg]
-[2026-06-10T18:30:46,049][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:30:46,164][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.opensearch-sap-log-types-config/pPzGFlvVTJGy5_27jR1Q6w]
-[2026-06-10T18:30:46,301][INFO ][o.o.c.r.a.AllocationService] [e1eb785c281a] Cluster health status changed from [RED] to [YELLOW] (reason: [shards started [[.opensearch-sap-log-types-config][0]]]).
-[2026-06-10T18:30:46,371][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:30:48,750][INFO ][o.o.m.a.MLModelAutoReDeployer] [e1eb785c281a] Index not found, not performing auto reloading!
-[2026-06-10T18:30:48,750][INFO ][o.o.m.c.MLCommonsClusterManagerEventListener] [e1eb785c281a] Starting ML sync up job...
-[2026-06-10T18:30:58,759][INFO ][o.o.m.c.MLSyncUpCron     ] [e1eb785c281a] ML configuration already initialized, no action needed
-[2026-06-10T18:31:38,721][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Performing move cluster state metadata.
-[2026-06-10T18:31:38,722][INFO ][o.o.i.i.MetadataService  ] [e1eb785c281a] ISM config index not exist, so we cancel the metadata migration job.
-[2026-06-10T18:32:38,722][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Cancel background move metadata process.
-[2026-06-10T18:32:38,722][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Performing move cluster state metadata.
-[2026-06-10T18:32:38,723][INFO ][o.o.i.i.MetadataService  ] [e1eb785c281a] Move metadata has finished.
-./opensearch-docker-entrypoint.sh: line 69:    93 Killed                  "$@" "${opensearch_opts[@]}"
+[2026-06-10T23:08:21,362][INFO ][o.o.j.s.JobSweeper       ] [e1eb785c281a] Running full sweep
+[2026-06-10T23:08:21,741][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [e1eb785c281a] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-10T23:08:21,741][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [e1eb785c281a] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-10T23:13:21,362][INFO ][o.o.j.s.JobSweeper       ] [e1eb785c281a] Running full sweep
+[2026-06-10T23:18:21,363][INFO ][o.o.j.s.JobSweeper       ] [e1eb785c281a] Running full sweep
+[2026-06-10T23:23:21,363][INFO ][o.o.j.s.JobSweeper       ] [e1eb785c281a] Running full sweep
+[2026-06-10T23:23:21,741][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [e1eb785c281a] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-10T23:23:21,742][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [e1eb785c281a] Finished housekeeping task for auto refresh streaming jobs.
+./opensearch-docker-entrypoint.sh: line 69:    88 Killed                  "$@" "${opensearch_opts[@]}"
 Enabling OpenSearch Security Plugin
 Enabling execution of install_demo_configuration.sh for OpenSearch Security Plugin
 OpenSearch 2.12.0 onwards, the OpenSearch Security Plugin a change that requires an initial password for 'admin' user.
@@ -113,261 +30,229 @@ WARNING: A terminally deprecated method in java.lang.System has been called
 WARNING: System::setSecurityManager has been called by org.opensearch.bootstrap.OpenSearch (file:/usr/share/opensearch/lib/opensearch-2.14.0.jar)
 WARNING: Please consider reporting this to the maintainers of org.opensearch.bootstrap.OpenSearch
 WARNING: System::setSecurityManager will be removed in a future release
-Jun 10, 2026 6:34:59 PM sun.util.locale.provider.LocaleProviderAdapter <clinit>
+Jun 10, 2026 11:24:29 PM sun.util.locale.provider.LocaleProviderAdapter <clinit>
 WARNING: COMPAT locale provider will be removed in a future release
 WARNING: A terminally deprecated method in java.lang.System has been called
 WARNING: System::setSecurityManager has been called by org.opensearch.bootstrap.Security (file:/usr/share/opensearch/lib/opensearch-2.14.0.jar)
 WARNING: Please consider reporting this to the maintainers of org.opensearch.bootstrap.Security
 WARNING: System::setSecurityManager will be removed in a future release
-[2026-06-10T18:34:59,624][INFO ][o.o.n.Node               ] [e1eb785c281a] version[2.14.0], pid[81], build[tar/aaa555453f4713d652b52436874e11ba258d8f03/2024-05-09T18:51:00.973564994Z], OS[Linux/6.8.0-117-generic/amd64], JVM[Eclipse Adoptium/OpenJDK 64-Bit Server VM/21.0.3/21.0.3+9-LTS]
-[2026-06-10T18:34:59,626][INFO ][o.o.n.Node               ] [e1eb785c281a] JVM home [/usr/share/opensearch/jdk], using bundled JDK/JRE [true]
-[2026-06-10T18:34:59,626][INFO ][o.o.n.Node               ] [e1eb785c281a] JVM arguments [-Xshare:auto, -Dopensearch.networkaddress.cache.ttl=60, -Dopensearch.networkaddress.cache.negative.ttl=10, -XX:+AlwaysPreTouch, -Xss1m, -Djava.awt.headless=true, -Dfile.encoding=UTF-8, -Djna.nosys=true, -XX:-OmitStackTraceInFastThrow, -XX:+ShowCodeDetailsInExceptionMessages, -Dio.netty.noUnsafe=true, -Dio.netty.noKeySetOptimization=true, -Dio.netty.recycler.maxCapacityPerThread=0, -Dio.netty.allocator.numDirectArenas=0, -Dlog4j.shutdownHookEnabled=false, -Dlog4j2.disable.jmx=true, -Djava.security.manager=allow, -Djava.locale.providers=SPI,COMPAT, -Xms1g, -Xmx1g, -XX:+UseG1GC, -XX:G1ReservePercent=25, -XX:InitiatingHeapOccupancyPercent=30, -Djava.io.tmpdir=/tmp/opensearch-18416262957373790031, -XX:+HeapDumpOnOutOfMemoryError, -XX:HeapDumpPath=data, -XX:ErrorFile=logs/hs_err_pid%p.log, -Xlog:gc*,gc+age=trace,safepoint:file=logs/gc.log:utctime,pid,tags:filecount=32,filesize=64m, -Djava.security.manager=allow, --add-modules=jdk.incubator.vector, -Djava.util.concurrent.ForkJoinPool.common.threadFactory=org.opensearch.secure_sm.SecuredForkJoinWorkerThreadFactory, -Dclk.tck=100, -Djdk.attach.allowAttachSelf=true, -Djava.security.policy=/usr/share/opensearch/config/opensearch-performance-analyzer/opensearch_security.policy, --add-opens=jdk.attach/sun.tools.attach=ALL-UNNAMED, -Dopensearch.cgroups.hierarchy.override=/, -Xms512m, -Xmx512m, -XX:MaxDirectMemorySize=268435456, -Dopensearch.path.home=/usr/share/opensearch, -Dopensearch.path.conf=/usr/share/opensearch/config, -Dopensearch.distribution.type=tar, -Dopensearch.bundled_jdk=true]
-[2026-06-10T18:35:00,629][INFO ][o.o.s.s.t.SSLConfig      ] [e1eb785c281a] SSL dual mode is disabled
-[2026-06-10T18:35:00,630][INFO ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] OpenSearch Config path is /usr/share/opensearch/config
-[2026-06-10T18:35:00,845][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] JVM supports TLSv1.3
-[2026-06-10T18:35:00,847][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] Config directory is /usr/share/opensearch/config/, from there the key- and truststore files are resolved relatively
-[2026-06-10T18:35:01,235][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] TLS Transport Client Provider : JDK
-[2026-06-10T18:35:01,235][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] TLS Transport Server Provider : JDK
-[2026-06-10T18:35:01,235][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] TLS HTTP Provider             : JDK
-[2026-06-10T18:35:01,236][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] Enabled TLS protocols for transport layer : [TLSv1.3, TLSv1.2]
-[2026-06-10T18:35:01,236][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] Enabled TLS protocols for HTTP layer      : [TLSv1.3, TLSv1.2]
-[2026-06-10T18:35:01,268][INFO ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] Clustername: docker-cluster
-[2026-06-10T18:35:01,274][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] Directory /usr/share/opensearch/config has insecure file permissions (should be 0700)
-[2026-06-10T18:35:01,275][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/securityadmin_demo.sh has insecure file permissions (should be 0600)
-[2026-06-10T18:35:01,275][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/kirk.pem has insecure file permissions (should be 0600)
-[2026-06-10T18:35:01,275][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/root-ca.pem has insecure file permissions (should be 0600)
-[2026-06-10T18:35:01,275][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/kirk-key.pem has insecure file permissions (should be 0600)
-[2026-06-10T18:35:01,275][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/esnode.pem has insecure file permissions (should be 0600)
-[2026-06-10T18:35:01,275][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/esnode-key.pem has insecure file permissions (should be 0600)
-[2026-06-10T18:35:01,892][INFO ][o.o.p.c.c.PluginSettings ] [e1eb785c281a] Config: metricsLocation: /dev/shm/performanceanalyzer/, metricsDeletionInterval: 1, httpsEnabled: false, cleanup-metrics-db-files: true, batch-metrics-retention-period-minutes: 7, rpc-port: 9650, webservice-port 9600
-[2026-06-10T18:35:02,425][INFO ][o.o.i.r.ReindexPlugin    ] [e1eb785c281a] ReindexPlugin reloadSPI called
-[2026-06-10T18:35:02,425][INFO ][o.o.i.r.ReindexPlugin    ] [e1eb785c281a] Unable to find any implementation for RemoteReindexExtension
-[2026-06-10T18:35:02,456][INFO ][o.o.j.JobSchedulerPlugin ] [e1eb785c281a] Loaded scheduler extension: opendistro_anomaly_detector, index: .opendistro-anomaly-detector-jobs
-[2026-06-10T18:35:02,483][INFO ][o.o.j.JobSchedulerPlugin ] [e1eb785c281a] Loaded scheduler extension: reports-scheduler, index: .opendistro-reports-definitions
-[2026-06-10T18:35:02,484][INFO ][o.o.j.JobSchedulerPlugin ] [e1eb785c281a] Loaded scheduler extension: opendistro-index-management, index: .opendistro-ism-config
-[2026-06-10T18:35:02,485][INFO ][o.o.j.JobSchedulerPlugin ] [e1eb785c281a] Loaded scheduler extension: scheduler_geospatial_ip2geo_datasource, index: .scheduler-geospatial-ip2geo-datasource
-[2026-06-10T18:35:02,487][INFO ][o.o.j.JobSchedulerPlugin ] [e1eb785c281a] Loaded scheduler extension: opensearch_sap_job, index: .opensearch-sap--job
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [aggs-matrix-stats]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [analysis-common]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [cache-common]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [geo]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [ingest-common]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [ingest-geoip]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [ingest-user-agent]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [lang-expression]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [lang-mustache]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [lang-painless]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [mapper-extras]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [opensearch-dashboards]
-[2026-06-10T18:35:02,514][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [parent-join]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [percolator]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [rank-eval]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [reindex]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [repository-url]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [search-pipeline-common]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [systemd]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [transport-netty4]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-alerting]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-anomaly-detection]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-asynchronous-search]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-cross-cluster-replication]
-[2026-06-10T18:35:02,515][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-custom-codecs]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-flow-framework]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-geospatial]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-index-management]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-job-scheduler]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-knn]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-ml]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-neural-search]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-notifications]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-notifications-core]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-observability]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-performance-analyzer]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-reports-scheduler]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-security]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-security-analytics]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-skills]
-[2026-06-10T18:35:02,516][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-sql]
-[2026-06-10T18:35:02,563][INFO ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] Disabled https compression by default to mitigate BREACH attacks. You can enable it by setting 'http.compression: true' in opensearch.yml
-[2026-06-10T18:35:02,566][INFO ][o.o.e.ExtensionsManager  ] [e1eb785c281a] ExtensionsManager initialized
-[2026-06-10T18:35:02,574][DEPRECATION][o.o.d.c.s.Settings       ] [e1eb785c281a] [node.max_local_storage_nodes] setting was deprecated in OpenSearch and will be removed in a future release! See the breaking changes documentation for the next major version.
-[2026-06-10T18:35:02,578][INFO ][o.a.l.s.MemorySegmentIndexInputProvider] [e1eb785c281a] Using MemorySegmentIndexInput with Java 21 or later; to disable start with -Dorg.apache.lucene.store.MMapDirectory.enableMemorySegments=false
-[2026-06-10T18:35:02,584][INFO ][o.o.e.NodeEnvironment    ] [e1eb785c281a] using [1] data paths, mounts [[/usr/share/opensearch/data (/dev/md2)]], net usable_space [442.3gb], net total_space [932.7gb], types [ext4]
-[2026-06-10T18:35:02,584][INFO ][o.o.e.NodeEnvironment    ] [e1eb785c281a] heap size [512mb], compressed ordinary object pointers [true]
-[2026-06-10T18:35:02,710][INFO ][o.o.n.Node               ] [e1eb785c281a] node name [e1eb785c281a], node ID [vlJ46vTYR2C_NMHQU64o3g], cluster name [docker-cluster], roles [ingest, remote_cluster_client, data, cluster_manager]
-[2026-06-10T18:35:04,434][DEPRECATION][o.o.d.c.s.Settings       ] [e1eb785c281a] [index.store.hybrid.mmap.extensions] setting was deprecated in OpenSearch and will be removed in a future release! See the breaking changes documentation for the next major version.
-[2026-06-10T18:35:04,435][DEPRECATION][o.o.d.c.s.Settings       ] [e1eb785c281a] [plugins.security.ssl.transport.enforce_hostname_verification] setting was deprecated in OpenSearch and will be removed in a future release! See the breaking changes documentation for the next major version.
-[2026-06-10T18:35:04,878][INFO ][o.o.n.p.NeuralSearch     ] [e1eb785c281a] Registering hybrid query phase searcher with feature flag [plugins.neural_search.hybrid_search_disabled]
-[2026-06-10T18:35:05,248][WARN ][o.o.s.c.Salt             ] [e1eb785c281a] If you plan to use field masking pls configure compliance salt e1ukloTsQlOgPquJ to be a random string of 16 chars length identical on all nodes
-[2026-06-10T18:35:05,285][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Message routing enabled: true
-[2026-06-10T18:35:05,319][INFO ][o.o.s.f.SecurityFilter   ] [e1eb785c281a] <NONE> indices are made immutable.
-[2026-06-10T18:35:05,577][INFO ][o.o.a.b.ADCircuitBreakerService] [e1eb785c281a] Registered memory breaker.
-[2026-06-10T18:35:05,891][INFO ][o.o.m.b.MLCircuitBreakerService] [e1eb785c281a] Registered ML memory breaker.
-[2026-06-10T18:35:05,891][INFO ][o.o.m.b.MLCircuitBreakerService] [e1eb785c281a] Registered ML disk breaker.
-[2026-06-10T18:35:05,891][INFO ][o.o.m.b.MLCircuitBreakerService] [e1eb785c281a] Registered ML native memory breaker.
-[2026-06-10T18:35:05,967][INFO ][o.r.Reflections          ] [e1eb785c281a] Reflections took 36 ms to scan 1 urls, producing 24 keys and 65 values
-[2026-06-10T18:35:06,029][WARN ][o.o.s.p.SQLPlugin        ] [e1eb785c281a] Master key is a required config for using create and update datasource APIs. Please set plugins.query.datasources.encryption.masterkey config in opensearch.yml in all the cluster nodes. More details can be found here: https://github.com/opensearch-project/sql/blob/main/docs/user/ppl/admin/datasources.rst#master-key-config-for-encrypting-credential-information
-[2026-06-10T18:35:06,542][INFO ][o.o.t.NettyAllocator     ] [e1eb785c281a] creating NettyAllocator with the following configs: [name=unpooled, suggested_max_allocation_size=256kb, factors={opensearch.unsafe.use_unpooled_allocator=null, g1gc_enabled=true, g1gc_region_size=1mb, heap_size=512mb}]
-[2026-06-10T18:35:06,547][INFO ][o.o.s.s.t.SSLConfig      ] [e1eb785c281a] SSL dual mode is disabled
-[2026-06-10T18:35:06,634][INFO ][o.o.d.DiscoveryModule    ] [e1eb785c281a] using discovery type [single-node] and seed hosts providers [settings]
-[2026-06-10T18:35:07,024][WARN ][o.o.g.DanglingIndicesState] [e1eb785c281a] gateway.auto_import_dangling_indices is disabled, dangling indices will not be automatically detected or imported and must be managed manually
-[2026-06-10T18:35:07,518][INFO ][o.o.p.h.c.PerformanceAnalyzerConfigAction] [e1eb785c281a] PerformanceAnalyzer Enabled: false
-[2026-06-10T18:35:07,546][INFO ][o.o.n.Node               ] [e1eb785c281a] initialized
-[2026-06-10T18:35:07,546][INFO ][o.o.n.Node               ] [e1eb785c281a] starting ...
-[2026-06-10T18:35:07,570][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [windows_logtype.json] log type
-[2026-06-10T18:35:07,570][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [waf_logtype.json] log type
-[2026-06-10T18:35:07,570][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [vpcflow_logtype.json] log type
-[2026-06-10T18:35:07,571][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [test_windows_logtype.json] log type
-[2026-06-10T18:35:07,571][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [s3_logtype.json] log type
-[2026-06-10T18:35:07,571][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_web_logtype.json] log type
-[2026-06-10T18:35:07,571][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_proxy_logtype.json] log type
-[2026-06-10T18:35:07,571][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_macos_logtype.json] log type
-[2026-06-10T18:35:07,572][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_compliance_logtype.json] log type
-[2026-06-10T18:35:07,572][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_cloud_logtype.json] log type
-[2026-06-10T18:35:07,572][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_apt_logtype.json] log type
-[2026-06-10T18:35:07,572][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_application_logtype.json] log type
-[2026-06-10T18:35:07,573][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [okta_logtype.json] log type
-[2026-06-10T18:35:07,573][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [network_logtype.json] log type
-[2026-06-10T18:35:07,573][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [netflow_logtype.json] log type
-[2026-06-10T18:35:07,573][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [m365_logtype.json] log type
-[2026-06-10T18:35:07,574][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [linux_logtype.json] log type
-[2026-06-10T18:35:07,574][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [gworkspace_logtype.json] log type
-[2026-06-10T18:35:07,574][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [github_logtype.json] log type
-[2026-06-10T18:35:07,574][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [dns_logtype.json] log type
-[2026-06-10T18:35:07,575][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [cloudtrail_logtype.json] log type
-[2026-06-10T18:35:07,575][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [azure_logtype.json] log type
-[2026-06-10T18:35:07,575][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [apache_access_logtype.json] log type
-[2026-06-10T18:35:07,575][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [ad_ldap_logtype.json] log type
-[2026-06-10T18:35:07,656][INFO ][o.o.t.TransportService   ] [e1eb785c281a] publish_address {172.20.0.2:9300}, bound_addresses {[::]:9300}
-[2026-06-10T18:35:07,658][INFO ][o.o.t.TransportService   ] [e1eb785c281a] Remote clusters initialized successfully.
-[2026-06-10T18:35:07,924][INFO ][o.o.c.c.Coordinator      ] [e1eb785c281a] cluster UUID [smPCS7KBQYWuyqcH7AWKCg]
-[2026-06-10T18:35:08,026][INFO ][o.o.c.s.MasterService    ] [e1eb785c281a] elected-as-cluster-manager ([1] nodes joined)[{e1eb785c281a}{vlJ46vTYR2C_NMHQU64o3g}{6R_6_2CaQcOihSt8puvNOw}{172.20.0.2}{172.20.0.2:9300}{dimr}{shard_indexing_pressure_enabled=true} elect leader, _BECOME_CLUSTER_MANAGER_TASK_, _FINISH_ELECTION_], term: 7, version: 321, delta: cluster-manager node changed {previous [], current [{e1eb785c281a}{vlJ46vTYR2C_NMHQU64o3g}{6R_6_2CaQcOihSt8puvNOw}{172.20.0.2}{172.20.0.2:9300}{dimr}{shard_indexing_pressure_enabled=true}]}
-[2026-06-10T18:35:08,121][INFO ][o.o.c.s.ClusterApplierService] [e1eb785c281a] cluster-manager node changed {previous [], current [{e1eb785c281a}{vlJ46vTYR2C_NMHQU64o3g}{6R_6_2CaQcOihSt8puvNOw}{172.20.0.2}{172.20.0.2:9300}{dimr}{shard_indexing_pressure_enabled=true}]}, term: 7, version: 321, reason: Publication{term=7, version=321}
-[2026-06-10T18:35:08,126][INFO ][o.o.a.c.ADClusterEventListener] [e1eb785c281a] Cluster is not recovered yet.
-[2026-06-10T18:35:08,148][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Cache cluster manager node onClusterManager time: 1781116508148
-[2026-06-10T18:35:08,156][WARN ][o.o.p.c.s.h.ConfigOverridesClusterSettingHandler] [e1eb785c281a] Config override setting update called with empty string. Ignoring.
-[2026-06-10T18:35:08,162][INFO ][o.o.d.PeerFinder         ] [e1eb785c281a] setting findPeersInterval to [1s] as node commission status = [true] for local node [{e1eb785c281a}{vlJ46vTYR2C_NMHQU64o3g}{6R_6_2CaQcOihSt8puvNOw}{172.20.0.2}{172.20.0.2:9300}{dimr}{shard_indexing_pressure_enabled=true}]
-[2026-06-10T18:35:08,165][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:08,168][INFO ][o.o.h.AbstractHttpServerTransport] [e1eb785c281a] publish_address {172.20.0.2:9200}, bound_addresses {[::]:9200}
-[2026-06-10T18:35:08,168][INFO ][o.o.n.Node               ] [e1eb785c281a] started
-[2026-06-10T18:35:08,169][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Will attempt to create index .opendistro_security and default configs if they are absent
-[2026-06-10T18:35:08,170][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Background init thread started. Install default config?: true
-[2026-06-10T18:35:08,171][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Wait for cluster to be available ...
-[2026-06-10T18:35:08,171][INFO ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] 0 OpenSearch Security modules loaded so far: []
-[2026-06-10T18:35:08,175][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:08,249][INFO ][o.o.c.s.ClusterSettings  ] [e1eb785c281a] updating [plugins.index_state_management.template_migration.control] from [0] to [-1]
-[2026-06-10T18:35:08,251][INFO ][o.o.a.c.HashRing         ] [e1eb785c281a] Node added: [vlJ46vTYR2C_NMHQU64o3g]
-[2026-06-10T18:35:08,253][INFO ][o.o.a.c.HashRing         ] [e1eb785c281a] Add data node to AD version hash ring: vlJ46vTYR2C_NMHQU64o3g
-[2026-06-10T18:35:08,254][INFO ][o.o.a.c.HashRing         ] [e1eb785c281a] All nodes with known AD version: {vlJ46vTYR2C_NMHQU64o3g=ADNodeInfo{version=2.14.0, isEligibleDataNode=true}}
-[2026-06-10T18:35:08,254][INFO ][o.o.a.c.HashRing         ] [e1eb785c281a] Rebuild AD hash ring for realtime AD with cooldown, nodeChangeEvents size 0
-[2026-06-10T18:35:08,254][INFO ][o.o.a.c.HashRing         ] [e1eb785c281a] Build AD version hash ring successfully
-[2026-06-10T18:35:08,255][INFO ][o.o.a.c.ADDataMigrator   ] [e1eb785c281a] Start migrating AD data
-[2026-06-10T18:35:08,255][INFO ][o.o.a.c.ADDataMigrator   ] [e1eb785c281a] AD job index doesn't exist, no need to migrate
-[2026-06-10T18:35:08,255][INFO ][o.o.a.c.ADClusterEventListener] [e1eb785c281a] Init AD version hash ring successfully
-[2026-06-10T18:35:08,268][INFO ][o.o.g.GatewayService     ] [e1eb785c281a] recovered [25] indices into cluster_state
-[2026-06-10T18:35:08,270][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Loading builtin types!
-[2026-06-10T18:35:08,273][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Indexing [429] fieldMappingDocs from logTypes: 24
-[2026-06-10T18:35:08,294][WARN ][o.o.o.i.ObservabilityIndex] [e1eb785c281a] message: index [.opensearch-observability/LYuCGnkYSpuu2kWAk4PW4g] already exists
-[2026-06-10T18:35:08,295][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:08,297][WARN ][o.o.s.SecurityAnalyticsPlugin] [e1eb785c281a] Failed to initialize LogType config index and builtin log types
-[2026-06-10T18:35:08,387][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,427][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.opendistro_security/TPsq0QMUTFalmLfM3shcTg]
-[2026-06-10T18:35:08,507][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,531][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,538][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflowqueue-shuffle/u1K2iI3aQ3e29iCjWDf3_g]
-[2026-06-10T18:35:08,546][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[security-auditlog-2026.06.10/4iHt443nTFeaJwkmfLD6Sw]
-[2026-06-10T18:35:08,553][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,558][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[platform_health/1T6I59P8T827a0ghSzi40g]
-[2026-06-10T18:35:08,579][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,599][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,629][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,738][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,757][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,837][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,919][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:08,984][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:08,996][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,158][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[openapi3/zzkR9Uh8QgiYHhpKYm1mkQ]
-[2026-06-10T18:35:09,159][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Loading builtin types!
-[2026-06-10T18:35:09,160][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Indexing [429] fieldMappingDocs from logTypes: 24
-[2026-06-10T18:35:09,161][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Loading builtin types!
-[2026-06-10T18:35:09,161][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Indexing [429] fieldMappingDocs from logTypes: 24
-[2026-06-10T18:35:09,163][INFO ][o.o.s.i.DetectorIndexManagementService] [e1eb785c281a] info deleteOldIndices
-[2026-06-10T18:35:09,163][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[files/uqUKmcUdSKGu8wBaEuuv8Q]
-[2026-06-10T18:35:09,166][INFO ][o.o.s.i.DetectorIndexManagementService] [e1eb785c281a] No Old Correlation Indices to delete
-[2026-06-10T18:35:09,172][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[organizations/7BpSGzFITpC4MCx0N1AeFg]
-[2026-06-10T18:35:09,202][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[app_revisions/IM0YZj-jRTqL7Zn5VWxg1Q]
-[2026-06-10T18:35:09,253][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,256][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,258][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,260][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,262][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,265][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,267][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,269][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,271][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,272][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,275][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,277][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
-[2026-06-10T18:35:09,383][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Index .opendistro_security already exists
-[2026-06-10T18:35:09,383][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Node started, try to initialize it. Wait for at least yellow cluster state....
-[2026-06-10T18:35:09,390][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'config' with /usr/share/opensearch/config/opensearch-security/config.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
-[2026-06-10T18:35:09,465][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id config, skipping update.
-[2026-06-10T18:35:09,465][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'roles' with /usr/share/opensearch/config/opensearch-security/roles.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
-[2026-06-10T18:35:09,476][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id roles, skipping update.
-[2026-06-10T18:35:09,476][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'rolesmapping' with /usr/share/opensearch/config/opensearch-security/roles_mapping.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
-[2026-06-10T18:35:09,483][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id rolesmapping, skipping update.
-[2026-06-10T18:35:09,483][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'internalusers' with /usr/share/opensearch/config/opensearch-security/internal_users.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
-[2026-06-10T18:35:09,491][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id internalusers, skipping update.
-[2026-06-10T18:35:09,491][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'actiongroups' with /usr/share/opensearch/config/opensearch-security/action_groups.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
-[2026-06-10T18:35:09,495][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id actiongroups, skipping update.
-[2026-06-10T18:35:09,495][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'tenants' with /usr/share/opensearch/config/opensearch-security/tenants.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
-[2026-06-10T18:35:09,498][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id tenants, skipping update.
-[2026-06-10T18:35:09,498][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'nodesdn' with /usr/share/opensearch/config/opensearch-security/nodes_dn.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=true
-[2026-06-10T18:35:09,500][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id nodesdn, skipping update.
-[2026-06-10T18:35:09,500][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'whitelist' with /usr/share/opensearch/config/opensearch-security/whitelist.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=true
-[2026-06-10T18:35:09,501][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id whitelist, skipping update.
-[2026-06-10T18:35:09,501][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'allowlist' with /usr/share/opensearch/config/opensearch-security/allowlist.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=true
-[2026-06-10T18:35:09,503][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id allowlist, skipping update.
-[2026-06-10T18:35:09,504][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'audit' with /usr/share/opensearch/config/opensearch-security/audit.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
-[2026-06-10T18:35:09,516][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id audit, skipping update.
-[2026-06-10T18:35:09,650][INFO ][stdout                   ] [e1eb785c281a] [FINE] No subscribers registered for event class org.opensearch.security.securityconf.DynamicConfigFactory$NodesDnModelImpl
-[2026-06-10T18:35:09,651][INFO ][stdout                   ] [e1eb785c281a] [FINE] No subscribers registered for event class org.greenrobot.eventbus.NoSubscriberEvent
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing on REST API is enabled.
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] [AUTHENTICATED, GRANTED_PRIVILEGES] are excluded from REST API auditing.
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing on Transport API is enabled.
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] [AUTHENTICATED, GRANTED_PRIVILEGES] are excluded from Transport API auditing.
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing of request body is enabled.
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Bulk requests resolution is disabled during request auditing.
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Index resolution is enabled during request auditing.
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Sensitive headers auditing is enabled.
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing requests from kibanaserver users is disabled.
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing request headers <NONE> is disabled.
-[2026-06-10T18:35:09,651][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing request url params <NONE> is disabled.
-[2026-06-10T18:35:09,654][WARN ][o.o.s.a.r.AuditMessageRouter] [e1eb785c281a] No endpoint configured for categories [BAD_HEADERS, FAILED_LOGIN, MISSING_PRIVILEGES, GRANTED_PRIVILEGES, OPENDISTRO_SECURITY_INDEX_ATTEMPT, SSL_EXCEPTION, AUTHENTICATED, INDEX_EVENT, COMPLIANCE_DOC_READ, COMPLIANCE_DOC_WRITE, COMPLIANCE_EXTERNAL_CONFIG, COMPLIANCE_INTERNAL_CONFIG_READ, COMPLIANCE_INTERNAL_CONFIG_WRITE], using default endpoint
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing of external configuration is disabled.
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing of internal configuration is enabled.
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing only metadata information for read request is enabled.
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing will watch {} for read requests.
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing read operation requests from kibanaserver users is disabled.
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing only metadata information for write request is enabled.
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing diffs for write requests is disabled.
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing write operation requests from kibanaserver users is disabled.
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing will watch <NONE> for write requests.
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] .opendistro_security is used as internal security index.
-[2026-06-10T18:35:09,654][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Internal index used for posting audit logs is null
-[2026-06-10T18:35:09,655][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Hot-reloading of audit configuration is enabled
-[2026-06-10T18:35:09,655][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Node 'e1eb785c281a' initialized
-[2026-06-10T18:35:09,771][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:09,946][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[datastore_category-000001/JuzzPGyITIWxS62mdxUyrA]
-[2026-06-10T18:35:09,954][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[users/v9M97APyS2ajYp8ZLxFh7Q]
-[2026-06-10T18:35:10,345][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:10,464][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflow-000001/93qVvt8WS-OKTyGgdd5gaA]
-[2026-06-10T18:35:10,484][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflow_revisions-000001/RquNuKk-TfGc2VBXAw5U1A]
-[2026-06-10T18:35:10,877][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:11,020][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflowapp-000001/F50dXqJNRkiheSG-WCo7mQ]
-[2026-06-10T18:35:11,577][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:11,585][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+[2026-06-10T23:24:29,640][INFO ][o.o.n.Node               ] [e1eb785c281a] version[2.14.0], pid[90], build[tar/aaa555453f4713d652b52436874e11ba258d8f03/2024-05-09T18:51:00.973564994Z], OS[Linux/6.8.0-117-generic/amd64], JVM[Eclipse Adoptium/OpenJDK 64-Bit Server VM/21.0.3/21.0.3+9-LTS]
+[2026-06-10T23:24:29,642][INFO ][o.o.n.Node               ] [e1eb785c281a] JVM home [/usr/share/opensearch/jdk], using bundled JDK/JRE [true]
+[2026-06-10T23:24:29,642][INFO ][o.o.n.Node               ] [e1eb785c281a] JVM arguments [-Xshare:auto, -Dopensearch.networkaddress.cache.ttl=60, -Dopensearch.networkaddress.cache.negative.ttl=10, -XX:+AlwaysPreTouch, -Xss1m, -Djava.awt.headless=true, -Dfile.encoding=UTF-8, -Djna.nosys=true, -XX:-OmitStackTraceInFastThrow, -XX:+ShowCodeDetailsInExceptionMessages, -Dio.netty.noUnsafe=true, -Dio.netty.noKeySetOptimization=true, -Dio.netty.recycler.maxCapacityPerThread=0, -Dio.netty.allocator.numDirectArenas=0, -Dlog4j.shutdownHookEnabled=false, -Dlog4j2.disable.jmx=true, -Djava.security.manager=allow, -Djava.locale.providers=SPI,COMPAT, -Xms1g, -Xmx1g, -XX:+UseG1GC, -XX:G1ReservePercent=25, -XX:InitiatingHeapOccupancyPercent=30, -Djava.io.tmpdir=/tmp/opensearch-17474601093890763845, -XX:+HeapDumpOnOutOfMemoryError, -XX:HeapDumpPath=data, -XX:ErrorFile=logs/hs_err_pid%p.log, -Xlog:gc*,gc+age=trace,safepoint:file=logs/gc.log:utctime,pid,tags:filecount=32,filesize=64m, -Djava.security.manager=allow, --add-modules=jdk.incubator.vector, -Djava.util.concurrent.ForkJoinPool.common.threadFactory=org.opensearch.secure_sm.SecuredForkJoinWorkerThreadFactory, -Dclk.tck=100, -Djdk.attach.allowAttachSelf=true, -Djava.security.policy=/usr/share/opensearch/config/opensearch-performance-analyzer/opensearch_security.policy, --add-opens=jdk.attach/sun.tools.attach=ALL-UNNAMED, -Dopensearch.cgroups.hierarchy.override=/, -Xms512m, -Xmx512m, -XX:MaxDirectMemorySize=268435456, -Dopensearch.path.home=/usr/share/opensearch, -Dopensearch.path.conf=/usr/share/opensearch/config, -Dopensearch.distribution.type=tar, -Dopensearch.bundled_jdk=true]
+[2026-06-10T23:24:30,737][INFO ][o.o.s.s.t.SSLConfig      ] [e1eb785c281a] SSL dual mode is disabled
+[2026-06-10T23:24:30,737][INFO ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] OpenSearch Config path is /usr/share/opensearch/config
+[2026-06-10T23:24:30,944][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] JVM supports TLSv1.3
+[2026-06-10T23:24:30,946][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] Config directory is /usr/share/opensearch/config/, from there the key- and truststore files are resolved relatively
+[2026-06-10T23:24:31,474][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] TLS Transport Client Provider : JDK
+[2026-06-10T23:24:31,475][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] TLS Transport Server Provider : JDK
+[2026-06-10T23:24:31,475][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] TLS HTTP Provider             : JDK
+[2026-06-10T23:24:31,475][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] Enabled TLS protocols for transport layer : [TLSv1.3, TLSv1.2]
+[2026-06-10T23:24:31,475][INFO ][o.o.s.s.DefaultSecurityKeyStore] [e1eb785c281a] Enabled TLS protocols for HTTP layer      : [TLSv1.3, TLSv1.2]
+[2026-06-10T23:24:31,518][INFO ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] Clustername: docker-cluster
+[2026-06-10T23:24:31,526][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] Directory /usr/share/opensearch/config has insecure file permissions (should be 0700)
+[2026-06-10T23:24:31,527][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/securityadmin_demo.sh has insecure file permissions (should be 0600)
+[2026-06-10T23:24:31,527][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/kirk.pem has insecure file permissions (should be 0600)
+[2026-06-10T23:24:31,527][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/root-ca.pem has insecure file permissions (should be 0600)
+[2026-06-10T23:24:31,527][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/kirk-key.pem has insecure file permissions (should be 0600)
+[2026-06-10T23:24:31,527][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/esnode.pem has insecure file permissions (should be 0600)
+[2026-06-10T23:24:31,527][WARN ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] File /usr/share/opensearch/config/esnode-key.pem has insecure file permissions (should be 0600)
+[2026-06-10T23:24:32,160][INFO ][o.o.p.c.c.PluginSettings ] [e1eb785c281a] Config: metricsLocation: /dev/shm/performanceanalyzer/, metricsDeletionInterval: 1, httpsEnabled: false, cleanup-metrics-db-files: true, batch-metrics-retention-period-minutes: 7, rpc-port: 9650, webservice-port 9600
+[2026-06-10T23:24:32,652][INFO ][o.o.i.r.ReindexPlugin    ] [e1eb785c281a] ReindexPlugin reloadSPI called
+[2026-06-10T23:24:32,652][INFO ][o.o.i.r.ReindexPlugin    ] [e1eb785c281a] Unable to find any implementation for RemoteReindexExtension
+[2026-06-10T23:24:32,679][INFO ][o.o.j.JobSchedulerPlugin ] [e1eb785c281a] Loaded scheduler extension: opendistro_anomaly_detector, index: .opendistro-anomaly-detector-jobs
+[2026-06-10T23:24:32,705][INFO ][o.o.j.JobSchedulerPlugin ] [e1eb785c281a] Loaded scheduler extension: reports-scheduler, index: .opendistro-reports-definitions
+[2026-06-10T23:24:32,706][INFO ][o.o.j.JobSchedulerPlugin ] [e1eb785c281a] Loaded scheduler extension: opendistro-index-management, index: .opendistro-ism-config
+[2026-06-10T23:24:32,707][INFO ][o.o.j.JobSchedulerPlugin ] [e1eb785c281a] Loaded scheduler extension: scheduler_geospatial_ip2geo_datasource, index: .scheduler-geospatial-ip2geo-datasource
+[2026-06-10T23:24:32,709][INFO ][o.o.j.JobSchedulerPlugin ] [e1eb785c281a] Loaded scheduler extension: opensearch_sap_job, index: .opensearch-sap--job
+[2026-06-10T23:24:32,750][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [aggs-matrix-stats]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [analysis-common]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [cache-common]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [geo]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [ingest-common]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [ingest-geoip]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [ingest-user-agent]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [lang-expression]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [lang-mustache]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [lang-painless]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [mapper-extras]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [opensearch-dashboards]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [parent-join]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [percolator]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [rank-eval]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [reindex]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [repository-url]
+[2026-06-10T23:24:32,751][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [search-pipeline-common]
+[2026-06-10T23:24:32,752][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [systemd]
+[2026-06-10T23:24:32,752][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded module [transport-netty4]
+[2026-06-10T23:24:32,752][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-alerting]
+[2026-06-10T23:24:32,752][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-anomaly-detection]
+[2026-06-10T23:24:32,752][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-asynchronous-search]
+[2026-06-10T23:24:32,752][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-cross-cluster-replication]
+[2026-06-10T23:24:32,752][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-custom-codecs]
+[2026-06-10T23:24:32,752][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-flow-framework]
+[2026-06-10T23:24:32,752][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-geospatial]
+[2026-06-10T23:24:32,752][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-index-management]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-job-scheduler]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-knn]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-ml]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-neural-search]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-notifications]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-notifications-core]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-observability]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-performance-analyzer]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-reports-scheduler]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-security]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-security-analytics]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-skills]
+[2026-06-10T23:24:32,753][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] loaded plugin [opensearch-sql]
+[2026-06-10T23:24:32,802][INFO ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] Disabled https compression by default to mitigate BREACH attacks. You can enable it by setting 'http.compression: true' in opensearch.yml
+[2026-06-10T23:24:32,805][INFO ][o.o.e.ExtensionsManager  ] [e1eb785c281a] ExtensionsManager initialized
+[2026-06-10T23:24:32,815][DEPRECATION][o.o.d.c.s.Settings       ] [e1eb785c281a] [node.max_local_storage_nodes] setting was deprecated in OpenSearch and will be removed in a future release! See the breaking changes documentation for the next major version.
+[2026-06-10T23:24:32,819][INFO ][o.a.l.s.MemorySegmentIndexInputProvider] [e1eb785c281a] Using MemorySegmentIndexInput with Java 21 or later; to disable start with -Dorg.apache.lucene.store.MMapDirectory.enableMemorySegments=false
+[2026-06-10T23:24:32,826][INFO ][o.o.e.NodeEnvironment    ] [e1eb785c281a] using [1] data paths, mounts [[/usr/share/opensearch/data (/dev/md2)]], net usable_space [436.8gb], net total_space [932.7gb], types [ext4]
+[2026-06-10T23:24:32,826][INFO ][o.o.e.NodeEnvironment    ] [e1eb785c281a] heap size [512mb], compressed ordinary object pointers [true]
+[2026-06-10T23:24:32,950][INFO ][o.o.n.Node               ] [e1eb785c281a] node name [e1eb785c281a], node ID [vlJ46vTYR2C_NMHQU64o3g], cluster name [docker-cluster], roles [ingest, remote_cluster_client, data, cluster_manager]
+[2026-06-10T23:24:34,645][DEPRECATION][o.o.d.c.s.Settings       ] [e1eb785c281a] [index.store.hybrid.mmap.extensions] setting was deprecated in OpenSearch and will be removed in a future release! See the breaking changes documentation for the next major version.
+[2026-06-10T23:24:34,646][DEPRECATION][o.o.d.c.s.Settings       ] [e1eb785c281a] [plugins.security.ssl.transport.enforce_hostname_verification] setting was deprecated in OpenSearch and will be removed in a future release! See the breaking changes documentation for the next major version.
+[2026-06-10T23:24:35,096][INFO ][o.o.n.p.NeuralSearch     ] [e1eb785c281a] Registering hybrid query phase searcher with feature flag [plugins.neural_search.hybrid_search_disabled]
+[2026-06-10T23:24:35,470][WARN ][o.o.s.c.Salt             ] [e1eb785c281a] If you plan to use field masking pls configure compliance salt e1ukloTsQlOgPquJ to be a random string of 16 chars length identical on all nodes
+[2026-06-10T23:24:35,510][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Message routing enabled: true
+[2026-06-10T23:24:35,537][INFO ][o.o.s.f.SecurityFilter   ] [e1eb785c281a] <NONE> indices are made immutable.
+[2026-06-10T23:24:35,794][INFO ][o.o.a.b.ADCircuitBreakerService] [e1eb785c281a] Registered memory breaker.
+[2026-06-10T23:24:36,128][INFO ][o.o.m.b.MLCircuitBreakerService] [e1eb785c281a] Registered ML memory breaker.
+[2026-06-10T23:24:36,129][INFO ][o.o.m.b.MLCircuitBreakerService] [e1eb785c281a] Registered ML disk breaker.
+[2026-06-10T23:24:36,129][INFO ][o.o.m.b.MLCircuitBreakerService] [e1eb785c281a] Registered ML native memory breaker.
+[2026-06-10T23:24:36,223][INFO ][o.r.Reflections          ] [e1eb785c281a] Reflections took 41 ms to scan 1 urls, producing 24 keys and 65 values
+[2026-06-10T23:24:36,296][WARN ][o.o.s.p.SQLPlugin        ] [e1eb785c281a] Master key is a required config for using create and update datasource APIs. Please set plugins.query.datasources.encryption.masterkey config in opensearch.yml in all the cluster nodes. More details can be found here: https://github.com/opensearch-project/sql/blob/main/docs/user/ppl/admin/datasources.rst#master-key-config-for-encrypting-credential-information
+[2026-06-10T23:24:36,869][INFO ][o.o.t.NettyAllocator     ] [e1eb785c281a] creating NettyAllocator with the following configs: [name=unpooled, suggested_max_allocation_size=256kb, factors={opensearch.unsafe.use_unpooled_allocator=null, g1gc_enabled=true, g1gc_region_size=1mb, heap_size=512mb}]
+[2026-06-10T23:24:36,875][INFO ][o.o.s.s.t.SSLConfig      ] [e1eb785c281a] SSL dual mode is disabled
+[2026-06-10T23:24:36,966][INFO ][o.o.d.DiscoveryModule    ] [e1eb785c281a] using discovery type [single-node] and seed hosts providers [settings]
+[2026-06-10T23:24:37,393][WARN ][o.o.g.DanglingIndicesState] [e1eb785c281a] gateway.auto_import_dangling_indices is disabled, dangling indices will not be automatically detected or imported and must be managed manually
+[2026-06-10T23:24:37,960][INFO ][o.o.p.h.c.PerformanceAnalyzerConfigAction] [e1eb785c281a] PerformanceAnalyzer Enabled: false
+[2026-06-10T23:24:37,997][INFO ][o.o.n.Node               ] [e1eb785c281a] initialized
+[2026-06-10T23:24:37,997][INFO ][o.o.n.Node               ] [e1eb785c281a] starting ...
+[2026-06-10T23:24:38,029][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [windows_logtype.json] log type
+[2026-06-10T23:24:38,030][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [waf_logtype.json] log type
+[2026-06-10T23:24:38,030][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [vpcflow_logtype.json] log type
+[2026-06-10T23:24:38,030][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [test_windows_logtype.json] log type
+[2026-06-10T23:24:38,031][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [s3_logtype.json] log type
+[2026-06-10T23:24:38,031][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_web_logtype.json] log type
+[2026-06-10T23:24:38,031][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_proxy_logtype.json] log type
+[2026-06-10T23:24:38,032][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_macos_logtype.json] log type
+[2026-06-10T23:24:38,032][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_compliance_logtype.json] log type
+[2026-06-10T23:24:38,032][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_cloud_logtype.json] log type
+[2026-06-10T23:24:38,033][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_apt_logtype.json] log type
+[2026-06-10T23:24:38,033][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [others_application_logtype.json] log type
+[2026-06-10T23:24:38,033][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [okta_logtype.json] log type
+[2026-06-10T23:24:38,034][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [network_logtype.json] log type
+[2026-06-10T23:24:38,034][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [netflow_logtype.json] log type
+[2026-06-10T23:24:38,034][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [m365_logtype.json] log type
+[2026-06-10T23:24:38,035][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [linux_logtype.json] log type
+[2026-06-10T23:24:38,035][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [gworkspace_logtype.json] log type
+[2026-06-10T23:24:38,035][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [github_logtype.json] log type
+[2026-06-10T23:24:38,035][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [dns_logtype.json] log type
+[2026-06-10T23:24:38,036][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [cloudtrail_logtype.json] log type
+[2026-06-10T23:24:38,036][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [azure_logtype.json] log type
+[2026-06-10T23:24:38,036][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [apache_access_logtype.json] log type
+[2026-06-10T23:24:38,036][INFO ][o.o.s.l.BuiltinLogTypeLoader] [e1eb785c281a] Loaded [ad_ldap_logtype.json] log type
+[2026-06-10T23:24:38,132][INFO ][o.o.t.TransportService   ] [e1eb785c281a] publish_address {172.20.0.2:9300}, bound_addresses {[::]:9300}
+[2026-06-10T23:24:38,133][INFO ][o.o.t.TransportService   ] [e1eb785c281a] Remote clusters initialized successfully.
+[2026-06-10T23:24:38,403][INFO ][o.o.c.c.Coordinator      ] [e1eb785c281a] cluster UUID [smPCS7KBQYWuyqcH7AWKCg]
+[2026-06-10T23:24:38,525][INFO ][o.o.c.s.MasterService    ] [e1eb785c281a] elected-as-cluster-manager ([1] nodes joined)[{e1eb785c281a}{vlJ46vTYR2C_NMHQU64o3g}{oJGmjTOZRZKVi4reDg_PjQ}{172.20.0.2}{172.20.0.2:9300}{dimr}{shard_indexing_pressure_enabled=true} elect leader, _BECOME_CLUSTER_MANAGER_TASK_, _FINISH_ELECTION_], term: 9, version: 404, delta: cluster-manager node changed {previous [], current [{e1eb785c281a}{vlJ46vTYR2C_NMHQU64o3g}{oJGmjTOZRZKVi4reDg_PjQ}{172.20.0.2}{172.20.0.2:9300}{dimr}{shard_indexing_pressure_enabled=true}]}
+[2026-06-10T23:24:38,622][INFO ][o.o.c.s.ClusterApplierService] [e1eb785c281a] cluster-manager node changed {previous [], current [{e1eb785c281a}{vlJ46vTYR2C_NMHQU64o3g}{oJGmjTOZRZKVi4reDg_PjQ}{172.20.0.2}{172.20.0.2:9300}{dimr}{shard_indexing_pressure_enabled=true}]}, term: 9, version: 404, reason: Publication{term=9, version=404}
+[2026-06-10T23:24:38,630][INFO ][o.o.a.c.ADClusterEventListener] [e1eb785c281a] Cluster is not recovered yet.
+[2026-06-10T23:24:38,655][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Cache cluster manager node onClusterManager time: 1781133878655
+[2026-06-10T23:24:38,663][WARN ][o.o.p.c.s.h.ConfigOverridesClusterSettingHandler] [e1eb785c281a] Config override setting update called with empty string. Ignoring.
+[2026-06-10T23:24:38,671][INFO ][o.o.d.PeerFinder         ] [e1eb785c281a] setting findPeersInterval to [1s] as node commission status = [true] for local node [{e1eb785c281a}{vlJ46vTYR2C_NMHQU64o3g}{oJGmjTOZRZKVi4reDg_PjQ}{172.20.0.2}{172.20.0.2:9300}{dimr}{shard_indexing_pressure_enabled=true}]
+[2026-06-10T23:24:38,673][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:38,675][INFO ][o.o.h.AbstractHttpServerTransport] [e1eb785c281a] publish_address {172.20.0.2:9200}, bound_addresses {[::]:9200}
+[2026-06-10T23:24:38,675][INFO ][o.o.n.Node               ] [e1eb785c281a] started
+[2026-06-10T23:24:38,676][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Will attempt to create index .opendistro_security and default configs if they are absent
+[2026-06-10T23:24:38,677][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Background init thread started. Install default config?: true
+[2026-06-10T23:24:38,677][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Wait for cluster to be available ...
+[2026-06-10T23:24:38,677][INFO ][o.o.s.OpenSearchSecurityPlugin] [e1eb785c281a] 0 OpenSearch Security modules loaded so far: []
+[2026-06-10T23:24:38,687][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:38,768][INFO ][o.o.c.s.ClusterSettings  ] [e1eb785c281a] updating [plugins.index_state_management.template_migration.control] from [0] to [-1]
+[2026-06-10T23:24:38,771][INFO ][o.o.a.c.HashRing         ] [e1eb785c281a] Node added: [vlJ46vTYR2C_NMHQU64o3g]
+[2026-06-10T23:24:38,774][INFO ][o.o.a.c.HashRing         ] [e1eb785c281a] Add data node to AD version hash ring: vlJ46vTYR2C_NMHQU64o3g
+[2026-06-10T23:24:38,776][INFO ][o.o.a.c.HashRing         ] [e1eb785c281a] All nodes with known AD version: {vlJ46vTYR2C_NMHQU64o3g=ADNodeInfo{version=2.14.0, isEligibleDataNode=true}}
+[2026-06-10T23:24:38,776][INFO ][o.o.a.c.HashRing         ] [e1eb785c281a] Rebuild AD hash ring for realtime AD with cooldown, nodeChangeEvents size 0
+[2026-06-10T23:24:38,777][INFO ][o.o.a.c.HashRing         ] [e1eb785c281a] Build AD version hash ring successfully
+[2026-06-10T23:24:38,777][INFO ][o.o.a.c.ADDataMigrator   ] [e1eb785c281a] Start migrating AD data
+[2026-06-10T23:24:38,777][INFO ][o.o.a.c.ADDataMigrator   ] [e1eb785c281a] AD job index doesn't exist, no need to migrate
+[2026-06-10T23:24:38,777][INFO ][o.o.a.c.ADClusterEventListener] [e1eb785c281a] Init AD version hash ring successfully
+[2026-06-10T23:24:38,792][INFO ][o.o.g.GatewayService     ] [e1eb785c281a] recovered [25] indices into cluster_state
+[2026-06-10T23:24:38,794][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Loading builtin types!
+[2026-06-10T23:24:38,797][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Indexing [429] fieldMappingDocs from logTypes: 24
+[2026-06-10T23:24:38,823][WARN ][o.o.o.i.ObservabilityIndex] [e1eb785c281a] message: index [.opensearch-observability/LYuCGnkYSpuu2kWAk4PW4g] already exists
+[2026-06-10T23:24:38,823][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:38,825][WARN ][o.o.s.SecurityAnalyticsPlugin] [e1eb785c281a] Failed to initialize LogType config index and builtin log types
+[2026-06-10T23:24:38,950][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.opendistro_security/TPsq0QMUTFalmLfM3shcTg]
+[2026-06-10T23:24:39,065][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflowqueue-shuffle/u1K2iI3aQ3e29iCjWDf3_g]
+[2026-06-10T23:24:39,074][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[security-auditlog-2026.06.10/4iHt443nTFeaJwkmfLD6Sw]
+[2026-06-10T23:24:39,088][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[platform_health/1T6I59P8T827a0ghSzi40g]
+[2026-06-10T23:24:39,667][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Loading builtin types!
+[2026-06-10T23:24:39,668][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Indexing [429] fieldMappingDocs from logTypes: 24
+[2026-06-10T23:24:39,671][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Loading builtin types!
+[2026-06-10T23:24:39,672][INFO ][o.o.s.l.LogTypeService   ] [e1eb785c281a] Indexing [429] fieldMappingDocs from logTypes: 24
+[2026-06-10T23:24:39,675][INFO ][o.o.s.i.DetectorIndexManagementService] [e1eb785c281a] info deleteOldIndices
+[2026-06-10T23:24:39,683][INFO ][o.o.s.i.DetectorIndexManagementService] [e1eb785c281a] No Old Correlation Indices to delete
+[2026-06-10T23:24:39,859][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Index .opendistro_security already exists
+[2026-06-10T23:24:39,863][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Node started, try to initialize it. Wait for at least yellow cluster state....
+[2026-06-10T23:24:39,861][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:39,880][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'config' with /usr/share/opensearch/config/opensearch-security/config.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
+[2026-06-10T23:24:39,955][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id config, skipping update.
+[2026-06-10T23:24:39,956][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'roles' with /usr/share/opensearch/config/opensearch-security/roles.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
+[2026-06-10T23:24:39,966][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id roles, skipping update.
+[2026-06-10T23:24:39,966][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'rolesmapping' with /usr/share/opensearch/config/opensearch-security/roles_mapping.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
+[2026-06-10T23:24:39,974][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id rolesmapping, skipping update.
+[2026-06-10T23:24:39,975][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'internalusers' with /usr/share/opensearch/config/opensearch-security/internal_users.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
+[2026-06-10T23:24:39,986][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id internalusers, skipping update.
+[2026-06-10T23:24:39,986][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'actiongroups' with /usr/share/opensearch/config/opensearch-security/action_groups.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
+[2026-06-10T23:24:39,991][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id actiongroups, skipping update.
+[2026-06-10T23:24:39,991][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'tenants' with /usr/share/opensearch/config/opensearch-security/tenants.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
+[2026-06-10T23:24:39,995][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id tenants, skipping update.
+[2026-06-10T23:24:39,996][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'nodesdn' with /usr/share/opensearch/config/opensearch-security/nodes_dn.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=true
+[2026-06-10T23:24:39,998][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[openapi3/zzkR9Uh8QgiYHhpKYm1mkQ]
+[2026-06-10T23:24:39,999][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id nodesdn, skipping update.
+[2026-06-10T23:24:39,999][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'whitelist' with /usr/share/opensearch/config/opensearch-security/whitelist.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=true
+[2026-06-10T23:24:40,004][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id whitelist, skipping update.
+[2026-06-10T23:24:40,004][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'allowlist' with /usr/share/opensearch/config/opensearch-security/allowlist.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=true
+[2026-06-10T23:24:40,007][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id allowlist, skipping update.
+[2026-06-10T23:24:40,008][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[files/uqUKmcUdSKGu8wBaEuuv8Q]
+[2026-06-10T23:24:40,008][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Will update 'audit' with /usr/share/opensearch/config/opensearch-security/audit.yml and populate it with empty doc if file missing and populateEmptyIfFileMissing=false
+[2026-06-10T23:24:40,020][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[organizations/7BpSGzFITpC4MCx0N1AeFg]
+[2026-06-10T23:24:40,024][INFO ][o.o.s.s.ConfigHelper     ] [e1eb785c281a] Index .opendistro_security already contains doc with id audit, skipping update.
+[2026-06-10T23:24:40,062][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[app_revisions/IM0YZj-jRTqL7Zn5VWxg1Q]
+[2026-06-10T23:24:40,138][ERROR][o.o.s.a.BackendRegistry  ] [e1eb785c281a] Not yet initialized (you may need to run securityadmin)
+[2026-06-10T23:24:40,161][INFO ][stdout                   ] [e1eb785c281a] [FINE] No subscribers registered for event class org.opensearch.security.securityconf.DynamicConfigFactory$NodesDnModelImpl
+[2026-06-10T23:24:40,162][INFO ][stdout                   ] [e1eb785c281a] [FINE] No subscribers registered for event class org.greenrobot.eventbus.NoSubscriberEvent
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing on REST API is enabled.
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] [AUTHENTICATED, GRANTED_PRIVILEGES] are excluded from REST API auditing.
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing on Transport API is enabled.
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] [AUTHENTICATED, GRANTED_PRIVILEGES] are excluded from Transport API auditing.
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing of request body is enabled.
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Bulk requests resolution is disabled during request auditing.
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Index resolution is enabled during request auditing.
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Sensitive headers auditing is enabled.
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing requests from kibanaserver users is disabled.
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing request headers <NONE> is disabled.
+[2026-06-10T23:24:40,162][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing request url params <NONE> is disabled.
+[2026-06-10T23:24:40,165][WARN ][o.o.s.a.r.AuditMessageRouter] [e1eb785c281a] No endpoint configured for categories [BAD_HEADERS, FAILED_LOGIN, MISSING_PRIVILEGES, GRANTED_PRIVILEGES, OPENDISTRO_SECURITY_INDEX_ATTEMPT, SSL_EXCEPTION, AUTHENTICATED, INDEX_EVENT, COMPLIANCE_DOC_READ, COMPLIANCE_DOC_WRITE, COMPLIANCE_EXTERNAL_CONFIG, COMPLIANCE_INTERNAL_CONFIG_READ, COMPLIANCE_INTERNAL_CONFIG_WRITE], using default endpoint
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing of external configuration is disabled.
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing of internal configuration is enabled.
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing only metadata information for read request is enabled.
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing will watch {} for read requests.
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing read operation requests from kibanaserver users is disabled.
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing only metadata information for write request is enabled.
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing diffs for write requests is disabled.
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing write operation requests from kibanaserver users is disabled.
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Auditing will watch <NONE> for write requests.
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] .opendistro_security is used as internal security index.
+[2026-06-10T23:24:40,165][INFO ][o.o.s.a.i.AuditLogImpl   ] [e1eb785c281a] Internal index used for posting audit logs is null
+[2026-06-10T23:24:40,166][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Hot-reloading of audit configuration is enabled
+[2026-06-10T23:24:40,166][INFO ][o.o.s.c.ConfigurationRepository] [e1eb785c281a] Node 'e1eb785c281a' initialized
+[2026-06-10T23:24:40,584][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
 org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
 	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
@@ -384,7 +269,7 @@ org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
 	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
-[2026-06-10T18:35:11,597][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+[2026-06-10T23:24:40,596][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
 org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
 	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
@@ -401,7 +286,7 @@ org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
 	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
-[2026-06-10T18:35:11,603][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+[2026-06-10T23:24:40,602][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
 org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
 	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
@@ -418,7 +303,7 @@ org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
 	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
-[2026-06-10T18:35:11,610][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+[2026-06-10T23:24:40,608][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
 org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
 	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
@@ -435,7 +320,7 @@ org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
 	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
-[2026-06-10T18:35:11,621][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+[2026-06-10T23:24:40,614][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
 org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
 	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
@@ -452,7 +337,7 @@ org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
 	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
-[2026-06-10T18:35:11,629][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+[2026-06-10T23:24:40,620][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
 org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
 	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
@@ -469,32 +354,147 @@ org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
 	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
-[2026-06-10T18:35:11,774][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[org_statistics-000001/r99IDL8mSP6xZy7Pw4cJbw]
-[2026-06-10T18:35:12,249][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:12,387][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[environments-000001/KT5b5gDnRu6l8pmqfspvzg]
-[2026-06-10T18:35:12,392][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[shuffle_logs-000001/wZiV8fuDSbSkpFDSA_RgGA]
-[2026-06-10T18:35:12,990][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:13,091][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[notifications-000001/N1uNa8YDSNm6Gr9POrvROg]
-[2026-06-10T18:35:13,456][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:13,578][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[org_cache_revisions-000001/ITi3CyFZR2q45KD6hpCRFw]
-[2026-06-10T18:35:13,985][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:14,121][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[datastore_ngram-000001/g7YwM_VDQr215Tv2UVO1oQ]
-[2026-06-10T18:35:14,125][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[org_cache-000001/DjH_uVfZRraYoc-xtfEfdg]
-[2026-06-10T18:35:14,520][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:14,609][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[security-auditlog-2026.05.23/iTOLQP5jSN6fKblUFxIwhw]
-[2026-06-10T18:35:14,613][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflowexecution-000001/EIZiv50cQe-wmHGE7Hp5pA]
-[2026-06-10T18:35:15,008][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:15,124][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.opensearch-observability/LYuCGnkYSpuu2kWAk4PW4g]
-[2026-06-10T18:35:15,129][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.plugins-ml-config/fjTZbWADTVCm3OOKoCpkOg]
-[2026-06-10T18:35:15,571][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:15,685][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.opensearch-sap-log-types-config/pPzGFlvVTJGy5_27jR1Q6w]
-[2026-06-10T18:35:15,788][INFO ][o.o.c.r.a.AllocationService] [e1eb785c281a] Cluster health status changed from [RED] to [YELLOW] (reason: [shards started [[.opensearch-sap-log-types-config][0]]]).
-[2026-06-10T18:35:15,878][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
-[2026-06-10T18:35:18,168][INFO ][o.o.m.a.MLModelAutoReDeployer] [e1eb785c281a] Index not found, not performing auto reloading!
-[2026-06-10T18:35:18,168][INFO ][o.o.m.c.MLCommonsClusterManagerEventListener] [e1eb785c281a] Starting ML sync up job...
-[2026-06-10T18:35:28,174][INFO ][o.o.m.c.MLSyncUpCron     ] [e1eb785c281a] ML configuration already initialized, no action needed
-[2026-06-10T18:36:08,158][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Performing move cluster state metadata.
-[2026-06-10T18:36:08,159][INFO ][o.o.i.i.MetadataService  ] [e1eb785c281a] ISM config index not exist, so we cancel the metadata migration job.
-[2026-06-10T18:37:08,159][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Cancel background move metadata process.
-[2026-06-10T18:37:08,168][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Performing move cluster state metadata.
-[2026-06-10T18:37:08,168][INFO ][o.o.i.i.MetadataService  ] [e1eb785c281a] Move metadata has finished.
+[2026-06-10T23:24:41,051][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:41,171][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[datastore_category-000001/JuzzPGyITIWxS62mdxUyrA]
+[2026-06-10T23:24:41,177][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[users/v9M97APyS2ajYp8ZLxFh7Q]
+[2026-06-10T23:24:41,704][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:41,826][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflow-000001/93qVvt8WS-OKTyGgdd5gaA]
+[2026-06-10T23:24:41,842][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflow_revisions-000001/RquNuKk-TfGc2VBXAw5U1A]
+[2026-06-10T23:24:42,409][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:42,508][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflowapp-000001/F50dXqJNRkiheSG-WCo7mQ]
+[2026-06-10T23:24:42,688][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseDone(AbstractSearchAsyncAction.java:796) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onShardFailure(AbstractSearchAsyncAction.java:542) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.lambda$performPhaseOnShard$0(AbstractSearchAsyncAction.java:289) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction$2.doRun(AbstractSearchAsyncAction.java:372) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.threadpool.TaskAwareRunnable.doRun(TaskAwareRunnable.java:78) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.TimedRunnable.doRun(TimedRunnable.java:59) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.ThreadContext$ContextPreservingAbstractRunnable.doRun(ThreadContext.java:913) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
+[2026-06-10T23:24:42,694][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseDone(AbstractSearchAsyncAction.java:796) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onShardFailure(AbstractSearchAsyncAction.java:542) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.lambda$performPhaseOnShard$0(AbstractSearchAsyncAction.java:289) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction$2.doRun(AbstractSearchAsyncAction.java:372) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.threadpool.TaskAwareRunnable.doRun(TaskAwareRunnable.java:78) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.TimedRunnable.doRun(TimedRunnable.java:59) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.ThreadContext$ContextPreservingAbstractRunnable.doRun(ThreadContext.java:913) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
+[2026-06-10T23:24:42,700][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseDone(AbstractSearchAsyncAction.java:796) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onShardFailure(AbstractSearchAsyncAction.java:542) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.lambda$performPhaseOnShard$0(AbstractSearchAsyncAction.java:289) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction$2.doRun(AbstractSearchAsyncAction.java:372) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.threadpool.TaskAwareRunnable.doRun(TaskAwareRunnable.java:78) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.TimedRunnable.doRun(TimedRunnable.java:59) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.ThreadContext$ContextPreservingAbstractRunnable.doRun(ThreadContext.java:913) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
+[2026-06-10T23:24:42,707][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseDone(AbstractSearchAsyncAction.java:796) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onShardFailure(AbstractSearchAsyncAction.java:542) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.lambda$performPhaseOnShard$0(AbstractSearchAsyncAction.java:289) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction$2.doRun(AbstractSearchAsyncAction.java:372) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.threadpool.TaskAwareRunnable.doRun(TaskAwareRunnable.java:78) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.TimedRunnable.doRun(TimedRunnable.java:59) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.ThreadContext$ContextPreservingAbstractRunnable.doRun(ThreadContext.java:913) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
+[2026-06-10T23:24:42,713][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseDone(AbstractSearchAsyncAction.java:796) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onShardFailure(AbstractSearchAsyncAction.java:542) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.lambda$performPhaseOnShard$0(AbstractSearchAsyncAction.java:289) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction$2.doRun(AbstractSearchAsyncAction.java:372) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.threadpool.TaskAwareRunnable.doRun(TaskAwareRunnable.java:78) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.TimedRunnable.doRun(TimedRunnable.java:59) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.ThreadContext$ContextPreservingAbstractRunnable.doRun(ThreadContext.java:913) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
+[2026-06-10T23:24:42,718][WARN ][r.suppressed             ] [e1eb785c281a] path: /environments/_search, params: {index=environments, track_total_hits=true}
+org.opensearch.action.search.SearchPhaseExecutionException: all shards failed
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseFailure(AbstractSearchAsyncAction.java:757) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.executeNextPhase(AbstractSearchAsyncAction.java:394) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onPhaseDone(AbstractSearchAsyncAction.java:796) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.onShardFailure(AbstractSearchAsyncAction.java:542) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction.lambda$performPhaseOnShard$0(AbstractSearchAsyncAction.java:289) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.action.search.AbstractSearchAsyncAction$2.doRun(AbstractSearchAsyncAction.java:372) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.threadpool.TaskAwareRunnable.doRun(TaskAwareRunnable.java:78) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.TimedRunnable.doRun(TimedRunnable.java:59) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.ThreadContext$ContextPreservingAbstractRunnable.doRun(ThreadContext.java:913) [opensearch-2.14.0.jar:2.14.0]
+	at org.opensearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:52) [opensearch-2.14.0.jar:2.14.0]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) [?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) [?:?]
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?]
+[2026-06-10T23:24:43,169][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:43,280][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[org_statistics-000001/r99IDL8mSP6xZy7Pw4cJbw]
+[2026-06-10T23:24:43,643][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:43,736][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[environments-000001/KT5b5gDnRu6l8pmqfspvzg]
+[2026-06-10T23:24:43,741][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[shuffle_logs-000001/wZiV8fuDSbSkpFDSA_RgGA]
+[2026-06-10T23:24:44,351][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:44,448][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[notifications-000001/N1uNa8YDSNm6Gr9POrvROg]
+[2026-06-10T23:24:44,821][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:44,914][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[org_cache_revisions-000001/ITi3CyFZR2q45KD6hpCRFw]
+[2026-06-10T23:24:45,533][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:45,633][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[datastore_ngram-000001/g7YwM_VDQr215Tv2UVO1oQ]
+[2026-06-10T23:24:45,637][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[org_cache-000001/DjH_uVfZRraYoc-xtfEfdg]
+[2026-06-10T23:24:46,284][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:46,384][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[security-auditlog-2026.05.23/iTOLQP5jSN6fKblUFxIwhw]
+[2026-06-10T23:24:46,390][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[workflowexecution-000001/EIZiv50cQe-wmHGE7Hp5pA]
+[2026-06-10T23:24:46,915][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:47,041][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.plugins-ml-config/fjTZbWADTVCm3OOKoCpkOg]
+[2026-06-10T23:24:47,459][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:47,564][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.opensearch-sap-log-types-config/pPzGFlvVTJGy5_27jR1Q6w]
+[2026-06-10T23:24:47,570][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[.opensearch-observability/LYuCGnkYSpuu2kWAk4PW4g]
+[2026-06-10T23:24:47,899][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:47,999][INFO ][o.o.c.r.a.AllocationService] [e1eb785c281a] Cluster health status changed from [RED] to [YELLOW] (reason: [shards started [[workflowexecution-000001][2]]]).
+[2026-06-10T23:24:48,085][WARN ][o.o.c.r.a.AllocationService] [e1eb785c281a] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-10T23:24:48,673][INFO ][o.o.m.a.MLModelAutoReDeployer] [e1eb785c281a] Index not found, not performing auto reloading!
+[2026-06-10T23:24:48,674][INFO ][o.o.m.c.MLCommonsClusterManagerEventListener] [e1eb785c281a] Starting ML sync up job...
+[2026-06-10T23:24:49,137][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[security-auditlog-2026.06.10/4iHt443nTFeaJwkmfLD6Sw]
+[2026-06-10T23:24:49,142][INFO ][o.o.c.m.MetadataMappingService] [e1eb785c281a] [security-auditlog-2026.06.10/4iHt443nTFeaJwkmfLD6Sw] update_mapping [_doc]
+[2026-06-10T23:24:49,259][INFO ][o.o.p.PluginsService     ] [e1eb785c281a] PluginService:onIndexModule index:[security-auditlog-2026.06.10/4iHt443nTFeaJwkmfLD6Sw]
+[2026-06-10T23:24:58,680][INFO ][o.o.m.c.MLSyncUpCron     ] [e1eb785c281a] ML configuration already initialized, no action needed
+[2026-06-10T23:25:38,656][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Performing move cluster state metadata.
+[2026-06-10T23:25:38,657][INFO ][o.o.i.i.MetadataService  ] [e1eb785c281a] ISM config index not exist, so we cancel the metadata migration job.
+[2026-06-10T23:26:38,657][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Cancel background move metadata process.
+[2026-06-10T23:26:38,666][INFO ][o.o.i.i.ManagedIndexCoordinator] [e1eb785c281a] Performing move cluster state metadata.
+[2026-06-10T23:26:38,666][INFO ][o.o.i.i.MetadataService  ] [e1eb785c281a] Move metadata has finished.

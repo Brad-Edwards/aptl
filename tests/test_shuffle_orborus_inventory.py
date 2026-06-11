@@ -32,7 +32,7 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 IMAGE_ID = "sha256:e74e0246ba3acd0daaa8343e58da859f7908f06b9f51094a9cd9f9ea8cbf7a44"
 IMAGE_DIGEST = "ghcr.io/shuffle/shuffle-orborus@sha256:e74e0246ba3acd0daaa8343e58da859f7908f06b9f51094a9cd9f9ea8cbf7a44"
 RUNTIME_PACKAGE_COUNT = 21
-TRIVY_FINDING_COUNT = 96
+TRIVY_FINDING_COUNT = 126
 FILESYSTEM_TREE_ROW_COUNT = 3
 SDL_FILESYSTEM_ENTRY_COUNT = 3
 LOCAL_IDENTITY_USER_COUNT = 17
@@ -60,6 +60,7 @@ REQUIRED_EVIDENCE_FILES = {
     "docker-version.json",
     "evidence-sha256sums.txt",
     "filesystem-checksums.txt",
+    "filesystem-tree-full.txt.gz",
     "filesystem-tree.txt",
     "language-manifests.txt",
     "orborus-state.txt",
@@ -257,7 +258,7 @@ def test_shuffle_orborus_runtime_evidence_counts():
 
 def test_shuffle_orborus_trivy_counts_match_severity_breakdown():
     counts = {row["severity"]: row["count"] for row in _json_file("trivy-vulnerability-counts.json")}
-    assert counts == {"CRITICAL": 3, "HIGH": 36, "MEDIUM": 32, "LOW": 25}
+    assert counts == {"CRITICAL": 3, "HIGH": 38, "MEDIUM": 40, "LOW": 45}
     assert sum(counts.values()) == TRIVY_FINDING_COUNT
 
 
@@ -334,6 +335,16 @@ def test_techvault_sdl_encodes_shuffle_orborus_docker_control_surface(legacy_sce
     listeners = runtime["service_listeners"]
     assert {l["scope"] for l in listeners} == {"loopback_only"}
     assert {l["address"] for l in listeners} == {"127.0.0.11"}
+
+    # PID 1 capability set is evidence-derived (/proc/1/status CapEff, Docker default 14).
+    caps = runtime["linux_capabilities"]
+    assert "00000000a80425fb" in caps["description"]
+    assert len(caps["effective"]) == 14
+    assert "CAP_NET_RAW" in caps["effective"]
+    assert "CAP_SYS_ADMIN" not in caps["effective"]
+    baseline = (EVIDENCE_DIR / "runtime-baseline.txt").read_text(encoding="utf-8")
+    assert "--pid1-capabilities--" in baseline
+    assert "CapEff:\t00000000a80425fb" in baseline
 
 
 def test_techvault_sdl_encodes_orborus_backend_relationship(legacy_scenario):

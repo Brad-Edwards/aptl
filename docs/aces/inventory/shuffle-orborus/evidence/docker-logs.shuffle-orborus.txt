@@ -1,272 +1,3 @@
-2026/06/10 07:00:35 [INFO] Looking for old containers to remove
-2026/06/10 07:00:35 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 07:00:35 [INFO] Should STOP and remove 0 containers.
-2026/06/10 07:00:35 [INFO] Should REMOVE 0 containers.
-2026/06/10 07:10:39 [INFO] Looking for old containers to remove
-2026/06/10 07:10:40 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 07:10:40 [INFO] Should STOP and remove 0 containers.
-2026/06/10 07:10:40 [INFO] Should REMOVE 0 containers.
-2026/06/10 07:20:38 [INFO][1845b237-c94f-47f6-9976-c34bb9b3388f] New Worker created. Environment Shuffle: docker logs fb0c48ad2feecc6add450cefc71fb29cc3ecc956aa6d3298f21903947f0cae26
-2026/06/10 07:20:44 [INFO] Looking for old containers to remove
-2026/06/10 07:20:45 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 07:20:45 [INFO] Should STOP and remove 0 containers.
-2026/06/10 07:20:45 [INFO] Should REMOVE 0 containers.
-2026/06/10 07:20:47 [INFO][804a6cc3-40bf-464d-a0a9-ed6553710f84] New Worker created. Environment Shuffle: docker logs 52afa4c0f22c1b041dd2e89bf847637b98b674d15c6445651d4f31afdf51c408
-2026/06/10 07:21:34 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
-2026/06/10 07:21:34 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_4678dcbe0c83e9d46db09012bfaf4ca9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_4678dcbe0c83e9d46db09012bfaf4ca9"
-2026/06/10 07:21:34 [WARNING] No auth found - running backend download without it.
-2026/06/10 07:21:34 [WARNING] No auth found - running backend download without it.
-2026/06/10 07:21:35 [INFO][68a31d2d-a78a-40d2-9199-b32328a3089b] New Worker created. Environment Shuffle: docker logs f10ed360c415b31d82298c8d694946c7e40ac71c47a68fbbd23d2633e8498d94
-2026/06/10 07:21:57 [WARNING] No auth found - running backend download without it.
-2026/06/10 07:21:58 [WARNING] No auth found - running backend download without it.
-2026/06/10 07:22:16 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_4678dcbe0c83e9d46db09012bfaf4ca9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 07:22:16 [WARNING] No auth found - running backend download without it.
-2026/06/10 07:22:17 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 07:22:17 [WARNING] No auth found - running backend download without it.
-2026/06/10 07:22:39 [WARNING] No auth found - running backend download without it.
-2026/06/10 07:22:40 [WARNING] No auth found - running backend download without it.
-2026/06/10 07:22:57 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_4678dcbe0c83e9d46db09012bfaf4ca9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 07:22:57 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 07:22:58 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 07:22:58 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 07:30:52 [INFO] Looking for old containers to remove
-2026/06/10 07:30:52 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 07:30:52 [INFO] Should STOP and remove 0 containers.
-2026/06/10 07:30:52 [INFO] Should REMOVE 17 containers.
-2026/06/10 07:40:56 [INFO] Looking for old containers to remove
-2026/06/10 07:40:57 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 07:40:57 [INFO] Should STOP and remove 0 containers.
-2026/06/10 07:40:57 [INFO] Should REMOVE 32 containers.
-2026/06/10 07:51:00 [INFO] Looking for old containers to remove
-2026/06/10 07:51:01 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 07:51:01 [INFO] Should STOP and remove 0 containers.
-2026/06/10 07:51:01 [INFO] Should REMOVE 0 containers.
-2026/06/10 08:01:05 [INFO] Looking for old containers to remove
-2026/06/10 08:01:05 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 08:01:05 [INFO] Should STOP and remove 0 containers.
-2026/06/10 08:01:05 [INFO] Should REMOVE 0 containers.
-2026/06/10 08:11:09 [INFO] Looking for old containers to remove
-2026/06/10 08:11:09 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 08:11:09 [INFO] Should STOP and remove 0 containers.
-2026/06/10 08:11:09 [INFO] Should REMOVE 0 containers.
-2026/06/10 08:20:40 [INFO][7e256b95-976a-4da8-8901-d6ae311dfe80] New Worker created. Environment Shuffle: docker logs 8db7ae234af1b17e48c51fba0c2846d2dc40fb79651bf65b4be14c2dd0461c9e
-2026/06/10 08:20:49 [INFO][9d23ee9c-3749-4f80-9bd2-0b04bf716f7e] New Worker created. Environment Shuffle: docker logs 0d7b743679a34aef817afaae3051ee5ff8add9f537b43108530ba92b0b6ab616
-2026/06/10 08:21:15 [INFO] Looking for old containers to remove
-2026/06/10 08:21:15 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 08:21:15 [INFO] Should STOP and remove 0 containers.
-2026/06/10 08:21:15 [INFO] Should REMOVE 0 containers.
-2026/06/10 08:21:35 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
-2026/06/10 08:21:35 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_e27847621943aae2869933e3c6e0e9ce,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_e27847621943aae2869933e3c6e0e9ce"
-2026/06/10 08:21:35 [WARNING] No auth found - running backend download without it.
-2026/06/10 08:21:35 [WARNING] No auth found - running backend download without it.
-2026/06/10 08:21:37 [INFO][055ec257-88fa-4552-af5e-4d778895e4c1] New Worker created. Environment Shuffle: docker logs 9fc850feab4898b817e0805468dd248513a97a6ba4971610e17bc7aa83a04d0d
-2026/06/10 08:21:58 [WARNING] No auth found - running backend download without it.
-2026/06/10 08:21:59 [WARNING] No auth found - running backend download without it.
-2026/06/10 08:22:17 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 08:22:17 [WARNING] No auth found - running backend download without it.
-2026/06/10 08:22:18 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_e27847621943aae2869933e3c6e0e9ce: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 08:22:18 [WARNING] No auth found - running backend download without it.
-2026/06/10 08:22:39 [WARNING] No auth found - running backend download without it.
-2026/06/10 08:22:39 [WARNING] No auth found - running backend download without it.
-2026/06/10 08:22:57 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 08:22:57 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 08:22:58 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_e27847621943aae2869933e3c6e0e9ce: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 08:22:58 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 08:31:21 [INFO] Looking for old containers to remove
-2026/06/10 08:31:22 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 08:31:22 [INFO] Should STOP and remove 0 containers.
-2026/06/10 08:31:22 [INFO] Should REMOVE 44 containers.
-2026/06/10 08:41:25 [INFO] Looking for old containers to remove
-2026/06/10 08:41:26 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 08:41:26 [INFO] Should STOP and remove 0 containers.
-2026/06/10 08:41:26 [INFO] Should REMOVE 5 containers.
-2026/06/10 08:51:30 [INFO] Looking for old containers to remove
-2026/06/10 08:51:30 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 08:51:30 [INFO] Should STOP and remove 0 containers.
-2026/06/10 08:51:30 [INFO] Should REMOVE 0 containers.
-2026/06/10 09:01:34 [INFO] Looking for old containers to remove
-2026/06/10 09:01:34 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 09:01:34 [INFO] Should STOP and remove 0 containers.
-2026/06/10 09:01:34 [INFO] Should REMOVE 0 containers.
-2026/06/10 09:11:38 [INFO] Looking for old containers to remove
-2026/06/10 09:11:39 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 09:11:39 [INFO] Should STOP and remove 0 containers.
-2026/06/10 09:11:39 [INFO] Should REMOVE 0 containers.
-2026/06/10 09:20:39 [INFO][17f63c3e-b884-48ef-b169-07b78483d6d1] New Worker created. Environment Shuffle: docker logs 9d28c9d49448a4b3cfed5767b0e015dc2d5c1a708aa25275b4c45686265a1155
-2026/06/10 09:20:48 [INFO][a2f13218-c6cf-45bd-a923-28dc8384fd15] New Worker created. Environment Shuffle: docker logs 7c71c4c465ddb638e8d6f0617bf148e1b1146e84c8d4a50d8ed7114f4b5c83f7
-2026/06/10 09:21:34 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
-2026/06/10 09:21:34 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_9345d58f1845349459189cfd726c2754,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_9345d58f1845349459189cfd726c2754"
-2026/06/10 09:21:34 [WARNING] No auth found - running backend download without it.
-2026/06/10 09:21:34 [WARNING] No auth found - running backend download without it.
-2026/06/10 09:21:36 [INFO][f6b77f4d-a341-4e8c-8dc5-0809ede9e89e] New Worker created. Environment Shuffle: docker logs d1a5cdc159a7445565cbd6197ba7c2a1bf5d8ffdfd53d9a3de1603211dd14949
-2026/06/10 09:21:46 [INFO] Looking for old containers to remove
-2026/06/10 09:21:47 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 09:21:47 [INFO] Should STOP and remove 0 containers.
-2026/06/10 09:21:47 [INFO] Should REMOVE 0 containers.
-2026/06/10 09:21:58 [WARNING] No auth found - running backend download without it.
-2026/06/10 09:21:59 [WARNING] No auth found - running backend download without it.
-2026/06/10 09:22:17 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 09:22:17 [WARNING] No auth found - running backend download without it.
-2026/06/10 09:22:17 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_9345d58f1845349459189cfd726c2754: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 09:22:17 [WARNING] No auth found - running backend download without it.
-2026/06/10 09:22:38 [WARNING] No auth found - running backend download without it.
-2026/06/10 09:22:39 [WARNING] No auth found - running backend download without it.
-2026/06/10 09:22:57 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 09:22:57 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 09:22:58 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_9345d58f1845349459189cfd726c2754: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 09:22:58 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 09:31:51 [INFO] Looking for old containers to remove
-2026/06/10 09:31:51 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 09:31:51 [INFO] Should STOP and remove 0 containers.
-2026/06/10 09:31:51 [INFO] Should REMOVE 49 containers.
-2026/06/10 09:41:55 [INFO] Looking for old containers to remove
-2026/06/10 09:41:55 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 09:41:55 [INFO] Should STOP and remove 0 containers.
-2026/06/10 09:41:55 [INFO] Should REMOVE 0 containers.
-2026/06/10 09:51:59 [INFO] Looking for old containers to remove
-2026/06/10 09:51:59 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 09:51:59 [INFO] Should STOP and remove 0 containers.
-2026/06/10 09:51:59 [INFO] Should REMOVE 0 containers.
-2026/06/10 10:02:03 [INFO] Looking for old containers to remove
-2026/06/10 10:02:04 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 10:02:04 [INFO] Should STOP and remove 0 containers.
-2026/06/10 10:02:04 [INFO] Should REMOVE 0 containers.
-2026/06/10 10:12:08 [INFO] Looking for old containers to remove
-2026/06/10 10:12:08 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 10:12:08 [INFO] Should STOP and remove 0 containers.
-2026/06/10 10:12:08 [INFO] Should REMOVE 0 containers.
-2026/06/10 10:20:38 [INFO][01c699e3-76c5-4ee7-b793-7730c61e7616] New Worker created. Environment Shuffle: docker logs 6d1f6b0c8ce54821e9afc3c8c35a9eedc7bccc0ae4bc24ee847c0a376e0cb7ae
-2026/06/10 10:20:48 [INFO][5ee199f5-c84e-4df3-9800-4d8507135c70] New Worker created. Environment Shuffle: docker logs aa655b47926397bfc83d8eb2f151ecca6fc3980ef44333bbacf92675690987d3
-2026/06/10 10:21:34 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
-2026/06/10 10:21:34 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_422900c7bdcbf9a942f299c1f69df49a,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_422900c7bdcbf9a942f299c1f69df49a"
-2026/06/10 10:21:34 [WARNING] No auth found - running backend download without it.
-2026/06/10 10:21:34 [WARNING] No auth found - running backend download without it.
-2026/06/10 10:21:35 [INFO][b52991bb-3fc9-484a-8752-a1d0589f41d2] New Worker created. Environment Shuffle: docker logs 1c64bc8c31dc2191170aff36bb9478dc09e6f59787d721090ef5fe0ad1f4adec
-2026/06/10 10:21:57 [WARNING] No auth found - running backend download without it.
-2026/06/10 10:21:58 [WARNING] No auth found - running backend download without it.
-2026/06/10 10:22:15 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 10:22:15 [WARNING] No auth found - running backend download without it.
-2026/06/10 10:22:16 [INFO] Looking for old containers to remove
-2026/06/10 10:22:16 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_422900c7bdcbf9a942f299c1f69df49a: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 10:22:16 [WARNING] No auth found - running backend download without it.
-2026/06/10 10:22:16 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 10:22:16 [INFO] Should STOP and remove 0 containers.
-2026/06/10 10:22:16 [INFO] Should REMOVE 0 containers.
-2026/06/10 10:22:37 [WARNING] No auth found - running backend download without it.
-2026/06/10 10:22:38 [WARNING] No auth found - running backend download without it.
-2026/06/10 10:22:55 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 10:22:55 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 10:22:56 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_422900c7bdcbf9a942f299c1f69df49a: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 10:22:56 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 10:32:20 [INFO] Looking for old containers to remove
-2026/06/10 10:32:20 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 10:32:20 [INFO] Should STOP and remove 0 containers.
-2026/06/10 10:32:20 [INFO] Should REMOVE 49 containers.
-2026/06/10 10:42:24 [INFO] Looking for old containers to remove
-2026/06/10 10:42:24 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 10:42:24 [INFO] Should STOP and remove 0 containers.
-2026/06/10 10:42:24 [INFO] Should REMOVE 0 containers.
-2026/06/10 10:52:28 [INFO] Looking for old containers to remove
-2026/06/10 10:52:29 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 10:52:29 [INFO] Should STOP and remove 0 containers.
-2026/06/10 10:52:29 [INFO] Should REMOVE 0 containers.
-2026/06/10 11:02:33 [INFO] Looking for old containers to remove
-2026/06/10 11:02:33 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 11:02:33 [INFO] Should STOP and remove 0 containers.
-2026/06/10 11:02:33 [INFO] Should REMOVE 0 containers.
-2026/06/10 11:12:37 [INFO] Looking for old containers to remove
-2026/06/10 11:12:37 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 11:12:37 [INFO] Should STOP and remove 0 containers.
-2026/06/10 11:12:37 [INFO] Should REMOVE 0 containers.
-2026/06/10 11:20:40 [INFO][0b1df4f4-5f2f-488e-99ed-96adfe0f0f3b] New Worker created. Environment Shuffle: docker logs 6ba9f10c0673560a059f090f9e08ad406c05389d3117540a59f3ff47e008dec3
-2026/06/10 11:20:49 [INFO][c3205d43-61e5-44b1-b8cc-70deac7f4f84] New Worker created. Environment Shuffle: docker logs fec90cb21d60bf8a26eebbfb08f0903bce86242f2b906335d5e7e44bf9fde9d7
-2026/06/10 11:21:35 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
-2026/06/10 11:21:35 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_bab441b1c50d54ad224f9d3d36747fe1,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_bab441b1c50d54ad224f9d3d36747fe1"
-2026/06/10 11:21:35 [WARNING] No auth found - running backend download without it.
-2026/06/10 11:21:35 [WARNING] No auth found - running backend download without it.
-2026/06/10 11:21:37 [INFO][e1c97616-c271-4cd9-8fda-9038fcab5817] New Worker created. Environment Shuffle: docker logs 112596b764c703544a40d27456b81b702ff55154344bb83b4a87dfa40272d86a
-2026/06/10 11:21:59 [WARNING] No auth found - running backend download without it.
-2026/06/10 11:21:59 [WARNING] No auth found - running backend download without it.
-2026/06/10 11:22:17 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_bab441b1c50d54ad224f9d3d36747fe1: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 11:22:17 [WARNING] No auth found - running backend download without it.
-2026/06/10 11:22:18 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 11:22:18 [WARNING] No auth found - running backend download without it.
-2026/06/10 11:22:39 [WARNING] No auth found - running backend download without it.
-2026/06/10 11:22:39 [WARNING] No auth found - running backend download without it.
-2026/06/10 11:22:45 [INFO] Looking for old containers to remove
-2026/06/10 11:22:46 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 11:22:46 [INFO] Should STOP and remove 0 containers.
-2026/06/10 11:22:46 [INFO] Should REMOVE 0 containers.
-2026/06/10 11:22:57 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_bab441b1c50d54ad224f9d3d36747fe1: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 11:22:57 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 11:22:58 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 11:22:58 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 11:32:50 [INFO] Looking for old containers to remove
-2026/06/10 11:32:50 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 11:32:50 [INFO] Should STOP and remove 0 containers.
-2026/06/10 11:32:50 [INFO] Should REMOVE 49 containers.
-2026/06/10 11:42:54 [INFO] Looking for old containers to remove
-2026/06/10 11:42:54 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 11:42:54 [INFO] Should STOP and remove 0 containers.
-2026/06/10 11:42:54 [INFO] Should REMOVE 0 containers.
-2026/06/10 11:52:58 [INFO] Looking for old containers to remove
-2026/06/10 11:52:58 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 11:52:58 [INFO] Should STOP and remove 0 containers.
-2026/06/10 11:52:58 [INFO] Should REMOVE 0 containers.
-2026/06/10 12:03:02 [INFO] Looking for old containers to remove
-2026/06/10 12:03:03 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 12:03:03 [INFO] Should STOP and remove 0 containers.
-2026/06/10 12:03:03 [INFO] Should REMOVE 0 containers.
-2026/06/10 12:13:07 [INFO] Looking for old containers to remove
-2026/06/10 12:13:07 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 12:13:07 [INFO] Should STOP and remove 0 containers.
-2026/06/10 12:13:07 [INFO] Should REMOVE 0 containers.
-2026/06/10 12:20:39 [INFO][6e90639a-d7aa-43f3-8996-ef235c2dc3f1] New Worker created. Environment Shuffle: docker logs 08a6c03435d2a7cc049c557d3a6850fae29dfe520a5d1d85298a519ec2eeca10
-2026/06/10 12:20:48 [INFO][b9e6a2ab-5645-4f8a-9222-184c25525b28] New Worker created. Environment Shuffle: docker logs f9032a2a48439743a2309f483d7bb1e4db4473079195e661cd85ec74fb63dbca
-2026/06/10 12:21:34 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
-2026/06/10 12:21:34 [WARNING] No auth found - running backend download without it.
-2026/06/10 12:21:36 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_46f2e5aa742f51d2ff4c4ac564c780fe,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_46f2e5aa742f51d2ff4c4ac564c780fe"
-2026/06/10 12:21:36 [WARNING] No auth found - running backend download without it.
-2026/06/10 12:21:38 [INFO][bb0a2bef-9621-40d7-8349-58d32dfcd711] New Worker created. Environment Shuffle: docker logs 61468dfe1b7cfc6d15f6c5965ed709b036c57a01553471627403438c8d4ccf60
-2026/06/10 12:21:56 [WARNING] No auth found - running backend download without it.
-2026/06/10 12:21:58 [WARNING] No auth found - running backend download without it.
-2026/06/10 12:22:15 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 12:22:15 [WARNING] No auth found - running backend download without it.
-2026/06/10 12:22:16 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_46f2e5aa742f51d2ff4c4ac564c780fe: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 12:22:16 [WARNING] No auth found - running backend download without it.
-2026/06/10 12:22:36 [WARNING] No auth found - running backend download without it.
-2026/06/10 12:22:37 [WARNING] No auth found - running backend download without it.
-2026/06/10 12:22:55 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 12:22:55 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 12:22:55 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_46f2e5aa742f51d2ff4c4ac564c780fe: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
-2026/06/10 12:22:55 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
-2026/06/10 12:23:15 [INFO] Looking for old containers to remove
-2026/06/10 12:23:15 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 12:23:15 [INFO] Should STOP and remove 0 containers.
-2026/06/10 12:23:15 [INFO] Should REMOVE 0 containers.
-2026/06/10 12:33:19 [INFO] Looking for old containers to remove
-2026/06/10 12:33:20 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 12:33:20 [INFO] Should STOP and remove 0 containers.
-2026/06/10 12:33:20 [INFO] Should REMOVE 49 containers.
-2026/06/10 12:43:23 [INFO] Looking for old containers to remove
-2026/06/10 12:43:24 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 12:43:24 [INFO] Should STOP and remove 0 containers.
-2026/06/10 12:43:24 [INFO] Should REMOVE 0 containers.
-2026/06/10 12:53:28 [INFO] Looking for old containers to remove
-2026/06/10 12:53:28 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 12:53:28 [INFO] Should STOP and remove 0 containers.
-2026/06/10 12:53:28 [INFO] Should REMOVE 0 containers.
-2026/06/10 13:03:32 [INFO] Looking for old containers to remove
-2026/06/10 13:03:32 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 13:03:32 [INFO] Should STOP and remove 0 containers.
-2026/06/10 13:03:32 [INFO] Should REMOVE 0 containers.
-2026/06/10 13:13:36 [INFO] Looking for old containers to remove
-2026/06/10 13:13:36 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
-2026/06/10 13:13:36 [INFO] Should STOP and remove 0 containers.
-2026/06/10 13:13:36 [INFO] Should REMOVE 0 containers.
-2026/06/10 13:20:38 [INFO][4c306801-8892-4ea0-b6a8-af50435a287c] New Worker created. Environment Shuffle: docker logs 65e89467772d6ed083ff12487890d4fad56d34e8dbdd395a9bbccee87865e06b
-2026/06/10 13:20:48 [INFO][999231d0-63e6-4227-9b33-c32488cdd46f] New Worker created. Environment Shuffle: docker logs 7a5550ca7402fd949eb722fad29a120f725feb808860c984131885e916d11360
-2026/06/10 13:21:36 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
 2026/06/10 13:21:36 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_f501801f0ae4accf8fd748b04d845196,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_f501801f0ae4accf8fd748b04d845196"
 2026/06/10 13:21:36 [WARNING] No auth found - running backend download without it.
 2026/06/10 13:21:36 [WARNING] No auth found - running backend download without it.
@@ -498,3 +229,272 @@
 2026/06/10 18:23:04 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
 2026/06/10 18:23:05 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_7b6cccff012202b2fde08e704dc1188b: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
 2026/06/10 18:23:05 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 18:25:43 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:25:45 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:25:47 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:25:49 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:25:51 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:25:53 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:26:14 [INFO] Looking for old containers to remove
+2026/06/10 18:26:15 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 18:26:15 [INFO] Should STOP and remove 0 containers.
+2026/06/10 18:26:15 [INFO] Should REMOVE 0 containers.
+2026/06/10 18:27:01 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:27:03 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:27:05 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:27:07 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:27:09 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:27:11 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:27:13 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "failed to json unmarshal body: invalid character 'O' looking for beginning of value"}
+2026/06/10 18:28:22 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:28:24 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:28:26 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:28:28 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:28:30 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:28:32 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "failed to json unmarshal body: invalid character 'O' looking for beginning of value"}
+2026/06/10 18:29:13 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp: lookup shuffle-opensearch on 127.0.0.11:53: server misbehaving"}
+2026/06/10 18:29:15 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:29:17 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:29:19 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:29:21 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:29:23 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:29:25 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:30:24 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:30:26 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:30:28 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:30:30 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:30:32 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:30:34 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:30:36 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:30:38 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:34:57 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:34:59 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:35:01 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:35:03 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:35:05 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:35:07 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:35:09 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "failed to json unmarshal body: invalid character 'O' looking for beginning of value"}
+2026/06/10 18:36:26 [INFO] Looking for old containers to remove
+2026/06/10 18:36:26 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 18:36:26 [INFO] Should STOP and remove 0 containers.
+2026/06/10 18:36:26 [INFO] Should REMOVE 49 containers.
+2026/06/10 18:38:11 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:38:13 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:38:15 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:38:17 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:38:19 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:38:21 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 18:46:32 [INFO] Looking for old containers to remove
+2026/06/10 18:46:33 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 18:46:33 [INFO] Should STOP and remove 0 containers.
+2026/06/10 18:46:33 [INFO] Should REMOVE 0 containers.
+2026/06/10 18:56:37 [INFO] Looking for old containers to remove
+2026/06/10 18:56:38 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 18:56:38 [INFO] Should STOP and remove 0 containers.
+2026/06/10 18:56:38 [INFO] Should REMOVE 0 containers.
+2026/06/10 19:06:43 [INFO] Looking for old containers to remove
+2026/06/10 19:06:43 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 19:06:43 [INFO] Should STOP and remove 0 containers.
+2026/06/10 19:06:43 [INFO] Should REMOVE 0 containers.
+2026/06/10 19:16:47 [INFO] Looking for old containers to remove
+2026/06/10 19:16:48 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 19:16:48 [INFO] Should STOP and remove 0 containers.
+2026/06/10 19:16:48 [INFO] Should REMOVE 0 containers.
+2026/06/10 19:20:39 [INFO][4f1294a1-5a8f-46f5-9f9f-58340730e5f1] New Worker created. Environment Shuffle: docker logs 9d3f4d8fe396626eea894ce8177571d5f8afbcdf62fbcb6655a98109cec2481b
+2026/06/10 19:20:48 [INFO][e1075782-74e0-44db-9661-d1bb4c93a58c] New Worker created. Environment Shuffle: docker logs 72cdf93f46c1330af9879c846ff5b749f988919d73202c280ff4c460ddba0a4c
+2026/06/10 19:21:35 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
+2026/06/10 19:21:35 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_0ff8ae317c452c139813effdc5a67df8,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_0ff8ae317c452c139813effdc5a67df8"
+2026/06/10 19:21:35 [WARNING] No auth found - running backend download without it.
+2026/06/10 19:21:35 [WARNING] No auth found - running backend download without it.
+2026/06/10 19:21:36 [INFO][738989fa-a1d1-4658-a2f4-0ee84b29f40c] New Worker created. Environment Shuffle: docker logs 44cfaa5ce5b0f5d709a062fb9609bf524a9754ec49dff56dba2ab7ef0dc91306
+2026/06/10 19:21:59 [WARNING] No auth found - running backend download without it.
+2026/06/10 19:22:00 [WARNING] No auth found - running backend download without it.
+2026/06/10 19:22:20 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 19:22:20 [WARNING] No auth found - running backend download without it.
+2026/06/10 19:22:21 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_0ff8ae317c452c139813effdc5a67df8: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 19:22:21 [WARNING] No auth found - running backend download without it.
+2026/06/10 19:22:43 [WARNING] No auth found - running backend download without it.
+2026/06/10 19:22:44 [WARNING] No auth found - running backend download without it.
+2026/06/10 19:23:04 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 19:23:04 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 19:23:04 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_0ff8ae317c452c139813effdc5a67df8: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 19:23:04 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 19:26:56 [INFO] Looking for old containers to remove
+2026/06/10 19:26:57 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 19:26:57 [INFO] Should STOP and remove 0 containers.
+2026/06/10 19:26:57 [INFO] Should REMOVE 0 containers.
+2026/06/10 19:37:01 [INFO] Looking for old containers to remove
+2026/06/10 19:37:01 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 19:37:01 [INFO] Should STOP and remove 0 containers.
+2026/06/10 19:37:01 [INFO] Should REMOVE 49 containers.
+2026/06/10 19:47:06 [INFO] Looking for old containers to remove
+2026/06/10 19:47:06 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 19:47:06 [INFO] Should STOP and remove 0 containers.
+2026/06/10 19:47:06 [INFO] Should REMOVE 0 containers.
+2026/06/10 19:57:10 [INFO] Looking for old containers to remove
+2026/06/10 19:57:11 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 19:57:11 [INFO] Should STOP and remove 0 containers.
+2026/06/10 19:57:11 [INFO] Should REMOVE 0 containers.
+2026/06/10 20:07:15 [INFO] Looking for old containers to remove
+2026/06/10 20:07:15 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 20:07:15 [INFO] Should STOP and remove 0 containers.
+2026/06/10 20:07:15 [INFO] Should REMOVE 0 containers.
+2026/06/10 20:17:19 [INFO] Looking for old containers to remove
+2026/06/10 20:17:20 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 20:17:20 [INFO] Should STOP and remove 0 containers.
+2026/06/10 20:17:20 [INFO] Should REMOVE 0 containers.
+2026/06/10 20:20:39 [INFO][a1428bfa-6cf4-4bd9-ad69-4a96932b64a9] New Worker created. Environment Shuffle: docker logs 5d89b21d7dac5511404dd03216df4e0a9d6de2e1d28e893d3705172f6c5b1c11
+2026/06/10 20:20:48 [INFO][d31ad3a5-cf9d-4748-b32b-a9d3e63db8c6] New Worker created. Environment Shuffle: docker logs 76eb2b4a20786ae1b628b833d0bf7c2ec11e2a5a41ebef62d9b01aca52b304c3
+2026/06/10 20:21:34 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
+2026/06/10 20:21:34 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_56672507c3a9ba0bef559498591705a8,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_56672507c3a9ba0bef559498591705a8"
+2026/06/10 20:21:34 [WARNING] No auth found - running backend download without it.
+2026/06/10 20:21:34 [WARNING] No auth found - running backend download without it.
+2026/06/10 20:21:36 [INFO][1698df74-ad28-42a7-af26-370a49541477] New Worker created. Environment Shuffle: docker logs c0bfbcfb83b98b453d9fc73f0a152a612e3cff3f28e517ec613b335972a69e1b
+2026/06/10 20:21:59 [WARNING] No auth found - running backend download without it.
+2026/06/10 20:22:00 [WARNING] No auth found - running backend download without it.
+2026/06/10 20:22:19 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 20:22:19 [WARNING] No auth found - running backend download without it.
+2026/06/10 20:22:19 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_56672507c3a9ba0bef559498591705a8: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 20:22:19 [WARNING] No auth found - running backend download without it.
+2026/06/10 20:22:41 [WARNING] No auth found - running backend download without it.
+2026/06/10 20:22:42 [WARNING] No auth found - running backend download without it.
+2026/06/10 20:23:00 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 20:23:00 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 20:23:01 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_56672507c3a9ba0bef559498591705a8: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 20:23:01 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 20:27:28 [INFO] Looking for old containers to remove
+2026/06/10 20:27:28 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 20:27:28 [INFO] Should STOP and remove 0 containers.
+2026/06/10 20:27:28 [INFO] Should REMOVE 0 containers.
+2026/06/10 20:37:32 [INFO] Looking for old containers to remove
+2026/06/10 20:37:33 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 20:37:33 [INFO] Should STOP and remove 0 containers.
+2026/06/10 20:37:33 [INFO] Should REMOVE 49 containers.
+2026/06/10 20:47:36 [INFO] Looking for old containers to remove
+2026/06/10 20:47:37 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 20:47:37 [INFO] Should STOP and remove 0 containers.
+2026/06/10 20:47:37 [INFO] Should REMOVE 0 containers.
+2026/06/10 20:57:41 [INFO] Looking for old containers to remove
+2026/06/10 20:57:41 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 20:57:41 [INFO] Should STOP and remove 0 containers.
+2026/06/10 20:57:41 [INFO] Should REMOVE 0 containers.
+2026/06/10 21:07:45 [INFO] Looking for old containers to remove
+2026/06/10 21:07:45 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 21:07:45 [INFO] Should STOP and remove 0 containers.
+2026/06/10 21:07:45 [INFO] Should REMOVE 0 containers.
+2026/06/10 21:17:49 [INFO] Looking for old containers to remove
+2026/06/10 21:17:49 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 21:17:49 [INFO] Should STOP and remove 0 containers.
+2026/06/10 21:17:49 [INFO] Should REMOVE 0 containers.
+2026/06/10 21:20:39 [INFO][94f774e1-8667-4f94-93bf-6337484aa0a6] New Worker created. Environment Shuffle: docker logs 6687a5c23c24b965ccfa363d0f9207e230173d999a04af102900342d458fb295
+2026/06/10 21:20:48 [INFO][ba54a52d-c787-49ee-8b44-016871620ec7] New Worker created. Environment Shuffle: docker logs 4a8819ad1c6097e150b35c6bb47cab69fa93ec282dc2e38512410170751ab0bc
+2026/06/10 21:21:36 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
+2026/06/10 21:21:36 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_9b59d27a86336652c148c26a04b6e783,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_9b59d27a86336652c148c26a04b6e783"
+2026/06/10 21:21:36 [WARNING] No auth found - running backend download without it.
+2026/06/10 21:21:36 [WARNING] No auth found - running backend download without it.
+2026/06/10 21:21:38 [INFO][504008de-92f9-4f60-9426-7a73a46684c7] New Worker created. Environment Shuffle: docker logs e1a663a2797d71e3eafa4081ba12d47460fe71db13f46a1916a0ab1609a9df85
+2026/06/10 21:22:00 [WARNING] No auth found - running backend download without it.
+2026/06/10 21:22:01 [WARNING] No auth found - running backend download without it.
+2026/06/10 21:22:20 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_9b59d27a86336652c148c26a04b6e783: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 21:22:20 [WARNING] No auth found - running backend download without it.
+2026/06/10 21:22:20 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 21:22:20 [WARNING] No auth found - running backend download without it.
+2026/06/10 21:22:42 [WARNING] No auth found - running backend download without it.
+2026/06/10 21:22:43 [WARNING] No auth found - running backend download without it.
+2026/06/10 21:23:01 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_9b59d27a86336652c148c26a04b6e783: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 21:23:01 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 21:23:02 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 21:23:02 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 21:27:57 [INFO] Looking for old containers to remove
+2026/06/10 21:27:58 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 21:27:58 [INFO] Should STOP and remove 0 containers.
+2026/06/10 21:27:58 [INFO] Should REMOVE 0 containers.
+2026/06/10 21:38:02 [INFO] Looking for old containers to remove
+2026/06/10 21:38:02 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 21:38:02 [INFO] Should STOP and remove 0 containers.
+2026/06/10 21:38:02 [INFO] Should REMOVE 49 containers.
+2026/06/10 21:48:06 [INFO] Looking for old containers to remove
+2026/06/10 21:48:07 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 21:48:07 [INFO] Should STOP and remove 0 containers.
+2026/06/10 21:48:07 [INFO] Should REMOVE 0 containers.
+2026/06/10 21:58:10 [INFO] Looking for old containers to remove
+2026/06/10 21:58:11 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 21:58:11 [INFO] Should STOP and remove 0 containers.
+2026/06/10 21:58:11 [INFO] Should REMOVE 0 containers.
+2026/06/10 22:08:15 [INFO] Looking for old containers to remove
+2026/06/10 22:08:15 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 22:08:15 [INFO] Should STOP and remove 0 containers.
+2026/06/10 22:08:15 [INFO] Should REMOVE 0 containers.
+2026/06/10 22:18:19 [INFO] Looking for old containers to remove
+2026/06/10 22:18:20 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 22:18:20 [INFO] Should STOP and remove 0 containers.
+2026/06/10 22:18:20 [INFO] Should REMOVE 0 containers.
+2026/06/10 22:20:39 [INFO][1b864bc4-38e8-4f14-bd23-a6742f305d58] New Worker created. Environment Shuffle: docker logs f824dd5897767964afa891334743094877a72da8a5c46b346af34427a6b814a5
+2026/06/10 22:20:48 [INFO][165796f9-7836-4fc4-9c13-3b90ff6e743d] New Worker created. Environment Shuffle: docker logs c3ea6c39748f8fcd689d5235aaa3efbbc42918f03db9fadfe98663eb5a72b285
+2026/06/10 22:21:34 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
+2026/06/10 22:21:34 [WARNING] No auth found - running backend download without it.
+2026/06/10 22:21:36 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_9e8bd52954c3e6ab32a4bf0a20e06aa1,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_9e8bd52954c3e6ab32a4bf0a20e06aa1"
+2026/06/10 22:21:36 [WARNING] No auth found - running backend download without it.
+2026/06/10 22:21:38 [INFO][70388058-2416-41c4-a8b3-27a0c6688def] New Worker created. Environment Shuffle: docker logs 7224f4994878789ce19490d2d518a18bd961db32294676c1aca471ffb430b626
+2026/06/10 22:21:58 [WARNING] No auth found - running backend download without it.
+2026/06/10 22:22:00 [WARNING] No auth found - running backend download without it.
+2026/06/10 22:22:18 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 22:22:18 [WARNING] No auth found - running backend download without it.
+2026/06/10 22:22:20 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_9e8bd52954c3e6ab32a4bf0a20e06aa1: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 22:22:20 [WARNING] No auth found - running backend download without it.
+2026/06/10 22:22:41 [WARNING] No auth found - running backend download without it.
+2026/06/10 22:22:43 [WARNING] No auth found - running backend download without it.
+2026/06/10 22:23:01 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 22:23:01 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 22:23:02 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_9e8bd52954c3e6ab32a4bf0a20e06aa1: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 22:23:02 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 22:28:28 [INFO] Looking for old containers to remove
+2026/06/10 22:28:28 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 22:28:28 [INFO] Should STOP and remove 0 containers.
+2026/06/10 22:28:28 [INFO] Should REMOVE 0 containers.
+2026/06/10 22:38:32 [INFO] Looking for old containers to remove
+2026/06/10 22:38:32 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 22:38:32 [INFO] Should STOP and remove 0 containers.
+2026/06/10 22:38:32 [INFO] Should REMOVE 49 containers.
+2026/06/10 22:48:36 [INFO] Looking for old containers to remove
+2026/06/10 22:48:36 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 22:48:36 [INFO] Should STOP and remove 0 containers.
+2026/06/10 22:48:36 [INFO] Should REMOVE 0 containers.
+2026/06/10 22:58:40 [INFO] Looking for old containers to remove
+2026/06/10 22:58:41 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 22:58:41 [INFO] Should STOP and remove 0 containers.
+2026/06/10 22:58:41 [INFO] Should REMOVE 0 containers.
+2026/06/10 23:08:45 [INFO] Looking for old containers to remove
+2026/06/10 23:08:45 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 23:08:45 [INFO] Should STOP and remove 0 containers.
+2026/06/10 23:08:45 [INFO] Should REMOVE 0 containers.
+2026/06/10 23:18:49 [INFO] Looking for old containers to remove
+2026/06/10 23:18:49 [INFO] Baseimage: frikky/shuffle, Workertimeout: 600
+2026/06/10 23:18:49 [INFO] Should STOP and remove 0 containers.
+2026/06/10 23:18:49 [INFO] Should REMOVE 0 containers.
+2026/06/10 23:20:40 [INFO][c110acc8-71da-4459-8ec5-635a3841593e] New Worker created. Environment Shuffle: docker logs fea4d363ad19138eaea037a92b6d6869a5bd03a9283f2be6699ab0935124322d
+2026/06/10 23:20:52 [INFO][a27b4442-8321-40b5-8e6f-e38037722ec1] New Worker created. Environment Shuffle: docker logs a2a658068675621c2accae1ec6ad200956752c04e4efb7e70d9a8939b2606dd0
+2026/06/10 23:21:40 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_cae78deef700968b3a098486b37d58c9,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9"
+2026/06/10 23:21:40 [INFO] Re-downloading new image(s) due to backend request: "shufflehealthcheck_1.1.0,shufflehealthcheck_aa005c65d0a0e0530cd225bc88fc218a,ShuffleHealthcheck_1.1.0,ShuffleHealthcheck_aa005c65d0a0e0530cd225bc88fc218a"
+2026/06/10 23:21:40 [WARNING] No auth found - running backend download without it.
+2026/06/10 23:21:40 [WARNING] No auth found - running backend download without it.
+2026/06/10 23:21:43 [INFO][ccab131f-1cd8-4b70-8cad-262f01897b57] New Worker created. Environment Shuffle: docker logs 3f1704efbee0648b69b448f4a895b6e4dc97f7db71a6f02a450feb6356c5e4a5
+2026/06/10 23:22:16 [WARNING] No auth found - running backend download without it.
+2026/06/10 23:22:16 [WARNING] No auth found - running backend download without it.
+2026/06/10 23:22:43 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 23:22:43 [WARNING] No auth found - running backend download without it.
+2026/06/10 23:22:44 [ERROR] Error loading image frikky/shuffle:shufflehealthcheck_aa005c65d0a0e0530cd225bc88fc218a: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 23:22:44 [WARNING] No auth found - running backend download without it.
+2026/06/10 23:23:21 [WARNING] No auth found - running backend download without it.
+2026/06/10 23:23:22 [WARNING] No auth found - running backend download without it.
+2026/06/10 23:23:53 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_cae78deef700968b3a098486b37d58c9: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 23:23:53 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 23:23:53 [ERROR] Error loading image frikky/shuffle:ShuffleHealthcheck_aa005c65d0a0e0530cd225bc88fc218a: {"error":"unrecognized image format","errorDetail":{"message":"unrecognized image format"}}
+2026/06/10 23:23:53 [DEBUG] Successfully downloaded image copies: frikky/shuffle:shufflehealthcheck_1.1.0, frikky/shuffle:ShuffleHealthcheck_1.1.0
+2026/06/10 23:24:26 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 23:24:28 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 23:24:30 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 23:24:32 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 23:24:34 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 23:24:36 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}
+2026/06/10 23:24:38 [ERROR] Backend connection failed for url 'http://shuffle-backend:5001/api/v1/workflows/queue', or is missing (500): {"success": false, "reason": "dial tcp 172.20.0.2:9200: connect: connection refused"}

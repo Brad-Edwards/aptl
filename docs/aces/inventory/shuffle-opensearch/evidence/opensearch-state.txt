@@ -41,30 +41,30 @@ health status index                        uuid                   pri rep docs.c
 green  open   .opendistro_security         TPsq0QMUTFalmLfM3shcTg   1   0         10            0     78.3kb         78.3kb
 green  open   .opensearch-observability    LYuCGnkYSpuu2kWAk4PW4g   1   0          0            0       208b           208b
 green  open   .plugins-ml-config           fjTZbWADTVCm3OOKoCpkOg   1   0          1            0      3.9kb          3.9kb
-yellow open   app_revisions                IM0YZj-jRTqL7Zn5VWxg1Q   1   1        445            0     29.2mb         29.2mb
+yellow open   app_revisions                IM0YZj-jRTqL7Zn5VWxg1Q   1   1        450            0     30.2mb         30.2mb
 yellow open   datastore_category-000001    JuzzPGyITIWxS62mdxUyrA   3   1          1            0      5.7kb          5.7kb
 yellow open   datastore_ngram-000001       g7YwM_VDQr215Tv2UVO1oQ   3   1          1            0      5.4kb          5.4kb
-yellow open   environments-000001          KT5b5gDnRu6l8pmqfspvzg   3   1          1            0     22.8kb         22.8kb
-yellow open   files                        uqUKmcUdSKGu8wBaEuuv8Q   1   1       1332           29    839.4kb        839.4kb
+yellow open   environments-000001          KT5b5gDnRu6l8pmqfspvzg   3   1          1            0     23.5kb         23.5kb
+yellow open   files                        uqUKmcUdSKGu8wBaEuuv8Q   1   1       1347           29    847.6kb        847.6kb
 yellow open   notifications-000001         N1uNa8YDSNm6Gr9POrvROg   3   1          0            0       624b           624b
-yellow open   openapi3                     zzkR9Uh8QgiYHhpKYm1mkQ   1   1        446            5     15.3mb         15.3mb
+yellow open   openapi3                     zzkR9Uh8QgiYHhpKYm1mkQ   1   1        451            6     15.4mb         15.4mb
 yellow open   org_cache-000001             DjH_uVfZRraYoc-xtfEfdg   3   1          2            0     16.7kb         16.7kb
-yellow open   org_cache_revisions-000001   ITi3CyFZR2q45KD6hpCRFw   3   1       1333            0        1mb            1mb
+yellow open   org_cache_revisions-000001   ITi3CyFZR2q45KD6hpCRFw   3   1       1348            0        1mb            1mb
 yellow open   org_statistics-000001        r99IDL8mSP6xZy7Pw4cJbw   3   1          0            0       624b           624b
 yellow open   organizations                7BpSGzFITpC4MCx0N1AeFg   1   1          1            0    152.8kb        152.8kb
-yellow open   platform_health              1T6I59P8T827a0ghSzi40g   1   1        445            0    706.8kb        706.8kb
+yellow open   platform_health              1T6I59P8T827a0ghSzi40g   1   1        450            0    810.1kb        810.1kb
 yellow open   security-auditlog-2026.05.23 iTOLQP5jSN6fKblUFxIwhw   1   1         63            0    215.6kb        215.6kb
-yellow open   security-auditlog-2026.06.10 4iHt443nTFeaJwkmfLD6Sw   1   1         50            0       72kb           72kb
+yellow open   security-auditlog-2026.06.10 4iHt443nTFeaJwkmfLD6Sw   1   1        100            0     71.4kb         71.4kb
 yellow open   shuffle_logs-000001          wZiV8fuDSbSkpFDSA_RgGA   3   1          0            0       624b           624b
 yellow open   users                        v9M97APyS2ajYp8ZLxFh7Q   1   1          1            0     94.9kb         94.9kb
 yellow open   workflow-000001              93qVvt8WS-OKTyGgdd5gaA   3   1          0            0       708b           708b
 yellow open   workflow_revisions-000001    RquNuKk-TfGc2VBXAw5U1A   3   1          0            0       624b           624b
 yellow open   workflowapp-000001           F50dXqJNRkiheSG-WCo7mQ   3   1          8            0    435.4kb        435.4kb
-yellow open   workflowexecution-000001     EIZiv50cQe-wmHGE7Hp5pA   3   1       1333          186     39.3mb         39.3mb
+yellow open   workflowexecution-000001     EIZiv50cQe-wmHGE7Hp5pA   3   1       1348          279       43mb           43mb
 yellow open   workflowqueue-shuffle        u1K2iI3aQ3e29iCjWDf3_g   1   1          0            0       239b           239b
 --cat-nodes--
 ip         heap.percent ram.percent cpu load_1m load_5m load_15m node.role node.roles                                        cluster_manager name
-172.20.0.2           32         100  23    5.54    6.44     5.64 dimr      cluster_manager,data,ingest,remote_cluster_client *               e1eb785c281a
+172.20.0.2           51         100  28    9.93   10.86     7.65 dimr      cluster_manager,data,ingest,remote_cluster_client *               e1eb785c281a
 --nodes-plugins-names-only--
 {
   "cluster_name": "docker-cluster",
@@ -137,5 +137,171 @@ ip         heap.percent ram.percent cpu load_1m load_5m load_15m node.role node.
         "publish_address" : "172.20.0.2:9200"
       }
     }
+  }
+}
+--security-internalusers--
+{
+  "logstash" : {
+    "hash" : "",
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "logstash"
+    ],
+    "attributes" : { },
+    "description" : "Demo logstash user, using external role mapping",
+    "opendistro_security_roles" : [ ],
+    "static" : false
+  },
+  "snapshotrestore" : {
+    "hash" : "",
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "snapshotrestore"
+    ],
+    "attributes" : { },
+    "description" : "Demo snapshotrestore user, using external role mapping",
+    "opendistro_security_roles" : [ ],
+    "static" : false
+  },
+  "admin" : {
+    "hash" : "",
+    "reserved" : true,
+    "hidden" : false,
+    "backend_roles" : [
+      "admin"
+    ],
+    "attributes" : { },
+    "description" : "Demo admin user",
+    "opendistro_security_roles" : [ ],
+    "static" : false
+  },
+  "kibanaserver" : {
+    "hash" : "",
+    "reserved" : true,
+    "hidden" : false,
+    "backend_roles" : [ ],
+    "attributes" : { },
+    "description" : "Demo OpenSearch Dashboards user",
+    "opendistro_security_roles" : [ ],
+    "static" : false
+  },
+  "kibanaro" : {
+    "hash" : "",
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "kibanauser",
+      "readall"
+    ],
+    "attributes" : {
+      "attribute1" : "value1",
+      "attribute2" : "value2",
+      "attribute3" : "value3"
+    },
+    "description" : "Demo OpenSearch Dashboards read only user, using external role mapping",
+    "opendistro_security_roles" : [ ],
+    "static" : false
+  },
+  "readall" : {
+    "hash" : "",
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "readall"
+    ],
+    "attributes" : { },
+    "description" : "Demo readall user, using external role mapping",
+    "opendistro_security_roles" : [ ],
+    "static" : false
+  },
+  "anomalyadmin" : {
+    "hash" : "",
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [ ],
+    "attributes" : { },
+    "description" : "Demo anomaly admin user, using internal role",
+    "opendistro_security_roles" : [
+      "anomaly_full_access"
+    ],
+    "static" : false
+  }
+}
+--security-rolesmapping--
+{
+  "manage_snapshots" : {
+    "hosts" : [ ],
+    "users" : [ ],
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "snapshotrestore"
+    ],
+    "and_backend_roles" : [ ]
+  },
+  "logstash" : {
+    "hosts" : [ ],
+    "users" : [ ],
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "logstash"
+    ],
+    "and_backend_roles" : [ ]
+  },
+  "own_index" : {
+    "hosts" : [ ],
+    "users" : [
+      "*"
+    ],
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [ ],
+    "and_backend_roles" : [ ],
+    "description" : "Allow full access to an index named like the username"
+  },
+  "kibana_user" : {
+    "hosts" : [ ],
+    "users" : [ ],
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "kibanauser"
+    ],
+    "and_backend_roles" : [ ],
+    "description" : "Maps kibanauser to kibana_user"
+  },
+  "all_access" : {
+    "hosts" : [ ],
+    "users" : [ ],
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "admin"
+    ],
+    "and_backend_roles" : [ ],
+    "description" : "Maps admin to all_access"
+  },
+  "readall" : {
+    "hosts" : [ ],
+    "users" : [ ],
+    "reserved" : false,
+    "hidden" : false,
+    "backend_roles" : [
+      "readall"
+    ],
+    "and_backend_roles" : [ ]
+  },
+  "kibana_server" : {
+    "hosts" : [ ],
+    "users" : [
+      "kibanaserver"
+    ],
+    "reserved" : true,
+    "hidden" : false,
+    "backend_roles" : [ ],
+    "and_backend_roles" : [ ]
   }
 }

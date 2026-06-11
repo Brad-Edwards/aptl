@@ -17,7 +17,7 @@ listener** and **publishes no host ports**.
 **No known ACES expressivity gap remains** for the catalogued steady-state facts.
 
 This capture is non-destructive. It used the already-running local `aptl`
-project (soc profile) on 2026-06-10 and **did not run
+project (soc profile) on 2026-06-11 and **did not run
 `aptl lab stop -v && aptl lab start`**. Treat this bundle as a frozen
 observation of that local steady state, **not as clean-lab rebuild proof**.
 
@@ -54,7 +54,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Network identity | `security-net` DHCP 172.20.0.6 (only network) |
 | Package inventory | 21 apk packages |
 | Software components | 139 Go modules (SBOM go-module catalogue) |
-| Trivy vulnerability findings | 96 image-layer findings: 3 critical, 36 high, 32 medium, 25 low |
+| Trivy vulnerability findings | 126 image-layer findings: 3 critical, 38 high, 40 medium, 45 low |
 | Local identity | 17 users, 35 groups, 0 sudo rules |
 
 ## Evidence Bundle
@@ -66,7 +66,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Upstream registry image identity is recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-buildx-imagetools.image.raw.json`, `evidence/docker-buildx-imagetools.image.txt`, `evidence/docker-history.image.txt`, `evidence/docker-history.image.jsonl`, `evidence/source-checksums.txt` |
 | Runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-security.json`, `evidence/docker-top.txt`, `evidence/docker-logs.shuffle-orborus.txt`, `evidence/runtime-baseline.txt` |
 | The docker.sock control surface, PID 1, env, and outbound target are recorded. | `evidence/orborus-state.txt` |
-| Filesystem manifest and stable-content checksums are recorded. | `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt` |
+| Filesystem manifest and stable-content checksums are recorded. | `evidence/filesystem-tree.txt` (curated), `evidence/filesystem-tree-full.txt.gz` (full rootfs), `evidence/filesystem-checksums.txt` |
 | Application/runtime versions are recorded. | `evidence/language-manifests.txt` |
 | Attacker (kali) vantage is recorded. | `evidence/participant-discovery.kali.txt` |
 | Package and CVE inventory are recorded. | `evidence/os-packages.txt`, `evidence/trivy-vulnerabilities.json.gz`, `evidence/trivy-vulnerability-list.json`, `evidence/trivy-vulnerability-counts.json` |
@@ -121,9 +121,11 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
 - The `/orborus` Go binary was never executed (running it starts the daemon and
   spawns workers); binary identity is from metadata, the shipped `/orborus.go`
   source, and the SBOM go-module catalogue.
-- The filesystem manifest is scoped to the orborus application surface
-  (`/orborus`, `/orborus.go`, `/etc/os-release`); the rest of the minimal Alpine
-  rootfs is covered by `os-packages.txt` and the SBOMs.
+- The curated filesystem manifest (and the SDL `filesystem_inventory`) is scoped
+  to the orborus application surface (`/orborus`, `/orborus.go`,
+  `/etc/os-release`); the full Alpine rootfs manifest is retained as evidence in
+  `filesystem-tree-full.txt.gz`, with package-level coverage in
+  `os-packages.txt` and the SBOMs.
 - `SHUFFLE_OPENSEARCH_URL` is an image-default env (no credentials) and no
   outbound opensearch connection was observed; only the orborus → backend edge
   is encoded.

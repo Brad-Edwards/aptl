@@ -47,7 +47,8 @@ correspondence_checks:
   status: implemented
   source: nodes.techvault.shuffle-opensearch.runtime
   method: tests/test_shuffle_opensearch_inventory.py parses the ACES SDL and asserts image, package, CVE, filesystem, identity,
-    process, environment, listener, and datastore counts/values against the evidence.
+    process, environment, listener, mount, capability, software-component, internal-user, and datastore counts/values against
+    the evidence.
   realized_evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/runtime-baseline.txt
@@ -56,9 +57,12 @@ correspondence_checks:
   - path: evidence/opensearch-state.txt
   ledger_fact_ids:
   - shuffle-opensearch.runtime.container-host-config
+  - shuffle-opensearch.runtime.mounts
   - shuffle-opensearch.runtime.package-inventory
   - shuffle-opensearch.runtime.vulnerability-scan
   - shuffle-opensearch.runtime.local-identity
+  - shuffle-opensearch.application.embedded-components
+  - shuffle-opensearch.identity.security-internal-users
   - shuffle-opensearch.datastore.opensearch-service
 - id: shuffle-opensearch-datastore-mapping-correspondence
   status: implemented
@@ -175,13 +179,15 @@ facts:
     rationale: Current ACES SDL node runtime fields carry the compose contract directly.
 - id: shuffle-opensearch.runtime.container-host-config
   category: runtime
-  summary: Docker runtime policy captures restart, 1 GiB memory, namespaces, masked/read-only paths, no added capabilities,
-    and runc runtime.
+  summary: Docker runtime policy captures restart, 1 GiB memory, namespaces, masked/read-only paths, the captured /proc/1/status
+    capability masks (CapEff=0000000000000000 — the non-root opensearch JVM holds an EMPTY effective capability set; the bounding
+    set CapBnd=00000000a80425fb is the Docker default; no compose cap_add), and runc runtime.
   evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/osquery-docker-containers.json
   - path: evidence/docker-top.txt
   - path: evidence/docker-logs.shuffle-opensearch.txt
+  - path: evidence/runtime-baseline.txt
   aces:
     disposition: encoded
     surface: nodes
@@ -227,8 +233,10 @@ facts:
     rationale: Current ACES SDL node service_listeners + services carry the listener facts directly.
 - id: shuffle-opensearch.runtime.mounts
   category: runtime
-  summary: The shuffle_opensearch_data named volume is mounted at /usr/share/opensearch/data; the runtime mount table and
-    volume inspect record it.
+  summary: The shuffle_opensearch_data named volume is mounted at /usr/share/opensearch/data (RW) and encoded in runtime.mounts
+    alongside the full captured mount table; the volume holds ALL OpenSearch index state (the Shuffle SOAR persistence). The
+    pre-#405 bundle encoded an EMPTY mount table because the in-container mount(1) probe silently produced no output; the
+    capture script now falls back to /proc/self/mounts and docker-inspect Mounts are treated as authoritative.
   evidence:
   - path: evidence/docker-volume.shuffle_opensearch_data.json
   - path: evidence/docker-inspect.container.json
@@ -324,6 +332,43 @@ facts:
     fields:
     - nodes.techvault.shuffle-opensearch.runtime.software_components
     rationale: Current ACES SDL node runtime.software_components carries the OpenSearch version directly.
+- id: shuffle-opensearch.application.embedded-components
+  category: application
+  summary: The 445 unique Maven/JAR components embedded in the OpenSearch 2.14.0 distribution (server, Lucene, modules, and
+    bundled plugins, deduplicated by purl) are encoded as runtime software components from the syft SBOM catalogue, matching
+    the shuffle-backend/orborus embedded-library precedent.
+  evidence:
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/syft-version.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.shuffle-opensearch.runtime.software_components
+    rationale: ACES runtime.software_components encode the embedded Maven dependency table; the SBOM catalogue is the
+      authoritative source for the bundled JAR surface.
+- id: shuffle-opensearch.identity.security-internal-users
+  category: identity
+  summary: The Security-plugin internal user database (7 internal users including the reserved admin, with backend_roles and
+    rolesmapping captured via the operator-credentialed _plugins/_security REST vantage) is encoded as the identity authority
+    opensearch-security-internal-users; the REST API redacts password hashes server-side and the admin credential is the
+    committed compose fixture.
+  evidence:
+  - path: evidence/opensearch-state.txt
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - accounts
+    fields:
+    - nodes.techvault.shuffle-opensearch.runtime.identity_authorities.opensearch-security-internal-users
+    rationale: ACES runtime.identity_authorities encode the Security-plugin internal users and their role attributes with
+      redacted secret material (the shuffle-backend identity-authority precedent).
 - id: shuffle-opensearch.runtime.package-inventory
   category: runtime
   summary: rpm package inventory captures 110 installed OS packages from the OpenSearch Amazon Linux 2023 base.
@@ -340,7 +385,7 @@ facts:
     rationale: Current ACES SDL node runtime.packages carries the rpm inventory directly.
 - id: shuffle-opensearch.runtime.vulnerability-scan
   category: runtime
-  summary: Trivy captured 410 image-layer vulnerability findings (2 critical, 157 high, 231 medium, 20 low).
+  summary: Trivy captured 410 image-layer vulnerability findings (2 critical, 180 high, 210 medium, 18 low).
   evidence:
   - path: evidence/trivy-vulnerabilities.json.gz
   - path: evidence/trivy-vulnerability-list.json

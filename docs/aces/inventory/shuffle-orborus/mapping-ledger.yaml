@@ -20,9 +20,9 @@ provenance:
     limits:
       - >
         Upstream Shuffle orborus registry image (:latest tag); identity is the
-        pinned platform RepoDigest sha256:e74e0246...366dba. The :latest tag
-        resolves to a multi-arch image index (digest sha256:94e61e79...8366dba in
-        docker-buildx-imagetools.image.txt); the realized amd64 platform manifest
+        pinned platform RepoDigest sha256:e74e0246...8cbf7a44. The :latest tag
+        resolves to a manifest with digest sha256:94e61e79...18366dba in
+        docker-buildx-imagetools.image.txt; the realized amd64 platform manifest
         is the digest encoded on the node. No registry-visible OCI/in-toto/SLSA
         attestation manifest is published for this tag.
 notes:
@@ -185,9 +185,9 @@ facts:
     category: image
     summary: >
       The asset uses upstream image ghcr.io/shuffle/shuffle-orborus:latest,
-      resolved to the realized amd64 platform digest sha256:e74e0246...366dba
-      (the :latest multi-arch index is sha256:94e61e79...8366dba), with Alpine
-      3.22 image metadata and no published attestation manifest.
+      resolved to the realized amd64 platform digest sha256:e74e0246...8cbf7a44
+      (the :latest registry manifest digest is sha256:94e61e79...18366dba), with
+      Alpine 3.22 image metadata and no published attestation manifest.
     evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/compose-service.shuffle-orborus.json
@@ -255,13 +255,17 @@ facts:
     category: runtime
     summary: >
       Docker runtime policy captures restart unless_stopped, a 256 MiB memory
-      limit, runc runtime, namespace modes, root PID 1, the absent healthcheck
-      (health status none, no compose healthcheck declared), and container config.
+      limit, runc runtime, namespace modes, root PID 1 with the captured
+      /proc/1/status capability masks (CapEff=00000000a80425fb, the Docker
+      default set, decoded into runtime.linux_capabilities.effective), the
+      absent healthcheck (health status none, no compose healthcheck declared),
+      and container config.
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/osquery-docker-containers.json
       - path: evidence/docker-top.txt
       - path: evidence/docker-logs.shuffle-orborus.txt
+      - path: evidence/runtime-baseline.txt
     aces:
       disposition: encoded
       surface: nodes
@@ -400,10 +404,12 @@ facts:
     summary: >
       The SDL encodes the curated orborus application surface (the /orborus Go
       binary, the image-shipped /orborus.go source, and the /etc/os-release
-      symlink); the rest of the minimal Alpine rootfs is out of manifest scope and
-      covered by os-packages.txt and the SBOMs.
+      symlink); the FULL Alpine rootfs manifest is retained as evidence in
+      filesystem-tree-full.txt.gz, with package-level coverage in
+      os-packages.txt and the SBOMs.
     evidence:
       - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-tree-full.txt.gz
       - path: evidence/filesystem-checksums.txt
       - path: evidence/capture-limits.txt
     aces:
@@ -413,9 +419,9 @@ facts:
       fields:
         - nodes.techvault.shuffle-orborus.runtime.filesystem_inventory
       caveat: >
-        The SDL encodes the curated application-surface paths; the rest of the
-        Alpine rootfs is intentionally out of manifest scope per the capture
-        limits.
+        The SDL encodes the curated application-surface paths; the full rootfs
+        manifest is evidence-only (filesystem-tree-full.txt.gz) per the capture
+        limits, with per-file checksums restricted to the curated set.
       rationale: >
         ACES runtime.filesystem_inventory encodes the load-bearing paths with
         metadata, stability, and sensitivity.
@@ -462,8 +468,8 @@ facts:
   - id: shuffle-orborus.runtime.vulnerability-scan
     category: runtime
     summary: >
-      Trivy 0.70.0 reported 96 package vulnerability findings: 3 critical, 36
-      high, 32 medium, and 25 low.
+      Trivy 0.70.0 reported 126 package vulnerability findings: 3 critical, 38
+      high, 40 medium, and 45 low.
     evidence:
       - path: evidence/trivy-version.txt
       - path: evidence/trivy-vulnerabilities.json.gz

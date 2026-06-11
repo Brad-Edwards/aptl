@@ -4574,6 +4574,15 @@
               },
               "type": "text"
             },
+            "audit_request_body": {
+              "fields": {
+                "keyword": {
+                  "ignore_above": 256,
+                  "type": "keyword"
+                }
+              },
+              "type": "text"
+            },
             "audit_request_effective_user": {
               "fields": {
                 "keyword": {
@@ -4611,6 +4620,15 @@
               "type": "text"
             },
             "audit_request_remote_address": {
+              "fields": {
+                "keyword": {
+                  "ignore_above": 256,
+                  "type": "keyword"
+                }
+              },
+              "type": "text"
+            },
+            "audit_trace_doc_id": {
               "fields": {
                 "keyword": {
                   "ignore_above": 256,

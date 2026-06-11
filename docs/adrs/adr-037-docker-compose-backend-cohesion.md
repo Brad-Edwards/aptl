@@ -128,12 +128,11 @@ Today that hook is `_subprocess_kwargs`, with `_run` and
 
 ## References
 
-- [ADR-013](adr-013-deployment-abstraction.md) — deployment backend
+- [ADR-013](adr-013-deployment-abstraction.md): deployment backend
   abstraction.
-- [ADR-023](adr-023-container-interaction-in-deployment-backend.md) —
-  typed container interaction and host inventory on the backend.
-- [ADR-029](adr-029-control-plane-secret-handling.md) — redaction and
+- [ADR-023](adr-023-container-interaction-in-deployment-backend.md): typed container interaction and host inventory on the backend.
+- [ADR-029](adr-029-control-plane-secret-handling.md): redaction and
   secret-handling boundaries.
-- [ADR-031](adr-031-lab-orchestration-contract-guards.md) — lab
+- [ADR-031](adr-031-lab-orchestration-contract-guards.md): lab
   orchestration contract guardrails.
 - [Issue #262](https://github.com/Brad-Edwards/aptl/issues/262).

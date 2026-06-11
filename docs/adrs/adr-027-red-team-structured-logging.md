@@ -8,11 +8,11 @@ accepted (amended 2026-05-17 by [ADR-033](adr-033-agent-reasoning-trace-boundary
 
 2026-05-09 (amended 2026-05-17)
 
-## Status update — 2026-05-17
+## Status update—2026-05-17
 
-The SIEM-transport portion of this ADR — rsyslog-to-Wazuh forwarding
+The SIEM-transport portion of this ADR (rsyslog-to-Wazuh forwarding
 from the Kali container, Wazuh-agent-on-Kali ingestion, and the
-`kali_redteam_rules.xml` decoder loaded by the Wazuh manager — is
+`kali_redteam_rules.xml` decoder loaded by the Wazuh manager) is
 **superseded by ADR-033** under the non-contamination principle. Red
 activity must not bleed into the blue defensive stack's awareness via
 the SIEM, because that injection inflates blue's artificial picture
@@ -37,8 +37,8 @@ What stays from this ADR is **the OCSF schema work**:
 What changes is **the sink**:
 
 - The default sink composite now writes to stderr (with `[OCSF]`
-  sentinel — local dev visibility) AND to a per-run JSONL at
-  `<state>/runs/<trace_id>/mcp-side/ocsf.jsonl` — never to a SIEM.
+  sentinel—local dev visibility) AND to a per-run JSONL at
+  `<state>/runs/<trace_id>/mcp-side/ocsf.jsonl`—never to a SIEM.
 - `mcp/mcp-red/src/logger.ts` exports `localOcsfJsonlSink(env)` and
   `defaultRedTeamSinks(env)`; the existing `stderrJsonlSink` is
   retained as a building block but no longer the default by itself.

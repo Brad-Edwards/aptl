@@ -12,11 +12,11 @@ accepted
 
 ## Context
 
-From v2.0 through v3.x, the lab lifecycle was managed by `start-lab.sh` — a 273-line bash script that handled SSH key generation, environment setup, certificate management, Docker Compose orchestration, credential synchronization, and health checking. While functional, it had accumulated serious limitations:
+From v2.0 through v3.x, the lab lifecycle was managed by `start-lab.sh`—a 273-line bash script that handled SSH key generation, environment setup, certificate management, Docker Compose orchestration, credential synchronization, and health checking. While functional, it had accumulated serious limitations:
 
 ### Problems with start-lab.sh
 
-1. **No error handling**: Commands that failed silently left the lab in an inconsistent state. A failed certificate generation didn't stop the startup sequence — containers would start without valid certs and fail with cryptic TLS errors.
+1. **No error handling**: Commands that failed silently left the lab in an inconsistent state. A failed certificate generation didn't stop the startup sequence—containers would start without valid certs and fail with cryptic TLS errors.
 
 2. **No parallelism**: Every operation ran sequentially. Docker image pulling, health checking, and SSH testing all blocked the main thread. Startup took longer than necessary.
 
@@ -32,7 +32,7 @@ From v2.0 through v3.x, the lab lifecycle was managed by `start-lab.sh` — a 27
 
 - Start, stop, and status commands with proper lifecycle management
 - Configuration validation before deployment
-- Structured error handling — fail early, report clearly
+- Structured error handling—fail early, report clearly
 - All Docker Compose profiles supported via `aptl.json`
 - Health check orchestration that waits for dependencies
 - SSH connectivity verification
@@ -50,7 +50,7 @@ Implement a Python CLI (`aptl`) as the primary control plane, replacing `start-l
 |-----------|--------|-----------|
 | CLI framework | **Typer** | Declarative command definitions, auto-generated help, type annotations for argument validation |
 | Configuration | **Pydantic** | Schema validation, type coercion, clear error messages for invalid configs |
-| Output | **Rich** | Colored terminal output, progress indicators, tables — without manual ANSI escape codes |
+| Output | **Rich** | Colored terminal output, progress indicators, tables—without manual ANSI escape codes |
 | Structure | **src layout** | `src/aptl/` package with `pyproject.toml`. Standard Python packaging. |
 
 ### Architecture
@@ -78,7 +78,7 @@ src/aptl/
     └── logging.py    # Structured logging
 ```
 
-The separation between `cli/` and `core/` is intentional — the core domain logic has no dependency on Typer, Rich, or terminal I/O. This enables:
+The separation between `cli/` and `core/` is intentional—the core domain logic has no dependency on Typer, Rich, or terminal I/O. This enables:
 
 - **Testing**: Core functions are testable without mocking CLI frameworks
 - **Reuse**: The future web UI backend ([ADR-011](adr-011-web-ui.md)) shares the same `core/` modules
@@ -111,7 +111,7 @@ Each step reports its status and fails the entire sequence on error, with a clea
 
 > **Superseded in part by [ADR-028](adr-028-runtime-rendered-service-config.md)
 > (issue #200).** Credential synchronization no longer writes back over the
-> checked-in `config/` files — those are source-owned templates. The
+> checked-in `config/` files—those are source-owned templates. The
 > credentialized result is now *rendered* into the ignored `.aptl/config/`
 > state tree (`0700` dirs / `0600` files, atomic write), and `docker-compose.yml`
 > mounts that rendered copy. The project-rooting boundary below still applies,
@@ -134,7 +134,7 @@ validate containment at the core-module boundary, then perform I/O.
 ### Positive
 
 - **Reliable startup**: Every step validates its preconditions and reports failures clearly
-- **All profiles supported**: `aptl.json` configuration drives which profiles are activated — all 6 profile groups work
+- **All profiles supported**: `aptl.json` configuration drives which profiles are activated—all 6 profile groups work
 - **Extensible**: Adding `aptl scenario start/stop` was straightforward because the core domain logic was already separated
 - **Testable**: 587+ tests provide confidence in orchestration logic, credential handling, certificate management
 - **Shared core**: Web UI backend can import `src/aptl/core/` directly instead of shelling out to the CLI
@@ -147,6 +147,6 @@ validate containment at the core-module boundary, then perform I/O.
 
 ### Risks
 
-- The `subprocess.run()` calls to `docker compose` are a fragile interface — changes to Docker Compose's CLI, output format, or exit codes can break the orchestration. The NDJSON parsing bug (v4.5.0) was an example.
+- The `subprocess.run()` calls to `docker compose` are a fragile interface—changes to Docker Compose's CLI, output format, or exit codes can break the orchestration. The NDJSON parsing bug (v4.5.0) was an example.
 - Credential synchronization uses regex to modify Wazuh configuration XML files. A polynomial backtracking (ReDoS) vulnerability was found and fixed in v4.6.5. XML manipulation via regex remains fragile.
 - The 12-step sequence is serial. Steps 7-12 could potentially be parallelized for faster startup, but the dependency ordering makes this non-trivial.

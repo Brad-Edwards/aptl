@@ -1,0 +1,6 @@
+extends: occurrence
+message: "Em-dash density: %s em-dash(es) in paragraph (soft budget is 1; prefer commas, semicolons, periods, or parentheses)."
+scope: paragraph
+level: error
+max: 1
+token: '[—–]'

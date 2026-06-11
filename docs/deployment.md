@@ -36,7 +36,7 @@ Edit `aptl.json` to enable/disable containers:
 # Check requirements
 docker --version && docker compose version
 sysctl vm.max_map_count  # Should be >= 262144
-netstat -tlnp | grep -E "(443|2022|2023|9200|55000)"  # Ports must be free
+netstat -tlnp | grep -E "(443|2027|8443|9000|9001|9200|55000)"  # Ports must be free
 
 # Fix vm.max_map_count if needed (Linux/WSL2)
 sudo sysctl -w vm.max_map_count=262144
@@ -66,7 +66,7 @@ aptl lab start
 
 **Use `aptl lab start` for the deploy itself.** Beyond the steps above it also
 renders the credentialized Wazuh config from the checked-in templates into the
-gitignored `.aptl/config/` tree (ADR-028) — there is no standalone manual
+gitignored `.aptl/config/` tree (ADR-028)—there is no standalone manual
 command for that render, so a hand-run `docker compose --profile wazuh ... up`
 on a fresh checkout fails at the `.aptl/config/...` bind mounts. Once a lab has
 been started, a raw `docker compose --profile wazuh --profile victim --profile
@@ -90,11 +90,11 @@ Wait 5-10 minutes for Wazuh indexer initialization.
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| Wazuh Dashboard | <https://localhost:443> | admin / SecretPassword |
-| Wazuh Indexer | <https://localhost:9200> | admin / SecretPassword |
-| Wazuh API | <https://localhost:55000> | wazuh-wui / WazuhPass123! |
-| Victim SSH | localhost:2022 | labadmin / aptl_lab_key |
-| Kali SSH | localhost:2023 | kali / aptl_lab_key |
+| Wazuh Dashboard | <https://localhost:443> | `INDEXER_USERNAME` / `INDEXER_PASSWORD` from `.env` |
+| Wazuh Indexer | <https://localhost:9200> | `INDEXER_USERNAME` / `INDEXER_PASSWORD` from `.env` |
+| Wazuh API | <https://localhost:55000> | `API_USERNAME` / `API_PASSWORD` from `.env` |
+| Victim shell | `aptl container shell aptl-victim` | container shell (no host SSH port) |
+| Kali shell | `aptl container shell aptl-kali` | container shell (no host SSH port) |
 
 ## Verification
 
@@ -136,7 +136,7 @@ docker compose --profile wazuh --profile victim --profile kali down -v
 ### Port Conflicts
 
 ```bash
-netstat -tlnp | grep -E "(443|2022|2023|9200|55000)"
+netstat -tlnp | grep -E "(443|2027|8443|9000|9001|9200|55000)"
 sudo lsof -t -i:443 | xargs kill
 ```
 

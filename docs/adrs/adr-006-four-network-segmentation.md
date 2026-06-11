@@ -14,7 +14,7 @@ APTL v2.0 through v3.x used a flat Docker network where all containers could rea
 
 ### Problems with Flat Networking
 
-1. **No pivot requirement**: An attacker (Kali) could reach every container directly. Real enterprise attacks require discovering and exploiting paths between network zones — DMZ to internal, internal to management, etc.
+1. **No pivot requirement**: An attacker (Kali) could reach every container directly. Real enterprise attacks require discovering and exploiting paths between network zones—DMZ to internal, internal to management, etc.
 2. **No zone-based detection**: Network IDS (Suricata) couldn't differentiate between expected traffic (web app → database on the internal network) and suspicious traffic (attacker → database from the DMZ). Without zones, all traffic is "internal."
 3. **No realistic firewall rules**: Enterprise networks restrict traffic between zones. A flat network has no concept of "the database is only reachable from the internal network."
 4. **No multi-homed containers**: Containers that bridge network zones (like a Wazuh Manager collecting logs from all zones, or Kali pivoting through the DMZ) had no architectural representation.
@@ -35,7 +35,7 @@ Create **four Docker bridge networks** that model enterprise network zones:
 | Network | Name | Subnet | Purpose |
 |---------|------|--------|---------|
 | Security | `aptl-security` | 172.20.0.0/24 | SOC stack: Wazuh, MISP, TheHive, Cortex, Shuffle, Suricata management, reverse engineering |
-| DMZ | `aptl-dmz` | 172.20.1.0/24 | Externally-reachable services: web app, mail server, DNS |
+| DMZ | `aptl-dmz` | 172.20.1.0/24 | Externally reachable services: web app, mail server, DNS |
 | Internal | `aptl-internal` | 172.20.2.0/24 | Enterprise services: AD, database, file server, victim, workstation |
 | Red Team | `aptl-redteam` | 172.20.4.0/24 | Attack platform: Kali (isolated by default) |
 
@@ -71,7 +71,7 @@ Each network uses a /24 (254 usable addresses), which is more than needed for th
 - Headroom: Adding containers doesn't require subnet resizing
 - Readability: `172.20.2.20` (victim on internal) is easier to remember than cramped subnets
 
-The /16 supernet (172.20.0.0/16) was noted as cosmetically oversized (review item #27) but declared "won't fix" — it works correctly, and changing it risks breaking existing deployments.
+The /16 supernet (172.20.0.0/16) was noted as cosmetically oversized (review item #27) but declared "won't fix"—it works correctly, and changing it risks breaking existing deployments.
 
 ## Consequences
 
@@ -87,10 +87,10 @@ The /16 supernet (172.20.0.0/16) was noted as cosmetically oversized (review ite
 
 - **Complexity**: 19 containers × multiple networks = many IP assignments to maintain. IP allocation must be manually coordinated in `docker-compose.yml`.
 - **Docker DNS limitations**: Containers on different Docker networks can't resolve each other by hostname without explicit `extra_hosts` entries or a shared DNS server (hence the DNS container).
-- **No dynamic routing**: Docker bridge networks don't support routing protocols. Inter-zone routing depends entirely on multi-homed containers. There's no firewall appliance enforcing zone boundaries — isolation relies on Docker network membership.
+- **No dynamic routing**: Docker bridge networks don't support routing protocols. Inter-zone routing depends entirely on multi-homed containers. There's no firewall appliance enforcing zone boundaries—isolation relies on Docker network membership.
 - **Port mapping complexity**: Host port mappings must be unique across all containers regardless of network. Multiple web servers can't both use host port 80.
 
 ### Risks
 
-- Docker bridge networking doesn't provide true network isolation at the kernel level — containers on different bridge networks can't communicate by default, but a compromised multi-homed container (e.g., the web app on both DMZ and internal) provides a real lateral movement path
+- Docker bridge networking doesn't provide true network isolation at the kernel level—containers on different bridge networks can't communicate by default, but a compromised multi-homed container (for example, the web app on both DMZ and internal) provides a real lateral movement path
 - Static IPs create a coupling between `docker-compose.yml` and every config file, script, and documentation page that references container addresses. The v4.4.0 documentation review found wrong IPs throughout the docs after the network migration.

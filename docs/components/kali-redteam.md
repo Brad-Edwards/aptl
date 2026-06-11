@@ -24,7 +24,7 @@ the full rationale.
 - **OBS-003 capture stack**: auditd, acct (process accounting), tcpdump,
   bsdmainutils (provides `script(1)` for PTY recording)
 - **User**: `kali` with sudo privileges
-- **SSH**: Key-based authentication only (port 22, mapped to host 2023);
+- **SSH**: Key-based authentication only (port 22, lab-internal; no host port is published);
   `AcceptEnv APTL_*` enabled so the MCP server can pass
   `APTL_SESSION_ID` / `APTL_RUN_ID` / `APTL_TRACE_ID` into the shell.
 - **ForceCommand**: every `kali` user SSH session is wrapped through
@@ -32,9 +32,9 @@ the full rationale.
   `script` + `tcpdump` and execs the agent's command (or an
   interactive bash).
 
-See [containers/kali/Dockerfile](../../containers/kali/Dockerfile) for
+See [containers/kali/Dockerfile](https://github.com/Brad-Edwards/aptl/blob/main/containers/kali/Dockerfile) for
 complete build configuration and
-[containers/kali/scripts/aptl-wrap-shell.sh](../../containers/kali/scripts/aptl-wrap-shell.sh)
+[containers/kali/scripts/aptl-wrap-shell.sh](https://github.com/Brad-Edwards/aptl/blob/main/containers/kali/scripts/aptl-wrap-shell.sh)
 for the session wrapper.
 
 ## Network Access
@@ -43,7 +43,7 @@ for the session wrapper.
   172.20.2.35 (internal)
 - **Networks**: aptl-redteam, aptl-dmz, aptl-internal. The
   aptl-internal attachment exists so the agent can reach internal
-  target hosts (db, files, ws01, dc, ns1) — NOT to reach the SIEM,
+  target hosts (db, files, ws01, dc, ns1)—NOT to reach the SIEM,
   which is no longer in scope for kali.
 - **Target Access**: DMZ (webapp 172.20.1.20, mail 172.20.1.21,
   DNS 172.20.1.22) and internal (AD 172.20.2.10, DB 172.20.2.11,
@@ -60,16 +60,16 @@ passed via `SendEnv APTL_SESSION_ID`.
 
 | Subdir | What | Tool |
 |---|---|---|
-| `pty/typescript` | Full PTY recording — every keystroke + every byte of output | `script -q -f --timing` |
+| `pty/typescript` | Full PTY recording—every keystroke + every byte of output | `script -q -f --timing` |
 | `pty/timing` | Companion timing file for `scriptreplay` playback | `script --timing` |
 | `pcap/session.pcap` (+ rotation) | Per-session network capture, excluding port 22 noise; rolling 1GB max per session | `tcpdump -i any -C 100 -W 10 -U` |
 
 Two container-wide captures are also collected (not per-session yet):
 
-- `/var/log/audit/audit.log` — auditd events for execve, connect,
+- `/var/log/audit/audit.log`: auditd events for execve, connect,
   and file ops on /home/kali, /tmp, /root, /etc. Loaded from
-  [containers/kali/audit/aptl.rules](../../containers/kali/audit/aptl.rules).
-- `/var/log/account/pacct` — process accounting (who ran what, when).
+  [containers/kali/audit/aptl.rules](https://github.com/Brad-Edwards/aptl/blob/main/containers/kali/audit/aptl.rules).
+- `/var/log/account/pacct`: process accounting (who ran what, when).
 
 Reading these:
 
@@ -89,18 +89,18 @@ ausearch -k aptl_exec
 
 The container requires:
 
-- `NET_RAW` + `NET_ADMIN` — for tcpdump and red-team network tools.
-- `AUDIT_CONTROL` + `AUDIT_WRITE` — for auditd to load the APTL
+- `NET_RAW` + `NET_ADMIN`—for tcpdump and red-team network tools.
+- `AUDIT_CONTROL` + `AUDIT_WRITE`—for auditd to load the APTL
   ruleset and write events. If your kernel/runtime denies these,
   auditd will fail at start and `entrypoint.sh` logs a warning; the
   rest of the lab continues working with PTY + pcap capture only.
 
 ## MCP Integration
 
-The red-team MCP server is in [mcp/mcp-red](../../mcp/mcp-red/). The
-shared SSH layer in [mcp/aptl-mcp-common/src/ssh.ts](../../mcp/aptl-mcp-common/src/ssh.ts)
+The red-team MCP server is in [mcp/mcp-red](https://github.com/Brad-Edwards/aptl/tree/main/mcp/mcp-red). The
+shared SSH layer in [mcp/aptl-mcp-common/src/ssh.ts](https://github.com/Brad-Edwards/aptl/blob/main/mcp/aptl-mcp-common/src/ssh.ts)
 opens sessions with `SendEnv APTL_*` and writes a continuous PTY tee
-to `.aptl/runs/<run_id>/mcp-side/sessions/<session_id>.jsonl` —
+to `.aptl/runs/<run_id>/mcp-side/sessions/<session_id>.jsonl`—
 that's the MCP-server-side witness, independent of the Kali-side
 `script` recording. Tool-call records (full untruncated args +
 result) go to `.aptl/runs/<run_id>/mcp-side/tool-calls.jsonl`.
@@ -132,7 +132,7 @@ By default the MCP-side captures (tool-calls.jsonl, ocsf.jsonl)
 redact credential-shaped values via the shared
 `src/aptl/utils/redaction.py` / `mcp/aptl-mcp-common/src/redaction.ts`
 helpers. For experiments where the credential IS the experimental
-signal (e.g. testing how an agent reasons about a particular leaked
+signal (for example testing how an agent reasons about a particular leaked
 secret), set `APTL_EXPERIMENT_NO_REDACT=1` in the MCP server's env;
 the redaction layer then passes values through verbatim. The toggle
 defaults off, fails closed against any non-truthy value, and never
@@ -150,11 +150,14 @@ blue's own sensors detect, not what the attacker self-reports.
 
 If a future requirement wants blue to learn red activity, the answer
 is "point blue at the experimental data store" or "build a summary
-tool" — not a direct red→SIEM pipe.
+tool"—not a direct red→SIEM pipe.
 
 ## Access
 
 ```bash
-# SSH access
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023
+# Interactive shell from the host (no host SSH port is published)
+aptl container shell aptl-kali
+
+# SSH from inside the lab (e.g. from another container)
+ssh -i /home/labadmin/.ssh/aptl_lab_key kali@172.20.4.30
 ```

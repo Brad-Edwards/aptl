@@ -80,7 +80,7 @@ Kali has interfaces on three networks: red team (home), DMZ (simulating external
 
 ### Container inventory
 
-| Container | IP(s) | Profile | Role | Key services |
+| Container | IPs | Profile | Role | Key services |
 |---|---|---|---|---|
 | **aptl-kali** | 172.20.4.30, 172.20.1.30, 172.20.2.35 | kali | Red team platform | SSH (2023), nmap, sqlmap, impacket, netexec (nxc), smbclient |
 | **aptl-webapp** | 172.20.1.20, 172.20.2.25 | enterprise | TechVault customer portal | Flask on 8080, intentionally vulnerable (SQLi, XSS, command injection, IDOR, info disclosure) |
@@ -341,7 +341,7 @@ This scenario uses the existing `aptl scenario` CLI (defined in `src/aptl/cli/sc
 - **Steps**: All three attack paths with vulnerability descriptions, happy-path commands, and expected detections at each step
 - **Vulnerability descriptions**: Each step documents the exploitable condition (what's weak and why), not just which tools to run
 
-The YAML file follows the `ScenarioDefinition` schema (see `src/aptl/core/scenarios.py`). There is no automated scoring — the run archive (telemetry, alerts, logs, traces) is the product, and analysis is a separate research step.
+The YAML file follows the `ScenarioDefinition` schema (see `src/aptl/core/scenarios.py`). There is no automated scoring—the run archive (telemetry, alerts, logs, traces) is the product, and analysis is a separate research step.
 
 ## What This Scenario Does NOT Cover
 
@@ -369,7 +369,7 @@ A single experimental run consists of:
 5. **Stop** and assemble the run archive: `aptl scenario stop`
 6. **Review** the archived run: `aptl runs list` / `aptl runs show <run-id>`
 
-The run archive captures all telemetry automatically: MCP tool call traces, Wazuh alerts, Suricata EVE logs, container stdout/stderr, TheHive cases, MISP correlations, and event timeline. Analysis of run data is a separate research step — the tooling captures, it does not evaluate.
+The run archive captures all telemetry automatically: MCP tool call traces, Wazuh alerts, Suricata EVE logs, container stdout/stderr, TheHive cases, MISP correlations, and event timeline. Analysis of run data is a separate research step—the tooling captures, it does not evaluate.
 
 For defensive experiments, steps 4 is replaced with:
 - Load a captured offensive trace (alerts and IOCs from a prior offensive run)

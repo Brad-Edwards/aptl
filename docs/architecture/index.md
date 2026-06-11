@@ -5,7 +5,7 @@
 ```mermaid
 flowchart TD
     subgraph "Host System"
-        H[Host Ports<br/>443, 2022, 2023, 2027, 9200, 55000]
+        H[Host Ports<br/>443, 2027, 8443, 9000, 9001, 9200, 55000, ...]
     end
 
     subgraph "Security Network 172.20.0.0/24"
@@ -72,7 +72,7 @@ flowchart TD
 
 ## Container Layout
 
-| Container | Network(s) | Primary IP | Purpose |
+| Container | Networks | Primary IP | Purpose |
 |-----------|-----------|------------|---------|
 | aptl-wazuh-manager | security, dmz, internal | 172.20.0.10 | Log processing, rules, alerts |
 | aptl-wazuh-dashboard | security | 172.20.0.11 | Web interface |
@@ -99,11 +99,18 @@ flowchart TD
 | Host | Container | Service |
 |------|-----------|---------|
 | 443 | aptl-wazuh-dashboard:5601 | Wazuh web UI |
-| 2022 | aptl-victim:22 | Victim SSH |
-| 2023 | aptl-kali:22 | Kali SSH |
+| 514/udp, 1514, 1515 | aptl-wazuh-manager | Syslog + agent enrollment |
 | 2027 | aptl-reverse:22 | Reverse engineering SSH |
+| 3443, 3001 | aptl-shuffle-frontend | Shuffle SOAR UI |
+| 8080 | aptl-webapp:8080 | TechVault web app |
+| 8443 | aptl-misp:443 | MISP UI |
+| 9000 | aptl-thehive:9000 | TheHive UI |
+| 9001 | aptl-cortex:9001 | Cortex UI |
 | 9200 | aptl-wazuh-indexer:9200 | OpenSearch API |
 | 55000 | aptl-wazuh-manager:55000 | Wazuh API |
+
+The victim and kali containers publish no host ports; use
+`aptl container shell aptl-victim` / `aptl container shell aptl-kali`.
 
 ## Data Flow
 

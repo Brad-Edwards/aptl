@@ -34,13 +34,13 @@ contract surface against a full purple-team lab.
 APTL today maintains its own in-tree SDL at `aptl.core.sdl`, plus a
 Pydantic-validated YAML schema at `aptl.core.scenarios` (SCN-001), with a
 parallel grammar/parser/validation story tracked by DSL-001..DSL-009. The
-in-tree SDL and ACES SDL both started from the Open Cyber Range SDL — the
-same root — so the surfaces overlap substantially, and the in-tree fork is
+in-tree SDL and ACES SDL both started from the Open Cyber Range SDL (the
+same root), so the surfaces overlap substantially, and the in-tree fork is
 already drifting in scope and naming.
 
 Carrying two SDLs has three concrete costs:
 
-1. **Cross-backend reproducibility — the central ACES claim — cannot be
+1. **Cross-backend reproducibility—the central ACES claim—cannot be
    demonstrated using APTL scenarios** because their grammar is
    APTL-private. The research program cannot show "the same scenario ran
    on backend A and backend B" while APTL refuses to read the same
@@ -49,10 +49,10 @@ Carrying two SDLs has three concrete costs:
    equivalent ACES features (variables/runtime substitution, composition,
    pre/post-conditions, CACAO/Attack Flow alignment, cleanup/rollback,
    topology declaration, user-behavior profiles).
-3. **Tooling already exists in ACES** — `aces sdl resolve`,
+3. **Tooling already exists in ACES**—`aces sdl resolve`,
    `aces sdl verify-imports`, `aces sdl publish`, lockfiles
    (`aces.lock.json`), OCI module distribution, MCP server, conformance
-   runner — and would have to be rebuilt in-tree to reach parity.
+   runner—and would have to be rebuilt in-tree to reach parity.
 
 ## Decision
 
@@ -95,7 +95,7 @@ Specifically:
 
 APTL targets `provisioning-only` initially because that profile requires
 only `backend-manifest-v2`, `operation-receipt-v1`, `operation-status-v1`,
-and `runtime-snapshot-v1` — all reachable by wrapping the existing lab
+and `runtime-snapshot-v1`—all reachable by wrapping the existing lab
 provisioning code. Moving to `orchestration-capable` adds
 `workflow-result-envelope-v1` and `workflow-history-event-stream-v1`,
 which maps onto APTL's existing scenario runtime engine (RTE-001) but is
@@ -216,10 +216,10 @@ expressivity class, not the backend's type system.
 ## Migration Plan
 
 The migration splits into a multi-PR prep phase and a single-PR cutover.
-APTL remains fully functional throughout the prep phase — the legacy
+APTL remains fully functional throughout the prep phase—the legacy
 in-tree SDL path stays the default until cutover.
 
-### Phase A — Prep (multiple PRs, parallel ACES path, non-default)
+### Phase A—Prep (multiple PRs, parallel ACES path, non-default)
 
 1. Add `aces-sdl` as an APTL Python dependency.
 2. Implement an ACES `RuntimeTarget` against the existing lab
@@ -235,7 +235,7 @@ in-tree SDL path stays the default until cutover.
 
 See dedicated section above. Hard prerequisite to Phase B.
 
-### Phase B — Cutover (single PR)
+### Phase B—Cutover (single PR)
 
 Lands in one PR:
 
@@ -275,14 +275,14 @@ deprecations across releases.
   paying duplicate grammar/parser/validation/tooling costs.
 - APTL gains ACES's existing tooling (`resolve`, `verify-imports`,
   `publish`, lockfiles, OCI module distribution, MCP server) for free.
-- ACES gains its first real-world conformant backend — the research
+- ACES gains its first real-world conformant backend—the research
   story.
 - Run provenance gains typed clock/synchronization/pacing surfaces from
   ACES contracts, supporting reproducibility across realizations.
 
 ### Negative / costs
 
-- Migration cost for existing scenarios — but they move to archive, not
+- Migration cost for existing scenarios—but they move to archive, not
   being rewritten, so this is a small one-time move once the ACES
   TechVault reaches parity.
 - APTL now depends on the `aces-sdl` Python package; version pinning and
@@ -290,7 +290,7 @@ deprecations across releases.
 - Backend conformance becomes a pre-push gate; failing conformance
   blocks merge. This is the intended quality contract.
 - DSL-001 / SCN-001 deprecation cascades through Ground Control
-  traceability — every link from those requirements must be reconciled
+  traceability—every link from those requirements must be reconciled
   in the cutover PR.
 
 ## Alternatives Considered
@@ -301,7 +301,7 @@ deprecations across releases.
    conformance signal.
 2. **Adopt ACES SDL but skip the backend conformance suite.** Rejected:
    without conformance, APTL is not a demonstrable ACES backend, and the
-   research claim collapses to "we use ACES syntax", not "ACES portability
+   research claim collapses to "we use ACES syntax," not "ACES portability
    holds against a real range".
 3. **Defer adoption until ACES reaches 1.0.** Rejected: ACES needs APTL
    as a real backend to drive contract design (`backend-manifest-v2`,
@@ -311,20 +311,20 @@ deprecations across releases.
 ## Related Requirements
 
 - Supersedes: DSL-001 (Formal Scenario Specification Language),
-  SCN-001 (Declarative YAML Scenario Specifications) — both transitioned
+  SCN-001 (Declarative YAML Scenario Specifications)—both transitioned
   to DEPRECATED at cutover
-- Deprecates at cutover: DSL-002 through DSL-009 — no per-item
+- Deprecates at cutover: DSL-002 through DSL-009—no per-item
   cross-links; bulk DEPRECATED transition
-- Updates at cutover: RTE-001 (Scenario Runtime Engine) — input source
+- Updates at cutover: RTE-001 (Scenario Runtime Engine)—input source
   changes to ACES `RuntimeModel`
 - Implements: SCN-010 (ACES SDL as APTL's Canonical Scenario Authoring
   Surface)
 
 ## Related Issues
 
-- Parent: [#310](https://github.com/Brad-Edwards/aptl/issues/310) —
+- Parent: [#310](https://github.com/Brad-Edwards/aptl/issues/310)—
   Adopt ACES SDL as APTL's canonical scenario authoring surface
-- Follow-on: [#311](https://github.com/Brad-Edwards/aptl/issues/311) —
+- Follow-on: [#311](https://github.com/Brad-Edwards/aptl/issues/311)—
   Upgrade APTL backend conformance to `orchestration-capable` profile
-- Follow-on: [#312](https://github.com/Brad-Edwards/aptl/issues/312) —
+- Follow-on: [#312](https://github.com/Brad-Edwards/aptl/issues/312)—
   Upgrade APTL backend conformance to `orchestration-evaluation` profile

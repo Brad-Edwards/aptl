@@ -157,8 +157,8 @@ active.
   Cortex-bundled Play artifact, not the keystore generation pipeline
   (which round-trips cleanly via `tests/test_soc_ca.py::TestKeystore`).
   Cortex therefore remains HTTP-only on the `aptl-security` network
-  until either a Cortex 4.x upgrade or an external consumer (e.g.,
-  `mcp-cortex` per INT-006) arrives — at which point the existing
+  until either a Cortex 4.x upgrade or an external consumer (for example,
+  `mcp-cortex` per INT-006) arrives—at which point the existing
   keystore in `config/soc_certs/cortex/` and the placeholder
   `config/cortex/application.conf` can be wired on. The lab CA bundle
   is still mounted into the Cortex container for outbound trust.
@@ -195,15 +195,14 @@ active.
 
 ## References
 
-- SEC-006 / GitHub issue #258 — Verified TLS for SOC Stack Clients via
+- SEC-006 / GitHub issue #258—Verified TLS for SOC Stack Clients via
   Lab-Managed CA
-- [ADR-003](adr-003-mcp-common-library.md) — MCP Common Library
-- [ADR-008](adr-008-soc-stack-integration.md) — SOC Stack Integration
-- [ADR-022](adr-022-misp-driven-suricata-rules.md) — MISP sync client TLS hook
-- [ADR-025](adr-025-strict-first-party-config-schema.md) — Strict first-party
+- [ADR-003](adr-003-mcp-common-library.md): MCP Common Library
+- [ADR-008](adr-008-soc-stack-integration.md): SOC Stack Integration
+- [ADR-022](adr-022-misp-driven-suricata-rules.md): MISP sync client TLS hook
+- [ADR-025](adr-025-strict-first-party-config-schema.md): Strict first-party
   config schema
-- [ADR-028](adr-028-runtime-rendered-service-config.md) —
-  Runtime-rendered generated artifacts
-- [ADR-029](adr-029-control-plane-secret-handling.md) — Secret handling
-- [ADR-031](adr-031-lab-orchestration-contract-guards.md) — Lab orchestration
+- [ADR-028](adr-028-runtime-rendered-service-config.md): Runtime-rendered generated artifacts
+- [ADR-029](adr-029-control-plane-secret-handling.md): Secret handling
+- [ADR-031](adr-031-lab-orchestration-contract-guards.md): Lab orchestration
   contracts

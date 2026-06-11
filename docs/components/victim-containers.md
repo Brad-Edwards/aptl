@@ -6,10 +6,10 @@ The victim container serves as a target system for red team activities and secur
 
 - **Base Image**: rockylinux:9
 - **User**: `labadmin` with sudo privileges (NOPASSWD)
-- **SSH**: Key-based authentication only (port 22, mapped to host 2022)
+- **SSH**: Key-based authentication only (port 22, lab-internal; no host port is published; use `aptl container shell aptl-victim` from the host)
 - **IP Address**: 172.20.2.20 (aptl-internal network)
 
-See [containers/victim/Dockerfile](../../containers/victim/Dockerfile) for complete build configuration.
+See [containers/victim/Dockerfile](https://github.com/Brad-Edwards/aptl/blob/main/containers/victim/Dockerfile) for complete build configuration.
 
 ## Security Monitoring
 
@@ -22,10 +22,10 @@ The container runs dual security monitoring:
 3. **rsyslog**: Forwards system logs to 172.20.2.30:514
 
 **Installation Scripts:**
-- [install-all.sh](../../containers/victim/install-all.sh) - Main installer
-- [install-wazuh.sh](../../containers/victim/install-wazuh.sh) - Wazuh agent setup
-- [install-falco.sh](../../containers/victim/install-falco.sh) - Falco setup
-- [ossec.conf.template](../../containers/victim/ossec.conf.template) - Wazuh config template
+- [install-all.sh](https://github.com/Brad-Edwards/aptl/blob/main/containers/victim/install-all.sh) - Main installer
+- [install-wazuh.sh](https://github.com/Brad-Edwards/aptl/blob/main/containers/victim/install-wazuh.sh) - Wazuh agent setup
+- [install-falco.sh](https://github.com/Brad-Edwards/aptl/blob/main/containers/victim/install-falco.sh) - Falco setup
+- [ossec.conf.template](https://github.com/Brad-Edwards/aptl/blob/main/containers/base/scripts/ossec.conf.template) - Wazuh config template
 
 ### Monitored Data
 

@@ -7,7 +7,7 @@ Four Docker bridge networks providing segmented lab environment.
 | Network | Subnet | Purpose |
 |---------|--------|---------|
 | aptl-security | 172.20.0.0/24 | SOC stack (Wazuh, MISP, TheHive, Cortex, Shuffle, Suricata mgmt) |
-| aptl-dmz | 172.20.1.0/24 | Externally-reachable services (webapp, mail, DNS) |
+| aptl-dmz | 172.20.1.0/24 | Externally reachable services (webapp, mail, DNS) |
 | aptl-internal | 172.20.2.0/24 | Enterprise services (AD, DB, file server, victim, workstation) |
 | aptl-redteam | 172.20.4.0/24 | Red team (Kali) |
 
@@ -79,11 +79,18 @@ Several containers connect to multiple networks:
 | Host Port | Container | Service |
 |-----------|-----------|---------|
 | 443 | aptl-wazuh-dashboard:5601 | Wazuh Dashboard |
-| 2022 | aptl-victim:22 | Victim SSH |
-| 2023 | aptl-kali:22 | Kali SSH |
+| 514/udp, 1514, 1515 | aptl-wazuh-manager | Syslog + agent enrollment |
 | 2027 | aptl-reverse:22 | Reverse Engineering SSH |
+| 3443, 3001 | aptl-shuffle-frontend | Shuffle SOAR UI |
+| 8080 | aptl-webapp:8080 | TechVault web app |
+| 8443 | aptl-misp:443 | MISP UI |
+| 9000 | aptl-thehive:9000 | TheHive UI |
+| 9001 | aptl-cortex:9001 | Cortex UI |
 | 9200 | aptl-wazuh-indexer:9200 | OpenSearch API |
 | 55000 | aptl-wazuh-manager:55000 | Wazuh API |
+
+The victim and kali containers publish no host ports; use
+`aptl container shell aptl-victim` / `aptl container shell aptl-kali`.
 
 ## Internal Communication
 
@@ -115,7 +122,7 @@ Three of the four networks use Docker's `internal: true` flag to prevent contain
 |---------|-------------------|-----------|
 | aptl-security | No | SOC tools (MISP, Wazuh, Shuffle) need internet for threat feeds and rule updates |
 | aptl-dmz | **Yes** | Contains attack targets and Kali entry point |
-| aptl-internal | **Yes** | Contains AD, database, victim, workstation — all attack targets |
+| aptl-internal | **Yes** | Contains AD, database, victim, workstation—all attack targets |
 | aptl-redteam | **Yes** | Kali command center; must not reach the real internet |
 
 ### Multi-homed container egress
@@ -124,11 +131,11 @@ Containers connected to both an internal network and `aptl-security` (dns, wazuh
 
 ### Host port mappings
 
-Docker `internal: true` blocks outbound container traffic (no MASQUERADE rules), but inbound host port mappings (docker-proxy/DNAT) continue to work. SSH access to victim (port 2022) and kali (port 2023) from the host is unaffected.
+Docker `internal: true` blocks outbound container traffic (no MASQUERADE rules), but inbound host port mappings (docker-proxy/DNAT) continue to work for containers that publish them, such as the reverse engineering container (port 2027). The victim and kali containers publish no host ports; reach them with `aptl container shell`.
 
 ### Package pre-installation
 
-Wazuh agent and Falco are pre-installed in container images at build time so that containers on internal networks do not need internet access at runtime. The runtime install scripts (`install-wazuh.sh`, `install-falco.sh`) detect pre-installed packages and skip downloads. If the packages are not pre-installed (e.g., using an older image), the scripts fall back to downloading from the internet, which will fail on internal networks.
+Wazuh agent and Falco are pre-installed in container images at build time so that containers on internal networks do not need internet access at runtime. The runtime install scripts (`install-wazuh.sh`, `install-falco.sh`) detect pre-installed packages and skip downloads. If the packages are not pre-installed (for example, using an older image), the scripts fall back to downloading from the internet, which will fail on internal networks.
 
 ### Upgrading from pre-SAF-002 deployments
 

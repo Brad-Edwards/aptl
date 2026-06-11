@@ -18,7 +18,7 @@ Before the scenario engine, APTL exercises were ad-hoc: a user read documentatio
 2. **Reproduce runs**: Two runs of the "same" exercise could produce completely different data depending on which commands the operator ran, in what order, and what state the lab was in.
 3. **Collect data**: After an exercise, SOC telemetry (Wazuh alerts, Suricata events, TheHive cases, MISP correlations, Shuffle execution logs) existed only in the running containers. Stopping the lab could lose ephemeral data.
 
-The research goal — comparing AI agent performance across different models, prompts, and configurations on identical scenarios — requires **repeatable runs** with **comparable data collection**. Without structured scenarios, every run is a unique snowflake.
+The research goal (comparing AI agent performance across different models, prompts, and configurations on identical scenarios) requires **repeatable runs** with **comparable data collection**. Without structured scenarios, every run is a unique snowflake.
 
 ### Requirements
 
@@ -121,7 +121,7 @@ aptl runs export --s3-bucket <bucket>
 
 ### Environment and Credentials
 
-Collectors load API credentials from the project `.env` file into `os.environ` before executing. This was a critical fix in v4.6.6 — without it, collectors got empty-string fallbacks for API keys and silently skipped data collection.
+Collectors load API credentials from the project `.env` file into `os.environ` before executing. This was a critical fix in v4.6.6—without it, collectors got empty-string fallbacks for API keys and silently skipped data collection.
 
 ## Consequences
 
@@ -130,7 +130,7 @@ Collectors load API credentials from the project `.env` file into `os.environ` b
 - **Reproducible research**: Identical scenario definitions + automated data collection = comparable runs across different AI agents, models, and configurations
 - **MITRE ATT&CK mapping**: Every scenario documents which techniques are exercised, enabling ATT&CK coverage analysis
 - **Automated data collection**: No manual post-exercise data gathering. Collectors run automatically on scenario stop.
-- **Range snapshots**: Complete lab state captured with each run — versions, configs, network topology — enabling root cause analysis of behavioral differences between runs
+- **Range snapshots**: Complete lab state captured with each run—versions, configs, network topology—enabling root cause analysis of behavioral differences between runs
 - **Extensible**: Adding a new collector (for a new SOC tool) is a new module implementing the collector interface
 
 ### Negative
@@ -142,5 +142,5 @@ Collectors load API credentials from the project `.env` file into `os.environ` b
 ### Risks
 
 - Scenario YAML schema evolution: Adding new fields (scoring criteria, automated validation, red team instructions) requires updating the Pydantic models and potentially migrating existing scenario files
-- S3 export creates a dependency on AWS credentials and boto3 — isolated behind the optional `aptl[s3]` dependency group to avoid requiring it for local-only use
+- S3 export creates a dependency on AWS credentials and boto3—isolated behind the optional `aptl[s3]` dependency group to avoid requiring it for local-only use
 - Run data volumes can grow large over hundreds of research runs. No automatic cleanup or retention policy is currently implemented.

@@ -77,9 +77,9 @@ aptl runs export <run-id> --s3-bucket my-bucket --s3-prefix runs/
 
 ## Key Source Files
 
-- `src/aptl/core/runstore.py` — Storage backend protocol and local filesystem implementation
-- `src/aptl/core/run_assembler.py` — Orchestrates data collection after scenario stop
-- `src/aptl/core/snapshot.py` — Range snapshot dataclasses and capture logic
-- `src/aptl/core/exporter.py` — Local tar.gz and S3 export
-- `src/aptl/core/collectors.py` — Individual data collectors (Wazuh, Suricata, TheHive, etc.)
-- `src/aptl/cli/runs.py` — CLI commands (`aptl runs list|show|path|export`)
+- `src/aptl/core/runstore.py`: Storage backend protocol and local filesystem implementation
+- `src/aptl/core/run_assembler.py`: Orchestrates data collection after scenario stop
+- `src/aptl/core/snapshot.py`: Range snapshot dataclasses and capture logic
+- `src/aptl/core/exporter.py`: Local tar.gz and S3 export
+- `src/aptl/core/collectors.py`: Individual data collectors (Wazuh, Suricata, TheHive, etc.)
+- `src/aptl/cli/runs.py`: CLI commands (`aptl runs list|show|path|export`)

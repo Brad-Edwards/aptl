@@ -74,11 +74,11 @@ Legacy APTL scenario YAMLs with a `metadata` block are intentionally rejected in
 
 ## Validation Pipeline
 
-1. **YAML parsing** — `yaml.safe_load()`
-2. **Key normalization** — lowercase field keys, preserve user names
-3. **Shorthand expansion** — source, infrastructure, roles, min-score, feature lists
-4. **Pydantic construction** — structural validation (types, ranges, required fields)
-5. **Semantic validation** — cross-reference checks plus variable-reference checks (22 passes, see [validation.md](validation.md))
+1. **YAML parsing**: `yaml.safe_load()`
+2. **Key normalization**: lowercase field keys, preserve user names
+3. **Shorthand expansion**: source, infrastructure, roles, min-score, feature lists
+4. **Pydantic construction**—structural validation (types, ranges, required fields)
+5. **Semantic validation**—cross-reference checks plus variable-reference checks (22 passes, see [validation.md](validation.md))
 
 On success, the returned `Scenario` may still carry non-fatal advisories in `scenario.advisories` (for example, VM nodes without explicit `resources`).
 
@@ -99,5 +99,5 @@ scenario = parse_sdl(yaml_string, skip_semantic_validation=True)
 
 ## Error Types
 
-- `SDLParseError` — YAML syntax errors, structural validation failures
-- `SDLValidationError` — semantic validation failures (has `.errors` list with all issues)
+- `SDLParseError`: YAML syntax errors, structural validation failures
+- `SDLValidationError`: semantic validation failures (has `.errors` list with all issues)

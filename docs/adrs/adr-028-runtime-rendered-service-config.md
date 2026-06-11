@@ -60,8 +60,8 @@ Secret-bearing generated directories must be created with restrictive
 permissions (`0700` directories), written atomically, and left out of version
 control. The generated *files* default to `0600`, but when a file is
 bind-mounted into a container whose process may run under a UID that does not
-match the host UID that ran `aptl lab start` (e.g. the Wazuh Dashboard image's
-non-root user), the file is widened to `0644` so the container can read it — the
+match the host UID that ran `aptl lab start` (for example the Wazuh Dashboard image's
+non-root user), the file is widened to `0644` so the container can read it—the
 owner-only parent directory remains the host-side access control, and the file
 still never reaches the repo because `.aptl/` is gitignored. Logging and
 returned errors may include artifact labels and paths, but must not include
@@ -86,10 +86,10 @@ bind-mounted config). The renderer also rejects a zero-match substitution and
 any symlink in the `.aptl/config/...` path chain (escape *or* back into a
 tracked file). `core.lab._step_sync_credentials` runs before
 `_step_check_bind_mounts` and `_step_start_containers`, so the rendered files
-exist by the time Docker Compose binds them — and a render failure aborts lab
+exist by the time Docker Compose binds them, and a render failure aborts lab
 start rather than leaving a stale copy in place. `aptl lab start` is the
 supported entrypoint; a bare `docker compose up` against a fresh checkout will
-not find the rendered mounts — the same property the gitignored
+not find the rendered mounts—the same property the gitignored
 `config/wazuh_indexer_ssl_certs/*` certificate mounts already have, so the
 manual / CI deployment docs route through `aptl lab start`. The other ~18
 `config/wazuh_cluster/*` mounts (rules, decoders, certs, helper scripts) are not

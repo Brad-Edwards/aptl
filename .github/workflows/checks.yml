@@ -1,9 +1,10 @@
 name: Checks
 
-# Single quality + security gate. There is intentionally no auto-deploy
-# workflow — APTL is local-first and there is currently nowhere to deploy
-# to. All checks below run in parallel; SonarCloud waits for the test
-# jobs to finish so it can ingest their coverage.
+# Single quality + security gate. APTL itself is local-first and has no
+# app deployment; the only deploy is the docs site, which lives in
+# docs-deploy.yml (GitHub Pages, main only). All checks below run in
+# parallel; SonarCloud waits for the test jobs to finish so it can
+# ingest their coverage.
 #
 # Required repo secrets:
 #   SONAR_TOKEN — SonarCloud authentication
@@ -30,10 +31,28 @@ jobs:
       # Skip the local test hooks here — the dedicated python-tests /
       # mcp-tests / web-tests jobs below already run them with the right
       # toolchain (deps installed, node available, etc). The test hooks
-      # exist for local pre-commit safety, not CI redundancy.
+      # exist for local pre-commit safety, not CI redundancy. The Vale
+      # hook is likewise covered by the dedicated docs job below.
       - run: pre-commit run --all-files --show-diff-on-failure
         env:
-          SKIP: pytest,vitest-mcp-common,vitest-mcp-red,vitest-web
+          SKIP: pytest,vitest-mcp-common,vitest-mcp-red,vitest-web,vale-prose-lint
+
+  docs:
+    name: Docs (Vale prose lint + mkdocs strict build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # git-revision-date-localized needs full history for page dates
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[docs]"
+      - name: Vale prose lint (full lintable corpus, ADR-038)
+        run: bash tools/vale-lint-all.sh
+      - name: mkdocs strict build (nav and links must resolve)
+        run: mkdocs build --strict
 
   python-tests:
     name: Python tests + coverage

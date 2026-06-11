@@ -91,7 +91,7 @@ For malware analysis and reverse engineering workloads, install the full RE tool
 .\setup-python-re.ps1        # Python 3.12 + pefile, yara-python, capstone, unicorn, keystone, floss, capa
 ```
 
-**Dependency note:** `setup-wdk.ps1` requires VS Build Tools — run `setup-vs-buildtools.ps1` first.
+**Dependency note:** `setup-wdk.ps1` requires VS Build Tools—run `setup-vs-buildtools.ps1` first.
 All other tools are independent and can be installed in any order.
 
 The orchestrator supports skip flags to exclude components:
@@ -157,4 +157,4 @@ With a domain-joined Windows endpoint, these attack techniques become possible:
 
 No dedicated MCP server exists for this VM. Use the Red Team MCP (`mcp-red`) to
 interact with the Windows target from the Kali container via standard offensive
-tooling (e.g., Impacket, CrackMapExec, Evil-WinRM).
+tooling (for example, Impacket, CrackMapExec, Evil-WinRM).

@@ -15,7 +15,7 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 
 - ADRs are **immutable** once accepted. To reverse a decision, create a new ADR that supersedes it.
 - ADRs are **numbered sequentially** and never reused.
-- ADRs are **versioned with code** — they live in the repo, not a wiki.
+- ADRs are **versioned with code**—they live in the repo, not a wiki.
 
 ## Index
 
@@ -59,3 +59,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [035](adr-035-aces-sdl-adoption.md) | Adopt ACES SDL as APTL's Scenario Authoring Surface | proposed | 2026-05-18 |
 | [036](adr-036-snapshot-endpoint-registry.md) | Snapshot Endpoint Registry Boundary | accepted | 2026-05-18 |
 | [037](adr-037-docker-compose-backend-cohesion.md) | Docker Compose Backend Cohesion | accepted | 2026-05-18 |
+| [038](adr-038-docs-style-lint-and-published-site.md) | Documentation Style Lint and Published Docs Site | accepted | 2026-06-11 |

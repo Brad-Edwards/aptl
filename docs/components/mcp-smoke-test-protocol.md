@@ -2,9 +2,9 @@
 
 Validates the full APTL lab after deployment or feature changes. Three layers of validation, each building on the last:
 
-1. **Automated tests** — pytest code that proves plumbing works (containers, pipelines, APIs, JSON-RPC)
-2. **Agent MCP protocol** — an agent uses the MCP tools to do real security work, proving the presentation layer
-3. **Manual fallback** — curl/ssh commands for debugging when the above aren't available
+1. **Automated tests**—pytest code that proves plumbing works (containers, pipelines, APIs, JSON-RPC)
+2. **Agent MCP protocol**—an agent uses the MCP tools to do real security work, proving the presentation layer
+3. **Manual fallback**—curl/ssh commands for debugging when the above aren't available
 
 ## Automated Tests
 
@@ -56,54 +56,48 @@ API keys are pre-configured in `.env` and `docker-compose.yml` so no manual expo
 
 ## Agent MCP Validation Protocol
 
-This protocol is executed by an AI agent with the APTL MCP servers connected. The agent calls real tools, inspects real responses, and verifies real system behavior. This validates the **agent experience** — that the MCP layer actually enables useful security work.
+This protocol is executed by an AI agent with the APTL MCP servers connected. The agent calls real tools, inspects real responses, and verifies real system behavior. This validates the **agent experience**—that the MCP layer actually enables useful security work.
 
 ### MCP Server Architecture
 
-APTL uses 7 MCP servers: 4 custom (Node.js, built from `mcp/`) and 3 published open-source servers (installed to `tools/`):
+APTL uses 8 custom MCP servers, all Node.js, built from `mcp/`:
 
 | Server (.mcp.json name) | Type | Source |
 |---|---|---|
-| `kali-ssh` | Custom Node.js | `mcp/mcp-red/` |
-| `reverse-sandbox-ssh` | Custom Node.js | `mcp/mcp-reverse/` |
-| `shuffle` | Custom Node.js | `mcp/mcp-soar/` |
-| `indexer` | Custom Node.js | `mcp/mcp-indexer/` |
-| `wazuh` | Published Rust binary | [gbrigandi/mcp-server-wazuh](https://github.com/gbrigandi/mcp-server-wazuh) |
-| `misp` | Published Python | [bornpresident/MISP-MCP-SERVER](https://github.com/bornpresident/MISP-MCP-SERVER) |
-| `thehive` | Published Go binary | [StrangeBeeCorp/TheHiveMCP](https://github.com/StrangeBeeCorp/TheHiveMCP) |
+| `aptl-red` | Custom Node.js | `mcp/mcp-red/` |
+| `aptl-reverse` | Custom Node.js | `mcp/mcp-reverse/` |
+| `aptl-indexer` | Custom Node.js | `mcp/mcp-indexer/` |
+| `aptl-wazuh` | Custom Node.js | `mcp/mcp-wazuh/` |
+| `aptl-network` | Custom Node.js | `mcp/mcp-network/` |
+| `aptl-soar` | Custom Node.js | `mcp/mcp-soar/` |
+| `aptl-casemgmt` | Custom Node.js | `mcp/mcp-casemgmt/` |
+| `aptl-threatintel` | Custom Node.js | `mcp/mcp-threatintel/` |
 
 ### Setup
 
-The agent's MCP client must have all 7 APTL servers configured (see `.mcp.json`). Environment variables required:
+The agent's MCP client must have all 8 APTL servers configured (see `.mcp.json`). Environment variables required:
 
-| Variable | Used by | Default |
+| Variable | Used by | Source |
 |---|---|---|
-| `INDEXER_USERNAME` | indexer | `admin` |
-| `INDEXER_PASSWORD` | indexer | `SecretPassword` |
-| `API_USERNAME` | indexer | `wazuh-wui` |
-| `API_PASSWORD` | indexer | `WazuhPass123!` |
-| `WAZUH_API_HOST` | wazuh | `localhost` |
-| `WAZUH_API_PORT` | wazuh | `55000` |
-| `WAZUH_API_USERNAME` | wazuh | `wazuh-wui` |
-| `WAZUH_API_PASSWORD` | wazuh | `WazuhPass123!` |
-| `WAZUH_INDEXER_*` | wazuh | (see `.mcp.json`) |
-| `MISP_URL` | misp | `https://localhost:8443` |
-| `MISP_API_KEY` | misp | (set via docker-compose `ADMIN_KEY`) |
-| `THEHIVE_URL` | thehive | `http://localhost:9000` |
-| `THEHIVE_API_KEY` | thehive | (from TheHive admin user) |
-| `SHUFFLE_API_KEY` | shuffle | (set in docker-compose) |
+| `INDEXER_USERNAME` / `INDEXER_PASSWORD` | `aptl-indexer`, `aptl-wazuh`, `aptl-network` | `.env` |
+| `API_USERNAME` / `API_PASSWORD` | `aptl-indexer` | `.env` |
+| `MISP_API_KEY` | `aptl-threatintel` | docker-compose `ADMIN_KEY` |
+| `THEHIVE_API_KEY` | `aptl-casemgmt` | TheHive admin user (`scripts/thehive-apikey.sh`) |
+| `SHUFFLE_API_KEY` | `aptl-soar` | Shuffle UI |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | all servers | `.mcp.json` |
 
 ### Tool inventory
 
 | Server | Tools |
 |---|---|
-| `kali-ssh` | `kali_info`, `kali_run_command`, `kali_interactive_session`, `kali_background_session`, `kali_session_command`, `kali_list_sessions`, `kali_close_session`, `kali_get_session_output`, `kali_close_all_sessions` |
-| `reverse-sandbox-ssh` | `reverse_info`, `reverse_run_command`, `reverse_interactive_session`, `reverse_background_session`, `reverse_session_command`, `reverse_list_sessions`, `reverse_close_session`, `reverse_get_session_output`, `reverse_close_all_sessions` |
-| `shuffle` | `soar_list_workflows`, `soar_get_workflow`, `soar_execute_workflow`, `soar_list_executions`, `soar_search_workflows` |
-| `indexer` | `indexer_query`, `indexer_create_rule` |
-| `wazuh` | `get_wazuh_cluster_health`, `get_wazuh_cluster_nodes`, `get_wazuh_agents`, `get_wazuh_alert_summary`, `get_wazuh_rules_summary`, `get_wazuh_vulnerability_summary`, `get_wazuh_critical_vulnerabilities`, `get_wazuh_manager_error_logs`, `search_wazuh_manager_logs`, `get_wazuh_weekly_stats`, `get_wazuh_log_collector_stats`, `get_wazuh_agent_processes`, `get_wazuh_remoted_stats`, `get_wazuh_agent_ports` |
-| `misp` | `search_misp`, `advanced_search`, `submit_ioc`, `generate_threat_report`, `get_misp_stats`, `get_mac_malware`, `get_platform_malware` |
-| `thehive` | `search-entities`, `get-resource`, `manage-entities`, `execute-automation` |
+| `aptl-red` | `kali_info`, `kali_run_command`, `kali_interactive_session`, `kali_background_session`, `kali_session_command`, `kali_list_sessions`, `kali_close_session`, `kali_get_session_output`, `kali_close_all_sessions` |
+| `aptl-reverse` | `reverse_info`, `reverse_run_command`, `reverse_interactive_session`, `reverse_background_session`, `reverse_session_command`, `reverse_list_sessions`, `reverse_close_session`, `reverse_get_session_output`, `reverse_close_all_sessions` |
+| `aptl-wazuh` | `wazuh_query_alerts`, `wazuh_query_logs`, `wazuh_create_detection_rule` |
+| `aptl-indexer` | `indexer_query`, `indexer_create_rule`, `indexer_get_rule_file`, `indexer_restart_manager` |
+| `aptl-network` | `network_query_ids_alerts`, `network_query_dns_events`, `network_query_network_flows`, `network_query_web_attacks` |
+| `aptl-soar` | `soar_list_workflows`, `soar_get_workflow`, `soar_execute_workflow`, `soar_list_executions`, `soar_search_workflows` |
+| `aptl-casemgmt` | `cases_list_cases`, `cases_create_case`, `cases_add_observable`, `cases_update_case`, `cases_create_alert` |
+| `aptl-threatintel` | `threatintel_search_iocs`, `threatintel_get_events`, `threatintel_add_indicator`, `threatintel_correlate_observable` |
 
 ### Protocol steps
 
@@ -124,12 +118,11 @@ Execute each step in order. Record PASS/FAIL per step. Stop and triage on first 
 
 **Goal**: Prove the agent can query the Wazuh SIEM for security alerts and cluster status.
 
-1. Call `get_wazuh_cluster_health`. **Verify**: response includes cluster enabled/running status.
-2. Call `get_wazuh_agents` with `{"status": "active"}`. **Verify**: response contains at least 1 active agent with ID, name, IP, status.
-3. Call `get_wazuh_alert_summary`. **Verify**: response contains alert data with rule IDs, descriptions, timestamps.
-4. Call `get_wazuh_rules_summary`. **Verify**: response contains rule definitions with IDs, levels, and groups.
+1. Call `wazuh_query_alerts` with `{"body": {"query": {"match_all": {}}, "size": 5}}`. **Verify**: response contains alert documents with rule IDs, descriptions, timestamps.
+2. Call `wazuh_query_alerts` with a time-bounded query (`{"range": {"@timestamp": {"gte": "now-24h"}}}`). **Verify**: only recent alerts return.
+3. Call `wazuh_query_logs` with `{"body": {"query": {"match_all": {}}, "size": 1}}`. **Verify**: raw archive documents return (requires `logall` on the manager).
 
-**Pass**: Agent can connect to the SIEM and retrieve agent status, alerts, and rule definitions.
+**Pass**: Agent can query processed alerts and raw archives from the SIEM.
 
 #### Step 3: Raw Indexer -- Elasticsearch DSL queries
 
@@ -145,9 +138,9 @@ Execute each step in order. Record PASS/FAIL per step. Stop and triage on first 
 
 **Goal**: Prove the agent can query MISP for IOCs and threat context.
 
-1. Call `search_misp` with `{"search_term": "172.20.1.30"}`. **Verify**: response contains the seeded Kali DMZ IP indicator.
-2. Call `advanced_search` with `{"search_query": "type:ip-src AND value:172.20.1.30"}`. **Verify**: response contains the Kali IP attribute with event context.
-3. Call `get_misp_stats`. **Verify**: response contains MISP statistics (event count, attribute count).
+1. Call `threatintel_search_iocs` with the value `172.20.1.30`. **Verify**: response contains the seeded Kali DMZ IP indicator.
+2. Call `threatintel_correlate_observable` with the same IP. **Verify**: response returns matching IOCs with event context.
+3. Call `threatintel_get_events`. **Verify**: response contains threat events with threat levels and tags.
 
 **Pass**: Agent can search threat intelligence for IOCs and retrieve event context.
 
@@ -155,11 +148,11 @@ Execute each step in order. Record PASS/FAIL per step. Stop and triage on first 
 
 **Goal**: Prove the agent can create and manage incident cases.
 
-1. Call `search-entities` with `{"type": "Case", "query": {}}`. **Verify**: response is a list (may be empty on fresh lab).
-2. Call `manage-entities` with `{"action": "create", "type": "Case", "data": {"title": "Agent Smoke Test", "description": "Automated validation", "severity": 1}}`. **Verify**: response contains the created case with an `_id` field.
-3. Call `get-resource` with `{"type": "Case", "id": "<id from step 2>"}`. **Verify**: response contains the case details matching what was created.
+1. Call `cases_list_cases`. **Verify**: response is a list (may be empty on fresh lab).
+2. Call `cases_create_case` with `{"title": "Agent Smoke Test", "description": "Automated validation", "severity": 1}`. **Verify**: response contains the created case with an id.
+3. Call `cases_add_observable` with the case id and `{"dataType": "ip", "data": "172.20.1.30"}`. **Verify**: observable attaches to the case.
 
-**Pass**: Agent can create cases, retrieve case details, and search cases.
+**Pass**: Agent can list cases, create cases, and attach observables.
 
 #### Step 6: SOAR -- Shuffle workflow execution
 
@@ -189,8 +182,8 @@ This step simulates what an agent would do in an actual purple team exercise:
 1. **Attack**: Call `kali_run_command` with `{"command": "curl -sk 'http://172.20.1.20:8080/search?q=1%27+OR+1%3D1--'"}`. This sends a SQLi payload from Kali to the webapp.
 2. **Wait 30s** for the detection pipeline to process.
 3. **Detect**: Call `indexer_query` with `{"body": {"query": {"bool": {"must": [{"match": {"rule.groups": "web_attack"}}, {"range": {"@timestamp": {"gte": "now-2m"}}}]}}, "size": 5}}`. **Verify**: at least one alert appears with the SQLi attack. Note: actual ES data is in the `data` field of the response.
-4. **Enrich**: Take the source IP from the alert and call `search_misp` with `{"search_term": "<src_ip>"}`. **Verify**: MISP returns context on the IP (the seeded Kali indicator).
-5. **Respond**: Call `manage-entities` to create a TheHive case with details from the alert. **Verify**: case created successfully.
+4. **Enrich**: Take the source IP from the alert and call `threatintel_correlate_observable` with it. **Verify**: MISP returns context on the IP (the seeded Kali indicator).
+5. **Respond**: Call `cases_create_case` with details from the alert. **Verify**: case created successfully.
 
 **Pass**: Agent executed a complete attack -> detect -> enrich -> respond workflow across 5 systems using only MCP tools.
 
@@ -198,13 +191,13 @@ This step simulates what an agent would do in an actual purple team exercise:
 
 | Step | System | Server | What it proves |
 |---|---|---|---|
-| 1 | Kali | `kali-ssh` | Agent can operate red team container |
-| 2 | Wazuh SIEM | `wazuh` | Agent can query alerts, agents, rules |
-| 3 | Wazuh Indexer | `indexer` | Agent can run raw ES DSL queries |
-| 4 | MISP | `misp` | Agent can look up threat intelligence |
-| 5 | TheHive | `thehive` | Agent can manage incident cases |
-| 6 | Shuffle | `shuffle` | Agent can trigger automated playbooks |
-| 7 | RE container | `reverse-sandbox-ssh` | Agent can use RE tools (optional) |
+| 1 | Kali | `aptl-red` | Agent can operate red team container |
+| 2 | Wazuh SIEM | `aptl-wazuh` | Agent can query alerts and raw archives |
+| 3 | Wazuh Indexer | `aptl-indexer` | Agent can run raw ES DSL queries |
+| 4 | MISP | `aptl-threatintel` | Agent can look up threat intelligence |
+| 5 | TheHive | `aptl-casemgmt` | Agent can manage incident cases |
+| 6 | Shuffle | `aptl-soar` | Agent can trigger automated playbooks |
+| 7 | RE container | `aptl-reverse` | Agent can use RE tools (optional) |
 | 8 | All systems | All servers | Agent can chain tools for end-to-end investigation |
 
 **Full pass**: Steps 1-6 and 8 all pass. Step 7 passes if reverse container is deployed.
@@ -248,11 +241,13 @@ If enterprise stack is enabled: `aptl-webapp`, `aptl-ad`, `aptl-db`.
 
 ### 2. SSH Access
 
-Each SSH-accessible container should accept key-based auth:
+The victim and kali containers publish no host SSH ports; reach them
+through the container runtime. The reverse engineering container is the
+only one with host SSH:
 
 ```bash
-ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022 'echo OK'   # victim
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 'echo OK'       # kali
+docker exec aptl-victim echo OK                                   # victim
+docker exec aptl-kali echo OK                                     # kali
 ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027 'echo OK'   # reverse (if enabled)
 ```
 

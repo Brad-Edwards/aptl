@@ -72,9 +72,9 @@ Treat `aptl.json` as a strict first-party schema at every level.
 
 ## References
 
-- [ADR-005](adr-005-docker-compose-profiles.md) — `aptl.json` drives Docker
+- [ADR-005](adr-005-docker-compose-profiles.md): `aptl.json` drives Docker
   Compose profile selection
-- [ADR-007](adr-007-python-cli-control-plane.md) — Python CLI and Pydantic
+- [ADR-007](adr-007-python-cli-control-plane.md): Python CLI and Pydantic
   validation are the control-plane boundary
-- Issue [#190](https://github.com/Brad-Edwards/aptl/issues/190) — top-level
+- Issue [#190](https://github.com/Brad-Edwards/aptl/issues/190)—top-level
   config drift is silent

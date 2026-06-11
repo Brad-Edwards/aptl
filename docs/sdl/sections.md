@@ -8,7 +8,7 @@ A scenario is a YAML document with a required top-level `name` and up to 21 name
 
 | Section | Type | Purpose |
 |---------|------|---------|
-| `nodes` | `dict[str, Node]` | VMs and network switches — the compute/network topology |
+| `nodes` | `dict[str, Node]` | VMs and network switches—the compute/network topology |
 | `infrastructure` | `dict[str, InfraNode]` | Deployment topology: counts, links, dependencies, IP/CIDR, ACLs |
 | `features` | `dict[str, Feature]` | Software (Service/Configuration/Artifact) deployed to VMs |
 | `conditions` | `dict[str, Condition]` | Health checks (command+interval or library source) |
@@ -471,10 +471,10 @@ workflows:
 
 Workflow step types are:
 
-- `objective` — run a declared objective, then optionally continue via `next`
-- `if` — branch on declarative predicate refs (`conditions`, `metrics`, `evaluations`, `tlos`, `goals`, `objectives`)
-- `parallel` — fan out to multiple branches, then optionally join at `next`
-- `end` — terminal node
+- `objective`: run a declared objective, then optionally continue via `next`
+- `if`: branch on declarative predicate refs (`conditions`, `metrics`, `evaluations`, `tlos`, `goals`, `objectives`)
+- `parallel`: fan out to multiple branches, then optionally join at `next`
+- `end`: terminal node
 
 Workflow graphs are acyclic. Every referenced step must exist, every step must be reachable from `start`, and `parallel.branches` must be unique. Workflow names and step names may not contain `.` because objective window refs use `<workflow>.<step>` syntax.
 
@@ -500,7 +500,7 @@ variables:
     required: false
 ```
 
-Variables are referenced as `${var_name}` in other sections. They are **not resolved at parse time** — resolution happens at instantiation.
+Variables are referenced as `${var_name}` in other sections. They are **not resolved at parse time**—resolution happens at instantiation.
 
 Full-value placeholders are currently supported in ordinary string fields, common scalar fields (counts, booleans, scores, timings, RAM/CPU, ports), many reference values, and selected leaf enum-backed property fields such as `accounts.*.password_strength`, `entities.*.role`, `nodes.*.os`, `nodes.*.asset_value.*`, `infrastructure.*.acls[*].action`, and `objectives.*.success.mode`. The semantic validator checks that `${var_name}` refers to a declared variable, but substitution still happens later during instantiation. User-defined mapping keys and discriminant/schema-shaping enum fields such as section `type` tags still need concrete values, and placeholder keys are rejected at parse time.
 

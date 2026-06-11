@@ -10,7 +10,7 @@ accepted
 
 ## Context
 
-APTL had no automated code quality analysis. Code quality was assessed through manual review only — first during development, then formally in the team review documented in `notes/team-review-synthesis.md`. That review found 30 issues (17 major, 13 minor), including `any`-typed MCP args, duplicated code, dead config fields, and a process-global SSL disable.
+APTL had no automated code quality analysis. Code quality was assessed through manual review only—first during development, then formally in the team review documented in `notes/team-review-synthesis.md`. That review found 30 issues (17 major, 13 minor), including `any`-typed MCP args, duplicated code, dead config fields, and a process-global SSL disable.
 
 As the codebase grew to include both Python (`src/aptl/`, 587+ tests) and TypeScript (`mcp/`, vitest tests), a continuous quality gate was needed to catch regressions before they accumulate.
 
@@ -48,12 +48,12 @@ Integrate SonarCloud via GitHub Actions for continuous code quality analysis acr
 ### Negative
 
 - **External dependency**: SonarCloud is a third-party service. Outages block quality gate checks.
-- **CI pipeline complexity**: The workflow must install Python, Node.js, run two test suites, and then scan — adding ~3-5 minutes to every CI run.
+- **CI pipeline complexity**: The workflow must install Python, Node.js, run two test suites, and then scan—adding ~3-5 minutes to every CI run.
 
 ### Risks
 
 - SonarCloud free tier limits may be reached as the codebase grows (currently well within limits for open-source projects)
-- Coverage thresholds are not yet enforced as quality gates — currently informational only
+- Coverage thresholds are not yet enforced as quality gates—currently informational only
 
 ## Update (2026-05-10): SonarCloud gate stays advisory; a hard in-repo complexity gate is added
 
@@ -64,24 +64,24 @@ former `sonarcloud.yml` was folded in), and the quality-gate job is run
 block infra-only commits (Dockerfiles, compose, workflows, scripts) that add
 no covered code. The scan still runs on every PR/push and the dashboard
 reflects current state; SonarCloud's PR analysis is also new-code-scoped, so
-it only surfaces issues on the lines a PR changes — pre-existing complexity
-debt in a lightly-touched file is invisible to it.
+it only surfaces issues on the lines a PR changes—pre-existing complexity
+debt in a lightly touched file is invisible to it.
 
 To keep god-methods / non-modular code out of the tree without the coverage
 trap and without the new-code-only blind spot, a dedicated, **hard**,
 repo-wide per-function complexity gate runs in pre-commit and CI: `ruff
 check src/` with **only `C901` enabled** (`[tool.ruff.lint] select =
-["C901"]`) and `[tool.ruff.lint.mccabe] max-complexity = 15` — matching
+["C901"]`) and `[tool.ruff.lint.mccabe] max-complexity = 15`—matching
 SonarCloud's default cognitive-complexity threshold (cyclomatic complexity is
 a fine proxy for "this method does too much"). This is the only `ruff` rule
-turned on; it is a complexity guard, not a style linter — widen the rule set
+turned on; it is a complexity guard, not a style linter; widen the rule set
 deliberately if/when the team wants more from `ruff`.
 
 ### Complexity backlog (per-file-ignored until refactored)
 
 Four large modules carry over-threshold functions today. `C901` is suppressed
 for those **whole files** via `[tool.ruff.lint.per-file-ignores]` in
-`pyproject.toml` — not carved out per-`def` with `# noqa: C901`, because that
+`pyproject.toml`—not carved out per-`def` with `# noqa: C901`, because that
 would *modify* the files and SonarCloud's PR analysis then re-surfaces their
 pre-existing complexity debt as "new code" (a one-token edit to a flagged
 `def` line drags the whole file's issue set into the PR and the
@@ -102,14 +102,14 @@ The specific functions to fix (CC = ruff's McCabe cyclomatic complexity):
 | `_collect_resources` | `src/aptl/core/runtime/planner.py` | 18 |
 | `_expand_shorthands` | `src/aptl/core/sdl/parser.py` | 17 |
 
-(SonarCloud's *cognitive*-complexity rule flags a wider, partly different set —
-many more functions in `validator.py` plus deeply-nested ones in `snapshot.py`
+(SonarCloud's *cognitive*-complexity rule flags a wider, partly different set—
+many more functions in `validator.py` plus deeply nested ones in `snapshot.py`
 / `collectors.py` / `env.py` / `detection.py` / `cli/runs.py`, and a CC-66
 function in `lab.py` on the older `main` analysis; the two metrics are
 complementary and both worth driving to zero.)
 
 Known wart: `src/aptl/core/lab.py:63` has a malformed `# noqa: delayed import
-for mocking` (it predates this gate) — `ruff check` prints a one-line warning
+for mocking` (it predates this gate)—`ruff check` prints a one-line warning
 for it but still passes. Left as-is here because fixing it touches `lab.py`,
 which would drag `lab.py`'s pre-existing SonarCloud issues into this
 config-only PR; fix it to `# noqa: PLC0415` the next time `lab.py` is edited.

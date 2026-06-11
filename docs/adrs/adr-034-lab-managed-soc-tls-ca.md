@@ -161,7 +161,10 @@ active.
   TheHive now consumes Cortex in-network using the deterministic lab
   fixture key provisioned by `scripts/cortex-apikey.sh` and injected
   into TheHive from `config/cortex/thehive-cortex.env`; there is still
-  no separate `mcp-cortex` client. This defers Cortex server-side TLS
+  no separate host-facing `mcp-cortex` client. The existing keystore
+  under `config/soc_certs/cortex/` stays reserved for a future HTTPS
+  cutover, and the lab CA bundle remains mounted into the Cortex
+  container for outbound trust. This defers Cortex server-side TLS
   without disabling TLS verification for any host-facing SOC API.
 
 ## Non-Goals
@@ -192,15 +195,14 @@ active.
 
 ## References
 
-- SEC-006 / GitHub issue #258 — Verified TLS for SOC Stack Clients via
+- SEC-006 / GitHub issue #258—Verified TLS for SOC Stack Clients via
   Lab-Managed CA
-- [ADR-003](adr-003-mcp-common-library.md) — MCP Common Library
-- [ADR-008](adr-008-soc-stack-integration.md) — SOC Stack Integration
-- [ADR-022](adr-022-misp-driven-suricata-rules.md) — MISP sync client TLS hook
-- [ADR-025](adr-025-strict-first-party-config-schema.md) — Strict first-party
+- [ADR-003](adr-003-mcp-common-library.md): MCP Common Library
+- [ADR-008](adr-008-soc-stack-integration.md): SOC Stack Integration
+- [ADR-022](adr-022-misp-driven-suricata-rules.md): MISP sync client TLS hook
+- [ADR-025](adr-025-strict-first-party-config-schema.md): Strict first-party
   config schema
-- [ADR-028](adr-028-runtime-rendered-service-config.md) —
-  Runtime-rendered generated artifacts
-- [ADR-029](adr-029-control-plane-secret-handling.md) — Secret handling
-- [ADR-031](adr-031-lab-orchestration-contract-guards.md) — Lab orchestration
+- [ADR-028](adr-028-runtime-rendered-service-config.md): Runtime-rendered generated artifacts
+- [ADR-029](adr-029-control-plane-secret-handling.md): Secret handling
+- [ADR-031](adr-031-lab-orchestration-contract-guards.md): Lab orchestration
   contracts

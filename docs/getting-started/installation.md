@@ -6,8 +6,12 @@
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
 pip install -e .
+cp .env.example .env   # then replace every CHANGE_ME value
 aptl lab start
 ```
+
+`aptl lab start` refuses to run while `.env` still contains the
+`.env.example` placeholder values.
 
 The CLI handles SSH keys, SSL certificates, system requirements, image pulling, container startup, service readiness checks, and connection info generation.
 
@@ -41,6 +45,8 @@ See [MCP Integration](../components/mcp-integration.md) for configuration detail
 ## Verification
 
 Access lab components:
-- Wazuh Dashboard: https://localhost:443 (admin/SecretPassword)
-- Victim SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022`
-- Kali SSH: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`
+
+- Wazuh Dashboard: <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`)
+- Victim shell: `aptl container shell aptl-victim`
+- Kali shell: `aptl container shell aptl-kali`
+- Reverse engineering SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`

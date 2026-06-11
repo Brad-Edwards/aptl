@@ -11,8 +11,8 @@ The semantic validator (`aptl.core.sdl.validator.SemanticValidator`) runs 22 nam
 | `verify_nodes` | Features, conditions, injects, vulnerabilities referenced by nodes exist in their respective sections. Role names on feature/condition/inject assignments must match declared node `roles`. Node names ≤ 35 characters. |
 | `verify_infrastructure` | Every infrastructure entry has a matching node. Links reference existing switch/network entries. Dependencies reference existing infrastructure entries. Switch nodes cannot have count > 1, and nodes with conditions cannot scale above 1. Complex property IPs must be valid IPs within the linked switch's CIDR. ACL `from_net` and `to_net` references are each checked and must resolve to switch/network entries. |
 | `verify_features` | Vulnerability references exist. Dependency references exist. **Dependency cycle detection** via topological sort. |
-| `verify_conditions` | (Structural: command+interval XOR source — enforced by Pydantic) |
-| `verify_vulnerabilities` | (Structural: CWE format — enforced by Pydantic) |
+| `verify_conditions` | (Structural: command+interval XOR source—enforced by Pydantic) |
+| `verify_vulnerabilities` | (Structural: CWE format—enforced by Pydantic) |
 | `verify_metrics` | Conditional metrics reference existing conditions. Each condition used by at most one metric. |
 | `verify_evaluations` | Referenced metrics exist. Absolute min-score doesn't exceed sum of metric max-scores. |
 | `verify_tlos` | Referenced evaluations exist. |

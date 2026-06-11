@@ -139,7 +139,7 @@ techvault-solutions.com
 - Full name
 - Current position at TechVault Solutions
 - Professional headshot
-- Headline (e.g., "CTO at TechVault Solutions | Cloud Security Expert")
+- Headline (for example, "CTO at TechVault Solutions | Cloud Security Expert")
 - About section (3-4 sentences)
 - Work experience (current + 1-2 previous roles)
 - Education (1-2 schools)

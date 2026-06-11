@@ -18,7 +18,7 @@ The migration from AWS to Docker ([ADR-001](adr-001-docker-compose-deployment.md
 - 30-day trial license requiring renewal
 - 5GB ISO requiring manual transfer to the instance
 - 1-2 hour installation process
-- Not available as a Docker image — requires a full VM
+- Not available as a Docker image—requires a full VM
 - Excellent detection capabilities but operationally heavy for a personal lab
 
 ### Splunk Enterprise
@@ -54,10 +54,10 @@ Adopt **Wazuh** (Manager + Indexer + Dashboard) as the SIEM platform for APTL.
 
 Wazuh supports both collection methods APTL needs:
 
-1. **Agent-based** (port 1514/tcp): Wazuh agents installed on victim and reverse engineering containers provide host-level visibility — file integrity monitoring, rootkit detection, system call auditing, process monitoring.
+1. **Agent-based** (port 1514/tcp): Wazuh agents installed on victim and reverse engineering containers provide host-level visibility—file integrity monitoring, rootkit detection, system call auditing, process monitoring.
 2. **Syslog forwarding** (port 514/udp): All containers forward application logs via rsyslog. This captures web server logs, database queries, authentication events, and SOC tool outputs without requiring an agent on every container.
 
-> **Update (ADR-020, 2026-05-02):** Agent placement on the five service-target containers (`webapp`, `fileshare`, `ad`, `dns`, `db`) was reworked in #248. Four of them now run `wazuh-agent` **in-process** so active-response can install `iptables` rules in the target's own namespace; `db` keeps its sidecar as a carve-out for the postgres-on-alpine case. The default for any future container is in-process — see [ADR-020](adr-020-wazuh-agents-in-process-vs-sidecar.md).
+> **Update (ADR-020, 2026-05-02):** Agent placement on the five service-target containers (`webapp`, `fileshare`, `ad`, `dns`, `db`) was reworked in #248. Four of them now run `wazuh-agent` **in-process** so active-response can install `iptables` rules in the target's own namespace; `db` keeps its sidecar as a carve-out for the postgres-on-alpine case. The default for any future container is in-process—see [ADR-020](adr-020-wazuh-agents-in-process-vs-sidecar.md).
 
 ### Version Pinning
 
@@ -83,6 +83,6 @@ All Wazuh components are pinned to version 4.12.0 to prevent agent/manager versi
 
 ### Risks
 
-- Wazuh version upgrades can break agent compatibility — strict version pinning mitigates this but requires manual upgrades
+- Wazuh version upgrades can break agent compatibility—strict version pinning mitigates this but requires manual upgrades
 - OpenSearch/Elasticsearch fork divergence may cause compatibility issues with third-party tools expecting standard Elasticsearch APIs
 - The SOC stack integration ([ADR-008](adr-008-soc-stack-integration.md)) adds significant load to the Wazuh Manager for alert forwarding to MISP, TheHive, and Shuffle

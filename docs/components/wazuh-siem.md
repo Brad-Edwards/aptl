@@ -115,8 +115,8 @@ Emergency      → 100607     → Level 15
 ```
 
 **Configuration Files:**
-- [falco_rules.xml](../../config/wazuh_cluster/falco_rules.xml) - Custom Falco rules
-- [wazuh_manager.conf](../../config/wazuh_cluster/wazuh_manager.conf) - Manager config
+- [falco_rules.xml](https://github.com/Brad-Edwards/aptl/blob/main/config/wazuh_cluster/falco_rules.xml) - Custom Falco rules
+- [wazuh_manager.conf](https://github.com/Brad-Edwards/aptl/blob/main/config/wazuh_cluster/wazuh_manager.conf) - Manager config
 
 ## MCP Integration
 

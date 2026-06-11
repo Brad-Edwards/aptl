@@ -4,19 +4,19 @@
 
 These are things the SDL cannot currently express, identified through stress-testing against 19 real-world scenarios from 8 platforms.
 
-### Deployment-Layer Gaps (by design — belong in provider bindings)
+### Deployment-Layer Gaps (by design—belong in provider bindings)
 
 These are intentionally excluded from the specification layer:
 
-- **Port mappings** (host:container exposure) — deployment detail
-- **Volume mounts** — deployment detail
-- **Linux capabilities** (NET_RAW, SYS_ADMIN) — deployment detail
-- **Security options** (seccomp, cgroup) — deployment detail
-- **Docker Compose profiles** — deployment-specific grouping
-- **Image build contexts** (Dockerfile paths) — deployment detail
-- **Container entrypoints/commands** — deployment detail
-- **Extra hosts** (/etc/hosts overrides) — deployment detail
-- **Ulimits** (nofile, memlock) — deployment detail
+- **Port mappings** (host:container exposure)—deployment detail
+- **Volume mounts**: deployment detail
+- **Linux capabilities** (NET_RAW, SYS_ADMIN)—deployment detail
+- **Security options** (seccomp, cgroup)—deployment detail
+- **Docker Compose profiles**: deployment-specific grouping
+- **Image build contexts** (Dockerfile paths)—deployment detail
+- **Container entrypoints/commands**: deployment detail
+- **Extra hosts** (/etc/hosts overrides)—deployment detail
+- **Ulimits** (nofile, memlock)—deployment detail
 
 These will be addressed by a future SDL → Docker Compose / Terraform provider binding layer.
 

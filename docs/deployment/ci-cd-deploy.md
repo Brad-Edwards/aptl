@@ -1,6 +1,14 @@
-# CI/CD Remote Deployment
+# CI/CD Remote Deployment (removed capability)
 
-APTL can auto-deploy to a remote host via GitHub Actions. This is optional — the default is local Docker Compose (`aptl lab start`).
+!!! warning "Historical record"
+    The `deploy.yml` workflow described below **no longer exists**. It was
+    removed when CI consolidated into the single `checks.yml` workflow
+    ("Consolidate CI into a single Checks workflow; remove auto-deploy")
+    because APTL is local-first and has no app deployment target. This page is
+    retained as a record of how the remote-deploy setup worked, in case the
+    capability is ever reintroduced.
+
+APTL could auto-deploy to a remote host via GitHub Actions. This was optional—the default is local Docker Compose (`aptl lab start`).
 
 ## How It Works
 
@@ -15,7 +23,7 @@ The `deploy.yml` workflow:
    remote must do its own render; see [ADR-028](../adrs/adr-028-runtime-rendered-service-config.md))
 5. Verifies containers are running
 
-Deployment targets are configured as **GitHub Environments** — each contributor can set up their own target without modifying any committed files.
+Deployment targets are configured as **GitHub Environments**—each contributor can set up their own target without modifying any committed files.
 
 ## Setting Up a Deployment Target
 
@@ -83,7 +91,7 @@ To disable auto-deploy:
 gh variable delete DEFAULT_DEPLOY_ENVIRONMENT --repo Brad-Edwards/aptl
 ```
 
-If `DEFAULT_DEPLOY_ENVIRONMENT` is not set, the deploy job is skipped entirely — only the existing SonarCloud analysis runs.
+If `DEFAULT_DEPLOY_ENVIRONMENT` is not set, the deploy job is skipped entirely—only the existing SonarCloud analysis runs.
 
 ## Tailscale Setup
 
@@ -93,7 +101,7 @@ If your target host is on a Tailscale network (not publicly accessible):
 2. Create a Tailscale OAuth client at [admin console](https://login.tailscale.com/admin/settings/oauth) with `Devices: Write` scope
 3. Add `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET` to your environment secrets
 4. Add an ACL tag `tag:ci` in your Tailscale policy and grant it access to your target host
-5. Use the Tailscale IP (e.g., `100.x.y.z`) as `DEPLOY_HOST`
+5. Use the Tailscale IP (for example, `100.x.y.z`) as `DEPLOY_HOST`
 
 ## What Gets Deployed
 
@@ -104,7 +112,7 @@ The workflow syncs the full project via rsync, excluding:
 - `__pycache__/`, `.venv/` (Python artifacts)
 - `runs/` (experiment data)
 - `research/` (local research files)
-- `.env` (secrets — seeded from `.env.example` on first deploy)
+- `.env` (secrets—seeded from `.env.example` on first deploy)
 - `.aptl/` (runtime state, including the credentialized service config rendered on the remote by `aptl lab start`)
 
 The lab is started with `aptl lab start`, which renders the credentialized Wazuh config under `.aptl/config/` on the remote before bringing up profiles matching `aptl.json` in the repo, plus the `otel` profile for observability.
@@ -113,8 +121,8 @@ The lab is started with `aptl lab start`, which renders the credentialized Wazuh
 
 Each contributor can create their own environment. The workflow supports any number:
 
-- `brad-dragondev` — Tailscale box at home
-- `alice-ec2` — AWS EC2 instance
-- `ci-staging` — shared team lab server
+- `brad-dragondev`: Tailscale box at home
+- `alice-ec2`: AWS EC2 instance
+- `ci-staging`: shared team lab server
 
 The same workflow YAML serves all targets. Only the GitHub Environment secrets and variables differ.

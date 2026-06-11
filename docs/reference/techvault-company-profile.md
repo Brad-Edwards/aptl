@@ -258,7 +258,7 @@
   - Support: (555) 847-2684
   - (Google Voice or VoIP.ms)
 
-- **Business Hours:** Mon-Fri 9AM-6PM PST
+- **Business Hours:** Mon-Fri 9 AM to 6 PM PST
 - **Support Hours:** 24/7 (simulated via chatbot)
 
 ---

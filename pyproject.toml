@@ -43,6 +43,10 @@ dev = [
     "hypothesis>=6.0.0",
     "ruff>=0.15.0",
 ]
+docs = [
+    "mkdocs-material>=9.5.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.2.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]

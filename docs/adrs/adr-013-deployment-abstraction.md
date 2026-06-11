@@ -17,7 +17,7 @@ From v2.0 onward, all lab lifecycle operations (start, stop, status, kill) were 
 - Container orchestration platforms (Kubernetes, Nomad)
 - Hybrid environments (some services local, some remote)
 
-The coupling was isolated to the **deployment lifecycle** — scenario definitions already reference containers by name (not Docker-specific concepts), and MCP servers use config-driven `docker-lab-config.json` files. This meant a deployment abstraction could be introduced without touching scenario or MCP code.
+The coupling was isolated to the **deployment lifecycle**—scenario definitions already reference containers by name (not Docker-specific concepts), and MCP servers use config-driven `docker-lab-config.json` files. This meant a deployment abstraction could be introduced without touching scenario or MCP code.
 
 ### Alternatives Considered
 
@@ -82,7 +82,7 @@ A factory function `get_backend(config, project_dir)` instantiates the correct b
 
 ### Scope
 
-This abstraction covers **deployment lifecycle** only: start, stop, status, kill, and image pulling. Container interaction (exec, logs, inspect) used by `snapshot.py`, `flags.py`, and `collectors.py` remains Docker-specific — those operations are a separate concern that can be abstracted independently when needed.
+This abstraction covers **deployment lifecycle** only: start, stop, status, kill, and image pulling. Container interaction (exec, logs, inspect) used by `snapshot.py`, `flags.py`, and `collectors.py` remains Docker-specific—those operations are a separate concern that can be abstracted independently when needed.
 
 ### Backward Compatibility
 
@@ -107,7 +107,7 @@ The public functions `start_lab()`, `stop_lab()`, `lab_status()`, and `kill_lab_
 ### Risks
 
 - The SSH backend has not been tested against all Docker versions. The `DOCKER_HOST=ssh://` feature was introduced in Docker 18.09 and has edge cases around context handling and compose file paths.
-- Future backends (Kubernetes) may need a richer Protocol interface — e.g., namespace management, resource quotas, or pod scheduling constraints that don't map cleanly to the current `profiles` concept.
+- Future backends (Kubernetes) may need a richer Protocol interface—for example, namespace management, resource quotas, or pod scheduling constraints that don't map cleanly to the current `profiles` concept.
 
 ## Subsequent Changes
 

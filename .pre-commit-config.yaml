@@ -65,6 +65,17 @@ repos:
         pass_filenames: false
         files: ^(src/.*\.py|pyproject\.toml)$
 
+      - id: vale-prose-lint
+        name: Vale prose lint (ADR-038)
+        # Lints staged markdown against Google style + AptlProject house
+        # rules. The exclude regex mirrors the lintable-corpus filter in
+        # tools/vale-lint-all.sh (generated artifacts, agent-facing
+        # contracts, dated point-in-time records) — keep the two in sync.
+        entry: tools/vale-lint-hook.sh
+        language: system
+        types_or: [markdown]
+        exclude: ^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md|docs/aces/inventory/|docs/history/|docs/known-issues/|docs/components/mcp-smoke-test-results-|node_modules/|\.tools/|\.vale/)
+
       - id: pytest
         name: Python tests (pytest)
         # Prefer the repo's .venv (so contributors don't need to activate it

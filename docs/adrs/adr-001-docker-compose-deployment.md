@@ -15,12 +15,12 @@ APTL v1.x deployed entirely to AWS using Terraform:
 - **EC2 instances** for the SIEM (qRadar on a c5.4xlarge), Kali Linux (t3.micro), and a victim RHEL 9.6 machine
 - **VPC** with public subnet, security groups, and bastion host SSH access
 - **S3 + DynamoDB** for Terraform state management with UUID-based bucket names (to prevent enumeration)
-- **Cost**: ~$280/month if left running continuously — the c5.4xlarge for qRadar alone was ~$250/month
+- **Cost**: ~$280/month if left running continuously—the c5.4xlarge for qRadar alone was ~$250/month
 - **qRadar Community Edition** required a 5GB ISO manual transfer, 1-2 hour installation, 5,000 EPS limit, and a 30-day trial license
 - **Setup time**: Even with full Terraform automation, deploying from scratch took 30-60 minutes for infrastructure + 1-2 hours for qRadar installation
 - **Network complexity**: VPC networking, security group rules, bastion host, inter-instance connectivity debugging
 
-The barrier to entry was too high for a personal training lab. Every session meant either leaving expensive infrastructure running or spending an hour redeploying. The target audience — security practitioners wanting to practice purple team operations — would often abandon setup before reaching the first exercise.
+The barrier to entry was too high for a personal training lab. Every session meant either leaving expensive infrastructure running or spending an hour redeploying. The target audience (security practitioners wanting to practice purple team operations) would often abandon setup before reaching the first exercise.
 
 Additionally, the AWS dependency created a hard coupling to a specific cloud provider and required AWS credentials, IAM permissions, and billing oversight that complicated sharing the project.
 
@@ -36,7 +36,7 @@ Additionally, the AWS dependency created a hard coupling to a specific cloud pro
 Replace the entire AWS/Terraform deployment model with Docker Compose running on the developer's local machine.
 
 - All lab components run as Docker containers defined in a single `docker-compose.yml`
-- No cloud infrastructure required — zero ongoing costs
+- No cloud infrastructure required—zero ongoing costs
 - Single-command startup: `docker compose up` (later `aptl lab start`)
 - Profiles enable selective deployment of container subsets (see [ADR-005](adr-005-docker-compose-profiles.md))
 - Wazuh replaces qRadar as the SIEM (see [ADR-002](adr-002-wazuh-siem.md))
@@ -54,7 +54,7 @@ The initial v2.0.0 deployment included 5 containers: Wazuh Manager, Wazuh Indexe
 
 ### What Was Preserved
 
-- The core purple team lab concept: SIEM + attacker + victim(s)
+- The core purple team lab concept: SIEM + attacker + victims
 - MCP server integration for AI agent control
 - SSH-based access to lab containers
 - Documentation structure (migrated from VitePress to MkDocs)
@@ -68,7 +68,7 @@ The initial v2.0.0 deployment included 5 containers: Wazuh Manager, Wazuh Indexe
 - **Offline capable**: Works without internet after initial image pulls
 - **Reproducible**: `docker-compose.yml` is the complete deployment spec. No Terraform state, no cloud drift.
 - **Lower barrier**: `git clone && aptl lab start` vs. AWS credentials + Terraform init + multi-step deployment
-- **Portable**: Works on any machine with Docker — Linux, macOS, WSL2
+- **Portable**: Works on any machine with Docker—Linux, macOS, WSL2
 
 ### Negative
 

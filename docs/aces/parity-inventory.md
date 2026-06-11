@@ -1,7 +1,7 @@
 # ACES SDL Parity Inventory (SCN-010)
 
 This directory holds the authoritative parity inventory that the
-SCN-010 specification issues (#319 – #324) and the eventual ACES-SDL
+SCN-010 specification issues (#319—#324) and the eventual ACES-SDL
 cutover PR must cite when claiming TechVault parity. It is scoped by
 ADR-035, sections **Parity Inventory Boundary** and **ACES Backend
 Integration Guardrails**.
@@ -15,7 +15,7 @@ docs/aces/parity-inventory.yaml
 This page explains the schema, the row taxonomy, and how to add or cite
 a row.
 
-## What this inventory is — and is not
+## What this inventory is—and is not
 
 This inventory is an **audit surface**. It is:
 
@@ -59,15 +59,15 @@ Every row also belongs to one of these legacy-surface buckets. The
 schema test asserts that every bucket carries at least one row, so the
 inventory cannot silently drop a surface area:
 
-- `scenarios_yaml` — top-level keys of files under `scenarios/*.yaml`
-- `docker_compose_topology` — profiles, networks, named volumes
-- `aptl_config` — `AptlConfig` / `ContainerSettings` / `LabSettings`
-- `env_vars_and_secrets` — `EnvVars` fields and the placeholder gate
-- `lab_lifecycle` — `_LAB_START_STEPS` and ADR-030 readiness taxonomy
-- `deployment_backend` — `DeploymentBackend` protocol methods
-- `snapshots_and_runstore` — `RangeSnapshot` and `RunManifest` fields
-- `defensive_stack_configs` — `config/` subdirectories
-- `test_and_validation` — conformance and parity gates
+- `scenarios_yaml`: top-level keys of files under `scenarios/*.yaml`
+- `docker_compose_topology`: profiles, networks, named volumes
+- `aptl_config`: `AptlConfig` / `ContainerSettings` / `LabSettings`
+- `env_vars_and_secrets`: `EnvVars` fields and the placeholder gate
+- `lab_lifecycle`: `_LAB_START_STEPS` and ADR-030 readiness taxonomy
+- `deployment_backend`: `DeploymentBackend` protocol methods
+- `snapshots_and_runstore`: `RangeSnapshot` and `RunManifest` fields
+- `defensive_stack_configs`: `config/` subdirectories
+- `test_and_validation`: conformance and parity gates
 
 ## Row schema
 
@@ -75,9 +75,9 @@ Each row in `rows[]` is a mapping with the following required keys:
 
 | Key | Meaning |
 | --- | --- |
-| `id` | Stable kebab / dot-segmented anchor used for citation (e.g. `parity#scen.recon-nmap-scan.metadata`). |
+| `id` | Stable kebab / dot-segmented anchor used for citation (for example `parity#scen.recon-nmap-scan.metadata`). |
 | `surface` | One of the surfaces above. |
-| `legacy_source` | Canonical owner — file path plus symbol or field name. The inventory does not store data; it routes to the existing owner. |
+| `legacy_source` | Canonical owner—file path plus symbol or field name. The inventory does not store data; it routes to the existing owner. |
 | `legacy_field` | The specific field, key, or method name being mapped. |
 | `category` | One of the categories above. |
 | `aces_target` | ACES SDL element / contract / profile, or `n/a`. |
@@ -88,7 +88,7 @@ Each row in `rows[]` is a mapping with the following required keys:
 
 The full schema is enforced by `tests/test_parity_inventory.py`. The
 test uses pure-Python assertions so the inventory does not import any
-APTL Pydantic model — that would re-introduce the duplicate
+APTL Pydantic model—that would re-introduce the duplicate
 `ScenarioDefinition` ADR-035 forbids.
 
 ## Citing a row
@@ -98,14 +98,14 @@ by id, in the form `parity#<id>`. Reviewers grep the inventory for the
 id to verify the row exists and that its category and follow-up are
 accurate. Example PR-description line:
 
-> Covers `parity#scen.recon-nmap-scan.objectives` — moved from
+> Covers `parity#scen.recon-nmap-scan.objectives`—moved from
 > `aces_schema_profile_gap` to `aces_sdl` once #312 promotes the
 > backend to `orchestration-evaluation`.
 
 ## Adding a row
 
 1. Decide the surface bucket. If none fits, the surface is missing
-   from the closed set — that is a deliberate change requiring a
+   from the closed set—that is a deliberate change requiring a
    deliberate edit to `surfaces:` and to ADR-035, not a workaround.
 2. Decide the category. The same caveat applies.
 3. Choose a stable, anchor-safe `id` (ASCII alphanumeric plus `.`,
@@ -119,14 +119,14 @@ accurate. Example PR-description line:
 
 ## Related ADRs
 
-- **ADR-035** — ACES SDL adoption and the parity-inventory boundary
+- **ADR-035**: ACES SDL adoption and the parity-inventory boundary
   (the binding document).
-- **ADR-028** — Runtime-rendered service config (generated-secret
+- **ADR-028**: Runtime-rendered service config (generated-secret
   boundary referenced by `env_vars_and_secrets` rows).
-- **ADR-029** — Snapshot / runstore redaction boundary.
-- **ADR-030** — Lab startup partial-readiness classification (owner of
+- **ADR-029**: Snapshot / runstore redaction boundary.
+- **ADR-030**: Lab startup partial-readiness classification (owner of
   `StartupOutcome`, `DiagnosticImpact`, `DiagnosticSeverity`,
-  `StartupDiagnostic`, `LabResult` — *not* duplicated here).
-- **ADR-034** — Generated-secret materialization (paired with ADR-028).
-- **ADR-036** — Endpoint-registry boundary (snapshot serialization).
-- **ADR-037** — Docker Compose backend cohesion.
+  `StartupDiagnostic`, `LabResult`—*not* duplicated here).
+- **ADR-034**: Generated-secret materialization (paired with ADR-028).
+- **ADR-036**: Endpoint-registry boundary (snapshot serialization).
+- **ADR-037**: Docker Compose backend cohesion.

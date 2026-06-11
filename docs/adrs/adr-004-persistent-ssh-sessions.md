@@ -10,7 +10,7 @@ accepted
 
 ## Context
 
-AI agents interact with lab containers by sending commands through MCP tool calls. Each tool call translates to an SSH command on the target container. The naive approach — open SSH connection, run command, close connection — has serious problems when an AI agent is the client:
+AI agents interact with lab containers by sending commands through MCP tool calls. Each tool call translates to an SSH command on the target container. The naive approach (open SSH connection, run command, close connection) has serious problems when an AI agent is the client:
 
 ### Problems with Per-Command SSH
 
@@ -20,7 +20,7 @@ AI agents interact with lab containers by sending commands through MCP tool call
 
 3. **Resource churn**: Rapid connect/disconnect cycles stress the SSH daemon on containers and exhaust file descriptors on the MCP server host.
 
-4. **MCP is stateless, SSH is stateful**: The MCP protocol is request-response with no session concept. But SSH sessions are inherently stateful — they maintain a shell process, environment, and working directory. Bridging these paradigms requires an explicit session layer.
+4. **MCP is stateless, SSH is stateful**: The MCP protocol is request-response with no session concept. But SSH sessions are inherently stateful—they maintain a shell process, environment, and working directory. Bridging these paradigms requires an explicit session layer.
 
 ### AI Agent Behavior Patterns
 
@@ -64,7 +64,7 @@ The session parser watches the output stream for these delimiters and extracts t
 
 **Per-command timeouts**: Each command has an individual timeout (default: 30 seconds, configurable per call). Long-running commands like nmap scans can specify longer timeouts. The session itself has a separate inactivity timeout.
 
-**Buffer overflow protection**: Output buffers are capped at 10,000 lines. When exceeded, the buffer is trimmed to the most recent 5,000 lines. This prevents memory exhaustion from verbose commands (e.g., `find /` or chatty compilation output).
+**Buffer overflow protection**: Output buffers are capped at 10,000 lines. When exceeded, the buffer is trimmed to the most recent 5,000 lines. This prevents memory exhaustion from verbose commands (for example, `find /` or chatty compilation output).
 
 **Keepalive**: SSH keepalive packets every 30 seconds prevent connection drops from inactive sessions. Max 3 missed keepalives before declaring the connection dead.
 
@@ -107,7 +107,7 @@ This supports the reverse engineering container (Ubuntu/bash) and future Windows
 
 - Session timeout tuning: Too short drops sessions mid-task; too long wastes resources. The 10-minute default was chosen based on observed agent interaction patterns but may need adjustment.
 - Buffer trimming can lose important early output from long-running commands. The 10,000/5,000 line limits were set based on typical command output sizes.
-- The v4.6.7 stranded-callers bug showed that cleanup paths must be exhaustively tested — any code path that closes a session must reject all pending promises.
+- The v4.6.7 stranded-callers bug showed that cleanup paths must be exhaustively tested—any code path that closes a session must reject all pending promises.
 
 ## Update (2026-05-12): Contract hardening guardrails
 
@@ -147,7 +147,7 @@ expands its ownership.
 ## Update (2026-05-18): Effective session-mode metadata
 
 `session_command` callers may override raw execution per command, but omitting
-`raw` means "use the session default", not "normal mode". The effective mode is
+`raw` means "use the session default," not "normal mode." The effective mode is
 therefore a runtime SSH-session fact, not a caller-argument fact.
 
 Implementations that expose command outcomes across the MCP boundary must:

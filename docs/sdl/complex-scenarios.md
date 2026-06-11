@@ -89,7 +89,7 @@ red team attempts data theft and radiology disruption?
 - Multiple agents with distinct initial knowledge and subnet scope
 - Objectives that target systems, relationships, and content
 
-## Scenario 2: SatCom Supply-Chain Release Poisoning
+## Scenario 2: SatCom Supply Chain Release Poisoning
 
 **Filename:** `examples/satcom-release-poisoning.sdl.yaml`
 

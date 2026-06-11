@@ -2,7 +2,7 @@
 
 The APTL SDL is a YAML-based specification language for describing cyber range scenarios and experiments. It starts from the [Open Cyber Range SDL](https://github.com/Open-Cyber-Range/SDL-parser) surface, preserves coverage across the OCR-derived sections, and extends that base with APTL's additional scenario concepts such as content, accounts, relationships, agents, objectives, workflows, and variables. It is intentionally its own SDL rather than a clone-level compatibility layer.
 
-The SDL describes *what the scenario and experiment mean* — not how to deploy them. A separate backend binding layer (not yet implemented) translates SDL specifications into concrete infrastructure (Docker Compose, Terraform, cloud APIs), and runtime adapters can evaluate SDL-declared conditions/objectives with concrete probes.
+The SDL describes *what the scenario and experiment mean*—not how to deploy them. A separate backend binding layer (not yet implemented) translates SDL specifications into concrete infrastructure (Docker Compose, Terraform, cloud APIs), and runtime adapters can evaluate SDL-declared conditions/objectives with concrete probes.
 
 ## Stable IDs, Variable Values
 
@@ -12,8 +12,8 @@ Variables are for **attribute values** on already-declared things. That includes
 
 In other words:
 
-- `nodes: {web: ...}` — `web` is a stable SDL identifier
-- `content.hostname-file.text: ${hostname}` — `${hostname}` is a variable-backed attribute value
+- `nodes: {web: ...}`: `web` is a stable SDL identifier
+- `content.hostname-file.text: ${hostname}`: `${hostname}` is a variable-backed attribute value
 
 This means a hostname, IP, path, or display string can be variable-backed, but a node cannot be created or renamed through `${...}` inside a mapping key.
 
@@ -79,15 +79,15 @@ accounts:
 
 ## Documentation
 
-- [SDL Sections Reference](sections.md) — Complete reference for all 21 sections
-- [Parser Behavior](parser.md) — Key normalization, shorthand expansion, SDL-only parsing
-- [Semantic Validation](validation.md) — Cross-reference checks and what the validator enforces
-- [Design Precedents](precedents.md) — Where each SDL element comes from
-- [Limitations & Future Work](limitations.md) — What the SDL cannot express yet
-- [Testing](testing.md) — How to run unit tests, stress tests, and fuzz tests
-- [Complex Scenario Designs](complex-scenarios.md) — Up-front design briefs for large example exercises
-- [Complex Scenario Authoring Notes](complex-scenario-authoring-notes.md) — Persistent issue log from encoding those designs into SDL
-- [Runtime Architecture](runtime-architecture.md) — SDL-native compiler, composite plans, and runtime targets
+- [SDL Sections Reference](sections.md): Complete reference for all 21 sections
+- [Parser Behavior](parser.md): Key normalization, shorthand expansion, SDL-only parsing
+- [Semantic Validation](validation.md): Cross-reference checks and what the validator enforces
+- [Design Precedents](precedents.md): Where each SDL element comes from
+- [Limitations & Future Work](limitations.md): What the SDL cannot express yet
+- [Testing](testing.md): How to run unit tests, stress tests, and fuzz tests
+- [Complex Scenario Designs](complex-scenarios.md): Up-front design briefs for large example exercises
+- [Complex Scenario Authoring Notes](complex-scenario-authoring-notes.md): Persistent issue log from encoding those designs into SDL
+- [Runtime Architecture](runtime-architecture.md): SDL-native compiler, composite plans, and runtime targets
 
 ## Usage
 

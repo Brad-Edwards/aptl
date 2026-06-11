@@ -7,8 +7,12 @@ git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
 
 pip install -e .
+cp .env.example .env   # then replace every CHANGE_ME value
 aptl lab start
 ```
+
+`aptl lab start` refuses to run while `.env` still contains the
+`.env.example` placeholder values.
 
 ## Manage Lab
 
@@ -22,11 +26,17 @@ aptl kill -c      # Emergency: kill MCP processes AND all lab containers
 
 ## Access
 
-**Wazuh Dashboard:** https://localhost:443 (admin/SecretPassword)
+**Wazuh Dashboard:** <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`)
 
-**SSH Access:**
-- Victim: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022`
-- Kali: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`
+**Container shells** (victim and kali publish no host SSH ports):
+
+```bash
+aptl container shell aptl-victim
+aptl container shell aptl-kali
+```
+
+The reverse engineering container is the only one with host SSH:
+`ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`.
 
 ## Test
 
@@ -34,10 +44,10 @@ Generate test activity and view in Wazuh Dashboard:
 
 ```bash
 # Generate log from victim
-ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022 "logger 'Test log entry'"
+docker exec aptl-victim logger 'Test log entry'
 
 # Run scan from Kali
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "nmap 172.20.2.20"
+docker exec aptl-kali nmap 172.20.2.20
 ```
 
 View events in Wazuh Dashboard → Security Events

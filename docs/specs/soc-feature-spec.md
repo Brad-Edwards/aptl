@@ -1,4 +1,4 @@
-# Scenario & Observability Core — Architecture Spec
+# Scenario & Observability Core—Architecture Spec
 
 > Historical note: this document describes the pre-SDL scenario runtime that was removed in the SDL-only branch. It is retained for context until a new SDL-native runtime lands.
 
@@ -21,15 +21,15 @@ for post-hoc analysis.
 
 ### 1.3 Design Principles
 
-1. **Match existing patterns** — Pydantic v2 for validation, dataclasses for
+1. **Match existing patterns**—Pydantic v2 for validation, dataclasses for
    results, `get_logger()` per module, subprocess for external tools, thin CLI
    over core logic.
-2. **Minimal new dependencies** — Only `PyYAML` and `requests` are added.
-3. **Scenarios are data, not code** — YAML files authored, shared, and
+2. **Minimal new dependencies**—Only `PyYAML` and `requests` are added.
+3. **Scenarios are data, not code**—YAML files authored, shared, and
    version-controlled independently of the engine.
-4. **Analysis is separate** — The system captures raw data. Scoring, grading,
+4. **Analysis is separate**—The system captures raw data. Scoring, grading,
    and comparative analysis are research steps performed after data collection.
-5. **Fault-tolerant collection** — Every collector returns empty on failure.
+5. **Fault-tolerant collection**—Every collector returns empty on failure.
    Partial data is better than no data.
 
 ### 1.4 Non-Goals (v1)
@@ -64,8 +64,8 @@ src/aptl/
 
 mcp/aptl-mcp-common/
   src/
-    tracing.ts      # ToolTracer — wraps every MCP tool call with JSONL logging
-    server.ts       # createMCPServer — integrates tracer into all MCP servers
+    tracing.ts      # ToolTracer—wraps every MCP tool call with JSONL logging
+    server.ts       # createMCPServer—integrates tracer into all MCP servers
 ```
 
 ### 2.2 Data Flow
@@ -140,9 +140,9 @@ Each step maps to a MITRE ATT&CK technique:
 | Field | Type | Description |
 |-------|------|-------------|
 | `step_number` | `int` | Execution order |
-| `technique_id` | `str` | ATT&CK ID (e.g., `T1595.002`) |
+| `technique_id` | `str` | ATT&CK ID (for example, `T1595.002`) |
 | `technique_name` | `str` | Human-readable technique name |
-| `tactic` | `str` | ATT&CK tactic (e.g., `Reconnaissance`) |
+| `tactic` | `str` | ATT&CK tactic (for example, `Reconnaissance`) |
 | `description` | `str` | What this step does |
 | `target` | `str` | Target container |
 | `vulnerability` | `str` | Exploitable condition (optional) |
@@ -171,9 +171,9 @@ paths = find_scenarios(Path("scenarios/"))  # Returns list[Path]
 IDLE -> ACTIVE -> COMPLETED -> (cleared)
 ```
 
-- `IDLE` — No active scenario (session.json absent)
-- `ACTIVE` — Scenario running, events being recorded
-- `COMPLETED` — Scenario stopped, ready for assembly
+- `IDLE`: No active scenario (session.json absent)
+- `ACTIVE`: Scenario running, events being recorded
+- `COMPLETED`: Scenario stopped, ready for assembly
 
 ### 4.2 CLI Commands
 

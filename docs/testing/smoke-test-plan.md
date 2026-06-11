@@ -182,7 +182,7 @@ Execute from Kali container via `mcp-red`. Each test verifies a specific attack 
 | RED-21 | LDAP anonymous bind | Returns base DN info | `ldapsearch -x -H ldap://172.20.2.10 -b 'DC=techvault,DC=local' -s base` |
 | RED-22 | Weak password login | jessica.williams:password123 works | `ldapsearch -x -H ldap://172.20.2.10 -D 'jessica.williams@techvault.local' -w 'password123' -b 'DC=techvault,DC=local' '(objectClass=user)' sAMAccountName` |
 | RED-23 | SPN enumeration | Finds svc-sql and svc-web SPNs | `ldapsearch -x -H ldap://172.20.2.10 -D 'jessica.williams@techvault.local' -w 'password123' -b 'DC=techvault,DC=local' '(servicePrincipalName=*)' sAMAccountName servicePrincipalName` |
-| RED-24 | Contractor account active | contractor.temp:Welcome1! works | `ldapsearch -x -H ldap://172.20.2.10 -D 'contractor.temp@techvault.local' -w 'Welcome1!' -b 'DC=techvault,DC=local' -s base` |
+| RED-24 | Contractor account active | `contractor.temp:Welcome1!` works | `ldapsearch -x -H ldap://172.20.2.10 -D 'contractor.temp@techvault.local' -w 'Welcome1!' -b 'DC=techvault,DC=local' -s base` |
 | RED-25 | Over-privileged service account | svc-backup is in Domain Admins | `ldapsearch -x -H ldap://172.20.2.10 -D 'jessica.williams@techvault.local' -w 'password123' -b 'DC=techvault,DC=local' '(sAMAccountName=svc-backup)' memberOf` |
 
 ### 3c. Database

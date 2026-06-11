@@ -107,9 +107,9 @@ cd mcp/mcp-red && npm install && npm run build && cd ../..
 cd mcp/mcp-wazuh && npm install && npm run build && cd ../..
 ```
 
-**Check SSH from MCP:**
+**Check the kali container is reachable:**
 ```bash
-ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023 "echo test"
+docker exec aptl-kali echo test
 ```
 
 ## Recovery
@@ -138,7 +138,7 @@ aptl lab start
 ```
 
 `aptl lab start` re-renders the credentialized Wazuh config under `.aptl/config/`
-and brings up the profiles from `aptl.json` — a bare `docker compose up` would
+and brings up the profiles from `aptl.json`—a bare `docker compose up` would
 skip the credential render and the profile selection.
 
 ## Platform Issues

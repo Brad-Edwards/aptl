@@ -211,14 +211,14 @@ The purple-team continuity carve-out from issue #252 is an orchestrator-side
 intervention, not an active-response rewrite. The in-band whitelist remains
 ADR-021's `aptl-firewall-drop` contract. The post-iteration audit that
 inspects and removes blanket kali source-IP drops is modeled as an
-orchestration lifecycle action with archive evidence and diagnostics — see
+orchestration lifecycle action with archive evidence and diagnostics—see
 [ADR-024](../adrs/adr-024-orchestrator-side-purple-continuity-carve-out.md)
 for the implementation contract.
 
 Mode-gating: runtime behavior must not infer purple mode from filenames,
 legacy fixtures, agents present, or CLI defaults. Today the continuity
 carve-out runs unconditionally because every shipped APTL scenario is
-purple by design — it does not read or guess `mode` from any source.
+purple by design—it does not read or guess `mode` from any source.
 Once SDL adds an authoritative `mode` field (issue #263), the carve-out
 gains a `scenario.mode == PURPLE` gate at its orchestration call site so
 that `red` and `blue` runs are explicitly skipped. That migration is a

@@ -1,4 +1,4 @@
-# APTL — Advanced Purple Team Lab
+# APTL—Advanced Purple Team Lab
 
 Docker-based purple team lab: Wazuh SIEM + enterprise infrastructure + Kali + AI agent integration via MCP.
 
@@ -34,14 +34,14 @@ aptl lab start
 ### Architecture
 - [Overview](architecture/index.md)
 - [Networking](architecture/networking.md)
-- [Enterprise Infrastructure](architecture/enterprise-infrastructure.md) — TechVault design rationale
+- [Enterprise Infrastructure](architecture/enterprise-infrastructure.md): TechVault design rationale
 
 ### Components
 - [Wazuh SIEM](components/wazuh-siem.md)
 - [Wazuh Active Response](components/wazuh-active-response.md)
-- [Default Defensive Posture](components/default-defensive-posture.md) — what ships enabled vs disabled at first boot
+- [Default Defensive Posture](components/default-defensive-posture.md): what ships enabled vs disabled at first boot
 - [Kali Red Team](components/kali-redteam.md)
-- [Red Team Activity Taxonomy](red-team-taxonomy.md) — OCSF activity classes the Kali MCP server emits
+- [Red Team Activity Taxonomy](red-team-taxonomy.md): OCSF activity classes the Kali MCP server emits
 - [Victim Containers](components/victim-containers.md)
 - [MCP Integration](components/mcp-integration.md)
 - [Reverse Engineering](components/reverse-engineering-container.md)
@@ -50,20 +50,20 @@ aptl lab start
 - [ADR Index](adrs/README.md) -- Why we built it this way
 
 ### Scenario Description Language (SDL)
-- [SDL Overview](sdl/index.md) — What the SDL is and how to use it
-- [Sections Reference](sdl/sections.md) — Complete reference for all 21 sections
-- [Parser Behavior](sdl/parser.md) — Key normalization, shorthands, SDL-only parsing
-- [Semantic Validation](sdl/validation.md) — Cross-reference checks (22 passes)
-- [Design Precedents](sdl/precedents.md) — Where each element comes from
-- [Limitations](sdl/limitations.md) — What the SDL cannot express yet
-- [Testing](sdl/testing.md) — Unit tests, stress tests, fuzz tests
-- [Runtime Architecture](sdl/runtime-architecture.md) — SDL-native compiler, planner, and runtime target design
+- [SDL Overview](sdl/index.md): What the SDL is and how to use it
+- [Sections Reference](sdl/sections.md): Complete reference for all 21 sections
+- [Parser Behavior](sdl/parser.md): Key normalization, shorthands, SDL-only parsing
+- [Semantic Validation](sdl/validation.md): Cross-reference checks (22 passes)
+- [Design Precedents](sdl/precedents.md): Where each element comes from
+- [Limitations](sdl/limitations.md): What the SDL cannot express yet
+- [Testing](sdl/testing.md): Unit tests, stress tests, fuzz tests
+- [Runtime Architecture](sdl/runtime-architecture.md): SDL-native compiler, planner, and runtime target design
 
 ### Scenarios & Runs
-- [SOC Architecture Spec](specs/soc-feature-spec.md) — Historical pre-SDL runtime spec retained for context
+- [SOC Architecture Spec](specs/soc-feature-spec.md): Historical pre-SDL runtime spec retained for context
 
 ### Testing
-- [Smoke Test Plan](testing/smoke-test-plan.md) — Historical full-stack plan for the pre-SDL scenario engine
+- [Smoke Test Plan](testing/smoke-test-plan.md): Historical full-stack plan for the pre-SDL scenario engine
 
 ### Reference
 - [TechVault Company Profile](reference/techvault-company-profile.md)
@@ -73,7 +73,7 @@ aptl lab start
 ### Operations
 - [Deployment](deployment.md)
 - [Troubleshooting](troubleshooting/)
-- [Known Issues — UAT Findings](known-issues/uat-findings-2026-02-23.md)
+- [Known Issues—UAT Findings](known-issues/uat-findings-2026-02-23.md)
 
 ### History
 - [Smoke Test Results 2026-02-08](history/smoke-test-results-2026-02-08.md)

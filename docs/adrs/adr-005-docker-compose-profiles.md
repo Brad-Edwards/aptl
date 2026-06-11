@@ -31,7 +31,7 @@ Use **Docker Compose profiles** to group containers into deployable subsets, con
 
 ### Profile Definitions
 
-Each service in `docker-compose.yml` declares which profile(s) it belongs to:
+Each service in `docker-compose.yml` declares which profiles it belongs to:
 
 | Profile | Containers | Purpose |
 |---------|-----------|---------|
@@ -66,9 +66,9 @@ The Python CLI (`aptl lab start`) reads this config and passes corresponding `--
 As part of this standardization, all services received:
 
 **Health checks** with generous timeouts for cold starts:
-- `start_period: 120s-300s` — SOC tools (MISP, TheHive, Shuffle) need up to 5 minutes for first-time initialization
-- `retries: 5-15` — enough attempts to survive slow disk I/O
-- `interval: 30s` — balanced between responsiveness and overhead
+- `start_period: 120s-300s`: SOC tools (MISP, TheHive, Shuffle) need up to 5 minutes for first-time initialization
+- `retries: 5-15`: enough attempts to survive slow disk I/O
+- `interval: 30s`: balanced between responsiveness and overhead
 
 **Memory limits** per container:
 - Wazuh Indexer: 2GB (OpenSearch JVM)
@@ -97,4 +97,4 @@ These limits prevent any single container from starving the others and provide p
 ### Risks
 
 - Health check `start_period` values were set based on observed cold-start times on a development machine. Slower machines or disk-constrained environments may need longer periods.
-- Memory limits may need tuning as data volumes grow — the Wazuh Indexer's 2GB limit is tight for large alert volumes during extended scenarios
+- Memory limits may need tuning as data volumes grow—the Wazuh Indexer's 2GB limit is tight for large alert volumes during extended scenarios

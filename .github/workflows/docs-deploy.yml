@@ -21,6 +21,11 @@ concurrency:
 
 jobs:
   build:
+    # Job-level main-only guard: `push.branches: [main]` constrains only
+    # push events, while workflow_dispatch can target any ref. Without
+    # this guard a collaborator could manually deploy a non-main
+    # branch's docs to Pages (codex finding on #408).
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -37,6 +42,7 @@ jobs:
           path: site
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:

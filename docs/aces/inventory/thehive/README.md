@@ -24,11 +24,13 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 
 > **Secrets.** The Play application secret
 > (`--secret aptl-thehive-lab-secret-key-2024-purple`) is a committed scenario
-> fixture (present in `docker-compose.yml`) — it is encoded **verbatim** on the
+> fixture (present in `docker-compose.yml`) - it is encoded **verbatim** on the
 > container command per the secret-fixture policy (a reproduction input, not a
 > real operator secret). The generated HTTPS keystore (`/etc/thehive/keystore.p12`)
-> and its password (`HTTPS_KEYSTORE_PASSWORD`, created at lab start) are operator
-> secrets — recorded as metadata only with the value withheld (ADR-029).
+> and its password (`HTTPS_KEYSTORE_PASSWORD`, created at lab start) are also
+> scenario target content in this lab; the password is captured verbatim in
+> Docker/runtime evidence and the keystore is covered by filesystem metadata and
+> checksum evidence.
 
 ## Asset Summary
 
@@ -112,7 +114,8 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
   filesystem manifest (top-level rows only); application state is in
   `thehive-state.txt`.
 - `/etc/thehive/keystore.p12` (generated HTTPS keystore) and
-  `HTTPS_KEYSTORE_PASSWORD` are operator secrets — metadata/empty only (ADR-029).
+  `HTTPS_KEYSTORE_PASSWORD` are scenario target content; the password is captured
+  verbatim and the keystore file is covered by metadata and checksum evidence.
 - The Play application secret is a committed scenario fixture, kept verbatim on
   the container command.
 - TheHive uses local Lucene indexing (`index.search.backend = lucene`), not the

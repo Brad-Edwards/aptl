@@ -27,8 +27,8 @@ notes:
   expressivity gap remains for the catalogued shuffle-frontend steady-state facts.'
 - The frontend is nginx serving the pre-built React SPA and reverse-proxying /api/v1|v2 to shuffle-backend:5001 (relationships.shuffle-frontend-proxies-backend).
   HTTP/80 is published to the host as 3001:80 and HTTPS/443 as 3443:443 (the pre-#405 3001:3001 mapping published a container port with no listener and was corrected).
-- The nginx TLS private key (/etc/nginx/privkey.pem) is a generated operator secret — metadata only, content withheld (ADR-029).
-  The server certificate and lab CA are public.
+- The nginx TLS private key (/etc/nginx/privkey.pem) is generated scenario fixture content and is captured verbatim in
+  filesystem-sensitive-paths.txt and by checksum in filesystem-checksums.txt. The server certificate and lab CA are public.
 - Upstream nginx-image shell variable references in the history-derived build instruction strings were normalized from ${VAR}
   to $VAR to avoid collision with ACES ${...} variable placeholders (names and recipe meaning preserved).
 correspondence_checks:
@@ -68,13 +68,14 @@ correspondence_checks:
   ledger_fact_ids:
   - shuffle-frontend.relationship.proxies-backend
   - shuffle-frontend.runtime.service-listeners
-- id: shuffle-frontend-scope-and-redaction-caveats
+- id: shuffle-frontend-scope-and-secret-capture-caveats
   status: implemented
   source: docs/aces/inventory/shuffle-frontend/evidence/capture-limits.txt
-  method: README and tests assert non-destructive capture scope, the TLS private-key operator-secret exclusion, the nginx-worker
+  method: README and tests assert non-destructive capture scope, the TLS private-key scenario-fixture capture, the nginx-worker
     dedup, and unavailable osquery tables.
   realized_evidence:
   - path: evidence/capture-limits.txt
+  - path: evidence/filesystem-sensitive-paths.txt
   - path: evidence/osquery-installed-applications.json
   - path: evidence/osquery-programs.json
   - path: evidence/docker-top.txt
@@ -229,11 +230,12 @@ facts:
     rationale: Current ACES SDL node service_listeners + services carry the listener facts directly.
 - id: shuffle-frontend.runtime.mounts
   category: runtime
-  summary: 'Three ro cert binds: the nginx TLS server certificate (public), the nginx TLS private key (operator secret), and
+  summary: 'Three ro cert binds: the nginx TLS server certificate (public), the nginx TLS private key (scenario fixture), and
     the lab CA pem.'
   evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/runtime-baseline.txt
+  - path: evidence/filesystem-sensitive-paths.txt
   aces:
     disposition: encoded_with_caveat
     surface: nodes
@@ -242,8 +244,8 @@ facts:
     fields:
     - nodes.techvault.shuffle-frontend.runtime.mounts
     rationale: Current ACES SDL node runtime.mounts carries the cert/key/CA binds directly.
-    caveat: The nginx TLS private key (/etc/nginx/privkey.pem, lab-CA-signed, generated at lab start) is an operator secret
-      — recorded as path/metadata only in the filesystem manifest, excluded from checksums, content never emitted (ADR-029).
+    caveat: The nginx TLS private key (/etc/nginx/privkey.pem, lab-CA-signed, generated at lab start) is scenario fixture
+      content captured verbatim in filesystem-sensitive-paths.txt and by checksum in filesystem-checksums.txt.
 - id: shuffle-frontend.runtime.filesystem-inventory
   category: filesystem
   summary: The nginx config, the static React web root (/usr/share/nginx/html), the cert/CA inputs, and os-release are encoded
@@ -251,6 +253,7 @@ facts:
   evidence:
   - path: evidence/filesystem-tree.txt
   - path: evidence/filesystem-checksums.txt
+  - path: evidence/filesystem-sensitive-paths.txt
   - path: evidence/capture-limits.txt
   aces:
     disposition: encoded_with_caveat
@@ -260,7 +263,7 @@ facts:
     fields:
     - nodes.techvault.shuffle-frontend.runtime.filesystem_inventory
     rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
-    caveat: The nginx TLS private key is operator_secret metadata-only (content excluded from checksums).
+    caveat: The nginx TLS private key is scenario fixture content captured verbatim and by checksum.
 - id: shuffle-frontend.runtime.process-set
   category: runtime
   summary: PID 1 is the nginx master; the steady-state set is the master plus a pool of identical nginx worker processes (one

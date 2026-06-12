@@ -37,7 +37,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | TechVault profile | `soc` |
 | Source class | `local-custom-build-forwarding-agent-sidecar` |
 | Image | `aptl-wazuh-sidecar:local` (custom build from `containers/wazuh-sidecar/Dockerfile`; same image as `wazuh-sidecar-db`) |
-| Local image config ID | `aptl-wazuh-sidecar@sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3` |
+| Local image config ID | `aptl-wazuh-sidecar@sha256:1a9c99918f73a234721fe07ccafdcc6c49e1b3784a16ce86cdb2864636345d25` |
 | Base image | `debian:12-slim` |
 | Runtime OS | Debian GNU/Linux 12 (bookworm) |
 | Agent | wazuh-agent 4.12.0-1 (revision rc1, `WAZUH_TYPE=agent`) |
@@ -112,8 +112,9 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
   volume) mounted read-only; only the monitored log path is recorded here, the
   full log directory content is the suricata asset's inventory
   (`docs/aces/inventory/suricata/`).
-- `/var/ossec/etc/client.keys` (agent registration secret) and `/var/ossec/.ssh`
-  are path/metadata only; content withheld (ADR-029).
+- `/var/ossec/etc/client.keys` is an in-range Wazuh agent registration fixture
+  and is captured verbatim in `evidence/wazuh-agent-state.txt`; `/var/ossec/.ssh`
+  remains path/metadata only.
 - `ss`/`netstat` are not installed in the image; the no-network-listener fact is
   sourced from container-namespace osquery.
 - Syft CycloneDX normalized by stripping `syft:location:*` properties; filesystem

@@ -1389,7 +1389,7 @@ accounts:
     - Domain Users
     password_strength: strong
     auth_method: password
-    description: Built-in domain administrator fixture account; raw password redacted.
+    description: Built-in domain administrator fixture account; password Admin123!.
     mail: ''
     spn: ''
     shell: ''
@@ -1781,18 +1781,6 @@ accounts:
     password_strength: none
     auth_method: local
     description: systemd Core Dumper
-    mail: ''
-    spn: ''
-    shell: /sbin/nologin
-    home: /
-    disabled: true
-  workstation-local-dbus:
-    username: dbus
-    node: techvault.workstation
-    groups: []
-    password_strength: none
-    auth_method: local
-    description: System message bus
     mail: ''
     spn: ''
     shell: /sbin/nologin
@@ -2349,7 +2337,7 @@ accounts:
     groups: []
     password_strength: weak
     auth_method: password
-    description: MariaDB application role from MYSQL_USER=misp; password value is redacted in evidence and SDL.
+    description: MariaDB application role from MYSQL_USER=misp; password misp_db_password.
     mail: ''
     spn: ''
     shell: ''
@@ -2361,7 +2349,7 @@ accounts:
     groups: []
     password_strength: weak
     auth_method: password
-    description: MariaDB root role from MYSQL_ROOT_PASSWORD; password value is redacted in evidence and SDL.
+    description: MariaDB root role from MYSQL_ROOT_PASSWORD; password misp_root_password.
     mail: ''
     spn: ''
     shell: ''

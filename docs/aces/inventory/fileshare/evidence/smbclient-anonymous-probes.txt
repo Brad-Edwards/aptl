@@ -1,17 +1,17 @@
 --public-anonymous-listing--
-  .                                   D        0  Sat May 23 06:18:35 2026
-  ..                                  D        0  Sat May 23 06:18:35 2026
-  welcome.txt                         N      118  Sat May 23 06:18:35 2026
+  .                                   D        0  Thu Jun 11 16:00:23 2026
+  ..                                  D        0  Thu Jun 11 16:00:22 2026
+  welcome.txt                         N      118  Thu Jun 11 16:00:23 2026
 
-		978087024 blocks of size 1024. 647617536 blocks available
+		978087024 blocks of size 1024. 445492300 blocks available
 --shared-anonymous-listing--
-  .                                   D        0  Sat May 23 06:18:36 2026
-  ..                                  D        0  Sat May 23 06:18:35 2026
-  user-flag.txt                       N      210  Sat May 23 06:18:36 2026
-  meeting-notes-q3.txt                N      283  Sat May 23 06:18:35 2026
-  wifi-passwords.txt                  N      133  Sat May 23 06:18:35 2026
+  .                                   D        0  Thu Jun 11 16:00:24 2026
+  ..                                  D        0  Thu Jun 11 16:00:22 2026
+  user-flag.txt                       N      210  Thu Jun 11 16:00:24 2026
+  meeting-notes-q3.txt                N      283  Thu Jun 11 16:00:23 2026
+  wifi-passwords.txt                  N      133  Thu Jun 11 16:00:23 2026
 
-		978087024 blocks of size 1024. 647617516 blocks available
+		978087024 blocks of size 1024. 445492300 blocks available
 --engineering-anonymous-listing--
 tree connect failed: NT_STATUS_ACCESS_DENIED
 --finance-anonymous-listing--

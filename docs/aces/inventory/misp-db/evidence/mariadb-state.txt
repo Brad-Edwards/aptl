@@ -1,6 +1,6 @@
 --mariadb-version--
 version	version_comment	hostname	port	datadir	socket	log_error
-10.11.16-MariaDB-ubu2204	mariadb.org binary distribution	1574ba5c2bb2	3306	/var/lib/mysql/	/run/mysqld/mysqld.sock
+10.11.16-MariaDB-ubu2204	mariadb.org binary distribution	3c887f1f2f79	3306	/var/lib/mysql/	/run/mysqld/mysqld.sock
 --databases--
 Database
 information_schema
@@ -24,10 +24,10 @@ misp	admin_settings	BASE TABLE	InnoDB	6
 misp	allowedlist	BASE TABLE	InnoDB	0
 misp	analyst_data_blocklists	BASE TABLE	InnoDB	0
 misp	attachment_scans	BASE TABLE	InnoDB	0
-misp	attributes	BASE TABLE	InnoDB	0
+misp	attributes	BASE TABLE	InnoDB	6
 misp	attribute_tags	BASE TABLE	InnoDB	0
 misp	attr_value_counts	BASE TABLE	InnoDB	0
-misp	audit_logs	BASE TABLE	InnoDB	99824
+misp	audit_logs	BASE TABLE	InnoDB	107252
 misp	auth_keys	BASE TABLE	InnoDB	1
 misp	bookmarks	BASE TABLE	InnoDB	0
 misp	bruteforces	BASE TABLE	InnoDB	0
@@ -44,7 +44,7 @@ misp	dashboards	BASE TABLE	InnoDB	0
 misp	decaying_models	BASE TABLE	InnoDB	0
 misp	decaying_model_mappings	BASE TABLE	InnoDB	0
 misp	default_correlations	BASE TABLE	InnoDB	0
-misp	events	BASE TABLE	InnoDB	0
+misp	events	BASE TABLE	InnoDB	1
 misp	event_blocklists	BASE TABLE	InnoDB	0
 misp	event_delegations	BASE TABLE	InnoDB	0
 misp	event_graph	BASE TABLE	InnoDB	0
@@ -52,19 +52,19 @@ misp	event_locks	BASE TABLE	InnoDB	0
 misp	event_reports	BASE TABLE	InnoDB	0
 misp	event_report_tags	BASE TABLE	InnoDB	0
 misp	event_report_template_variables	BASE TABLE	InnoDB	0
-misp	event_tags	BASE TABLE	InnoDB	0
+misp	event_tags	BASE TABLE	InnoDB	2
 misp	favourite_tags	BASE TABLE	InnoDB	0
 misp	feeds	BASE TABLE	InnoDB	2
 misp	fuzzy_correlate_ssdeep	BASE TABLE	InnoDB	0
 misp	galaxies	BASE TABLE	InnoDB	112
-misp	galaxy_clusters	BASE TABLE	InnoDB	56341
+misp	galaxy_clusters	BASE TABLE	InnoDB	46890
 misp	galaxy_cluster_blocklists	BASE TABLE	InnoDB	0
-misp	galaxy_cluster_relations	BASE TABLE	InnoDB	59905
+misp	galaxy_cluster_relations	BASE TABLE	InnoDB	59876
 misp	galaxy_cluster_relation_tags	BASE TABLE	InnoDB	18934
-misp	galaxy_elements	BASE TABLE	InnoDB	321235
+misp	galaxy_elements	BASE TABLE	InnoDB	303547
 misp	inbox	BASE TABLE	InnoDB	0
-misp	jobs	BASE TABLE	InnoDB	126
-misp	logs	BASE TABLE	InnoDB	3935
+misp	jobs	BASE TABLE	InnoDB	18
+misp	logs	BASE TABLE	InnoDB	557
 misp	news	BASE TABLE	InnoDB	0
 misp	notes	BASE TABLE	InnoDB	0
 misp	noticelists	BASE TABLE	InnoDB	1
@@ -75,7 +75,7 @@ misp	objects	BASE TABLE	InnoDB	0
 misp	object_references	BASE TABLE	InnoDB	0
 misp	object_relationships	BASE TABLE	InnoDB	0
 misp	object_templates	BASE TABLE	InnoDB	388
-misp	object_template_elements	BASE TABLE	InnoDB	5523
+misp	object_template_elements	BASE TABLE	InnoDB	5506
 misp	opinions	BASE TABLE	InnoDB	0
 misp	organisations	BASE TABLE	InnoDB	1
 misp	org_blocklists	BASE TABLE	InnoDB	2
@@ -98,13 +98,13 @@ misp	sightingdb_orgs	BASE TABLE	InnoDB	0
 misp	sightings	BASE TABLE	InnoDB	0
 misp	sighting_blocklists	BASE TABLE	InnoDB	0
 misp	system_settings	BASE TABLE	InnoDB	0
-misp	tags	BASE TABLE	InnoDB	5
+misp	tags	BASE TABLE	InnoDB	7
 misp	tag_collections	BASE TABLE	InnoDB	0
 misp	tag_collection_tags	BASE TABLE	InnoDB	0
 misp	tasks	BASE TABLE	InnoDB	0
 misp	taxii_servers	BASE TABLE	InnoDB	0
 misp	taxonomies	BASE TABLE	InnoDB	165
-misp	taxonomy_entries	BASE TABLE	InnoDB	12986
+misp	taxonomy_entries	BASE TABLE	InnoDB	13407
 misp	taxonomy_predicates	BASE TABLE	InnoDB	1215
 misp	templates	BASE TABLE	InnoDB	4
 misp	template_elements	BASE TABLE	InnoDB	45
@@ -118,7 +118,7 @@ misp	users	BASE TABLE	InnoDB	1
 misp	user_login_profiles	BASE TABLE	InnoDB	0
 misp	user_settings	BASE TABLE	InnoDB	0
 misp	warninglists	BASE TABLE	InnoDB	122
-misp	warninglist_entries	BASE TABLE	InnoDB	2509058
+misp	warninglist_entries	BASE TABLE	InnoDB	2442246
 misp	warninglist_types	BASE TABLE	InnoDB	570
 misp	workflows	BASE TABLE	InnoDB	0
 misp	workflow_blueprints	BASE TABLE	InnoDB	0
@@ -135,7 +135,7 @@ mysql	help_keyword	BASE TABLE	Aria	106
 mysql	help_relation	BASE TABLE	Aria	201
 mysql	help_topic	BASE TABLE	Aria	833
 mysql	index_stats	BASE TABLE	Aria	0
-mysql	innodb_index_stats	BASE TABLE	InnoDB	1255
+mysql	innodb_index_stats	BASE TABLE	InnoDB	1514
 mysql	innodb_table_stats	BASE TABLE	InnoDB	104
 mysql	plugin	BASE TABLE	Aria	0
 mysql	proc	BASE TABLE	Aria	50
@@ -261,10 +261,10 @@ admin_settings	6
 allowedlist	0
 analyst_data_blocklists	0
 attachment_scans	0
-attributes	0
+attributes	6
 attribute_tags	0
 attr_value_counts	0
-audit_logs	99824
+audit_logs	107252
 auth_keys	1
 bookmarks	0
 bruteforces	0
@@ -281,7 +281,7 @@ dashboards	0
 decaying_models	0
 decaying_model_mappings	0
 default_correlations	0
-events	0
+events	1
 event_blocklists	0
 event_delegations	0
 event_graph	0
@@ -289,19 +289,19 @@ event_locks	0
 event_reports	0
 event_report_tags	0
 event_report_template_variables	0
-event_tags	0
+event_tags	2
 favourite_tags	0
 feeds	2
 fuzzy_correlate_ssdeep	0
 galaxies	112
-galaxy_clusters	56341
+galaxy_clusters	46890
 galaxy_cluster_blocklists	0
-galaxy_cluster_relations	59905
+galaxy_cluster_relations	59876
 galaxy_cluster_relation_tags	18934
-galaxy_elements	321235
+galaxy_elements	303547
 inbox	0
-jobs	126
-logs	3935
+jobs	18
+logs	557
 news	0
 notes	0
 noticelists	1
@@ -312,7 +312,7 @@ objects	0
 object_references	0
 object_relationships	0
 object_templates	388
-object_template_elements	5523
+object_template_elements	5506
 opinions	0
 organisations	1
 org_blocklists	2
@@ -335,13 +335,13 @@ sightingdb_orgs	0
 sightings	0
 sighting_blocklists	0
 system_settings	0
-tags	5
+tags	7
 tag_collections	0
 tag_collection_tags	0
 tasks	0
 taxii_servers	0
 taxonomies	165
-taxonomy_entries	12986
+taxonomy_entries	13407
 taxonomy_predicates	1215
 templates	4
 template_elements	45
@@ -355,7 +355,7 @@ users	1
 user_login_profiles	0
 user_settings	0
 warninglists	122
-warninglist_entries	2509058
+warninglist_entries	2442246
 warninglist_types	570
 workflows	0
 workflow_blueprints	0
@@ -366,7 +366,7 @@ character_set_server	utf8mb4
 collation_server	utf8mb4_general_ci
 datadir	/var/lib/mysql/
 general_log	OFF
-hostname	1574ba5c2bb2
+hostname	3c887f1f2f79
 log_error
 max_connections	151
 port	3306

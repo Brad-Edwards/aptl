@@ -44,11 +44,12 @@ SOURCE_INPUT_COUNT = 2
 
 REQUIRED_EVIDENCE_FILES = {'docker-top.txt', 'os-packages.txt', 'trivy-version.txt', 'docker-inspect.image.json', 'language-manifests.txt', 'docker-compose-version.json', 'docker-history.image.txt', 'osquery-installed-applications.json', 'docker-history.image.jsonl', 'trivy-vulnerability-list.json', 'mailserver-state.txt', 'participant-discovery.kali.txt', 'trivy-vulnerability-counts.json', 'captured-at-utc.txt', 'filesystem-tree.txt', 'compose-service.mailserver.json', 'docker-inspect.container.json', 'filesystem-checksums.txt', 'source-checksums.txt', 'docker-buildx-imagetools.image.txt', 'docker-network.aptl-dmz.json', 'osquery-programs.json', 'docker-network.aptl-internal.json', 'osquery-docker-images.json', 'docker-logs.mailserver.txt', 'docker-version.json', 'docker-volume.mailserver-state.json', 'runtime-baseline.txt', 'osquery-apt-sources.json', 'syft-sbom.cyclonedx.json.gz', 'osquery-processes.json', 'syft-version.json', 'evidence-sha256sums.txt', 'docker-volume.mailserver-data.json', 'docker-volume.mailserver-logs.json', 'docker-buildx-imagetools.image.raw.json', 'osquery-version.txt', 'osquery-docker-containers.json', 'osquery-listening-ports.json', 'trivy-sbom.cyclonedx.json.gz', 'capture-limits.txt'}
 
-RAW_SECRET_PATTERNS = (
-    r"TvMail2024!",
-    r"BEGIN .*PRIVATE KEY",
-    r"APTL\{",
-)
+SANDBOX_KEY = "/var/run/docker/netns/0e9fa7813d12"
+MAIL_LOG_SESSIONS = {
+    "654we9pSssmsFAEe",
+    "3iExe9pSusmsFAEe",
+    "N8E1fNpSxuSsFAEe",
+}
 
 
 def _json_file(name: str):
@@ -175,16 +176,14 @@ def test_mailserver_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_mailserver_evidence_does_not_commit_raw_secret_values():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
-    offenders = [
-        path.name
-        for path in EVIDENCE_DIR.iterdir()
-        if path.is_file()
-        and path.name not in {"filesystem-checksums.txt", "evidence-sha256sums.txt"}
-        and forbidden.search(_evidence_text(path))
-    ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+def test_mailserver_evidence_commits_runtime_values_without_placeholders():
+    inspect_data = _json_file("docker-inspect.container.json")[0]
+    logs = (EVIDENCE_DIR / "docker-logs.mailserver.txt").read_text(encoding="utf-8")
+
+    assert inspect_data["NetworkSettings"]["SandboxKey"] == SANDBOX_KEY
+    assert MAIL_LOG_SESSIONS <= set(re.findall(r"session=<([^>]+)>", logs))
+    assert "<REDACTED" not in logs
+    assert "<HTTP-COOKIE-VALUE-OMITTED>" not in logs
 
 
 def test_mailserver_runtime_evidence_counts_and_caveats():
@@ -251,8 +250,8 @@ def test_techvault_sdl_encodes_mailserver_inventory_surfaces():
     assert ssl_key_settings, "ssl_key setting must remain encoded under mail_services.settings"
     assert ssl_key_settings[0].value_classification == "secret_fixture", (
         "ACES #471 removed the secret-name value-omission rule: a secret-bearing "
-        "setting carries its real scenario value classified as secret_fixture, not "
-        "redacted. Every value in a synthetic-range SDL is authored scenario content."
+        "setting carries its real scenario value classified as secret_fixture, with "
+        "no capture-time placeholder. Every value in a synthetic-range SDL is authored scenario content."
     )
     assert ssl_key_settings[0].value == "/etc/ssl/private/ssl-cert-snakeoil.key", (
         "ssl_key carries the doveconf-reported key path verbatim; the value is the "

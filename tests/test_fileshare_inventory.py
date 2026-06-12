@@ -29,14 +29,30 @@ EVIDENCE_DIR = FILESHARE_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59"
+IMAGE_ID = "sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96"
 IMAGE_DIGEST = f"aptl-fileshare@{IMAGE_ID}"
-PACKAGE_COUNT = 235
-TRIVY_FINDING_COUNT = 120
-FILESYSTEM_ENTRY_COUNT = 32
+PACKAGE_COUNT = 247
+TRIVY_FINDING_COUNT = 132
+FILESYSTEM_ENTRY_COUNT = 33
 LOCAL_IDENTITY_USER_COUNT = 23
-LOCAL_IDENTITY_GROUP_COUNT = 46
+LOCAL_IDENTITY_GROUP_COUNT = 47
 LEDGER_FACT_COUNT = 23
+FILESHARE_SANDBOX_KEY = "/var/run/docker/netns/23bdaeee731c"
+FILESHARE_USER_FLAG = "APTL{user_fileshare_7d5d8d89e5e9df9af8d7937d3a75c618}"
+FILESHARE_ROOT_FLAG = "APTL{root_fileshare_6bd5c98703a205583127318782193af6}"
+FILESHARE_CLIENT_KEYS = "003 aptl-fileshare-agent any b20d4556e9c01eab57b5bab4771dd0f4fc449819e1d9c851d43c4ccf7807dd17"
+FILESHARE_DEPLOY_KEY_SHA256 = (
+    "824d3000d16d2a0a8982107ff0cf0b28ac12a97f0c628b0d6cbd8ac72dbce9b0"
+)
+FILESHARE_USER_FLAG_SHA256 = (
+    "e30d90d0cbcae561369c9a57aefa27fb26056b974b58fb0a2a95d843a2ece535"
+)
+FILESHARE_ROOT_FLAG_SHA256 = (
+    "6f4abd1d53d3539f8bd4dbafd9bc74415e61a2f6f1055db6cc0b7b9c89d3dc58"
+)
+FILESHARE_CLIENT_KEYS_SHA256 = (
+    "93779c006f1ac5556227b1d50a3d50c7e90e7a7793b785768f28191fb29e9d76"
+)
 
 REQUIRED_EVIDENCE_FILES = {
     "capture-limits.txt",
@@ -54,6 +70,7 @@ REQUIRED_EVIDENCE_FILES = {
     "docker-volume.fileshare-logs.json",
     "evidence-sha256sums.txt",
     "filesystem-checksums.txt",
+    "filesystem-sensitive-paths.txt",
     "filesystem-tree.txt",
     "language-manifests.txt",
     "os-packages.txt",
@@ -199,8 +216,7 @@ def test_fileshare_mapping_ledger_references_every_evidence_file():
     ledger = load_mapping_ledger(LEDGER_PATH)
     refs = set()
     refs.update(
-        ref["path"]
-        for ref in ledger["provenance"]["attestation"].get("evidence", [])
+        ref["path"] for ref in ledger["provenance"]["attestation"].get("evidence", [])
     )
     for check in ledger["correspondence_checks"]:
         refs.update(ref["path"] for ref in check.get("realized_evidence", []))
@@ -208,22 +224,59 @@ def test_fileshare_mapping_ledger_references_every_evidence_file():
         refs.update(ref["path"] for ref in fact["evidence"])
 
     evidence_files = {
-        f"evidence/{path.name}"
-        for path in EVIDENCE_DIR.iterdir()
-        if path.is_file()
+        f"evidence/{path.name}" for path in EVIDENCE_DIR.iterdir() if path.is_file()
     }
     assert evidence_files <= refs
 
 
-def test_fileshare_evidence_does_not_commit_generated_secret_material():
-    forbidden = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----|APTL\{|^Token:", re.MULTILINE)
+def test_fileshare_evidence_has_no_secret_suppression_placeholders():
+    forbidden = re.compile(
+        r"<REDACTED|<OMITTED|operator_secret|value withheld|content excluded",
+        re.IGNORECASE,
+    )
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file()
         and forbidden.search(path.read_text(encoding="utf-8", errors="ignore"))
     ]
-    assert not offenders, f"Generated secret material leaked into evidence: {offenders}"
+    assert not offenders, (
+        f"Evidence still contains secret suppression placeholders: {offenders}"
+    )
+
+
+def test_fileshare_evidence_commits_scenario_secret_material():
+    sensitive_paths = (EVIDENCE_DIR / "filesystem-sensitive-paths.txt").read_text(
+        encoding="utf-8"
+    )
+    filesystem_checksums = (EVIDENCE_DIR / "filesystem-checksums.txt").read_text(
+        encoding="utf-8"
+    )
+    share_checksums = (EVIDENCE_DIR / "share-checksums.txt").read_text(encoding="utf-8")
+
+    assert FILESHARE_USER_FLAG in sensitive_paths
+    assert FILESHARE_ROOT_FLAG in sensitive_paths
+    assert "-----BEGIN OPENSSH PRIVATE KEY-----" in sensitive_paths
+    assert FILESHARE_CLIENT_KEYS in sensitive_paths
+    assert "techvault_db_pass" in sensitive_paths
+    assert "Vault2024Secure" in sensitive_paths
+    assert (
+        f"{FILESHARE_DEPLOY_KEY_SHA256}  /srv/shares/it-backups/keys/deploy_key"
+        in filesystem_checksums
+    )
+    assert (
+        f"{FILESHARE_USER_FLAG_SHA256}  /srv/shares/shared/user-flag.txt"
+        in filesystem_checksums
+    )
+    assert (
+        f"{FILESHARE_USER_FLAG_SHA256}  /srv/shares/shared/user-flag.txt"
+        in share_checksums
+    )
+    assert f"{FILESHARE_ROOT_FLAG_SHA256}  /root/root.txt" in filesystem_checksums
+    assert (
+        f"{FILESHARE_CLIENT_KEYS_SHA256}  /var/ossec/etc/client.keys"
+        in filesystem_checksums
+    )
 
 
 def test_fileshare_container_runtime_state():
@@ -233,6 +286,7 @@ def test_fileshare_container_runtime_state():
     assert container["State"]["Health"]["Status"] == "healthy"
     assert container["Image"] == IMAGE_ID
     assert container["Config"]["Hostname"] == "files.techvault.local"
+    assert container["NetworkSettings"]["SandboxKey"] == FILESHARE_SANDBOX_KEY
     assert container["HostConfig"]["Memory"] == 536870912
     assert container["HostConfig"]["CapAdd"] == ["CAP_NET_ADMIN"]
     assert container["HostConfig"]["RestartPolicy"]["Name"] == "unless-stopped"
@@ -314,7 +368,7 @@ def test_fileshare_trivy_vulnerability_summary_matches_list():
 
     assert counts == dict(computed)
     assert sum(counts.values()) == len(vulnerabilities) == TRIVY_FINDING_COUNT
-    assert counts == {"LOW": 68, "MEDIUM": 52}
+    assert counts == {"HIGH": 1, "LOW": 78, "MEDIUM": 53}
     assert all(item["id"] for item in vulnerabilities)
     assert all(item["package_name"] for item in vulnerabilities)
 
@@ -387,7 +441,10 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert len(build["source_inputs"]) == 9
     assert len(build["copied_sources"]) == 8
     assert build["config"]["entrypoint"] == ["/opt/setup-shares.sh"]
-    services = {(service["port"], service["protocol"], service["name"]) for service in fileshare["services"]}
+    services = {
+        (service["port"], service["protocol"], service["name"])
+        for service in fileshare["services"]
+    }
     assert (139, "tcp", "netbios-ssn") in services
     assert (445, "tcp", "microsoft-ds") in services
 
@@ -412,7 +469,9 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
         "processes list previously omitted PID 1 entirely; the singular "
         "runtime.process field was the only encoding."
     )
-    supervisord_processes = [p for p in runtime["processes"] if p["name"] == "supervisord"]
+    supervisord_processes = [
+        p for p in runtime["processes"] if p["name"] == "supervisord"
+    ]
     assert len(supervisord_processes) == 1
     assert supervisord_processes[0]["pid"] == 1
     assert supervisord_processes[0]["role"] == "primary"
@@ -442,8 +501,7 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert shares["it-backups"]["valid_groups"] == ["group-it-admins"]
 
     principals = {
-        principal["principal_id"]: principal
-        for principal in file_service["principals"]
+        principal["principal_id"]: principal for principal in file_service["principals"]
     }
     assert principals["nobody"]["kind"] == "guest"
     assert principals["nobody"]["credential_classification"] == "no_credential"
@@ -460,7 +518,10 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert observations["svc-fileshare-engineering-list"]["outcome"] == "denied"
 
     filesystem = {entry["path"]: entry for entry in runtime["filesystem_inventory"]}
-    assert filesystem["/srv/shares/shared/user-flag.txt"]["sensitivity"] == "secret_fixture"
+    assert (
+        filesystem["/srv/shares/shared/user-flag.txt"]["sensitivity"]
+        == "secret_fixture"
+    )
     assert filesystem["/root/root.txt"]["mode"] == "0600"
     # The planted leaked SSH deploy key is now present (the image was missing
     # openssh-client, so the keygen previously silently no-oped).
@@ -468,14 +529,15 @@ def test_techvault_sdl_encodes_fileshare_inventory_surfaces():
     assert deploy_key["entry_type"] == "file"
     assert deploy_key["presence"] == "present"
     assert deploy_key["sensitivity"] == "secret_fixture"
-    assert deploy_key["mode"] == "0600"
+    assert deploy_key["mode"] == "0700"
     assert deploy_key["digest_algorithm"] == "sha256"
-    assert deploy_key["content_digest"] == (
-        "ef731cb1a6c3cd4cbeebb6d329f3e964ad681bb95d55ed8c50dae19c164b0563"
-    )
-    assert filesystem["/srv/shares/engineering/deployments/deploy.sh"]["content_digest"] == (
-        "4830319c1205cebdf51c139c0496f7e8ed27304acaafb8c4aa9b61f5bcade8e6"
-    )
+    assert deploy_key["content_digest"] == FILESHARE_DEPLOY_KEY_SHA256
+    client_keys = filesystem["/var/ossec/etc/client.keys"]
+    assert client_keys["sensitivity"] == "secret_fixture"
+    assert client_keys["content_digest"] == FILESHARE_CLIENT_KEYS_SHA256
+    assert filesystem["/srv/shares/engineering/deployments/deploy.sh"][
+        "content_digest"
+    ] == ("4830319c1205cebdf51c139c0496f7e8ed27304acaafb8c4aa9b61f5bcade8e6")
 
 
 def test_techvault_sdl_parses_and_compiles_with_fileshare_runtime_fields():
@@ -511,8 +573,14 @@ def test_fileshare_sdl_filesystem_inventory_matches_evidence_paths():
         entry["path"]: entry
         for entry in data["nodes"]["fileshare"]["runtime"]["filesystem_inventory"]
     }
-    for line in (EVIDENCE_DIR / "filesystem-tree.txt").read_text(encoding="utf-8").splitlines():
-        path = line.split(" ", 1)[1] if line.startswith("MISSING ") else line.split(" ", 6)[6]
+    for line in (
+        (EVIDENCE_DIR / "filesystem-tree.txt").read_text(encoding="utf-8").splitlines()
+    ):
+        path = (
+            line.split(" ", 1)[1]
+            if line.startswith("MISSING ")
+            else line.split(" ", 6)[6]
+        )
         assert path in encoded
 
 
@@ -526,7 +594,8 @@ def test_fileshare_runtime_local_identity_matches_passwd_and_group_evidence():
     assert len(encoded_groups) == len(_runtime_baseline_section("groups"))
     assert encoded_users["svc-fileshare"]["uid"] == 1000
     assert encoded_users["wazuh"]["home"] == "/var/ossec"
-    assert encoded_groups["sambashare"]["gid"] == 105
+    assert encoded_groups["_ssh"]["gid"] == 105
+    assert encoded_groups["sambashare"]["gid"] == 106
     assert local_identity["sudo_rules"] == []
 
 
@@ -539,7 +608,9 @@ def test_techvault_sdl_fileshare_content_accounts_relationships_and_parity():
     rows = {row["id"]: row for row in parity["rows"]}
 
     assert "fileshare-file-etc-samba-smb-conf" in content
-    assert content["fileshare-file-srv-shares-shared-user-flag-txt"]["sensitive"] is True
+    assert (
+        content["fileshare-file-srv-shares-shared-user-flag-txt"]["sensitive"] is True
+    )
     assert "fileshare-samba-svc-fileshare" not in accounts
     assert accounts["fileshare-local-svc-fileshare"]["disabled"] is False
     forward = relationships["fileshare-forwards-wazuh"]
@@ -562,7 +633,9 @@ def test_techvault_sdl_fileshare_content_accounts_relationships_and_parity():
     fs_agent = forwarding_agents["fileshare-wazuh-agent"]
     assert fs_agent["implementation"] == "wazuh_agent"
     assert fs_agent["agent_kind"] == "log_forwarder"
-    assert fs_agent["buffer_policy"]["buffer_policy_id"] == "fileshare-wazuh-agent-buffer"
+    assert (
+        fs_agent["buffer_policy"]["buffer_policy_id"] == "fileshare-wazuh-agent-buffer"
+    )
     assert 1514 in {target["ingestion_port"] for target in fs_agent["ship_targets"]}
 
     assert rows["scen.techvault.fileshare-inventory"]["category"] == "aces_sdl"

@@ -43,15 +43,16 @@ replacement for ADR-035 or the ACES asset-inventorying methodology.
 - ACES SDL authority: sibling `../aces-sdl` parser/model documentation and
   the closed ACES #354 runtime-surface gap. Do not parse
   `techvault.sdl.yaml` with `aptl.core.sdl`.
-- Secret and evidence safety: ADR-029, `aptl.utils.redaction`, the existing
-  test pattern that blocks raw secret assignments, and redacted evidence files.
+- Scenario evidence handling: authored TechVault fixture values are captured
+  verbatim as scenario content, while non-scenario operator/control-plane
+  material is excluded with an explicit capture limit.
 
 ## Security And Validation Gates
 
-- Evidence committed to git must redact operator/control-plane secrets. The
-  webapp's intentional participant-visible fixture secrets are allowed only
-  when they are scenario facts already present in checked-in source or Compose
-  configuration.
+- Evidence committed to git must preserve participant-visible scenario facts
+  exactly. Operator/control-plane material outside the scenario target is out
+  of capture scope and must be recorded as a limit rather than transformed in
+  the evidence.
 - Runtime evidence must cite the command/source that produced each claim:
   Docker inspect/history/network/volume/top, in-container runtime baseline,
   package manifests, filesystem hashes, and scanner output when available.

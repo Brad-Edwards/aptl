@@ -308,9 +308,9 @@ features:
     - MYSQL_HOST=misp-db
     - MYSQL_DATABASE=misp
     - MYSQL_USER=misp
-    - MYSQL_PASSWORD=<redacted>
+    - MYSQL_PASSWORD=misp_db_password
     - REDIS_HOST=misp-redis
-    - ADMIN_KEY=<redacted>
+    - ADMIN_KEY=JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw
   techvault-misp-db-service:
     name: ''
     type: service
@@ -325,5 +325,5 @@ features:
     environment:
     - MYSQL_DATABASE=misp
     - MYSQL_USER=misp
-    - MYSQL_PASSWORD=<redacted>
-    - MYSQL_ROOT_PASSWORD=<redacted>
+    - MYSQL_PASSWORD=misp_db_password
+    - MYSQL_ROOT_PASSWORD=misp_root_password

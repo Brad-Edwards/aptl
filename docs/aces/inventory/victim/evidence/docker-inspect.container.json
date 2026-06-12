@@ -1,7 +1,7 @@
 [
   {
-    "Id": "a9701bcb6a262e1e16fcb5250c31fbdccacdc56c2f5c495f992ac4f01ec4daba",
-    "Created": "2026-05-23T06:18:32.822790182Z",
+    "Id": "7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691",
+    "Created": "2026-06-11T16:00:20.010123573Z",
     "Path": "/usr/local/bin/entrypoint.sh",
     "Args": [
       "/usr/sbin/init"
@@ -13,53 +13,53 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2966186,
+      "Pid": 812698,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:19:17.845806843Z",
+      "StartedAt": "2026-06-11T16:00:59.748331157Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-05-28T08:09:02.496148253+02:00",
-            "End": "2026-05-28T08:09:02.559245192+02:00",
+            "Start": "2026-06-12T12:42:15.85496186+02:00",
+            "End": "2026-06-12T12:42:15.910355647+02:00",
             "ExitCode": 0,
             "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
           },
           {
-            "Start": "2026-05-28T08:09:17.560219035+02:00",
-            "End": "2026-05-28T08:09:17.62364238+02:00",
+            "Start": "2026-06-12T12:42:30.911744751+02:00",
+            "End": "2026-06-12T12:42:30.971435552+02:00",
             "ExitCode": 0,
             "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
           },
           {
-            "Start": "2026-05-28T08:09:32.624069163+02:00",
-            "End": "2026-05-28T08:09:32.687525109+02:00",
+            "Start": "2026-06-12T12:42:45.972288071+02:00",
+            "End": "2026-06-12T12:42:46.021192052+02:00",
             "ExitCode": 0,
             "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
           },
           {
-            "Start": "2026-05-28T08:09:47.688125715+02:00",
-            "End": "2026-05-28T08:09:47.734458822+02:00",
+            "Start": "2026-06-12T12:43:01.022068752+02:00",
+            "End": "2026-06-12T12:43:01.083333694+02:00",
             "ExitCode": 0,
             "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
           },
           {
-            "Start": "2026-05-28T08:10:02.735712075+02:00",
-            "End": "2026-05-28T08:10:02.810312292+02:00",
+            "Start": "2026-06-12T12:43:16.083806495+02:00",
+            "End": "2026-06-12T12:43:16.137870939+02:00",
             "ExitCode": 0,
             "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
           }
         ]
       }
     },
-    "Image": "sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310",
-    "ResolvConfPath": "/var/lib/docker/containers/a9701bcb6a262e1e16fcb5250c31fbdccacdc56c2f5c495f992ac4f01ec4daba/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/a9701bcb6a262e1e16fcb5250c31fbdccacdc56c2f5c495f992ac4f01ec4daba/hostname",
-    "HostsPath": "/var/lib/docker/containers/a9701bcb6a262e1e16fcb5250c31fbdccacdc56c2f5c495f992ac4f01ec4daba/hosts",
-    "LogPath": "/var/lib/docker/containers/a9701bcb6a262e1e16fcb5250c31fbdccacdc56c2f5c495f992ac4f01ec4daba/a9701bcb6a262e1e16fcb5250c31fbdccacdc56c2f5c495f992ac4f01ec4daba-json.log",
+    "Image": "sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f",
+    "ResolvConfPath": "/var/lib/docker/containers/7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691/hostname",
+    "HostsPath": "/var/lib/docker/containers/7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691/hosts",
+    "LogPath": "/var/lib/docker/containers/7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691/7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691-json.log",
     "Name": "/aptl-victim",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -70,9 +70,9 @@
     "ExecIDs": null,
     "HostConfig": {
       "Binds": [
+        "aptl_victim_logs:/var/log:rw",
         "/sys/fs/cgroup:/sys/fs/cgroup:rw",
-        "/home/atomik/src/aptl/keys:/keys:ro",
-        "aptl_victim_logs:/var/log:rw"
+        "/home/atomik/src/aptl/keys:/keys:ro"
       ],
       "ContainerIDFile": "",
       "LogConfig": {
@@ -184,6 +184,26 @@
     },
     "Mounts": [
       {
+        "Type": "volume",
+        "Name": "f1a0e708d96316ca80e6970ef2986dfd2f56427ecab224ee0c5b5cbc984e2a85",
+        "Source": "/var/lib/docker/volumes/f1a0e708d96316ca80e6970ef2986dfd2f56427ecab224ee0c5b5cbc984e2a85/_data",
+        "Destination": "/home",
+        "Driver": "local",
+        "Mode": "",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_victim_logs",
+        "Source": "/var/lib/docker/volumes/aptl_victim_logs/_data",
+        "Destination": "/var/log",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
         "Type": "bind",
         "Source": "/sys/fs/cgroup",
         "Destination": "/sys/fs/cgroup",
@@ -198,26 +218,6 @@
         "Mode": "ro",
         "RW": false,
         "Propagation": "rprivate"
-      },
-      {
-        "Type": "volume",
-        "Name": "aptl_victim_logs",
-        "Source": "/var/lib/docker/volumes/aptl_victim_logs/_data",
-        "Destination": "/var/log",
-        "Driver": "local",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": ""
-      },
-      {
-        "Type": "volume",
-        "Name": "b618dcbafb023c994143804867b7097205f369c43cf87ea21869a3e290237428",
-        "Source": "/var/lib/docker/volumes/b618dcbafb023c994143804867b7097205f369c43cf87ea21869a3e290237428/_data",
-        "Destination": "/home",
-        "Driver": "local",
-        "Mode": "",
-        "RW": true,
-        "Propagation": ""
       }
     ],
     "Config": {
@@ -235,8 +235,8 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub",
         "SIEM_IP=172.20.2.30",
+        "LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "INSTALL_WAZUH=true",
         "INSTALL_FALCO=true",
@@ -268,7 +268,7 @@
         "com.docker.compose.config-hash": "5e64ef51a3879de413c8c18fc1cde943afe9be04ee3fa04dac9827dcf5174bcb",
         "com.docker.compose.container-number": "1",
         "com.docker.compose.depends_on": "wazuh.manager:service_healthy:false",
-        "com.docker.compose.image": "sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310",
+        "com.docker.compose.image": "sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
         "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
@@ -278,8 +278,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "30497481a4f7c06a909cdc02704fc665bac066c689ac4141c58aaf54335d13da",
-      "SandboxKey": "/var/run/docker/netns/30497481a4f7",
+      "SandboxID": "a06965997b83d1426de1868b974447e4091c1391f90fd48de76808f2db3d0008",
+      "SandboxKey": "/var/run/docker/netns/a06965997b83",
       "Ports": {
         "22/tcp": null,
         "514/tcp": null
@@ -297,10 +297,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
-          "EndpointID": "4a235d56c902f72aa27b64c760ca95670e4014ba7823f0286262baeda6e31d26",
+          "EndpointID": "13eaa548e14a12ca2d6673206329bc165d545c2868f2cc13c8c42d502c78da34",
           "Gateway": "",
           "IPAddress": "172.20.2.20",
-          "MacAddress": "56:88:c2:77:b1:02",
+          "MacAddress": "d6:9c:ac:f8:6a:c7",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -308,7 +308,7 @@
           "DNSNames": [
             "aptl-victim",
             "victim",
-            "a9701bcb6a26",
+            "7ed4af3e0aa0",
             "app.techvault.local"
           ]
         }

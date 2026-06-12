@@ -7,15 +7,7 @@
   "rows": [
     {
       "address": "",
-      "path": "queue/sockets/logcollector",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/com",
+      "path": "queue/sockets/syscheck",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -31,7 +23,7 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/queue",
+      "path": "queue/sockets/com",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -39,7 +31,7 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/syscheck",
+      "path": "queue/sockets/queue",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -55,7 +47,7 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/com",
+      "path": "queue/sockets/syscheck",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -71,6 +63,14 @@
     },
     {
       "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
       "path": "queue/sockets/queue",
       "pid": "-1",
       "port": "0",
@@ -79,16 +79,8 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/syscheck",
+      "path": "queue/sockets/logcollector",
       "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/wmodules",
-      "pid": "101",
       "port": "0",
       "protocol": "0",
       "socket": "0"
@@ -96,15 +88,7 @@
     {
       "address": "",
       "path": "queue/sockets/upgrade",
-      "pid": "101",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/control",
-      "pid": "101",
+      "pid": "98",
       "port": "0",
       "protocol": "0",
       "socket": "0"
@@ -112,15 +96,7 @@
     {
       "address": "",
       "path": "queue/sockets/wmodules",
-      "pid": "101",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/upgrade",
-      "pid": "101",
+      "pid": "98",
       "port": "0",
       "protocol": "0",
       "socket": "0"
@@ -128,7 +104,31 @@
     {
       "address": "",
       "path": "queue/sockets/control",
-      "pid": "101",
+      "pid": "98",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/upgrade",
+      "pid": "98",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/wmodules",
+      "pid": "98",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/control",
+      "pid": "98",
       "port": "0",
       "protocol": "0",
       "socket": "0"
@@ -137,33 +137,33 @@
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "33157",
-      "protocol": "6",
-      "socket": "170307351"
-    },
-    {
-      "address": "127.0.0.11",
-      "path": "",
-      "pid": "-1",
-      "port": "33157",
-      "protocol": "6",
-      "socket": "170307351"
-    },
-    {
-      "address": "127.0.0.11",
-      "path": "",
-      "pid": "-1",
-      "port": "46686",
+      "port": "35663",
       "protocol": "17",
-      "socket": "170307350"
+      "socket": "637317465"
     },
     {
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "46686",
+      "port": "35663",
       "protocol": "17",
-      "socket": "170307350"
+      "socket": "637317465"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "43959",
+      "protocol": "6",
+      "socket": "637317466"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "43959",
+      "protocol": "6",
+      "socket": "637317466"
     }
   ]
 }

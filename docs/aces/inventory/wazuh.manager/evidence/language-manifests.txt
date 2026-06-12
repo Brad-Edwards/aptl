@@ -4,7 +4,7 @@ Python 3.10.15
 Cython==0.29.36
 Jinja2==3.1.4
 MarkupSafe==2.1.2
-PyJWT=<REDACTED>
+PyJWT==2.8.0
 PyYAML==5.4.1
 SQLAlchemy==2.0.23
 Werkzeug==3.1.3

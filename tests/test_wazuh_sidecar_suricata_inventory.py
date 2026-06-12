@@ -29,11 +29,11 @@ EVIDENCE_DIR = ASSET_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3"
-IMAGE_DIGEST = "aptl-wazuh-sidecar@sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3"
+IMAGE_ID = "sha256:1a9c99918f73a234721fe07ccafdcc6c49e1b3784a16ce86cdb2864636345d25"
+IMAGE_DIGEST = "aptl-wazuh-sidecar@sha256:1a9c99918f73a234721fe07ccafdcc6c49e1b3784a16ce86cdb2864636345d25"
 RUNTIME_PACKAGE_COUNT = 114
-TRIVY_FINDING_COUNT = 194
-FILESYSTEM_TREE_ROW_COUNT = 218
+TRIVY_FINDING_COUNT = 165
+FILESYSTEM_TREE_ROW_COUNT = 200
 FILESYSTEM_CHECKSUM_COUNT = 113
 SDL_FILESYSTEM_ENTRY_COUNT = 22
 LOCAL_IDENTITY_USER_COUNT = 19
@@ -256,9 +256,12 @@ def test_wazuh_sidecar_suricata_evidence_does_not_commit_raw_secret_values():
         if path.is_file() and forbidden.search(_evidence_text(path))
     ]
     assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
-    # The agent registration secret is recorded as metadata only.
+    # The in-range agent registration fixture is captured verbatim.
     agent_state = (EVIDENCE_DIR / "wazuh-agent-state.txt").read_text(encoding="utf-8")
-    assert "content withheld" in agent_state
+    assert (
+        "005 aptl-suricata-agent any "
+        "ab7796c5102c0338e4d3be3f3879768aac155b662c2699b5e743382a41d71376"
+    ) in agent_state
 
 
 def test_wazuh_sidecar_suricata_runtime_evidence_counts():
@@ -282,7 +285,7 @@ def test_wazuh_sidecar_suricata_runtime_evidence_counts():
 
 def test_wazuh_sidecar_suricata_trivy_counts_match_severity_breakdown():
     counts = {row["severity"]: row["count"] for row in _json_file("trivy-vulnerability-counts.json")}
-    assert counts == {"CRITICAL": 5, "HIGH": 17, "MEDIUM": 71, "LOW": 98, "UNKNOWN": 3}
+    assert counts == {"CRITICAL": 3, "HIGH": 12, "MEDIUM": 60, "LOW": 85, "UNKNOWN": 5}
     assert sum(counts.values()) == TRIVY_FINDING_COUNT
 
 
@@ -360,9 +363,9 @@ def test_techvault_sdl_encodes_wazuh_sidecar_suricata_node(legacy_scenario):
     fs = {entry["path"]: entry for entry in runtime["filesystem_inventory"]}
     assert fs["/logs/eve.json"]["stability"] == "log"
     assert fs["/var/ossec/etc/client.keys"]["sensitivity"] == "secret_fixture"
-    # Registration key content is withheld (ADR-029): no digest recorded
-    # (the legacy loader normalizes the absent field to an empty string).
-    assert not fs["/var/ossec/etc/client.keys"].get("content_digest")
+    assert fs["/var/ossec/etc/client.keys"]["content_digest"] == (
+        "175fb59eb770e611c4f2120f3b5af2fba07268c8bc1d148beec96036337422e4"
+    )
     assert "/var/ossec/queue/rids/006" in fs
 
 

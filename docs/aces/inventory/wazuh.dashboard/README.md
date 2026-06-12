@@ -44,7 +44,7 @@ This capture is non-destructive. It used the existing running lab as authorized 
 - The realized runtime OS is Amazon Linux 2023. The image does not include `find`, `tar`, `ps`, `ss`, `netstat`, `ip`, or `mount`, so runtime evidence combines Docker inspect/network records, `docker top`, osquery namespace sharing, `/proc/net/*` fallback, and host-side `docker export` rootfs capture. The full compressed filesystem manifests are chunked as `filesystem-tree.txt.gz.part-*` and `filesystem-checksums.txt.xz.part-*` so the evidence remains complete while each committed file stays below the repository large-file gate.
 - The dashboard reports OpenSearch Dashboards 2.19.1 and Wazuh dashboard 4.12.0 rc1. The Wazuh plugin package reports revision `03` and uses the default route `/app/wz-home`.
 - The HTTPS listener is bound on container TCP 5601 and host-published on TCP 443. Unauthenticated `/api/status` returns HTTP 401 JSON; unauthenticated `/` redirects to `/app/login?`.
-- Wazuh API, indexer, and dashboard fixture credential values required by the TechVault range are retained in the Compose, runtime, configuration, and SDL evidence. The unauthenticated HTTP probe omits transient authorization and cookie header values only.
+- Wazuh API, indexer, and dashboard fixture credential values required by the TechVault range are retained in the Compose, runtime, configuration, and SDL evidence. The unauthenticated HTTP probe retains response headers and transient cookie values exactly as observed.
 
 ## ACES Mapping Result
 
@@ -65,4 +65,4 @@ uv run aptl aces-inventory gaps docs/aces/inventory/wazuh.dashboard
 - The capture does not prove byte-identical rebuildability or full root filesystem equivalence.
 - Vulnerability results are time-sensitive to the Trivy database and advisory feeds.
 - osquery `apt_sources`, `installed_applications`, and `programs` were not applicable or unavailable in the digest-pinned Linux osquery scanner image.
-- Transient HTTP authorization and cookie header values from the unauthenticated probe are omitted from committed evidence; scenario fixture credentials and private-key source checksums are retained as captured range facts.
+- HTTP response headers, transient cookie values, scenario fixture credentials, and private-key source checksums are retained as captured range facts.

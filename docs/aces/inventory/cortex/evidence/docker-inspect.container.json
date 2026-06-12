@@ -21,32 +21,32 @@
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-06-11T18:06:22.565129868+02:00",
-            "End": "2026-06-11T18:06:22.63732716+02:00",
+            "Start": "2026-06-12T15:16:15.507272723+02:00",
+            "End": "2026-06-12T15:16:15.559115166+02:00",
             "ExitCode": 0,
             "Output": "{\"versions\":{\"Cortex\":\"3.1.8-1\",\"Elastic4Play\":\"1.13.6\",\"Play\":\"2.8.19\",\"Elastic4s\":\"7.17.2\",\"ElasticSearch client\":\"7.17.1\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\"],\"ssoAutoLogin\":false}}"
           },
           {
-            "Start": "2026-06-11T18:06:52.638189794+02:00",
-            "End": "2026-06-11T18:06:52.695335981+02:00",
+            "Start": "2026-06-12T15:16:45.560016023+02:00",
+            "End": "2026-06-12T15:16:45.612361785+02:00",
             "ExitCode": 0,
             "Output": "{\"versions\":{\"Cortex\":\"3.1.8-1\",\"Elastic4Play\":\"1.13.6\",\"Play\":\"2.8.19\",\"Elastic4s\":\"7.17.2\",\"ElasticSearch client\":\"7.17.1\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\"],\"ssoAutoLogin\":false}}"
           },
           {
-            "Start": "2026-06-11T18:07:22.695970373+02:00",
-            "End": "2026-06-11T18:07:22.757343795+02:00",
+            "Start": "2026-06-12T15:17:15.613731978+02:00",
+            "End": "2026-06-12T15:17:15.675888559+02:00",
             "ExitCode": 0,
             "Output": "{\"versions\":{\"Cortex\":\"3.1.8-1\",\"Elastic4Play\":\"1.13.6\",\"Play\":\"2.8.19\",\"Elastic4s\":\"7.17.2\",\"ElasticSearch client\":\"7.17.1\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\"],\"ssoAutoLogin\":false}}"
           },
           {
-            "Start": "2026-06-11T18:07:52.758714825+02:00",
-            "End": "2026-06-11T18:07:52.816504476+02:00",
+            "Start": "2026-06-12T15:17:45.676923262+02:00",
+            "End": "2026-06-12T15:17:45.726399884+02:00",
             "ExitCode": 0,
             "Output": "{\"versions\":{\"Cortex\":\"3.1.8-1\",\"Elastic4Play\":\"1.13.6\",\"Play\":\"2.8.19\",\"Elastic4s\":\"7.17.2\",\"ElasticSearch client\":\"7.17.1\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\"],\"ssoAutoLogin\":false}}"
           },
           {
-            "Start": "2026-06-11T18:08:22.817932742+02:00",
-            "End": "2026-06-11T18:08:22.87446969+02:00",
+            "Start": "2026-06-12T15:18:15.727360524+02:00",
+            "End": "2026-06-12T15:18:15.78314507+02:00",
             "ExitCode": 0,
             "Output": "{\"versions\":{\"Cortex\":\"3.1.8-1\",\"Elastic4Play\":\"1.13.6\",\"Play\":\"2.8.19\",\"Elastic4s\":\"7.17.2\",\"ElasticSearch client\":\"7.17.1\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\"],\"ssoAutoLogin\":false}}"
           }
@@ -278,7 +278,7 @@
     },
     "NetworkSettings": {
       "SandboxID": "7111d1e47e2f590dd444ed0aa21c926b57f8965d630454b9e2e0abb7ac0ebb49",
-      "SandboxKey": "<REDACTED>",
+      "SandboxKey": "/var/run/docker/netns/7111d1e47e2f",
       "Ports": {
         "9001/tcp": [
           {

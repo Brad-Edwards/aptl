@@ -8,11 +8,11 @@
 35579f1c69c77a4792da5bccb15dc9feb0d1c623ba9c7df14cb7922ec113c301  /opt/aptl/wazuh/ossec.conf.template
 0b0b2b8ba176edeeb37594acd2c5b4fca062b5d20b906c6b8581be8fcf97ac84  /opt/aptl/wazuh/wazuh-agent.sh
 0b0b2b8ba176edeeb37594acd2c5b4fca062b5d20b906c6b8581be8fcf97ac84  /opt/aptl/wazuh/wazuh-agent.sh
-f6f1edb193e9d5385591e4fcdc838c1971de47bf93eb18251cd0b5db35773065  /opt/flags/user.txt
-f6f1edb193e9d5385591e4fcdc838c1971de47bf93eb18251cd0b5db35773065  /opt/flags/user.txt
+14b992b7ca9adf7327fbe5ba5639d2409809e48ed5c6c3910d3db8999808e71a  /opt/flags/user.txt
+14b992b7ca9adf7327fbe5ba5639d2409809e48ed5c6c3910d3db8999808e71a  /opt/flags/user.txt
 df9bbc5f65dfa47eac50dbe0e440f1de6f55323cd4b55c10d9853581f5749904  /opt/provision-users.sh
 ecdc6988e165a3f738b4348c443f2eac3f8d0ec580bc22b54adaa5b3a272835e  /opt/setup-ad.sh
-02215db800cf22a15d835067d44c148b71bbceeae4b3a0f414f37567eb9f51c3  /root/root.txt
+298395b76788c8f199a6ebf47cdafbef1eb5007ed3ba5937c78189806518d91e  /root/root.txt
 3a2bce4f3f2b44d3612339ec8d23b0a962ade176cb0fafa069d46862bbaefa1e  /var/lib/samba/account_policy.tdb
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /var/lib/samba/private/.provisioned
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /var/lib/samba/private/dns_update_cache

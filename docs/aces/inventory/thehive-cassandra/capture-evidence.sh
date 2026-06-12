@@ -17,7 +17,7 @@ ASSET_DIR="$ROOT/docs/aces/inventory/thehive-cassandra"
 OUT="$ASSET_DIR/evidence"
 CONTAINER="${CONTAINER:-aptl-thehive-cassandra}"
 IMAGE="${IMAGE:-cassandra:4.1}"
-CONTAINER_IP="${CONTAINER_IP:-172.20.0.5}"
+CONTAINER_IP="${CONTAINER_IP:-172.20.0.4}"
 
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -38,40 +38,6 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)=([^[:space:]]+)/\1=<REDACTED>/Ig'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|key|cookie|session|private_key|api_key|jwt)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -80,35 +46,16 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 # The thehive-cassandra compose block is extracted directly from
 # docker-compose.yml with yq. A profile-filtered `docker compose config`
 # cannot be used because the soc profile pulls in services that depend_on
-# wazuh.manager and profile filtering invalidates the project. The env
-# redaction rule is applied uniformly to the environment array.
-yq -o=json '.services."thehive-cassandra"' "$ROOT/docker-compose.yml" \
-  | jq '
-      if (has("environment") and (.environment | type == "array")) then
-        .environment |= map(
-          if test("^(?<name>[^=]+)=") then
-            capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-            | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i"))
-              then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-              else .
-              end
-          else
-            .
-          end
-        )
-      else . end
-    ' > "$OUT/compose-service.thehive-cassandra.json"
+# wazuh.manager and profile filtering invalidates the project.
+yq -o=json '.services."thehive-cassandra"' "$ROOT/docker-compose.yml" | jq . > "$OUT/compose-service.thehive-cassandra.json"
 record_limit "compose-service.thehive-cassandra.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project."
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+  | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -121,8 +68,8 @@ fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_thehive_cassandra_data | jq . > "$OUT/docker-volume.thehive_cassandra_data.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.thehive-cassandra.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 > "$OUT/docker-logs.thehive-cassandra.txt"
 
 record_limit "Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof."
 record_limit "thehive_cassandra_data volume contents (/var/lib/cassandra: commitlog, data, hints, saved_caches) are runtime database state and out of manifest scope; only top-level directory rows are recorded in filesystem-tree.txt.gz. Schema-level database state is captured in cassandra-state.txt instead."
@@ -144,7 +91,7 @@ docker exec "$CONTAINER" sh -lc "dpkg-query -W -f='\${binary:Package}\t\${Versio
   printf "%s\n" "--java-home--"
   docker exec "$CONTAINER" sh -lc 'command -v java && readlink -f "$(command -v java)"' 2>&1 || true
   printf "%s\n" "--cassandra-version--"
-  docker exec "$CONTAINER" sh -lc 'cassandra -v 2>/dev/null || nodetool version' 2>&1 || true
+  docker exec "$CONTAINER" sh -lc '/opt/cassandra/bin/cassandra -v 2>/dev/null || /opt/cassandra/bin/nodetool version' 2>&1 || true
   printf "%s\n" "--python-cqlsh-runtime--"
   docker exec "$CONTAINER" sh -lc 'python3 --version 2>&1; head -1 /opt/cassandra/bin/cqlsh' 2>&1 || true
   printf "%s\n" "--pip-npm-presence--"
@@ -220,30 +167,30 @@ docker exec "$CONTAINER" sh -lc '
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 # Service-specific state: cluster membership, node info, CQL-visible cluster
 # identity and keyspaces.
 {
   printf "%s\n" --nodetool-status--
-  docker exec "$CONTAINER" nodetool status 2>&1 || true
-  printf "%s\n" --nodetool-info--
-  docker exec "$CONTAINER" nodetool info 2>&1 | sed -n "1,30p" || true
-  printf "%s\n" --cqlsh-describe-cluster--
-  docker exec "$CONTAINER" cqlsh -e "describe cluster" 2>&1 || true
-  printf "%s\n" --cqlsh-describe-keyspaces--
-  docker exec "$CONTAINER" cqlsh -e "describe keyspaces" 2>&1 || true
-  printf "%s\n" --cqlsh-system-local--
-  docker exec "$CONTAINER" cqlsh -e "SELECT cluster_name, release_version FROM system.local;" 2>&1 || true
-} | redact_stream > "$OUT/cassandra-state.txt"
+	  docker exec "$CONTAINER" /opt/cassandra/bin/nodetool status 2>&1 || true
+	  printf "%s\n" --nodetool-info--
+	  docker exec "$CONTAINER" /opt/cassandra/bin/nodetool info 2>&1 | sed -n "1,30p" || true
+	  printf "%s\n" --cqlsh-describe-cluster--
+	  docker exec "$CONTAINER" /opt/cassandra/bin/cqlsh -e "describe cluster" 2>&1 || true
+	  printf "%s\n" --cqlsh-describe-keyspaces--
+	  docker exec "$CONTAINER" /opt/cassandra/bin/cqlsh -e "describe keyspaces" 2>&1 || true
+	  printf "%s\n" --cqlsh-system-local--
+	  docker exec "$CONTAINER" /opt/cassandra/bin/cqlsh -e "SELECT cluster_name, release_version FROM system.local;" 2>&1 || true
+} > "$OUT/cassandra-state.txt"
 
 # Per-keyspace replication strategy + factor (system_schema.keyspaces). Needed to
 # characterise the wide-column data distribution: the thehive keyspace and the
 # SimpleStrategy system keyspaces carry a replication_factor; the LocalStrategy
 # (system, system_schema) and virtual (system_virtual_schema, system_views)
 # keyspaces are node-local/virtual and carry no replication factor.
-docker exec "$CONTAINER" cqlsh -e "SELECT keyspace_name, durable_writes, replication FROM system_schema.keyspaces;" \
-  2>&1 | redact_stream > "$OUT/cassandra-keyspaces.txt" || true
+docker exec "$CONTAINER" /opt/cassandra/bin/cqlsh -e "SELECT keyspace_name, durable_writes, replication FROM system_schema.keyspaces;" \
+  2>&1 > "$OUT/cassandra-keyspaces.txt" || true
 record_limit "The LocalStrategy keyspaces (system, system_schema) and virtual keyspaces (system_virtual_schema, system_views) carry no replication_factor and are Cassandra engine-internal catalogs; they are recorded in cassandra-keyspaces.txt evidence but are not encoded as wide_column keyspace partitions (the profile models replicated keyspaces). The participant-relevant thehive keyspace and the replicated SimpleStrategy system keyspaces are encoded as partitions."
 
 # Attacker vantage: kali. Cassandra is on security-net only and publishes no
@@ -260,7 +207,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --ping--
     ping -c 1 -W 2 '"$CONTAINER_IP"' 2>&1 | sed -n "1,4p"
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

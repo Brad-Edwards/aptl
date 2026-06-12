@@ -30,17 +30,17 @@ EVIDENCE_DIR = WORKSTATION_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f"
+IMAGE_ID = "sha256:a407dd9bd9aecf297a51bd747215873e5edcc71e8618e9775bea9a5bb654dcbd"
 IMAGE_DIGEST = f"aptl-workstation@{IMAGE_ID}"
 BUILD_HISTORY_LAYER_COUNT = 41
 SOURCE_INPUT_COUNT = 12
-LOCAL_IDENTITY_USER_COUNT = 20
-LOCAL_IDENTITY_GROUP_COUNT = 39
+LOCAL_IDENTITY_USER_COUNT = 19
+LOCAL_IDENTITY_GROUP_COUNT = 38
 RUNTIME_PACKAGE_COUNT = 261
 TRIVY_FINDING_COUNT = 42
-FILESYSTEM_ENTRY_COUNT = 191
-WORKSTATION_CONTENT_COUNT = 184
-SERVICE_MANAGER_UNIT_COUNT = 74
+FILESYSTEM_ENTRY_COUNT = 193
+WORKSTATION_CONTENT_COUNT = 186
+SERVICE_MANAGER_UNIT_COUNT = 73
 
 REQUIRED_EVIDENCE_FILES = {
     "captured-at-utc.txt",
@@ -82,21 +82,10 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
 }
 
-RAW_SECRET_PATTERNS = (
-    r"BEGIN .*PRIVATE KEY",
-    r"Summer2024",
-    r"LabAdmin2024!",
-    r"Welcome1!",
-    r"Admin123!",
-    r"admin123",
-    r"techvault_db_pass",
-    r"techvault-jwt-weak",
-    r"tvault-api-key-2024-admin",
-    r"techvault-secret-key-2024",
-    r"AKIAIOSFODNN7EXAMPLE",
-    r"wJalrXUtnFEMI",
-    r"APTL\{",
-)
+WORKSTATION_SANDBOX_KEY = "/var/run/docker/netns/615fb925489b"
+WORKSTATION_USER_FLAG = "APTL{user_workstation_72395e72095e1e90dd5fad29d6ae4c84}"
+WORKSTATION_ROOT_FLAG = "APTL{root_workstation_0c4f10b485d46e0f78d8469ea35ef483}"
+WORKSTATION_CLIENT_KEYS_DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 
 def _json_file(name: str):
@@ -151,7 +140,7 @@ def test_workstation_inventory_note_declares_scope_and_evidence():
         "custom-build",
         "already-running local lab",
         "not as clean-lab rebuild proof",
-        "Rocky Linux 9.7",
+        "Rocky Linux 9.8",
         "CAP_SYS_ADMIN",
         "seccomp:unconfined",
         "74 systemd service-manager unit records",
@@ -164,7 +153,7 @@ def test_workstation_inventory_note_declares_scope_and_evidence():
     assert not missing, f"Workstation inventory note missing scope markers: {missing}"
 
 
-def test_workstation_capture_script_pins_reproducible_toolchain_and_redaction():
+def test_workstation_capture_script_pins_reproducible_toolchain_and_secret_capture():
     text = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
     required = (
         "aquasec/trivy@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e",
@@ -260,17 +249,28 @@ def test_workstation_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_workstation_evidence_does_not_contain_raw_secret_material():
-    offenders = {}
-    patterns = [re.compile(pattern) for pattern in RAW_SECRET_PATTERNS]
-    for path in EVIDENCE_DIR.iterdir():
-        if not path.is_file():
-            continue
-        text = _evidence_text(path)
-        leaked = [pattern.pattern for pattern in patterns if pattern.search(text)]
-        if leaked:
-            offenders[path.name] = leaked
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+def test_workstation_evidence_commits_scenario_secret_material():
+    container = _json_file("docker-inspect.container.json")[0]
+    history = (EVIDENCE_DIR / "docker-history.image.txt").read_text(encoding="utf-8")
+    sensitive_paths = (EVIDENCE_DIR / "filesystem-sensitive-paths.txt").read_text(encoding="utf-8")
+    filesystem_checksums = (EVIDENCE_DIR / "filesystem-checksums.txt").read_text(encoding="utf-8")
+
+    assert container["NetworkSettings"]["SandboxKey"] == WORKSTATION_SANDBOX_KEY
+    assert 'echo "dev-user:Summer2024" | chpasswd' in history
+    assert WORKSTATION_USER_FLAG in sensitive_paths
+    assert WORKSTATION_ROOT_FLAG in sensitive_paths
+    assert "techvault_db_pass" in sensitive_paths
+    assert "techvault-jwt-weak" in sensitive_paths
+    assert "tvault-api-key-2024-admin" in sensitive_paths
+    assert "AKIAIOSFODNN7EXAMPLE" in sensitive_paths
+    assert "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" in sensitive_paths
+    assert "--path:/keys/aptl_lab_key--" in sensitive_paths
+    assert "--path:/home/dev-user/.ssh/id_rsa--" in sensitive_paths
+    assert "-----BEGIN OPENSSH PRIVATE KEY-----" in sensitive_paths
+    assert "--path:/var/ossec/etc/client.keys--" in sensitive_paths
+    assert f"{WORKSTATION_CLIENT_KEYS_DIGEST}  /var/ossec/etc/client.keys" in filesystem_checksums
+    assert "<REDACTED" not in sensitive_paths
+    assert "<REDACTED" not in history
 
 
 def test_workstation_container_runtime_state_and_identity():
@@ -323,7 +323,7 @@ def test_workstation_image_identity_and_source_package_are_recorded():
 def test_workstation_runtime_baseline_captures_expected_steady_state():
     text = (EVIDENCE_DIR / "runtime-baseline.txt").read_text(encoding="utf-8")
     required = (
-        'PRETTY_NAME="Rocky Linux 9.7 (Blue Onyx)"',
+        'PRETTY_NAME="Rocky Linux 9.8 (Blue Onyx)"',
         "uid=0(root)",
         "/usr/sbin/init",
         "/usr/lib/systemd/systemd-journald",

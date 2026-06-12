@@ -1,41 +1,41 @@
-IMAGE                                                                     CREATED        CREATED BY                                                                                                                                                                  SIZE      COMMENT
-sha256:af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a   9 months ago   ENV DMS_RELEASE=v15.1.0                                                                                                                                                     0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   LABEL org.opencontainers.image.version=v15.1.0                                                                                                                              0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   LABEL org.opencontainers.image.revision=060bf9a47443382fb7e37f30d6ab9709b4b8aeab                                                                                            0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   LABEL org.opencontainers.image.source=https://github.com/docker-mailserver/docker-mailserver                                                                                0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   LABEL org.opencontainers.image.documentation=https://github.com/docker-mailserver/docker-mailserver/blob/master/README.md                                                   0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   LABEL org.opencontainers.image.url=https://github.com/docker-mailserver                                                                                                     0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   LABEL org.opencontainers.image.description=A fullstack but simple mail server (SMTP, IMAP, LDAP, Anti-spam, Anti-virus, etc.). Only configuration files, no SQL database.   0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   LABEL org.opencontainers.image.licenses=MIT                                                                                                                                 0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   LABEL org.opencontainers.image.authors=The Docker Mailserver Organization on GitHub                                                                                         0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   LABEL org.opencontainers.image.vendor=The Docker Mailserver Organization                                                                                                    0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   LABEL org.opencontainers.image.title=docker-mailserver                                                                                                                      0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   ENV SASLAUTHD_MECH_OPTIONS=                                                                                                                                                 0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   ENV POSTGREY_TEXT=Delayed by Postgrey                                                                                                                                       0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   ENV POSTGREY_MAX_AGE=35                                                                                                                                                     0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   ENV POSTGREY_DELAY=300                                                                                                                                                      0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   ENV POSTGREY_AUTO_WHITELIST_CLIENTS=5                                                                                                                                       0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   ENV FETCHMAIL_POLL=300                                                                                                                                                      0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   CMD ["supervisord" "-c" "/etc/supervisor/supervisord.conf"]                                                                                                                 0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   ENTRYPOINT ["/usr/bin/dumb-init" "--"]                                                                                                                                      0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   EXPOSE map[110/tcp:{} 143/tcp:{} 25/tcp:{} 4190/tcp:{} 465/tcp:{} 587/tcp:{} 993/tcp:{} 995/tcp:{}]                                                                         0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   WORKDIR /                                                                                                                                                                   0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   ARG VCS_REVISION=060bf9a47443382fb7e37f30d6ab9709b4b8aeab                                                                                                                   0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   ARG DMS_RELEASE=v15.1.0                                                                                                                                                     0B        buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   COPY target/scripts/startup/setup.d /usr/local/bin/setup.d # buildkit                                                                                                       131kB     buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   COPY target/scripts/helpers /usr/local/bin/helpers # buildkit                                                                                                               160kB     buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c chmod +x /usr/local/bin/* # buildkit                             57.3kB    buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   COPY target/bin/* target/scripts/*.sh target/scripts/startup/*.sh /usr/local/bin/ # buildkit                                                                                201kB     buildkit.dockerfile.v0
-<missing>                                                                 9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   rm -rf /usr/share/locale/*
+IMAGE                                                                     CREATED         CREATED BY                                                                                                                                                                  SIZE      COMMENT
+sha256:af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a   10 months ago   ENV DMS_RELEASE=v15.1.0                                                                                                                                                     0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   LABEL org.opencontainers.image.version=v15.1.0                                                                                                                              0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   LABEL org.opencontainers.image.revision=060bf9a47443382fb7e37f30d6ab9709b4b8aeab                                                                                            0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   LABEL org.opencontainers.image.source=https://github.com/docker-mailserver/docker-mailserver                                                                                0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   LABEL org.opencontainers.image.documentation=https://github.com/docker-mailserver/docker-mailserver/blob/master/README.md                                                   0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   LABEL org.opencontainers.image.url=https://github.com/docker-mailserver                                                                                                     0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   LABEL org.opencontainers.image.description=A fullstack but simple mail server (SMTP, IMAP, LDAP, Anti-spam, Anti-virus, etc.). Only configuration files, no SQL database.   0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   LABEL org.opencontainers.image.licenses=MIT                                                                                                                                 0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   LABEL org.opencontainers.image.authors=The Docker Mailserver Organization on GitHub                                                                                         0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   LABEL org.opencontainers.image.vendor=The Docker Mailserver Organization                                                                                                    0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   LABEL org.opencontainers.image.title=docker-mailserver                                                                                                                      0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   ENV SASLAUTHD_MECH_OPTIONS=                                                                                                                                                 0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   ENV POSTGREY_TEXT=Delayed by Postgrey                                                                                                                                       0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   ENV POSTGREY_MAX_AGE=35                                                                                                                                                     0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   ENV POSTGREY_DELAY=300                                                                                                                                                      0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   ENV POSTGREY_AUTO_WHITELIST_CLIENTS=5                                                                                                                                       0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   ENV FETCHMAIL_POLL=300                                                                                                                                                      0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   CMD ["supervisord" "-c" "/etc/supervisor/supervisord.conf"]                                                                                                                 0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   ENTRYPOINT ["/usr/bin/dumb-init" "--"]                                                                                                                                      0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   EXPOSE map[110/tcp:{} 143/tcp:{} 25/tcp:{} 4190/tcp:{} 465/tcp:{} 587/tcp:{} 993/tcp:{} 995/tcp:{}]                                                                         0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   WORKDIR /                                                                                                                                                                   0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   ARG VCS_REVISION=060bf9a47443382fb7e37f30d6ab9709b4b8aeab                                                                                                                   0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   ARG DMS_RELEASE=v15.1.0                                                                                                                                                     0B        buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   COPY target/scripts/startup/setup.d /usr/local/bin/setup.d # buildkit                                                                                                       131kB     buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   COPY target/scripts/helpers /usr/local/bin/helpers # buildkit                                                                                                               160kB     buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c chmod +x /usr/local/bin/* # buildkit                             57.3kB    buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   COPY target/bin/* target/scripts/*.sh target/scripts/startup/*.sh /usr/local/bin/ # buildkit                                                                                201kB     buildkit.dockerfile.v0
+<missing>                                                                 10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   rm -rf /usr/share/locale/*
   rm -rf /usr/share/man/*
   rm -rf /usr/share/doc/*
   update-locale
- # buildkit   49.2kB         buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/supervisor/conf.d/* /etc/supervisor/conf.d/ # buildkit                      28.7kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/supervisor/supervisord.conf /etc/supervisor/supervisord.conf # buildkit     16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/logwatch/ignore.conf /etc/logwatch/conf/ignore.conf # buildkit              20.5kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/logwatch/maillog.conf /etc/logwatch/conf/logfiles/maillog.conf # buildkit   24.6kB    buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   sedfile -i -r "/^#?compress/c\compress\ncopytruncate" /etc/logrotate.conf
+ # buildkit   49.2kB          buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/supervisor/conf.d/* /etc/supervisor/conf.d/ # buildkit                      28.7kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/supervisor/supervisord.conf /etc/supervisor/supervisord.conf # buildkit     16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/logwatch/ignore.conf /etc/logwatch/conf/ignore.conf # buildkit              20.5kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/logwatch/maillog.conf /etc/logwatch/conf/logfiles/maillog.conf # buildkit   24.6kB    buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   sedfile -i -r "/^#?compress/c\compress\ncopytruncate" /etc/logrotate.conf
   mkdir /var/log/mail
   chown syslog:root /var/log/mail
   touch /var/log/mail/clamav.log
@@ -61,34 +61,34 @@ sha256:af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a   9 mont
   # this change is for our alternative process manager rather than part of
   # a fix related to the change preceding it.
   echo -e '\n/usr/bin/supervisorctl signal hup rsyslog >/dev/null' >>/usr/lib/rsyslog/rsyslog-rotate
- # buildkit   102kB          buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   : >/etc/aliases
+ # buildkit   102kB           buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   : >/etc/aliases
   sedfile -i 's/START_DAEMON=no/START_DAEMON=yes/g' /etc/default/fetchmail
   mkdir /var/run/fetchmail && chown fetchmail /var/run/fetchmail
- # buildkit   24.6kB         buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/postfix/header_checks.pcre target/postfix/sender_header_filter.pcre target/postfix/sender_login_maps.pcre /etc/postfix/maps/ # buildkit                                                                                     24.6kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/shared/ffdhe4096.pem /etc/dovecot/dh.pem # buildkit                                                                                                                                                                         16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/shared/ffdhe4096.pem /etc/postfix/dhparams.pem # buildkit                                                                                                                                                                   16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/postfix/main.cf target/postfix/master.cf /etc/postfix/ # buildkit                                                                                                                                                           24.6kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/getmail/getmail-service.sh /usr/local/bin/ # buildkit                                                                                                                                                                       20.5kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/getmail/getmailrc_general /etc/getmailrc_general # buildkit                                                                                                                                                                 12.3kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/fetchmail/fetchmailrc /etc/fetchmailrc_general # buildkit                                                                                                                                                                   12.3kB    buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c echo 'Reason_Message = Message {rejectdefer} due to: {spf}.' >>/etc/postfix-policyd-spf-python/policyd-spf.conf # buildkit   16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   mkdir /var/run/mta-sts
+ # buildkit   24.6kB          buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/postfix/header_checks.pcre target/postfix/sender_header_filter.pcre target/postfix/sender_login_maps.pcre /etc/postfix/maps/ # buildkit                                                                                     24.6kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/shared/ffdhe4096.pem /etc/dovecot/dh.pem # buildkit                                                                                                                                                                         16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/shared/ffdhe4096.pem /etc/postfix/dhparams.pem # buildkit                                                                                                                                                                   16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/postfix/main.cf target/postfix/master.cf /etc/postfix/ # buildkit                                                                                                                                                           24.6kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/getmail/getmail-service.sh /usr/local/bin/ # buildkit                                                                                                                                                                       20.5kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/getmail/getmailrc_general /etc/getmailrc_general # buildkit                                                                                                                                                                 12.3kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/fetchmail/fetchmailrc /etc/fetchmailrc_general # buildkit                                                                                                                                                                   12.3kB    buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c echo 'Reason_Message = Message {rejectdefer} due to: {spf}.' >>/etc/postfix-policyd-spf-python/policyd-spf.conf # buildkit   16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   mkdir /var/run/mta-sts
   chown -R _mta-sts:root /var/run/mta-sts
- # buildkit   12.3kB         buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/mta-sts-daemon/mta-sts-daemon.yml /etc/mta-sts-daemon.yml # buildkit   12.3kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/opendmarc/ignore.hosts /etc/opendmarc/ignore.hosts # buildkit          16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/opendmarc/default-opendmarc /etc/default/opendmarc # buildkit          16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/opendmarc/opendmarc.conf /etc/opendmarc.conf # buildkit                12.3kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/opendkim/default-opendkim /etc/default/opendkim # buildkit             16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/opendkim/opendkim.conf /etc/opendkim.conf # buildkit                   12.3kB    buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   ln -s  /var/log/mail/mail.log     /var/log/mail.log
+ # buildkit   12.3kB          buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/mta-sts-daemon/mta-sts-daemon.yml /etc/mta-sts-daemon.yml # buildkit   12.3kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/opendmarc/ignore.hosts /etc/opendmarc/ignore.hosts # buildkit          16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/opendmarc/default-opendmarc /etc/default/opendmarc # buildkit          16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/opendmarc/opendmarc.conf /etc/opendmarc.conf # buildkit                12.3kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/opendkim/default-opendkim /etc/default/opendkim # buildkit             16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/opendkim/opendkim.conf /etc/opendkim.conf # buildkit                   12.3kB    buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   ln -s  /var/log/mail/mail.log     /var/log/mail.log
   ln -sf /var/log/mail/fail2ban.log /var/log/fail2ban.log
- # buildkit   12.3kB         buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/fail2ban/fail2ban.d/fixes.local /etc/fail2ban/fail2ban.d/fixes.local # buildkit   20.5kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/fail2ban/jail.local /etc/fail2ban/jail.local # buildkit                           16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   for _ in {1..10}; do
+ # buildkit   12.3kB          buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/fail2ban/fail2ban.d/fixes.local /etc/fail2ban/fail2ban.d/fixes.local # buildkit   20.5kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/fail2ban/jail.local /etc/fail2ban/jail.local # buildkit                           16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   for _ in {1..10}; do
     su - amavis -c "razor-admin -create"
     sleep 3
     if su - amavis -c "razor-admin -register"; then
@@ -99,8 +99,8 @@ sha256:af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a   9 mont
     fi
   done
   exit ${EC}
- # buildkit   45.1kB         buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   sedfile -i -r 's/#(@|   \\%)bypass/\1bypass/g' /etc/amavis/conf.d/15-content_filter_mode
+ # buildkit   45.1kB          buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   sedfile -i -r 's/#(@|   \\%)bypass/\1bypass/g' /etc/amavis/conf.d/15-content_filter_mode
   # add users clamav and amavis to each others group
   adduser clamav amavis
   adduser amavis clamav
@@ -109,33 +109,33 @@ sha256:af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a   9 mont
   useradd -u 5000 -d /home/docker -s /bin/bash -p "$(echo docker | openssl passwd -1 -stdin)" docker
   echo "0 4 * * * /usr/local/bin/virus-wiper" | crontab -
   chmod 644 /etc/amavis/conf.d/*
- # buildkit   81.9kB         buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/amavis/postfix-amavis.cf /etc/dms/postfix/master.d/ # buildkit   24.6kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/amavis/conf.d/* /etc/amavis/conf.d/ # buildkit                   28.7kB    buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   mkdir /var/run/postgrey
+ # buildkit   81.9kB          buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/amavis/postfix-amavis.cf /etc/dms/postfix/master.d/ # buildkit   24.6kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/amavis/conf.d/* /etc/amavis/conf.d/ # buildkit                   28.7kB    buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   mkdir /var/run/postgrey
   chown postgrey:postgrey /var/run/postgrey
   curl -Lsfo /etc/postgrey/whitelist_clients https://raw.githubusercontent.com/schweikert/postgrey/master/postgrey_whitelist_clients
- # buildkit   32.8kB         buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/postgrey/postgrey /etc/default/postgrey # buildkit   16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/postsrsd/postsrsd /etc/default/postsrsd # buildkit   16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   # ref: https://github.com/docker-mailserver/docker-mailserver/pull/3403#discussion_r1306282387
+ # buildkit   32.8kB          buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/postgrey/postgrey /etc/default/postgrey # buildkit   16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/postsrsd/postsrsd /etc/default/postsrsd # buildkit   16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   # ref: https://github.com/docker-mailserver/docker-mailserver/pull/3403#discussion_r1306282387
   echo 'CRON=1' >/etc/default/spamassassin
   sedfile -i -r 's/^\$INIT restart/supervisorctl restart amavis/g' /etc/spamassassin/sa-update-hooks.d/amavisd-new
   mkdir /etc/spamassassin/kam/
   curl -sSfLo /etc/spamassassin/kam/kam.sa-channels.mcgrail.com.key https://mcgrail.com/downloads/kam.sa-channels.mcgrail.com.key
- # buildkit   36.9kB         buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/postfix/ldap-users.cf target/postfix/ldap-groups.cf target/postfix/ldap-aliases.cf target/postfix/ldap-domains.cf target/postfix/ldap-senders.cf /etc/postfix/ # buildkit     32.8kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/dovecot/auth-ldap.conf.ext /etc/dovecot/conf.d # buildkit                                                                                                                     20.5kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/dovecot/dovecot-ldap.conf.ext /etc/dovecot # buildkit                                                                                                                         16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/dovecot/auth-oauth2.conf.ext /etc/dovecot/conf.d # buildkit                                                                                                                   20.5kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/dovecot/dovecot-oauth2.conf.ext /etc/dovecot # buildkit                                                                                                                       16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/rspamd/local.d/ /etc/rspamd/local.d/ # buildkit                                                                                                                               77.8kB    buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c chmod 0 /etc/cron.d/dovecot-purge.disabled # buildkit                          16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/dovecot/dovecot-purge.cron /etc/cron.d/dovecot-purge.disabled # buildkit                                                                                                      16.4kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/dovecot/*.inc target/dovecot/*.conf /etc/dovecot/conf.d/ # buildkit                                                                                                           98.3kB    buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c dpkg -i /dovecot-fts-xapian-*.deb && rm /dovecot-fts-xapian-*.deb # buildkit   1.84MB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY dovecot-fts-xapian-*.deb / # buildkit                                                                                                                                                561kB     buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   # `COPY --link --chown=200` has a bug when built by the buildx docker-container driver.
+ # buildkit   36.9kB          buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/postfix/ldap-users.cf target/postfix/ldap-groups.cf target/postfix/ldap-aliases.cf target/postfix/ldap-domains.cf target/postfix/ldap-senders.cf /etc/postfix/ # buildkit     32.8kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/dovecot/auth-ldap.conf.ext /etc/dovecot/conf.d # buildkit                                                                                                                     20.5kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/dovecot/dovecot-ldap.conf.ext /etc/dovecot # buildkit                                                                                                                         16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/dovecot/auth-oauth2.conf.ext /etc/dovecot/conf.d # buildkit                                                                                                                   20.5kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/dovecot/dovecot-oauth2.conf.ext /etc/dovecot # buildkit                                                                                                                       16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/rspamd/local.d/ /etc/rspamd/local.d/ # buildkit                                                                                                                               77.8kB    buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c chmod 0 /etc/cron.d/dovecot-purge.disabled # buildkit                          16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/dovecot/dovecot-purge.cron /etc/cron.d/dovecot-purge.disabled # buildkit                                                                                                      16.4kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/dovecot/*.inc target/dovecot/*.conf /etc/dovecot/conf.d/ # buildkit                                                                                                           98.3kB    buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c dpkg -i /dovecot-fts-xapian-*.deb && rm /dovecot-fts-xapian-*.deb # buildkit   1.84MB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY dovecot-fts-xapian-*.deb / # buildkit                                                                                                                                                561kB     buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   # `COPY --link --chown=200` has a bug when built by the buildx docker-container driver.
   # Restore ownership of parent dirs (Bug: https://github.com/moby/buildkit/issues/3912)
   chown root:root /var /var/lib
   echo '0 */6 * * * clamav /usr/bin/freshclam --quiet' >/etc/cron.d/clamav-freshclam
@@ -144,20 +144,20 @@ sha256:af51b15dd3fc72153c0e90eb7692bb5e3a463212d87959a80fa7aa89b617d44a   9 mont
   mkdir /var/run/clamav
   chown -R clamav:root /var/run/clamav
   rm -rf /var/log/clamav/
- # buildkit   49.2kB         buildkit.dockerfile.v0
-<missing>     9 months ago   COPY --chown=200 /var/lib/clamav /var/lib/clamav # buildkit                                                                                                          235MB     buildkit.dockerfile.v0
-<missing>     9 months ago   SHELL [/bin/bash -e -o pipefail -c]                                                                                                                                  0B        buildkit.dockerfile.v0
-<missing>     9 months ago   ARG LOG_LEVEL=trace                                                                                                                                                  0B        buildkit.dockerfile.v0
-<missing>     9 months ago   ARG DEBIAN_FRONTEND=noninteractive                                                                                                                                   0B        buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c /bin/bash /build/packages.sh && rm -r /build # buildkit   484MB     buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/scripts/helpers/log.sh /usr/local/bin/helpers/log.sh # buildkit                                                                                          24.6kB    buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/scripts/build/packages.sh /build/ # buildkit                                                                                                             20.5kB    buildkit.dockerfile.v0
-<missing>     9 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   chmod +x /usr/local/bin/sedfile
+ # buildkit   49.2kB          buildkit.dockerfile.v0
+<missing>     10 months ago   COPY --chown=200 /var/lib/clamav /var/lib/clamav # buildkit                                                                                                          235MB     buildkit.dockerfile.v0
+<missing>     10 months ago   SHELL [/bin/bash -e -o pipefail -c]                                                                                                                                  0B        buildkit.dockerfile.v0
+<missing>     10 months ago   ARG LOG_LEVEL=trace                                                                                                                                                  0B        buildkit.dockerfile.v0
+<missing>     10 months ago   ARG DEBIAN_FRONTEND=noninteractive                                                                                                                                   0B        buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c /bin/bash /build/packages.sh && rm -r /build # buildkit   484MB     buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/scripts/helpers/log.sh /usr/local/bin/helpers/log.sh # buildkit                                                                                          24.6kB    buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/scripts/build/packages.sh /build/ # buildkit                                                                                                             20.5kB    buildkit.dockerfile.v0
+<missing>     10 months ago   RUN |3 DEBIAN_FRONTEND=noninteractive DOVECOT_COMMUNITY_REPO=0 LOG_LEVEL=trace /bin/bash -e -o pipefail -c   chmod +x /usr/local/bin/sedfile
   adduser --quiet --system --group --disabled-password --home /var/lib/clamav --no-create-home --uid 200 clamav
- # buildkit   45.1kB         buildkit.dockerfile.v0
-<missing>     9 months ago   COPY target/bin/sedfile /usr/local/bin/sedfile # buildkit   20.5kB    buildkit.dockerfile.v0
-<missing>     9 months ago   SHELL [/bin/bash -e -o pipefail -c]                         0B        buildkit.dockerfile.v0
-<missing>     9 months ago   ARG LOG_LEVEL=trace                                         0B        buildkit.dockerfile.v0
-<missing>     9 months ago   ARG DOVECOT_COMMUNITY_REPO=0                                0B        buildkit.dockerfile.v0
-<missing>     9 months ago   ARG DEBIAN_FRONTEND=noninteractive                          0B        buildkit.dockerfile.v0
-<missing>     9 months ago   # debian.sh --arch 'amd64' out/ 'bookworm' '@1754870400'    85.2MB    debuerreotype 0.15
+ # buildkit   45.1kB          buildkit.dockerfile.v0
+<missing>     10 months ago   COPY target/bin/sedfile /usr/local/bin/sedfile # buildkit   20.5kB    buildkit.dockerfile.v0
+<missing>     10 months ago   SHELL [/bin/bash -e -o pipefail -c]                         0B        buildkit.dockerfile.v0
+<missing>     10 months ago   ARG LOG_LEVEL=trace                                         0B        buildkit.dockerfile.v0
+<missing>     10 months ago   ARG DOVECOT_COMMUNITY_REPO=0                                0B        buildkit.dockerfile.v0
+<missing>     10 months ago   ARG DEBIAN_FRONTEND=noninteractive                          0B        buildkit.dockerfile.v0
+<missing>     10 months ago   # debian.sh --arch 'amd64' out/ 'bookworm' '@1754870400'    85.2MB    debuerreotype 0.15

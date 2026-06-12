@@ -19,16 +19,6 @@ record_limit() {
   printf -- "- %s\n" "$*" >> "$OUT/capture-limits.txt"
 }
 
-redact_env_jq='
-  def redact_env:
-    if test("^(APTL_FLAG_KEY|DB_PASSWORD|JWT_SECRET|SECRET_KEY)=") then
-      capture("^(?<name>[^=]+)=") as $m
-      | "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-    else
-      .
-    end;
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -36,20 +26,10 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 
 record_limit "Capture uses the already-running local lab and did not run aptl lab stop -v && aptl lab start; this is a steady-state observation, not clean-reset rebuild proof."
 
-COMPOSE_PROFILES=dns,enterprise,wazuh,soc docker compose -f "$ROOT/docker-compose.yml" config --format json \
-  | jq '
-      .services.dns
-      | .environment |= with_entries(
-          if (.key | test("^(APTL_FLAG_KEY|DB_PASSWORD|JWT_SECRET|SECRET_KEY)$"))
-          then .value = ("<REDACTED-" + (.key | gsub("_"; "-")) + ">")
-          else .
-          end
-        )
-    ' > "$OUT/compose-service.dns.json"
+yq -o=json '.services.dns' "$ROOT/docker-compose.yml" \
+  | jq . > "$OUT/compose-service.dns.json"
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= map(redact_env)" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
 docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
@@ -131,10 +111,6 @@ docker exec "$CONTAINER" sh -lc '
 
 docker exec "$CONTAINER" sh -lc '
   set -eu
-  redact_env() {
-    sed -E "s/^(APTL_FLAG_KEY|DB_PASSWORD|JWT_SECRET|SECRET_KEY)=.*/\1=<REDACTED-\1>/" \
-      | sed "s/<REDACTED-APTL_FLAG_KEY>/<REDACTED-APTL-FLAG-KEY>/;s/<REDACTED-DB_PASSWORD>/<REDACTED-DB-PASSWORD>/;s/<REDACTED-JWT_SECRET>/<REDACTED-JWT-SECRET>/;s/<REDACTED-SECRET_KEY>/<REDACTED-SECRET-KEY>/"
-  }
   echo --os-release--
   cat /etc/os-release
   echo --id--
@@ -146,7 +122,7 @@ docker exec "$CONTAINER" sh -lc '
   echo --capabilities-pid1--
   grep "^Cap" /proc/1/status || true
   echo --environment--
-  env | sort | redact_env
+  env | sort
   echo --listeners--
   (ss -lntup || netstat -lntup || true) 2>&1
   echo --mounts--

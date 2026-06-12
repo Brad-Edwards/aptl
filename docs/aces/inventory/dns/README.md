@@ -5,7 +5,7 @@ the `dns` Compose service realized as container `aptl-dns`.
 
 The target is a first-party custom build from `containers/dns/`, observed as:
 
-- Image: `aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75`
+- Image: `aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6`
 - Runtime OS: Ubuntu 22.04.5 LTS
 - DNS implementation: BIND 9.18.39-0ubuntu0.22.04.3-Ubuntu
 - Service identity: `ns1.techvault.local`

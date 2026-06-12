@@ -23,7 +23,7 @@ proof.
 | Source class | `custom-build` |
 | Source package | `containers/webapp/` plus `containers/_wazuh-agent/` |
 | Image tag | `aptl-webapp:latest` |
-| Image digest | `aptl-webapp@sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a` |
+| Image digest | `aptl-webapp@sha256:261633f0d60aa96b6921fc561a31e76a7601ea7f52e4f435efac79686882e299` |
 | Runtime OS | Debian GNU/Linux 13 (trixie) |
 | Runtime command | `/usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf` |
 | Working directory | `/app` |
@@ -39,7 +39,7 @@ proof.
 | --- | --- |
 | Capture commands are reproducible. | `capture-evidence.sh` |
 | Capture time, tool versions, and limits are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt`, `evidence/syft-version.json`, `evidence/osquery-version.txt` |
-| Docker Compose service intent is represented by the redacted Compose service slice. | `evidence/compose-service.webapp.json` |
+| Docker Compose service intent is represented by the Compose service slice. | `evidence/compose-service.webapp.json` |
 | Custom image identity, config, and layers are recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-history.image.txt` |
 | Source package inputs are checksum-addressable. | `evidence/source-checksums.txt` |
 | Realized runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-dmz.json`, `evidence/docker-network.aptl-internal.json`, `evidence/docker-volume.webapp-logs.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt` |
@@ -81,10 +81,10 @@ proof.
   tables were captured through the host Docker socket. Linux osquery 4.9.0 does
   not expose `installed_applications` or `programs`; those table attempts are
   recorded as unavailable in per-table evidence and `capture-limits.txt`.
-- Secret-shaped env-var values in Docker/Compose evidence were redacted before
-  committing the bundle. The webapp intentionally contains participant-visible
-  fixture secrets in checked-in source and runtime endpoints; those are scenario
-  facts, not operator-control-plane secrets.
+- Scenario-authored fixture credentials are retained unmasked in Docker,
+  Compose, runtime, and SDL evidence. The webapp intentionally contains
+  participant-visible fixture secrets in checked-in source and runtime
+  endpoints; those are scenario facts, not operator-control-plane secrets.
 
 ## ACES Mapping Result
 

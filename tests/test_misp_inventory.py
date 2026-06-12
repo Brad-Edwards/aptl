@@ -42,7 +42,7 @@ IMAGE_DIGEST = (
 RUNTIME_PACKAGE_COUNT = 238
 TRIVY_FINDING_COUNT = 593
 FILESYSTEM_ENTRY_COUNT = 17516
-FILESYSTEM_CHECKSUM_COUNT = 12544
+FILESYSTEM_CHECKSUM_COUNT = 12549
 LOCAL_IDENTITY_USER_COUNT = 21
 LOCAL_IDENTITY_GROUP_COUNT = 42
 DOCKER_HISTORY_ROW_COUNT = 33
@@ -226,7 +226,7 @@ def test_misp_inventory_note_declares_scope_and_realization_caveats():
         "ACES #431 is consumed",
         "No known ACES expressivity gap remains",
         "runtime.service_listeners",
-        "zero events",
+        "one event",
         "#348 and #349",
     )
     missing = [needle for needle in required if needle not in text]
@@ -319,14 +319,22 @@ def test_misp_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_misp_evidence_does_not_commit_raw_secret_values():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
-    offenders = [
-        path.name
-        for path in EVIDENCE_DIR.iterdir()
-        if path.is_file() and forbidden.search(_evidence_text(path))
-    ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+def test_misp_sdl_captures_fixture_secrets_and_health_output(scenario):
+    node = scenario.nodes[MISP_NODE_ID]
+    runtime = node.runtime
+    env = {item.name: item for item in runtime.environment}
+
+    assert env["ADMIN_KEY"].value == "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw"
+    assert env["ADMIN_KEY"].value_classification == "secret_fixture"
+    assert env["MYSQL_PASSWORD"].value == "misp_db_password"
+    assert env["MYSQL_PASSWORD"].value_classification == "secret_fixture"
+
+    assert runtime.health is not None
+    assert runtime.health.status == "healthy"
+    assert len(runtime.health.log) == 5
+    for entry in runtime.health.log:
+        assert entry.output_redacted is False
+        assert 'name="data[_Token][key]" value=' in entry.output
 
 
 def test_misp_runtime_evidence_counts_and_caveats():
@@ -348,9 +356,10 @@ def test_misp_runtime_evidence_counts_and_caveats():
     assert len(_json_file("trivy-vulnerabilities.json.gz")["Metadata"]["Layers"]) == IMAGE_LAYER_COUNT
 
     counts = _misp_content_counts()
-    assert counts["events"] == 0
-    assert counts["attributes"] == 0
+    assert counts["events"] == 1
+    assert counts["attributes"] == 6
     assert counts["objects"] == 0
+    assert counts["tags"] == 7
     assert counts["taxonomies"] == 165
     assert counts["galaxies"] == 112
     assert counts["galaxy_clusters"] == 49300
@@ -360,7 +369,7 @@ def test_misp_runtime_evidence_counts_and_caveats():
 
     settings = _misp_admin_settings()
     assert settings["db_version"] == "146"
-    assert settings["fix_login"] == "2026-05-23 06:19:07"
+    assert settings["fix_login"] == "2026-06-11 16:00:53"
     assert settings["default_role"] == "3"
     assert settings["clean_db"] == "0"
     assert "addIPLogging" in settings["update_progress"]
@@ -470,6 +479,12 @@ def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
     assert len(platform.content_objects) == PLATFORM_CONTENT_OBJECT_COUNT
     assert len(platform.settings) == PLATFORM_SETTING_COUNT
     platform_content = {item.content_object_id: item for item in platform.content_objects}
+    assert platform_content["misp-events"].attributes["row_count"] == 1
+    assert "APTL Lab - Known Threat Actors" in platform_content["misp-events"].description
+    assert platform_content["misp-attributes"].attributes["row_count"] == 6
+    assert "172.20.4.30" in platform_content["misp-attributes"].description
+    assert platform_content["misp-tags"].attributes["row_count"] == 7
+    assert "aptl:red-team" in platform_content["misp-tags"].description
     assert platform_content["misp-taxonomies"].kind == "taxonomy"
     assert platform_content["misp-taxonomies"].attributes["row_count"] == 165
     assert platform_content["misp-galaxy-clusters"].kind == "galaxy_cluster"
@@ -484,9 +499,10 @@ def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
 
     content = scenario.content[MISP_CONTENT_ID]
     content_counts = {item.name: item.tags[1] for item in content.items}
-    assert content_counts["events"] == "count:0"
-    assert content_counts["attributes"] == "count:0"
+    assert content_counts["events"] == "count:1"
+    assert content_counts["attributes"] == "count:6"
     assert content_counts["objects"] == "count:0"
+    assert content_counts["tags"] == "count:7"
     assert content_counts["taxonomies"] == "count:165"
     assert content_counts["galaxy_clusters"] == "count:49300"
     assert content_counts["object_templates"] == "count:388"

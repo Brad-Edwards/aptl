@@ -1,7 +1,7 @@
 [
   {
-    "Id": "bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7",
-    "Created": "2026-05-23T06:18:32.82276284Z",
+    "Id": "264d754571f7866985e9ea41cab9077221933aab35fa412986bff01e5aa2d1d1",
+    "Created": "2026-06-11T16:00:20.010238039Z",
     "Path": "/usr/local/bin/entrypoint.sh",
     "Args": [
       "/usr/sbin/init"
@@ -13,53 +13,53 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2966060,
+      "Pid": 812928,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:19:17.813717549Z",
+      "StartedAt": "2026-06-11T16:00:59.8265719Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-05-26T05:00:07.803190847+02:00",
-            "End": "2026-05-26T05:00:07.8529087+02:00",
+            "Start": "2026-06-12T13:08:35.121341775+02:00",
+            "End": "2026-06-12T13:08:35.174550954+02:00",
             "ExitCode": 0,
-            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=7))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=8))\n"
           },
           {
-            "Start": "2026-05-26T05:00:22.853716393+02:00",
-            "End": "2026-05-26T05:00:22.905175539+02:00",
+            "Start": "2026-06-12T13:08:50.175688402+02:00",
+            "End": "2026-06-12T13:08:50.231798734+02:00",
             "ExitCode": 0,
-            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=7))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=8))\n"
           },
           {
-            "Start": "2026-05-26T05:00:37.906475619+02:00",
-            "End": "2026-05-26T05:00:37.961758174+02:00",
+            "Start": "2026-06-12T13:09:05.232539193+02:00",
+            "End": "2026-06-12T13:09:05.289034901+02:00",
             "ExitCode": 0,
-            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=7))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=8))\n"
           },
           {
-            "Start": "2026-05-26T05:00:52.962763784+02:00",
-            "End": "2026-05-26T05:00:53.010564473+02:00",
+            "Start": "2026-06-12T13:09:20.289462302+02:00",
+            "End": "2026-06-12T13:09:20.346889066+02:00",
             "ExitCode": 0,
-            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=7))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=8))\n"
           },
           {
-            "Start": "2026-05-26T05:01:08.011133223+02:00",
-            "End": "2026-05-26T05:01:08.065646819+02:00",
+            "Start": "2026-06-12T13:09:35.348201327+02:00",
+            "End": "2026-06-12T13:09:35.402453293+02:00",
             "ExitCode": 0,
-            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=7))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=8))\n"
           }
         ]
       }
     },
-    "Image": "sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f",
-    "ResolvConfPath": "/var/lib/docker/containers/bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7/hostname",
-    "HostsPath": "/var/lib/docker/containers/bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7/hosts",
-    "LogPath": "/var/lib/docker/containers/bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7/bee68cc7d455e9101c91febab49f87fb87f145088e03b443de99815a0dcf81b7-json.log",
+    "Image": "sha256:a407dd9bd9aecf297a51bd747215873e5edcc71e8618e9775bea9a5bb654dcbd",
+    "ResolvConfPath": "/var/lib/docker/containers/264d754571f7866985e9ea41cab9077221933aab35fa412986bff01e5aa2d1d1/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/264d754571f7866985e9ea41cab9077221933aab35fa412986bff01e5aa2d1d1/hostname",
+    "HostsPath": "/var/lib/docker/containers/264d754571f7866985e9ea41cab9077221933aab35fa412986bff01e5aa2d1d1/hosts",
+    "LogPath": "/var/lib/docker/containers/264d754571f7866985e9ea41cab9077221933aab35fa412986bff01e5aa2d1d1/264d754571f7866985e9ea41cab9077221933aab35fa412986bff01e5aa2d1d1-json.log",
     "Name": "/aptl-workstation",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -211,8 +211,8 @@
       },
       {
         "Type": "volume",
-        "Name": "4e24e6ea836958417b1881d7f18939e5abfd3bc5e83d0e746347e32deb1efe09",
-        "Source": "/var/lib/docker/volumes/4e24e6ea836958417b1881d7f18939e5abfd3bc5e83d0e746347e32deb1efe09/_data",
+        "Name": "de1ebf39e3688f961869a3b4cd02c43469df0c53422dd7ecb8a5c16c6eacb8ea",
+        "Source": "/var/lib/docker/volumes/de1ebf39e3688f961869a3b4cd02c43469df0c53422dd7ecb8a5c16c6eacb8ea/_data",
         "Destination": "/home",
         "Driver": "local",
         "Mode": "",
@@ -234,8 +234,8 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "SIEM_IP=172.20.2.30",
         "LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub",
+        "SIEM_IP=172.20.2.30",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "INSTALL_WAZUH=true",
         "INSTALL_FALCO=true",
@@ -267,7 +267,7 @@
         "com.docker.compose.config-hash": "a45f0346f533410281dbebb1aa502b7ce847a34a227a5a24a3e1fb1823fe6765",
         "com.docker.compose.container-number": "1",
         "com.docker.compose.depends_on": "wazuh.manager:service_healthy:false",
-        "com.docker.compose.image": "sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f",
+        "com.docker.compose.image": "sha256:a407dd9bd9aecf297a51bd747215873e5edcc71e8618e9775bea9a5bb654dcbd",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
         "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
@@ -277,8 +277,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "4d3c100784aa6bb571f06ce88defbc931786327c2713ee7fbb6bd9bb7d263cc5",
-      "SandboxKey": "/var/run/docker/netns/4d3c100784aa",
+      "SandboxID": "615fb925489b776c7c0b07ed6601cb86ec7536f72a9d4a66a11aec9bffb9a657",
+      "SandboxKey": "/var/run/docker/netns/615fb925489b",
       "Ports": {
         "22/tcp": null
       },
@@ -295,10 +295,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
-          "EndpointID": "fa4d83bf827a98b9cdaee7bb41d99529c381a4cd3e3beb397671e0ab2df4d953",
+          "EndpointID": "e07344281cbc69620cdb2202e198ae4d72a16845e8b834495febcabeaeffa7a3",
           "Gateway": "",
           "IPAddress": "172.20.2.40",
-          "MacAddress": "6a:9b:77:93:b3:7a",
+          "MacAddress": "22:dc:46:cf:d7:1c",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -306,7 +306,7 @@
           "DNSNames": [
             "aptl-workstation",
             "workstation",
-            "bee68cc7d455",
+            "264d754571f7",
             "ws01.techvault.local"
           ]
         }
@@ -314,7 +314,7 @@
     },
     "ImageManifestDescriptor": {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:5e22aefe62cfc32fcd785260a05b6dd60b5b875db92aafc60f7a73feffda86c6",
+      "digest": "sha256:20cb128f5a71891b82599c1f3e755228fdfaa19b5494c7821d25969e98dafe0c",
       "size": 5962,
       "platform": {
         "architecture": "amd64",

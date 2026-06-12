@@ -1,7 +1,7 @@
 [
   {
-    "Id": "23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22",
-    "Created": "2026-05-23T06:18:29.914756753Z",
+    "Id": "4281739e19e1119c427a3fd8315d9c8081e1fb313a11907712ccbe05c35630d1",
+    "Created": "2026-06-11T16:00:17.855619921Z",
     "Path": "/docker-entrypoint.sh",
     "Args": [
       "-c",
@@ -15,17 +15,17 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2955413,
+      "Pid": 805157,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:34.345672175Z",
+      "StartedAt": "2026-06-11T16:00:22.35536717Z",
       "FinishedAt": "0001-01-01T00:00:00Z"
     },
     "Image": "sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d",
-    "ResolvConfPath": "/var/lib/docker/containers/23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22/hostname",
-    "HostsPath": "/var/lib/docker/containers/23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22/hosts",
-    "LogPath": "/var/lib/docker/containers/23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22/23dec623baa3a9318ee9d76e486592a2ba74ad9ea18c62cce5bcae2b48fdab22-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/4281739e19e1119c427a3fd8315d9c8081e1fb313a11907712ccbe05c35630d1/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/4281739e19e1119c427a3fd8315d9c8081e1fb313a11907712ccbe05c35630d1/hostname",
+    "HostsPath": "/var/lib/docker/containers/4281739e19e1119c427a3fd8315d9c8081e1fb313a11907712ccbe05c35630d1/hosts",
+    "LogPath": "/var/lib/docker/containers/4281739e19e1119c427a3fd8315d9c8081e1fb313a11907712ccbe05c35630d1/4281739e19e1119c427a3fd8315d9c8081e1fb313a11907712ccbe05c35630d1-json.log",
     "Name": "/aptl-suricata",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -36,11 +36,11 @@
     "ExecIDs": null,
     "HostConfig": {
       "Binds": [
+        "aptl_suricata_command_socket:/var/run/suricata:rw",
+        "/home/atomik/src/aptl/.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw",
         "/home/atomik/src/aptl/config/suricata/suricata.yaml:/etc/suricata/suricata.yaml:rw",
         "/home/atomik/src/aptl/config/suricata/rules/local.rules:/etc/suricata/rules/local.rules:rw",
-        "aptl_suricata_logs:/var/log/suricata:rw",
-        "aptl_suricata_command_socket:/var/run/suricata:rw",
-        "/home/atomik/src/aptl/.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw"
+        "aptl_suricata_logs:/var/log/suricata:rw"
       ],
       "ContainerIDFile": "",
       "LogConfig": {
@@ -147,8 +147,18 @@
     "Mounts": [
       {
         "Type": "volume",
-        "Name": "1878036baebb5f308f43968b0fe4ec140e1379c89aad90c6ef9afc5128e887a0",
-        "Source": "/var/lib/docker/volumes/1878036baebb5f308f43968b0fe4ec140e1379c89aad90c6ef9afc5128e887a0/_data",
+        "Name": "aptl_suricata_logs",
+        "Source": "/var/lib/docker/volumes/aptl_suricata_logs/_data",
+        "Destination": "/var/log/suricata",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "14a58a4a4a906fc29860af3c524554593e16df93540ce4608e716a95920a26c8",
+        "Source": "/var/lib/docker/volumes/14a58a4a4a906fc29860af3c524554593e16df93540ce4608e716a95920a26c8/_data",
         "Destination": "/var/lib/suricata",
         "Driver": "local",
         "Mode": "",
@@ -156,28 +166,12 @@
         "Propagation": ""
       },
       {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/suricata/suricata.yaml",
-        "Destination": "/etc/suricata/suricata.yaml",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/suricata/rules/local.rules",
-        "Destination": "/etc/suricata/rules/local.rules",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
-      },
-      {
         "Type": "volume",
-        "Name": "aptl_suricata_logs",
-        "Source": "/var/lib/docker/volumes/aptl_suricata_logs/_data",
-        "Destination": "/var/log/suricata",
+        "Name": "2684faf8161eeca969edb69adc0355cd24ad266ed1cb1b12d3fdc44b231d3f62",
+        "Source": "/var/lib/docker/volumes/2684faf8161eeca969edb69adc0355cd24ad266ed1cb1b12d3fdc44b231d3f62/_data",
+        "Destination": "/etc/suricata",
         "Driver": "local",
-        "Mode": "rw",
+        "Mode": "",
         "RW": true,
         "Propagation": ""
       },
@@ -200,14 +194,20 @@
         "Propagation": "rprivate"
       },
       {
-        "Type": "volume",
-        "Name": "81c498ffea76b3b20a83b93b20621c0b9801fba1dba6a2d7a3f72b4f391b135f",
-        "Source": "/var/lib/docker/volumes/81c498ffea76b3b20a83b93b20621c0b9801fba1dba6a2d7a3f72b4f391b135f/_data",
-        "Destination": "/etc/suricata",
-        "Driver": "local",
-        "Mode": "",
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/suricata/suricata.yaml",
+        "Destination": "/etc/suricata/suricata.yaml",
+        "Mode": "rw",
         "RW": true,
-        "Propagation": ""
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/suricata/rules/local.rules",
+        "Destination": "/etc/suricata/rules/local.rules",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
       }
     ],
     "Config": {
@@ -254,8 +254,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "73bd8917862626c5bcc986d2b34733558f94377745e61c96edef7a9f6c5547a8",
-      "SandboxKey": "<REDACTED>",
+      "SandboxID": "21de7d2d42c3f0ce264ed76bbba696c27ba9f361860e3f307628fd8f03e1466a",
+      "SandboxKey": "/var/run/docker/netns/21de7d2d42c3",
       "Ports": {},
       "Networks": {
         "aptl_aptl-dmz": {
@@ -270,10 +270,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "3b7c4e642d7ebef4866bf953ff0b04bd39affb9639881b4938cdcb8a9dc09c16",
-          "EndpointID": "f71a0b2a10b9b524038cdd82cc550fdc32e3580199762516ef35f4a63ac7ec35",
+          "EndpointID": "2c545048b27352e81ea9fc511304aea64a2aeb491f426d6d6c5515259daa7cbd",
           "Gateway": "",
           "IPAddress": "172.20.1.50",
-          "MacAddress": "82:aa:07:a7:db:d9",
+          "MacAddress": "06:e7:f1:a8:62:c0",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -281,7 +281,7 @@
           "DNSNames": [
             "aptl-suricata",
             "suricata",
-            "23dec623baa3"
+            "4281739e19e1"
           ]
         },
         "aptl_aptl-internal": {
@@ -296,10 +296,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
-          "EndpointID": "693b4226ec8213d28b2000a89cb63996c4574afcb220f3d5ed82ad818e501065",
+          "EndpointID": "d2aff68b4860db2afd51cacd35b115df3239ec0c0d0d1a70c38c9850dc437edd",
           "Gateway": "",
           "IPAddress": "172.20.2.50",
-          "MacAddress": "8a:d4:10:7e:60:b4",
+          "MacAddress": "d6:3e:0a:c1:26:32",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -307,7 +307,7 @@
           "DNSNames": [
             "aptl-suricata",
             "suricata",
-            "23dec623baa3"
+            "4281739e19e1"
           ]
         },
         "aptl_aptl-security": {
@@ -322,10 +322,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "f531b4053fbcb648b918f085d69e46dafd1ff77ac87da71976a05a8369f06598",
+          "EndpointID": "7679ac32e7963f5fba9208df0850b4597f4c5a3ae5c639031c6215957b28cce1",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.50",
-          "MacAddress": "fe:d7:53:72:ef:4f",
+          "MacAddress": "be:3d:8a:44:e1:54",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -333,7 +333,7 @@
           "DNSNames": [
             "aptl-suricata",
             "suricata",
-            "23dec623baa3"
+            "4281739e19e1"
           ]
         }
       }

@@ -1,21 +1,15 @@
 {
   "table": "docker_images",
-  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%aptl-wazuh-sidecar%\";",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%wazuh-sidecar-suricata%\";",
   "tool": "osqueryi version 4.9.0",
   "vantage": "containerized osquery host-side Docker socket view",
   "status": "captured",
   "rows": [
     {
-      "created": "1779354126",
-      "id": "de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3",
-      "size_bytes": "169809307",
+      "created": "1781190932",
+      "id": "1a9c99918f73a234721fe07ccafdcc6c49e1b3784a16ce86cdb2864636345d25",
+      "size_bytes": "169830835",
       "tags": "aptl-wazuh-sidecar:local"
-    },
-    {
-      "created": "1777611058",
-      "id": "bdbb03c60c68aa15f0541917da03a8a31ceefa2ed541d2c5b9388b8d8d96204e",
-      "size_bytes": "164223280",
-      "tags": "aptl-wazuh-sidecar:test"
     }
   ]
 }

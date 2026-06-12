@@ -21,7 +21,7 @@ provenance:
       attestation is published for this tag.
 notes:
 - 'SCN-010 issue #357 inventories Cortex as nodes.techvault.cortex after repairing TheHive/Cortex integration.'
-- Cortex remains HTTP-only per ADR-034, but key auth is enabled and TheHive authenticates with a redacted fixture service
+- Cortex remains HTTP-only per ADR-034, but key auth is enabled and TheHive authenticates with a fixture service
   account.
 - No known ACES expressivity gap remains for catalogued Cortex steady-state facts.
 correspondence_checks:
@@ -64,14 +64,14 @@ correspondence_checks:
   ledger_fact_ids:
   - cortex.elasticsearch.backend
   - cortex.thehive.consumer-integration
-- id: cortex-scope-and-redaction-caveats
+- id: cortex-scope-and-credential-capture-caveats
   status: implemented
   source: docs/aces/inventory/cortex/evidence/capture-limits.txt
-  method: README and tests assert clean-start scope, HTTPS deferral, credential redaction, jobs-volume boundary, Syft normalization,
+  method: README and tests assert clean-start scope, HTTPS deferral, credential capture, jobs-volume boundary, Syft normalization,
     and optional osquery limits.
   realized_evidence:
   - path: evidence/capture-limits.txt
-  - path: evidence/cortex-index-documents.redacted.json
+  - path: evidence/cortex-index-documents.json
   - path: evidence/thehive-cortex-auth-current-user.json
   ledger_fact_ids:
   - cortex.auth.service-account
@@ -207,10 +207,10 @@ facts:
     rationale: Current ACES SDL nodes fields carry this catalogued Cortex fact.
 - id: cortex.auth.service-account
   category: auth
-  summary: The APTL organization and aptl-svc@cortex.local service account are seeded in cortex_6; raw key/password are redacted
-    while hasKey/hasPassword, roles, org, and successful TheHive bearer auth are captured.
+  summary: The APTL organization and aptl-svc@cortex.local service account are seeded in cortex_6; raw key/password,
+    hasKey/hasPassword, roles, org, and successful TheHive bearer auth are captured.
   evidence:
-  - path: evidence/cortex-index-documents.redacted.json
+  - path: evidence/cortex-index-documents.json
   - path: evidence/thehive-cortex-auth-current-user.json
   - path: evidence/cortex-state.txt
   aces:
@@ -221,8 +221,8 @@ facts:
     fields:
     - nodes.techvault.cortex.runtime.app_authorizations
     rationale: Current ACES SDL nodes fields carry this catalogued Cortex fact.
-    caveat: Raw fixture credentials are intentionally not encoded; ACES carries credential classification and observed auth
-      behaviour.
+    caveat: ACES app_authorizations has no raw credential field; the raw fixture values are carried in evidence and scenario
+      descriptions while auth behaviour is typed.
 - id: cortex.elasticsearch.backend
   category: relationship
   summary: Cortex uses search.uri http://thehive-es:9200, index cortex_6, with key-auth fields relations/status/key pre-created

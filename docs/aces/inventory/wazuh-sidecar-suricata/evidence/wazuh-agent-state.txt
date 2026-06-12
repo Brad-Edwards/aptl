@@ -50,23 +50,23 @@ wazuh-execd is running...
 status='connected'
 
 # Last time a keepalive was sent
-last_keepalive='2026-06-10 03:36:18'
+last_keepalive='2026-06-12 13:21:57'
 
 # Last time a control message was received
-last_ack='2026-06-10 03:36:18'
+last_ack='2026-06-12 13:21:57'
 
 # Number of generated events
-msg_count='196644'
+msg_count='9743'
 
 # Number of messages (events + control messages) sent to the manager
-msg_sent='351172'
+msg_sent='17429'
 
 # Number of events currently buffered
 # Empty if anti-flooding mechanism is disabled
 msg_buffer='0'
 --client-keys-presence--
-client.keys present: 1 line(s), 93 bytes (content withheld)
-006 aptl-suricata-agent any
+client.keys present: 1 line(s), 93 bytes
+005 aptl-suricata-agent any ab7796c5102c0338e4d3be3f3879768aac155b662c2699b5e743382a41d71376
 --active-response-whitelist--
 # Active-response source-IP whitelist (issue #249, ADR-021).
 #
@@ -104,9 +104,9 @@ client.keys present: 1 line(s), 93 bytes (content withheld)
 172.20.2.35
 --active-response-bin--
 total 304
-drwxr-x--- 2 root wazuh  4096 May 21 09:01 .
-drwxr-x--- 3 root wazuh  4096 May 21 09:01 ..
--rwxr-xr-x 1 root wazuh  6627 May 21 09:01 aptl-firewall-drop
+drwxr-x--- 2 root wazuh  4096 Jun 11 15:15 .
+drwxr-x--- 3 root wazuh  4096 Jun 11 15:15 ..
+-rwxr-xr-x 1 root wazuh  6627 Jun 11 15:15 aptl-firewall-drop
 -rwxr-x--- 1 root wazuh 21656 Apr 30  2025 default-firewall-drop
 -rwxr-x--- 1 root wazuh 19296 Apr 30  2025 disable-account
 -rwxr-x--- 1 root wazuh 21656 Apr 30  2025 firewall-drop
@@ -123,7 +123,7 @@ drwxr-x--- 3 root wazuh  4096 May 21 09:01 ..
 -rwxr-x--- 1 root wazuh 17912 Apr 30  2025 route-null
 -rwxr-x--- 1 root wazuh 19280 Apr 30  2025 wazuh-slack
 --monitored-log-source--
--rw-r--r-- 1 998 998 1529805592 Jun 10 03:36 /logs/eve.json
+-rw-r--r-- 1 998 998 75737383 Jun 12 13:22 /logs/eve.json
 --internal-options--
 analysisd.default_timeframe=360
 analysisd.stats_maxdiff=999000

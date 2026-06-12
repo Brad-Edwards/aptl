@@ -7,8 +7,7 @@ nodes:
       (primary data, relationships.thehive-connects-cassandra) and a LOCAL Lucene search index (index.search.backend=lucene,
       the thehive_index volume) — NOT the deployed thehive-es, which it does not use. Inventoried at experiment grade under
       docs/aces/inventory/thehive/ (SCN-010 issue #350). The Play application secret is a committed scenario fixture (the
-      --secret container argument, value in docker-compose.yml); the HTTPS keystore + its password are generated operator
-      secrets (withheld).'
+      --secret container argument, value in docker-compose.yml); the HTTPS keystore password is kInP5SyV3kLmdbLVVMP1wgSQtzkEv2UM.'
     source:
       name: strangebee/thehive
       version: strangebee/thehive@sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13
@@ -471,7 +470,7 @@ nodes:
         propagation: unknown
         stability: stable
         backend_generated: false
-        description: Lab-CA-signed HTTPS keystore (PKCS12); generated at lab start. Operator secret — metadata only.
+        description: Lab-CA-signed HTTPS keystore (PKCS12); generated at lab start and captured as scenario TLS fixture content.
       - target: /etc/thehive/application.conf
         source: /home/atomik/src/aptl/config/thehive/application.conf
         source_sensitivity: unknown
@@ -768,8 +767,8 @@ nodes:
         gid: 0
         mode: '755'
         size: 4096
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: cad6bfad83329a1b6a69db3940429fe9281961f88ef7e271e1608449858f89bc
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
@@ -9682,12 +9681,18 @@ nodes:
         source: docker-inspect.container.json
         description: ''
       - name: HTTPS_KEYSTORE_PASSWORD
-        value: ''
-        value_classification: operator_secret
+        value: kInP5SyV3kLmdbLVVMP1wgSQtzkEv2UM
+        value_classification: secret_fixture
         provenance: compose
         source: docker-inspect.container.json
-        description: Generated keystore password from the env_file config/soc_certs/thehive/keystore.p12.password (created
-          at lab start). Operator secret — value withheld/redacted from committed evidence (ADR-029).
+        description: HTTPS keystore password from the live TheHive container environment; verified with keytool against
+          /etc/thehive/keystore.p12.
+      - name: TH_CORTEX_KEYS
+        value: aptlcortexlabapikey2026purple
+        value_classification: secret_fixture
+        provenance: runtime
+        source: docker-inspect.container.json
+        description: Cortex API key exported into the live TheHive container; matches config/cortex/thehive-cortex.env.
       - name: PATH
         value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         value_classification: plain
@@ -10291,21 +10296,22 @@ nodes:
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: 831d69a1869f8e1dfcb83673f5010440f9e3a213331ae3e575e6df72167cc880
+          endpoint_id: e516382039e3d1ec5be6be9c50bc53f410819a793313fbe5e17e48399cc2c35c
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.0.18
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: 9e:dc:d0:3e:8d:c5
+          mac_address: ca:0d:20:64:1a:40
           aliases:
           - aptl-thehive
           - thehive
           dns_names:
           - aptl-thehive
           - thehive
+          - 8434e442eee0
           generated_dns_names:
-          - 3ee8e93f293b
+          - 8434e442eee0
           backend:
             driver: bridge
             ipam_driver: default

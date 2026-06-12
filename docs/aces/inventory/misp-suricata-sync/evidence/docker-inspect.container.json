@@ -1,7 +1,7 @@
 [
   {
-    "Id": "f93b9d4e28659e3645e8d982f1e54aae7bf555fd65317a3ede095a79ba181140",
-    "Created": "2026-05-23T06:18:33.940460113Z",
+    "Id": "4d56ddfac02728f5df55169655664a10b97ffdf803c1a9d08ef5ae44946ac006",
+    "Created": "2026-06-11T16:00:20.90864794Z",
     "Path": "aptl-misp-suricata-sync",
     "Args": [],
     "State": {
@@ -11,17 +11,17 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2966482,
+      "Pid": 816601,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:19:18.253749742Z",
+      "StartedAt": "2026-06-11T16:01:13.234913066Z",
       "FinishedAt": "0001-01-01T00:00:00Z"
     },
-    "Image": "sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e",
-    "ResolvConfPath": "/var/lib/docker/containers/f93b9d4e28659e3645e8d982f1e54aae7bf555fd65317a3ede095a79ba181140/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/f93b9d4e28659e3645e8d982f1e54aae7bf555fd65317a3ede095a79ba181140/hostname",
-    "HostsPath": "/var/lib/docker/containers/f93b9d4e28659e3645e8d982f1e54aae7bf555fd65317a3ede095a79ba181140/hosts",
-    "LogPath": "/var/lib/docker/containers/f93b9d4e28659e3645e8d982f1e54aae7bf555fd65317a3ede095a79ba181140/f93b9d4e28659e3645e8d982f1e54aae7bf555fd65317a3ede095a79ba181140-json.log",
+    "Image": "sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb",
+    "ResolvConfPath": "/var/lib/docker/containers/4d56ddfac02728f5df55169655664a10b97ffdf803c1a9d08ef5ae44946ac006/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/4d56ddfac02728f5df55169655664a10b97ffdf803c1a9d08ef5ae44946ac006/hostname",
+    "HostsPath": "/var/lib/docker/containers/4d56ddfac02728f5df55169655664a10b97ffdf803c1a9d08ef5ae44946ac006/hosts",
+    "LogPath": "/var/lib/docker/containers/4d56ddfac02728f5df55169655664a10b97ffdf803c1a9d08ef5ae44946ac006/4d56ddfac02728f5df55169655664a10b97ffdf803c1a9d08ef5ae44946ac006-json.log",
     "Name": "/aptl-misp-suricata-sync",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -173,19 +173,19 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "IOC_TAG_FILTER=aptl:enforce",
-        "SID_BASE=99000000",
-        "MISP_VERIFY_SSL=false",
-        "SURICATA_SOCKET_PATH=/var/run/suricata/suricata-command.socket",
-        "SYNC_INTERVAL_SECONDS=300",
-        "MISP_CA_CERT_PATH=/etc/lab-ca/lab-ca.pem",
-        "LOG_LEVEL=INFO",
-        "MISP_API_KEY=<REDACTED-MISP-API-KEY>",
-        "RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules",
         "MISP_URL=https://misp",
+        "RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules",
+        "SYNC_INTERVAL_SECONDS=300",
+        "SID_BASE=99000000",
+        "IOC_TAG_FILTER=aptl:enforce",
+        "MISP_CA_CERT_PATH=/etc/lab-ca/lab-ca.pem",
+        "MISP_VERIFY_SSL=false",
+        "MISP_API_KEY=JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw",
+        "LOG_LEVEL=INFO",
+        "SURICATA_SOCKET_PATH=/var/run/suricata/suricata-command.socket",
         "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "LANG=C.UTF-8",
-        "GPG_KEY=<REDACTED-GPG-KEY>",
+        "GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D",
         "PYTHON_VERSION=3.11.15",
         "PYTHON_SHA256=272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625"
       ],
@@ -200,7 +200,7 @@
         "com.docker.compose.config-hash": "698addea73c31be5c811bd694c043524dcfd0af0730d177cfb1ee47c95f9f2ae",
         "com.docker.compose.container-number": "1",
         "com.docker.compose.depends_on": "suricata:service_started:false,misp:service_healthy:false",
-        "com.docker.compose.image": "sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e",
+        "com.docker.compose.image": "sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
         "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
@@ -210,8 +210,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "e91bb451cf3e8eb8653486369ecade33f02358bd5c25e1ed3634f8761adc0986",
-      "SandboxKey": "<REDACTED>",
+      "SandboxID": "4b2ecb2a398f6aa1f774972011aa40f65921766cfa0ad9df719e5312710373fb",
+      "SandboxKey": "/var/run/docker/netns/4b2ecb2a398f",
       "Ports": {},
       "Networks": {
         "aptl_aptl-security": {
@@ -226,10 +226,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "c2e7c9057e44f3738c59729144ddb56b9ad8c7d7ec9d16a1e20d8b6c618bde9d",
+          "EndpointID": "1f9c73fd62723bdc27495a37d74155403b91b1b67b891a7a659c564054f8283b",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.19",
-          "MacAddress": "12:17:77:43:59:eb",
+          "MacAddress": "4e:15:5f:aa:9a:0d",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -237,14 +237,14 @@
           "DNSNames": [
             "aptl-misp-suricata-sync",
             "misp-suricata-sync",
-            "f93b9d4e2865"
+            "4d56ddfac027"
           ]
         }
       }
     },
     "ImageManifestDescriptor": {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:099e39a47ded62a5b6f52fdb4d5b48e7d9368e1d1d30c1009279e7292364aa12",
+      "digest": "sha256:675b3c6ff934ed25e0bf01e2b43ffca3eac3b86dc4003d0fa74736cf0dc4f9b4",
       "size": 2008,
       "platform": {
         "architecture": "amd64",

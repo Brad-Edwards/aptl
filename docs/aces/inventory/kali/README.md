@@ -25,7 +25,7 @@ clean-lab rebuild proof and not a byte-identical rebuildability proof.
 | Source class | `custom-build` |
 | Source package | `containers/kali/` |
 | Image tag | `aptl-kali:latest` |
-| Image digest | `aptl-kali@sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9` |
+| Image digest | `aptl-kali@sha256:fee0813b38264c78fab66c86167595715803a6fd9152bf6c0af8e6835d368462` |
 | Base image | `kalilinux/kali-last-release:latest` (mutable upstream tag) |
 | Runtime OS | Kali GNU/Linux Rolling 2026.1 (`kali-rolling`) |
 | Entrypoint | `/entrypoint.sh` under `/sbin/docker-init` (PID 1) |
@@ -41,7 +41,7 @@ clean-lab rebuild proof and not a byte-identical rebuildability proof.
 | Claim | Evidence |
 | --- | --- |
 | Capture time, tool versions, and limits are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt`, `evidence/grype-version.txt` |
-| Docker Compose service intent is represented by the redacted Compose service slice. | `evidence/compose-service.kali.json` |
+| Docker Compose service intent is represented by the authored Compose service slice. | `evidence/compose-service.kali.json` |
 | Custom image identity, config, and layers are recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-history.image.txt` |
 | Source package inputs are checksum-addressable. | `evidence/source-checksums.txt` |
 | Realized runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-redteam.json`, `evidence/docker-network.aptl-dmz.json`, `evidence/docker-network.aptl-internal.json`, `evidence/docker-volume.kali-operations.json`, `evidence/docker-volume.kali-captures.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt` |

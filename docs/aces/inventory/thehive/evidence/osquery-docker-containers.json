@@ -7,11 +7,11 @@
   "rows": [
     {
       "cgroup_namespace": "",
-      "command": "/opt/thehive/entrypoint --secret aptl-thehive-lab-secret-key-2024-purple --cql-hostnames thehive-cassandra --index-backend lucene --es-hostnames thehive-es --no-config-cortex",
+      "command": "/opt/thehive/entrypoint --secret aptl-thehive-lab-secret-key-2024-purple --cql-hostnames thehive-cassandra --index-backend lucene --es-hostnames thehive-es --cortex-proto http --cortex-hostnames cortex --cortex-port 9001",
       "config_entrypoint": "/opt/thehive/entrypoint",
-      "created": "1779517111",
+      "created": "1781193621",
       "finished_at": "0001-01-01T00:00:00Z",
-      "id": "3ee8e93f293ba3e8d5ebae58992c340265d79a9c8c840e85fd6f50273538259f",
+      "id": "8434e442eee0ae7b19788d1da5c8fee1957b84181c22f18e0c4f6e862a2759cd",
       "image": "strangebee/thehive:5.4",
       "image_id": "ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13",
       "ipc_namespace": "",
@@ -19,14 +19,14 @@
       "name": "/aptl-thehive",
       "net_namespace": "",
       "path": "/opt/thehive/entrypoint",
-      "pid": "2974336",
+      "pid": "819543",
       "pid_namespace": "",
       "privileged": "0",
       "readonly_rootfs": "0",
       "security_options": "",
-      "started_at": "2026-05-23T06:19:42.235245872Z",
+      "started_at": "2026-06-11T16:01:28.127487793Z",
       "state": "running",
-      "status": "Up 2 weeks (healthy)",
+      "status": "Up 23 hours (healthy)",
       "user_namespace": "",
       "uts_namespace": ""
     }

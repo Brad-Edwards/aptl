@@ -1,7 +1,7 @@
 [
   {
-    "Id": "baf593babfd4c17e3133cb5a1b05d356b66b6166e59a3bd1192678b23d0c8425",
-    "Created": "2026-05-23T06:18:29.919044782Z",
+    "Id": "f838813d53ead651c21145aa396b916533be87c22036a8d045c1597275da6bb0",
+    "Created": "2026-06-11T16:00:17.868679649Z",
     "Path": "docker-entrypoint.sh",
     "Args": [
       "cassandra",
@@ -14,42 +14,42 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2955925,
+      "Pid": 804777,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:34.690745911Z",
+      "StartedAt": "2026-06-11T16:00:22.179359908Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-06-10T07:17:55.309727816+02:00",
-            "End": "2026-06-10T07:17:55.716229713+02:00",
+            "Start": "2026-06-12T13:45:21.015913945+02:00",
+            "End": "2026-06-12T13:45:21.381344709+02:00",
             "ExitCode": 0,
             "Output": "\nCluster: thehive\nPartitioner: Murmur3Partitioner\nSnitch: DynamicEndpointSnitch\n\n"
           },
           {
-            "Start": "2026-06-10T07:18:25.716891236+02:00",
-            "End": "2026-06-10T07:18:26.125547+02:00",
+            "Start": "2026-06-12T13:45:51.382194863+02:00",
+            "End": "2026-06-12T13:45:51.757600992+02:00",
             "ExitCode": 0,
             "Output": "\nCluster: thehive\nPartitioner: Murmur3Partitioner\nSnitch: DynamicEndpointSnitch\n\n"
           },
           {
-            "Start": "2026-06-10T07:18:56.126431385+02:00",
-            "End": "2026-06-10T07:18:56.497893477+02:00",
+            "Start": "2026-06-12T13:46:21.758167654+02:00",
+            "End": "2026-06-12T13:46:22.121282587+02:00",
             "ExitCode": 0,
             "Output": "\nCluster: thehive\nPartitioner: Murmur3Partitioner\nSnitch: DynamicEndpointSnitch\n\n"
           },
           {
-            "Start": "2026-06-10T07:19:26.499114068+02:00",
-            "End": "2026-06-10T07:19:26.881506848+02:00",
+            "Start": "2026-06-12T13:46:52.121654839+02:00",
+            "End": "2026-06-12T13:46:52.632149674+02:00",
             "ExitCode": 0,
             "Output": "\nCluster: thehive\nPartitioner: Murmur3Partitioner\nSnitch: DynamicEndpointSnitch\n\n"
           },
           {
-            "Start": "2026-06-10T07:19:56.883002713+02:00",
-            "End": "2026-06-10T07:19:57.271849529+02:00",
+            "Start": "2026-06-12T13:47:22.63270011+02:00",
+            "End": "2026-06-12T13:47:23.0123282+02:00",
             "ExitCode": 0,
             "Output": "\nCluster: thehive\nPartitioner: Murmur3Partitioner\nSnitch: DynamicEndpointSnitch\n\n"
           }
@@ -57,10 +57,10 @@
       }
     },
     "Image": "sha256:bfc28ce8118c09cd32840684f5c31b664f505d0f3e46898147864b18ccefcca0",
-    "ResolvConfPath": "/var/lib/docker/containers/baf593babfd4c17e3133cb5a1b05d356b66b6166e59a3bd1192678b23d0c8425/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/baf593babfd4c17e3133cb5a1b05d356b66b6166e59a3bd1192678b23d0c8425/hostname",
-    "HostsPath": "/var/lib/docker/containers/baf593babfd4c17e3133cb5a1b05d356b66b6166e59a3bd1192678b23d0c8425/hosts",
-    "LogPath": "/var/lib/docker/containers/baf593babfd4c17e3133cb5a1b05d356b66b6166e59a3bd1192678b23d0c8425/baf593babfd4c17e3133cb5a1b05d356b66b6166e59a3bd1192678b23d0c8425-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/f838813d53ead651c21145aa396b916533be87c22036a8d045c1597275da6bb0/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/f838813d53ead651c21145aa396b916533be87c22036a8d045c1597275da6bb0/hostname",
+    "HostsPath": "/var/lib/docker/containers/f838813d53ead651c21145aa396b916533be87c22036a8d045c1597275da6bb0/hosts",
+    "LogPath": "/var/lib/docker/containers/f838813d53ead651c21145aa396b916533be87c22036a8d045c1597275da6bb0/f838813d53ead651c21145aa396b916533be87c22036a8d045c1597275da6bb0-json.log",
     "Name": "/aptl-thehive-cassandra",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -184,7 +184,7 @@
       }
     ],
     "Config": {
-      "Hostname": "baf593babfd4",
+      "Hostname": "f838813d53ea",
       "Domainname": "",
       "User": "",
       "AttachStdin": false,
@@ -201,9 +201,9 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
+        "CASSANDRA_CLUSTER_NAME=thehive",
         "MAX_HEAP_SIZE=512M",
         "HEAP_NEWSIZE=128M",
-        "CASSANDRA_CLUSTER_NAME=thehive",
         "PATH=/opt/cassandra/bin:/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "GOSU_VERSION=1.19",
         "JAVA_HOME=/opt/java/openjdk",
@@ -249,8 +249,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "b6dcea2dcb68274bdc1627670ca31a7dda5fb8f6a9ffb058114364ec78537dc3",
-      "SandboxKey": "<REDACTED>",
+      "SandboxID": "fca6c4613ec5e7967d4d62a31413f612fbc3a73250a5acd7af6234f9519ec066",
+      "SandboxKey": "/var/run/docker/netns/fca6c4613ec5",
       "Ports": {
         "7000/tcp": null,
         "7001/tcp": null,
@@ -269,10 +269,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "cc2baef19a8c4f2b6dd7798d848b54cb73da88e7a1d8079b67e4bc39b8f7e56c",
+          "EndpointID": "1417eeb83b041c577c185da7dff14581c009ab5947f03ee297c20769f8844191",
           "Gateway": "172.20.0.1",
-          "IPAddress": "172.20.0.5",
-          "MacAddress": "e6:c8:39:71:62:0c",
+          "IPAddress": "172.20.0.4",
+          "MacAddress": "8a:57:bc:8c:4d:95",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -280,7 +280,7 @@
           "DNSNames": [
             "aptl-thehive-cassandra",
             "thehive-cassandra",
-            "baf593babfd4"
+            "f838813d53ea"
           ]
         }
       }

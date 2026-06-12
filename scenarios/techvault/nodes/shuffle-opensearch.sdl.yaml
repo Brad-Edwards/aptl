@@ -998,13 +998,13 @@ nodes:
         gid: 1000
         mode: '664'
         size: 1703
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: e1cd21e57a9dbcfbcbd14cca50035e34d8b78f662e7dde69688c75ceb9c6a943
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree + filesystem-checksums
         stability: stable
-        sensitivity: operator_secret
-        description: ''
+        sensitivity: secret_fixture
+        description: OpenSearch node TLS private key; checksum verified from the live container.
       - path: /usr/share/opensearch/config/esnode.pem
         entry_type: file
         presence: present
@@ -1062,13 +1062,13 @@ nodes:
         gid: 1000
         mode: '664'
         size: 1703
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 1c448538553155f9d6013529b1a85d06f644ccbfb64788d2972175627ab759a1
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree + filesystem-checksums
         stability: stable
-        sensitivity: operator_secret
-        description: ''
+        sensitivity: secret_fixture
+        description: OpenSearch admin TLS private key; checksum verified from the live container.
       - path: /usr/share/opensearch/config/kirk.pem
         entry_type: file
         presence: present
@@ -1590,13 +1590,13 @@ nodes:
         gid: 1000
         mode: '660'
         size: 196
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: fe368ea631cc9456ed91392d4b26439bf22fcdee9f3f4a17d93ce3bf6012d73f
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree + filesystem-checksums
         stability: runtime_created
-        sensitivity: operator_secret
-        description: ''
+        sensitivity: secret_fixture
+        description: OpenSearch keystore; checksum verified from the live container.
       - path: /usr/share/opensearch/config/opensearch.yml
         entry_type: file
         presence: present
@@ -2384,8 +2384,15 @@ nodes:
         parent_pid: null
         command:
         - /usr/share/opensearch/jdk/bin/java
-        - '...'
-        command_redacted: true
+        - >-
+          -Xshare:auto -Xms4m -Xmx64m -XX:+UseSerialGC
+          -Dlog4j.configurationFile=/usr/share/opensearch/config/opensearch-performance-analyzer/log4j2.xml
+          -Xms64M -Xmx64M -XX:+UseSerialGC -XX:CICompilerCount=1 -XX:-TieredCompilation
+          -XX:InitialCodeCacheSize=4096 -XX:MaxRAM=400m -Dopensearch.path.home=/usr/share/opensearch
+          -Dopensearch.path.conf=/usr/share/opensearch/config -Dopensearch.distribution.type=tar -cp
+          /usr/share/opensearch/lib/*:/usr/share/opensearch/performance-analyzer-rca/lib/*
+          org.opensearch.performanceanalyzer.PerformanceAnalyzerApp
+        command_redacted: false
         role: other
         user: opensearch
         group: opensearch
@@ -2396,8 +2403,27 @@ nodes:
         parent_pid: null
         command:
         - /usr/share/opensearch/jdk/bin/java
-        - '...'
-        command_redacted: true
+        - >-
+          -Xshare:auto -Dopensearch.networkaddress.cache.ttl=60 -Dopensearch.networkaddress.cache.negative.ttl=10
+          -XX:+AlwaysPreTouch -Xss1m -Djava.awt.headless=true -Dfile.encoding=UTF-8 -Djna.nosys=true
+          -XX:-OmitStackTraceInFastThrow -XX:+ShowCodeDetailsInExceptionMessages -Dio.netty.noUnsafe=true
+          -Dio.netty.noKeySetOptimization=true -Dio.netty.recycler.maxCapacityPerThread=0
+          -Dio.netty.allocator.numDirectArenas=0 -Dlog4j.shutdownHookEnabled=false -Dlog4j2.disable.jmx=true
+          -Djava.security.manager=allow -Djava.locale.providers=SPI,COMPAT -Xms1g -Xmx1g -XX:+UseG1GC
+          -XX:G1ReservePercent=25 -XX:InitiatingHeapOccupancyPercent=30
+          -Djava.io.tmpdir=/tmp/opensearch-14699837816484798594 -XX:+HeapDumpOnOutOfMemoryError
+          -XX:HeapDumpPath=data -XX:ErrorFile=logs/hs_err_pid%p.log
+          -Xlog:gc*,gc+age=trace,safepoint:file=logs/gc.log:utctime,pid,tags:filecount=32,filesize=64m
+          -Djava.security.manager=allow --add-modules=jdk.incubator.vector
+          -Djava.util.concurrent.ForkJoinPool.common.threadFactory=org.opensearch.secure_sm.SecuredForkJoinWorkerThreadFactory
+          -Dclk.tck=100 -Djdk.attach.allowAttachSelf=true
+          -Djava.security.policy=/usr/share/opensearch/config/opensearch-performance-analyzer/opensearch_security.policy
+          --add-opens=jdk.attach/sun.tools.attach=ALL-UNNAMED -Dopensearch.cgroups.hierarchy.override=/
+          -Xms512m -Xmx512m -XX:MaxDirectMemorySize=268435456 -Dopensearch.path.home=/usr/share/opensearch
+          -Dopensearch.path.conf=/usr/share/opensearch/config -Dopensearch.distribution.type=tar
+          -Dopensearch.bundled_jdk=true -cp /usr/share/opensearch/lib/* org.opensearch.bootstrap.OpenSearch
+          -Ediscovery.type=single-node
+        command_redacted: false
         role: worker
         user: opensearch
         group: opensearch
@@ -2835,7 +2861,7 @@ nodes:
           exit_code: 0
           output: |
             {
-              "name" : "e1eb785c281a",
+              "name" : "3931f92d40bb",
               "cluster_name" : "docker-cluster",
               "cluster_uuid" : "smPCS7KBQYWuyqcH7AWKCg",
               "version" : {
@@ -2857,7 +2883,7 @@ nodes:
           exit_code: 0
           output: |
             {
-              "name" : "e1eb785c281a",
+              "name" : "3931f92d40bb",
               "cluster_name" : "docker-cluster",
               "cluster_uuid" : "smPCS7KBQYWuyqcH7AWKCg",
               "version" : {
@@ -2879,7 +2905,7 @@ nodes:
           exit_code: 0
           output: |
             {
-              "name" : "e1eb785c281a",
+              "name" : "3931f92d40bb",
               "cluster_name" : "docker-cluster",
               "cluster_uuid" : "smPCS7KBQYWuyqcH7AWKCg",
               "version" : {
@@ -2901,7 +2927,7 @@ nodes:
           exit_code: 0
           output: |
             {
-              "name" : "e1eb785c281a",
+              "name" : "3931f92d40bb",
               "cluster_name" : "docker-cluster",
               "cluster_uuid" : "smPCS7KBQYWuyqcH7AWKCg",
               "version" : {
@@ -2923,7 +2949,7 @@ nodes:
           exit_code: 0
           output: |
             {
-              "name" : "e1eb785c281a",
+              "name" : "3931f92d40bb",
               "cluster_name" : "docker-cluster",
               "cluster_uuid" : "smPCS7KBQYWuyqcH7AWKCg",
               "version" : {
@@ -2942,27 +2968,28 @@ nodes:
           output_redacted: false
         description: Compose healthcheck probes the OpenSearch cluster over HTTPS with the admin credential.
       network:
-        hostname: e1eb785c281a
+        hostname: 3931f92d40bb
         domainname: ''
         endpoints:
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: 52f773a460e0f1c8222a0a69d912e57d65d1feee7e784f7779269ed14598f302
+          endpoint_id: a537d655a9f35a110e53b3a2c0bf509f220a485510710352120b169901ef06a7
           endpoint_id_stability: ephemeral
           backend_generated: true
-          ip_address: 172.20.0.2
+          ip_address: 172.20.0.3
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: 66:7d:36:37:28:71
+          mac_address: f6:03:be:a2:c8:6e
           aliases:
           - aptl-shuffle-opensearch
           - shuffle-opensearch
           dns_names:
           - aptl-shuffle-opensearch
           - shuffle-opensearch
+          - 3931f92d40bb
           generated_dns_names:
-          - e1eb785c281a
+          - 3931f92d40bb
           backend:
             driver: bridge
             ipam_driver: default
@@ -3075,8 +3102,7 @@ nodes:
         tenant_id: ''
         base_dn: ''
         description: Security-plugin internal users persisted in the .opendistro_security index, captured via the operator-credentialed
-          _plugins/_security/api/internalusers and rolesmapping REST vantage (opensearch-state.txt). The REST API redacts
-          password hashes server-side; the admin credential is the committed compose fixture.
+          _plugins/_security/api/internalusers and rolesmapping REST vantage (opensearch-state.txt). The REST API response does not expose password hashes; the admin credential is the committed compose fixture and capture content remains verbatim.
         services:
         - service_id: opensearch-rest-api
           service: shuffle-opensearch-rest
@@ -3344,7 +3370,7 @@ nodes:
             on single node). Backs all Shuffle SOAR persistence (24 indices: workflows, executions, apps, orgs, users, security).'
         nodes:
         - node_id: vlJ46vTYR2C_NMHQU64o3g
-          name: e1eb785c281a
+          name: 3931f92d40bb
           roles:
           - cluster_manager
           - data

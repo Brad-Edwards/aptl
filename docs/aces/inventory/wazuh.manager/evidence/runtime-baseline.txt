@@ -28,14 +28,14 @@ CapEff:	00000000a80425fb
 CapBnd:	00000000a80425fb
 CapAmb:	0000000000000000
 --environment--
-API_PASSWORD=<REDACTED>
+API_PASSWORD=WazuhPass123!
 API_USERNAME=wazuh-wui
 FILEBEAT_SSL_VERIFICATION_MODE=full
 HISTCONTROL=ignoredups
 HISTSIZE=1000
 HOME=/root
 HOSTNAME=
-INDEXER_PASSWORD=<REDACTED>
+INDEXER_PASSWORD=SecretPassword
 INDEXER_URL=https://wazuh.indexer:9200
 INDEXER_USERNAME=admin
 LOGNAME=root
@@ -45,7 +45,7 @@ PWD=/
 SHLVL=1
 SSL_CERTIFICATE=/etc/ssl/filebeat.pem
 SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
-SSL_KEY=<REDACTED>
+SSL_KEY=/etc/ssl/filebeat.key
 USER=root
 _=/usr/bin/env
 --listeners--

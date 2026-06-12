@@ -30,9 +30,10 @@ capture ran at `2026-06-05T06:11:11Z` with Trivy `0.70.0`.
   `/var/run/docker.sock` bind encoded as both a runtime mount and a
   `local_control_interfaces` entry, the PID 1 `./shufflebackend` process
   (root, working dir `/app`, a 119,680,431-byte Go binary), 8 compose-declared
-  `SHUFFLE_*` environment variables plus the image `PATH` (3 redacted:
-  `SHUFFLE_DEFAULT_APIKEY`, `SHUFFLE_DEFAULT_PASSWORD`,
-  `SHUFFLE_OPENSEARCH_PASSWORD`), and the `security-net` endpoint at
+  `SHUFFLE_*` environment variables plus the image `PATH`, including the
+  scenario fixture values for `SHUFFLE_DEFAULT_APIKEY`,
+  `SHUFFLE_DEFAULT_PASSWORD`, and `SHUFFLE_OPENSEARCH_PASSWORD`, and the
+  `security-net` endpoint at
   `172.20.0.20` with no host-published ports (intra-cluster only per
   SEC-006 / ADR-034).
 - `runtime.service_listeners` for the wildcard Shuffle API on `:::5001` and the
@@ -43,7 +44,7 @@ capture ran at `2026-06-05T06:11:11Z` with Trivy `0.70.0`.
 - The Shuffle REST API routes (`/api/v1/health` unauthenticated;
   `/api/v1/workflows`, `/apps`, `/users` behind a Bearer API key) under
   `runtime.applications`, the Shuffle org / admin user / admin API-key metadata
-  under `runtime.identity_authorities` (redacted secret material), and the
+  under `runtime.identity_authorities`, and the
   Shuffle SOAR platform state under `runtime.platform_applications`
   (`platform_kind: soar`).
 - Package state: 21 Alpine apk packages, the Go `go.mod` dependency manifest,
@@ -84,9 +85,9 @@ capture ran at `2026-06-05T06:11:11Z` with Trivy `0.70.0`.
   destructive fresh-lab reset or byte-identical rebuild proof.
 - SBOM and vulnerability results are scanner state tied to the captured Trivy
   `0.70.0` version and advisory-database state, not permanent truth.
-- Raw secret values are redacted from every committed artifact: the
+- Scenario fixture secrets are retained verbatim in the committed capture:
   `SHUFFLE_DEFAULT_APIKEY`, the scenario admin password, and the OpenSearch
-  password are recorded by declaration, classification, and mount/source only.
+  password are TechVault scenario content.
 - Inbound consumers (shuffle-orborus, shuffle-frontend, the Wazuh
   custom-shuffle integration) are documented as future SOC-companion
   inventories; only the shuffle-opensearch datastore relationship is encoded.

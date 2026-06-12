@@ -22,7 +22,7 @@ now encodes:
   proc paths), the anonymous `/data` volume mount (image `VOLUME /data`; no named
   Compose volume), PID 1 `redis-server` running as the `redis` service account
   (uid 999) with no effective capabilities, the security-net endpoint
-  (DHCP-assigned `172.20.0.3`, no host-published ports), environment, local
+  (DHCP-assigned `172.20.0.2`, no host-published ports), environment, local
   users/groups, 17 apk packages, the redis/gosu software components, SBOM scanner
   evidence, and 101 Trivy findings.
 - `runtime.service_listeners` for the Redis RESP listener on the IPv4 and IPv6
@@ -66,7 +66,7 @@ SDL (per ACES #471) so the asset can be reproduced — not an operator secret.
 - Authentication: a single `default` Redis ACL user with `~* &* +@all` and
   `requirepass` enforced; the fixture password is preserved as scenario content.
 - Participant discovery: `aptl-misp` resolves `misp-redis` / `aptl-misp-redis`
-  to `172.20.0.3` and reaches TCP/6379; `aptl-kali` cannot reach the security-net
+  to `172.20.0.2` and reaches TCP/6379; `aptl-kali` cannot reach the security-net
   address from its current network vantage.
 
 ## Limits

@@ -43,10 +43,10 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Registry digest | `cassandra@sha256:bfc28ce8118c09cd32840684f5c31b664f505d0f3e46898147864b18ccefcca0` |
 | Runtime OS | Debian GNU/Linux 12 (bookworm) |
 | Engine | Apache Cassandra 4.1.11, single-node, Murmur3Partitioner |
-| Cluster | `thehive` (host `fd42dafe-...`), datacenter1/rack1, 16 vnode tokens, 100% ownership |
+| Cluster | `thehive` (host `27c4df17-...`), datacenter1/rack1, 16 vnode tokens, 100% ownership |
 | Keyspaces (replicated) | `thehive` RF1, `system_auth` RF1, `system_distributed` RF3, `system_traces` RF2 |
 | Reachable participant ports | none host-published; 9042 (CQL) + 7000 (inter-node) + 7199 (JMX, loopback) on security-net |
-| Network identity | `security-net` 172.20.0.5 (only network) |
+| Network identity | `security-net` 172.20.0.4 (only network) |
 | Memory limit | 1 GiB (`MAX_HEAP_SIZE=512M`) |
 | Package inventory | 122 dpkg packages |
 | Trivy vulnerability findings | 398 image-layer findings: 15 critical, 55 high, 191 medium, 132 low, 5 unknown |

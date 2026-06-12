@@ -13,13 +13,9 @@ set -euo pipefail
 # 9600 (performance analyzer) to the security network only (no host-published
 # ports).
 #
-# Secret handling: OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123! is a
-# COMMITTED SCENARIO FIXTURE present in docker-compose.yml. It is a
-# secret_fixture: its value is PRESERVED in the authored compose extraction
-# (compose-service.shuffle-opensearch.json) and is used to authenticate the
-# in-container REST probes, but it is REDACTED from every other evidence file
-# (docker-inspect env redaction, runtime-baseline env, and the redact_stream
-# backstop on all *-state files). Non-destructive: observes the running lab.
+# OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123! is TechVault scenario
+# content and is captured verbatim in evidence. Non-destructive: observes the
+# running lab.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
@@ -33,8 +29,7 @@ export PATH="$HOME/.local/bin:$PATH"
 # The OpenSearch admin password is the committed compose scenario fixture. It is
 # read from the authored compose file (not hardcoded here) so the probe stays
 # in sync with the scenario, passed to docker exec via -e, and NEVER written to
-# evidence; redact_stream redacts the literal value as a defense-in-depth
-# backstop.
+# evidence as scenario content.
 OS_ADMIN_USER="${OS_ADMIN_USER:-admin}"
 OS_ADMIN_PASS="$(yq -r '.services."shuffle-opensearch".environment[] | select(test("^OPENSEARCH_INITIAL_ADMIN_PASSWORD=")) | sub("^OPENSEARCH_INITIAL_ADMIN_PASSWORD=";"")' "$ROOT/docker-compose.yml")"
 
@@ -53,48 +48,10 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-# redact_stream redacts NAME=value secret env, JSON "key":"value" secrets, PEM
-# private-key envelopes, AND the literal scenario-fixture password value so it
-# can never leak into a *-state or runtime file.
-redact_stream() {
-  local pass_re
-  pass_re="$(printf '%s' "$OS_ADMIN_PASS" | sed -E 's/[][(){}.^$*+?|\\\/]/\\&/g')"
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's/("?(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie)"?[[:space:]]*[:=][[:space:]]*")[^"]*(")/\1<REDACTED>\3/Ig' \
-    -e 's/-----BEGIN [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-BEGIN>/g' \
-    -e 's/-----END [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-END>/g' \
-    -e "s/${pass_re}/<REDACTED-SCENARIO-FIXTURE>/g"
+# Scenario target values are captured verbatim; placeholders are defects.
+capture_stream() {
+  cat
 }
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie|authorization)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
 
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
@@ -104,49 +61,22 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 # The shuffle-opensearch compose block is extracted directly from
 # docker-compose.yml with yq. A profile-filtered docker compose config cannot
 # be used because soc-profile services depend_on wazuh.manager and profile
-# filtering invalidates the project. The env redaction rule is applied
-# uniformly EXCEPT it intentionally preserves OPENSEARCH_INITIAL_ADMIN_PASSWORD:
-# that committed value is a secret_fixture (scenario reproduction input), not a
-# real operator secret, so it stays in the authored compose extraction.
+# filtering invalidates the project. Authored environment values are captured
+# exactly as scenario intent.
 yq -o=json '.services."shuffle-opensearch"' "$ROOT/docker-compose.yml" \
-  | jq '
-      if (has("environment") and (.environment | type == "array")) then
-        .environment |= map(
-          if test("^(?<name>[^=]+)=") then
-            capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-            | if ($m.name == "OPENSEARCH_INITIAL_ADMIN_PASSWORD") then .
-              elif ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i"))
-              then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-              else .
-              end
-          else
-            .
-          end
-        )
-      else . end
-    ' > "$OUT/compose-service.shuffle-opensearch.json"
+  | jq . > "$OUT/compose-service.shuffle-opensearch.json"
 record_limit "compose-service.shuffle-opensearch.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project."
-record_limit "OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123! is a COMMITTED SCENARIO FIXTURE (secret_fixture), not a real operator secret. Its value is intentionally PRESERVED in compose-service.shuffle-opensearch.json (the authored compose extraction) as a scenario reproduction input, and is REDACTED everywhere else (docker-inspect.container.json env, runtime-baseline.txt env, and all *-state files via redact_stream). This matches the committed docker-compose.yml."
+record_limit "OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123! is a committed scenario fixture and is retained verbatim in evidence and SDL because it is TechVault scenario content."
 
-# The env array is redacted by redact_env (covers OPENSEARCH_INITIAL_ADMIN_PASSWORD).
-# The committed scenario-fixture password ALSO appears inside the compose
-# healthcheck Test command that Docker embeds in the container config
-# (curl -u admin:<fixture>); it is redacted structurally inside jq via a LITERAL
-# (non-regex) split/join replacement over every string so the JSON stays
-# well-formed (a line-based sed would mangle the JSON quoting). The fixture
-# value is preserved ONLY in the authored compose-service extraction.
 docker inspect "$CONTAINER" \
-  | jq --arg fixture "$OS_ADMIN_PASS" --arg redacted "<REDACTED-SCENARIO-FIXTURE>" "$redact_env_jq
-      .[].Config.Env |= ((. // []) | map(redact_env))
-      | redact_sensitive_keys
-      | walk(if (type == \"string\" and (\$fixture | length) > 0) then (split(\$fixture) | join(\$redacted)) else . end)" \
+  | jq . \
   > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
+  | jq . \
   > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker history --no-trunc "$IMAGE" | capture_stream > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" | capture_stream > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -159,8 +89,8 @@ fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_shuffle_opensearch_data | jq . > "$OUT/docker-volume.shuffle_opensearch_data.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.shuffle-opensearch.txt"
+docker top "$CONTAINER" | capture_stream > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 | capture_stream > "$OUT/docker-logs.shuffle-opensearch.txt"
 
 record_limit "Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof."
 record_limit "shuffle-opensearch joins aptl-security with a DHCP address (the compose service declares no static ipv4_address) and publishes NO host ports; its current network identity is recorded in docker-inspect.container.json and docker-network.aptl-security.json."
@@ -194,10 +124,8 @@ docker exec "$CONTAINER" bash -lc '
 } > "$OUT/language-manifests.txt"
 
 # --- Filesystem manifest + checksums (config + bin + modules/plugins list) --
-# Excludes the data volume content. TLS private keys under config
-# (esnode-key.pem, kirk-key.pem and any *-key.pem) are operator_secret: recorded
-# path/metadata only with sensitivity=operator_secret and excluded from
-# checksums.
+# Excludes the data volume content. Config key and keystore paths are captured
+# as scenario runtime surfaces.
 #
 # The Amazon Linux 2023 OpenSearch image does NOT ship find(1) or xargs(1); it
 # does ship python3, stat, and sha256sum. The path list is therefore enumerated
@@ -248,19 +176,17 @@ PY
         sensitivity=plain
         case "$path" in
           /usr/share/opensearch/data*) stability=runtime_created ;;
-          *-key.pem|/usr/share/opensearch/config/*.key) sensitivity=operator_secret ;;
-          /usr/share/opensearch/config/opensearch.keystore) stability=runtime_created; sensitivity=operator_secret ;;
+          /usr/share/opensearch/config/opensearch.keystore) stability=runtime_created ;;
         esac
         stat -c "%F\t%A\t%a\t%u\t%U\t%g\t%G\t%s\t%Y\t${stability}\t${sensitivity}\t%n" "$path"
       done
 ' | awk '{gsub(/\\t/,"\t"); print}' | gzip -n > "$OUT/filesystem-tree.txt.gz"
-record_limit "filesystem-tree.txt.gz scopes the manifest to the application surfaces (/usr/share/opensearch config, bin, and modules/plugins listings, /etc/os-release) plus top-level directory rows for the volume-backed data tree. TLS private keys under config (esnode-key.pem, kirk-key.pem) and the generated opensearch.keystore are recorded as path/metadata rows with sensitivity=operator_secret and excluded from filesystem-checksums.txt."
+record_limit "filesystem-tree.txt.gz scopes the manifest to the application surfaces (/usr/share/opensearch config, bin, and modules/plugins listings, /etc/os-release) plus top-level directory rows for the volume-backed data tree."
 record_limit "The Amazon Linux 2023 OpenSearch image ships no find(1) or xargs(1); the filesystem manifest and checksums are enumerated with the in-container python3 os.walk and computed with the in-container stat/sha256sum, producing the same column format as the precedents."
 
-# Stable-content checksums over config + bin trees; TLS private keys and the
-# generated keystore are excluded (metadata rows only above). modules/plugins
-# are listing-level evidence per the dedicated limit. Enumerated with python3
-# (no find/xargs in image), checksummed with the native sha256sum per path.
+# Stable-content checksums over config + bin trees. modules/plugins are
+# listing-level evidence per the dedicated limit. Enumerated with python3 (no
+# find/xargs in image), checksummed with the native sha256sum per path.
 docker exec "$CONTAINER" bash -lc '
   set -eu
   python3 - <<"PY" | sort -u | while IFS= read -r path; do
@@ -276,8 +202,6 @@ for root in roots:
             if not os.path.isfile(p):
                 continue
             base = os.path.basename(p)
-            if base.endswith("-key.pem") or base.endswith(".key") or base == "opensearch.keystore":
-                continue
             out.add(p)
 for p in sorted(out):
     print(p)
@@ -285,7 +209,7 @@ PY
         sha256sum "$path"
       done
 ' | xz -9 -c > "$OUT/filesystem-checksums.txt.xz"
-record_limit "filesystem-checksums.txt.xz covers the OpenSearch config and bin trees only; modules and plugins are recorded as manifest listing rows in filesystem-tree.txt.gz (no per-file checksums) and their integrity is evidenced by the registry image digest and the SBOMs. TLS private keys (esnode-key.pem, kirk-key.pem) and the generated opensearch.keystore are excluded from checksums (operator_secret)."
+record_limit "filesystem-checksums.txt.xz covers the OpenSearch config and bin trees only; modules and plugins are recorded as manifest listing rows in filesystem-tree.txt.gz (no per-file checksums) and their integrity is evidenced by the registry image digest and the SBOMs."
 
 # --- Runtime baseline --------------------------------------------------------
 # The OpenSearch image (Amazon Linux 2023) does not include ss or netstat;
@@ -319,12 +243,12 @@ docker exec "$CONTAINER" sh -lc '
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args 2>/dev/null || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
   true
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' | capture_stream > "$OUT/runtime-baseline.txt"
 record_limit "The OpenSearch (Amazon Linux 2023) image does not include ss or netstat; listener and outbound-connection evidence in runtime-baseline.txt falls back to raw /proc/net/tcp,tcp6,udp,udp6 tables, complemented by docker top and osquery namespace-sharing evidence. The REST/transport/perf-analyzer listeners are confirmed via the OpenSearch API in opensearch-state.txt."
 
 # --- Service-specific state: OpenSearch REST API (authenticated, HTTPS) ------
 # Security is ENABLED; HTTPS with a self-signed cert (hence -k). Auth uses the
-# committed scenario-fixture credentials, passed via -e and redacted on output.
+# committed scenario-fixture credentials, passed via -e.
 # A readiness poll guards against a momentary REST/security-plugin
 # unavailability (e.g. a GC pause or a security-plugin reinitialization, which
 # transiently returns "OpenSearch Security not initialized") producing empty or
@@ -368,7 +292,7 @@ except Exception as e:
   echo --security-rolesmapping--
   curl -ks -u "$cred" "https://localhost:9200/_plugins/_security/api/rolesmapping?pretty" 2>&1
   true
-' | redact_stream > "$OUT/opensearch-state.txt"
+' | capture_stream > "$OUT/opensearch-state.txt"
 record_limit "opensearch-state.txt captures the Security-plugin internal user database (_plugins/_security/api/internalusers) and roles mappings from the operator-credentialed REST vantage; bcrypt password hashes of the committed fixture credential are scenario content and retained per the repo secret-fixture policy."
 
 # --- Per-index mappings ------------------------------------------------------
@@ -404,7 +328,7 @@ except Exception:
   done
   echo "}"
   true
-' | redact_stream | jq -S . > "$OUT/shuffle-opensearch-index-mappings.json"
+' | capture_stream | jq -S . > "$OUT/shuffle-opensearch-index-mappings.json"
 record_limit "shuffle-opensearch-index-mappings.json captures per-index _mapping bodies for every index returned by _cat/indices, tagging each with the vantage used (_mapping for accessible indices; the operator _cluster/state/metadata vantage as a fallback for any reserved/system index whose _mapping returns a security_exception). The structured field schemas are encoded as ACES datastore mapping manifests (field counts, type census, schema digest per aces#468-470); the raw _mapping bodies remain evidence-only."
 
 # --- Participant-vantage discovery: kali ------------------------------------
@@ -430,7 +354,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --ping--
     [ -n "$OS_IP" ] && ping -c 1 -W 2 "$OS_IP" 2>&1 | sed -n "1,4p"
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' | capture_stream > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

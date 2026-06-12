@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+  image_digest: aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -77,7 +77,7 @@ notes:
 facts:
 - id: dns.image.identity
   category: provenance
-  summary: The asset uses first-party local image aptl-dns:latest, captured as aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75.
+  summary: The asset uses first-party local image aptl-dns:latest, captured as aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6.
   evidence:
   - path: evidence/docker-inspect.image.json
   - path: evidence/docker-inspect.container.json

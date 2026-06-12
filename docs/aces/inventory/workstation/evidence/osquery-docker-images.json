@@ -1,15 +1,21 @@
 {
   "table": "docker_images",
-  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%aptl-workstation%\";",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%workstation%\";",
   "tool": "osqueryi version 4.9.0",
   "vantage": "containerized osquery host-side Docker socket view",
   "status": "captured",
   "rows": [
     {
-      "created": "1779227074",
-      "id": "7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f",
-      "size_bytes": "981446197",
+      "created": "1781191078",
+      "id": "a407dd9bd9aecf297a51bd747215873e5edcc71e8618e9775bea9a5bb654dcbd",
+      "size_bytes": "1003772268",
       "tags": "aptl-workstation:latest"
+    },
+    {
+      "created": "1779354154",
+      "id": "6709a77dd328c7f4a4173df884a22113a6e4de000372d3d02892ab4c9fce1faf",
+      "size_bytes": "981573544",
+      "tags": "aptl2-workstation:latest"
     }
   ]
 }

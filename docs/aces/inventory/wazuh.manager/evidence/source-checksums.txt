@@ -11,5 +11,5 @@ dd72b3d2a2912a0fca61b2d3c69e08deafce6821b357106ad90023965de1757a  config/wazuh_c
 b1fdf64371c5ea24f8e1ce47ea2d0aba185f2f6697702c4bb092c2f3d696547c  config/wazuh_cluster/suricata_rules.xml
 3799f8319eaf0da79c2c2a6e9468750122e6afcc715ee8095870ce750e366e15  config/wazuh_cluster/database_rules.xml
 295e56ea82a93f8396d6cdd679fca0819bdf49f9c93a0099e4c4da06834a7498  config/wazuh_cluster/patch-rule-path.py
-<OMITTED-OPERATOR-SECRET-CHECKSUM>  config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem
-<OMITTED-OPERATOR-SECRET-CHECKSUM>  .aptl/config/wazuh_cluster/wazuh_manager.conf
+3cc8f81ea96d480bf5bc3beaeaa6a313c7d04cb6fdd7901cc14ea30707324e40  config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem
+a7825ac654a4ab90bf121abdb21cf745ccf103a348b1dc40f8feb6690460ea3b  .aptl/config/wazuh_cluster/wazuh_manager.conf

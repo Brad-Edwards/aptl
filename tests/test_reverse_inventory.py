@@ -94,9 +94,9 @@ REQUIRED_EVIDENCE_FILES = {
     "wazuh-agent-state.txt",
 }
 
-RAW_SECRET_PATTERNS = (
-    r"BEGIN .*PRIVATE KEY",
-    r"-----BEGIN OPENSSH",
+CLIENT_KEYS_LINE = (
+    "007 reverse-reverse-host-1781067531 any "
+    "544ed89c27b97d4f48c5a2d4789c5053badad324f17788d905695691d994d75b"
 )
 
 
@@ -241,14 +241,17 @@ def test_reverse_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_reverse_evidence_does_not_commit_raw_secret_values():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
-    offenders = [
-        path.name
-        for path in EVIDENCE_DIR.iterdir()
-        if path.is_file() and forbidden.search(_evidence_text(path))
-    ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+def test_reverse_evidence_commits_scenario_secret_values():
+    wazuh_state = (EVIDENCE_DIR / "wazuh-agent-state.txt").read_text(encoding="utf-8")
+    sensitive_paths = (EVIDENCE_DIR / "filesystem-sensitive-paths.txt").read_text(encoding="utf-8")
+
+    assert CLIENT_KEYS_LINE in wazuh_state
+    assert CLIENT_KEYS_LINE in sensitive_paths
+    assert "--path:/keys/aptl_lab_key--" in sensitive_paths
+    assert "--path:/etc/ssh/ssh_host_ed25519_key--" in sensitive_paths
+    assert "-----BEGIN OPENSSH PRIVATE KEY-----" in sensitive_paths
+    assert "<REDACTED" not in wazuh_state
+    assert "content withheld" not in wazuh_state
 
 
 def test_reverse_runtime_evidence_counts():

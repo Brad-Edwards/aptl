@@ -17,7 +17,7 @@ ASSET_DIR="$ROOT/docs/aces/inventory/thehive-es"
 OUT="$ASSET_DIR/evidence"
 CONTAINER="${CONTAINER:-aptl-thehive-es}"
 IMAGE="${IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:7.17.28}"
-CONTAINER_IP="${CONTAINER_IP:-172.20.0.4}"
+CONTAINER_IP="${CONTAINER_IP:-172.20.0.5}"
 
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -38,40 +38,6 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)=([^[:space:]]+)/\1=<REDACTED>/Ig'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|key|cookie|session|private_key|api_key|jwt)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -80,35 +46,16 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 # The thehive-es compose block is extracted directly from docker-compose.yml
 # with yq. A profile-filtered `docker compose config` cannot be used because
 # the soc profile pulls in services that depend_on wazuh.manager and profile
-# filtering invalidates the project. The env redaction rule is applied
-# uniformly to the environment array.
-yq -o=json '.services."thehive-es"' "$ROOT/docker-compose.yml" \
-  | jq '
-      if (has("environment") and (.environment | type == "array")) then
-        .environment |= map(
-          if test("^(?<name>[^=]+)=") then
-            capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-            | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i"))
-              then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-              else .
-              end
-          else
-            .
-          end
-        )
-      else . end
-    ' > "$OUT/compose-service.thehive-es.json"
+# filtering invalidates the project.
+yq -o=json '.services."thehive-es"' "$ROOT/docker-compose.yml" | jq . > "$OUT/compose-service.thehive-es.json"
 record_limit "compose-service.thehive-es.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project."
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+  | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -121,12 +68,12 @@ fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_thehive_es_data | jq . > "$OUT/docker-volume.thehive_es_data.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.thehive-es.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 > "$OUT/docker-logs.thehive-es.txt"
 
 record_limit "Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof."
 record_limit "thehive_es_data volume contents (/usr/share/elasticsearch/data) are runtime index state and out of manifest scope; only top-level directory rows are recorded in filesystem-tree.txt.gz. Index-level state is captured in elasticsearch-state.txt instead."
-record_limit "/usr/share/elasticsearch/config/elasticsearch.keystore is the entrypoint-generated service keystore (bootstrap seed): recorded as path/metadata only with sensitivity=operator_secret in filesystem-tree.txt.gz and excluded from filesystem-checksums.txt.xz."
+record_limit "/usr/share/elasticsearch/config/elasticsearch.keystore is the entrypoint-generated service keystore (bootstrap seed): recorded as scenario fixture metadata and checksum evidence."
 record_limit "/usr/share/elasticsearch/modules and plugins are recorded as manifest listing rows only (no per-file checksums); module jar content integrity is evidenced by the registry image digest and the SBOMs. The plugins directory is empty in this image."
 record_limit "The Elasticsearch image does not include ss or netstat; listener and connection evidence falls back to raw /proc/net/tcp,tcp6,udp tables, complemented by docker top and osquery namespace-sharing evidence."
 
@@ -174,7 +121,7 @@ docker exec "$CONTAINER" sh -lc '
             ;;
           /usr/share/elasticsearch/config/elasticsearch.keystore)
             stability=runtime_created
-            sensitivity=operator_secret
+            sensitivity=secret_fixture
             ;;
         esac
         stat -c "%F\t%A\t%a\t%u\t%U\t%g\t%G\t%s\t%Y\t${stability}\t${sensitivity}\t%n" "$path"
@@ -182,9 +129,9 @@ docker exec "$CONTAINER" sh -lc '
 ' | gzip -n > "$OUT/filesystem-tree.txt.gz"
 record_limit "filesystem-tree.txt.gz scopes the manifest to the application surfaces (/usr/share/elasticsearch config, bin, modules and plugins listings, /etc/os-release) plus top-level directory rows for the volume-backed data tree; volume runtime data content and runtime logs are out of manifest scope."
 
-# Stable-content checksums over the config and bin trees. The generated
-# elasticsearch.keystore is excluded (metadata row only above); modules and
-# plugins are listing-level evidence per the dedicated limit.
+# Stable-content checksums over the config and bin trees, including the generated
+# elasticsearch.keystore scenario fixture. Modules and plugins are listing-level
+# evidence per the dedicated limit.
 docker exec "$CONTAINER" sh -lc '
   set -eu
   for root in /usr/share/elasticsearch/config /usr/share/elasticsearch/bin; do
@@ -192,7 +139,6 @@ docker exec "$CONTAINER" sh -lc '
     find "$root" -xdev -type f -print0
   done \
     | sort -zu \
-    | grep -zEv "^/usr/share/elasticsearch/config/elasticsearch\.keystore$" \
     | xargs -0 -r sha256sum
 ' | xz -9 -c > "$OUT/filesystem-checksums.txt.xz"
 
@@ -224,7 +170,7 @@ docker exec "$CONTAINER" sh -lc '
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 # Service-specific state: node identity, cluster health, indices, nodes, and
 # installed plugin/module names (names only; full module detail omitted).
@@ -240,18 +186,16 @@ docker exec "$CONTAINER" sh -lc '
   printf "%s\n" --nodes-plugins-names-only--
   docker exec "$CONTAINER" curl -s http://localhost:9200/_nodes/_local/plugins 2>/dev/null \
     | jq '{cluster_name, nodes: (.nodes | map_values({name, version, plugins: [.plugins[].name], modules: [.modules[].name]}))}' 2>&1 || true
-} | redact_stream > "$OUT/elasticsearch-state.txt"
+} > "$OUT/elasticsearch-state.txt"
 
-# Index mapping manifests. At steady state the only index is the ES-internal
-# .geoip_databases system index; its _mapping and _field_caps APIs return a
-# reserved-access error, so the field schema is captured from the operator
-# _cluster/state/metadata vantage (which does expose system-index mappings).
-# TheHive uses local Lucene (index.search.backend=lucene), so it creates no
-# data lives in Cassandra, so no participant-created indices exist pre-attack.
-docker exec "$CONTAINER" curl -s "http://localhost:9200/_cluster/state/metadata/.geoip_databases" 2>/dev/null \
+# Index mapping manifests. The ES-internal .geoip_databases system index and
+# Cortex's cortex_6 index are captured from the operator _cluster/state/metadata
+# vantage. TheHive uses local Lucene (index.search.backend=lucene), so it creates
+# no TheHive indices in this ES; primary TheHive data lives in Cassandra.
+docker exec "$CONTAINER" curl -s "http://localhost:9200/_cluster/state/metadata/.geoip_databases,cortex_6" 2>/dev/null \
   | jq . > "$OUT/thehive-es-index-mappings.json" 2>&1 || \
-  docker exec "$CONTAINER" curl -s "http://localhost:9200/_cluster/state/metadata/.geoip_databases" > "$OUT/thehive-es-index-mappings.json"
-record_limit "Only the ES-internal .geoip_databases system index exists at steady state (TheHive uses local Lucene, index.search.backend=lucene, so it creates no indices in this ES; primary data is in Cassandra). Its _mapping/_field_caps APIs return a reserved-access error, so the field schema (data/name/chunk) was captured via the operator _cluster/state/metadata vantage in thehive-es-index-mappings.json. No participant-created index mappings exist to capture."
+  docker exec "$CONTAINER" curl -s "http://localhost:9200/_cluster/state/metadata/.geoip_databases,cortex_6" > "$OUT/thehive-es-index-mappings.json"
+record_limit "The ES-internal .geoip_databases system index and Cortex's cortex_6 index exist at steady state. TheHive uses local Lucene (index.search.backend=lucene), so it creates no TheHive indices in this ES; primary TheHive data is in Cassandra. Index mappings are captured via the operator _cluster/state/metadata vantage in thehive-es-index-mappings.json."
 
 # Attacker vantage: kali. Elasticsearch is on security-net only and publishes
 # no host ports; record what an in-range attacker can resolve/reach on 9200.
@@ -267,7 +211,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --ping--
     ping -c 1 -W 2 '"$CONTAINER_IP"' 2>&1 | sed -n "1,4p"
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

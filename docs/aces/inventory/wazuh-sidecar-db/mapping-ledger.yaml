@@ -7,7 +7,7 @@ asset:
   source_class: local-custom-build-forwarding-agent-sidecar
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-wazuh-sidecar@sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3
+  image_digest: aptl-wazuh-sidecar@sha256:1a9c99918f73a234721fe07ccafdcc6c49e1b3784a16ce86cdb2864636345d25
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -33,8 +33,7 @@ notes:
   runtime.linux_capabilities and the filesystem_inventory entry, not asserted as a working prevention control.
 - /logs is the db container's PostgreSQL PGDATA (shared aptl_db_data volume) mounted read-only; its content is the db asset's
   inventory (docs/aces/inventory/db/). Only the monitored log path is recorded here as the agent's tailed source.
-- The agent's manager-registration secret (/var/ossec/etc/client.keys) is represented by path/metadata only; its key material
-  is never emitted (ADR-029).
+- The agent's manager-registration fixture (/var/ossec/etc/client.keys) is represented by path/metadata plus verbatim key material.
 correspondence_checks:
 - id: wazuh-sidecar-db-evidence-bundle-integrity
   status: implemented
@@ -76,10 +75,10 @@ correspondence_checks:
   - wazuh-sidecar-db.agent.connection-state
   - wazuh-sidecar-db.relationship.forwards-manager
   - wazuh-sidecar-db.relationship.reads-db-logs
-- id: wazuh-sidecar-db-scope-and-redaction-caveats
+- id: wazuh-sidecar-db-scope-and-fixture-caveats
   status: implemented
   source: docs/aces/inventory/wazuh-sidecar-db/evidence/capture-limits.txt
-  method: README and tests assert non-destructive capture scope, client.keys redaction, db PGDATA owner/consumer split, Syft
+  method: README and tests assert non-destructive capture scope, verbatim client.keys capture, db PGDATA owner/consumer split, Syft
     normalization, missing ss/netstat, and unavailable osquery tables.
   realized_evidence:
   - path: evidence/capture-limits.txt
@@ -251,7 +250,7 @@ facts:
     fields:
     - nodes.techvault.wazuh-sidecar-db.runtime.filesystem_inventory
     rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
-    caveat: client.keys (agent secret) and .ssh are path/metadata only with content withheld; transient logs/queue state are
+    caveat: client.keys is captured verbatim as an agent fixture; .ssh is path/metadata only; transient logs/queue state are
       recorded as metadata; the read-only /logs PGDATA content is the db asset's inventory, not duplicated here.
 - id: wazuh-sidecar-db.runtime.process-tree
   category: runtime

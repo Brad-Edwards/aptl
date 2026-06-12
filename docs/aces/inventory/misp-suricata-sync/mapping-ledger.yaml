@@ -7,7 +7,7 @@ asset:
   source_class: local-custom-build-integration-service
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+  image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -28,7 +28,7 @@ notes:
   node, and the MISP-API + Suricata-handoff behaviour on typed relationship edges. No known ACES expressivity gap remains
   for the catalogued misp-suricata-sync steady-state facts.'
 - MISP_API_KEY is the lab MISP admin API key — the same secret_fixture value already disclosed on nodes.techvault.misp (ADMIN_KEY).
-  It is redacted from committed evidence (ADR-029) and carried with its value only in the SDL secret-fixture encoding.
+  It is retained verbatim in committed evidence and SDL because it is TechVault scenario content.
 - /var/run/suricata is the suricata asset's command-socket volume and /var/lib/suricata/rules/misp is a shared host bind;
   the socket and the suricata-owned hash-list files are recorded here as path/metadata with cross-references to the suricata
   asset inventory.
@@ -75,10 +75,10 @@ correspondence_checks:
   - misp-suricata-sync.relationship.queries-misp-api
   - misp-suricata-sync.relationship.updates-suricata-rules
   - misp-suricata-sync.service.sync-behavior
-- id: misp-suricata-sync-scope-and-redaction-caveats
+- id: misp-suricata-sync-scope-and-scenario-secret-caveats
   status: implemented
   source: docs/aces/inventory/misp-suricata-sync/evidence/capture-limits.txt
-  method: README and tests assert non-destructive capture scope, MISP_API_KEY/GPG_KEY redaction, the scoped filesystem manifest,
+  method: README and tests assert non-destructive capture scope, MISP_API_KEY/GPG_KEY retention, the scoped filesystem manifest,
     missing ss/netstat, and unavailable osquery tables.
   realized_evidence:
   - path: evidence/capture-limits.txt
@@ -308,8 +308,8 @@ facts:
     fields:
     - nodes.techvault.misp-suricata-sync.runtime.environment
     rationale: Current ACES SDL node runtime.environment carries the captured variables directly.
-    caveat: MISP_API_KEY and GPG_KEY are redacted in committed evidence (ADR-029) and carried with their values only as SDL
-      secret fixtures; MISP_API_KEY equals the ADMIN_KEY fixture already disclosed on nodes.techvault.misp.
+    caveat: MISP_API_KEY and GPG_KEY are retained verbatim in committed evidence and SDL; MISP_API_KEY equals the ADMIN_KEY
+      fixture already disclosed on nodes.techvault.misp.
 - id: misp-suricata-sync.runtime.linux-capabilities
   category: runtime
   summary: PID 1 holds the default Docker capability set (00000000a80425fb); no cap_add. The service runs as root for host-bind
@@ -487,7 +487,7 @@ facts:
 - id: misp-suricata-sync.secret.misp-api-key-fixture
   category: secret
   summary: MISP_API_KEY equals the lab MISP admin API key already disclosed as a secret_fixture on nodes.techvault.misp (ADMIN_KEY);
-    evidence is redacted, the SDL carries the fixture value.
+    evidence and SDL carry the fixture value verbatim.
   evidence:
   - path: evidence/capture-limits.txt
   - path: evidence/docker-inspect.container.json
@@ -500,5 +500,4 @@ facts:
     - nodes.techvault.misp-suricata-sync.runtime.environment
     rationale: The scenario-fixture API key is encoded with its value per the repo secret-fixture policy (deliberate lab credential,
       reproduction input).
-    caveat: Committed evidence redacts the value (ADR-029); the SDL secret_fixture entry is the canonical disclosed copy,
-      identical to the misp node's ADMIN_KEY.
+    caveat: Committed evidence and SDL both retain the scenario-fixture API key, identical to the misp node's ADMIN_KEY.

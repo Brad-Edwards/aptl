@@ -40,44 +40,6 @@ find "$OUT" -maxdepth 1 -type f -delete
 record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
-
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's/("?(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie)"?[[:space:]]*[:=][[:space:]]*")[^"]*(")/\1<REDACTED>\3/Ig' \
-    -e 's/-----BEGIN [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-BEGIN>/g' \
-    -e 's/-----END [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-END>/g'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie|authorization)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -86,35 +48,16 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 # Compose block extracted directly from docker-compose.yml with yq (a
 # profile-filtered docker compose config cannot render because soc-profile
 # services depend_on wazuh.manager and profile filtering invalidates the
-# project). The env redaction rule is applied uniformly to the environment
-# array; orborus environment is non-secret operational config and is preserved.
+# project).
 yq -o=json '.services."shuffle-orborus"' "$ROOT/docker-compose.yml" \
-  | jq '
-      if (has("environment") and (.environment | type == "array")) then
-        .environment |= map(
-          if test("^(?<name>[^=]+)=") then
-            capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-            | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i"))
-              then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-              else .
-              end
-          else
-            .
-          end
-        )
-      else . end
-    ' > "$OUT/compose-service.shuffle-orborus.json"
+  | jq . > "$OUT/compose-service.shuffle-orborus.json"
 record_limit "compose-service.shuffle-orborus.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project."
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -126,8 +69,8 @@ else
 fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.shuffle-orborus.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 > "$OUT/docker-logs.shuffle-orborus.txt"
 
 record_limit "Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof."
 record_limit "shuffle-orborus has no named Docker volume; its only mount is the host /var/run/docker.sock bind. No docker-volume.*.json is emitted for this asset."
@@ -170,7 +113,7 @@ docker exec "$CONTAINER" sh -lc '
   docker exec "$CONTAINER" sh -lc 'command -v strings >/dev/null 2>&1 && strings /orborus 2>/dev/null | grep -aoE "go1\.[0-9]+(\.[0-9]+)?" | sort -u | head -5 || echo "strings(1) absent"' 2>&1 || true
   printf "%s\n" "--orborus-shuffle-version-refs--"
   docker exec "$CONTAINER" sh -lc 'command -v strings >/dev/null 2>&1 && strings /orborus 2>/dev/null | grep -aiE "shuffle-(orborus|worker|backend)" | sort -u | head -20 || echo "strings(1) absent"' 2>&1 || true
-} | redact_stream > "$OUT/language-manifests.txt"
+} > "$OUT/language-manifests.txt"
 record_limit "The /orborus Go binary was NEVER executed during capture: invoking it (even with --version) starts the orborus daemon, which would poll the backend and spawn worker containers via the host docker.sock. Binary identity is therefore captured from file metadata, the image-shipped /orborus.go source, embedded Go-version and Shuffle-image strings, and the trivy/syft go-module SBOM catalog instead of a runtime version flag."
 
 # --- Filesystem manifest + checksums (orborus binary + its dir + os-release) -
@@ -253,7 +196,7 @@ docker exec "$CONTAINER" sh -lc '
   grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args 2>/dev/null || ps -ef || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 # --- Service-specific state: orborus orchestrator + docker.sock surface ------
 {
@@ -269,7 +212,7 @@ docker exec "$CONTAINER" sh -lc '
   docker exec "$CONTAINER" sh -lc 'getent hosts shuffle-backend 2>&1; echo "---tcp 5001 probe---"; (timeout 6 nc -vz shuffle-backend 5001 2>&1 || timeout 6 wget -q --spider http://shuffle-backend:5001/ 2>&1; echo "rc=$?")' 2>&1 || true
   printf "%s\n" --host-control-note--
   printf "%s\n" "orborus runs as PID 1 (the /orborus Go static binary) and is bound to the host Docker daemon via the read-write /var/run/docker.sock bind. It does not listen on any TCP port (no published ports, no listeners); it is an OUTBOUND poller against http://shuffle-backend:5001 and a host-Docker controller. The docker.sock bind is the dominant attack surface of this asset: full host-Docker control == host root."
-} | redact_stream > "$OUT/orborus-state.txt"
+} > "$OUT/orborus-state.txt"
 
 # --- Participant-vantage discovery: kali ------------------------------------
 # orborus has no static IP and no published ports, so its DHCP address is read
@@ -292,7 +235,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --ping--
     [ -n "$ORBORUS_IP" ] && ping -c 1 -W 2 "$ORBORUS_IP" 2>&1 | sed -n "1,4p"
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

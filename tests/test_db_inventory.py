@@ -181,16 +181,18 @@ def test_db_evidence_sha256_manifest_matches_files():
     assert evidence_files <= manifest_entries
 
 
-def test_db_evidence_does_not_contain_raw_postgres_password():
-    offenders = {}
-    for path in EVIDENCE_DIR.iterdir():
-        if not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8")
-        leaked = [needle for needle in SECRET_NEEDLES if needle in text]
-        if leaked:
-            offenders[path.name] = leaked
-    assert not offenders, f"Raw Postgres fixture secret leaked into evidence: {offenders}"
+def test_db_evidence_captures_raw_postgres_fixture_password():
+    compose = _json_file("compose-service.db.json")
+    container = _json_file("docker-inspect.container.json")[0]
+    runtime = (EVIDENCE_DIR / "runtime-baseline.txt").read_text(encoding="utf-8")
+    inspect_env = dict(item.split("=", 1) for item in container["Config"]["Env"])
+
+    assert compose["environment"]["POSTGRES_PASSWORD"] == "techvault_db_pass"
+    assert inspect_env["POSTGRES_PASSWORD"] == "techvault_db_pass"
+    assert "POSTGRES_PASSWORD=techvault_db_pass" in runtime
+    assert "<REDACTED" not in json.dumps(compose)
+    assert "<REDACTED" not in json.dumps(container)
+    assert "<REDACTED" not in runtime
 
 
 def test_db_container_runtime_state_and_redaction_boundary():
@@ -205,7 +207,7 @@ def test_db_container_runtime_state_and_redaction_boundary():
     assert container["HostConfig"]["Memory"] == 268435456
     assert container["HostConfig"]["RestartPolicy"]["Name"] == "unless-stopped"
     assert "aptl_db_data:/var/lib/postgresql/data:rw" in container["HostConfig"]["Binds"]
-    assert re.search(r"^POSTGRES_PASSWORD=<REDACTED-SCENARIO-FIXTURE>$", env, re.MULTILINE)
+    assert re.search(r"^POSTGRES_PASSWORD=techvault_db_pass$", env, re.MULTILINE)
 
 
 def test_db_image_identity_and_source_package_are_recorded():
@@ -237,7 +239,7 @@ def test_db_runtime_baseline_captures_expected_steady_state():
         "log_statement=all",
         "public.users",
         "public.audit_log",
-        "POSTGRES_PASSWORD=<REDACTED-SCENARIO-FIXTURE>",
+        "POSTGRES_PASSWORD=techvault_db_pass",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Runtime baseline missing expected observations: {missing}"

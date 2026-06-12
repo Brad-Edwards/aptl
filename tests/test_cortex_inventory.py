@@ -33,10 +33,10 @@ RUNTIME_PROCESS_COUNT = 4
 RUNTIME_ENV_COUNT = 3
 LEDGER_FACT_COUNT = 15
 
-REQUIRED_EVIDENCE_FILES = {'cortex-state.txt', 'docker-buildx-imagetools.image.raw.json', 'compose-service.cortex-index-init.json', 'source-checksums.txt', 'thehive-cortex-auth-current-user.json', 'language-manifests.txt', 'compose-service.cortex.json', 'docker-buildx-imagetools.image.txt', 'filesystem-tree.txt.gz', 'trivy-version.txt', 'capture-limits.txt', 'os-packages.txt', 'cortex-index-documents.redacted.json', 'docker-inspect.image.json', 'participant-discovery.kali.txt', 'trivy-vulnerabilities.json.xz', 'osquery-installed-applications.json', 'osquery-docker-images.json', 'runtime-baseline.txt', 'docker-volume.cortex_data.json', 'osquery-listening-ports.json', 'docker-version.json', 'trivy-vulnerability-list.json', 'captured-at-utc.txt', 'filesystem-checksums.txt.xz', 'docker-compose-version.json', 'docker-inspect.container.json', 'trivy-sbom.cyclonedx.json.gz', 'syft-version.json', 'docker-logs.cortex.txt', 'trivy-vulnerability-counts.json', 'osquery-processes.json', 'syft-sbom.cyclonedx.json.gz', 'docker-history.image.txt', 'osquery-programs.json', 'docker-top.txt', 'osquery-version.txt', 'docker-history.image.jsonl', 'evidence-sha256sums.txt', 'docker-network.aptl-security.json', 'osquery-docker-containers.json', 'osquery-apt-sources.json'}
+REQUIRED_EVIDENCE_FILES = {'cortex-state.txt', 'docker-buildx-imagetools.image.raw.json', 'compose-service.cortex-index-init.json', 'source-checksums.txt', 'thehive-cortex-auth-current-user.json', 'language-manifests.txt', 'compose-service.cortex.json', 'docker-buildx-imagetools.image.txt', 'filesystem-tree.txt.gz', 'trivy-version.txt', 'capture-limits.txt', 'os-packages.txt', 'cortex-index-documents.json', 'docker-inspect.image.json', 'participant-discovery.kali.txt', 'trivy-vulnerabilities.json.xz', 'osquery-installed-applications.json', 'osquery-docker-images.json', 'runtime-baseline.txt', 'docker-volume.cortex_data.json', 'osquery-listening-ports.json', 'docker-version.json', 'trivy-vulnerability-list.json', 'captured-at-utc.txt', 'filesystem-checksums.txt.xz', 'docker-compose-version.json', 'docker-inspect.container.json', 'trivy-sbom.cyclonedx.json.gz', 'syft-version.json', 'docker-logs.cortex.txt', 'trivy-vulnerability-counts.json', 'osquery-processes.json', 'syft-sbom.cyclonedx.json.gz', 'docker-history.image.txt', 'osquery-programs.json', 'docker-top.txt', 'osquery-version.txt', 'docker-history.image.jsonl', 'evidence-sha256sums.txt', 'docker-network.aptl-security.json', 'osquery-docker-containers.json', 'osquery-apt-sources.json'}
+_CORTEX_API_KEY = "aptlcortexlabapikey2026purple"
+_CORTEX_PASSWORD_HASH = "䚺퐓戡翝蓂㦲횧씽蕶叿,cfb766587935fd7a8e5bf5d2e5d4d689d4d6f282c6857fdb3aa238801e430c23"
 RAW_SECRET_PATTERNS = (
-    r"aptlcortexlabapikey2026purple",
-    r"AptlCortexService2026",
     r"BEGIN .*PRIVATE KEY",
     r"-----BEGIN OPENSSH",
 )
@@ -132,10 +132,16 @@ def test_cortex_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_cortex_evidence_does_not_commit_raw_secret_values():
+def test_cortex_evidence_captures_scenario_fixture_values_without_private_keys():
+    index_documents = _json_file("cortex-index-documents.json")
+    user_doc = next(hit for hit in index_documents["hits"]["hits"] if hit["_id"] == "aptl-svc@cortex.local")
+    assert user_doc["_source"]["key"] == _CORTEX_API_KEY
+    assert user_doc["_source"]["password"] == _CORTEX_PASSWORD_HASH
+    assert _CORTEX_API_KEY in (EVIDENCE_DIR / "cortex-index-documents.json").read_text(encoding="utf-8")
+
     forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
     offenders = [path.name for path in EVIDENCE_DIR.iterdir() if path.is_file() and forbidden.search(_evidence_text(path))]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+    assert not offenders, f"Unexpected private-key material leaked into evidence: {offenders}"
 
 
 def test_cortex_runtime_evidence_counts_and_mapping():
@@ -174,7 +180,9 @@ def test_techvault_sdl_encodes_cortex_runtime_and_relationships(legacy_scenario)
     assert apps["cortex-api"]["protocol"] == "http"
     auth = runtime["app_authorizations"][0]
     assert auth["principals"][0]["name"] == "aptl-svc@cortex.local"
-    assert auth["principals"][0]["credential_classification"] == "redacted"
+    assert auth["principals"][0]["credential_classification"] == "none"
+    assert "aptlcortexlabapikey2026purple" in auth["principals"][0]["description"]
+    assert "AptlCortexService2026!" in auth["principals"][0]["description"]
     relationships = legacy_scenario["relationships"]
     assert relationships["cortex-connects-thehive-es"]["target"] == "thehive-es"
     assert relationships["thehive-connects-cortex"]["target"] == "cortex"

@@ -5,7 +5,7 @@ nodes:
     description: TechVault BIND DNS container steady-state inventory.
     source:
       name: aptl-dns
-      version: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
+      version: aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6
       build:
         base_image: ubuntu:22.04
         base_image_digest: ''
@@ -1889,23 +1889,23 @@ nodes:
         - network: techvault.dmz-net
           network_id: 3b7c4e642d7ebef4866bf953ff0b04bd39affb9639881b4938cdcb8a9dc09c16
           network_id_stability: stable
-          endpoint_id: eb2e45bb214120473221dc4d67404506498050a22542a3d7731d31620cdea687
+          endpoint_id: 23e19fff8f280fa9e6f816e97e37ff3da76738cd585b518c1ffaaa857b0e2527
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.1.22
           ip_prefix_length: 24
           gateway: ''
-          mac_address: d6:91:1f:4c:ff:c7
+          mac_address: 3a:44:5f:7f:42:73
           aliases:
           - aptl-dns
           - dns
           dns_names:
           - aptl-dns
           - dns
-          - ceed7fcfb8cf
+          - 246fa725d79a
           - ns1.techvault.local
           generated_dns_names:
-          - ceed7fcfb8cf
+          - 246fa725d79a
           backend:
             driver: bridge
             ipam_driver: default
@@ -1916,23 +1916,23 @@ nodes:
         - network: techvault.internal-net
           network_id: 5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f
           network_id_stability: stable
-          endpoint_id: 43843734713a7c1cc6e230a499bd0c7cf020f058452e8c83920286e83a84913a
+          endpoint_id: e7559df484b29c7468f4e6167cbcdf8c764b0988d84116afb1b549489d1a050c
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.2.27
           ip_prefix_length: 24
           gateway: ''
-          mac_address: 7e:58:a5:13:f6:34
+          mac_address: c6:49:cc:27:01:da
           aliases:
           - aptl-dns
           - dns
           dns_names:
           - aptl-dns
           - dns
-          - ceed7fcfb8cf
+          - 246fa725d79a
           - ns1.techvault.local
           generated_dns_names:
-          - ceed7fcfb8cf
+          - 246fa725d79a
           backend:
             driver: bridge
             ipam_driver: default
@@ -1943,23 +1943,23 @@ nodes:
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: 5d23550a01131bf2d9bdae8c31002c3848de46d7851ff4303660343979103cc9
+          endpoint_id: 52b904dff453015126f11968f518f998fb605b94ae21f1d9bac7628d42a8918f
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.0.25
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: 36:a4:19:0b:50:e3
+          mac_address: ae:9b:d4:a3:d7:ee
           aliases:
           - aptl-dns
           - dns
           dns_names:
           - aptl-dns
           - dns
-          - ceed7fcfb8cf
+          - 246fa725d79a
           - ns1.techvault.local
           generated_dns_names:
-          - ceed7fcfb8cf
+          - 246fa725d79a
           backend:
             driver: bridge
             ipam_driver: default
@@ -4222,277 +4222,277 @@ nodes:
       package_vulnerabilities:
       - id: CVE-2026-3039
         package_name: bind9
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3039'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3592
         package_name: bind9
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3592'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5946
         package_name: bind9
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5946'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5950
         package_name: bind9
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5950'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3039
         package_name: bind9-dnsutils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3039'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3592
         package_name: bind9-dnsutils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3592'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5946
         package_name: bind9-dnsutils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5946'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5950
         package_name: bind9-dnsutils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5950'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3039
         package_name: bind9-host
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3039'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3592
         package_name: bind9-host
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3592'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5946
         package_name: bind9-host
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5946'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5950
         package_name: bind9-host
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5950'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3039
         package_name: bind9-libs
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3039'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3592
         package_name: bind9-libs
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3592'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5946
         package_name: bind9-libs
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5946'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5950
         package_name: bind9-libs
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5950'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3039
         package_name: bind9-utils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3039'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3592
         package_name: bind9-utils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3592'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5946
         package_name: bind9-utils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5946'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5950
         package_name: bind9-utils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5950'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-27456
         package_name: bsdutils
-        installed_version: 1:2.37.2-4ubuntu3.5
+        installed_version: '1:2.37.2-4ubuntu3.5'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3039
         package_name: dnsutils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3039'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3592
         package_name: dnsutils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3592'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5946
         package_name: dnsutils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5946'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5950
         package_name: dnsutils
-        installed_version: 1:9.18.39-0ubuntu0.22.04.3
+        installed_version: '1:9.18.39-0ubuntu0.22.04.3'
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
-        fixed_version: 1:9.18.39-0ubuntu0.22.04.4
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: '1:9.18.39-0ubuntu0.22.04.4'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5950'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2022-27943
@@ -4500,10 +4500,10 @@ nodes:
         installed_version: 12.3.0-1ubuntu1~22.04.3
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-27943'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-27456
@@ -4511,21 +4511,21 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2025-29481
         package_name: libbpf0
-        installed_version: 1:0.5.0-1ubuntu22.04.1
+        installed_version: '1:0.5.0-1ubuntu22.04.1'
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-29481
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-29481'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-4046
@@ -4533,32 +4533,32 @@ nodes:
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4046
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-4046'
         scanner_version: 0.70.0
         scanner_database: ''
-      - id: CVE-2026-4437
+      - id: CVE-2026-5435
         package_name: libc-bin
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4437
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5435'
         scanner_version: 0.70.0
         scanner_database: ''
-      - id: CVE-2026-4438
+      - id: CVE-2026-6238
         package_name: libc-bin
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4438
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-6238'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-4046
@@ -4566,32 +4566,32 @@ nodes:
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4046
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-4046'
         scanner_version: 0.70.0
         scanner_database: ''
-      - id: CVE-2026-4437
+      - id: CVE-2026-5435
         package_name: libc6
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4437
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5435'
         scanner_version: 0.70.0
         scanner_database: ''
-      - id: CVE-2026-4438
+      - id: CVE-2026-6238
         package_name: libc6
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4438
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-6238'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2025-1352
@@ -4599,10 +4599,10 @@ nodes:
         installed_version: 0.186-1ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-1352
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-1352'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2025-1376
@@ -4610,10 +4610,10 @@ nodes:
         installed_version: 0.186-1ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-1376
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-1376'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2025-66382
@@ -4621,10 +4621,10 @@ nodes:
         installed_version: 2.4.7-1ubuntu0.7
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-66382
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-66382'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2022-27943
@@ -4632,10 +4632,10 @@ nodes:
         installed_version: 12.3.0-1ubuntu1~22.04.3
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-27943'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-41989
@@ -4643,10 +4643,10 @@ nodes:
         installed_version: 1.9.4-3ubuntu3
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 1.9.4-3ubuntu3.2
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-41989
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-41989'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2024-2236
@@ -4654,10 +4654,10 @@ nodes:
         installed_version: 1.9.4-3ubuntu3
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-2236
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-2236'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-33845
@@ -4665,10 +4665,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-33845
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-33845'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-33846
@@ -4676,10 +4676,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-33846
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-33846'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3832
@@ -4687,10 +4687,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3832
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3832'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-3833
@@ -4698,10 +4698,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3833
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3833'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-42009
@@ -4709,10 +4709,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42009
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42009'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-42010
@@ -4720,10 +4720,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42010
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42010'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-42011
@@ -4731,10 +4731,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42011
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42011'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-42012
@@ -4742,10 +4742,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42012
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42012'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-42013
@@ -4753,10 +4753,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42013
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42013'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-42014
@@ -4764,10 +4764,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42014
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42014'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-42015
@@ -4775,10 +4775,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42015
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42015'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5260
@@ -4786,10 +4786,10 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5260
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5260'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2025-5222
@@ -4797,10 +4797,10 @@ nodes:
         installed_version: 70.1-2
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-5222
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-5222'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-22185
@@ -4808,10 +4808,21 @@ nodes:
         installed_version: 0.9.24-1build2
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-22185
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-22185'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-34743
+        package_name: liblzma5
+        installed_version: 5.2.5-2ubuntu1
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 5.2.5-2ubuntu1.1
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-34743'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-27456
@@ -4819,10 +4830,10 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2023-50495
@@ -4830,10 +4841,10 @@ nodes:
         installed_version: 6.3-2ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-50495'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2023-50495
@@ -4841,10 +4852,10 @@ nodes:
         installed_version: 6.3-2ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-50495'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2022-41409
@@ -4852,21 +4863,21 @@ nodes:
         installed_version: 10.39-3ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41409
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-41409'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2017-11164
         package_name: libpcre3
-        installed_version: 2:8.39-13ubuntu0.22.04.1
+        installed_version: '2:8.39-13ubuntu0.22.04.1'
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2017-11164
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2017-11164'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-2297
@@ -4874,10 +4885,10 @@ nodes:
         installed_version: 3.10.12-1~22.04.15
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-2297'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-2297
@@ -4885,10 +4896,10 @@ nodes:
         installed_version: 3.10.12-1~22.04.15
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-2297'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-27456
@@ -4896,10 +4907,120 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-45447
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: high
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-45447'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-34182
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: medium
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-34182'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-45445
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: medium
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-45445'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-34180
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-34180'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-42766
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42766'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-42767
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42767'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-42770
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42770'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-45446
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-45446'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-7383
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-7383'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-9076
+        package_name: libssl3
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-9076'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2022-27943
@@ -4907,10 +5028,21 @@ nodes:
         installed_version: 12.3.0-1ubuntu1~22.04.3
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-27943'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-40226
+        package_name: libsystemd0
+        installed_version: 249.11-0ubuntu3.20
+        severity: medium
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 249.11-0ubuntu3.21
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-40226'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2023-7008
@@ -4918,10 +5050,21 @@ nodes:
         installed_version: 249.11-0ubuntu3.20
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 249.11-0ubuntu3.21
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-7008'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-40228
+        package_name: libsystemd0
+        installed_version: 249.11-0ubuntu3.20
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-7008
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-40228'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2023-50495
@@ -4929,10 +5072,21 @@ nodes:
         installed_version: 6.3-2ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-50495'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-40226
+        package_name: libudev1
+        installed_version: 249.11-0ubuntu3.20
+        severity: medium
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 249.11-0ubuntu3.21
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-40226'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2023-7008
@@ -4940,10 +5094,21 @@ nodes:
         installed_version: 249.11-0ubuntu3.20
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 249.11-0ubuntu3.21
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-7008'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-40228
+        package_name: libudev1
+        installed_version: 249.11-0ubuntu3.20
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-7008
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-40228'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-27456
@@ -4951,10 +5116,10 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2022-4899
@@ -4962,32 +5127,32 @@ nodes:
         installed_version: 1.4.8+dfsg-3build1
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-4899
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-4899'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2023-29383
         package_name: login
-        installed_version: 1:4.8.1-2ubuntu2.2
+        installed_version: '1:4.8.1-2ubuntu2.2'
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29383
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-29383'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2024-56433
         package_name: login
-        installed_version: 1:4.8.1-2ubuntu2.2
+        installed_version: '1:4.8.1-2ubuntu2.2'
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-56433'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-27456
@@ -4995,10 +5160,10 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2023-50495
@@ -5006,10 +5171,10 @@ nodes:
         installed_version: 6.3-2ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-50495'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2023-50495
@@ -5017,32 +5182,142 @@ nodes:
         installed_version: 6.3-2ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-50495'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-45447
+        package_name: openssl
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: high
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-45447'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-34182
+        package_name: openssl
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: medium
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-34182'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-45445
+        package_name: openssl
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: medium
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-45445'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-34180
+        package_name: openssl
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-34180'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-42766
+        package_name: openssl
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42766'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-42767
+        package_name: openssl
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42767'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-42770
+        package_name: openssl
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42770'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-45446
+        package_name: openssl
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-45446'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-7383
+        package_name: openssl
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-7383'
+        scanner_version: 0.70.0
+        scanner_database: ''
+      - id: CVE-2026-9076
+        package_name: openssl
+        installed_version: 3.0.2-0ubuntu1.23
+        severity: low
+        scanner: trivy
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
+        fixed_version: 3.0.2-0ubuntu1.25
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-9076'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2023-29383
         package_name: passwd
-        installed_version: 1:4.8.1-2ubuntu2.2
+        installed_version: '1:4.8.1-2ubuntu2.2'
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29383
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-29383'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2024-56433
         package_name: passwd
-        installed_version: 1:4.8.1-2ubuntu2.2
+        installed_version: '1:4.8.1-2ubuntu2.2'
         severity: low
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-56433'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-2297
@@ -5050,10 +5325,10 @@ nodes:
         installed_version: 3.10.12-1~22.04.15
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-2297'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-2297
@@ -5061,10 +5336,10 @@ nodes:
         installed_version: 3.10.12-1~22.04.15
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-2297'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2025-45582
@@ -5072,10 +5347,10 @@ nodes:
         installed_version: 1.34+dfsg-1ubuntu0.1.22.04.2
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-45582
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-45582'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-5704
@@ -5083,10 +5358,10 @@ nodes:
         installed_version: 1.34+dfsg-1ubuntu0.1.22.04.2
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5704
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5704'
         scanner_version: 0.70.0
         scanner_database: ''
       - id: CVE-2026-27456
@@ -5094,9 +5369,9 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75
-        scan_time: '2026-05-28T04:09:14.803193569Z'
+        image_digest: 'aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6'
+        scan_time: '2026-06-12T13:20:27Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
         scanner_version: 0.70.0
         scanner_database: ''

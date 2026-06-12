@@ -11,7 +11,7 @@
       "name": "wazuh-agent.sh",
       "path": "/usr/bin/bash",
       "pid": "1",
-      "start_time": "1779517173",
+      "start_time": "1781193673",
       "uid": "0"
     },
     {
@@ -20,7 +20,7 @@
       "name": "wazuh-execd",
       "path": "",
       "pid": "49",
-      "start_time": "1779517174",
+      "start_time": "1781193675",
       "uid": "0"
     },
     {
@@ -29,7 +29,7 @@
       "name": "wazuh-agentd",
       "path": "",
       "pid": "60",
-      "start_time": "1779517175",
+      "start_time": "1781193676",
       "uid": "100"
     },
     {
@@ -38,7 +38,7 @@
       "name": "wazuh-syscheckd",
       "path": "",
       "pid": "74",
-      "start_time": "1779517176",
+      "start_time": "1781193677",
       "uid": "0"
     },
     {
@@ -47,7 +47,7 @@
       "name": "wazuh-logcollec",
       "path": "",
       "pid": "84",
-      "start_time": "1779517176",
+      "start_time": "1781193677",
       "uid": "0"
     },
     {
@@ -55,8 +55,8 @@
       "gid": "0",
       "name": "wazuh-modulesd",
       "path": "/var/ossec/bin/wazuh-modulesd",
-      "pid": "101",
-      "start_time": "1779517177",
+      "pid": "98",
+      "start_time": "1781193677",
       "uid": "0"
     },
     {
@@ -64,8 +64,8 @@
       "gid": "0",
       "name": "tail",
       "path": "/usr/bin/tail",
-      "pid": "119",
-      "start_time": "1779517180",
+      "pid": "116",
+      "start_time": "1781193680",
       "uid": "0"
     },
     {
@@ -73,8 +73,8 @@
       "gid": "0",
       "name": "sleep",
       "path": "/usr/bin/sleep",
-      "pid": "309523",
-      "start_time": "1781062605",
+      "pid": "15864",
+      "start_time": "1781270540",
       "uid": "0"
     }
   ]

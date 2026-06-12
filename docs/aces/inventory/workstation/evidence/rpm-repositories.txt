@@ -46,6 +46,9 @@ sap-source                    Rocky Linux 9 - SAP Source                disabled
 saphana                       Rocky Linux 9 - SAPHANA                   disabled
 saphana-debuginfo             Rocky Linux 9 - SAPHANA Debug             disabled
 saphana-source                Rocky Linux 9 - SAPHANA Source            disabled
+security                      Rocky Linux 9 - Security                  disabled
+security-debuginfo            Rocky Linux 9 - Security Debug            disabled
+security-source               Rocky Linux 9 - Security Source           disabled
 wazuh                         EL-9 - Wazuh                              enabled
 --yum-repos--
 [/etc/yum.repos.d/epel-cisco-openh264.repo]
@@ -422,6 +425,44 @@ gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9
 name=Rocky Linux $releasever - Plus - Source
 mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=source&repo=plus-$releasever-source$rltype
 #baseurl=http://dl.rockylinux.org/$contentdir/$releasever/plus/source/tree/
+gpgcheck=1
+enabled=0
+metadata_expire=6h
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9
+[/etc/yum.repos.d/rocky-security.repo]
+# rocky-security.repo
+#
+# The mirrorlist system uses the connecting IP address of the client and the
+# update status of each mirror to pick current mirrors that are geographically
+# close to the client.  You should use this for Rocky updates unless you are
+# manually picking other mirrors.
+#
+# If the mirrorlist does not work for you, you can try the commented out
+# baseurl line instead.
+
+[security]
+name=Rocky Linux $releasever - Security
+mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=$basearch&repo=security-$releasever$rltype
+#baseurl=http://dl.rockylinux.org/$contentdir/$releasever/security/$basearch/os/
+gpgcheck=1
+enabled=0
+countme=1
+metadata_expire=6h
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9
+
+[security-debuginfo]
+name=Rocky Linux $releasever - Security Debug
+mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=$basearch&repo=security-$releasever-debug$rltype
+#baseurl=http://dl.rockylinux.org/$contentdir/$releasever/security/$basearch/debug/tree/
+gpgcheck=1
+enabled=0
+metadata_expire=6h
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9
+
+[security-source]
+name=Rocky Linux $releasever - Security Source
+mirrorlist=https://mirrors.rockylinux.org/mirrorlist?arch=$basearch&repo=security-$releasever-source$rltype
+#baseurl=http://dl.rockylinux.org/$contentdir/$releasever/security/source/tree/
 gpgcheck=1
 enabled=0
 metadata_expire=6h

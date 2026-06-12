@@ -1,9 +1,9 @@
 UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
-root                2971964             2971907             0                   May23               ?                   00:02:15            /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
-root                2972474             2971964             0                   May23               ?                   00:00:33            /var/ossec/bin/wazuh-execd
-dhcpcd              2972675             2971964             0                   May23               ?                   00:08:08            /var/ossec/bin/wazuh-agentd
-root                2972927             2971964             0                   May23               ?                   00:00:26            /var/ossec/bin/wazuh-syscheckd
-root                2972937             2971964             0                   May23               ?                   00:03:49            /var/ossec/bin/wazuh-logcollector
-root                2973495             2971964             0                   May23               ?                   00:00:15            /var/ossec/bin/wazuh-modulesd
-root                2974167             2971964             0                   May23               ?                   00:00:59            tail -F /var/ossec/logs/ossec.log
-root                2404380             2971964             0                   05:36               ?                   00:00:00            sleep 5
+root                817388              817364              0                   Jun11               ?                   00:00:06            /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
+root                817635              817388              0                   Jun11               ?                   00:00:01            /var/ossec/bin/wazuh-execd
+dhcpcd              817763              817388              0                   Jun11               ?                   00:00:23            /var/ossec/bin/wazuh-agentd
+root                818014              817388              0                   Jun11               ?                   00:00:01            /var/ossec/bin/wazuh-syscheckd
+root                818028              817388              0                   Jun11               ?                   00:00:10            /var/ossec/bin/wazuh-logcollector
+root                818042              817388              0                   Jun11               ?                   00:00:00            /var/ossec/bin/wazuh-modulesd
+root                818752              817388              0                   Jun11               ?                   00:00:02            tail -F /var/ossec/logs/ossec.log
+root                1327852             817388              0                   15:22               ?                   00:00:00            sleep 5

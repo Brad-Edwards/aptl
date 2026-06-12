@@ -1,14 +1,14 @@
 [
   {
-    "Id": "sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a",
+    "Id": "sha256:261633f0d60aa96b6921fc561a31e76a7601ea7f52e4f435efac79686882e299",
     "RepoTags": [
       "aptl-webapp:latest"
     ],
     "RepoDigests": [
-      "aptl-webapp@sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a"
+      "aptl-webapp@sha256:261633f0d60aa96b6921fc561a31e76a7601ea7f52e4f435efac79686882e299"
     ],
     "Comment": "buildkit.dockerfile.v0",
-    "Created": "2026-05-23T08:18:17.679083157+02:00",
+    "Created": "2026-06-11T17:16:31.537275684+02:00",
     "Config": {
       "ExposedPorts": {
         "8080/tcp": {}
@@ -35,45 +35,45 @@
     },
     "Architecture": "amd64",
     "Os": "linux",
-    "Size": 111715124,
+    "Size": 111717627,
     "RootFS": {
       "Type": "layers",
       "Layers": [
-        "sha256:219a998c60509502b47b97f1158067d5dd62640d2d689560d32cfd5594f6bc40",
-        "sha256:98df1ca0e575d9026c1abd12994fad3c14effa4558d50b6961fd586930956b26",
-        "sha256:bffa3c30a00bb534b2e3637bd26d9a75e095172be7d0b33924f1a61bf6cb2120",
-        "sha256:89bfb82659d056dd4ef25b8b3f99c7a97874083d86d92924e931ffa2fb7c7861",
-        "sha256:e0eb6232c6d01d639a2ca84c3b6dc26166fd27b94991082bc6f327902ae4c78f",
-        "sha256:b4b98b6f65ecae7263217967076b5bf3e783e76f3d043b06a439814b367c58f5",
-        "sha256:3d4b28c8b9c130f19c72fb755391e2ef94b0ec81272f188c30868293275b12b6",
-        "sha256:f8873166b81a8a4e0754f397931a1015c1042e3867d97c4bd6c77a1cbc657432",
-        "sha256:9c87f861cd08c038c414259b77fa54f40473dc98ded0aa7dbcf44b20c64b2979",
-        "sha256:e9370102ac0510a6203a97426eeffb0bb2284dfc774e8478bef1cc72df573b8e",
-        "sha256:dfb851b085ef1abd36de98807021dbafab5c358fa33804cf70fe93fcf8ac8a99",
+        "sha256:f4f8b983b714f130e2cff99176baa26352db6a55d3622e10ada40f2b4720a4eb",
+        "sha256:30397027ad83521a240789f494c872644416a4e3a3c44f2efb5bdc4eb457e20f",
+        "sha256:28b2c2519a708607986b8f9cc0fdd3c481df4c3f4d6730db76bdbce692e8d868",
+        "sha256:fc765e52b6a7a069d79e6fc708336d622c2cd040a37bae484c64b7edf9f7b5a5",
+        "sha256:9d26c38bd86be88229a4ea8f33e20d0908eee2ccf50b174b084b2e5fde5fc2d7",
+        "sha256:27d66e7a6d5a47a1e669ca416df4fd87d16ed72dc0da2429a1a3eac16246aac6",
+        "sha256:8f6bf678972cca1364a154de205ff240e6b21354b44185d9059fe8b84d2a4ff6",
+        "sha256:56b14589382c7af2d58928be598ceab3e57b9224c329fa04ec8aecfbf279e482",
+        "sha256:5a1119ecb2f2587636915d78ea6f48cdb47af802015a22e2d1947f72a41110ea",
+        "sha256:f8223e727d77cfc8f9b39302cfe17b183b799521e99af1e4ee09896291eed3e0",
+        "sha256:ae5cd0e1f0877436cab555e504ad193595027f676e9f2916f012a60a3f9b9d07",
         "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
-        "sha256:13a5e1ab896047bae68f0b673d81cf50135e4fc2211f8826571392132cb7b309",
-        "sha256:b32da2a6577e8c386424bf24b8a3260b06978c69ea1923036688c72fb250d97c",
-        "sha256:45f5e96f048f18b87778dbe3512b791e9efb2d09b3800d239f36167d395f1e87",
+        "sha256:eeaf8198ffe21d8f854ab58d4648f8b9570abbd14f800565982b4d6fc76c41d6",
+        "sha256:ccdaf69c55e9ebf4fdbf48828de4554ba3807ebe2a355f33e56dd370e7bfde28",
+        "sha256:7cb7c61fe190c23600f92e527f48739bef5596d8e443a62aae8022c9f59e9983",
         "sha256:3186a9a340e1d36f9058eb37f4045d82dad455da52c0b18f4af61990b1f43a85",
         "sha256:6bd72a573ab2259fdc2248f67522c37b5059e695431b55ba5431edbf24c24dcb",
-        "sha256:3ea1be00eedc6fb813f1fdbc4137d7fcd186d29cc1097813253801b7fef1ece8",
+        "sha256:57e22804c129e46151d37941c0c84a4564e8a97ba2c7ca3da2c69245314ffab2",
         "sha256:2c64f20c42f027931f3582894a72cf2a0e1380337946bb42ad4b3562e7d97ea8",
-        "sha256:10efa3ddf3b62bb6991c3a290b474bc5edd56005b7fc7d59c5f256aec90bad45"
+        "sha256:bac21cdb6dd0e54353d73ea7604a38748e88c43f6eed40be135424870042ab3f"
       ]
     },
     "Metadata": {
-      "LastTagTime": "2026-05-23T06:18:24.987976832Z"
+      "LastTagTime": "2026-06-11T16:00:12.612980229Z"
     },
     "Descriptor": {
       "mediaType": "application/vnd.oci.image.index.v1+json",
-      "digest": "sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a",
+      "digest": "sha256:261633f0d60aa96b6921fc561a31e76a7601ea7f52e4f435efac79686882e299",
       "size": 856
     },
     "Identity": {
       "Build": [
         {
-          "Ref": "qn3qxt26aswyg6xqnnez9014i",
-          "CreatedAt": "2026-05-23T08:18:28.859978331+02:00"
+          "Ref": "59b0fw7namo5nd1v2dmrnhtcs",
+          "CreatedAt": "2026-06-11T18:00:13.037611716+02:00"
         }
       ]
     }

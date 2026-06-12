@@ -23,17 +23,17 @@ CapBnd:	00000000a80425fb
 CapAmb:	0000000000000000
 --environment--
 ADMIN_EMAIL=admin@admin.test
-ADMIN_KEY=<REDACTED>
-ADMIN_PASSWORD=<REDACTED>
+ADMIN_KEY=JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw
+ADMIN_PASSWORD=admin
 BASE_URL=https://localhost
 DEBIAN_FRONTEND=noninteractive
-GPG_KEY=<REDACTED>
+GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305
 HOME=/root
 HOSTNAME=misp
 LANG=C.UTF-8
 MYSQL_DATABASE=misp
 MYSQL_HOST=misp-db
-MYSQL_PASSWORD=<REDACTED>
+MYSQL_PASSWORD=misp_db_password
 MYSQL_USER=misp
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 PWD=/var/www/MISP
@@ -42,16 +42,16 @@ PYTHON_VERSION=3.12.13
 REDIS_HOST=misp-redis
 --listeners--
 Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
-udp   UNCONN 0      0         127.0.0.11:52950      0.0.0.0:*
-tcp   LISTEN 0      4096      127.0.0.11:34143      0.0.0.0:*
-tcp   LISTEN 0      511          0.0.0.0:80         0.0.0.0:*    users:(("nginx",pid=96,fd=8))
-tcp   LISTEN 0      511          0.0.0.0:443        0.0.0.0:*    users:(("nginx",pid=96,fd=6))
-tcp   LISTEN 0      100        127.0.0.1:50000      0.0.0.0:*
+udp   UNCONN 0      0         127.0.0.11:40717      0.0.0.0:*
 tcp   LISTEN 0      1024       127.0.0.1:9001       0.0.0.0:*    users:(("supervisord",pid=8,fd=4))
-tcp   LISTEN 0      511             [::]:80            [::]:*    users:(("nginx",pid=96,fd=9))
-tcp   LISTEN 0      511             [::]:443           [::]:*    users:(("nginx",pid=96,fd=7))
+tcp   LISTEN 0      4096      127.0.0.11:46879      0.0.0.0:*
+tcp   LISTEN 0      511          0.0.0.0:443        0.0.0.0:*    users:(("nginx",pid=87,fd=6))
+tcp   LISTEN 0      511          0.0.0.0:80         0.0.0.0:*    users:(("nginx",pid=87,fd=8))
+tcp   LISTEN 0      100        127.0.0.1:50000      0.0.0.0:*
+tcp   LISTEN 0      511             [::]:443           [::]:*    users:(("nginx",pid=87,fd=7))
+tcp   LISTEN 0      511             [::]:80            [::]:*    users:(("nginx",pid=87,fd=9))
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51161/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/345/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/344/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/343/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/342/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/341/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/340/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/339/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/338/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/337/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/331/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/329/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/325/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/324/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/323/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/322/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/321/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/268/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/267/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/264/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/263/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/57/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51167/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51167/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107899/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/345/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/344/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/343/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/342/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/341/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/340/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/339/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/338/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/337/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/331/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/329/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/325/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/324/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/323/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/322/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/321/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/268/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/267/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/264/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/263/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/57/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107904/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107904/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -151,53 +151,53 @@ stunnel4:x:997:stunnel4
       8       1 root     /usr/local/bin/python3.12 /usr/local/bin/supervisord -c /etc/supervisor/supervisord.conf
       9       8 root     /bin/bash /entrypoint_nginx.sh
      11       8 root     /usr/sbin/rsyslogd -n
-     96       9 root     nginx: master process nginx -g daemon off;
-    163      96 www-data nginx: worker process
-    164      96 www-data nginx: worker process
-    165      96 www-data nginx: worker process
-    166      96 www-data nginx: worker process
-    167      96 www-data nginx: worker process
-    168      96 www-data nginx: worker process
-    169      96 www-data nginx: worker process
-    170      96 www-data nginx: worker process
-    171      96 www-data nginx: worker process
-    172      96 www-data nginx: worker process
-    173      96 www-data nginx: worker process
-    174      96 www-data nginx: worker process
-    175      96 www-data nginx: worker process
-    176      96 www-data nginx: worker process
-    177      96 www-data nginx: worker process
-    179      96 www-data nginx: worker process
-   1467       1 www-data /usr/local/bin/python3 /var/www/MISP/app/files/scripts/mispzmq/mispzmq.py
-   2712       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app scheduler_worker
-   2775       1 root     gpg-agent --homedir /var/www/MISP/.gnupg --use-standard-socket --daemon
-   3782       8 root     /bin/bash /entrypoint_fpm.sh
-   3810    3782 root     php-fpm: master process (/etc/php/8.4/fpm/php-fpm.conf)
-   3811    3810 www-data php-fpm: pool www
-   3812    3810 www-data php-fpm: pool www
- 105543       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
- 105544       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
- 105559       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
- 105567       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
- 105575       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
- 105576       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
- 105577       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
- 105580       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
- 105584       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
- 105587       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
- 105608       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
- 105619       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
- 105626       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
- 105630       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
- 105635       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
- 105639       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
- 105650       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
- 105657       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
- 105660       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
- 105666       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker update
- 105710       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
- 156124       0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --capabilities-pid1--   grep "^Cap" /proc/1/status || true   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --process-tree--   ps -eo pid,ppid,user,args || true   printf "%s\n" --service-versions--   php -v | sed -n "1,4p" || true   nginx -v 2>&1 || true   python3 --version 2>&1 || true   mysql --version 2>&1 || true   redis-cli --version 2>&1 || true   printf "%s\n" --supervisor--   supervisorctl status 2>&1 || true
- 156147  156124 root     ps -eo pid,ppid,user,args
+     87       9 root     nginx: master process nginx -g daemon off;
+   1368      87 www-data nginx: worker process
+   1369      87 www-data nginx: worker process
+   1370      87 www-data nginx: worker process
+   1371      87 www-data nginx: worker process
+   1372      87 www-data nginx: worker process
+   1373      87 www-data nginx: worker process
+   1374      87 www-data nginx: worker process
+   1375      87 www-data nginx: worker process
+   1376      87 www-data nginx: worker process
+   1377      87 www-data nginx: worker process
+   1378      87 www-data nginx: worker process
+   1379      87 www-data nginx: worker process
+   1380      87 www-data nginx: worker process
+   1381      87 www-data nginx: worker process
+   1382      87 www-data nginx: worker process
+   1383      87 www-data nginx: worker process
+   1501       1 www-data /usr/local/bin/python3 /var/www/MISP/app/files/scripts/mispzmq/mispzmq.py
+   2625       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
+   2626       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
+   2627       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
+   2628       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
+   2631       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker default
+   2635       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
+   2640       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
+   2648       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
+   2657       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
+   2662       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker email
+   2670       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
+   2678       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
+   2683       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
+   2690       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
+   2705       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker cache
+   2712       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
+   2722       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
+   2739       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
+   2743       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
+   2749       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker prio
+   2754       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app start_worker update
+   2757       8 www-data php -q /var/www/MISP/app/Console/cake.php -working /var/www/MISP/app scheduler_worker
+   2816       1 root     gpg-agent --homedir /var/www/MISP/.gnupg --use-standard-socket --daemon
+   3817       8 root     /bin/bash /entrypoint_fpm.sh
+   3845    3817 root     php-fpm: master process (/etc/php/8.4/fpm/php-fpm.conf)
+   3846    3845 www-data php-fpm: pool www
+   3847    3845 www-data php-fpm: pool www
+  35574       0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --capabilities-pid1--   grep "^Cap" /proc/1/status || true   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --process-tree--   ps -eo pid,ppid,user,args || true   printf "%s\n" --service-versions--   php -v | sed -n "1,4p" || true   nginx -v 2>&1 || true   python3 --version 2>&1 || true   mysql --version 2>&1 || true   redis-cli --version 2>&1 || true   printf "%s\n" --supervisor--   supervisorctl status 2>&1 || true
+  35597   35574 root     ps -eo pid,ppid,user,args
 --service-versions--
 PHP 8.4.16 (cli) (built: Dec 18 2025 21:19:25) (NTS)
 Copyright (c) The PHP Group

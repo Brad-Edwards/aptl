@@ -55,7 +55,7 @@ correspondence_checks:
   - misp-redis.datastore.logical-dbs
   - misp-redis.datastore.acl
   - misp-redis.runtime.vulnerability-scan
-- id: misp-redis-scope-and-redaction-caveats
+- id: misp-redis-scope-and-capture-caveats
   status: implemented
   source: docs/aces/inventory/misp-redis/evidence/capture-limits.txt
   method: README and tests assert non-destructive capture scope, preservation of the disclosed Redis auth fixture, Syft normalization, dump.rdb checksum exclusion, and unavailable osquery tables.
@@ -179,7 +179,7 @@ facts:
     rationale: Current ACES SDL node runtime container/policy/health fields carry this catalogued MISP Redis fact directly.
 - id: misp-redis.network.identity
   category: network
-  summary: misp-redis is attached to security-net at a DHCP-assigned 172.20.0.3 with Docker aliases, DNS names, a MAC address, and no host-published ports.
+  summary: misp-redis is attached to security-net at a DHCP-assigned 172.20.0.2 with Docker aliases, DNS names, a MAC address, and no host-published ports.
   evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/docker-network.aptl-security.json

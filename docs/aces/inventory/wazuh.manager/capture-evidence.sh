@@ -16,8 +16,6 @@ SYFT_IMAGE="${SYFT_IMAGE:-anchore/syft@sha256:86fde6445b483d902fe011dd9f68c4987d
 OSQUERY_IMAGE="${OSQUERY_IMAGE:-osquery/osquery@sha256:f8ec3300048158292df2d4bb0d1d7804af358f530005828c3387553f23c796cd}"
 SYFT_NORMALIZER="$ASSET_DIR/normalize-syft-cyclonedx.jq"
 
-SECRET_NAME_REGEX="(token|secret|password|passwd|credential|cookie|session|private_key|api_key|jwt|flag_key|access_key|shared_key|enrollment_key|client_key|cluster_key|ssl_key|key$)"
-
 require() {
   command -v "$1" >/dev/null 2>&1 || {
     printf 'required command missing: %s\n' "$1" >&2
@@ -28,45 +26,6 @@ require() {
 record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
-
-redact_stream() {
-  sed -E \
-    -e 's#(^|[^[:alnum:]_./-])(([-[:alnum:]_.]*(token|secret|password|passwd|credential|cookie|session|private_key|api_key|jwt|flag_key|access_key|shared_key|enrollment_key|client_key|cluster_key|ssl_key)[-[:alnum:]_.]*|[-[:alnum:]_.]*key)[[:space:]]*[:=][[:space:]]*)("[^"]*"|[^[:space:],;]+)#\1\2<REDACTED-SECRET>#Ig' \
-    -e 's#(<([-[:alnum:]_.:]*(token|secret|password|passwd|credential|cookie|session|private_key|api_key|jwt|flag_key|access_key|shared_key|enrollment_key|client_key|cluster_key|ssl_key)[-[:alnum:]_.:]*|[-[:alnum:]_.:]*key)[^>]*>)[^<]*(</\2>)#\1<REDACTED-SECRET>\4#Ig' \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|ACCESS_KEY|SHARED_KEY|ENROLLMENT_KEY|CLIENT_KEY|CLUSTER_KEY|SSL_KEY)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's#(<key>)[^<]+(</key>)#\1<REDACTED-CLUSTER-KEY>\2#Ig' \
-    -e 's#(Authorization:[[:space:]]*)[^[:space:]]+([[:space:]]+[^[:space:]]+)?#\1<REDACTED-AUTHORIZATION>#Ig'
-}
-
-redact_env_jq='
-  def redact_env($secret_re):
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test($secret_re; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys($secret_re):
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test($secret_re; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 write_json_status() {
   local output="$1"
   local table="$2"
@@ -119,7 +78,7 @@ mkdir -p "$OUT"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 record_limit "This capture used the existing running lab as authorized by the user on 2026-05-29 and did not run aptl lab stop -v && aptl lab start; it is a non-destructive frozen steady-state observation, not clean-lab rebuild proof."
-record_limit "Raw Wazuh API credentials, indexer credentials, cluster keys, API tokens, and private key material are intentionally absent from committed evidence; paths, metadata, redacted setting names, and safe hashes are retained where permitted."
+record_limit "Wazuh API credentials, indexer credentials, cluster keys, API tokens, and private key checksums are retained as in-range scenario evidence."
 record_limit "The Wazuh manager image does not include ss, netstat, ip, or mount; runtime evidence uses Docker inspect/network records and /proc/net/* listener fallback where in-container tooling is unavailable."
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -128,32 +87,13 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 COMPOSE_PROFILES="$COMPOSE_PROFILES" docker compose -f "$COMPOSE_FILE" config --format json \
   | jq \
     --arg service "$COMPOSE_SERVICE" \
-    --arg secret_re "$SECRET_NAME_REGEX" '
-      .services[$service]
-      | .environment = (
-          (.environment // {})
-          | with_entries(
-              if (.key | test($secret_re; "i")) then
-                .value = ("<REDACTED-" + (.key | gsub("_"; "-")) + ">")
-              else
-                .
-              end
-            )
-        )
-    ' > "$OUT/compose-service.wazuh.manager.json"
+    '.services[$service]' > "$OUT/compose-service.wazuh.manager.json"
 
-docker inspect "$CONTAINER" \
-  | jq --arg secret_re "$SECRET_NAME_REGEX" \
-      "$redact_env_jq
-      .[].Config.Env |= ((. // []) | map(redact_env(\$secret_re)))
-      | redact_sensitive_keys(\$secret_re)" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq --arg secret_re "$SECRET_NAME_REGEX" "$redact_env_jq redact_sensitive_keys(\$secret_re)" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw | jq . > "$OUT/docker-buildx-imagetools.image.raw.json"
@@ -181,7 +121,7 @@ docker volume inspect aptl_wazuh_wodles | jq . > "$OUT/docker-volume.wazuh-wodle
 docker volume inspect aptl_filebeat_etc | jq . > "$OUT/docker-volume.filebeat-etc.json"
 docker volume inspect aptl_filebeat_var | jq . > "$OUT/docker-volume.filebeat-var.json"
 
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
 
 sha256sum \
   "$ROOT/docker-compose.yml" \
@@ -189,6 +129,7 @@ sha256sum \
   "$ROOT/config/wazuh_cluster/filebeat_wazuh_module.yml" \
   "$ROOT/config/wazuh_indexer_ssl_certs/root-ca-manager.pem" \
   "$ROOT/config/wazuh_indexer_ssl_certs/wazuh.manager.pem" \
+  "$ROOT/config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem" \
   "$ROOT/config/wazuh_cluster/falco_rules.xml" \
   "$ROOT/config/wazuh_cluster/samba_decoders.xml" \
   "$ROOT/config/wazuh_cluster/postgresql_decoders.xml" \
@@ -197,9 +138,8 @@ sha256sum \
   "$ROOT/config/wazuh_cluster/suricata_rules.xml" \
   "$ROOT/config/wazuh_cluster/database_rules.xml" \
   "$ROOT/config/wazuh_cluster/patch-rule-path.py" \
+  "$ROOT/.aptl/config/wazuh_cluster/wazuh_manager.conf" \
   | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
-printf '<OMITTED-OPERATOR-SECRET-CHECKSUM>  config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem\n' >> "$OUT/source-checksums.txt"
-printf '<OMITTED-OPERATOR-SECRET-CHECKSUM>  .aptl/config/wazuh_cluster/wazuh_manager.conf\n' >> "$OUT/source-checksums.txt"
 
 docker exec "$CONTAINER" bash -lc '
   rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n" | sort
@@ -215,7 +155,7 @@ docker exec "$CONTAINER" bash -lc '
   /usr/share/filebeat/bin/filebeat version 2>&1
   echo --wazuh--
   /var/ossec/bin/wazuh-control info 2>&1
-' | redact_stream > "$OUT/language-manifests.txt"
+' > "$OUT/language-manifests.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set +e
@@ -251,7 +191,7 @@ docker exec "$CONTAINER" bash -lc '
   getent group | sed -n "1,260p"
   echo --process-tree--
   ps -eo pid,ppid,user,args || true
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set +e
@@ -279,12 +219,12 @@ docker exec "$CONTAINER" bash -lc '
   sed -n "1,260p" /var/ossec/etc/ossec.conf 2>/dev/null
   echo --filebeat-config--
   sed -n "1,220p" /etc/filebeat/filebeat.yml 2>/dev/null
-' | redact_stream > "$OUT/wazuh-manager-state.txt"
+' > "$OUT/wazuh-manager-state.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set +e
   curl -ks -i https://localhost:55000 2>&1 | sed -n "1,80p"
-' | redact_stream \
+' \
   | jq -Rs '{vantage: "container localhost", command: "curl -ks -i https://localhost:55000", output: .}' \
   > "$OUT/wazuh-api-probe.json"
 
@@ -330,7 +270,7 @@ docker exec "$CONTAINER" bash -lc '
   done | sort -u | while IFS= read -r path; do
     stat -c "%F %A %a %u %U %g %G %s %Y %n" "$path"
   done
-' | redact_stream > "$OUT/filesystem-tree.txt"
+' > "$OUT/filesystem-tree.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set -euo pipefail
@@ -354,11 +294,9 @@ docker exec "$CONTAINER" bash -lc '
   "
   for root in $roots; do
     [ -e "$root" ] || continue
-    find "$root" -xdev -maxdepth 6 -type f ! -path /etc/ssl/filebeat.key ! -path /var/ossec/etc/client.keys ! -path /var/ossec/etc/local_internal_options.conf -print
+    find "$root" -xdev -maxdepth 6 -type f -print
   done | sort -u | xargs -r sha256sum
 ' > "$OUT/filesystem-checksums.txt"
-printf '<OMITTED-OPERATOR-SECRET-CHECKSUM>  /etc/ssl/filebeat.key\n' >> "$OUT/filesystem-checksums.txt"
-printf '<OMITTED-WAZUH-SECRET-CHECKSUM>  /var/ossec/etc/client.keys\n' >> "$OUT/filesystem-checksums.txt"
 
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" --version \
   > "$OUT/trivy-version.txt"

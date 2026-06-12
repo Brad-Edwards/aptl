@@ -1,11 +1,11 @@
 [
   {
-    "Id": "sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052",
+    "Id": "sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957",
     "RepoTags": [
       "aptl-ad:latest"
     ],
     "RepoDigests": [
-      "aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052"
+      "aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957"
     ],
     "Comment": "buildkit.dockerfile.v0",
     "Created": "2026-05-18T02:58:51.868306295+02:00",
@@ -31,7 +31,7 @@
         "DEBIAN_FRONTEND=noninteractive",
         "SAMBA_DOMAIN=TECHVAULT",
         "SAMBA_REALM=TECHVAULT.LOCAL",
-        "SAMBA_ADMIN_PASSWORD=<REDACTED-SCENARIO-FIXTURE>"
+        "SAMBA_ADMIN_PASSWORD=Admin123!"
       ],
       "Entrypoint": [
         "/opt/setup-ad.sh"
@@ -65,18 +65,18 @@
       ]
     },
     "Metadata": {
-      "LastTagTime": "2026-05-23T06:17:07.772122585Z"
+      "LastTagTime": "2026-06-11T16:00:13.82672672Z"
     },
     "Descriptor": {
       "mediaType": "application/vnd.oci.image.index.v1+json",
-      "digest": "sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052",
+      "digest": "sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957",
       "size": 856
     },
     "Identity": {
       "Build": [
         {
-          "Ref": "zj6w0ha5bhobd4uai283aajw5",
-          "CreatedAt": "2026-05-23T08:17:07.990693639+02:00"
+          "Ref": "qbcjhs1wa3f78xn802jegyj06",
+          "CreatedAt": "2026-06-11T18:00:13.911719651+02:00"
         }
       ]
     }

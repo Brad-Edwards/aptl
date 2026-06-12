@@ -1,7 +1,7 @@
 [
   {
-    "Id": "c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7",
-    "Created": "2026-05-23T06:18:32.801281828Z",
+    "Id": "2463810da701ee82ea8024e7b7a8e3faafe67500c5fdbcb440387becfab0c613",
+    "Created": "2026-06-11T16:00:19.990934522Z",
     "Path": "/entrypoint.sh",
     "Args": [],
     "State": {
@@ -11,42 +11,42 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2966185,
+      "Pid": 812808,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:19:17.853018717Z",
+      "StartedAt": "2026-06-11T16:00:59.77563144Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-06-06T09:30:40.853029917+02:00",
-            "End": "2026-06-06T09:30:40.911734002+02:00",
+            "Start": "2026-06-12T14:59:08.032850155+02:00",
+            "End": "2026-06-12T14:59:08.07603314+02:00",
             "ExitCode": 0,
             "Output": ""
           },
           {
-            "Start": "2026-06-06T09:31:10.912650536+02:00",
-            "End": "2026-06-06T09:31:10.968247847+02:00",
+            "Start": "2026-06-12T14:59:38.077323693+02:00",
+            "End": "2026-06-12T14:59:38.140290067+02:00",
             "ExitCode": 0,
             "Output": ""
           },
           {
-            "Start": "2026-06-06T09:31:40.968778448+02:00",
-            "End": "2026-06-06T09:31:41.020888436+02:00",
+            "Start": "2026-06-12T15:00:08.141455644+02:00",
+            "End": "2026-06-12T15:00:08.20370106+02:00",
             "ExitCode": 0,
             "Output": ""
           },
           {
-            "Start": "2026-06-06T09:32:11.02183178+02:00",
-            "End": "2026-06-06T09:32:11.09181814+02:00",
+            "Start": "2026-06-12T15:00:38.204384704+02:00",
+            "End": "2026-06-12T15:00:38.268651011+02:00",
             "ExitCode": 0,
             "Output": ""
           },
           {
-            "Start": "2026-06-06T09:32:41.092408137+02:00",
-            "End": "2026-06-06T09:32:41.151038089+02:00",
+            "Start": "2026-06-12T15:01:08.270207921+02:00",
+            "End": "2026-06-12T15:01:08.323608452+02:00",
             "ExitCode": 0,
             "Output": ""
           }
@@ -54,10 +54,10 @@
       }
     },
     "Image": "sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7",
-    "ResolvConfPath": "/var/lib/docker/containers/c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7/hostname",
-    "HostsPath": "/var/lib/docker/containers/c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7/hosts",
-    "LogPath": "/var/lib/docker/containers/c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7/c064e5698405c9ebd3d305b3076a78ad7ee26a600482c91f92f3cbf54670bcd7-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/2463810da701ee82ea8024e7b7a8e3faafe67500c5fdbcb440387becfab0c613/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/2463810da701ee82ea8024e7b7a8e3faafe67500c5fdbcb440387becfab0c613/hostname",
+    "HostsPath": "/var/lib/docker/containers/2463810da701ee82ea8024e7b7a8e3faafe67500c5fdbcb440387becfab0c613/hosts",
+    "LogPath": "/var/lib/docker/containers/2463810da701ee82ea8024e7b7a8e3faafe67500c5fdbcb440387becfab0c613/2463810da701ee82ea8024e7b7a8e3faafe67500c5fdbcb440387becfab0c613-json.log",
     "Name": "/aptl-wazuh-dashboard",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -68,13 +68,13 @@
     "ExecIDs": null,
     "HostConfig": {
       "Binds": [
-        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:rw",
         "/home/atomik/src/aptl/config/wazuh_dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:rw",
         "/home/atomik/src/aptl/.aptl/config/wazuh_dashboard/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml:rw",
         "aptl_wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config:rw",
         "aptl_wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom:rw",
         "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:rw",
-        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:rw"
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:rw",
+        "/home/atomik/src/aptl/config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:rw"
       ],
       "ContainerIDFile": "",
       "LogConfig": {
@@ -183,6 +183,32 @@
     },
     "Mounts": [
       {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/wazuh_dashboard/opensearch_dashboards.yml",
+        "Destination": "/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/.aptl/config/wazuh_dashboard/wazuh.yml",
+        "Destination": "/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_wazuh-dashboard-config",
+        "Source": "/var/lib/docker/volumes/aptl_wazuh-dashboard-config/_data",
+        "Destination": "/usr/share/wazuh-dashboard/data/wazuh/config",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
         "Type": "volume",
         "Name": "aptl_wazuh-dashboard-custom",
         "Source": "/var/lib/docker/volumes/aptl_wazuh-dashboard-custom/_data",
@@ -215,32 +241,6 @@
         "Mode": "rw",
         "RW": true,
         "Propagation": "rprivate"
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/wazuh_dashboard/opensearch_dashboards.yml",
-        "Destination": "/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/.aptl/config/wazuh_dashboard/wazuh.yml",
-        "Destination": "/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
-      },
-      {
-        "Type": "volume",
-        "Name": "aptl_wazuh-dashboard-config",
-        "Source": "/var/lib/docker/volumes/aptl_wazuh-dashboard-config/_data",
-        "Destination": "/usr/share/wazuh-dashboard/data/wazuh/config",
-        "Driver": "local",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": ""
       }
     ],
     "Config": {
@@ -258,13 +258,13 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "INDEXER_USERNAME=admin",
-        "INDEXER_PASSWORD=SecretPassword",
         "WAZUH_API_URL=https://wazuh.manager",
         "DASHBOARD_USERNAME=kibanaserver",
         "DASHBOARD_PASSWORD=kibanaserver",
         "API_USERNAME=wazuh-wui",
         "API_PASSWORD=WazuhPass123!",
+        "INDEXER_USERNAME=admin",
+        "INDEXER_PASSWORD=SecretPassword",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "USER=wazuh-dashboard",
         "GROUP=wazuh-dashboard",
@@ -315,8 +315,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "49929268e4fe9f3883403720321107c72cf5eec6a58149ffac83a8f39ef53292",
-      "SandboxKey": "/var/run/docker/netns/49929268e4fe",
+      "SandboxID": "953bfcdd95945123bf49959cd9db1129e3545644a455f783678e6b983f0a15e0",
+      "SandboxKey": "/var/run/docker/netns/953bfcdd9594",
       "Ports": {
         "443/tcp": null,
         "5601/tcp": [
@@ -343,10 +343,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "20430152a65e828de2388ba941a29d8e3d837b692290217cb7ec7e641ba329ff",
+          "EndpointID": "2a053aebe4fcc2685a7ad7c4c168c68bc0d0fe4ce4061c6e4b9a3f124754daca",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.11",
-          "MacAddress": "9a:ac:f7:25:27:95",
+          "MacAddress": "ce:73:a1:0e:dc:52",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -354,7 +354,7 @@
           "DNSNames": [
             "aptl-wazuh-dashboard",
             "wazuh.dashboard",
-            "c064e5698405"
+            "2463810da701"
           ]
         }
       }

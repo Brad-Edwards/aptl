@@ -1,4 +1,4 @@
-PID                 PPID                USER                COMMAND
-3323699             3323659             root                /sbin/docker-init -- /entrypoint.sh
-3323793             3323699             root                sleep infinity
-3323836             3323699             root                sshd: /usr/sbin/sshd [listener] 0 of 10-100 startups
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+root                804653              804618              0                   Jun11               ?                   00:00:01            /sbin/docker-init -- /entrypoint.sh
+root                805668              804653              0                   Jun11               ?                   00:00:00            sleep infinity
+root                805980              804653              0                   Jun11               ?                   00:00:00            sshd: /usr/sbin/sshd [listener] 0 of 10-100 startups

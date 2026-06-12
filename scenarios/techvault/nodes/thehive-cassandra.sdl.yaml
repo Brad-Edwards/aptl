@@ -4329,9 +4329,82 @@ nodes:
         pid: 1
         parent_pid: null
         command:
-        - /opt/java/openjdk/bin/java
-        - '...'
-        command_redacted: true
+        - '/opt/java/openjdk/bin/java'
+        - '-ea'
+        - '-da:net.openhft...'
+        - '-XX:+UseThreadPriorities'
+        - '-XX:+HeapDumpOnOutOfMemoryError'
+        - '-Xss256k'
+        - '-XX:+AlwaysPreTouch'
+        - '-XX:-UseBiasedLocking'
+        - '-XX:+UseTLAB'
+        - '-XX:+ResizeTLAB'
+        - '-XX:+UseNUMA'
+        - '-XX:+PerfDisableSharedMem'
+        - '-Djava.net.preferIPv4Stack=true'
+        - '-XX:+UseConcMarkSweepGC'
+        - '-XX:+CMSParallelRemarkEnabled'
+        - '-XX:SurvivorRatio=8'
+        - '-XX:MaxTenuringThreshold=1'
+        - '-XX:CMSInitiatingOccupancyFraction=75'
+        - '-XX:+UseCMSInitiatingOccupancyOnly'
+        - '-XX:CMSWaitDuration=10000'
+        - '-XX:+CMSParallelInitialMarkEnabled'
+        - '-XX:+CMSEdenChunksRecordAlways'
+        - '-XX:+CMSClassUnloadingEnabled'
+        - '-Djdk.attach.allowAttachSelf=true'
+        - '--add-exports'
+        - 'java.base/jdk.internal.misc=ALL-UNNAMED'
+        - '--add-exports'
+        - 'java.base/jdk.internal.ref=ALL-UNNAMED'
+        - '--add-exports'
+        - 'java.base/sun.nio.ch=ALL-UNNAMED'
+        - '--add-exports'
+        - 'java.management.rmi/com.sun.jmx.remote.internal.rmi=ALL-UNNAMED'
+        - '--add-exports'
+        - 'java.rmi/sun.rmi.registry=ALL-UNNAMED'
+        - '--add-exports'
+        - 'java.rmi/sun.rmi.server=ALL-UNNAMED'
+        - '--add-exports'
+        - 'java.sql/java.sql=ALL-UNNAMED'
+        - '--add-opens'
+        - 'java.base/java.lang.module=ALL-UNNAMED'
+        - '--add-opens'
+        - 'java.base/jdk.internal.loader=ALL-UNNAMED'
+        - '--add-opens'
+        - 'java.base/jdk.internal.ref=ALL-UNNAMED'
+        - '--add-opens'
+        - 'java.base/jdk.internal.reflect=ALL-UNNAMED'
+        - '--add-opens'
+        - 'java.base/jdk.internal.math=ALL-UNNAMED'
+        - '--add-opens'
+        - 'java.base/jdk.internal.module=ALL-UNNAMED'
+        - '--add-opens'
+        - 'java.base/jdk.internal.util.jar=ALL-UNNAMED'
+        - '--add-opens'
+        - 'jdk.management/com.sun.management.internal=ALL-UNNAMED'
+        - '-Dio.netty.tryReflectionSetAccessible=true'
+        - '-Xlog:gc=info,heap*=trace,age*=debug,safepoint=info,promotion*=trace:file=/opt/cassandra/logs/gc.log:time,uptime,pid,tid,level:filecount=10,filesize=10485760'
+        - '-Xms512M'
+        - '-Xmx512M'
+        - '-Xmn128M'
+        - '-XX:+UseCondCardMark'
+        - '-XX:CompileCommandFile=/etc/cassandra/hotspot_compiler'
+        - '-javaagent:/opt/cassandra/lib/jamm-0.3.2.jar'
+        - '-Dcassandra.jmx.local.port=7199'
+        - '-Dcom.sun.management.jmxremote.authenticate=false'
+        - '-Dcom.sun.management.jmxremote.password.file=/etc/cassandra/jmxremote.password'
+        - '-Djava.library.path=/opt/cassandra/lib/sigar-bin'
+        - '-Dcassandra.libjemalloc=/usr/local/lib/libjemalloc.so'
+        - '-XX:OnOutOfMemoryError=kill -9 %p'
+        - '-Dlogback.configurationFile=logback.xml'
+        - '-Dcassandra.logdir=/opt/cassandra/logs'
+        - '-Dcassandra.storagedir=/opt/cassandra/data'
+        - '-Dcassandra-foreground=yes'
+        - '-cp'
+        - '/etc/cassandra:/opt/cassandra/lib/HdrHistogram-2.1.12.jar:/opt/cassandra/lib/ST4-4.0.8.jar:/opt/cassandra/lib/airline-0.8.jar:/opt/cassandra/lib/antlr-runtime-3.5.2.jar:/opt/cassandra/lib/apache-cassandra-4.1.11.jar:/opt/cassandra/lib/asm-9.1.jar:/opt/cassandra/lib/caffeine-2.9.2.jar:/opt/cassandra/lib/cassandra-driver-core-3.11.5-shaded.jar:/opt/cassandra/lib/checker-qual-3.10.0.jar:/opt/cassandra/lib/chronicle-bytes-2.20.111.jar:/opt/cassandra/lib/chronicle-core-2.20.126.jar:/opt/cassandra/lib/chronicle-queue-5.20.123.jar:/opt/cassandra/lib/chronicle-threads-2.20.111.jar:/opt/cassandra/lib/chronicle-wire-2.20.117.jar:/opt/cassandra/lib/commons-cli-1.1.jar:/opt/cassandra/lib/commons-codec-1.9.jar:/opt/cassandra/lib/commons-lang3-3.18.0.jar:/opt/cassandra/lib/commons-math3-3.2.jar:/opt/cassandra/lib/concurrent-trees-2.4.0.jar:/opt/cassandra/lib/ecj-4.6.1.jar:/opt/cassandra/lib/error_prone_annotations-2.5.1.jar:/opt/cassandra/lib/guava-27.0-jre.jar:/opt/cassandra/lib/high-scale-lib-1.0.6.jar:/opt/cassandra/lib/hppc-0.8.1.jar:/opt/cassandra/lib/ipaddress-5.3.3.jar:/opt/cassandra/lib/j2objc-annotations-1.3.jar:/opt/cassandra/lib/jackson-annotations-2.19.2.jar:/opt/cassandra/lib/jackson-core-2.19.2.jar:/opt/cassandra/lib/jackson-databind-2.19.2.jar:/opt/cassandra/lib/jackson-datatype-jsr310-2.19.2.jar:/opt/cassandra/lib/jamm-0.3.2.jar:/opt/cassandra/lib/javax.inject-1.jar:/opt/cassandra/lib/jbcrypt-0.4.jar:/opt/cassandra/lib/jcl-over-slf4j-1.7.25.jar:/opt/cassandra/lib/jcommander-1.30.jar:/opt/cassandra/lib/jctools-core-3.1.0.jar:/opt/cassandra/lib/jna-5.9.0.jar:/opt/cassandra/lib/json-simple-1.1.jar:/opt/cassandra/lib/jsr305-2.0.2.jar:/opt/cassandra/lib/jvm-attach-api-1.5.jar:/opt/cassandra/lib/log4j-over-slf4j-1.7.25.jar:/opt/cassandra/lib/logback-classic-1.2.9.jar:/opt/cassandra/lib/logback-core-1.2.9.jar:/opt/cassandra/lib/lz4-java-1.10.1.jar:/opt/cassandra/lib/metrics-core-3.1.5.jar:/opt/cassandra/lib/metrics-jvm-3.1.5.jar:/opt/cassandra/lib/metrics-logback-3.1.5.jar:/opt/cassandra/lib/mxdump-0.14.jar:/opt/cassandra/lib/netty-all-4.1.58.Final.jar:/opt/cassandra/lib/netty-tcnative-boringssl-static-2.0.36.Final.jar:/opt/cassandra/lib/ohc-core-0.5.1.jar:/opt/cassandra/lib/ohc-core-j8-0.5.1.jar:/opt/cassandra/lib/psjava-0.1.19.jar:/opt/cassandra/lib/reporter-config-base-3.0.3.jar:/opt/cassandra/lib/reporter-config3-3.0.3.jar:/opt/cassandra/lib/sigar-1.6.4.jar:/opt/cassandra/lib/sjk-cli-0.14.jar:/opt/cassandra/lib/sjk-core-0.14.jar:/opt/cassandra/lib/sjk-json-0.14.jar:/opt/cassandra/lib/sjk-stacktrace-0.14.jar:/opt/cassandra/lib/slf4j-api-1.7.25.jar:/opt/cassandra/lib/snakeyaml-1.26.jar:/opt/cassandra/lib/snappy-java-1.1.10.4.jar:/opt/cassandra/lib/snowball-stemmer-1.3.0.581.1.jar:/opt/cassandra/lib/stream-2.5.2.jar:/opt/cassandra/lib/zstd-jni-1.5.7-2.jar:/opt/cassandra/lib/jsr223/*/*.jar:'
+        - 'org.apache.cassandra.service.CassandraDaemon'
+        command_redacted: false
         role: primary
         user: cassandra
         group: cassandra
@@ -5003,27 +5076,28 @@ nodes:
           output_redacted: false
         description: Compose healthcheck probes cqlsh 'describe cluster'.
       network:
-        hostname: baf593babfd4
+        hostname: f838813d53ea
         domainname: ''
         endpoints:
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: cc2baef19a8c4f2b6dd7798d848b54cb73da88e7a1d8079b67e4bc39b8f7e56c
+          endpoint_id: 1417eeb83b041c577c185da7dff14581c009ab5947f03ee297c20769f8844191
           endpoint_id_stability: ephemeral
           backend_generated: true
-          ip_address: 172.20.0.5
+          ip_address: 172.20.0.4
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: e6:c8:39:71:62:0c
+          mac_address: 8a:57:bc:8c:4d:95
           aliases:
           - aptl-thehive-cassandra
           - thehive-cassandra
           dns_names:
           - aptl-thehive-cassandra
           - thehive-cassandra
+          - f838813d53ea
           generated_dns_names:
-          - baf593babfd4
+          - f838813d53ea
           backend:
             driver: bridge
             ipam_driver: default
@@ -5055,7 +5129,7 @@ nodes:
         description: Cassandra native CQL transport on TCP/9042 (reached by thehive).
       - service_listener_id: internode-7000
         service: thehive-cassandra-internode
-        address: 172.20.0.5
+        address: 172.20.0.4
         port: 7000
         protocol: tcp
         address_family: ipv4
@@ -5108,7 +5182,7 @@ nodes:
         name: TechVault TheHive Cassandra
         cluster:
           cluster_id: techvault-thehive-cassandra-cluster
-          uuid: fd42dafe-8cb7-45a8-b969-f17fb342f3be
+          uuid: 27c4df17-0d1d-417d-b45e-c89f9443c8dc
           name: thehive
           health: green
           discovery_mode: single-node
@@ -5120,10 +5194,10 @@ nodes:
           doc_count: null
           store_size_bytes: 3585572
           description: Single-node Cassandra 4.1 cluster 'thehive' (Murmur3Partitioner, DynamicEndpointSnitch); datacenter1/rack1,
-            16 vnode tokens, 100% ownership, host fd42dafe-... from nodetool status/info in cassandra-state.txt.
+            16 vnode tokens, 100% ownership, host 27c4df17-... from nodetool status/info in cassandra-state.txt.
         nodes:
-        - node_id: fd42dafe-8cb7-45a8-b969-f17fb342f3be
-          name: 172.20.0.5
+        - node_id: 27c4df17-0d1d-417d-b45e-c89f9443c8dc
+          name: 172.20.0.4
           roles:
           - data
           is_coordinator: true

@@ -29,7 +29,7 @@
   "entrypoint": null,
   "environment": {
     "POSTGRES_DB": "techvault",
-    "POSTGRES_PASSWORD": "<REDACTED-SCENARIO-FIXTURE>",
+    "POSTGRES_PASSWORD": "techvault_db_pass",
     "POSTGRES_USER": "techvault"
   },
   "hostname": "db.techvault.local",

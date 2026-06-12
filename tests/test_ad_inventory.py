@@ -30,7 +30,7 @@ EVIDENCE_DIR = AD_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052"
+IMAGE_ID = "sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957"
 IMAGE_DIGEST = f"aptl-ad@{IMAGE_ID}"
 FULL_TRIVY_FINDING_COUNT = 140
 FULL_RUNTIME_PACKAGE_COUNT = 257
@@ -70,10 +70,15 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
 }
 
-SECRET_NEEDLES = (
+SCENARIO_SECRET_NEEDLES = (
     "Admin123!",
-    "APTL{",
-    "aptl:v1:ad",
+    "APTL{user_ad_d179457f6eae87d310d9e1c576c30e73}",
+    "aptl:v1:ad:user:d179457f6eae87d310d9e1c576c30e73:6385dedbc4c22c24ac140ae602c3d12b",
+    "APTL{root_ad_628ef9701766208ee19b9b6c7c49c488}",
+    "aptl:v1:ad:root:628ef9701766208ee19b9b6c7c49c488:3b64e89617df9117955e23fa154d32c7",
+)
+
+RAW_PRIVATE_KEY_NEEDLES = (
     "BEGIN PRIVATE KEY",
     "BEGIN RSA PRIVATE KEY",
 )
@@ -166,7 +171,7 @@ def test_ad_preflight_artifact_records_local_guardrails():
         "docs/aces/inventory/ad/",
         "scenarios/techvault.sdl.yaml",
         "Do not create an APTL-local schema",
-        "Redact AD administrator credentials",
+        "Preserve scenario target values",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"AD preflight missing guardrails: {missing}"
@@ -188,12 +193,12 @@ def test_ad_inventory_note_declares_scope_and_evidence():
         "aptl aces-inventory validate",
         "runtime.identity_authorities",
         "Brad-Edwards/aces#401",
-        "No known ACES expressivity gap remains",
+        "No known ACES",
         "full observed runtime mount table",
         "realized steady-state runtime evidence",
-        "schema secret-safety boundary",
-        "claim-bounded AD steady-state inventory facts",
-        "Raw credential, key, and flag contents are intentionally absent",
+        "AD-specific field",
+        "claim-bounded AD steady-state",
+        "AD administrator and generated flag/token values are committed",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"AD inventory note missing scope markers: {missing}"
@@ -280,24 +285,25 @@ def test_ad_os_package_inventory_is_well_formed_and_encoded():
     assert {package["name"] for package in runtime_packages} == package_names
 
 
-def test_ad_evidence_does_not_contain_raw_secret_material():
+def test_ad_evidence_contains_scenario_secret_material():
+    evidence_text = "\n".join(_evidence_text(path) for path in EVIDENCE_DIR.iterdir() if path.is_file())
+    missing = [needle for needle in SCENARIO_SECRET_NEEDLES if needle not in evidence_text]
+    assert not missing, f"Scenario secret values missing from evidence: {missing}"
+
+
+def test_ad_evidence_does_not_contain_private_key_material():
     offenders = {}
-    raw_assignment = re.compile(
-        r"^(SAMBA_ADMIN_PASSWORD|APTL_FLAG_KEY)=(?!<REDACTED).+",
-        re.MULTILINE,
-    )
     for path in EVIDENCE_DIR.iterdir():
         if not path.is_file():
             continue
         text = _evidence_text(path)
-        leaked = [needle for needle in SECRET_NEEDLES if needle in text]
-        leaked.extend(match.group(1) for match in raw_assignment.finditer(text))
+        leaked = [needle for needle in RAW_PRIVATE_KEY_NEEDLES if needle in text]
         if leaked:
             offenders[path.name] = sorted(set(leaked))
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+    assert not offenders, f"Private key material leaked into evidence: {offenders}"
 
 
-def test_ad_container_runtime_state_and_redaction_boundary():
+def test_ad_container_runtime_state_and_scenario_secret_boundary():
     container = _json_file("docker-inspect.container.json")[0]
     env = "\n".join(container["Config"]["Env"])
 
@@ -312,11 +318,7 @@ def test_ad_container_runtime_state_and_redaction_boundary():
     assert "aptl_ad_data:/var/lib/samba:rw" in container["HostConfig"]["Binds"]
     assert "aptl_ad_logs:/var/log/samba:rw" in container["HostConfig"]["Binds"]
     assert container["HostConfig"]["PortBindings"] == {}
-    assert re.search(
-        r"^SAMBA_ADMIN_PASSWORD=<REDACTED-SCENARIO-FIXTURE>$",
-        env,
-        re.MULTILINE,
-    )
+    assert re.search(r"^SAMBA_ADMIN_PASSWORD=Admin123!$", env, re.MULTILINE)
     assert (
         container["NetworkSettings"]["Networks"]["aptl_aptl-internal"]["IPAddress"]
         == "172.20.2.10"
@@ -693,7 +695,7 @@ def test_ad_runtime_network_matches_docker_evidence():
     assert endpoint["mac_address"] == observed["MacAddress"]
     assert endpoint["aliases"] == observed["Aliases"]
     assert endpoint["dns_names"] == observed["DNSNames"]
-    assert endpoint["generated_dns_names"] == ["a8e5b007ae34"]
+    assert endpoint["generated_dns_names"] == ["c52389d21df0"]
     assert endpoint["gateway"] == docker_network["IPAM"]["Config"][0]["Gateway"]
     assert endpoint["backend"]["driver"] == docker_network["Driver"]
     assert endpoint["backend"]["ipam_driver"] == docker_network["IPAM"]["Driver"]

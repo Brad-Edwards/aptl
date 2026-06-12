@@ -22,7 +22,7 @@ rebuild proof.
 | Source class | `custom-build` |
 | Source package | `containers/ad/` plus `containers/_wazuh-agent/` |
 | Image tag | `aptl-ad:latest` |
-| Image digest | `aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052` |
+| Image digest | `aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957` |
 | Runtime OS | Ubuntu 22.04.5 LTS |
 | Samba version | 4.15.13-Ubuntu |
 | Runtime command | `/usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf` |
@@ -38,7 +38,7 @@ rebuild proof.
 | Claim | Evidence |
 | --- | --- |
 | Capture time, tool versions, and limits are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt` |
-| Docker Compose service intent is represented by the redacted Compose service slice. | `evidence/compose-service.ad.json` |
+| Docker Compose service intent is represented by the Compose service slice. | `evidence/compose-service.ad.json` |
 | Custom image identity, config, and layers are recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-history.image.txt` |
 | Source package inputs are checksum-addressable. | `evidence/source-checksums.txt` |
 | Realized runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-internal.json`, `evidence/docker-volume.ad-data.json`, `evidence/docker-volume.ad-logs.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt` |
@@ -83,10 +83,9 @@ rebuild proof.
   membership claims, so those memberships are not asserted.
 - Trivy 0.70.0 reported 140 package vulnerability findings at scan time:
   65 medium and 75 low.
-- Secret-shaped values in Docker/Compose evidence were redacted before
-  committing the bundle. The SDL records only secret classes and scenario
-  weakness intent, not raw AD passwords, generated flags, Wazuh keys, or
-  Kerberos/Samba secret material.
+- Scenario target secrets in Docker/Compose and runtime evidence are retained
+  verbatim. The AD administrator password and generated flag/token contents are
+  committed as TechVault scenario content.
 
 ## ACES Mapping Result
 
@@ -107,13 +106,13 @@ membership facts. AD-native subject attributes captured in committed evidence
 are represented as first-class identity-authority attributes where they are
 non-secret facts, including object GUID/SID, account-control, primary-group,
 last-logon, admin-count, and creation-time values. `pwdLastSet` stays in the
-evidence bundle but is not encoded as an SDL attribute because ACES rejects
-secret-bearing identity attribute names; that is a schema secret-safety boundary,
-not an AD identity expressivity gap. No known ACES expressivity gap remains for
-the encoded, claim-bounded AD steady-state inventory facts in this ledger. Full
-raw Samba private database content, Kerberos key material, Wazuh `client.keys`,
-generated flags, and raw password values are redacted as secret material; their
-observable path/metadata/checksum shape is recorded where useful.
+evidence bundle but is not encoded as an SDL attribute because the current SDL
+identity attribute model does not carry that AD-specific field. No known ACES
+expressivity gap remains for the encoded, claim-bounded AD steady-state
+inventory facts in this ledger. Samba private database content, Kerberos key
+material, and Wazuh `client.keys` remain represented by observable
+path/metadata/checksum shape where useful; AD administrator and generated flag
+scenario values are captured verbatim.
 
 Run:
 
@@ -128,8 +127,9 @@ aptl aces-inventory gaps docs/aces/inventory/ad
   rebuild proof.
 - Generated Samba databases, Kerberos keys, Wazuh enrollment material, and CTF
   flag files can change on a fresh reprovision. Checksums are snapshot facts.
-- Raw credential, key, and flag contents are intentionally absent from committed
-  evidence.
+- AD administrator and generated flag/token values are committed as scenario
+  content; other generated service databases and key stores are represented by
+  path, metadata, and checksum evidence in this bundle.
 - Vulnerability results are time-sensitive to the Trivy database and advisory
   feeds.
 - The capture does not assert attack-induced state changes or later

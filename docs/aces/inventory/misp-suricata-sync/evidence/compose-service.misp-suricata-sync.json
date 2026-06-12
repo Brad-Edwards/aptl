@@ -11,7 +11,7 @@
   "restart": "unless-stopped",
   "environment": [
     "MISP_URL=https://misp",
-    "MISP_API_KEY=<REDACTED-MISP-API-KEY>",
+    "MISP_API_KEY=${MISP_API_KEY:?MISP_API_KEY must be set in .env (copy .env.example to .env)}",
     "MISP_VERIFY_SSL=${MISP_VERIFY_SSL:-true}",
     "MISP_CA_CERT_PATH=${MISP_CA_CERT_PATH:-/etc/lab-ca/lab-ca.pem}",
     "IOC_TAG_FILTER=aptl:enforce",

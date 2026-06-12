@@ -1,7 +1,7 @@
 [
   {
-    "Id": "961e464bcbf1d2a9f8a96a015a52dcd3438f56da254be8fc484cb01d4c82183b",
-    "Created": "2026-05-23T06:18:29.911616288Z",
+    "Id": "21eda147ba3068e4cfe3a5d18ea1ede798a7d84ba4826c0f3065645bc23971ad",
+    "Created": "2026-06-11T16:00:17.869356325Z",
     "Path": "/opt/setup-shares.sh",
     "Args": [],
     "State": {
@@ -11,53 +11,53 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2955821,
+      "Pid": 805090,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:34.664837176Z",
+      "StartedAt": "2026-06-11T16:00:22.322622516Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-05-26T04:50:28.989867665+02:00",
-            "End": "2026-05-26T04:50:29.062257756+02:00",
+            "Start": "2026-06-12T14:24:41.64325654+02:00",
+            "End": "2026-06-12T14:24:41.710193224+02:00",
             "ExitCode": 0,
             "Output": "\n\tSharename       Type      Comment\n\t---------       ----      -------\n\tPublic          Disk      Public Share - Anyone can access\n\tEngineering     Disk      Engineering Team Files\n\tFinance         Disk      Financial Documents\n\tHR              Disk      HR Documents\n\tShared          Disk      Company Shared Drive\n\tIPC$            IPC       IPC Service (TechVault File Server)\nSMB1 disabled -- no workgroup available\n"
           },
           {
-            "Start": "2026-05-26T04:50:44.062667178+02:00",
-            "End": "2026-05-26T04:50:44.142690398+02:00",
+            "Start": "2026-06-12T14:24:56.710718953+02:00",
+            "End": "2026-06-12T14:24:56.789222164+02:00",
             "ExitCode": 0,
             "Output": "\n\tSharename       Type      Comment\n\t---------       ----      -------\n\tPublic          Disk      Public Share - Anyone can access\n\tEngineering     Disk      Engineering Team Files\n\tFinance         Disk      Financial Documents\n\tHR              Disk      HR Documents\n\tShared          Disk      Company Shared Drive\n\tIPC$            IPC       IPC Service (TechVault File Server)\nSMB1 disabled -- no workgroup available\n"
           },
           {
-            "Start": "2026-05-26T04:50:59.143438563+02:00",
-            "End": "2026-05-26T04:50:59.21494902+02:00",
+            "Start": "2026-06-12T14:25:11.790539621+02:00",
+            "End": "2026-06-12T14:25:11.86018801+02:00",
             "ExitCode": 0,
             "Output": "\n\tSharename       Type      Comment\n\t---------       ----      -------\n\tPublic          Disk      Public Share - Anyone can access\n\tEngineering     Disk      Engineering Team Files\n\tFinance         Disk      Financial Documents\n\tHR              Disk      HR Documents\n\tShared          Disk      Company Shared Drive\n\tIPC$            IPC       IPC Service (TechVault File Server)\nSMB1 disabled -- no workgroup available\n"
           },
           {
-            "Start": "2026-05-26T04:51:14.216194527+02:00",
-            "End": "2026-05-26T04:51:14.286974198+02:00",
+            "Start": "2026-06-12T14:25:26.861591238+02:00",
+            "End": "2026-06-12T14:25:26.939762536+02:00",
             "ExitCode": 0,
             "Output": "\n\tSharename       Type      Comment\n\t---------       ----      -------\n\tPublic          Disk      Public Share - Anyone can access\n\tEngineering     Disk      Engineering Team Files\n\tFinance         Disk      Financial Documents\n\tHR              Disk      HR Documents\n\tShared          Disk      Company Shared Drive\n\tIPC$            IPC       IPC Service (TechVault File Server)\nSMB1 disabled -- no workgroup available\n"
           },
           {
-            "Start": "2026-05-26T04:51:29.288465697+02:00",
-            "End": "2026-05-26T04:51:29.355828087+02:00",
+            "Start": "2026-06-12T14:25:41.941041016+02:00",
+            "End": "2026-06-12T14:25:42.009966814+02:00",
             "ExitCode": 0,
             "Output": "\n\tSharename       Type      Comment\n\t---------       ----      -------\n\tPublic          Disk      Public Share - Anyone can access\n\tEngineering     Disk      Engineering Team Files\n\tFinance         Disk      Financial Documents\n\tHR              Disk      HR Documents\n\tShared          Disk      Company Shared Drive\n\tIPC$            IPC       IPC Service (TechVault File Server)\nSMB1 disabled -- no workgroup available\n"
           }
         ]
       }
     },
-    "Image": "sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59",
-    "ResolvConfPath": "/var/lib/docker/containers/961e464bcbf1d2a9f8a96a015a52dcd3438f56da254be8fc484cb01d4c82183b/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/961e464bcbf1d2a9f8a96a015a52dcd3438f56da254be8fc484cb01d4c82183b/hostname",
-    "HostsPath": "/var/lib/docker/containers/961e464bcbf1d2a9f8a96a015a52dcd3438f56da254be8fc484cb01d4c82183b/hosts",
-    "LogPath": "/var/lib/docker/containers/961e464bcbf1d2a9f8a96a015a52dcd3438f56da254be8fc484cb01d4c82183b/961e464bcbf1d2a9f8a96a015a52dcd3438f56da254be8fc484cb01d4c82183b-json.log",
+    "Image": "sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96",
+    "ResolvConfPath": "/var/lib/docker/containers/21eda147ba3068e4cfe3a5d18ea1ede798a7d84ba4826c0f3065645bc23971ad/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/21eda147ba3068e4cfe3a5d18ea1ede798a7d84ba4826c0f3065645bc23971ad/hostname",
+    "HostsPath": "/var/lib/docker/containers/21eda147ba3068e4cfe3a5d18ea1ede798a7d84ba4826c0f3065645bc23971ad/hosts",
+    "LogPath": "/var/lib/docker/containers/21eda147ba3068e4cfe3a5d18ea1ede798a7d84ba4826c0f3065645bc23971ad/21eda147ba3068e4cfe3a5d18ea1ede798a7d84ba4826c0f3065645bc23971ad-json.log",
     "Name": "/aptl-fileshare",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -68,8 +68,8 @@
     "ExecIDs": null,
     "HostConfig": {
       "Binds": [
-        "aptl_fileshare_logs:/var/log/samba:rw",
-        "aptl_fileshare_data:/srv/shares:rw"
+        "aptl_fileshare_data:/srv/shares:rw",
+        "aptl_fileshare_logs:/var/log/samba:rw"
       ],
       "ContainerIDFile": "",
       "LogConfig": {
@@ -174,9 +174,9 @@
     "Mounts": [
       {
         "Type": "volume",
-        "Name": "aptl_fileshare_logs",
-        "Source": "/var/lib/docker/volumes/aptl_fileshare_logs/_data",
-        "Destination": "/var/log/samba",
+        "Name": "aptl_fileshare_data",
+        "Source": "/var/lib/docker/volumes/aptl_fileshare_data/_data",
+        "Destination": "/srv/shares",
         "Driver": "local",
         "Mode": "rw",
         "RW": true,
@@ -184,9 +184,9 @@
       },
       {
         "Type": "volume",
-        "Name": "aptl_fileshare_data",
-        "Source": "/var/lib/docker/volumes/aptl_fileshare_data/_data",
-        "Destination": "/srv/shares",
+        "Name": "aptl_fileshare_logs",
+        "Source": "/var/lib/docker/volumes/aptl_fileshare_logs/_data",
+        "Destination": "/var/log/samba",
         "Driver": "local",
         "Mode": "rw",
         "RW": true,
@@ -208,11 +208,11 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "WAZUH_MANAGER=wazuh.manager",
         "AGENT_NAME=aptl-fileshare-agent",
         "LOG_PATHS=/var/log/samba/log.samba-bgqd,/var/log/samba/log.*",
         "LOG_FORMAT=syslog",
         "SIEM_IP=172.20.0.10",
+        "WAZUH_MANAGER=wazuh.manager",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "DEBIAN_FRONTEND=noninteractive"
       ],
@@ -237,7 +237,7 @@
         "com.docker.compose.config-hash": "3ca345b670eb433bbe48d5656f03b7909c5bc22d816b344955dba7cf1e1d81b9",
         "com.docker.compose.container-number": "1",
         "com.docker.compose.depends_on": "",
-        "com.docker.compose.image": "sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59",
+        "com.docker.compose.image": "sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
         "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
@@ -248,8 +248,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "88f59f87b4b3ce3e23f5b2bbc7d1b32b7b64192f6a304e286c9c53e661fd1119",
-      "SandboxKey": "/var/run/docker/netns/88f59f87b4b3",
+      "SandboxID": "23bdaeee731cc6f26bd35a745fdfff1d71ab6ee96b9d321bf5967c60314ad4d2",
+      "SandboxKey": "/var/run/docker/netns/23bdaeee731c",
       "Ports": {
         "139/tcp": null,
         "445/tcp": null
@@ -267,10 +267,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
-          "EndpointID": "329bb36706e30e185325da0c1360c6cb18fdb4e92f84f586e0f5162da616f53e",
+          "EndpointID": "a744f96583d9e5f32b0d5831c81f05a17c38d166b74d54f53a5c1e40a907faac",
           "Gateway": "",
           "IPAddress": "172.20.2.12",
-          "MacAddress": "26:36:cc:03:76:e1",
+          "MacAddress": "aa:0a:ca:f6:3f:b1",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -278,7 +278,7 @@
           "DNSNames": [
             "aptl-fileshare",
             "fileshare",
-            "961e464bcbf1",
+            "21eda147ba30",
             "files.techvault.local"
           ]
         }
@@ -286,7 +286,7 @@
     },
     "ImageManifestDescriptor": {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:0afc7a8d8497d6a0fe37a0861b60c5d2c61da0267939659b741c9fa529d9ab51",
+      "digest": "sha256:7b1c92a7ba85ee68a2dfcd47628a21b5aa0284282cd1976f32d76960b3a096cb",
       "size": 2753,
       "platform": {
         "architecture": "amd64",

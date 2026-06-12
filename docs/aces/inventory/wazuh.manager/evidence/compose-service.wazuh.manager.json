@@ -24,15 +24,15 @@
     "cp /tmp/filebeat-override.yml /etc/filebeat/filebeat.yml && chown root:root /etc/filebeat/filebeat.yml && python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init"
   ],
   "environment": {
-    "API_PASSWORD": "<REDACTED-API-PASSWORD>",
+    "API_PASSWORD": "WazuhPass123!",
     "API_USERNAME": "wazuh-wui",
     "FILEBEAT_SSL_VERIFICATION_MODE": "full",
-    "INDEXER_PASSWORD": "<REDACTED-INDEXER-PASSWORD>",
+    "INDEXER_PASSWORD": "SecretPassword",
     "INDEXER_URL": "https://wazuh.indexer:9200",
     "INDEXER_USERNAME": "admin",
     "SSL_CERTIFICATE": "/etc/ssl/filebeat.pem",
     "SSL_CERTIFICATE_AUTHORITIES": "/etc/ssl/root-ca.pem",
-    "SSL_KEY": "<REDACTED-SSL-KEY>"
+    "SSL_KEY": "/etc/ssl/filebeat.key"
   },
   "hostname": "wazuh.manager",
   "healthcheck": {

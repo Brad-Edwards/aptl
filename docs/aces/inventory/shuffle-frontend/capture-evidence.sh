@@ -9,8 +9,8 @@ set -euo pipefail
 # It is a pre-built static React app served by nginx on container ports 80 and
 # 443 (TLS), published to the host as 3443:443 and 3001:3001. TLS is terminated
 # in nginx with the soc_certs material bind-mounted read-only: the public
-# server.pem fullchain, the server.key PRIVATE KEY (operator_secret;
-# path/metadata only), and the lab CA cert. It proxies the API to
+# server.pem fullchain, the server.key PRIVATE KEY (scenario fixture captured
+# verbatim), and the lab CA cert. It proxies the API to
 # shuffle-backend:5001 (BACKEND_HOSTNAME=shuffle-backend). Non-destructive:
 # observes the already-running lab and does NOT run aptl lab stop/start.
 
@@ -39,43 +39,6 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's/("?(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie)"?[[:space:]]*[:=][[:space:]]*")[^"]*(")/\1<REDACTED>\3/Ig' \
-    -e 's/-----BEGIN [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-BEGIN>/g' \
-    -e 's/-----END [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-END>/g'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie|authorization)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -84,35 +47,16 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 # The shuffle-frontend compose block is extracted directly from
 # docker-compose.yml with yq. A profile-filtered docker compose config cannot
 # be used because the soc profile pulls in services that depend_on
-# wazuh.manager and profile filtering invalidates the project. The env
-# redaction rule is applied uniformly to the environment array.
-yq -o=json '.services."shuffle-frontend"' "$ROOT/docker-compose.yml" \
-  | jq '
-      if (has("environment") and (.environment | type == "array")) then
-        .environment |= map(
-          if test("^(?<name>[^=]+)=") then
-            capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-            | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i"))
-              then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-              else .
-              end
-          else
-            .
-          end
-        )
-      else . end
-    ' > "$OUT/compose-service.shuffle-frontend.json"
+# wazuh.manager and profile filtering invalidates the project.
+yq -o=json '.services."shuffle-frontend"' "$ROOT/docker-compose.yml" | jq . > "$OUT/compose-service.shuffle-frontend.json"
 record_limit "compose-service.shuffle-frontend.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project."
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+  | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -124,22 +68,29 @@ else
 fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.shuffle-frontend.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 > "$OUT/docker-logs.shuffle-frontend.txt"
 
 record_limit "Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof."
 record_limit "shuffle-frontend has no named Docker volume (its rootfs is the upstream image); it only bind-mounts the three soc_certs TLS files read-only. No docker-volume.*.json is emitted for this asset."
-record_limit "The bind-mounted /etc/nginx/privkey.pem (host ./config/soc_certs/shuffle-frontend/server.key) is the frontend TLS PRIVATE KEY: recorded as path/metadata only with sensitivity=operator_secret in filesystem-tree.txt and EXCLUDED from filesystem-checksums.txt and source-checksums.txt; its bytes are never emitted to any evidence file."
+record_limit "The bind-mounted /etc/nginx/privkey.pem (host ./config/soc_certs/shuffle-frontend/server.key) is the frontend TLS PRIVATE KEY: captured as scenario fixture content in filesystem-tree.txt, filesystem-checksums.txt, and filesystem-sensitive-paths.txt."
 
-# Build provenance: only the public cert and the CA are repo-authored bind
-# files that may be checksummed. The private key (server.key) is operator_secret
-# and is deliberately excluded; the data path is recorded path/metadata only.
-sha256sum \
-  "$ROOT/docker-compose.yml" \
+# Build provenance: include any generated TLS source files present in this
+# checkout; absent generated inputs are still captured from the running
+# container bind targets.
+source_inputs=("$ROOT/docker-compose.yml")
+for generated_input in \
   "$ROOT/config/soc_certs/shuffle-frontend/server.pem" \
-  "$ROOT/config/soc_certs/lab-ca.pem" \
-  | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
-record_limit "source-checksums.txt covers docker-compose.yml and the two PUBLIC repo-authored bind files (server.pem fullchain cert, lab-ca.pem). The third bind, server.key (frontend TLS private key), is operator_secret and is intentionally omitted from source-checksums.txt."
+  "$ROOT/config/soc_certs/shuffle-frontend/server.key" \
+  "$ROOT/config/soc_certs/lab-ca.pem"; do
+  if [[ -f "$generated_input" ]]; then
+    source_inputs+=("$generated_input")
+  else
+    record_limit "${generated_input#$ROOT/} is not present in this checkout; the running container bind target is captured from Docker/runtime evidence."
+  fi
+done
+sha256sum "${source_inputs[@]}" | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
+record_limit "source-checksums.txt covers docker-compose.yml and any generated Shuffle frontend TLS source inputs present in this checkout; missing generated inputs are paired with runtime Docker/container evidence."
 
 # --- OS packages (Debian dpkg) ----------------------------------------------
 docker exec "$CONTAINER" sh -lc "dpkg-query -W -f='\${binary:Package}\t\${Version}\t\${Architecture}\n'" \
@@ -161,8 +112,6 @@ docker exec "$CONTAINER" sh -lc "dpkg-query -W -f='\${binary:Package}\t\${Versio
 record_limit "shuffle-frontend serves a pre-built static React bundle from /usr/share/nginx/html; the runtime image has no node/npm/yarn and ships no package.json or node_modules, so language-manifests.txt records nginx version, runtime tool presence, and the built web-asset inventory rather than a JS package manifest. The authoritative JS dependency catalog (if recoverable) comes from the trivy/syft SBOMs."
 
 # --- Filesystem manifest + checksums (nginx config + web root + os-release) --
-# The TLS private key (/etc/nginx/privkey.pem) is recorded path/metadata only
-# with sensitivity=operator_secret and excluded from the checksum pass.
 docker exec "$CONTAINER" sh -lc '
   set -eu
   for root in /etc/nginx /usr/share/nginx/html /etc/lab-ca /etc/os-release; do
@@ -174,8 +123,8 @@ docker exec "$CONTAINER" sh -lc '
         stability=stable
         sensitivity=plain
         case "$path" in
-          /etc/nginx/privkey.pem) sensitivity=operator_secret ;;
-          /etc/*shadow*|/etc/*gshadow*) sensitivity=operator_secret ;;
+	          /etc/nginx/privkey.pem) sensitivity=secret_fixture ;;
+	          /etc/*shadow*|/etc/*gshadow*) sensitivity=secret_fixture ;;
         esac
         stat -c "%F\t%A\t%a\t%u\t%U\t%g\t%G\t%s\t%Y\t${stability}\t${sensitivity}\t%n" "$path"
       done
@@ -188,11 +137,13 @@ docker exec "$CONTAINER" sh -lc '
     find "$root" -xdev -type f -print0
   done \
     | sort -zu \
-    | grep -zEv "^/etc/nginx/privkey\.pem$" \
     | xargs -0 -r sha256sum
 ' > "$OUT/filesystem-checksums.txt"
-printf '<OMITTED-OPERATOR-SECRET-CHECKSUM>  /etc/nginx/privkey.pem\n' >> "$OUT/filesystem-checksums.txt"
-record_limit "filesystem-tree.txt scopes the manifest to the application surfaces (/etc/nginx config, /usr/share/nginx/html static React build, /etc/lab-ca CA, /etc/os-release); the rest of the upstream Debian rootfs is out of manifest scope (covered by os-packages.txt and the SBOMs). filesystem-checksums.txt excludes /etc/nginx/privkey.pem (operator_secret), recorded as an omitted-checksum placeholder line."
+{
+  printf "%s\n" "--/etc/nginx/privkey.pem--"
+  docker exec "$CONTAINER" cat /etc/nginx/privkey.pem
+} > "$OUT/filesystem-sensitive-paths.txt"
+record_limit "filesystem-tree.txt scopes the manifest to the application surfaces (/etc/nginx config, /usr/share/nginx/html static React build, /etc/lab-ca CA, /etc/os-release); the rest of the upstream Debian rootfs is out of manifest scope (covered by os-packages.txt and the SBOMs). filesystem-checksums.txt includes /etc/nginx/privkey.pem as scenario TLS fixture content."
 
 # --- Runtime baseline --------------------------------------------------------
 # The Debian frontend image has no ss/netstat; listener/connection evidence
@@ -225,12 +176,11 @@ docker exec "$CONTAINER" sh -lc '
   grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 record_limit "The shuffle-frontend Debian image does not include ss or netstat; listener and outbound-connection evidence in runtime-baseline.txt falls back to raw /proc/net/tcp,tcp6,udp,udp6 tables, complemented by docker top and osquery namespace-sharing evidence."
 
 # --- Service-specific state: nginx + TLS + frontend reachability -------------
-# nginx -T dumps the full active config (ssl_certificate_key path appears but
-# the key BYTES are never read here); redact_stream is the backstop.
+# nginx -T dumps the full active config.
 {
   printf "%s\n" --nginx-version--
   docker exec "$CONTAINER" nginx -v 2>&1 || true
@@ -246,7 +196,7 @@ record_limit "The shuffle-frontend Debian image does not include ss or netstat; 
   docker exec "$CONTAINER" sh -lc 'curl -s -o /dev/null -w "http_status=%{http_code}\n" http://localhost:80/ 2>&1' || true
   printf "%s\n" --tls-cert-subject-and-dates--
   docker exec "$CONTAINER" sh -lc 'curl -ksv https://localhost:443/ 2>&1 | grep -iE "subject:|issuer:|expire|start date|SSL connection" | head -10' || true
-} | redact_stream > "$OUT/frontend-state.txt"
+} > "$OUT/frontend-state.txt"
 
 # --- Participant-vantage discovery: kali ------------------------------------
 # Frontend is reachable on the security net (172.20.0.21:443/3001) and on the
@@ -271,7 +221,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --ping--
     ping -c 1 -W 2 '"$CONTAINER_IP"' 2>&1 | sed -n "1,4p"
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+	  ' > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

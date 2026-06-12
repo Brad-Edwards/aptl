@@ -141,5 +141,5 @@ e9ea57d52b4efd85f0a5e40a9e2003b2a989e8b5f094641386d1cb501f940cdd  /usr/share/waz
 53323ee99bb3ee849b5249193e50ba2b2bc4b45cd8a65f450bf00b88f839a033  /usr/share/wazuh-indexer/plugins/opensearch-security/xmlsec-2.3.5.jar
 a04f997f305bf31b697076a6227e46be65b9c9c08e0b826d93c0a090f9e2ef89  /usr/share/wazuh-indexer/plugins/opensearch-security/zjsonpatch-0.4.16.jar
 38efaebab09144eb1f4d4c9ff650e79df875a8d6c4539c105b079a606bb7db34  /usr/share/wazuh-indexer/plugins/opensearch-security/zxcvbn-1.9.0.jar
-<OMITTED-OPERATOR-SECRET-CHECKSUM>  /usr/share/wazuh-indexer/certs/wazuh.indexer.key
-<OMITTED-OPERATOR-SECRET-CHECKSUM>  /usr/share/wazuh-indexer/certs/admin-key.pem
+b9003fbf3ac6030da81bb19abeef031d35881010d2d8145cfc57c4978044f7a3  /usr/share/wazuh-indexer/certs/wazuh.indexer.key
+abfe717cb6dcf0377ce662c7ad6dc171a2f0e9b5c64abf96fee56f9254ce9511  /usr/share/wazuh-indexer/certs/admin-key.pem

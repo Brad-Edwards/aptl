@@ -75,7 +75,7 @@ correspondence_checks:
   ledger_fact_ids:
   - shuffle-opensearch.datastore.opensearch-service
   - shuffle-opensearch.runtime.service-listeners
-- id: shuffle-opensearch-scope-and-redaction-caveats
+- id: shuffle-opensearch-scope-and-capture-caveats
   status: implemented
   source: docs/aces/inventory/shuffle-opensearch/evidence/capture-limits.txt
   method: README and tests assert non-destructive capture scope, the data-volume manifest exclusion, the admin-password secret-fixture
@@ -162,7 +162,7 @@ facts:
   category: compose
   summary: Compose declares aptl-shuffle-opensearch, image opensearch:2.14.0, discovery.type=single-node, OPENSEARCH_JAVA_OPTS
     heap, OPENSEARCH_INITIAL_ADMIN_PASSWORD (committed fixture), the shuffle_opensearch_data volume, 1g memory, and security-net
-    172.20.0.2 (no host-published ports).
+    172.20.0.3 (no host-published ports).
   evidence:
   - path: evidence/compose-service.shuffle-opensearch.json
   - path: evidence/docker-compose-version.json
@@ -200,7 +200,7 @@ facts:
     rationale: Current ACES SDL node runtime fields carry this catalogued fact directly.
 - id: shuffle-opensearch.network.identity
   category: network
-  summary: The datastore is on security-net at 172.20.0.2; 9200/9300/9600 are NOT host-published; kali (other subnets) cannot
+  summary: The datastore is on security-net at 172.20.0.3; 9200/9300/9600 are NOT host-published; kali (other subnets) cannot
     route to it.
   evidence:
   - path: evidence/docker-network.aptl-security.json
@@ -301,8 +301,7 @@ facts:
     - nodes.techvault.shuffle-opensearch.runtime.environment
     rationale: Current ACES SDL node runtime.environment carries the captured variables directly.
     caveat: OPENSEARCH_INITIAL_ADMIN_PASSWORD is a committed scenario fixture (value present in docker-compose.yml); it is
-      kept verbatim per the secret-fixture policy (redacted in docker-inspect evidence, preserved in the authored compose
-      block).
+      kept verbatim in evidence and SDL because it is TechVault scenario content.
 - id: shuffle-opensearch.runtime.local-identity
   category: identity
   summary: Local passwd/group inventory records 14 users and 25 groups (minimal Amazon Linux 2023 + the opensearch service
@@ -354,7 +353,7 @@ facts:
   category: identity
   summary: The Security-plugin internal user database (7 internal users including the reserved admin, with backend_roles and
     rolesmapping captured via the operator-credentialed _plugins/_security REST vantage) is encoded as the identity authority
-    opensearch-security-internal-users; the REST API redacts password hashes server-side and the admin credential is the
+    opensearch-security-internal-users; the REST API response does not expose password hashes and the admin credential is the
     committed compose fixture.
   evidence:
   - path: evidence/opensearch-state.txt
@@ -368,7 +367,7 @@ facts:
     fields:
     - nodes.techvault.shuffle-opensearch.runtime.identity_authorities.opensearch-security-internal-users
     rationale: ACES runtime.identity_authorities encode the Security-plugin internal users and their role attributes with
-      redacted secret material (the shuffle-backend identity-authority precedent).
+      scenario fixture material (the shuffle-backend identity-authority precedent).
 - id: shuffle-opensearch.runtime.package-inventory
   category: runtime
   summary: rpm package inventory captures 110 installed OS packages from the OpenSearch Amazon Linux 2023 base.

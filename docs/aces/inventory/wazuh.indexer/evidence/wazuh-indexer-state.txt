@@ -755,19 +755,19 @@ _meta:
 ## Demo users
 
 admin:
-  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  hash: "$2y$12$K/SpwjtB.wOHJ/Nc6GVRDuc1h0rM1DfvziFRNPtk27P.c4yDr9njO"
   reserved: true
   backend_roles:
   - "admin"
   description: "Demo admin user"
 
 kibanaserver:
-  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  hash: "$2a$12$4AcgAt3xwOWadA5s5blL6ev39OXDNhmOesEoo33eZtrq2N0YrU3H."
   reserved: true
   description: "Demo kibanaserver user"
 
 kibanaro:
-  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  hash: "$2a$12$JJSXNfTowz7Uu5ttXfeYpeYE0arACvcwlPBStB1F.MI7f0U9Z4DGC"
   reserved: false
   backend_roles:
   - "kibanauser"
@@ -779,21 +779,21 @@ kibanaro:
   description: "Demo kibanaro user"
 
 logstash:
-  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  hash: "$2a$12$u1ShR4l4uBS3Uv59Pa2y5.1uQuZBrZtmNfqB3iM/.jL0XoV9sghS2"
   reserved: false
   backend_roles:
   - "logstash"
   description: "Demo logstash user"
 
 readall:
-  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  hash: "$2a$12$ae4ycwzwvLtZxwZ82RmiEunBbIPiAmGZduBAjKN0TXdwQFtCwARz2"
   reserved: false
   backend_roles:
   - "readall"
   description: "Demo readall user"
 
 snapshotrestore:
-  hash: "<REDACTED-INDEXER-INTERNAL-USER-HASH>"
+  hash: "$2y$12$DpwmetHKwgYnorbgdvORCenv4NAK8cPUg8AI6pxLCuWf/ALc0.v7W"
   reserved: false
   backend_roles:
   - "snapshotrestore"

@@ -14,35 +14,17 @@ OSQUERY_IMAGE="${OSQUERY_IMAGE:-osquery/osquery@sha256:f8ec3300048158292df2d4bb0
 
 mkdir -p "$OUT"
 
-redact_env_jq='
-  def redact_env:
-    if test("^(APTL_FLAG_KEY|DB_PASSWORD|JWT_SECRET|SECRET_KEY)=") then
-      capture("^(?<name>[^=]+)=") as $m
-      | "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-    else
-      .
-    end;
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
 docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 
-COMPOSE_PROFILES=enterprise,wazuh,soc docker compose -f "$ROOT/docker-compose.yml" config --format json \
-  | jq '
-      .services.webapp
-      | .environment |= with_entries(
-          if (.key | test("^(APTL_FLAG_KEY|DB_PASSWORD|JWT_SECRET|SECRET_KEY)$"))
-          then .value = ("<REDACTED-" + (.key | gsub("_"; "-")) + ">")
-          else .
-          end
-        )
-    ' > "$OUT/compose-service.webapp.json"
+yq -o=json '.services.webapp' "$ROOT/docker-compose.yml" \
+  | jq '.environment = ((.environment // []) | map(split("=") | {(.[0]): (.[1:] | join("="))}) | add)' \
+  > "$OUT/compose-service.webapp.json"
 
 docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= map(redact_env)" \
-  > "$OUT/docker-inspect.container.json"
+  | jq . > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
 docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
@@ -138,10 +120,6 @@ docker exec "$CONTAINER" sh -lc '
 
 docker exec "$CONTAINER" sh -lc '
   set -eu
-  redact_env() {
-    sed -E "s/^(APTL_FLAG_KEY|DB_PASSWORD|JWT_SECRET|SECRET_KEY)=.*/\1=<REDACTED-\1>/" \
-      | sed "s/<REDACTED-APTL_FLAG_KEY>/<REDACTED-APTL-FLAG-KEY>/;s/<REDACTED-DB_PASSWORD>/<REDACTED-DB-PASSWORD>/;s/<REDACTED-JWT_SECRET>/<REDACTED-JWT-SECRET>/;s/<REDACTED-SECRET_KEY>/<REDACTED-SECRET-KEY>/"
-  }
   echo --os-release--
   cat /etc/os-release
   echo --id--
@@ -153,7 +131,7 @@ docker exec "$CONTAINER" sh -lc '
   echo --capabilities-pid1--
   grep "^Cap" /proc/1/status || true
   echo --environment--
-  env | sort | redact_env
+  env | sort
   echo --listeners--
   (ss -lntup || netstat -lntup || true) 2>&1
   echo --mounts--

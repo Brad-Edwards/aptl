@@ -1,8 +1,8 @@
 --root--
 {
-  "name" : "65c13c0e3ff5",
+  "name" : "0195e03e370b",
   "cluster_name" : "docker-cluster",
-  "cluster_uuid" : "YG-I79ZXRJO0X4l7x3DozA",
+  "cluster_uuid" : "ohJNVSX-TDyF6XOwPk-HLw",
   "version" : {
     "number" : "7.17.28",
     "build_flavor" : "default",
@@ -19,33 +19,34 @@
 --cluster-health--
 {
   "cluster_name" : "docker-cluster",
-  "status" : "green",
+  "status" : "yellow",
   "timed_out" : false,
   "number_of_nodes" : 1,
   "number_of_data_nodes" : 1,
-  "active_primary_shards" : 1,
-  "active_shards" : 1,
+  "active_primary_shards" : 2,
+  "active_shards" : 2,
   "relocating_shards" : 0,
   "initializing_shards" : 0,
-  "unassigned_shards" : 0,
+  "unassigned_shards" : 1,
   "delayed_unassigned_shards" : 0,
   "number_of_pending_tasks" : 0,
   "number_of_in_flight_fetch" : 0,
   "task_max_waiting_in_queue_millis" : 0,
-  "active_shards_percent_as_number" : 100.0
+  "active_shards_percent_as_number" : 66.66666666666666
 }
 --cat-indices--
 health status index            uuid                   pri rep docs.count docs.deleted store.size pri.store.size
-green  open   .geoip_databases l_-gud0iT3G25IXqqGUfPg   1   0         43           42     40.2mb         40.2mb
+green  open   .geoip_databases TGnTluEpStKZhulcAmXv7w   1   0         32            0       30mb           30mb
+yellow open   cortex_6         Ufyl_oZHTkiD-eWF1qRgwg   1   1          2            0     27.2kb         27.2kb
 --cat-nodes--
 ip         heap.percent ram.percent cpu load_1m load_5m load_15m node.role   master name
-172.20.0.4           68          68  13    6.66    3.87     3.80 cdfhilmrstw *      65c13c0e3ff5
+172.20.0.5           56          93   5    1.26    1.34     1.60 cdfhilmrstw *      0195e03e370b
 --nodes-plugins-names-only--
 {
   "cluster_name": "docker-cluster",
   "nodes": {
-    "Q6NTOUABQH6zfRtSYg_9Dw": {
-      "name": "65c13c0e3ff5",
+    "gjGqAdmbQtyj77ycKD4BoA": {
+      "name": "0195e03e370b",
       "version": "7.17.28",
       "plugins": [],
       "modules": [

@@ -326,7 +326,7 @@ facts:
     caveat: 'Previously blocked on ACES Brad-Edwards/aces#430; encoded after PR #437/#438 landed runtime.network_detection_engines (app_layer_protocols, rule_sources managed/local/ioc, network_sets HOME_NET zoning, output_streams eve_json/fast_log, unix-socket control channel with rule_reload capability).'
 - id: suricata.capture.toolchain-baseline
   category: capture-methodology
-  summary: The bundle records Trivy, Syft, osquery, Docker, filesystem manifest, redaction, and capture-limit evidence for rerunnable methodology review.
+  summary: The bundle records Trivy, Syft, osquery, Docker, filesystem manifest and capture-limit evidence for rerunnable methodology review.
   evidence:
   - path: evidence/capture-limits.txt
   - path: evidence/captured-at-utc.txt

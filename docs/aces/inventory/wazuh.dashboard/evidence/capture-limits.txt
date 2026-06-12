@@ -1,5 +1,5 @@
 - This capture used the existing running lab as authorized by the user on 2026-06-06 and did not run aptl lab stop -v && aptl lab start; it is a non-destructive frozen steady-state observation, not clean-lab rebuild proof.
-- HTTP authorization headers and transient HTTP cookie values from unauthenticated probe responses are omitted from committed evidence; scenario fixture credentials and private-key file checksums are retained as captured range facts.
+- HTTP response headers, transient HTTP cookie values, scenario fixture credentials, and private-key file checksums are retained in committed evidence as captured range facts.
 - The Wazuh dashboard image does not include find, tar, ps, ss, netstat, ip, or mount; runtime evidence uses Docker inspect/network records, docker top, osquery namespace sharing, /proc/net/* listener fallback, and host-side docker export filesystem capture.
 - Filesystem checksums exclude host identity databases such as /etc/shadow, /etc/shadow-, /etc/gshadow, and /etc/gshadow-; dashboard fixture config and private-key file checksums are retained.
 - Large compressed filesystem manifests are split into 450k chunks (filesystem-tree.txt.gz.part-* and filesystem-checksums.txt.xz.part-*) to preserve full evidence while satisfying the repository added-file size gate.
@@ -7,4 +7,4 @@
 - Trivy and Syft CycloneDX SBOM evidence is committed as deterministic gzip-compressed minified JSON to satisfy the repository's added-file size gate; compression is lossless.
 - osquery apt_sources was not applicable for the Amazon Linux Wazuh dashboard target.
 - osquery installed_applications was unavailable in the digest-pinned Linux osquery scanner image.
-- osquery programs was unavailable in the digest-pinned Linux osquery scanner image.
+- osquery programs was unavailable in the Linux osquery registry for the digest-pinned osquery 4.9.0 scanner image.

@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
+  image_digest: aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -48,6 +48,8 @@ correspondence_checks:
       - path: evidence/os-packages.txt
       - path: evidence/trivy-vulnerability-list.json
       - path: evidence/filesystem-tree.txt
+      - path: evidence/filesystem-checksums.txt
+      - path: evidence/filesystem-sensitive-paths.txt
       - path: evidence/share-tree.txt
       - path: evidence/smbclient-anonymous-probes.txt
       - path: evidence/smbclient-svc-fileshare-probes.txt
@@ -82,9 +84,9 @@ notes:
     non-destructive current-baseline capture rather than clean-lab rebuild
     proof.
   - >
-    Generated CTF flag contents and generated SSH private-key material are not
-    committed. The bundle records metadata, checksums, and the observed absence
-    of deploy_key/deploy_key.pub instead.
+    Scenario secret fixture files are captured verbatim in
+    evidence/filesystem-sensitive-paths.txt, including flags, planted
+    credentials, the leaked deploy key, and the Wazuh client key.
   - >
     No known ACES expressivity blocker remains for the catalogued fileshare
     steady-state inventory facts. Full root filesystem cataloguing is deferred
@@ -94,7 +96,7 @@ facts:
     category: provenance
     summary: >
       The asset uses first-party local image aptl-fileshare:latest, captured as
-      aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59.
+      aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96.
     evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-inspect.container.json
@@ -342,7 +344,7 @@ facts:
   - id: fileshare.runtime.package-inventory
     category: runtime-inventory
     summary: >
-      The runtime image contains 235 dpkg packages, Trivy CycloneDX SBOM
+      The runtime image contains 247 dpkg packages, Trivy CycloneDX SBOM
       component evidence, and Syft CycloneDX SBOM component evidence.
     evidence:
       - path: evidence/os-packages.txt
@@ -364,8 +366,8 @@ facts:
   - id: fileshare.runtime.vulnerability-scan
     category: runtime-inventory
     summary: >
-      Trivy captured 120 package vulnerability findings at scan time: 52
-      medium and 68 low.
+      Trivy captured 132 package vulnerability findings at scan time: 1 high,
+      53 medium, and 78 low.
     evidence:
       - path: evidence/trivy-vulnerability-list.json
       - path: evidence/trivy-vulnerability-counts.json
@@ -386,10 +388,12 @@ facts:
       The observed fileshare runtime paths under /opt, /etc/samba,
       /etc/supervisor/conf.d, /etc/rsyslog.d, /var/ossec/etc, /srv/shares,
       /var/log/samba, and generated flag locations are represented with
-      checksum-addressed source or runtime references.
+      checksum-addressed source or runtime references and raw scenario secret
+      fixture content.
     evidence:
       - path: evidence/filesystem-tree.txt
       - path: evidence/filesystem-checksums.txt
+      - path: evidence/filesystem-sensitive-paths.txt
       - path: evidence/share-tree.txt
       - path: evidence/share-checksums.txt
       - path: evidence/source-checksums.txt
@@ -410,11 +414,12 @@ facts:
     category: filesystem-inventory
     summary: >
       The capture records share permissions, ownership, sizes, checksums, the
-      absence of deploy_key/deploy_key.pub, and redaction boundaries for
-      generated flags and generated private-key material.
+      deploy_key/deploy_key.pub, generated flags, planted credentials, and the
+      Wazuh client key.
     evidence:
       - path: evidence/filesystem-tree.txt
       - path: evidence/filesystem-checksums.txt
+      - path: evidence/filesystem-sensitive-paths.txt
       - path: evidence/share-tree.txt
       - path: evidence/share-checksums.txt
       - path: evidence/capture-limits.txt
@@ -577,6 +582,7 @@ facts:
       - path: evidence/source-checksums.txt
       - path: evidence/syft-sbom.cyclonedx.json
       - path: evidence/trivy-sbom.cyclonedx.json
+      - path: evidence/filesystem-sensitive-paths.txt
     aces:
       disposition: encoded_with_caveat
       surface: nodes

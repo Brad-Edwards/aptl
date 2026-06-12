@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+  image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -61,8 +61,10 @@ correspondence_checks:
       evidence, not an automated live correspondence check.
 notes:
   - >
-    Raw AD passwords, generated flags, Wazuh client keys, Kerberos key material,
-    and Samba private database contents are redacted as secret material.
+    AD administrator and generated flag/token values are retained verbatim as
+    TechVault scenario content. Wazuh client keys, Kerberos key material, and
+    Samba private database contents are represented by live path, metadata, and
+    checksum evidence in this bundle.
   - >
     Brad-Edwards/aces#401 added the provider-neutral
     runtime.identity_authorities surface used by this bundle for the Samba AD
@@ -88,7 +90,7 @@ facts:
     category: provenance
     summary: >
       The asset uses first-party local image aptl-ad:latest, captured as
-      aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052.
+      aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957.
     evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-inspect.container.json
@@ -235,8 +237,8 @@ facts:
     category: runtime-configuration
     summary: >
       Runtime environment carries domain, realm, DNS forwarder, SIEM, Wazuh,
-      and log path values, with the AD admin password redacted as a fixture
-      secret.
+      and log path values, with the AD admin password retained as a scenario
+      fixture value.
     evidence:
       - path: evidence/compose-service.ad.json
       - path: evidence/runtime-baseline.txt

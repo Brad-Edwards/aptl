@@ -5,7 +5,7 @@ nodes:
     description: 'TechVault generic victim container (SCN-010 issue #337 steady-state ACES inventory).'
     source:
       name: aptl-victim
-      version: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+      version: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
       build:
         base_image: rockylinux:9
         base_image_digest: ''
@@ -1096,8 +1096,8 @@ nodes:
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
-        sensitivity: operator_secret
-        description: operator_private_key captured as metadata-only per redaction boundary.
+        sensitivity: secret_fixture
+        description: Victim lab SSH private key; checksum verified from the live container.
       - path: /home/labadmin/.ssh/authorized_keys
         entry_type: file
         presence: present
@@ -1107,7 +1107,7 @@ nodes:
         gid: 1000
         mode: '600'
         size: 96
-        content_digest: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
+        content_digest: 8b6ec3cd0e45892aaba98895ae1fa83a029007a698235a9d6f05970b8779e1b8
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -1240,8 +1240,8 @@ nodes:
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
-        sensitivity: operator_secret
-        description: host_private_key captured as metadata-only per redaction boundary.
+        sensitivity: secret_fixture
+        description: Victim SSH host DSA private key; checksum verified from the live container.
       - path: /root/root.txt
         entry_type: file
         presence: present
@@ -1251,13 +1251,13 @@ nodes:
         gid: 0
         mode: '600'
         size: 204
-        content_digest: 71ce5db8b54fee32043721f2bdeacba818ede76f89c78fe337aaa8bb3823e2a0
+        content_digest: 387375cc4a145704f997dd98a9e665b8d660ab55d28f5b5550656525dd8e2f65
         digest_algorithm: sha256
         source_path: ''
-        provenance: filesystem-tree.txt
+        provenance: filesystem-tree.txt + filesystem-checksums.txt + filesystem-sensitive-paths.txt
         stability: generated
         sensitivity: secret_fixture
-        description: generated_flag captured as metadata-only per redaction boundary.
+        description: Generated root flag captured verbatim from the live container.
       - path: /root/original-ks.cfg
         entry_type: file
         presence: present
@@ -1320,8 +1320,8 @@ nodes:
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
-        sensitivity: operator_secret
-        description: host_private_key captured as metadata-only per redaction boundary.
+        sensitivity: secret_fixture
+        description: Victim SSH host RSA private key; checksum verified from the live container.
       - path: /var/log/anaconda/lvm.log
         entry_type: file
         presence: present
@@ -1384,8 +1384,8 @@ nodes:
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
-        sensitivity: operator_secret
-        description: host_private_key captured as metadata-only per redaction boundary.
+        sensitivity: secret_fixture
+        description: Victim SSH host Ed25519 private key; checksum verified from the live container.
       - path: /var/log/anaconda/anaconda.log
         entry_type: file
         presence: present
@@ -1416,8 +1416,8 @@ nodes:
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
-        sensitivity: operator_secret
-        description: host_private_key captured as metadata-only per redaction boundary.
+        sensitivity: secret_fixture
+        description: Victim SSH host ECDSA private key; checksum verified from the live container.
       - path: /var/log/anaconda/syslog
         entry_type: file
         presence: present
@@ -1459,7 +1459,7 @@ nodes:
         gid: 0
         mode: '600'
         size: 672
-        content_digest: 6687f9bc08ffc393778078223bdf773b564e7e5cfc71e0c00f3471614e6018bf
+        content_digest: 22c26070aa8c86e20d90d7833c6edbd9cf9b0eb6656dafd523e7b7ea57cca9ab
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -1491,7 +1491,7 @@ nodes:
         gid: 0
         mode: '600'
         size: 7585
-        content_digest: ae679e754189070af18b2e29ccfcaf3962e279bb270b1a12e67dc45965b1fa4d
+        content_digest: eecfb9925ddcbf15f7f09ea12ca1075ec1d4166032a561188da32f196d7bf71f
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -1560,8 +1560,8 @@ nodes:
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
-        sensitivity: operator_secret
-        description: wazuh_agent_secret captured as metadata-only per redaction boundary.
+        sensitivity: plain
+        description: Victim Wazuh client.keys file is present but empty in the live container.
       - path: /var/ossec/etc/localtime
         entry_type: file
         presence: present
@@ -1667,13 +1667,13 @@ nodes:
         gid: 1000
         mode: '644'
         size: 204
-        content_digest: 77bed07f296a170538e70902e86535e863a19a359e408c0cd5ce529acb6349cc
+        content_digest: b2f0803d9ed72e71d6649e9c8e3c7fa38a9e3a63998303f4718a50c23648c42b
         digest_algorithm: sha256
         source_path: ''
-        provenance: filesystem-tree.txt + filesystem-checksums.txt
+        provenance: filesystem-tree.txt + filesystem-checksums.txt + filesystem-sensitive-paths.txt
         stability: generated
         sensitivity: secret_fixture
-        description: generated_flag captured as checksum-only per redaction boundary.
+        description: Generated user flag captured verbatim from the live container.
       - path: /home/labadmin/.bashrc
         entry_type: file
         presence: present
@@ -1705,7 +1705,7 @@ nodes:
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: stable
         sensitivity: plain
-        description: public_lab_key captured as checksum-only per redaction boundary.
+        description: Public lab key captured in filesystem-sensitive-paths.txt and checksummed.
       - path: /keys/authorized_keys
         entry_type: file
         presence: present
@@ -1721,7 +1721,7 @@ nodes:
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: stable
         sensitivity: plain
-        description: public_lab_key captured as checksum-only per redaction boundary.
+        description: Public lab authorized_keys entry captured in filesystem-sensitive-paths.txt and checksummed.
       - path: /etc/dnf/vars/rltype
         entry_type: file
         presence: present
@@ -1843,7 +1843,7 @@ nodes:
         gid: 0
         mode: '644'
         size: 109291
-        content_digest: 2f77240103698df65293f28472d009dc5a9c7b7b55641954db0674516d346ce6
+        content_digest: b0ca5c910e6318acfb3717619bf0e3b15bf694bce7a410732321ad7272d58634
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -2051,7 +2051,7 @@ nodes:
         gid: 0
         mode: '644'
         size: 19201
-        content_digest: 9b8d146ecf94deae6398f61149d8bd898f3911702f54d3797ef469960e451325
+        content_digest: 4f838fba0f7a22aec8c88a1ab74707b1f80b312f9eaf5c214d612f92d5e28b2a
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -2147,7 +2147,7 @@ nodes:
         gid: 0
         mode: '644'
         size: 23246
-        content_digest: a5e512dde542ecfa2ef9fcc5094fc33dcfb6100e97bb3a752f7961adce5a5797
+        content_digest: 8ec185852d1bf31eecdec88eb1537028a36b5439e3f168298980e6b169b5c3d5
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -2323,7 +2323,7 @@ nodes:
         gid: 0
         mode: '644'
         size: 42885
-        content_digest: fe6ed581a32c4b5ec248a00f727ee4a0b5dbdc20295741cf2c839d45a695352c
+        content_digest: 934ca315d7fba22ea4d6bcae787b46a023e45871dcfeed6f9ac7f933b86f1aeb
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -2691,7 +2691,7 @@ nodes:
         gid: 998
         mode: '660'
         size: 2161
-        content_digest: 3c1adefec281f9a23d02b47ac3edbb982c92ad2ea5a1c5d37fb2ca72e75eef30
+        content_digest: 1497f17a401d04c3e18411315626f7a8903b5eb579cd423dee5b163e045c2567
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -4546,23 +4546,23 @@ nodes:
         - network: techvault.internal-net
           network_id: 5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f
           network_id_stability: stable
-          endpoint_id: 4a235d56c902f72aa27b64c760ca95670e4014ba7823f0286262baeda6e31d26
+          endpoint_id: 13eaa548e14a12ca2d6673206329bc165d545c2868f2cc13c8c42d502c78da34
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.2.20
           ip_prefix_length: 24
           gateway: 172.20.2.1
-          mac_address: 56:88:c2:77:b1:02
+          mac_address: d6:9c:ac:f8:6a:c7
           aliases:
           - aptl-victim
           - victim
           dns_names:
           - aptl-victim
           - victim
-          - a9701bcb6a26
+          - 7ed4af3e0aa0
           - app.techvault.local
           generated_dns_names:
-          - a9701bcb6a26
+          - 7ed4af3e0aa0
           backend:
             driver: bridge
             ipam_driver: default
@@ -6993,7 +6993,7 @@ nodes:
         installed_version: 2.68.4-18.el9_7.1
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 2.68.4-18.el9_7.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14087
@@ -7004,7 +7004,7 @@ nodes:
         installed_version: 2.68.4-18.el9_7.1
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 2.68.4-18.el9_7.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14512
@@ -7015,7 +7015,7 @@ nodes:
         installed_version: 2.48-10.el9
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 2.48-10.el9_7.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4878
@@ -7026,7 +7026,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35385
@@ -7037,7 +7037,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35386
@@ -7048,7 +7048,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35387
@@ -7059,7 +7059,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35388
@@ -7070,7 +7070,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35414
@@ -7081,7 +7081,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35385
@@ -7092,7 +7092,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35386
@@ -7103,7 +7103,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35387
@@ -7114,7 +7114,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35388
@@ -7125,7 +7125,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35414
@@ -7136,7 +7136,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35385
@@ -7147,7 +7147,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35386
@@ -7158,7 +7158,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35387
@@ -7169,7 +7169,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35388
@@ -7180,7 +7180,7 @@ nodes:
         installed_version: 8.7p1-48.el9_7.rocky.0.1
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 8.7p1-49.el9_7.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35414
@@ -7191,7 +7191,7 @@ nodes:
         installed_version: 1.9.5p2-13.el9
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.9.5p2-15.el9_7
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35535
@@ -7202,7 +7202,7 @@ nodes:
         installed_version: 252-55.el9_7.8.rocky.0.1
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 252-55.el9_7.9.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-29111
@@ -7213,7 +7213,7 @@ nodes:
         installed_version: 252-55.el9_7.8.rocky.0.1
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 252-55.el9_7.9.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-29111
@@ -7224,7 +7224,7 @@ nodes:
         installed_version: 252-55.el9_7.8.rocky.0.1
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 252-55.el9_7.9.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-29111
@@ -7235,7 +7235,7 @@ nodes:
         installed_version: 252-55.el9_7.8.rocky.0.1
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 252-55.el9_7.9.rocky.0.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-29111
@@ -7246,7 +7246,7 @@ nodes:
         installed_version: 2:8.2.2637-23.el9_7.2
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 2:8.2.2637-23.el9_7.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34982
@@ -7257,7 +7257,7 @@ nodes:
         installed_version: v1.7.4
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.7.8
         advisory_url: https://github.com/advisories/GHSA-xmrv-pmrh-hhx2
@@ -7268,7 +7268,7 @@ nodes:
         installed_version: v1.93.2
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.97.3
         advisory_url: https://github.com/advisories/GHSA-xmrv-pmrh-hhx2
@@ -7279,7 +7279,7 @@ nodes:
         installed_version: v29.0.3+incompatible
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 29.2.0
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-15558
@@ -7290,7 +7290,7 @@ nodes:
         installed_version: v28.5.2+incompatible
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 29.3.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34040
@@ -7301,7 +7301,7 @@ nodes:
         installed_version: v28.5.2+incompatible
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-41567
@@ -7312,7 +7312,7 @@ nodes:
         installed_version: v28.5.2+incompatible
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42306
@@ -7323,7 +7323,7 @@ nodes:
         installed_version: v28.5.2+incompatible
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 29.3.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-33997
@@ -7334,7 +7334,7 @@ nodes:
         installed_version: v28.5.2+incompatible
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-41568
@@ -7345,7 +7345,7 @@ nodes:
         installed_version: v4.1.3
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 4.1.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34986
@@ -7356,7 +7356,7 @@ nodes:
         installed_version: v0.9.0
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 0.11.0
         advisory_url: https://github.com/advisories/GHSA-pmwq-pjrm-6p5r
@@ -7367,7 +7367,7 @@ nodes:
         installed_version: v0.5.0
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 0.5.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-35469
@@ -7378,7 +7378,7 @@ nodes:
         installed_version: v2.0.4
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 2.0.6
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39984
@@ -7389,7 +7389,7 @@ nodes:
         installed_version: v1.39.0
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.41.0
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-29181
@@ -7400,7 +7400,7 @@ nodes:
         installed_version: v1.39.0
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.40.0
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-24051
@@ -7411,7 +7411,7 @@ nodes:
         installed_version: v1.39.0
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.43.0
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39883
@@ -7422,7 +7422,7 @@ nodes:
         installed_version: v1.78.0
         severity: critical
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.79.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-33186
@@ -7433,7 +7433,7 @@ nodes:
         installed_version: v1.25.5
         severity: critical
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.24.13, 1.25.7, 1.26.0-rc.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-68121
@@ -7444,7 +7444,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.24.12, 1.25.6
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61726
@@ -7455,7 +7455,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.8, 1.26.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-25679
@@ -7466,7 +7466,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32280
@@ -7477,7 +7477,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32281
@@ -7488,7 +7488,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32283
@@ -7499,7 +7499,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-33811
@@ -7510,7 +7510,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-33814
@@ -7521,7 +7521,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39820
@@ -7532,7 +7532,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39823
@@ -7543,7 +7543,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39825
@@ -7554,7 +7554,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39826
@@ -7565,7 +7565,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-39836
@@ -7576,7 +7576,7 @@ nodes:
         installed_version: v1.25.5
         severity: high
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.10, 1.26.3
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42499
@@ -7587,7 +7587,7 @@ nodes:
         installed_version: v1.25.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.24.12, 1.25.6
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61728
@@ -7598,7 +7598,7 @@ nodes:
         installed_version: v1.25.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.24.12, 1.25.6
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-61730
@@ -7609,7 +7609,7 @@ nodes:
         installed_version: v1.25.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.8, 1.26.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27142
@@ -7620,7 +7620,7 @@ nodes:
         installed_version: v1.25.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32282
@@ -7631,7 +7631,7 @@ nodes:
         installed_version: v1.25.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32288
@@ -7642,7 +7642,7 @@ nodes:
         installed_version: v1.25.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.9, 1.26.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-32289
@@ -7653,7 +7653,7 @@ nodes:
         installed_version: v1.25.5
         severity: low
         scanner: trivy
-        image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+        image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
         scan_time: '2026-05-28T06:10:02Z'
         fixed_version: 1.25.8, 1.26.1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27139

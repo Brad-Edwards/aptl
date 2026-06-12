@@ -39,8 +39,8 @@ a001 OK Pre-login capabilities listed, post-login capabilities have more.
 a002 OK Logout completed.
 --smtps-probe--
 Connecting to 172.20.1.21
-40675DE2727B0000:error:0A00010B:SSL routines:tls_validate_record_header:wrong version number:../ssl/record/methods/tlsany_meth.c:77:
+40B746C0197C0000:error:0A00010B:SSL routines:tls_validate_record_header:wrong version number:../ssl/record/methods/tlsany_meth.c:77:
 --imaps-probe--
-4057F7360B770000:error:8000006F:system library:BIO_connect:Connection refused:../crypto/bio/bio_sock2.c:183:calling connect()
-4057F7360B770000:error:10000067:BIO routines:BIO_connect:connect error:../crypto/bio/bio_sock2.c:185:
+409720DF897D0000:error:8000006F:system library:BIO_connect:Connection refused:../crypto/bio/bio_sock2.c:183:calling connect()
+409720DF897D0000:error:10000067:BIO routines:BIO_connect:connect error:../crypto/bio/bio_sock2.c:185:
 connect:errno=111

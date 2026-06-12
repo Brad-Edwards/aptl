@@ -1,7 +1,7 @@
 [
   {
-    "Id": "65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af",
-    "Created": "2026-05-23T06:18:29.91144204Z",
+    "Id": "0195e03e370b90cb0170a11fcb42c2d74fb08a20e2a327f51a6252aa1102e77b",
+    "Created": "2026-06-11T16:00:17.860547668Z",
     "Path": "/bin/tini",
     "Args": [
       "--",
@@ -15,53 +15,53 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2955936,
+      "Pid": 805124,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:34.718613531Z",
+      "StartedAt": "2026-06-11T16:00:22.332942555Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-06-10T07:19:05.688667423+02:00",
-            "End": "2026-06-10T07:19:05.747687205+02:00",
+            "Start": "2026-06-12T13:44:21.674048565+02:00",
+            "End": "2026-06-12T13:44:21.72437838+02:00",
             "ExitCode": 0,
-            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"green\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":1,\"active_shards\":1,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":0,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":100.0}"
+            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"yellow\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":2,\"active_shards\":2,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":1,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":66.66666666666666}"
           },
           {
-            "Start": "2026-06-10T07:19:35.749369618+02:00",
-            "End": "2026-06-10T07:19:35.822518738+02:00",
+            "Start": "2026-06-12T13:44:51.725199354+02:00",
+            "End": "2026-06-12T13:44:51.781681028+02:00",
             "ExitCode": 0,
-            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"green\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":1,\"active_shards\":1,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":0,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":100.0}"
+            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"yellow\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":2,\"active_shards\":2,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":1,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":66.66666666666666}"
           },
           {
-            "Start": "2026-06-10T07:20:05.823514588+02:00",
-            "End": "2026-06-10T07:20:05.87537267+02:00",
+            "Start": "2026-06-12T13:45:21.782904984+02:00",
+            "End": "2026-06-12T13:45:21.832845233+02:00",
             "ExitCode": 0,
-            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"green\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":1,\"active_shards\":1,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":0,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":100.0}"
+            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"yellow\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":2,\"active_shards\":2,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":1,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":66.66666666666666}"
           },
           {
-            "Start": "2026-06-10T07:20:35.876955467+02:00",
-            "End": "2026-06-10T07:20:35.935767471+02:00",
+            "Start": "2026-06-12T13:45:51.833199865+02:00",
+            "End": "2026-06-12T13:45:51.898959652+02:00",
             "ExitCode": 0,
-            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"green\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":1,\"active_shards\":1,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":0,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":100.0}"
+            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"yellow\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":2,\"active_shards\":2,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":1,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":66.66666666666666}"
           },
           {
-            "Start": "2026-06-10T07:21:05.936995414+02:00",
-            "End": "2026-06-10T07:21:06.026350489+02:00",
+            "Start": "2026-06-12T13:46:21.9003549+02:00",
+            "End": "2026-06-12T13:46:21.957031351+02:00",
             "ExitCode": 0,
-            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"green\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":1,\"active_shards\":1,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":0,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":100.0}"
+            "Output": "{\"cluster_name\":\"docker-cluster\",\"status\":\"yellow\",\"timed_out\":false,\"number_of_nodes\":1,\"number_of_data_nodes\":1,\"active_primary_shards\":2,\"active_shards\":2,\"relocating_shards\":0,\"initializing_shards\":0,\"unassigned_shards\":1,\"delayed_unassigned_shards\":0,\"number_of_pending_tasks\":0,\"number_of_in_flight_fetch\":0,\"task_max_waiting_in_queue_millis\":0,\"active_shards_percent_as_number\":66.66666666666666}"
           }
         ]
       }
     },
     "Image": "sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1",
-    "ResolvConfPath": "/var/lib/docker/containers/65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af/hostname",
-    "HostsPath": "/var/lib/docker/containers/65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af/hosts",
-    "LogPath": "/var/lib/docker/containers/65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af/65c13c0e3ff5a1dd75970cf528bb3f69ec3bc2e29a91ca0d68c8a44b699b13af-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/0195e03e370b90cb0170a11fcb42c2d74fb08a20e2a327f51a6252aa1102e77b/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/0195e03e370b90cb0170a11fcb42c2d74fb08a20e2a327f51a6252aa1102e77b/hostname",
+    "HostsPath": "/var/lib/docker/containers/0195e03e370b90cb0170a11fcb42c2d74fb08a20e2a327f51a6252aa1102e77b/hosts",
+    "LogPath": "/var/lib/docker/containers/0195e03e370b90cb0170a11fcb42c2d74fb08a20e2a327f51a6252aa1102e77b/0195e03e370b90cb0170a11fcb42c2d74fb08a20e2a327f51a6252aa1102e77b-json.log",
     "Name": "/aptl-thehive-es",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -185,7 +185,7 @@
       }
     ],
     "Config": {
-      "Hostname": "65c13c0e3ff5",
+      "Hostname": "0195e03e370b",
       "Domainname": "",
       "User": "",
       "AttachStdin": false,
@@ -199,9 +199,9 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "discovery.type=single-node",
         "xpack.security.enabled=false",
         "ES_JAVA_OPTS=-Xms512m -Xmx512m",
+        "discovery.type=single-node",
         "PATH=/usr/share/elasticsearch/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "ELASTIC_CONTAINER=true"
       ],
@@ -260,8 +260,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "0ced452f16d8661d4a49269d21ef7e55abd96c34cd0bbceb310f2a25ccbee2c9",
-      "SandboxKey": "<REDACTED>",
+      "SandboxID": "fad05f6fed130aaec2ced1ac65e29a7102b78ce64466ab0ca783b413e2fad612",
+      "SandboxKey": "/var/run/docker/netns/fad05f6fed13",
       "Ports": {
         "9200/tcp": null,
         "9300/tcp": null
@@ -277,10 +277,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "8cd9a3f3b446bc9209e4f3f82e457c2fd6e869cd93e85dc5656c44d1ea99d5e6",
+          "EndpointID": "5a192ee037a801c25168cfacbc5a37d6e6ee9054c1fc5fbf82f82b1e087b602e",
           "Gateway": "172.20.0.1",
-          "IPAddress": "172.20.0.4",
-          "MacAddress": "6e:90:06:ed:1e:39",
+          "IPAddress": "172.20.0.5",
+          "MacAddress": "c2:5b:e0:6e:56:68",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -288,7 +288,7 @@
           "DNSNames": [
             "aptl-thehive-es",
             "thehive-es",
-            "65c13c0e3ff5"
+            "0195e03e370b"
           ]
         }
       }

@@ -17,9 +17,9 @@ set -euo pipefail
 # compose-service extraction and the container inspect Cmd/Args.
 #
 # The lab-CA-signed TLS keystore /etc/thehive/keystore.p12 and its env_file
-# password (HTTPS_KEYSTORE_PASSWORD) are generated lab TLS material: keystore
-# content is path/metadata only and the password value is redacted from
-# committed evidence per ADR-029.
+# password (HTTPS_KEYSTORE_PASSWORD) are generated scenario lab material. They
+# are retained verbatim in capture evidence because they are scenario target
+# content.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
@@ -48,41 +48,6 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's/^([[:space:]]*password[[:space:]]*=[[:space:]]*).*$/\1<REDACTED>/Ig'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|key|cookie|session|private_key|api_key|jwt)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -91,37 +56,16 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 # The thehive compose block is extracted directly from docker-compose.yml with
 # yq. A profile-filtered `docker compose config` cannot be used because the
 # soc profile pulls in services that depend_on wazuh.manager and profile
-# filtering invalidates the project. The authored command's
-# "--secret aptl-thehive-lab-secret-key-2024-purple" is a committed scenario
-# fixture and is retained as authored; the env redaction rule is applied
-# uniformly to the environment array.
-yq -o=json '.services.thehive' "$ROOT/docker-compose.yml" \
-  | jq '
-      if (has("environment") and (.environment | type == "array")) then
-        .environment |= map(
-          if test("^(?<name>[^=]+)=") then
-            capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-            | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i"))
-              then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-              else .
-              end
-          else
-            .
-          end
-        )
-      else . end
-    ' > "$OUT/compose-service.thehive.json"
+# filtering invalidates the project.
+yq -o=json '.services.thehive' "$ROOT/docker-compose.yml" | jq . > "$OUT/compose-service.thehive.json"
 record_limit "compose-service.thehive.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project. The authored command retains the committed scenario fixture '--secret aptl-thehive-lab-secret-key-2024-purple' (secret_fixture, visible in docker-compose.yml), not an operator secret."
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+  | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -135,24 +79,34 @@ fi
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_thehive_data | jq . > "$OUT/docker-volume.thehive_data.json"
 docker volume inspect aptl_thehive_index | jq . > "$OUT/docker-volume.thehive_index.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.thehive.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 > "$OUT/docker-logs.thehive.txt"
 
 record_limit "Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof."
-record_limit "/etc/thehive/keystore.p12 is the lab-CA-signed TLS keystore generated at aptl lab start (deliberate lab cert): recorded as path/metadata only with sensitivity=secret_fixture in filesystem-tree.txt.gz and excluded from filesystem-checksums.txt.xz and source-checksums.txt."
-record_limit "config/soc_certs/thehive/keystore.p12.password (compose env_file) injects HTTPS_KEYSTORE_PASSWORD into the runtime environment; the generated keystore password value is redacted from committed evidence (docker-inspect env, runtime-baseline environment, application.conf password line) per ADR-029, and the secret-bearing env_file is excluded from source-checksums.txt."
+record_limit "/etc/thehive/keystore.p12 is the lab-CA-signed TLS keystore generated at aptl lab start; it is scenario fixture material and is included in filesystem metadata and checksum evidence."
+record_limit "config/soc_certs/thehive/keystore.p12.password injects HTTPS_KEYSTORE_PASSWORD into the runtime environment; the live value is captured verbatim in docker-inspect.container.json and runtime-baseline.txt."
 record_limit "thehive_data and thehive_index volume contents (/opt/thp/thehive/data, /opt/thp/thehive/index) are runtime data and out of manifest scope; only top-level directory rows are recorded in filesystem-tree.txt.gz and a top-level ls in thehive-state.txt."
 record_limit "The entrypoint-generated /tmp/thehive-*.conf Play configuration (assembled at start from the compose command args, including the committed --secret scenario fixture) is runtime-created and out of manifest scope; its authored inputs are the compose command and /etc/thehive/application.conf."
 record_limit "The TheHive image does not include ss, netstat, or ps; listener and connection evidence falls back to raw /proc/net/tcp,tcp6,udp tables and the process tree to a /proc PID walk, complemented by docker top and osquery namespace-sharing evidence."
 
-# Build provenance for the authored binds: the compose file, the tracked
-# application.conf overlay, and the generated lab CA certificate input.
-sha256sum \
-  "$ROOT/docker-compose.yml" \
-  "$ROOT/config/thehive/application.conf" \
+# Build provenance for the authored binds and generated lab TLS inputs available
+# in this checkout.
+source_inputs=(
+  "$ROOT/docker-compose.yml"
+  "$ROOT/config/thehive/application.conf"
+)
+for generated_input in \
   "$ROOT/config/soc_certs/lab-ca.pem" \
-  | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
-record_limit "source-checksums.txt covers docker-compose.yml, the tracked config/thehive/application.conf overlay, and the generated lab CA certificate config/soc_certs/lab-ca.pem; the keystore.p12 bind and keystore.p12.password env_file are excluded as secret-bearing generated lab material (see dedicated limits)."
+  "$ROOT/config/soc_certs/thehive/keystore.p12" \
+  "$ROOT/config/soc_certs/thehive/keystore.p12.password"; do
+  if [[ -f "$generated_input" ]]; then
+    source_inputs+=("$generated_input")
+  else
+    record_limit "${generated_input#$ROOT/} is not present in this checkout; the running container bind/env value is captured from Docker/runtime evidence."
+  fi
+done
+sha256sum "${source_inputs[@]}" | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
+record_limit "source-checksums.txt covers the compose file, TheHive application.conf overlay, lab CA certificate, and any generated TheHive TLS source inputs present in this checkout; missing generated inputs are paired with runtime Docker/container evidence."
 
 docker exec "$CONTAINER" sh -lc "dpkg-query -W -f='\${binary:Package}\t\${Version}\t\${Architecture}\n'" \
   | sort > "$OUT/os-packages.txt"
@@ -202,8 +156,8 @@ docker exec "$CONTAINER" sh -lc '
 ' | gzip -n > "$OUT/filesystem-tree.txt.gz"
 record_limit "filesystem-tree.txt.gz scopes the manifest to the application surfaces (/opt/thehive install, /etc/thehive config mounts, /etc/lab-ca trust input, /etc/os-release) plus top-level directory rows for the volume-backed /opt/thp tree; volume runtime data content is out of manifest scope."
 
-# Stable-content checksums over the install, mounted config, and CA input.
-# The keystore.p12 secret fixture is excluded (metadata row only above).
+# Stable-content checksums over the install, mounted config, keystore, and CA
+# input.
 docker exec "$CONTAINER" sh -lc '
   set -eu
   for root in /opt/thehive /etc/thehive /etc/lab-ca; do
@@ -211,7 +165,6 @@ docker exec "$CONTAINER" sh -lc '
     find "$root" -xdev -type f -print0
   done \
     | sort -zu \
-    | grep -zEv "^/etc/thehive/keystore\.p12$" \
     | xargs -0 -r sha256sum
 ' | xz -9 -c > "$OUT/filesystem-checksums.txt.xz"
 
@@ -243,10 +196,10 @@ docker exec "$CONTAINER" sh -lc '
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 # Service-specific state: API status over the lab-CA HTTPS listener, the
-# mounted application.conf overlay (password line redacted), top-level data
+# mounted application.conf overlay, top-level data
 # and index directory listings, and JVM process identity.
 {
   printf "%s\n" --api-status--
@@ -268,7 +221,7 @@ docker exec "$CONTAINER" sh -lc '
   # deployed thehive-es Elasticsearch — which it does not use).
   printf "%s\n" --rendered-index-backend--
   docker exec "$CONTAINER" sh -lc 'grep -hE "index.search" /tmp/thehive-*.conf 2>/dev/null' 2>&1 || true
-} | redact_stream > "$OUT/thehive-state.txt"
+} > "$OUT/thehive-state.txt"
 
 # Attacker vantage: kali. TheHive listens on 9000 (HTTPS) on aptl-security and
 # the port is host-published; record what an in-range attacker can
@@ -287,7 +240,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --ping--
     ping -c 1 -W 2 '"$CONTAINER_IP"' 2>&1 | sed -n "1,4p"
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+	  ' > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

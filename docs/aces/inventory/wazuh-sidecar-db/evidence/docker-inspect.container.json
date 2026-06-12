@@ -1,7 +1,7 @@
 [
   {
-    "Id": "404b16989dedfed41b2fff56be2831b526b8ac73c98cf46813f237bbff04fa88",
-    "Created": "2026-05-23T06:18:32.812648831Z",
+    "Id": "83afd43012dd1ad31bd3f54ee5ac27a09fc833ec827c3f5444ba991c3cd19b5c",
+    "Created": "2026-06-11T16:00:20.001493682Z",
     "Path": "/opt/aptl/wazuh/wazuh-agent.sh",
     "Args": [],
     "State": {
@@ -11,17 +11,17 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2971966,
+      "Pid": 818088,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:19:34.588602747Z",
-      "FinishedAt": "2026-05-23T06:19:34.048728112Z"
+      "StartedAt": "2026-06-11T16:01:18.283521252Z",
+      "FinishedAt": "2026-06-11T16:01:17.785742241Z"
     },
-    "Image": "sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3",
-    "ResolvConfPath": "/var/lib/docker/containers/404b16989dedfed41b2fff56be2831b526b8ac73c98cf46813f237bbff04fa88/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/404b16989dedfed41b2fff56be2831b526b8ac73c98cf46813f237bbff04fa88/hostname",
-    "HostsPath": "/var/lib/docker/containers/404b16989dedfed41b2fff56be2831b526b8ac73c98cf46813f237bbff04fa88/hosts",
-    "LogPath": "/var/lib/docker/containers/404b16989dedfed41b2fff56be2831b526b8ac73c98cf46813f237bbff04fa88/404b16989dedfed41b2fff56be2831b526b8ac73c98cf46813f237bbff04fa88-json.log",
+    "Image": "sha256:1a9c99918f73a234721fe07ccafdcc6c49e1b3784a16ce86cdb2864636345d25",
+    "ResolvConfPath": "/var/lib/docker/containers/83afd43012dd1ad31bd3f54ee5ac27a09fc833ec827c3f5444ba991c3cd19b5c/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/83afd43012dd1ad31bd3f54ee5ac27a09fc833ec827c3f5444ba991c3cd19b5c/hostname",
+    "HostsPath": "/var/lib/docker/containers/83afd43012dd1ad31bd3f54ee5ac27a09fc833ec827c3f5444ba991c3cd19b5c/hosts",
+    "LogPath": "/var/lib/docker/containers/83afd43012dd1ad31bd3f54ee5ac27a09fc833ec827c3f5444ba991c3cd19b5c/83afd43012dd1ad31bd3f54ee5ac27a09fc833ec827c3f5444ba991c3cd19b5c-json.log",
     "Name": "/aptl-wazuh-sidecar-db",
     "RestartCount": 1,
     "Driver": "overlayfs",
@@ -155,10 +155,10 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "AGENT_NAME=aptl-db-agent",
-        "LOG_PATHS=/logs/pg_log/postgresql.log",
         "LOG_FORMAT=syslog",
         "WAZUH_MANAGER=wazuh.manager",
+        "AGENT_NAME=aptl-db-agent",
+        "LOG_PATHS=/logs/pg_log/postgresql.log",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "DEBIAN_FRONTEND=noninteractive"
       ],
@@ -173,7 +173,7 @@
         "com.docker.compose.config-hash": "19f161571de7498965199fe1a49db0bfcc5bf9e5b352b7ce7a3ab47120edd04d",
         "com.docker.compose.container-number": "1",
         "com.docker.compose.depends_on": "wazuh.manager:service_healthy:false",
-        "com.docker.compose.image": "sha256:acc670bd4adc35dd8dbefbce79bc979b92e301e1c6c5a33125368cd17c3de0a9",
+        "com.docker.compose.image": "sha256:1c1d665099f3d8a1ea97d2cb7970abaf4c8b62e077331857101ed4f9e9abf961",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
         "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
@@ -183,8 +183,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "a67bca9c02e381db73a959253289584ad6bcd8000d9482a01bee21c4360a54e1",
-      "SandboxKey": "<REDACTED>",
+      "SandboxID": "ec9866646467460154d43374a93bc09d100b3b58bad891f381d27dc82dfa98dd",
+      "SandboxKey": "/var/run/docker/netns/ec9866646467",
       "Ports": {},
       "Networks": {
         "aptl_aptl-security": {
@@ -199,10 +199,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "91095e1ea27cc849b878dd7d193e011f89db78749798b4d426d5272a081c6b45",
+          "EndpointID": "d001f2f509f4b1ca8af5c123af28392a1d7b44691b0128d7ad185886d60d2bdc",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.35",
-          "MacAddress": "9e:19:75:cf:5f:48",
+          "MacAddress": "86:46:20:34:a2:ac",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -210,14 +210,14 @@
           "DNSNames": [
             "aptl-wazuh-sidecar-db",
             "wazuh-sidecar-db",
-            "404b16989ded"
+            "83afd43012dd"
           ]
         }
       }
     },
     "ImageManifestDescriptor": {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:52a71e9b05775dfd788eddadf067216ca93b5b7895b192d75ae1153c438b3352",
+      "digest": "sha256:0cf1afa8026b4deadf55d31572e2b5fdfa24e784fc0f6d8d5e1a71c11785ac4c",
       "size": 1806,
       "platform": {
         "architecture": "amd64",

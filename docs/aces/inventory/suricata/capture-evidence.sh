@@ -32,40 +32,6 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|API_KEY|APIKEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)=([^[:space:]]+)/\1=<REDACTED>/Ig'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|API_KEY|APIKEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|api_key|apikey|key|cookie|session|private_key|jwt)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -77,25 +43,14 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 # here: the soc profile's wazuh-sidecar-suricata depends_on wazuh.manager, and
 # profile filtering drops that target, which makes the filtered project invalid.
 yq -o=json '.services.suricata' "$ROOT/docker-compose.yml" \
-  | jq '
-      if (has("environment") and (.environment | type == "array")) then
-        .environment |= map(
-          if test("(PASSWORD|PASS|SECRET|TOKEN|API_KEY|APIKEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)="; "i")
-          then sub("=.*$"; "=<REDACTED>") else . end
-        )
-      else . end
-    ' > "$OUT/compose-service.suricata.json"
+  | jq . > "$OUT/compose-service.suricata.json"
 record_limit "compose-service.suricata.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile wazuh-sidecar-suricata depends_on wazuh.manager and profile filtering invalidates the project. suricata carries no compose-injected environment, so authored and resolved compose values coincide"
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -110,10 +65,10 @@ docker network inspect aptl_aptl-internal | jq . > "$OUT/docker-network.aptl-int
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_suricata_logs | jq . > "$OUT/docker-volume.suricata-logs.json"
 docker volume inspect aptl_suricata_command_socket | jq . > "$OUT/docker-volume.suricata-command-socket.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
 # Container logs are bounded to the tail; suricata is verbose at startup but
 # the operational tail characterizes steady state without copying telemetry.
-docker logs --tail 400 "$CONTAINER" 2>&1 | redact_stream > "$OUT/docker-logs.suricata.txt"
+docker logs --tail 400 "$CONTAINER" 2>&1 > "$OUT/docker-logs.suricata.txt"
 
 record_limit "Capture used the already-running aptl lab (soc profile up) and did not run aptl lab stop -v && aptl lab start; this is a frozen observation of local steady state, not a clean-lab rebuild proof"
 
@@ -225,7 +180,7 @@ docker exec "$CONTAINER" sh -lc '
   getent group 2>/dev/null | sed -n "1,300p" || cat /etc/group
   echo --process-tree--
   ps -eo pid,ppid,user,args 2>/dev/null || ps aux
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 # Suricata engine / sensor logical state. No suricatasc network probe needed —
 # the engine state is read from the build info, the loaded rule files, and a
@@ -256,7 +211,7 @@ docker exec "$CONTAINER" sh -lc '
   tail -n 10 /var/log/suricata/fast.log 2>/dev/null || true
   echo --suricata-update-sources--
   (suricata-update list-enabled-sources 2>&1 || true) | head -20
-' | redact_stream > "$OUT/suricata-state.txt"
+' > "$OUT/suricata-state.txt"
 
 # Participant-vantage probe from kali. Suricata is a passive sensor with no
 # TCP listener; probes are expected to be refused. Recording the refusal IS
@@ -277,7 +232,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     echo --note--
     echo "suricata is a passive IDS sensor: no participant-reachable TCP listener is expected on any attached network"
     true
-  ' 2>&1 | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' > "$OUT/participant-discovery.kali.txt" 2>&1
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present"
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

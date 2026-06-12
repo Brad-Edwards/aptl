@@ -1,10 +1,11 @@
--rwxrwxr-x root root 0 0 5271 /opt/setup-shares.sh
+-rwxrwxr-x root root 0 0 5569 /opt/setup-shares.sh
 -rw-r--r-- root root 0 0 1208 /etc/samba/smb.conf
 -rw-rw-r-- root root 0 0 1104 /etc/supervisor/conf.d/fileshare.conf
 -rw-r--r-- root root 0 0 21 /etc/rsyslog.d/90-forward.conf
 -rw-rw-r-- root root 0 0 670 /opt/aptl/wazuh/ossec.conf.template
 -rwxrwxr-x root root 0 0 6902 /opt/aptl/wazuh/wazuh-agent.sh
--rw-r----- root wazuh 0 106 881 /var/ossec/etc/ossec.conf
+-rw-r----- root wazuh 0 107 881 /var/ossec/etc/ossec.conf
+-rw-r----- root wazuh 0 107 94 /var/ossec/etc/client.keys
 drwxr-xr-x root root 0 0 4096 /srv/shares
 drwxrwxrwx root root 0 0 4096 /srv/shares/public
 -rwxrwxrwx root root 0 0 118 /srv/shares/public/welcome.txt
@@ -21,8 +22,8 @@ drwxr-x--- root root 0 0 4096 /srv/shares/hr/employees
 drwx------ root root 0 0 4096 /srv/shares/it-backups
 drwx------ root root 0 0 4096 /srv/shares/it-backups/keys
 -rwx------ root root 0 0 61 /srv/shares/it-backups/keys/README
--rw------- root root 0 0 1831 /srv/shares/it-backups/keys/deploy_key
--rw-r--r-- root root 0 0 404 /srv/shares/it-backups/keys/deploy_key.pub
+-rwx------ root root 0 0 1831 /srv/shares/it-backups/keys/deploy_key
+-rwx------ root root 0 0 408 /srv/shares/it-backups/keys/deploy_key.pub
 -rwx------ root root 0 0 377 /srv/shares/it-backups/db_backup_20240115.sql
 drwxrwxrwx root root 0 0 4096 /srv/shares/shared
 -rwxrwxrwx root root 0 0 133 /srv/shares/shared/wifi-passwords.txt

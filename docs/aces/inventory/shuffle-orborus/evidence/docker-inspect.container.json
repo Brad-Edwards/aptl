@@ -1,7 +1,7 @@
 [
   {
-    "Id": "cae4c1cf9e6cee79118d95837a3aca4e40f307ca661d418971a53d923973633f",
-    "Created": "2026-05-23T06:18:32.67956569Z",
+    "Id": "3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb",
+    "Created": "2026-06-11T16:00:20.107416558Z",
     "Path": "./orborus",
     "Args": [],
     "State": {
@@ -11,17 +11,17 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2960189,
+      "Pid": 807959,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:56.184316764Z",
+      "StartedAt": "2026-06-11T16:00:38.812642504Z",
       "FinishedAt": "0001-01-01T00:00:00Z"
     },
     "Image": "sha256:e74e0246ba3acd0daaa8343e58da859f7908f06b9f51094a9cd9f9ea8cbf7a44",
-    "ResolvConfPath": "/var/lib/docker/containers/cae4c1cf9e6cee79118d95837a3aca4e40f307ca661d418971a53d923973633f/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/cae4c1cf9e6cee79118d95837a3aca4e40f307ca661d418971a53d923973633f/hostname",
-    "HostsPath": "/var/lib/docker/containers/cae4c1cf9e6cee79118d95837a3aca4e40f307ca661d418971a53d923973633f/hosts",
-    "LogPath": "/var/lib/docker/containers/cae4c1cf9e6cee79118d95837a3aca4e40f307ca661d418971a53d923973633f/cae4c1cf9e6cee79118d95837a3aca4e40f307ca661d418971a53d923973633f-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb/hostname",
+    "HostsPath": "/var/lib/docker/containers/3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb/hosts",
+    "LogPath": "/var/lib/docker/containers/3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb/3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb-json.log",
     "Name": "/aptl-shuffle-orborus",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -153,18 +153,18 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "ENVIRONMENT_NAME=Shuffle",
-        "CLEANUP=false",
-        "SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:latest",
         "DOCKER_API_VERSION=1.44",
-        "SHUFFLE_LOGS_DISABLED=true",
-        "BASE_URL=http://shuffle-backend:5001",
         "SHUFFLE_STATS_DISABLED=true",
+        "ORBORUS_CONTAINER_NAME=aptl-shuffle-orborus",
         "SHUFFLE_SKIP_PIPELINES=true",
-        "SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600",
         "ORG_ID=Shuffle",
         "SHUFFLE_APP_SDK_TIMEOUT=300",
-        "ORBORUS_CONTAINER_NAME=aptl-shuffle-orborus",
+        "BASE_URL=http://shuffle-backend:5001",
+        "SHUFFLE_LOGS_DISABLED=true",
+        "SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:latest",
+        "SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600",
+        "ENVIRONMENT_NAME=Shuffle",
+        "CLEANUP=false",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "SHUFFLE_OPENSEARCH_URL=https://opensearch:9200"
       ],
@@ -189,8 +189,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "7951df9a1b1983051d930a004adae5a37251fbde041ea51287eea969c76e3d1b",
-      "SandboxKey": "/var/run/docker/netns/7951df9a1b19",
+      "SandboxID": "8bc21c9251e0e7ae1f5488b302d4bd13f5912ad90b6a9957f5e808d74465d1a2",
+      "SandboxKey": "/var/run/docker/netns/8bc21c9251e0",
       "Ports": {},
       "Networks": {
         "aptl_aptl-security": {
@@ -203,10 +203,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "017ec486227ae01ac147e78b3df72857d4d0e53c64ee3de6b964ba6e6213baf1",
+          "EndpointID": "4c1236121cc15fea3e9cdbb210edcc2b26fd8aac31d24b87f20031bb13b471dc",
           "Gateway": "172.20.0.1",
-          "IPAddress": "172.20.0.6",
-          "MacAddress": "8a:51:5f:67:89:f8",
+          "IPAddress": "172.20.0.7",
+          "MacAddress": "06:7a:92:c0:08:df",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -214,7 +214,7 @@
           "DNSNames": [
             "aptl-shuffle-orborus",
             "shuffle-orborus",
-            "cae4c1cf9e6c"
+            "3915bf99db61"
           ]
         }
       }

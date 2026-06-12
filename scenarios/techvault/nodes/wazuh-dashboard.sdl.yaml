@@ -1594,21 +1594,22 @@ nodes:
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: ephemeral
-          endpoint_id: 20430152a65e828de2388ba941a29d8e3d837b692290217cb7ec7e641ba329ff
+          endpoint_id: 2a053aebe4fcc2685a7ad7c4c168c68bc0d0fe4ce4061c6e4b9a3f124754daca
           endpoint_id_stability: ephemeral
           backend_generated: null
           ip_address: 172.20.0.11
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: 9a:ac:f7:25:27:95
+          mac_address: ce:73:a1:0e:dc:52
           aliases:
           - aptl-wazuh-dashboard
           - wazuh.dashboard
           dns_names:
           - aptl-wazuh-dashboard
           - wazuh.dashboard
+          - 2463810da701
           generated_dns_names:
-          - c064e5698405
+          - 2463810da701
           backend:
             driver: bridge
             ipam_driver: default
@@ -1735,7 +1736,8 @@ nodes:
             location: cookie
             required: true
             data_type: session
-            description: Authentication/session cookie; transient probe values are omitted from evidence.
+            description: Authentication/session cookie; unauthenticated /api/status returns a clearing cookie value
+              security_authentication=.
           responses:
           - status_code: 401
             content_type: application/json; charset=utf-8
@@ -1752,8 +1754,9 @@ nodes:
             description: Probe exposed no raw credential material.
           exposed_fields:
           - name: set-cookie
-            sensitivity: redacted
-            description: Response sets an HttpOnly cookie clearing prior session state; transient probe value omitted from evidence.
+            sensitivity: plain
+            description: 'Response header: set-cookie: security_authentication=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00
+              GMT; HttpOnly; Path=/'
           upstream_target: null
       database_services: []
       dns_services: []
@@ -1820,9 +1823,10 @@ nodes:
           description: Default route from opensearch_dashboards.yml.
         - setting_id: dashboard-api-password
           name: Wazuh API password
-          classification: redacted
+          value: WazuhPass123!
+          classification: plain
           provenance: config_file
-          description: Raw fixture value is retained in runtime.environment and dashboard-config-files.txt; this platform-setting surface marks secret-bearing setting names as redacted.
+          description: Wazuh API password fixture verified from the live Wazuh dashboard container environment.
         authorization_ref: ''
         description: Wazuh analytics dashboard configured against the Wazuh indexer and manager.
       forwarding_agents: []

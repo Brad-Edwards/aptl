@@ -21,8 +21,8 @@ set -euo pipefail
 #
 # MISP_API_KEY in the runtime env is the lab's MISP admin API key — the same
 # secret_fixture value already disclosed on nodes.techvault.misp runtime
-# environment (ADMIN_KEY). It is redacted from committed evidence (ADR-029)
-# and carried with its value only in the SDL secret-fixture encoding.
+# environment (ADMIN_KEY). It is TechVault scenario content and is captured
+# verbatim in committed evidence.
 
 ROOT="$(git rev-parse --show-toplevel)"
 ASSET_DIR="$ROOT/docs/aces/inventory/misp-suricata-sync"
@@ -47,39 +47,9 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)=([^[:space:]]+)/\1=<REDACTED>/Ig'
+capture_stream() {
+  cat
 }
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|key|cookie|session|private_key|api_key|jwt)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
 
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
@@ -91,35 +61,20 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 # be used because the soc profile pulls in services that depend_on
 # wazuh.manager and profile filtering invalidates the project. The authored
 # MISP_API_KEY entry is an ${MISP_API_KEY:?...} interpolation template, not a
-# literal secret, but the env redaction rule is applied uniformly anyway; the
-# authored template text is plain in docker-compose.yml.
+# literal secret, and is captured exactly as authored.
 yq -o=json '.services."misp-suricata-sync"' "$ROOT/docker-compose.yml" \
-  | jq '
-      if (has("environment") and (.environment | type == "array")) then
-        .environment |= map(
-          if test("^(?<name>[^=]+)=") then
-            capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-            | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i"))
-              then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-              else .
-              end
-          else
-            .
-          end
-        )
-      else . end
-    ' > "$OUT/compose-service.misp-suricata-sync.json"
-record_limit "compose-service.misp-suricata-sync.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project. The authored MISP_API_KEY value is an \${MISP_API_KEY:?...} interpolation template (visible in docker-compose.yml), redacted here by the uniform env redaction rule."
+  | jq . > "$OUT/compose-service.misp-suricata-sync.json"
+record_limit "compose-service.misp-suricata-sync.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project. The authored MISP_API_KEY value is an \${MISP_API_KEY:?...} interpolation template and is captured exactly as authored."
 
 docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
+  | jq . \
   > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
+  | jq . \
   > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker history --no-trunc "$IMAGE" | capture_stream > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" | capture_stream > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -132,11 +87,11 @@ fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_suricata_command_socket | jq . > "$OUT/docker-volume.suricata_command_socket.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.misp-suricata-sync.txt"
+docker top "$CONTAINER" | capture_stream > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 | capture_stream > "$OUT/docker-logs.misp-suricata-sync.txt"
 
 record_limit "Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof."
-record_limit "MISP_API_KEY (runtime env) is the lab MISP admin API key — the same secret_fixture value already disclosed on nodes.techvault.misp (ADMIN_KEY). Redacted from committed evidence per ADR-029; carried with its value only in the SDL secret-fixture encoding."
+record_limit "MISP_API_KEY (runtime env) is the lab MISP admin API key — the same secret_fixture value already disclosed on nodes.techvault.misp (ADMIN_KEY). It is retained verbatim in committed evidence and SDL because it is TechVault scenario content."
 record_limit "/var/run/suricata is the shared suricata_command_socket volume owned by the suricata asset; only the socket path/metadata is recorded here. /var/lib/suricata/rules/misp is a host bind mount (.aptl/suricata/rules/misp) whose misp-iocs.rules content is generated by this service and recorded as a runtime-created file."
 
 # Build-recipe provenance: the Dockerfile COPYs pyproject.toml and the entire
@@ -257,7 +212,7 @@ docker exec "$CONTAINER" sh -lc '
   (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
   printf "%s\n" --python-version--
   python3 --version 2>&1 || true
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' | capture_stream > "$OUT/runtime-baseline.txt"
 
 # Service-specific state: the generated Suricata rules output, the command
 # socket, the CA trust input, and the sync loop's recent activity.
@@ -272,7 +227,7 @@ docker exec "$CONTAINER" sh -lc '
   printf "%s\n" --ca-cert-fingerprint--
   (command -v openssl >/dev/null 2>&1 && openssl x509 -in /etc/lab-ca/lab-ca.pem -noout -fingerprint -sha256 -subject -dates) 2>&1 \
     || sha256sum /etc/lab-ca/lab-ca.pem 2>&1 || true
-' | redact_stream > "$OUT/sync-service-state.txt"
+' | capture_stream > "$OUT/sync-service-state.txt"
 
 # Observer vantage: the suricata container consumes the rules file and the
 # command socket. Record the realized integration from the consumer side.
@@ -287,7 +242,7 @@ if docker inspect "$SURICATA_CONTAINER" >/dev/null 2>&1; then
     printf "%s\n" --suricata-rule-reload-counters--
     (suricatasc -c "show-all-rules" /var/run/suricata/suricata-command.socket 2>&1 | head -3) 2>&1
     true
-  ' | redact_stream > "$OUT/observer-discovery.suricata.txt"
+  ' | capture_stream > "$OUT/observer-discovery.suricata.txt"
 else
   record_limit "Suricata observer-vantage discovery was skipped because $SURICATA_CONTAINER was not present."
   printf '%s container unavailable\n' "$SURICATA_CONTAINER" > "$OUT/observer-discovery.suricata.txt"
@@ -307,7 +262,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --ping--
     ping -c 1 -W 2 172.20.0.19 2>&1 | sed -n "1,4p"
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' | capture_stream > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

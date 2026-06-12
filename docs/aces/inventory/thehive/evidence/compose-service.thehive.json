@@ -13,7 +13,8 @@
     "JVM_OPTS=-Xms512m -Xmx512m"
   ],
   "env_file": [
-    "./config/soc_certs/thehive/keystore.p12.password"
+    "./config/soc_certs/thehive/keystore.p12.password",
+    "./config/cortex/thehive-cortex.env"
   ],
   "volumes": [
     "thehive_data:/opt/thp/thehive/data",
@@ -31,7 +32,12 @@
     "lucene",
     "--es-hostnames",
     "thehive-es",
-    "--no-config-cortex"
+    "--cortex-proto",
+    "http",
+    "--cortex-hostnames",
+    "cortex",
+    "--cortex-port",
+    "9001"
   ],
   "healthcheck": {
     "test": [
@@ -55,6 +61,9 @@
       "condition": "service_healthy"
     },
     "thehive-es": {
+      "condition": "service_healthy"
+    },
+    "cortex": {
       "condition": "service_healthy"
     }
   },

@@ -1,14 +1,14 @@
 [
   {
-    "Id": "sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e",
+    "Id": "sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb",
     "RepoTags": [
       "aptl-misp-suricata-sync:latest"
     ],
     "RepoDigests": [
-      "aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e"
+      "aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb"
     ],
     "Comment": "buildkit.dockerfile.v0",
-    "Created": "2026-05-23T08:17:44.953784955+02:00",
+    "Created": "2026-06-11T17:15:58.139822106+02:00",
     "Config": {
       "Env": [
         "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -29,34 +29,34 @@
     },
     "Architecture": "amd64",
     "Os": "linux",
-    "Size": 114201128,
+    "Size": 114813853,
     "RootFS": {
       "Type": "layers",
       "Layers": [
-        "sha256:219a998c60509502b47b97f1158067d5dd62640d2d689560d32cfd5594f6bc40",
-        "sha256:98df1ca0e575d9026c1abd12994fad3c14effa4558d50b6961fd586930956b26",
-        "sha256:bffa3c30a00bb534b2e3637bd26d9a75e095172be7d0b33924f1a61bf6cb2120",
-        "sha256:89bfb82659d056dd4ef25b8b3f99c7a97874083d86d92924e931ffa2fb7c7861",
-        "sha256:323eb9311846722470f94332df2d3a10b99658aac4c39624f1fe6ae3ee49d32f",
-        "sha256:dc1b01f6b7228ddca8df73c90239cfb0c55a3f3f5d571bff8edaeea4fc8949f3",
-        "sha256:9632fe7a7363c825bfe943fd6532e5afc9994610c232ef550770a37f2dae95c3",
-        "sha256:5473a54ecbee25f3e5d13390bcac20b9e191b9c015cbcf75f8c1b26ffd9ca2ec",
-        "sha256:87bbc7895e09b6fe07a317c0572bbafc91f2b6cf0091e8503c698c173b23af1f"
+        "sha256:f4f8b983b714f130e2cff99176baa26352db6a55d3622e10ada40f2b4720a4eb",
+        "sha256:30397027ad83521a240789f494c872644416a4e3a3c44f2efb5bdc4eb457e20f",
+        "sha256:28b2c2519a708607986b8f9cc0fdd3c481df4c3f4d6730db76bdbce692e8d868",
+        "sha256:fc765e52b6a7a069d79e6fc708336d622c2cd040a37bae484c64b7edf9f7b5a5",
+        "sha256:71ab58e680c48926e2e52847acc0c54c7666a9054ca9abe5ca87bb40bc3ff477",
+        "sha256:fd56aace439b8d4db1f9633aa6910d7af670cd024fe862144bed2f79ba272662",
+        "sha256:ac23bb47eced054e63a931e05c6ab91b59c0218e09a6d00b3c88301a511af543",
+        "sha256:ba16317430ff90d6dc30f0c0485a2a2df07c505e3a00629634bf7f3d14846d85",
+        "sha256:0aaa5c7169995e92d7df700ed106b6606ab7b91ae6f8a6db1fe534387481030c"
       ]
     },
     "Metadata": {
-      "LastTagTime": "2026-05-23T06:17:51.013940318Z"
+      "LastTagTime": "2026-06-11T16:00:12.204402187Z"
     },
     "Descriptor": {
       "mediaType": "application/vnd.oci.image.index.v1+json",
-      "digest": "sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e",
+      "digest": "sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb",
       "size": 856
     },
     "Identity": {
       "Build": [
         {
-          "Ref": "zqytksanrfpp93kb2xm7yeuap",
-          "CreatedAt": "2026-05-23T08:17:52.967446472+02:00"
+          "Ref": "imiicbdf668i0jrss8lukfmu6",
+          "CreatedAt": "2026-06-11T18:00:12.485113656+02:00"
         }
       ]
     }

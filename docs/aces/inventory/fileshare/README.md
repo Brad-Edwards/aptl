@@ -20,7 +20,7 @@ of that local steady state, not as clean-lab rebuild proof.
 | Source class | `custom-build` |
 | Source package | `containers/fileshare/` plus `containers/_wazuh-agent/` |
 | Image tag | `aptl-fileshare:latest` |
-| Image digest | `aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59` |
+| Image digest | `aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96` |
 | Runtime OS | Ubuntu 22.04.5 LTS (Jammy Jellyfish) |
 | Runtime command | `/usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf` |
 | Listener | `0.0.0.0:139`, `0.0.0.0:445`, `:::139`, `:::445` |
@@ -35,14 +35,14 @@ of that local steady state, not as clean-lab rebuild proof.
 | --- | --- |
 | Capture commands are reproducible. | `capture-evidence.sh`, `normalize-syft-cyclonedx.jq` |
 | Capture time, tool versions, and limits are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt`, `evidence/syft-version.json`, `evidence/osquery-version.txt` |
-| Compose service intent is represented by the redacted service slice. | `evidence/compose-service.fileshare.json` |
+| Compose service intent is represented by the service slice. | `evidence/compose-service.fileshare.json` |
 | Custom image identity, config, and layers are recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-history.image.txt`, `evidence/docker-history.image.jsonl` |
 | Source package inputs are checksum-addressable. | `evidence/source-checksums.txt` |
 | Runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-internal.json`, `evidence/docker-volume.fileshare-data.json`, `evidence/docker-volume.fileshare-logs.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt` |
 | OS packages and SBOM component inventories are recorded. | `evidence/os-packages.txt`, `evidence/language-manifests.txt`, `evidence/trivy-sbom.cyclonedx.json`, `evidence/syft-sbom.cyclonedx.json` |
 | Patch state is machine-readable. | `evidence/trivy-vulnerability-counts.json`, `evidence/trivy-vulnerability-list.json` |
 | osquery table attempts are recorded. | `evidence/osquery-apt-sources.json`, `evidence/osquery-docker-containers.json`, `evidence/osquery-docker-images.json`, `evidence/osquery-installed-applications.json`, `evidence/osquery-listening-ports.json`, `evidence/osquery-processes.json`, `evidence/osquery-programs.json` |
-| Filesystem and share paths are hashable without committing generated secret contents. | `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt`, `evidence/share-tree.txt`, `evidence/share-checksums.txt` |
+| Filesystem and share paths, including scenario secret fixture contents, are recorded. | `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt`, `evidence/filesystem-sensitive-paths.txt`, `evidence/share-tree.txt`, `evidence/share-checksums.txt` |
 | SMB access behavior is captured from inside the container. | `evidence/smbclient-anonymous-probes.txt`, `evidence/smbclient-svc-fileshare-probes.txt` |
 | Evidence files have integrity checksums. | `evidence/evidence-sha256sums.txt` |
 | Captured facts are mapped to current ACES surfaces. | `mapping-ledger.yaml` |
@@ -62,18 +62,19 @@ of that local steady state, not as clean-lab rebuild proof.
 - The named volume `aptl_fileshare_data` is mounted at `/srv/shares` and
   contains the Public, Engineering, Finance, HR, IT-Backups, and Shared share
   trees. The named volume `aptl_fileshare_logs` is mounted at `/var/log/samba`.
+- Scenario secret fixture files, including flags, planted credentials, the
+  leaked deploy key, and the Wazuh client key, are captured verbatim in
+  `evidence/filesystem-sensitive-paths.txt`.
 - Anonymous SMB access lists Public and Shared. Anonymous access to
   Engineering, Finance, HR, and IT-Backups returns `NT_STATUS_ACCESS_DENIED`.
 - The `svc-fileshare` Samba account is present, but the captured probe shows it
   still cannot list Engineering because no local `Engineering` group membership
   exists in the standalone Samba container.
-- `setup-shares.sh` attempts to generate
-  `/srv/shares/it-backups/keys/deploy_key`, but the observed runtime state does
-  not contain `deploy_key` or `deploy_key.pub`. The likely realized cause is
-  that `ssh-keygen` is not available in the image; the bundle records the
-  absence rather than treating authored intent as runtime fact.
-- The Trivy evidence captured 120 package vulnerability findings at scan time:
-  52 medium and 68 low.
+- `setup-shares.sh` generates `/srv/shares/it-backups/keys/deploy_key` and
+  `deploy_key.pub`; both are present in the observed runtime state and captured
+  by stat, checksum, and raw content evidence.
+- The Trivy evidence captured 132 package vulnerability findings at scan time:
+  1 high, 53 medium, and 78 low.
 - Syft CycloneDX output is normalized by `normalize-syft-cyclonedx.jq` to strip
   `syft:location:*` properties only. Filesystem provenance is retained through
   `filesystem-tree.txt`, `filesystem-checksums.txt`, `share-tree.txt`, and
@@ -110,9 +111,6 @@ uv run aptl aces-inventory gaps docs/aces/inventory/fileshare
 - The evidence came from a running lab, not a destructive fresh reset.
 - The capture does not prove byte-identical rebuildability or full root
   filesystem equivalence.
-- Generated flag contents and generated SSH private-key material are not
-  committed. Their paths, permissions, sizes, and SHA-256 digests or absence
-  are recorded instead.
 - Vulnerability results are time-sensitive to the Trivy database and advisory
   feeds.
 - osquery `installed_applications` and `programs` were unavailable in the

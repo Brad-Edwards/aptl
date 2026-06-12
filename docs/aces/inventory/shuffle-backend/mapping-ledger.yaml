@@ -50,7 +50,7 @@ notes:
     Shuffle persistent state lives in the shuffle-opensearch datastore
     (OpenSearch 2.14.0), not in the aptl_shuffle_data volume, which is empty at
     steady state. Application state was captured through the Shuffle backend HTTP
-    API and OpenSearch _cat/indices, with apikey/password/session fields redacted.
+    API and OpenSearch _cat/indices with scenario values retained verbatim.
   - >
     Inbound consumers of this backend (the shuffle-orborus worker on
     http://shuffle-backend:5001, the shuffle-frontend nginx proxy, and the Wazuh
@@ -105,12 +105,12 @@ correspondence_checks:
       - shuffle-backend.runtime.vulnerability-scan
       - shuffle-backend.runtime.package-inventory
       - shuffle-backend.runtime.filesystem-inventory
-  - id: shuffle-backend-scope-and-redaction-caveats
+  - id: shuffle-backend-scope-and-scenario-secret-caveats
     status: implemented
     source: docs/aces/inventory/shuffle-backend/evidence/capture-limits.txt
     method: >
-      README and tests assert non-destructive capture scope, secret redaction
-      (apikey/passwords), Syft normalization, unavailable osquery tables, the
+      README and tests assert non-destructive capture scope, scenario secret
+      retention (apikey/passwords), Syft normalization, unavailable osquery tables, the
       empty data volume vs OpenSearch-backed state, and Compose extraction
       caveats.
     realized_evidence:
@@ -379,7 +379,7 @@ facts:
     summary: >
       Runtime environment encodes the 8 compose-declared SHUFFLE_* variables plus
       the image-default PATH; SHUFFLE_DEFAULT_APIKEY, SHUFFLE_DEFAULT_PASSWORD,
-      and SHUFFLE_OPENSEARCH_PASSWORD are redacted.
+      and SHUFFLE_OPENSEARCH_PASSWORD are retained as scenario fixture values.
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
@@ -392,7 +392,7 @@ facts:
         - nodes.techvault.shuffle-backend.runtime.environment
       rationale: >
         ACES runtime.environment carries each variable with a value_classification;
-        secret values are recorded as redacted with empty value strings.
+        the scenario fixture secret values are recorded verbatim.
   - id: shuffle-backend.runtime.local-identity
     category: runtime
     summary: >
@@ -492,8 +492,8 @@ facts:
     summary: >
       The Shuffle org (default, id 08b070b1-...), the single admin user (id
       c98f23e2-..., role admin, active, unverified), and the seeded admin API-key
-      metadata are encoded as a runtime identity authority; raw secret material is
-      redacted.
+      metadata are encoded as a runtime identity authority with scenario fixture
+      values retained where present in the scenario target.
     evidence:
       - path: evidence/shuffle-state.txt
     aces:
@@ -504,7 +504,7 @@ facts:
         - nodes.techvault.shuffle-backend.runtime.identity_authorities.shuffle-local-authorization
       rationale: >
         ACES runtime.identity_authorities encode the Shuffle organisation, user,
-        and API-key subjects with redacted secret material.
+        and API-key subjects with the seeded API key represented as scenario content.
   - id: shuffle-backend.application.platform-state
     category: application
     summary: >
@@ -596,8 +596,9 @@ facts:
         - nodes.techvault.shuffle-backend.runtime.platform_applications.shuffle-soar.upstream_bindings.shuffle-opensearch-index
       caveat: >
         TLS verification is disabled (SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true) and
-        the OpenSearch password is redacted; the datastore is a minimal companion
-        stub node owned by future SOC-companion inventory work.
+        the OpenSearch password is retained as scenario fixture content; the
+        datastore is a minimal companion stub node owned by future SOC-companion
+        inventory work.
       rationale: >
         The datastore dependency is encoded as both a relationships edge and a
         platform_application upstream_binding to shuffle-opensearch.

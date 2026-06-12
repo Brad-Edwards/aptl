@@ -21,7 +21,7 @@ provenance:
 notes:
   - Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start.
   - ACES #431 is consumed through nodes.techvault.misp.runtime.service_listeners; no known ACES expressivity gap remains for the catalogued MISP steady-state facts.
-  - No MISP events, attributes, or objects were present, so typed threat-intelligence event semantics were not exercised by this snapshot.
+  - The live MISP database contains one known-threat-actors event, six attributes, seven tags, and installed reference datasets.
 correspondence_checks:
   - id: misp-evidence-bundle-integrity
     status: implemented
@@ -49,10 +49,11 @@ correspondence_checks:
       - misp.application.local-authorization
       - misp.application.platform-settings
       - misp.runtime.vulnerability-scan
-  - id: misp-scope-and-redaction-caveats
+  - id: misp-scope-and-capture-caveats
     status: implemented
     source: docs/aces/inventory/misp/evidence/capture-limits.txt
-    method: README and tests assert non-destructive capture scope, secret redaction, Syft normalization, unavailable osquery tables, and Compose extraction caveats.
+    method: README and tests assert non-destructive capture scope, retained scenario secret values, Syft normalization,
+      unavailable osquery tables, and Compose extraction caveats.
     realized_evidence:
       - path: evidence/capture-limits.txt
       - path: evidence/osquery-installed-applications.json
@@ -132,7 +133,7 @@ facts:
         - conditions.misp-https-ready
   - id: misp.source.realization-inputs
     category: source
-    summary: Local Compose, seed script, MISP certificate, and lab CA checksums are captured as local realization inputs; private key source is intentionally omitted.
+    summary: Local Compose, seed script, MISP certificate, and lab CA checksums are captured as local realization inputs; the live mounted TLS key is captured through container filesystem evidence.
     evidence:
       - path: evidence/source-checksums.txt
       - path: evidence/capture-limits.txt
@@ -142,7 +143,7 @@ facts:
       checked_surfaces: [nodes, content]
       fields:
         - nodes.techvault.misp.source.build.source_inputs
-      caveat: server.key is captured as a mounted path and filesystem entry but not hashed because it is private key material.
+      caveat: The aptl4 checkout used for this branch does not contain config/soc_certs/misp/server.key as a source file; the running target exposes the key at /etc/nginx/certs/key.pem and the runtime checksum is captured there.
   - id: misp.runtime.container-policy
     category: runtime
     summary: Docker runtime policy captures restart behavior, memory limits, namespace modes, privileged/read-only flags, init process, health, log driver, and masked/read-only paths.
@@ -191,18 +192,17 @@ facts:
         - nodes.techvault.misp.runtime.mounts
   - id: misp.runtime.filesystem-inventory
     category: runtime
-    summary: The SDL encodes the full compressed filesystem manifest and checksum surface, including redacted secret-bearing config/key paths.
+    summary: The SDL encodes the full compressed filesystem manifest and checksum surface, including active config and TLS key paths with target-file SHA-256 digests.
     evidence:
       - path: evidence/filesystem-tree.txt.gz
       - path: evidence/filesystem-checksums.txt.xz
       - path: evidence/capture-limits.txt
     aces:
-      disposition: encoded_with_caveat
+      disposition: encoded
       surface: nodes
       checked_surfaces: [nodes]
       fields:
         - nodes.techvault.misp.runtime.filesystem_inventory
-      caveat: Secret-bearing config files and the private key path are represented by path/metadata/sensitivity; raw contents and hashes are intentionally absent.
   - id: misp.runtime.process-tree
     category: runtime
     summary: Runtime process evidence captures tini, supervisord, nginx, rsyslogd, MISP ZMQ, scheduler worker, gpg-agent, PHP-FPM, and MISP worker pools.
@@ -233,7 +233,7 @@ facts:
       caveat: Docker embedded DNS listener ports are backend-generated and encoded as node-local runtime listeners, not MISP application services.
   - id: misp.runtime.environment
     category: runtime
-    summary: Runtime environment includes MISP database, Redis, base URL, admin email, image defaults, and redacted secret values.
+    summary: Runtime environment includes MISP database, Redis, base URL, admin email, image defaults, and unmasked scenario fixture secret values.
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/runtime-baseline.txt
@@ -308,7 +308,7 @@ facts:
         - nodes.techvault.misp.runtime.platform_applications.misp-threat-intel.settings
   - id: misp.application.content-state
     category: content
-    summary: MISP database content counts show zero events, zero attributes, zero objects, and installed reference collections, with typed threat-intelligence platform content also encoded under runtime.platform_applications.
+    summary: MISP database content counts show one known-threat-actors event, six attributes, zero objects, seven tags, and installed reference collections, with typed threat-intelligence platform content also encoded under runtime.platform_applications.
     evidence:
       - path: evidence/misp-state.txt
     aces:
@@ -319,7 +319,7 @@ facts:
         - content.techvault.misp-reference-datasets
         - nodes.techvault.misp.runtime.platform_applications.misp-threat-intel.content_objects
         - nodes.techvault.misp.runtime.applications.misp-web.description
-      caveat: No MISP event/attribute/object rows were present, so concrete event/attribute/object semantics are not exercised by this snapshot; reference collections and settings are encoded through the ACES platform-application surface.
+      caveat: Current SDL content/platform surfaces encode the MISP event and IOC rows as counted content with row-level evidence in misp-state.txt; richer MISP-native event semantics remain outside this inventory pass.
   - id: misp.runtime.package-inventory
     category: runtime
     summary: dpkg package inventory captures 238 installed OS packages.
@@ -398,7 +398,7 @@ facts:
         - nodes.techvault.misp.runtime.service_listeners.https-443-ipv4.readiness
   - id: misp.relationship.mariadb
     category: relationship
-    summary: MISP points at `misp-db` using MYSQL_HOST, database `misp`, user `misp`, and a redacted password.
+    summary: MISP points at `misp-db` using MYSQL_HOST, database `misp`, user `misp`, and password `misp_db_password`.
     evidence:
       - path: evidence/compose-service.misp.json
       - path: evidence/docker-inspect.container.json

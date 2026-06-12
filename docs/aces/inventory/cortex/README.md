@@ -2,7 +2,7 @@
 
 This directory is the SCN-010 / issue #357 inventory bundle for the TechVault `cortex` container. It applies the ACES asset inventory methodology to the realized `aptl-cortex` service after a clean lab reset/start and after TheHive/Cortex integration was repaired.
 
-`cortex` is the lab's **SOC analyzer engine**: upstream `thehiveproject/cortex:3.1.8` (Cortex 3.1.8-1, Play 2.8.19 on Debian 11), serving HTTP on 9001 (published `9001:9001`, security-net `172.20.0.22`). Cortex stores organization/user metadata in the shared `thehive-es` Elasticsearch service using the `cortex_6` index. The TheHive consumer authenticates with a seeded service account (`aptl-svc@cortex.local`, roles `read,analyze,orgadmin`) whose raw fixture key/password are redacted from evidence.
+`cortex` is the lab's **SOC analyzer engine**: upstream `thehiveproject/cortex:3.1.8` (Cortex 3.1.8-1, Play 2.8.19 on Debian 11), serving HTTP on 9001 (published `9001:9001`, security-net `172.20.0.22`). Cortex stores organization/user metadata in the shared `thehive-es` Elasticsearch service using the `cortex_6` index. The TheHive consumer authenticates with a seeded service account (`aptl-svc@cortex.local`, roles `read,analyze,orgadmin`) whose fixture key/password are retained as scenario evidence.
 
 HTTPS is intentionally deferred for Cortex 3.1.8 under ADR-034 because the bundled Play SSL provider fails at runtime. The repaired integration uses HTTP on the internal Docker network plus Cortex key auth (`auth.provider = ["local", "key"]`). The Elasticsearch index is pre-created by `cortex-index-init` so `relations`, `status`, and `key` are `keyword` fields; otherwise Cortex key-auth term queries miss dynamically-created `text` fields.
 
@@ -36,7 +36,7 @@ HTTPS is intentionally deferred for Cortex 3.1.8 under ADR-034 because the bundl
 | Capture time, tool versions, and limits are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt`, `evidence/syft-version.json`, `evidence/osquery-version.txt` |
 | Upstream registry image identity is recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-buildx-imagetools.image.raw.json`, `evidence/docker-buildx-imagetools.image.txt`, `evidence/docker-history.image.txt`, `evidence/docker-history.image.jsonl`, `evidence/source-checksums.txt` |
 | Runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-security.json`, `evidence/docker-volume.cortex_data.json`, `evidence/docker-top.txt`, `evidence/docker-logs.cortex.txt`, `evidence/runtime-baseline.txt` |
-| Cortex application state and TheHive auth are recorded. | `evidence/cortex-state.txt`, `evidence/cortex-index-documents.redacted.json`, `evidence/thehive-cortex-auth-current-user.json`, `evidence/participant-discovery.kali.txt` |
+| Cortex application state and TheHive auth are recorded. | `evidence/cortex-state.txt`, `evidence/cortex-index-documents.json`, `evidence/thehive-cortex-auth-current-user.json`, `evidence/participant-discovery.kali.txt` |
 | Filesystem and package inventory are recorded. | `evidence/filesystem-tree.txt.gz`, `evidence/filesystem-checksums.txt.xz`, `evidence/os-packages.txt`, `evidence/language-manifests.txt` |
 | Required + useful-optional scanners are recorded. | `evidence/trivy-sbom.cyclonedx.json.gz`, `evidence/trivy-vulnerabilities.json.xz`, `evidence/trivy-vulnerability-list.json`, `evidence/trivy-vulnerability-counts.json`, `evidence/syft-sbom.cyclonedx.json.gz` |
 | osquery baseline is recorded. | `evidence/osquery-processes.json`, `evidence/osquery-listening-ports.json`, `evidence/osquery-docker-containers.json`, `evidence/osquery-docker-images.json`, `evidence/osquery-apt-sources.json`, `evidence/osquery-installed-applications.json`, `evidence/osquery-programs.json` |
@@ -74,7 +74,7 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
 
 - Capture used `COMPOSE_BAKE=false` because local Docker Compose Buildx Bake hung; this is a local startup workaround, not a scenario setting.
 - Cortex HTTPS is deferred by ADR-034; HTTP plus key auth is the realized steady-state integration.
-- Raw API key and bootstrap password values are redacted; evidence records identity, role, and auth-success facts.
+- Raw API key and bootstrap password values are retained as in-range scenario evidence.
 - `cortex_data` had no analyzer job artifacts at snapshot time; future job output is dynamic state.
 - Syft output is normalized by stripping `syft:location:*` properties.
 - Some osquery tables are not meaningful from the digest-pinned namespace-sharing scanner; Docker inspect and dpkg evidence cover those facts.

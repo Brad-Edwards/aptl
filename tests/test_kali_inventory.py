@@ -29,7 +29,7 @@ PREFLIGHT_PATH = PROJECT_ROOT / "docs" / "aces" / "inventory" / "kali-preflight.
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9"
+IMAGE_ID = "sha256:fee0813b38264c78fab66c86167595715803a6fd9152bf6c0af8e6835d368462"
 IMAGE_DIGEST = f"aptl-kali@{IMAGE_ID}"
 
 LEDGER_FACT_COUNT = 25

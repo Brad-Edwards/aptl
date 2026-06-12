@@ -30,7 +30,7 @@ EVIDENCE_DIR = VICTIM_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310"
+IMAGE_ID = "sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f"
 IMAGE_DIGEST = f"aptl-victim@{IMAGE_ID}"
 BUILD_HISTORY_LAYER_COUNT = 38
 DOCKERFILE_INSTRUCTION_COUNT = 37
@@ -47,7 +47,10 @@ PROCESS_COUNT = 4
 
 REQUIRED_EVIDENCE_FILES = {'filesystem-sensitive-paths.txt', 'docker-inspect.image.json', 'docker-volume.victim-logs.json', 'compose-service.victim.json', 'osquery-version.txt', 'osquery-installed-applications.json', 'filesystem-checksums.txt', 'systemd-units.txt', 'trivy-vulnerability-counts.json', 'rpm-repositories.txt', 'os-packages.txt', 'filesystem-tree.txt', 'captured-at-utc.txt', 'osquery-docker-images.json', 'language-manifests.txt', 'capture-limits.txt', 'syft-sbom.cyclonedx.json.gz', 'osquery-listening-ports.json', 'docker-top.txt', 'docker-volume.victim-home.json', 'osquery-apt-sources.json', 'osquery-docker-containers.json', 'runtime-baseline.txt', 'source-checksums.txt', 'trivy-version.txt', 'osquery-programs.json', 'trivy-sbom.cyclonedx.json.gz', 'docker-inspect.container.json', 'docker-history.image.txt', 'evidence-sha256sums.txt', 'osquery-processes.json', 'docker-network.aptl-internal.json', 'docker-compose-version.json', 'docker-version.json', 'syft-version.json', 'trivy-vulnerability-list.json', 'docker-history.image.jsonl'}
 
-RAW_SECRET_PATTERNS = ('BEGIN .*PRIVATE KEY', 'Summer2024', 'LabAdmin2024!', 'Welcome1!', 'Admin123!', 'admin123', 'techvault_db_pass', 'techvault-jwt-weak', 'tvault-api-key-2024-admin', 'techvault-secret-key-2024', 'AKIAIOSFODNN7EXAMPLE', 'wJalrXUtnFEMI', 'APTL\\{')
+VICTIM_SANDBOX_KEY = "/var/run/docker/netns/a06965997b83"
+VICTIM_USER_FLAG = "APTL{user_victim_6ad54b556e9c31ca37897f092c363be3}"
+VICTIM_ROOT_FLAG = "APTL{root_victim_3bf660025cc08791a2b11372aaeda6de}"
+VICTIM_CLIENT_KEYS_DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 
 def _json_file(name: str):
@@ -114,7 +117,7 @@ def test_victim_inventory_note_declares_scope_and_evidence():
     assert not missing, f"Victim inventory note missing scope markers: {missing}"
 
 
-def test_victim_capture_script_pins_reproducible_toolchain_and_redaction():
+def test_victim_capture_script_pins_reproducible_toolchain_and_secret_capture():
     text = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
     required = (
         "aquasec/trivy@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e",
@@ -210,17 +213,20 @@ def test_victim_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_victim_evidence_does_not_contain_raw_secret_material():
-    offenders = {}
-    patterns = [re.compile(pattern) for pattern in RAW_SECRET_PATTERNS]
-    for path in EVIDENCE_DIR.iterdir():
-        if not path.is_file():
-            continue
-        text = _evidence_text(path)
-        leaked = [pattern.pattern for pattern in patterns if pattern.search(text)]
-        if leaked:
-            offenders[path.name] = leaked
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+def test_victim_evidence_commits_scenario_secret_material():
+    container = _json_file("docker-inspect.container.json")[0]
+    sensitive_paths = (EVIDENCE_DIR / "filesystem-sensitive-paths.txt").read_text(encoding="utf-8")
+    filesystem_checksums = (EVIDENCE_DIR / "filesystem-checksums.txt").read_text(encoding="utf-8")
+
+    assert container["NetworkSettings"]["SandboxKey"] == VICTIM_SANDBOX_KEY
+    assert VICTIM_USER_FLAG in sensitive_paths
+    assert VICTIM_ROOT_FLAG in sensitive_paths
+    assert "--path:/keys/aptl_lab_key--" in sensitive_paths
+    assert "--path:/etc/ssh/ssh_host_ed25519_key--" in sensitive_paths
+    assert "-----BEGIN OPENSSH PRIVATE KEY-----" in sensitive_paths
+    assert "--path:/var/ossec/etc/client.keys--" in sensitive_paths
+    assert f"{VICTIM_CLIENT_KEYS_DIGEST}  /var/ossec/etc/client.keys" in filesystem_checksums
+    assert "<REDACTED" not in sensitive_paths
 
 
 def test_victim_container_runtime_state_and_identity():
@@ -506,8 +512,8 @@ def test_victim_filesystem_tree_is_encoded_as_runtime_inventory():
 
     assert filesystem["/home/labadmin/user.txt"]["sensitivity"] == "secret_fixture"
     assert filesystem["/root/root.txt"]["sensitivity"] == "secret_fixture"
-    assert filesystem["/keys/aptl_lab_key"]["sensitivity"] == "operator_secret"
-    assert filesystem["/var/ossec/etc/client.keys"]["sensitivity"] == "operator_secret"
+    assert filesystem["/keys/aptl_lab_key"]["sensitivity"] == "secret_fixture"
+    assert filesystem["/var/ossec/etc/client.keys"]["sensitivity"] == "plain"
 
 
 def test_victim_passwd_users_are_encoded_as_accounts():

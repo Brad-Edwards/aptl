@@ -30,8 +30,8 @@ notes:
   is NOT used by TheHive (the --es-hostnames arg is inert under the lucene backend), so no thehive->es relationship is encoded.
 - The Play application secret (--secret aptl-thehive-lab-secret-key-2024-purple) is a committed scenario fixture (present
   in docker-compose.yml), encoded verbatim on the container command per the secret-fixture policy. The generated HTTPS keystore
-  (/etc/thehive/keystore.p12) and its password (HTTPS_KEYSTORE_PASSWORD env_file) are operator secrets, withheld (metadata/empty
-  value only).
+  (/etc/thehive/keystore.p12), HTTPS_KEYSTORE_PASSWORD env_file value, and TH_CORTEX_KEYS API key are scenario target content
+  and are captured verbatim where they appear in Docker/runtime evidence.
 - HTTPS is terminated in-container on 9000 using the lab-CA-signed keystore.p12; the authored application.conf overlay (config/thehive/application.conf)
   enables it. Published to the host as 9000:9000.
 correspondence_checks:
@@ -75,11 +75,11 @@ correspondence_checks:
   - thehive.relationship.connects-cassandra
   - thehive.secret.play-application-secret
   - thehive.runtime.service-listener
-- id: thehive-scope-and-redaction-caveats
+- id: thehive-scope-and-secret-capture-caveats
   status: implemented
   source: docs/aces/inventory/thehive/evidence/capture-limits.txt
   method: README and tests assert non-destructive capture scope, the data/index volume manifest exclusion, the keystore/password
-    redaction, and unavailable osquery tables.
+    and Cortex API key capture, and unavailable osquery tables.
   realized_evidence:
   - path: evidence/capture-limits.txt
   - path: evidence/osquery-installed-applications.json
@@ -232,7 +232,7 @@ facts:
 - id: thehive.runtime.mounts
   category: runtime
   summary: 'Two named volumes (thehive_data, thehive_index — the LOCAL Lucene search index) plus three binds: the generated
-    keystore.p12 (operator secret, metadata only), the authored application.conf overlay, and the lab CA pem.'
+    keystore.p12 scenario TLS fixture, the authored application.conf overlay, and the lab CA pem.'
   evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/docker-volume.thehive_data.json
@@ -248,8 +248,8 @@ facts:
     rationale: Current ACES SDL node runtime.mounts carries the volume + bind mounts directly.
 - id: thehive.runtime.filesystem-inventory
   category: filesystem
-  summary: The TheHive install tree, the authored application.conf, the lab CA, and os-release are encoded with checksums
-    for stable files; the data/index volumes are excluded; the keystore is metadata-only (operator secret).
+  summary: The TheHive install tree, the authored application.conf, the lab CA, the generated keystore, and os-release are
+    encoded with checksums for stable files; the data/index volumes are excluded.
   evidence:
   - path: evidence/filesystem-tree.txt.gz
   - path: evidence/filesystem-checksums.txt.xz
@@ -263,7 +263,7 @@ facts:
     - nodes.techvault.thehive.runtime.filesystem_inventory
     rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
     caveat: The data/index volume contents are excluded from the manifest (top-level rows only). /etc/thehive/keystore.p12
-      (generated HTTPS keystore) is metadata-only with content excluded (operator secret, ADR-029).
+      (generated HTTPS keystore) is captured as scenario TLS fixture metadata plus a stable-content checksum.
 - id: thehive.runtime.process-set
   category: runtime
   summary: PID 1 is the TheHive JVM (Play/Scalligraph on Amazon Corretto 11); a single long-lived java process under the entrypoint.
@@ -281,7 +281,7 @@ facts:
     rationale: Current ACES SDL node runtime.processes carries the captured process set directly.
 - id: thehive.runtime.environment
   category: runtime
-  summary: Runtime environment is five variables (JVM_OPTS, HTTPS_KEYSTORE_PASSWORD, PATH, JAVA_HOME, LANG).
+  summary: Runtime environment is six variables (JVM_OPTS, HTTPS_KEYSTORE_PASSWORD, TH_CORTEX_KEYS, PATH, JAVA_HOME, LANG).
   evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/runtime-baseline.txt
@@ -294,8 +294,9 @@ facts:
     - nodes.techvault.thehive.runtime.environment
     rationale: Current ACES SDL node runtime.environment carries the captured variables directly.
     caveat: HTTPS_KEYSTORE_PASSWORD is a generated keystore password (env_file config/soc_certs/thehive/keystore.p12.password,
-      created at lab start) — classified operator_secret with its value omitted/withheld (ADR-029). The Play application secret
-      is carried separately on the container command as a committed scenario fixture (see runtime.container).
+      created at lab start) and TH_CORTEX_KEYS is the scenario Cortex API key consumed by TheHive; both values are classified
+      as secret_fixture scenario content and captured verbatim. The Play application secret is carried separately on the
+      container command as a committed scenario fixture (see runtime.container).
 - id: thehive.runtime.local-identity
   category: identity
   summary: Local passwd/group inventory records 19 users and 39 groups (stock Debian 12 + the thehive service account); no
@@ -331,7 +332,7 @@ facts:
 - id: thehive.secret.play-application-secret
   category: secret
   summary: The Play application secret is a committed scenario fixture (--secret aptl-thehive-lab-secret-key-2024-purple)
-    carried on the container command; it is present in docker-compose.yml and kept (not redacted).
+    carried on the container command; it is present in docker-compose.yml and kept verbatim.
   evidence:
   - path: evidence/compose-service.thehive.json
   - path: evidence/docker-inspect.container.json
@@ -344,9 +345,9 @@ facts:
     fields:
     - nodes.techvault.thehive.runtime.container.command
     rationale: The Play application secret is a deliberate, committed lab fixture (a reproduction input present in docker-compose.yml);
-      it is encoded as part of the container command per the secret-fixture policy (kept, not redacted).
+      it is encoded as part of the container command per the secret-fixture policy (kept verbatim).
     caveat: This is a scenario-fixture secret (committed in docker-compose.yml), not a real operator secret; it is retained
-      verbatim. The separate generated HTTPS keystore password is the operator secret and is withheld.
+      verbatim. The generated HTTPS keystore password is also scenario target content and is captured in runtime evidence.
 - id: thehive.runtime.package-inventory
   category: runtime
   summary: dpkg package inventory captures 126 installed OS packages from the strangebee/thehive Debian 12 base.

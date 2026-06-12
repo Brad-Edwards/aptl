@@ -30,43 +30,6 @@ mkdir -p "$OUT"
 record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
-
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's/^([[:space:]]*password[[:space:]]*=[[:space:]]*).*$/\1<REDACTED>/Ig' \
-    -e 's/^([[:space:]]*key[[:space:]]*=[[:space:]]*).*$/\1<REDACTED>/Ig'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|key|cookie|session|private_key|api_key|jwt)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -75,17 +38,7 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 yq -o=json '.services.cortex' "$ROOT/docker-compose.yml" \
   | jq '
       if (has("environment") and (.environment | type == "array")) then
-        .environment |= map(
-          if test("^(?<name>[^=]+)=") then
-            capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-            | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i"))
-              then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-              else .
-              end
-          else
-            .
-          end
-        )
+        .environment |= map(.)
       else . end
     ' > "$OUT/compose-service.cortex.json"
 record_limit "compose-service.cortex.json is the authored docker-compose.yml service block (yq-extracted). The container uses HTTP only on the aptl-security network; TheHive consumes it with the fixture API key provisioned by scripts/cortex-apikey.sh."
@@ -93,15 +46,11 @@ record_limit "compose-service.cortex.json is the authored docker-compose.yml ser
 yq -o=json '.services["cortex-index-init"]' "$ROOT/docker-compose.yml" \
   > "$OUT/compose-service.cortex-index-init.json"
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw | jq . > "$OUT/docker-buildx-imagetools.image.raw.json"
@@ -113,12 +62,12 @@ fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_cortex_data | jq . > "$OUT/docker-volume.cortex_data.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.cortex.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 > "$OUT/docker-logs.cortex.txt"
 
 record_limit "Capture followed a clean aptl lab stop -v && COMPOSE_BAKE=false aptl lab start immediately before inventory; COMPOSE_BAKE=false is a local Docker Compose workaround because Buildx Bake hung in this environment, not a scenario setting."
 record_limit "Cortex HTTPS is intentionally deferred by ADR-034 because the Cortex 3.1.8 bundled Play SSL provider fails at runtime. The participant-visible service is HTTP on the security network, with TheHive using the fixture API key over the internal network."
-record_limit "The Cortex API key and bootstrap password are fixture credentials. Evidence records the service-account identity, roles, key-present flag, and auth behaviour; raw key/password values are redacted from committed evidence."
+record_limit "The Cortex API key and bootstrap password are fixture credentials; raw key/password values are retained as in-range scenario evidence."
 record_limit "The cortex_data volume backs /opt/cortex/jobs. At the steady-state snapshot no analyzer jobs were present; the filesystem manifest records the top-level jobs directory and volume metadata, not future job artifacts."
 
 sha256sum \
@@ -129,7 +78,7 @@ sha256sum \
   "$ROOT/scripts/cortex-index-init.sh" \
   "$ROOT/config/soc_certs/lab-ca.pem" \
   | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
-record_limit "source-checksums.txt covers docker-compose.yml, the Cortex application overlay, the fixture TheHive-Cortex env file, the Cortex API-key/index bootstrap scripts, and the generated lab CA certificate. Raw fixture key material is not copied into evidence."
+record_limit "source-checksums.txt covers docker-compose.yml, the Cortex application overlay, the fixture TheHive-Cortex env file, the Cortex API-key/index bootstrap scripts, and the generated lab CA certificate."
 
 docker exec "$CONTAINER" sh -lc "dpkg-query -W -f='\${binary:Package}\t\${Version}\t\${Architecture}\n'" \
   | sort > "$OUT/os-packages.txt"
@@ -205,7 +154,7 @@ docker exec "$CONTAINER" sh -lc '
   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true
   printf "%s\n" --process-tree--
   (ps -eo pid,ppid,user,args || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 {
   printf "%s\n" --api-status--
@@ -222,21 +171,10 @@ docker exec "$CONTAINER" sh -lc '
   docker exec "$CONTAINER" sh -lc 'curl -sf http://thehive-es:9200/cortex_6/_mapping' 2>&1 || true
   printf "\n%s\n" --cortex-index-count--
   docker exec "$CONTAINER" sh -lc 'curl -sf http://thehive-es:9200/cortex_6/_count' 2>&1 || true
-} | redact_stream > "$OUT/cortex-state.txt"
+} > "$OUT/cortex-state.txt"
 
 docker exec "$CONTAINER" sh -lc 'curl -sf "http://thehive-es:9200/cortex_6/_search?size=20"' \
-  | jq '
-      .hits.hits |= map(
-        if (._source // {} | type == "object") then
-          ._source |= (
-            if has("key") then .key = "<REDACTED-CORTEX-API-KEY>" else . end
-            | if has("password") then .password = "<REDACTED-CORTEX-PASSWORD-HASH>" else . end
-          )
-        else
-          .
-        end
-      )
-    ' > "$OUT/cortex-index-documents.redacted.json"
+  | jq . > "$OUT/cortex-index-documents.json"
 
 docker exec aptl-thehive sh -lc 'curl -sf -H "Authorization: Bearer ${TH_CORTEX_KEYS}" http://cortex:9001/api/user/current' \
   | jq 'del(.key, .password)' > "$OUT/thehive-cortex-auth-current-user.json"
@@ -252,7 +190,7 @@ docker exec aptl-thehive sh -lc 'curl -sf -H "Authorization: Bearer ${TH_CORTEX_
   docker exec aptl-kali sh -lc "curl -sf --max-time 5 http://${CONTAINER_IP}:9001/api/status" 2>&1 || true
   printf "%s\n" --thehive-cortex-status--
   docker exec aptl-thehive sh -lc 'curl -sf http://cortex:9001/api/status' 2>&1 || true
-} | redact_stream > "$OUT/participant-discovery.kali.txt"
+} > "$OUT/participant-discovery.kali.txt"
 
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$TRIVY_CACHE_VOLUME:/root/.cache/" "$TRIVY_IMAGE" --version \
   > "$OUT/trivy-version.txt"

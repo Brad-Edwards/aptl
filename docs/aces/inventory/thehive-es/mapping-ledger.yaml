@@ -25,12 +25,11 @@ notes:
 - 'SCN-010 issue #352 inventories the deployed TheHive Elasticsearch companion as nodes.techvault.thehive-es (datastore
   family, upstream Elastic registry image). Every catalogued observable maps to a current ACES surface (datastore_services
   search_index profile). No known ACES expressivity gap remains for the catalogued thehive-es steady-state facts.'
-- 'Near-gap resolved without distortion: the search_index profile mandates >=1 structured mapping manifest, but the only steady-state
-  index (.geoip_databases) is ES-system-reserved and refuses _mapping/_field_caps. Rather than fabricate a mapping or distort
-  the data_model, the real field schema was captured via the operator _cluster/state/metadata vantage and encoded faithfully.
-  No ACES issue needed.'
+- 'Near-gap resolved without distortion: the search_index profile mandates structured mapping manifests; .geoip_databases
+  is ES-system-reserved while Cortex''s cortex_6 index is application-created. Both mappings were captured via the operator
+  _cluster/state/metadata vantage and encoded faithfully. No ACES issue needed.'
 - 'xpack.security.enabled=false: the REST (9200) and transport (9300) ports carry no TLS or auth; security-net compose isolation
-  is the only control. NOTE: the realized TheHive config uses local Lucene (index.search.backend=lucene, directory /data/index), so thehive-es is NOT the active TheHive index backend — TheHive holds no outbound connection to it and creates no indices in it (the --es-hostnames arg is inert); thehive-es holds only the ES-internal system .geoip_databases index. No thehive->es relationship is encoded.'
+  is the only control. NOTE: the realized TheHive config uses local Lucene (index.search.backend=lucene, directory /data/index), so thehive-es is NOT the active TheHive index backend — TheHive holds no outbound connection to it and creates no TheHive indices in it (the --es-hostnames arg is inert). Cortex uses this Elasticsearch service and creates cortex_6; .geoip_databases is also present. No thehive->es relationship is encoded.'
 correspondence_checks:
 - id: thehive-es-evidence-bundle-integrity
   status: implemented
@@ -62,15 +61,15 @@ correspondence_checks:
 - id: thehive-es-datastore-mapping-correspondence
   status: implemented
   source: nodes.techvault.thehive-es.runtime.datastore_services
-  method: README and tests assert the ES datastore engine/version/cluster/partition and the geoip mapping captured via the
-    _cluster/state operator vantage.
+  method: README and tests assert the ES datastore engine/version/cluster/partitions and the geoip + cortex_6 mappings captured
+    via the _cluster/state operator vantage.
   realized_evidence:
   - path: evidence/elasticsearch-state.txt
   - path: evidence/thehive-es-index-mappings.json
   ledger_fact_ids:
   - thehive-es.datastore.elasticsearch-service
   - thehive-es.runtime.service-listeners
-- id: thehive-es-scope-and-redaction-caveats
+- id: thehive-es-scope-and-capture-caveats
   status: implemented
   source: docs/aces/inventory/thehive-es/evidence/capture-limits.txt
   method: README and tests assert non-destructive capture scope, the data-volume manifest exclusion, the system-index mapping
@@ -155,7 +154,7 @@ facts:
 - id: thehive-es.compose.service-contract
   category: compose
   summary: Compose declares aptl-thehive-es, image elasticsearch:7.17.28, discovery.type=single-node, xpack.security.enabled=false,
-    ES_JAVA_OPTS heap, the thehive_es_data volume, 1g memory, and security-net 172.20.0.4 (no host-published ports).
+    ES_JAVA_OPTS heap, the thehive_es_data volume, 1g memory, and security-net 172.20.0.5 (no host-published ports).
   evidence:
   - path: evidence/compose-service.thehive-es.json
   - path: evidence/docker-compose-version.json
@@ -191,7 +190,7 @@ facts:
     rationale: Current ACES SDL node runtime fields carry this catalogued fact directly.
 - id: thehive-es.network.identity
   category: network
-  summary: The datastore is attached to security-net only at 172.20.0.4; 9200/9300 are NOT host-published; kali (other subnets)
+  summary: The datastore is attached to security-net only at 172.20.0.5; 9200/9300 are NOT host-published; kali (other subnets)
     cannot route to it.
   evidence:
   - path: evidence/docker-network.aptl-security.json
@@ -390,9 +389,9 @@ facts:
       as capture limits).
 - id: thehive-es.datastore.elasticsearch-service
   category: datastore
-  summary: 'The ES search-index datastore is encoded: engine elasticsearch 7.17.28, single-node cluster docker-cluster (green),
-    the node with its role set, the .geoip_databases index partition, the captured index mapping, security-disabled transport,
-    and the discovery/security/heap settings.'
+  summary: 'The ES search-index datastore is encoded: engine elasticsearch 7.17.28, single-node cluster docker-cluster (yellow),
+    the node with its role set, the .geoip_databases and cortex_6 index partitions, the captured index mappings, security-disabled
+    transport, and the discovery/security/heap settings.'
   evidence:
   - path: evidence/elasticsearch-state.txt
   - path: evidence/thehive-es-index-mappings.json
@@ -406,6 +405,7 @@ facts:
     - nodes.techvault.thehive-es.runtime.datastore_services
     rationale: Current ACES SDL node runtime.datastore_services (search_index profile) carries the engine, cluster, node,
       partition, mapping, transport_security, and settings facts directly.
-    caveat: At steady state the only index is the ES-internal .geoip_databases system index; its _mapping/_field_caps APIs
-      return a reserved-access error, so the field schema (data/name/chunk; binary/keyword/integer) was captured via the operator
-      _cluster/state/metadata vantage. TheHive does NOT create indices in this ES (index.search.backend=lucene; primary data is in Cassandra and search index is local Lucene), so no TheHive index mappings exist here — only the ES-internal system index. xpack.security is disabled (no TLS/auth on 9200/9300).
+    caveat: At steady state .geoip_databases and cortex_6 exist. The geoip system index rejects public _mapping/_field_caps,
+      so the mappings were captured via the operator _cluster/state/metadata vantage. TheHive does NOT create indices in this
+      ES (index.search.backend=lucene; primary data is in Cassandra and search index is local Lucene), so no TheHive index
+      mappings exist here. Cortex creates cortex_6. xpack.security is disabled (no TLS/auth on 9200/9300).

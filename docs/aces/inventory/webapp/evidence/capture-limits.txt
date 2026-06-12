@@ -1,6 +1,8 @@
 Capture used the already-running local lab on 2026-05-25 rather than a destructive clean reset. `aptl lab stop -v && aptl lab start` was not run because it would remove the user's current lab state.
 
-Secret-shaped runtime environment values in Docker/Compose evidence are redacted. The webapp intentionally exposes some fixture credentials through checked-in source and runtime endpoints; this evidence bundle cites those sources without storing raw secret assignments in generated evidence.
+Compose service evidence was extracted from docker-compose.yml with yq because the full local compose project requires a generated TheHive keystore password env file that is not present in this branch checkout.
+
+Scenario-authored fixture credentials are retained unmasked in Docker, Compose, runtime, and SDL evidence.
 
 Vulnerability evidence is scanner state tied to the Trivy version/database available during capture. Treat package CVEs as time-sensitive observations, not permanent facts about the asset.
 

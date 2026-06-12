@@ -21,9 +21,10 @@ project (soc profile) on 2026-06-11 and **did not run
 observation of that local steady state, **not as clean-lab rebuild proof**.
 
 > **TLS private key.** The nginx TLS private key (`/etc/nginx/privkey.pem`,
-> lab-CA-signed, generated at lab start) is an **operator secret** — recorded as
-> path/metadata only, excluded from checksums, content never emitted (ADR-029).
-> The server certificate and lab CA are public.
+> lab-CA-signed, generated at lab start) is scenario fixture content. It is
+> captured verbatim in `evidence/filesystem-sensitive-paths.txt` and by checksum
+> in `evidence/filesystem-checksums.txt`. The server certificate and lab CA are
+> public.
 
 ## Asset Summary
 
@@ -54,7 +55,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Upstream registry image identity is recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-buildx-imagetools.image.raw.json`, `evidence/docker-buildx-imagetools.image.txt`, `evidence/docker-history.image.txt`, `evidence/docker-history.image.jsonl`, `evidence/source-checksums.txt` |
 | Runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-security.json`, `evidence/docker-top.txt`, `evidence/docker-logs.shuffle-frontend.txt`, `evidence/runtime-baseline.txt` |
 | nginx config + TLS + listeners are recorded. | `evidence/frontend-state.txt` |
-| Filesystem manifest and stable-content checksums are recorded. | `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt` |
+| Filesystem manifest, stable-content checksums, and scenario secret fixture content are recorded. | `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt`, `evidence/filesystem-sensitive-paths.txt` |
 | Application/runtime versions are recorded. | `evidence/language-manifests.txt` |
 | Attacker (kali) vantage is recorded. | `evidence/participant-discovery.kali.txt` |
 | Package and CVE inventory are recorded. | `evidence/os-packages.txt`, `evidence/trivy-vulnerabilities.json.gz`, `evidence/trivy-vulnerability-list.json`, `evidence/trivy-vulnerability-counts.json` |
@@ -101,8 +102,9 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
 
 - Non-destructive capture against the already-running lab; not clean-reset
   rebuild proof.
-- The nginx TLS private key is an operator secret — metadata only (ADR-029);
-  the server certificate and lab CA are public.
+- The nginx TLS private key is scenario fixture content; it is captured
+  verbatim in `evidence/filesystem-sensitive-paths.txt` and by checksum in
+  `evidence/filesystem-checksums.txt`.
 - The nginx worker pool is N identical processes; one representative worker is
   encoded (count in its description) rather than duplicating identical rows.
 - Upstream nginx-image shell variable references (`${NGINX_VERSION}` etc.) in the

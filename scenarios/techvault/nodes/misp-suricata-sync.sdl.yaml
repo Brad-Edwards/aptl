@@ -13,10 +13,10 @@ nodes:
     os_version: Debian GNU/Linux 13 (trixie)
     source:
       name: aptl-misp-suricata-sync
-      version: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+      version: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
       build:
         description: Locally built APTL image (aptl-misp-suricata-sync:latest); not a registry artifact, so source.version
-          is the local image config ID (sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e, docker image
+          is the local image config ID (sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb, docker image
           inspect .Id) and docker buildx imagetools inspect fails (see capture-limits.txt). The build context is the repo
           root; the Dockerfile (containers/misp-suricata-sync/Dockerfile) COPYs pyproject.toml and the entire src/ tree, then
           pip-installs the aptl package whose aptl-misp-suricata-sync console script is the entrypoint. source_inputs checksums
@@ -80,7 +80,7 @@ nodes:
           empty: false
           description: ''
         - digest: ''
-          created_by: ENV GPG_KEY=<REDACTED> weeks ago
+          created_by: ENV GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D weeks ago
           size: 0
           empty: true
           description: ''
@@ -643,8 +643,8 @@ nodes:
         value: JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw
         value_classification: secret_fixture
         provenance: compose
-        description: Lab MISP admin API key — the same secret_fixture value disclosed on nodes.techvault.misp runtime environment
-          (ADMIN_KEY). Value redacted from committed evidence.
+        description: Lab MISP admin API key -- the same secret_fixture value disclosed on nodes.techvault.misp runtime environment
+          (ADMIN_KEY).
       - name: RULES_OUT_PATH
         value: /var/lib/suricata/rules/misp/misp-iocs.rules
         value_classification: plain
@@ -665,7 +665,7 @@ nodes:
         value: A035C8C19219BA821ECEA86B64E628F8D684696D
         value_classification: secret_fixture
         provenance: image
-        description: CPython release-signing key fingerprint baked into python:3.11-slim. Value redacted from committed evidence.
+        description: CPython release-signing key fingerprint baked into python:3.11-slim.
       - name: PYTHON_VERSION
         value: 3.11.15
         value_classification: plain
@@ -757,20 +757,22 @@ nodes:
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: c2e7c9057e44
+          endpoint_id: 1f9c73fd62723bdc27495a37d74155403b91b1b67b891a7a659c564054f8283b
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.0.19
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: 12:17:77:43:59:eb
+          mac_address: 4e:15:5f:aa:9a:0d
           aliases:
           - aptl-misp-suricata-sync
           - misp-suricata-sync
           dns_names:
           - aptl-misp-suricata-sync
           - misp-suricata-sync
-          generated_dns_names: []
+          - 4d56ddfac027
+          generated_dns_names:
+          - 4d56ddfac027
           backend:
             driver: bridge
           description: Docker endpoint for aptl-misp-suricata-sync on aptl_aptl-security. Compose-assigned static IP 172.20.0.19.
@@ -1470,7 +1472,7 @@ nodes:
         installed_version: 3.0.3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2011-3374
@@ -1481,7 +1483,7 @@ nodes:
         installed_version: 5.2.37-2+b9
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://security-tracker.debian.org/tracker/TEMP-0841856-B18BAF
@@ -1492,7 +1494,7 @@ nodes:
         installed_version: 1:2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -1503,7 +1505,7 @@ nodes:
         installed_version: 1:2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
@@ -1514,7 +1516,7 @@ nodes:
         installed_version: 1:2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
@@ -1525,7 +1527,7 @@ nodes:
         installed_version: 1:2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
@@ -1536,7 +1538,7 @@ nodes:
         installed_version: 9.7-3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2017-18018
@@ -1547,7 +1549,7 @@ nodes:
         installed_version: 9.7-3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-5278
@@ -1558,7 +1560,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5773
@@ -1569,7 +1571,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6276
@@ -1580,7 +1582,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-1965
@@ -1591,7 +1593,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3783
@@ -1602,7 +1604,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3784
@@ -1613,7 +1615,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3805
@@ -1624,7 +1626,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4873
@@ -1635,7 +1637,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5545
@@ -1646,7 +1648,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6253
@@ -1657,7 +1659,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6429
@@ -1668,7 +1670,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-7168
@@ -1679,7 +1681,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-10966
@@ -1690,7 +1692,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14017
@@ -1701,7 +1703,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14524
@@ -1712,7 +1714,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14819
@@ -1723,7 +1725,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-15079
@@ -1734,7 +1736,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-15224
@@ -1745,7 +1747,7 @@ nodes:
         installed_version: 3.0.3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2011-3374
@@ -1756,7 +1758,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -1767,7 +1769,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
@@ -1778,7 +1780,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
@@ -1789,7 +1791,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
@@ -1800,7 +1802,7 @@ nodes:
         installed_version: 1.0.8-6
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42250
@@ -1811,7 +1813,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5435
@@ -1822,7 +1824,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5450
@@ -1833,7 +1835,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5928
@@ -1844,7 +1846,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6238
@@ -1855,7 +1857,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2010-4756
@@ -1866,7 +1868,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-20796
@@ -1877,7 +1879,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010022
@@ -1888,7 +1890,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010023
@@ -1899,7 +1901,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010024
@@ -1910,7 +1912,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010025
@@ -1921,7 +1923,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2019-9192
@@ -1932,7 +1934,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5435
@@ -1943,7 +1945,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5450
@@ -1954,7 +1956,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5928
@@ -1965,7 +1967,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6238
@@ -1976,7 +1978,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2010-4756
@@ -1987,7 +1989,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-20796
@@ -1998,7 +2000,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010022
@@ -2009,7 +2011,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010023
@@ -2020,7 +2022,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010024
@@ -2031,7 +2033,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010025
@@ -2042,7 +2044,7 @@ nodes:
         installed_version: 2.41-12+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2019-9192
@@ -2053,7 +2055,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5773
@@ -2064,7 +2066,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6276
@@ -2075,7 +2077,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-1965
@@ -2086,7 +2088,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3783
@@ -2097,7 +2099,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3784
@@ -2108,7 +2110,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3805
@@ -2119,7 +2121,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4873
@@ -2130,7 +2132,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5545
@@ -2141,7 +2143,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6253
@@ -2152,7 +2154,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6429
@@ -2163,7 +2165,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-7168
@@ -2174,7 +2176,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-10966
@@ -2185,7 +2187,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14017
@@ -2196,7 +2198,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14524
@@ -2207,7 +2209,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14819
@@ -2218,7 +2220,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-15079
@@ -2229,7 +2231,7 @@ nodes:
         installed_version: 8.14.1-2+deb13u3
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-15224
@@ -2240,7 +2242,7 @@ nodes:
         installed_version: 3.8.9-3+deb13u4
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2011-3389
@@ -2251,7 +2253,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 1.21.3-5+deb13u1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40355
@@ -2262,7 +2264,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 1.21.3-5+deb13u1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40356
@@ -2273,7 +2275,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-5709
@@ -2284,7 +2286,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-26458
@@ -2295,7 +2297,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-26461
@@ -2306,7 +2308,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 1.21.3-5+deb13u1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40355
@@ -2317,7 +2319,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 1.21.3-5+deb13u1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40356
@@ -2328,7 +2330,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-5709
@@ -2339,7 +2341,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-26458
@@ -2350,7 +2352,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-26461
@@ -2361,7 +2363,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 1.21.3-5+deb13u1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40355
@@ -2372,7 +2374,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 1.21.3-5+deb13u1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40356
@@ -2383,7 +2385,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-5709
@@ -2394,7 +2396,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-26458
@@ -2405,7 +2407,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-26461
@@ -2416,7 +2418,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 1.21.3-5+deb13u1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40355
@@ -2427,7 +2429,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 1.21.3-5+deb13u1
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40356
@@ -2438,7 +2440,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-5709
@@ -2449,7 +2451,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-26458
@@ -2460,7 +2462,7 @@ nodes:
         installed_version: 1.21.3-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-26461
@@ -2471,7 +2473,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -2482,7 +2484,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
@@ -2493,7 +2495,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
@@ -2504,7 +2506,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
@@ -2515,7 +2517,7 @@ nodes:
         installed_version: 2.6.10+dfsg-1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2015-3276
@@ -2526,7 +2528,7 @@ nodes:
         installed_version: 2.6.10+dfsg-1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2017-14159
@@ -2537,7 +2539,7 @@ nodes:
         installed_version: 2.6.10+dfsg-1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2017-17740
@@ -2548,7 +2550,7 @@ nodes:
         installed_version: 2.6.10+dfsg-1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-15719
@@ -2559,7 +2561,7 @@ nodes:
         installed_version: 2.6.10+dfsg-1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-22185
@@ -2570,7 +2572,7 @@ nodes:
         installed_version: 5.8.1-1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34743
@@ -2581,7 +2583,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -2592,7 +2594,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
@@ -2603,7 +2605,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
@@ -2614,7 +2616,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
@@ -2625,7 +2627,7 @@ nodes:
         installed_version: 6.5+20250216-2
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-69720
@@ -2636,7 +2638,7 @@ nodes:
         installed_version: 6.5+20250216-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-6141
@@ -2647,7 +2649,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -2658,7 +2660,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
@@ -2669,7 +2671,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
@@ -2680,7 +2682,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
@@ -2691,7 +2693,7 @@ nodes:
         installed_version: 3.46.1-7+deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-45346
@@ -2702,7 +2704,7 @@ nodes:
         installed_version: 3.46.1-7+deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-70873
@@ -2713,7 +2715,7 @@ nodes:
         installed_version: 1.11.1-1
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-7598
@@ -2724,7 +2726,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-45447
@@ -2735,7 +2737,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34182
@@ -2746,7 +2748,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34183
@@ -2757,7 +2759,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42764
@@ -2768,7 +2770,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-45445
@@ -2779,7 +2781,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34180
@@ -2790,7 +2792,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34181
@@ -2801,7 +2803,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42766
@@ -2812,7 +2814,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42767
@@ -2823,7 +2825,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42768
@@ -2834,7 +2836,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42769
@@ -2845,7 +2847,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42770
@@ -2856,7 +2858,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-45446
@@ -2867,7 +2869,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-7383
@@ -2878,7 +2880,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-9076
@@ -2889,7 +2891,7 @@ nodes:
         installed_version: 257.13-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2013-4392
@@ -2900,7 +2902,7 @@ nodes:
         installed_version: 257.13-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-31437
@@ -2911,7 +2913,7 @@ nodes:
         installed_version: 257.13-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-31438
@@ -2922,7 +2924,7 @@ nodes:
         installed_version: 257.13-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-31439
@@ -2933,7 +2935,7 @@ nodes:
         installed_version: 257.13-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
@@ -2944,7 +2946,7 @@ nodes:
         installed_version: 4.20.0-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-13151
@@ -2955,7 +2957,7 @@ nodes:
         installed_version: 6.5+20250216-2
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-69720
@@ -2966,7 +2968,7 @@ nodes:
         installed_version: 6.5+20250216-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-6141
@@ -2977,7 +2979,7 @@ nodes:
         installed_version: 257.13-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2013-4392
@@ -2988,7 +2990,7 @@ nodes:
         installed_version: 257.13-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-31437
@@ -2999,7 +3001,7 @@ nodes:
         installed_version: 257.13-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-31438
@@ -3010,7 +3012,7 @@ nodes:
         installed_version: 257.13-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-31439
@@ -3021,7 +3023,7 @@ nodes:
         installed_version: 257.13-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
@@ -3032,7 +3034,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -3043,7 +3045,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
@@ -3054,7 +3056,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
@@ -3065,7 +3067,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
@@ -3076,7 +3078,7 @@ nodes:
         installed_version: 1:4.16.0-2+really2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -3087,7 +3089,7 @@ nodes:
         installed_version: 1:4.16.0-2+really2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
@@ -3098,7 +3100,7 @@ nodes:
         installed_version: 1:4.16.0-2+really2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
@@ -3109,7 +3111,7 @@ nodes:
         installed_version: 1:4.16.0-2+really2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
@@ -3120,7 +3122,7 @@ nodes:
         installed_version: 1:4.17.4-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2007-5686
@@ -3131,7 +3133,7 @@ nodes:
         installed_version: 1:4.17.4-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
@@ -3142,7 +3144,7 @@ nodes:
         installed_version: 1:4.17.4-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://security-tracker.debian.org/tracker/TEMP-0628843-DBAD28
@@ -3153,7 +3155,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -3164,7 +3166,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
@@ -3175,7 +3177,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
@@ -3186,7 +3188,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
@@ -3197,7 +3199,7 @@ nodes:
         installed_version: 6.5+20250216-2
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-69720
@@ -3208,7 +3210,7 @@ nodes:
         installed_version: 6.5+20250216-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-6141
@@ -3219,7 +3221,7 @@ nodes:
         installed_version: 6.5+20250216-2
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-69720
@@ -3230,7 +3232,7 @@ nodes:
         installed_version: 6.5+20250216-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-6141
@@ -3241,7 +3243,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-45447
@@ -3252,7 +3254,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34182
@@ -3263,7 +3265,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34183
@@ -3274,7 +3276,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42764
@@ -3285,7 +3287,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-45445
@@ -3296,7 +3298,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34180
@@ -3307,7 +3309,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34181
@@ -3318,7 +3320,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42766
@@ -3329,7 +3331,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42767
@@ -3340,7 +3342,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42768
@@ -3351,7 +3353,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42769
@@ -3362,7 +3364,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42770
@@ -3373,7 +3375,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-45446
@@ -3384,7 +3386,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-7383
@@ -3395,7 +3397,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-9076
@@ -3406,7 +3408,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-45447
@@ -3417,7 +3419,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34182
@@ -3428,7 +3430,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34183
@@ -3439,7 +3441,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42764
@@ -3450,7 +3452,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-45445
@@ -3461,7 +3463,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34180
@@ -3472,7 +3474,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-34181
@@ -3483,7 +3485,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42766
@@ -3494,7 +3496,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42767
@@ -3505,7 +3507,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42768
@@ -3516,7 +3518,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42769
@@ -3527,7 +3529,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42770
@@ -3538,7 +3540,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-45446
@@ -3549,7 +3551,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-7383
@@ -3560,7 +3562,7 @@ nodes:
         installed_version: 3.5.6-1~deb13u1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-9076
@@ -3571,7 +3573,7 @@ nodes:
         installed_version: 1:4.17.4-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2007-5686
@@ -3582,7 +3584,7 @@ nodes:
         installed_version: 1:4.17.4-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
@@ -3593,7 +3595,7 @@ nodes:
         installed_version: 1:4.17.4-2
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://security-tracker.debian.org/tracker/TEMP-0628843-DBAD28
@@ -3604,7 +3606,7 @@ nodes:
         installed_version: 5.40.1-6
         severity: critical
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42496
@@ -3615,7 +3617,7 @@ nodes:
         installed_version: 5.40.1-6
         severity: critical
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-8376
@@ -3626,7 +3628,7 @@ nodes:
         installed_version: 5.40.1-6
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42497
@@ -3637,7 +3639,7 @@ nodes:
         installed_version: 5.40.1-6
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-48959
@@ -3648,7 +3650,7 @@ nodes:
         installed_version: 5.40.1-6
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-48962
@@ -3659,7 +3661,7 @@ nodes:
         installed_version: 5.40.1-6
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-9538
@@ -3670,7 +3672,7 @@ nodes:
         installed_version: 5.40.1-6
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-15649
@@ -3681,7 +3683,7 @@ nodes:
         installed_version: 5.40.1-6
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-7010
@@ -3692,7 +3694,7 @@ nodes:
         installed_version: 5.40.1-6
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2011-4116
@@ -3703,7 +3705,7 @@ nodes:
         installed_version: 5.40.1-6
         severity: unknown
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-48961
@@ -3714,7 +3716,7 @@ nodes:
         installed_version: 3.14-4
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://security-tracker.debian.org/tracker/TEMP-0517018-A83CE6
@@ -3725,7 +3727,7 @@ nodes:
         installed_version: 1.35+dfsg-3.1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5704
@@ -3736,7 +3738,7 @@ nodes:
         installed_version: 1.35+dfsg-3.1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2005-2541
@@ -3747,7 +3749,7 @@ nodes:
         installed_version: 1.35+dfsg-3.1
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://security-tracker.debian.org/tracker/TEMP-0290435-0B57B5
@@ -3758,7 +3760,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -3769,7 +3771,7 @@ nodes:
         installed_version: 2.41-5
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
@@ -3780,7 +3782,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
@@ -3791,7 +3793,7 @@ nodes:
         installed_version: 2.41-5
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
@@ -3802,7 +3804,7 @@ nodes:
         installed_version: 1:1.3.dfsg+really1.3.1-1+b1
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27171
@@ -3813,7 +3815,7 @@ nodes:
         installed_version: 5.3.0
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 6.1.0
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-23949
@@ -3824,7 +3826,7 @@ nodes:
         installed_version: '24.0'
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: '25.3'
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-8869
@@ -3835,7 +3837,7 @@ nodes:
         installed_version: '24.0'
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: '26.1'
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3219
@@ -3846,7 +3848,7 @@ nodes:
         installed_version: '24.0'
         severity: medium
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: '26.1'
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-6357
@@ -3857,7 +3859,7 @@ nodes:
         installed_version: '24.0'
         severity: low
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: '26.0'
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-1703
@@ -3868,7 +3870,7 @@ nodes:
         installed_version: 0.45.1
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 0.46.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-24049
@@ -3879,7 +3881,7 @@ nodes:
         installed_version: 0.45.1
         severity: high
         scanner: trivy
-        image_digest: aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
         scan_time: '2026-06-10T04:26:25Z'
         fixed_version: 0.46.2
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-24049

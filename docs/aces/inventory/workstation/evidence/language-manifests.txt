@@ -7,9 +7,9 @@ bash: line 8: node: command not found
 --npm--
 bash: line 10: npm: command not found
 --psql--
-psql (PostgreSQL) 13.23
+psql (PostgreSQL) 16.13
 --git--
-git version 2.47.3
+git version 2.52.0
 --falco--
 Error: Error reading config file (/etc/falco/falco.yaml): engine.kind 'modern_bpf' is not a valid kind.
 --wazuh--

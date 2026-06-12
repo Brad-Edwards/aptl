@@ -24,8 +24,8 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 
 > **Secret fixture.** `OPENSEARCH_INITIAL_ADMIN_PASSWORD` is a committed
 > scenario fixture (value present in `docker-compose.yml`) — kept verbatim in
-> the SDL `runtime.environment` per the secret-fixture policy (it is redacted in
-> the `docker-inspect` evidence and preserved in the authored compose block).
+> the SDL `runtime.environment` and runtime evidence because it is TechVault
+> scenario content.
 
 ## Asset Summary
 
@@ -43,7 +43,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Cluster | `docker-cluster` (uuid `smPCS7KBQYWuyqcH7AWKCg`), health yellow (single-node replicas unassigned), 1 node |
 | Indices | 24 (workflows, executions, apps, orgs, users, notifications, `.opendistro_security`, …) |
 | Reachable participant ports | none host-published; 9200 (REST/HTTPS) + 9300 (transport) + 9600 (perf analyzer) on security-net |
-| Network identity | `security-net` 172.20.0.2 (only network) |
+| Network identity | `security-net` 172.20.0.3 (only network) |
 | Memory limit | 1 GiB (`OPENSEARCH_JAVA_OPTS -Xms512m -Xmx512m`) |
 | Package inventory | 110 rpm packages |
 | Trivy vulnerability findings | 410 image-layer findings: 2 critical, 180 high, 210 medium, 18 low |
@@ -120,8 +120,9 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
   `opensearch-state.txt`.
 - `OPENSEARCH_INITIAL_ADMIN_PASSWORD` is a committed scenario fixture, kept
   verbatim; mappings and the Security-plugin internal-user database were read
-  with admin auth via the `_mapping` and `_plugins/_security` APIs (the REST API
-  redacts password hashes server-side).
+  with admin auth via the `_mapping` and `_plugins/_security` APIs. The REST
+  API response does not expose password hashes; capture records that response
+  verbatim.
 - Syft CycloneDX normalized by stripping `syft:location:*` properties.
 - osquery `installed_applications` / `programs` unavailable in the scanner image;
   `apt_sources` not applicable to the Amazon Linux 2023 target.

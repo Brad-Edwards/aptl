@@ -38,7 +38,7 @@
           "name": "APTL Cortex Service Account",
           "createdAt": 1781193783518,
           "createdBy": "init",
-          "key": "<REDACTED-CORTEX-API-KEY>",
+          "key": "aptlcortexlabapikey2026purple",
           "roles": [
             "read",
             "analyze",
@@ -48,7 +48,7 @@
           "preferences": "{}",
           "organization": "APTL",
           "relations": "user",
-          "password": "<REDACTED-CORTEX-PASSWORD-HASH>",
+          "password": "䚺퐓戡翝蓂㦲횧씽蕶叿,cfb766587935fd7a8e5bf5d2e5d4d689d4d6f282c6857fdb3aa238801e430c23",
           "updatedBy": "init",
           "updatedAt": 1781193784454
         }

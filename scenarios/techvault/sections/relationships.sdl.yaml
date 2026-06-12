@@ -443,6 +443,44 @@ relationships:
     forwarding_edge: null
     service_integration: null
     proxy_upstream: null
+  cortex-connects-thehive-es:
+    type: connects_to
+    source: techvault.cortex
+    target: techvault.thehive-es
+    description: 'Cortex stores organization/user metadata in the shared TheHive Elasticsearch service over HTTP/9200 using
+      search.uri=http://thehive-es:9200 and index cortex_6. The cortex-index-init one-shot service pre-creates relations,
+      status, and key as keyword fields so Cortex key-auth term queries match the seeded service account.'
+    properties:
+      protocol: http
+      port: '9200'
+      backend: elasticsearch
+      index: cortex_6
+      auth_method: none
+      vantage: aptl-cortex
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  thehive-connects-cortex:
+    type: connects_to
+    source: techvault.thehive
+    target: techvault.cortex
+    description: 'TheHive consumes Cortex analyzers over the internal aptl-security network at http://cortex:9001. The
+      connector is configured by docker-compose --cortex-proto/--cortex-hostnames/--cortex-port flags and authenticates with
+      the redacted fixture API key from config/cortex/thehive-cortex.env; Cortex observes it as aptl-svc@cortex.local in
+      organization APTL with read/analyze/orgadmin roles.'
+    properties:
+      protocol: http
+      port: '9001'
+      auth_method: bearer_api_key
+      credential_classification: redacted_fixture
+      vantage: aptl-thehive
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
   misp-suricata-sync-queries-misp-api:
     type: connects_to
     source: techvault.misp-suricata-sync

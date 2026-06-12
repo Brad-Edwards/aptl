@@ -1,0 +1,8 @@
+{
+  "table": "installed_applications",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "digest-pinned Linux osquery scanner",
+  "status": "not_available",
+  "rows": [],
+  "limit": "Table unavailable or not meaningful from the container namespace scanner for this asset; docker/OS/package evidence is captured through Docker inspect and dpkg-query."
+}

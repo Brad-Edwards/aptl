@@ -157,15 +157,15 @@ active.
   Cortex-bundled Play artifact, not the keystore generation pipeline
   (which round-trips cleanly via `tests/test_soc_ca.py::TestKeystore`).
   Cortex therefore remains HTTP-only on the `aptl-security` network
-  until either a Cortex 4.x upgrade or an external consumer (for example,
-  `mcp-cortex` per INT-006) arrives—at which point the existing
-  keystore in `config/soc_certs/cortex/` and the placeholder
-  `config/cortex/application.conf` can be wired on. The lab CA bundle
-  is still mounted into the Cortex container for outbound trust.
-  Cortex has no external client today (TheHive launches with
-  `--no-config-cortex`, no `mcp-cortex` exists, no collector reaches
-  Cortex), so the deferral does not regress any consumer-side
-  verification contract.
+  until either a Cortex 4.x upgrade or a Play SSL-provider fix lands.
+  TheHive now consumes Cortex in-network using the deterministic lab
+  fixture key provisioned by `scripts/cortex-apikey.sh` and injected
+  into TheHive from `config/cortex/thehive-cortex.env`; there is still
+  no separate host-facing `mcp-cortex` client. The existing keystore
+  under `config/soc_certs/cortex/` stays reserved for a future HTTPS
+  cutover, and the lab CA bundle remains mounted into the Cortex
+  container for outbound trust. This defers Cortex server-side TLS
+  without disabling TLS verification for any host-facing SOC API.
 
 ## Non-Goals
 

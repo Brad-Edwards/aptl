@@ -1,0 +1,51 @@
+{
+  "profiles": [
+    "soc"
+  ],
+  "image": "thehiveproject/cortex:3.1.8",
+  "container_name": "aptl-cortex",
+  "hostname": "cortex",
+  "restart": "unless-stopped",
+  "ports": [
+    "9001:9001"
+  ],
+  "environment": [
+    "job_directory=/opt/cortex/jobs"
+  ],
+  "volumes": [
+    "cortex_data:/opt/cortex/jobs",
+    "/var/run/docker.sock:/var/run/docker.sock",
+    "./config/cortex/application.conf:/etc/cortex/application.conf:ro",
+    "./config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro"
+  ],
+  "healthcheck": {
+    "test": [
+      "CMD-SHELL",
+      "curl -sf http://localhost:9001/api/status || exit 1"
+    ],
+    "interval": "30s",
+    "timeout": "10s",
+    "retries": 15,
+    "start_period": "180s"
+  },
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "512m"
+      }
+    }
+  },
+  "depends_on": {
+    "thehive-es": {
+      "condition": "service_healthy"
+    },
+    "cortex-index-init": {
+      "condition": "service_completed_successfully"
+    }
+  },
+  "networks": {
+    "aptl-security": {
+      "ipv4_address": "172.20.0.22"
+    }
+  }
+}

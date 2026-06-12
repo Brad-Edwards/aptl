@@ -888,6 +888,17 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #350 thehive application inventory pass (application family, upstream strangebee/thehive:5.4 image). The SDL encodes the catalogued registry image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, the JVM process, environment, container command, security-net endpoint with the 9000:9000 published HTTPS port, the 9000 HTTPS listener, the TheHive 5.4.11 web/REST application surface (Play/Scalligraph, /api/status route), and the realized thehive-connects-cassandra CQL edge. TheHive's realized backends are Cassandra (data) + LOCAL Lucene (search index, index.search.backend=lucene); the deployed thehive-es is NOT used by TheHive (the --es-hostnames arg is inert), so no thehive->es relationship is encoded. The Play application secret (--secret) is a committed scenario fixture kept verbatim on the container command; the generated HTTPS keystore + password are operator secrets, withheld. No known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
+  - id: scen.techvault.cortex-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.cortex + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.cortex (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, network, service_listeners, applications, app_authorizations, software_components) + relationships.cortex-connects-thehive-es + relationships.thehive-connects-cortex
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/cortex/ + tests/test_cortex_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #357 Cortex analyzer-engine inventory pass. The SDL encodes the catalogued upstream thehiveproject/cortex:3.1.8 image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, entrypoint/su/JVM process chain, environment, Docker default-capability set, security-net endpoint with the 9001:9001 published HTTP port, the 9001 Cortex API listener, the Cortex status/current-user API surface, the seeded APTL organization and aptl-svc@cortex.local service account (raw API key/password redacted), and the realized Cortex-to-thehive-es and TheHive-to-Cortex relationship facts. Cortex HTTPS is deferred by ADR-034; key auth is enabled and the cortex_6 index is pre-created with keyword key-auth fields. No known remaining ACES expressivity blocker for the catalogued Cortex steady-state inventory. The capture followed a clean lab reset/start; COMPOSE_BAKE=false was only a local Docker Compose workaround.
+
   - id: scen.techvault.shuffle-opensearch-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
@@ -1854,13 +1865,13 @@ rows:
   - id: defconf.cortex
     surface: defensive_stack_configs
     legacy_source: config/cortex/
-    legacy_field: application.conf
+    legacy_field: application.conf + thehive-cortex.env + bootstrap scripts
     category: aptl_backend_responsibility
     aces_target: n/a (defensive-stack realization)
     runtime_owner: config/cortex + docker-compose `soc` profile
-    validation_evidence: lab health (Cortex reachable from TheHive)
+    validation_evidence: docs/aces/inventory/cortex/ + tests/test_cortex_integration_config.py + tests/test_cortex_inventory.py
     blocking_followup: "#322"
-    notes: Cortex analyzer service config.
+    notes: Cortex analyzer service config, including search.uri, key/local auth, TheHive fixture-key env wiring, and the cortex_6 keyword index bootstrap. Scenario-observable realized facts are now encoded under scen.techvault.cortex-inventory; generated defensive config ownership remains APTL backend responsibility.
 
   - id: defconf.otel
     surface: defensive_stack_configs

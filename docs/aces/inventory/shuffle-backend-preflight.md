@@ -67,8 +67,8 @@ intentionally updated.
   `src/aptl/core/lab_types.py`.
 - Config and secret handling:
   `AptlConfig`, `ContainerSettings.enabled_profiles()`, `EnvVars`,
-  `find_placeholder_env_values`, ADR-029, `aptl.utils.redaction.redact`, and
-  `aptl.utils.curl_safe` for token-bearing command boundaries.
+  `find_placeholder_env_values`, ADR-029, and `aptl.utils.curl_safe` for
+  command boundaries that must not introduce unrelated non-scenario secrets.
 
 ## Security And Validation Layers
 
@@ -100,9 +100,9 @@ intentionally updated.
   Compose, host port exposure, profile selection, or startup behavior in this
   inventory issue.
 - **Error envelopes and observability:** new helper diagnostics must stay
-  narrow and redacted. Raw Docker, scanner, ACES, or Compose exceptions should
-  not be copied verbatim into CLI/API output, logs, run archives, or evidence
-  notes.
+  narrow and must not introduce unrelated non-scenario credentials. Raw Docker,
+  scanner, ACES, or Compose exceptions should not be copied verbatim into
+  CLI/API output, logs, run archives, or evidence notes.
 
 ## Extensibility Seam
 
@@ -134,7 +134,7 @@ that belongs behind the ACES backend target and existing APTL
 - Do not reintroduce a host-published plaintext `5001` Shuffle backend path.
   Current Compose intentionally keeps the backend intra-cluster behind the
   HTTPS frontend.
-- Do not create a second secret taxonomy, redaction helper, ACES parser,
+- Do not create a second secret taxonomy, capture-transform helper, ACES parser,
   inventory validator, readiness taxonomy, or runtime exception hierarchy.
 
 ## Non-Goals

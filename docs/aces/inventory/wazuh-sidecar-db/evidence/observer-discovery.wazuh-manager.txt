@@ -1,11 +1,11 @@
 --agent-list--
 Wazuh agent_control. List of available agents:
    ID: 000, Name: wazuh.manager (server), IP: 127.0.0.1, Active/Local
-   ID: 005, Name: aptl-db-agent, IP: any, Active
+   ID: 006, Name: aptl-db-agent, IP: any, Active
 --agent-detail--
 
 Wazuh agent_control. Agent information:
-   Agent ID:   005
+   Agent ID:   006
    Agent Name: aptl-db-agent
    IP address: any
    Status:     Active
@@ -14,7 +14,7 @@ Wazuh agent_control. Agent information:
    Client version:      Wazuh v4.12.0
    Configuration hash:  ab73af41699f13fdd81903b5f23d8d00
    Shared file hash:    cb5dc59d195320bb20b6039a519a8c0e
-   Last keep alive:     1780717505
+   Last keep alive:     1781270469
 
    Syscheck last started at:  Unknown
    Syscheck last ended at:    Unknown

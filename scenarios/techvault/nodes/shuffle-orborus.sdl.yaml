@@ -1250,21 +1250,22 @@ nodes:
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: 017ec486227ae01ac147e78b3df72857d4d0e53c64ee3de6b964ba6e6213baf1
+          endpoint_id: 4c1236121cc15fea3e9cdbb210edcc2b26fd8aac31d24b87f20031bb13b471dc
           endpoint_id_stability: ephemeral
           backend_generated: true
-          ip_address: 172.20.0.6
+          ip_address: 172.20.0.7
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: 8a:51:5f:67:89:f8
+          mac_address: 06:7a:92:c0:08:df
           aliases:
           - aptl-shuffle-orborus
           - shuffle-orborus
           dns_names:
           - aptl-shuffle-orborus
           - shuffle-orborus
+          - 3915bf99db61
           generated_dns_names:
-          - cae4c1cf9e6c
+          - 3915bf99db61
           backend:
             driver: bridge
             ipam_driver: default
@@ -1273,7 +1274,7 @@ nodes:
             description: ''
           description: ''
         published_ports: []
-        description: security-net (DHCP, 172.20.0.6 at capture) only; orborus exposes NO inbound application listener and
+        description: security-net (DHCP, 172.20.0.7 at capture) only; orborus exposes NO inbound application listener and
           publishes no ports (the sole listeners are the backend-generated Docker embedded-DNS loopback sockets on 127.0.0.11).
           It dials OUT to shuffle-backend:5001 (BASE_URL, ESTABLISHED at capture) and drives the host Docker daemon via the
           docker.sock control interface.

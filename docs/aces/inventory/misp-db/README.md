@@ -58,9 +58,9 @@ is not encoded.
 ## Limits
 
 - This is not a destructive fresh-lab reset or byte-identical rebuild proof.
-- `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, raw authentication strings, and raw
-  table data are redacted or omitted. Secret-bearing table files are represented
-  by metadata and, where safe, checksums rather than contents.
+- `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD` are retained as scenario fixture
+  evidence. Raw table data remains out of scope for this bounded inventory;
+  table files are represented by metadata and selected checksums.
 - Docker embedded DNS listener ports and endpoint IDs are backend-generated;
   the SDL records them as node-local or ephemeral runtime facts with provenance
   rather than as authored application services.

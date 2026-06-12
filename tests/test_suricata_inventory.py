@@ -30,11 +30,15 @@ TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
 # Local image config ID (docker inspect .Id) — distinct from the upstream digest.
-IMAGE_CONFIG_ID = "sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d"
+IMAGE_CONFIG_ID = (
+    "sha256:66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d"
+)
 # Canonical upstream registry manifest-list digest for the jasonish/suricata:7.0
 # tag (docker buildx imagetools inspect) — what source.version pins to.
 IMAGE_DIGEST = "jasonish/suricata@sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe"
-IMAGE_MANIFEST_LIST_DIGEST = "sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe"
+IMAGE_MANIFEST_LIST_DIGEST = (
+    "sha256:7b3fa735ba2bc7c1e3e764e6070c0a319935a737ca86e86e86d2640e408295fe"
+)
 RUNTIME_PACKAGE_COUNT = 191
 TRIVY_FINDING_COUNT = 18
 FILESYSTEM_ENTRY_COUNT = 29
@@ -48,12 +52,75 @@ BUILD_HISTORY_LAYER_COUNT = 17
 SOURCE_INPUT_COUNT = 6  # suricata.yaml, local.rules, + 4 MISP baselines
 NODE_KEY = "techvault.suricata"
 GAP_ISSUES = []  # ACES #429/#430 landed; both formerly-blocked facts are now encoded
+SURICATA_SANDBOX_KEY = "/var/run/docker/netns/21de7d2d42c3"
+SURICATA_ENDPOINTS = {
+    "aptl_aptl-dmz": {
+        "endpoint_id": "2c545048b27352e81ea9fc511304aea64a2aeb491f426d6d6c5515259daa7cbd",
+        "mac_address": "06:e7:f1:a8:62:c0",
+        "ip_address": "172.20.1.50",
+    },
+    "aptl_aptl-internal": {
+        "endpoint_id": "d2aff68b4860db2afd51cacd35b115df3239ec0c0d0d1a70c38c9850dc437edd",
+        "mac_address": "d6:3e:0a:c1:26:32",
+        "ip_address": "172.20.2.50",
+    },
+    "aptl_aptl-security": {
+        "endpoint_id": "7679ac32e7963f5fba9208df0850b4597f4c5a3ae5c639031c6215957b28cce1",
+        "mac_address": "be:3d:8a:44:e1:54",
+        "ip_address": "172.20.0.50",
+    },
+}
 
-REQUIRED_EVIDENCE_FILES = {'docker-logs.suricata.txt', 'docker-volume.suricata-logs.json', 'docker-network.aptl-dmz.json', 'osquery-version.txt', 'participant-discovery.kali.txt', 'docker-inspect.container.json', 'docker-buildx-imagetools.image.txt', 'docker-buildx-imagetools.image.raw.json', 'docker-history.image.jsonl', 'osquery-processes.json', 'suricata-state.txt', 'docker-network.aptl-internal.json', 'captured-at-utc.txt', 'osquery-programs.json', 'os-packages.txt', 'docker-history.image.txt', 'source-checksums.txt', 'docker-top.txt', 'osquery-docker-images.json', 'osquery-installed-applications.json', 'trivy-vulnerability-counts.json', 'osquery-docker-containers.json', 'docker-inspect.image.json', 'docker-network.aptl-security.json', 'osquery-listening-ports.json', 'osquery-apt-sources.json', 'syft-version.json', 'trivy-sbom.cyclonedx.json.gz', 'trivy-vulnerability-list.json', 'filesystem-tree.txt', 'capture-limits.txt', 'docker-volume.suricata-command-socket.json', 'trivy-version.txt', 'language-manifests.txt', 'syft-sbom.cyclonedx.json.gz', 'compose-service.suricata.json', 'docker-compose-version.json', 'filesystem-checksums.txt', 'evidence-sha256sums.txt', 'runtime-baseline.txt', 'docker-version.json'}
+REQUIRED_EVIDENCE_FILES = {
+    "docker-logs.suricata.txt",
+    "docker-volume.suricata-logs.json",
+    "docker-network.aptl-dmz.json",
+    "osquery-version.txt",
+    "participant-discovery.kali.txt",
+    "docker-inspect.container.json",
+    "docker-buildx-imagetools.image.txt",
+    "docker-buildx-imagetools.image.raw.json",
+    "docker-history.image.jsonl",
+    "osquery-processes.json",
+    "suricata-state.txt",
+    "docker-network.aptl-internal.json",
+    "captured-at-utc.txt",
+    "osquery-programs.json",
+    "os-packages.txt",
+    "docker-history.image.txt",
+    "source-checksums.txt",
+    "docker-top.txt",
+    "osquery-docker-images.json",
+    "osquery-installed-applications.json",
+    "trivy-vulnerability-counts.json",
+    "osquery-docker-containers.json",
+    "docker-inspect.image.json",
+    "docker-network.aptl-security.json",
+    "osquery-listening-ports.json",
+    "osquery-apt-sources.json",
+    "syft-version.json",
+    "trivy-sbom.cyclonedx.json.gz",
+    "trivy-vulnerability-list.json",
+    "filesystem-tree.txt",
+    "capture-limits.txt",
+    "docker-volume.suricata-command-socket.json",
+    "trivy-version.txt",
+    "language-manifests.txt",
+    "syft-sbom.cyclonedx.json.gz",
+    "compose-service.suricata.json",
+    "docker-compose-version.json",
+    "filesystem-checksums.txt",
+    "evidence-sha256sums.txt",
+    "runtime-baseline.txt",
+    "docker-version.json",
+}
 
-RAW_SECRET_PATTERNS = (
-    r"BEGIN .*PRIVATE KEY",
-    r"APTL\{",
+SUPPRESSION_PLACEHOLDERS = (
+    "<REDACTED",
+    "<OMITTED",
+    "operator_secret",
+    "value withheld",
+    "content excluded",
 )
 
 
@@ -148,7 +215,11 @@ def test_suricata_gap_report_has_no_remaining_aces_gaps():
 def test_suricata_evidence_bundle_files_are_present_and_non_empty():
     present = {path.name for path in EVIDENCE_DIR.iterdir() if path.is_file()}
     assert REQUIRED_EVIDENCE_FILES <= present
-    empty = [name for name in REQUIRED_EVIDENCE_FILES if (EVIDENCE_DIR / name).stat().st_size == 0]
+    empty = [
+        name
+        for name in REQUIRED_EVIDENCE_FILES
+        if (EVIDENCE_DIR / name).stat().st_size == 0
+    ]
     assert not empty, f"Evidence files must not be empty: {empty}"
 
 
@@ -175,18 +246,25 @@ def test_suricata_evidence_sha256_manifest_matches_files():
 def test_suricata_mapping_ledger_references_every_evidence_file():
     ledger = load_mapping_ledger(LEDGER_PATH)
     refs = set()
-    refs.update(ref["path"] for ref in ledger["provenance"]["attestation"].get("evidence", []))
+    refs.update(
+        ref["path"] for ref in ledger["provenance"]["attestation"].get("evidence", [])
+    )
     for check in ledger["correspondence_checks"]:
         refs.update(ref["path"] for ref in check.get("realized_evidence", []))
     for fact in ledger["facts"]:
         refs.update(ref["path"] for ref in fact["evidence"])
 
-    evidence_files = {f"evidence/{path.name}" for path in EVIDENCE_DIR.iterdir() if path.is_file()}
+    evidence_files = {
+        f"evidence/{path.name}" for path in EVIDENCE_DIR.iterdir() if path.is_file()
+    }
     assert evidence_files <= refs
 
 
-def test_suricata_evidence_does_not_commit_raw_secret_values():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
+def test_suricata_evidence_has_no_secret_suppression_placeholders():
+    forbidden = re.compile(
+        "|".join(re.escape(marker) for marker in SUPPRESSION_PLACEHOLDERS),
+        re.IGNORECASE,
+    )
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()
@@ -194,22 +272,46 @@ def test_suricata_evidence_does_not_commit_raw_secret_values():
         and path.name not in {"filesystem-checksums.txt", "evidence-sha256sums.txt"}
         and forbidden.search(_evidence_text(path))
     ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+    assert not offenders, (
+        f"Evidence still contains secret suppression placeholders: {offenders}"
+    )
 
 
 def test_suricata_runtime_evidence_counts_and_passive_posture():
     image = _json_file("docker-inspect.image.json")[0]
+    container = _json_file("docker-inspect.container.json")[0]
     assert image["Id"] == IMAGE_CONFIG_ID
+    assert container["NetworkSettings"]["SandboxKey"] == SURICATA_SANDBOX_KEY
+    for network_name, expected in SURICATA_ENDPOINTS.items():
+        endpoint = container["NetworkSettings"]["Networks"][network_name]
+        assert endpoint["IPAddress"] == expected["ip_address"]
+        assert endpoint["EndpointID"] == expected["endpoint_id"]
+        assert endpoint["MacAddress"] == expected["mac_address"]
+        assert endpoint["DNSNames"] == ["aptl-suricata", "suricata", "4281739e19e1"]
     # The canonical upstream digest is the registry manifest-list digest from
     # buildx imagetools — NOT the local config ID that docker mirrors into RepoDigests.
-    buildx = (EVIDENCE_DIR / "docker-buildx-imagetools.image.txt").read_text(encoding="utf-8")
+    buildx = (EVIDENCE_DIR / "docker-buildx-imagetools.image.txt").read_text(
+        encoding="utf-8"
+    )
     assert IMAGE_MANIFEST_LIST_DIGEST in buildx
 
-    assert len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()) == RUNTIME_PACKAGE_COUNT
+    assert (
+        len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines())
+        == RUNTIME_PACKAGE_COUNT
+    )
     assert len(_json_file("trivy-vulnerability-list.json")) == TRIVY_FINDING_COUNT
-    assert len((EVIDENCE_DIR / "filesystem-tree.txt").read_text(encoding="utf-8").splitlines()) == FILESYSTEM_ENTRY_COUNT
+    assert (
+        len(
+            (EVIDENCE_DIR / "filesystem-tree.txt")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        )
+        == FILESYSTEM_ENTRY_COUNT
+    )
 
-    participant = (EVIDENCE_DIR / "participant-discovery.kali.txt").read_text(encoding="utf-8")
+    participant = (EVIDENCE_DIR / "participant-discovery.kali.txt").read_text(
+        encoding="utf-8"
+    )
     assert "22 (ssh) : Connection refused" in participant
     assert "passive IDS sensor" in participant
 
@@ -248,7 +350,44 @@ def test_techvault_sdl_encodes_suricata_inventory_surfaces():
     assert len(runtime.local_identity.groups) == LOCAL_IDENTITY_GROUP_COUNT
     assert runtime.network.published_ports == []
     assert {ep.network for ep in runtime.network.endpoints} == {
-        "techvault.dmz-net", "techvault.internal-net", "techvault.security-net"}
+        "techvault.dmz-net",
+        "techvault.internal-net",
+        "techvault.security-net",
+    }
+    encoded_endpoints = {ep.network: ep for ep in runtime.network.endpoints}
+    assert (
+        encoded_endpoints["techvault.dmz-net"].endpoint_id
+        == SURICATA_ENDPOINTS["aptl_aptl-dmz"]["endpoint_id"]
+    )
+    assert (
+        encoded_endpoints["techvault.dmz-net"].mac_address
+        == SURICATA_ENDPOINTS["aptl_aptl-dmz"]["mac_address"]
+    )
+    assert encoded_endpoints["techvault.dmz-net"].generated_dns_names == [
+        "4281739e19e1"
+    ]
+    assert (
+        encoded_endpoints["techvault.internal-net"].endpoint_id
+        == SURICATA_ENDPOINTS["aptl_aptl-internal"]["endpoint_id"]
+    )
+    assert (
+        encoded_endpoints["techvault.internal-net"].mac_address
+        == SURICATA_ENDPOINTS["aptl_aptl-internal"]["mac_address"]
+    )
+    assert encoded_endpoints["techvault.internal-net"].generated_dns_names == [
+        "4281739e19e1"
+    ]
+    assert (
+        encoded_endpoints["techvault.security-net"].endpoint_id
+        == SURICATA_ENDPOINTS["aptl_aptl-security"]["endpoint_id"]
+    )
+    assert (
+        encoded_endpoints["techvault.security-net"].mac_address
+        == SURICATA_ENDPOINTS["aptl_aptl-security"]["mac_address"]
+    )
+    assert encoded_endpoints["techvault.security-net"].generated_dns_names == [
+        "4281739e19e1"
+    ]
 
     # the unix command socket is the only control surface
     assert len(runtime.local_control_interfaces) == 1
@@ -269,14 +408,29 @@ def test_techvault_sdl_encodes_suricata_inventory_surfaces():
     assert sensor.capture_mode.value == "pcap"
     assert sensor.network_sensor_id == "suricata-sensor"
     assert set(sensor.monitored_network_refs) == {
-        "techvault.dmz-net", "techvault.internal-net", "techvault.security-net"}
+        "techvault.dmz-net",
+        "techvault.internal-net",
+        "techvault.security-net",
+    }
 
     # IDS/NDR detection engine (ACES #430 surface)
     assert len(runtime.network_detection_engines) == 1
     engine = runtime.network_detection_engines[0]
     assert engine.implementation.value == "suricata"
-    assert {p.value for p in engine.app_layer_protocols} == {"http", "tls", "dns", "ssh", "smtp", "ftp", "smb"}
-    assert {rs.source_id for rs in engine.rule_sources} == {"suricata-rules", "local-rules", "misp-iocs"}
+    assert {p.value for p in engine.app_layer_protocols} == {
+        "http",
+        "tls",
+        "dns",
+        "ssh",
+        "smtp",
+        "ftp",
+        "smb",
+    }
+    assert {rs.source_id for rs in engine.rule_sources} == {
+        "suricata-rules",
+        "local-rules",
+        "misp-iocs",
+    }
     assert {o.format.value for o in engine.output_streams} == {"eve_json", "fast_log"}
     assert engine.control_channels[0].kind.value == "unix_socket"
     assert "rule_reload" in [c.value for c in engine.control_channels[0].capabilities]
@@ -316,7 +470,8 @@ def test_techvault_sdl_encodes_suricata_authored_content_and_no_accounts():
     # (the wazuh-sidecar-suricata node's local accounts are a different node;
     # match on the account's node, not a key substring)
     assert [
-        k for k, account in scenario.accounts.items()
+        k
+        for k, account in scenario.accounts.items()
         if account.node == "techvault.suricata"
     ] == []
 
@@ -342,11 +497,24 @@ def test_techvault_sdl_compiles_with_suricata_runtime_fields():
     assert build["attestation"]["status"] == "absent"
     # source_inputs land at their realized on-node destinations (the four MISP
     # baselines under /var/lib/suricata/rules/misp, not the local.rules path)
-    dest_by_src = {si["source_path"]: si["destination_path"] for si in build["source_inputs"]}
+    dest_by_src = {
+        si["source_path"]: si["destination_path"] for si in build["source_inputs"]
+    }
     assert dest_by_src["config/suricata/suricata.yaml"] == "/etc/suricata/suricata.yaml"
-    assert dest_by_src["config/suricata/rules/local.rules"] == "/etc/suricata/rules/local.rules"
-    for misp in ("misp-iocs.rules", "misp-md5.list", "misp-sha1.list", "misp-sha256.list"):
-        assert dest_by_src[f"config/suricata/rules/misp/{misp}"] == f"/var/lib/suricata/rules/misp/{misp}"
+    assert (
+        dest_by_src["config/suricata/rules/local.rules"]
+        == "/etc/suricata/rules/local.rules"
+    )
+    for misp in (
+        "misp-iocs.rules",
+        "misp-md5.list",
+        "misp-sha1.list",
+        "misp-sha256.list",
+    ):
+        assert (
+            dest_by_src[f"config/suricata/rules/misp/{misp}"]
+            == f"/var/lib/suricata/rules/misp/{misp}"
+        )
     assert len(runtime["packages"]) == RUNTIME_PACKAGE_COUNT
     assert len(runtime["package_vulnerabilities"]) == TRIVY_FINDING_COUNT
     assert len(runtime["network"]["endpoints"]) == 3

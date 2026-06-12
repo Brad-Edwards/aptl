@@ -498,7 +498,7 @@ content:
     text: null
     source:
       name: containers/fileshare/setup-shares.sh
-      version: sha256:fd5633ace91fd172502fef9e63eca6e46c8cf7dc527d92edcece14899b7675e1
+      version: sha256:465d1ae4ff0d006017f9addfce38ba36fb618c0b56391b6bb560ae2fc5bcb07f
       build: null
     format: ''
     items: []
@@ -870,7 +870,7 @@ content:
     text: null
     source:
       name: runtime-observed:/srv/shares/shared/user-flag.txt
-      version: sha256:bc2ea9704988a87ac19fc1ce5092e3c03e3efe25a08bddb242623acaaafb70b1
+      version: sha256:e30d90d0cbcae561369c9a57aefa27fb26056b974b58fb0a2a95d843a2ece535
       build: null
     format: ''
     items: []
@@ -885,7 +885,7 @@ content:
     text: null
     source:
       name: runtime-observed:/root/root.txt
-      version: sha256:1ad329ace87a3bb779f9e785bd0834444dee6186c95067baa64142e3ea62e567
+      version: sha256:6f4abd1d53d3539f8bd4dbafd9bc74415e61a2f6f1055db6cc0b7b9c89d3dc58
       build: null
     format: ''
     items: []
@@ -2534,7 +2534,7 @@ content:
     tags: []
   workstation-file-home-dev-user-pgpass:
     type: file
-    description: secret_fixture captured as checksum-only per ADR-029 redaction boundary.
+    description: secret_fixture retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /home/dev-user/.pgpass
     destination: ''
@@ -2549,7 +2549,7 @@ content:
     tags: []
   workstation-file-home-dev-user-ssh-id-rsa:
     type: file
-    description: secret_fixture_private_key captured as checksum-only per ADR-029 redaction boundary.
+    description: secret_fixture_private_key retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /home/dev-user/.ssh/id_rsa
     destination: ''
@@ -2564,7 +2564,7 @@ content:
     tags: []
   workstation-file-home-dev-user-projects-techvault-portal-env:
     type: file
-    description: secret_fixture captured as checksum-only per ADR-029 redaction boundary.
+    description: secret_fixture retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /home/dev-user/projects/techvault-portal/.env
     destination: ''
@@ -2579,7 +2579,7 @@ content:
     tags: []
   workstation-file-home-dev-user-config-credentials-json:
     type: file
-    description: secret_fixture captured as checksum-only per ADR-029 redaction boundary.
+    description: secret_fixture retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /home/dev-user/.config/credentials.json
     destination: ''
@@ -2594,7 +2594,7 @@ content:
     tags: []
   workstation-file-home-dev-user-bash-history:
     type: file
-    description: secret_fixture captured as checksum-only per ADR-029 redaction boundary.
+    description: secret_fixture retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /home/dev-user/.bash_history
     destination: ''
@@ -2609,7 +2609,7 @@ content:
     tags: []
   workstation-file-keys-aptl-lab-key:
     type: file
-    description: operator_private_key captured as metadata-only per ADR-029 redaction boundary.
+    description: operator_private_key retained as in-range scenario content with runtime metadata provenance.
     target: techvault.workstation
     path: /keys/aptl_lab_key
     destination: ''
@@ -2771,7 +2771,7 @@ content:
     tags: []
   workstation-file-etc-ssh-ssh-host-dsa-key:
     type: file
-    description: host_private_key captured as metadata-only per ADR-029 redaction boundary.
+    description: host_private_key retained as in-range scenario content with runtime metadata provenance.
     target: techvault.workstation
     path: /etc/ssh/ssh_host_dsa_key
     destination: ''
@@ -2798,7 +2798,7 @@ content:
     tags: []
   workstation-file-root-root-txt:
     type: file
-    description: generated_flag captured as metadata-only per ADR-029 redaction boundary.
+    description: generated_flag retained as in-range scenario content with runtime metadata provenance.
     target: techvault.workstation
     path: /root/root.txt
     destination: ''
@@ -2840,7 +2840,7 @@ content:
     tags: []
   workstation-file-etc-ssh-ssh-host-rsa-key:
     type: file
-    description: host_private_key captured as metadata-only per ADR-029 redaction boundary.
+    description: host_private_key retained as in-range scenario content with runtime metadata provenance.
     target: techvault.workstation
     path: /etc/ssh/ssh_host_rsa_key
     destination: ''
@@ -2897,7 +2897,7 @@ content:
     tags: []
   workstation-file-etc-ssh-ssh-host-ed25519-key:
     type: file
-    description: host_private_key captured as metadata-only per ADR-029 redaction boundary.
+    description: host_private_key retained as in-range scenario content with runtime metadata provenance.
     target: techvault.workstation
     path: /etc/ssh/ssh_host_ed25519_key
     destination: ''
@@ -2924,7 +2924,7 @@ content:
     tags: []
   workstation-file-etc-ssh-ssh-host-ecdsa-key:
     type: file
-    description: host_private_key captured as metadata-only per ADR-029 redaction boundary.
+    description: host_private_key retained as in-range scenario content with runtime metadata provenance.
     target: techvault.workstation
     path: /etc/ssh/ssh_host_ecdsa_key
     destination: ''
@@ -3026,7 +3026,7 @@ content:
     tags: []
   workstation-file-var-ossec-etc-client-keys:
     type: file
-    description: wazuh_agent_secret captured as metadata-only per ADR-029 redaction boundary.
+    description: wazuh_agent_secret retained as in-range scenario content with runtime metadata provenance.
     target: techvault.workstation
     path: /var/ossec/etc/client.keys
     destination: ''
@@ -3098,7 +3098,7 @@ content:
     tags: []
   workstation-file-home-dev-user-documents-onboarding-notes-txt:
     type: file
-    description: secret_fixture captured as checksum-only per ADR-029 redaction boundary.
+    description: secret_fixture retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /home/dev-user/Documents/onboarding-notes.txt
     destination: ''
@@ -3143,7 +3143,7 @@ content:
     tags: []
   workstation-file-home-dev-user-user-txt:
     type: file
-    description: generated_flag captured as checksum-only per ADR-029 redaction boundary.
+    description: generated_flag retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /home/dev-user/user.txt
     destination: ''
@@ -3158,7 +3158,7 @@ content:
     tags: []
   workstation-file-home-dev-user-ssh-known-hosts:
     type: file
-    description: public_fixture captured as checksum-only per ADR-029 redaction boundary.
+    description: public_fixture retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /home/dev-user/.ssh/known_hosts
     destination: ''
@@ -3173,7 +3173,7 @@ content:
     tags: []
   workstation-file-home-dev-user-ssh-id-rsa-pub:
     type: file
-    description: public_fixture captured as checksum-only per ADR-029 redaction boundary.
+    description: public_fixture retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /home/dev-user/.ssh/id_rsa.pub
     destination: ''
@@ -3248,7 +3248,7 @@ content:
     tags: []
   workstation-file-keys-aptl-lab-key-pub:
     type: file
-    description: public_lab_key captured as checksum-only per ADR-029 redaction boundary.
+    description: public_lab_key retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /keys/aptl_lab_key.pub
     destination: ''
@@ -3263,7 +3263,7 @@ content:
     tags: []
   workstation-file-keys-authorized-keys:
     type: file
-    description: public_lab_key captured as checksum-only per ADR-029 redaction boundary.
+    description: public_lab_key retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /keys/authorized_keys
     destination: ''
@@ -3736,6 +3736,21 @@ content:
     source:
       name: runtime-observed:/etc/yum.repos.d/rocky.repo
       version: sha256:0b54db74b2f3e6c15fd17d96b6da1de1ebb6693e59bdd8b046affb53911eba3d
+      build: null
+    format: ''
+    items: []
+    sensitive: false
+    tags: []
+  workstation-file-etc-yum-repos-d-rocky-security-repo:
+    type: file
+    description: Workstation runtime file observed at /etc/yum.repos.d/rocky-security.repo.
+    target: techvault.workstation
+    path: /etc/yum.repos.d/rocky-security.repo
+    destination: ''
+    text: null
+    source:
+      name: runtime-observed:/etc/yum.repos.d/rocky-security.repo
+      version: sha256:e7f324492aae06beda53fc1f9576b066301af349c61968298810177ee0ed8b74
       build: null
     format: ''
     items: []
@@ -4463,7 +4478,7 @@ content:
     tags: []
   workstation-file-home-dev-user-projects-techvault-portal-deploy-sh:
     type: file
-    description: secret_fixture captured as checksum-only per ADR-029 redaction boundary.
+    description: secret_fixture retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
     path: /home/dev-user/projects/techvault-portal/deploy.sh
     destination: ''
@@ -4766,6 +4781,21 @@ content:
     destination: /etc/dnf/modules.d
     text: null
     source: null
+    format: ''
+    items: []
+    sensitive: false
+    tags: []
+  workstation-file-etc-dnf-modules-d-postgresql-module:
+    type: file
+    description: Workstation runtime file observed at /etc/dnf/modules.d/postgresql.module.
+    target: techvault.workstation
+    path: /etc/dnf/modules.d/postgresql.module
+    destination: ''
+    text: null
+    source:
+      name: runtime-observed:/etc/dnf/modules.d/postgresql.module
+      version: sha256:cae229f5dbd4df343c3e49dc3bded74fe4a366ec74a920c4eca9e28650791d07
+      build: null
     format: ''
     items: []
     sensitive: false
@@ -7822,8 +7852,8 @@ content:
     tags: []
   misp-reference-datasets:
     type: dataset
-    description: MISP logical content counts captured from the application database. No events, attributes, or objects were
-      present in this steady-state snapshot; reference-data collections were installed.
+    description: MISP logical content counts captured from the application database. The live snapshot contains one
+      known-threat-actors event with six IOC attributes plus installed reference-data collections.
     target: techvault.misp
     path: ''
     destination: ''
@@ -7834,13 +7864,13 @@ content:
     - name: events
       tags:
       - misp
-      - count:0
-      description: No MISP event rows were present.
+      - count:1
+      description: 'One event row was present: APTL Lab - Known Threat Actors.'
     - name: attributes
       tags:
       - misp
-      - count:0
-      description: No MISP attribute rows were present.
+      - count:6
+      description: 'Six attribute rows were present: three ip-src IOCs and three pattern-in-traffic IOCs.'
     - name: objects
       tags:
       - misp
@@ -7849,8 +7879,8 @@ content:
     - name: tags
       tags:
       - misp
-      - count:5
-      description: Five tag rows were present.
+      - count:7
+      description: Seven tag rows were present, including aptl:red-team and tlp:red.
     - name: taxonomies
       tags:
       - misp
@@ -8026,7 +8056,7 @@ content:
     - name: misp.attributes
       tags:
       - table
-      - count:0
+      - count:6
       description: MariaDB TABLE_ROWS observation for misp.attributes.
     - name: misp.attribute_tags
       tags:
@@ -8041,7 +8071,7 @@ content:
     - name: misp.audit_logs
       tags:
       - table
-      - count:99824
+      - count:107252
       description: MariaDB TABLE_ROWS observation for misp.audit_logs.
     - name: misp.auth_keys
       tags:
@@ -8126,7 +8156,7 @@ content:
     - name: misp.events
       tags:
       - table
-      - count:0
+      - count:1
       description: MariaDB TABLE_ROWS observation for misp.events.
     - name: misp.event_blocklists
       tags:
@@ -8166,7 +8196,7 @@ content:
     - name: misp.event_tags
       tags:
       - table
-      - count:0
+      - count:2
       description: MariaDB TABLE_ROWS observation for misp.event_tags.
     - name: misp.favourite_tags
       tags:
@@ -8191,7 +8221,7 @@ content:
     - name: misp.galaxy_clusters
       tags:
       - table
-      - count:56341
+      - count:46890
       description: MariaDB TABLE_ROWS observation for misp.galaxy_clusters.
     - name: misp.galaxy_cluster_blocklists
       tags:
@@ -8201,7 +8231,7 @@ content:
     - name: misp.galaxy_cluster_relations
       tags:
       - table
-      - count:59905
+      - count:59876
       description: MariaDB TABLE_ROWS observation for misp.galaxy_cluster_relations.
     - name: misp.galaxy_cluster_relation_tags
       tags:
@@ -8211,7 +8241,7 @@ content:
     - name: misp.galaxy_elements
       tags:
       - table
-      - count:321235
+      - count:303547
       description: MariaDB TABLE_ROWS observation for misp.galaxy_elements.
     - name: misp.inbox
       tags:
@@ -8221,12 +8251,12 @@ content:
     - name: misp.jobs
       tags:
       - table
-      - count:126
+      - count:18
       description: MariaDB TABLE_ROWS observation for misp.jobs.
     - name: misp.logs
       tags:
       - table
-      - count:3935
+      - count:557
       description: MariaDB TABLE_ROWS observation for misp.logs.
     - name: misp.news
       tags:
@@ -8281,7 +8311,7 @@ content:
     - name: misp.object_template_elements
       tags:
       - table
-      - count:5523
+      - count:5506
       description: MariaDB TABLE_ROWS observation for misp.object_template_elements.
     - name: misp.opinions
       tags:
@@ -8396,7 +8426,7 @@ content:
     - name: misp.tags
       tags:
       - table
-      - count:5
+      - count:7
       description: MariaDB TABLE_ROWS observation for misp.tags.
     - name: misp.tag_collections
       tags:
@@ -8426,7 +8456,7 @@ content:
     - name: misp.taxonomy_entries
       tags:
       - table
-      - count:12986
+      - count:13407
       description: MariaDB TABLE_ROWS observation for misp.taxonomy_entries.
     - name: misp.taxonomy_predicates
       tags:
@@ -8496,7 +8526,7 @@ content:
     - name: misp.warninglist_entries
       tags:
       - table
-      - count:2509058
+      - count:2442246
       description: MariaDB TABLE_ROWS observation for misp.warninglist_entries.
     - name: misp.warninglist_types
       tags:

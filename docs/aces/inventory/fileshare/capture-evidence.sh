@@ -21,35 +21,14 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-redact_env_jq='
-  def redact_env:
-    if test("^(APTL_FLAG_KEY|WAZUH_PASSWORD|WAZUH_REGISTRATION_PASSWORD|WAZUH_API_PASSWORD)=") then
-      capture("^(?<name>[^=]+)=") as $m
-      | "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-    else
-      .
-    end;
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
 docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 
-COMPOSE_PROFILES=fileshare,wazuh,soc docker compose -f "$ROOT/docker-compose.yml" config --format json \
-  | jq '
-      .services.fileshare
-      | .environment |= with_entries(
-          if (.key | test("^(APTL_FLAG_KEY|WAZUH_PASSWORD|WAZUH_REGISTRATION_PASSWORD|WAZUH_API_PASSWORD)$"))
-          then .value = ("<REDACTED-" + (.key | gsub("_"; "-")) + ">")
-          else .
-          end
-        )
-    ' > "$OUT/compose-service.fileshare.json"
+yq -o=json '.services.fileshare' "$ROOT/docker-compose.yml" | jq . > "$OUT/compose-service.fileshare.json"
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= map(redact_env)" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
 docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
@@ -96,6 +75,7 @@ docker exec "$CONTAINER" sh -lc '
     /opt/aptl/wazuh/ossec.conf.template \
     /opt/aptl/wazuh/wazuh-agent.sh \
     /var/ossec/etc/ossec.conf \
+    /var/ossec/etc/client.keys \
     /srv/shares \
     /srv/shares/public \
     /srv/shares/public/welcome.txt \
@@ -140,6 +120,7 @@ docker exec "$CONTAINER" sh -lc '
     /opt/aptl/wazuh/ossec.conf.template \
     /opt/aptl/wazuh/wazuh-agent.sh \
     /var/ossec/etc/ossec.conf \
+    /var/ossec/etc/client.keys \
     /srv/shares/public/welcome.txt \
     /srv/shares/engineering/deployments/deploy.sh \
     /srv/shares/engineering/deployments/README.md \
@@ -162,15 +143,8 @@ docker exec "$CONTAINER" sh -lc '
   done
 ' > "$OUT/filesystem-checksums.txt"
 
-record_limit "Generated flag contents and generated SSH private-key material are represented by path metadata and SHA-256 digests only; raw values are intentionally not committed under ADR-029."
-record_limit "The authored setup-shares.sh attempts to generate /srv/shares/it-backups/keys/deploy_key, but the observed steady-state container does not contain deploy_key or deploy_key.pub; filesystem-tree.txt and filesystem-checksums.txt record those paths as MISSING."
-
 docker exec "$CONTAINER" sh -lc '
   set -eu
-  redact_env() {
-    sed -E "s/^(APTL_FLAG_KEY|WAZUH_PASSWORD|WAZUH_REGISTRATION_PASSWORD|WAZUH_API_PASSWORD)=.*/\1=<REDACTED-\1>/" \
-      | sed "s/<REDACTED-APTL_FLAG_KEY>/<REDACTED-APTL-FLAG-KEY>/;s/<REDACTED-WAZUH_PASSWORD>/<REDACTED-WAZUH-PASSWORD>/;s/<REDACTED-WAZUH_REGISTRATION_PASSWORD>/<REDACTED-WAZUH-REGISTRATION-PASSWORD>/;s/<REDACTED-WAZUH_API_PASSWORD>/<REDACTED-WAZUH-API-PASSWORD>/"
-  }
   echo --os-release--
   cat /etc/os-release
   echo --id--
@@ -182,7 +156,7 @@ docker exec "$CONTAINER" sh -lc '
   echo --capabilities-pid1--
   grep "^Cap" /proc/1/status || true
   echo --environment--
-  env | sort | redact_env
+  env | sort
   echo --listeners--
   (ss -lntup || netstat -lntup || true) 2>&1
   echo --mounts--
@@ -196,13 +170,37 @@ docker exec "$CONTAINER" sh -lc '
   echo --samba-config-shares--
   testparm -s 2>/dev/null | sed -n "/^\\[/,\$p" || true
   echo --samba-users--
-  pdbedit -L -v 2>/dev/null | sed -E "s/(NT password|LM password):.*/\1:<REDACTED>/" || true
+  pdbedit -L -v 2>/dev/null || true
   echo --supervisor--
   supervisorctl status || true
   echo --process-tree--
   ps -eo pid,ppid,user,args || true
 ' > "$OUT/runtime-baseline.txt"
 sed -i 's/[[:space:]]\+$//' "$OUT/runtime-baseline.txt" "$OUT/docker-top.txt"
+
+docker exec "$CONTAINER" sh -lc '
+  set -eu
+  for path in \
+    /srv/shares/engineering/deployments/deploy.sh \
+    /srv/shares/finance/reports/q3-revenue.csv \
+    /srv/shares/hr/employees/directory.csv \
+    /srv/shares/it-backups/keys/deploy_key \
+    /srv/shares/it-backups/keys/deploy_key.pub \
+    /srv/shares/it-backups/db_backup_20240115.sql \
+    /srv/shares/shared/wifi-passwords.txt \
+    /srv/shares/shared/user-flag.txt \
+    /root/root.txt \
+    /var/ossec/etc/client.keys
+  do
+    printf -- "--path:%s--\n" "$path"
+    if [ -f "$path" ]; then
+      cat "$path"
+      printf "\n"
+    else
+      printf "MISSING\n"
+    fi
+  done
+' > "$OUT/filesystem-sensitive-paths.txt"
 
 docker exec "$CONTAINER" sh -lc '
   set -eu

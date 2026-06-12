@@ -844,5 +844,5 @@ c73825ff455023be78294408141fc486a324c2af30461ce8f0ea5b095df28f80  /var/ossec/wod
 6604feeb23229c046ceeed623c21e6419857b32bf74bf45cc27814e6cd7fe88b  /var/ossec/wodles/gcloud/pubsub/subscriber.py
 235ee00c7da964e7cf773f09cc06a495b04735ecbe121b0b6de316df5465a063  /var/ossec/wodles/gcloud/tools.py
 4de8c3213fe8efffa4eb8ae4d43dd74432b2e92379d4a1eae7a6cb29f227b596  /var/ossec/wodles/utils.py
-<OMITTED-OPERATOR-SECRET-CHECKSUM>  /etc/ssl/filebeat.key
-<OMITTED-WAZUH-SECRET-CHECKSUM>  /var/ossec/etc/client.keys
+3cc8f81ea96d480bf5bc3beaeaa6a313c7d04cb6fdd7901cc14ea30707324e40  /etc/ssl/filebeat.key
+ca4ad50ccfb0bd86ee6a7bb620f9b9857f9ea866afc4e28a1ba210f1343a03ab  /var/ossec/etc/client.keys

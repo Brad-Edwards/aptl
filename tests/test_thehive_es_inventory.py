@@ -31,6 +31,9 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
 IMAGE_ID = "sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1"
 IMAGE_DIGEST = "docker.elastic.co/elasticsearch/elasticsearch@sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1"
+THEHIVE_ES_IP = "172.20.0.5"
+THEHIVE_ES_SANDBOX_KEY = "/var/run/docker/netns/fad05f6fed13"
+THEHIVE_ES_KEYSTORE_SHA256 = "7a27c2b5d7a9d6730da3cd27f85a0cac156cf856577e19edd3c9e68b2e9864c0"
 RUNTIME_PACKAGE_COUNT = 128
 TRIVY_FINDING_COUNT = 94
 FILESYSTEM_TREE_ROW_COUNT = 526
@@ -85,9 +88,12 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
 }
 
-RAW_SECRET_PATTERNS = (
-    r"BEGIN .*PRIVATE KEY",
-    r"-----BEGIN OPENSSH",
+SUPPRESSION_PLACEHOLDERS = (
+    "<REDACTED",
+    "<OMITTED",
+    "operator_secret",
+    "value withheld",
+    "content excluded",
 )
 
 
@@ -229,14 +235,14 @@ def test_thehive_es_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_thehive_es_evidence_does_not_commit_raw_secret_values():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
+def test_thehive_es_evidence_has_no_secret_suppression_placeholders():
+    forbidden = re.compile("|".join(re.escape(marker) for marker in SUPPRESSION_PLACEHOLDERS), re.IGNORECASE)
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and forbidden.search(_evidence_text(path))
     ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+    assert not offenders, f"Evidence still contains secret suppression placeholders: {offenders}"
 
 
 def test_thehive_es_runtime_evidence_counts():
@@ -247,6 +253,8 @@ def test_thehive_es_runtime_evidence_counts():
     assert image["RepoDigests"][0] == IMAGE_DIGEST
     assert image["Config"]["Cmd"] == ["eswrapper"]
     assert container["HostConfig"]["Memory"] == 1073741824
+    assert container["NetworkSettings"]["SandboxKey"] == THEHIVE_ES_SANDBOX_KEY
+    assert container["NetworkSettings"]["Networks"]["aptl_aptl-security"]["IPAddress"] == THEHIVE_ES_IP
 
     assert len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()) == RUNTIME_PACKAGE_COUNT
     assert len(_json_file("trivy-vulnerability-list.json")) == TRIVY_FINDING_COUNT
@@ -254,6 +262,13 @@ def test_thehive_es_runtime_evidence_counts():
     assert len((EVIDENCE_DIR / "docker-history.image.jsonl").read_text(encoding="utf-8").splitlines()) == DOCKER_HISTORY_ROW_COUNT
     assert len(_section("users")) == LOCAL_IDENTITY_USER_COUNT
     assert len(_section("groups")) == LOCAL_IDENTITY_GROUP_COUNT
+
+
+def test_thehive_es_keystore_checksum_is_captured():
+    checksums = _evidence_text(EVIDENCE_DIR / "filesystem-checksums.txt.xz")
+    tree = _evidence_text(EVIDENCE_DIR / "filesystem-tree.txt.gz")
+    assert f"{THEHIVE_ES_KEYSTORE_SHA256}  /usr/share/elasticsearch/config/elasticsearch.keystore" in checksums
+    assert "secret_fixture\\t/usr/share/elasticsearch/config/elasticsearch.keystore" in tree
 
 
 def test_thehive_es_trivy_counts_match_severity_breakdown():
@@ -270,9 +285,12 @@ def test_thehive_es_listeners_are_rest_and_transport():
 
 def test_thehive_es_index_mapping_captured_via_cluster_state():
     mapping = _json_file("thehive-es-index-mappings.json")
-    idx = mapping["metadata"]["indices"][".geoip_databases"]
-    props = idx["mappings"]["_doc"]["properties"]
-    assert set(props) == {"data", "name", "chunk"}
+    indices = mapping["metadata"]["indices"]
+    assert {".geoip_databases", "cortex_6"} <= set(indices)
+    geoip_props = indices[".geoip_databases"]["mappings"]["_doc"]["properties"]
+    cortex_props = indices["cortex_6"]["mappings"]["_doc"]["properties"]
+    assert set(geoip_props) == {"data", "name", "chunk"}
+    assert {"key", "password", "roles", "status"} <= set(cortex_props)
 
 
 def test_thehive_es_kali_cannot_route():
@@ -300,7 +318,7 @@ def test_techvault_sdl_encodes_thehive_es_node(legacy_scenario):
     assert network["published_ports"] == []
     endpoint = network["endpoints"][0]
     assert endpoint["network"] == "security-net"
-    assert endpoint["ip_address"] == "172.20.0.4"
+    assert endpoint["ip_address"] == THEHIVE_ES_IP
 
     listener_ports = {listener["port"] for listener in runtime["service_listeners"]}
     assert {9200, 9300} == listener_ports
@@ -312,16 +330,22 @@ def test_techvault_sdl_encodes_thehive_es_datastore(legacy_scenario):
     assert ds["data_model"] == "search_index"
     assert ds["version"] == "7.17.28"
     assert ds["cluster"]["name"] == "docker-cluster"
-    assert ds["cluster"]["health"] == "green"
+    assert ds["cluster"]["health"] == "yellow"
     assert ds["transport_security"]["mode"] == "none"
 
     partitions = {p["name"] for p in ds["partitions"]}
     assert ".geoip_databases" in partitions
+    assert "cortex_6" in partitions
 
-    assert len(ds["mappings"]) >= 1
-    geoip = next(m for m in ds["mappings"] if m["name"] == ".geoip_databases")
+    mappings = {m["name"]: m for m in ds["mappings"]}
+    assert {".geoip_databases", "cortex_6"} <= set(mappings)
+    geoip = mappings[".geoip_databases"]
     assert geoip["top_level_field_count"] == 3
     assert geoip["field_type_census"] == {"binary": 1, "keyword": 1, "integer": 1}
+    cortex = mappings["cortex_6"]
+    assert cortex["top_level_field_count"] == 13
+    assert cortex["leaf_field_count"] == 21
+    assert cortex["field_type_census"] == {"long": 2, "text": 8, "keyword": 11}
 
     settings = {s["name"]: s["value"] for s in ds["settings"]}
     assert settings["xpack.security.enabled"] == "false"

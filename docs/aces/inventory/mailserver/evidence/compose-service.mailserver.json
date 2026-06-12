@@ -85,7 +85,7 @@
     },
     {
       "type": "bind",
-      "source": "/home/atomik/src/aptl3/containers/mailserver/setup.sh",
+      "source": "/home/atomik/src/aptl4/containers/mailserver/setup.sh",
       "target": "/tmp/setup.sh",
       "read_only": true,
       "bind": {}

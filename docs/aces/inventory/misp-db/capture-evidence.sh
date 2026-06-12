@@ -23,42 +23,6 @@ mkdir -p "$OUT"
 record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
-
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHKEY)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's/(misp_db_password|misp_root_password|redispassword)/<REDACTED-SCENARIO-FIXTURE>/g'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHKEY)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|key|cookie|session|private_key|api_key|jwt|authkey)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -66,29 +30,15 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 
 yq -o=json '.services."misp-db"' "$ROOT/docker-compose.yml" \
   | jq '
-      .environment |= map(
-        if test("^(?<name>[^=]+)=") then
-          capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-          | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHKEY)$"; "i"))
-            then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-            else .
-            end
-        else
-          .
-        end
-      )
+      .environment |= map(.)
     ' > "$OUT/compose-service.misp-db.json"
 record_limit "Compose service evidence was extracted from docker-compose.yml with yq because the full local compose project can include profile-dependent services outside this asset scope."
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -100,8 +50,8 @@ fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_misp_db_data | jq . > "$OUT/docker-volume.misp-db-data.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.misp-db.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 > "$OUT/docker-logs.misp-db.txt"
 
 record_limit "Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof."
 record_limit "Full data-volume filesystem evidence is captured as compressed manifests. SDL encodes participant-visible database, listener, package, runtime, and filesystem surfaces directly; byte-identical rebuild proof remains out of scope for this inventory issue."
@@ -216,7 +166,7 @@ docker exec "$CONTAINER" sh -lc '
   mariadb --version 2>&1 || mysql --version 2>&1 || true
   mariadbd --version 2>&1 || true
   healthcheck.sh --help 2>&1 | sed -n "1,20p" || true
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 docker exec "$CONTAINER" sh -lc '
   set -eu
@@ -237,7 +187,7 @@ docker exec "$CONTAINER" sh -lc '
   query -e "show variables where Variable_name in (\"version\",\"version_comment\",\"hostname\",\"port\",\"datadir\",\"socket\",\"bind_address\",\"skip_networking\",\"log_error\",\"general_log\",\"slow_query_log\",\"character_set_server\",\"collation_server\",\"max_connections\",\"sql_mode\");"
   printf "%s\n" --schema-sample--
   query misp -e "show tables;" | sed -n "1,260p"
-' | redact_stream > "$OUT/mariadb-state.txt"
+' > "$OUT/mariadb-state.txt"
 
 if docker inspect "$MISP_CONTAINER" >/dev/null 2>&1; then
   docker exec "$MISP_CONTAINER" sh -lc '
@@ -249,7 +199,7 @@ if docker inspect "$MISP_CONTAINER" >/dev/null 2>&1; then
     printf "%s\n" --mysql-client--
     mysql --ssl=0 -h "$MYSQL_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" --batch --raw -e "select @@version as version, database() as database_name;" 2>&1
     true
-  ' | redact_stream > "$OUT/participant-discovery.misp.txt"
+  ' > "$OUT/participant-discovery.misp.txt"
 else
   record_limit "MISP participant-vantage discovery was skipped because $MISP_CONTAINER was not present."
   printf '%s container unavailable\n' "$MISP_CONTAINER" > "$OUT/participant-discovery.misp.txt"
@@ -263,7 +213,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --tcp3306--
     timeout 5 sh -c "nc -vz 172.20.0.17 3306" 2>&1
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

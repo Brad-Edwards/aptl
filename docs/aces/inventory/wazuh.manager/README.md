@@ -69,10 +69,8 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
 - Runtime package state is encoded from the normalized Syft CycloneDX SBOM
   (322 components) and RPM package list (118 packages). Trivy captured 368
   vulnerability findings at scan time.
-- Raw Wazuh API credentials, indexer credentials, cluster keys, API tokens,
-  and private key material are not committed as raw values. SDL records
-  redacted value classifications and, for selected filesystem entries, path and
-  metadata only.
+- Wazuh API credentials, indexer credentials, cluster keys, API tokens,
+  and private key checksums are retained as in-range scenario evidence.
 - Docker-history strings containing braced shell parameter syntax were
   normalized in SDL to shell-equivalent `$VAR` spelling because ACES reserves
   `${...}` for scenario variables. The raw byte-exact history is preserved in

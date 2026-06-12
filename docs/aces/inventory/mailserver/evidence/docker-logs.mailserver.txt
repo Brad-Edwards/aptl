@@ -24,7 +24,7 @@
 2026-05-28T06:02:18.318089+00:00 mail amavis[1369]: No decoder for       .doc
 2026-05-28T06:02:18.318099+00:00 mail amavis[1369]: No decoder for       .zoo
 2026-05-28T06:02:18.318106+00:00 mail amavis[1369]: No decoder for       .zst
-2026-05-28T06:03:03.396120+00:00 mail dovecot: imap-login: Disconnected: Connection closed (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<REDACTED>
+2026-05-28T06:03:03.396120+00:00 mail dovecot: imap-login: Disconnected: Connection closed (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<654we9pSssmsFAEe>
 2026-05-28T06:03:03.403993+00:00 mail postfix/submissions/smtpd[2281]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
 2026-05-28T06:03:03.404014+00:00 mail postfix/submission/smtpd[2282]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
 2026-05-28T06:03:03.405144+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
@@ -50,7 +50,7 @@
 2026-05-28T06:03:03.420901+00:00 mail postfix/submission/smtpd[2282]: improper command pipelining after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]: EHLO kali.techvault.local\r\nQUIT\r\n
 2026-05-28T06:03:03.421457+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
 2026-05-28T06:03:03.421597+00:00 mail postfix/submission/smtpd[2282]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] ehlo=1 quit=1 commands=2
-2026-05-28T06:03:03.429647+00:00 mail dovecot: imap-login: Disconnected: Aborted login by logging out (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<REDACTED>
+2026-05-28T06:03:03.429647+00:00 mail dovecot: imap-login: Disconnected: Aborted login by logging out (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<3iExe9pSusmsFAEe>
 2026-05-28T06:03:03.449915+00:00 mail postfix/submissions/smtpd[2281]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
 2026-05-28T06:03:03.449950+00:00 mail postfix/submissions/smtpd[2281]: improper command pipelining after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]: \026\003\001\006\224\001\000\006\220\003\003w\352\364w:7\0240^\276N\006V\215l\022f"\312\355\311\211\001\276\203\254@\300\364\354b\272 m~*\236\006G\\\226\336Q\216\360\377\221y+\361\271\3479\271\261\350k\310\025Z4\020H`\306\000\266\023\002\023\003\023\001\300,\3000\000\243\000\237\314\251\314\250\314\252\300\255
 2026-05-28T06:03:03.450538+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
@@ -66,7 +66,7 @@
 2026-05-28T06:03:20.508261+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
 2026-05-28T06:03:20.508388+00:00 mail postfix/submissions/smtpd[2281]: lost connection after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]
 2026-05-28T06:03:20.508424+00:00 mail postfix/submissions/smtpd[2281]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] commands=0/0
-2026-05-28T06:03:20.509782+00:00 mail dovecot: imap-login: Disconnected: Connection closed (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<REDACTED>
+2026-05-28T06:03:20.509782+00:00 mail dovecot: imap-login: Disconnected: Connection closed (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<N8E1fNpSxuSsFAEe>
 2026-05-28T06:03:20.510412+00:00 mail postfix/submission/smtpd[2282]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
 2026-05-28T06:03:20.511289+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
 2026-05-28T06:03:20.511408+00:00 mail postfix/submission/smtpd[2282]: lost connection after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]
@@ -81,7 +81,7 @@
 2026-05-28T06:03:20.519596+00:00 mail postfix/submission/smtpd[2282]: improper command pipelining after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]: EHLO kali.techvault.local\r\nQUIT\r\n
 2026-05-28T06:03:20.520117+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
 2026-05-28T06:03:20.520263+00:00 mail postfix/submission/smtpd[2282]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] ehlo=1 quit=1 commands=2
-2026-05-28T06:03:20.528371+00:00 mail dovecot: imap-login: Disconnected: Aborted login by logging out (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<REDACTED>
+2026-05-28T06:03:20.528371+00:00 mail dovecot: imap-login: Disconnected: Aborted login by logging out (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<ygk2fNpSyOSsFAEe>
 2026-05-28T06:03:20.542016+00:00 mail postfix/submissions/smtpd[2281]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
 2026-05-28T06:03:20.542062+00:00 mail postfix/submissions/smtpd[2281]: improper command pipelining after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]: \026\003\001\006\224\001\000\006\220\003\003\212\353\016?D"[?\354\333-\3153\377\000\024m\274\317\207\370F\234,byPf\274\021G# 3\3074'\306{\242\023\211x$\325\311Au\302\030.pJ\310w(\031\v\272\036R\374\035\204\207\000\266\023\002\023\003\023\001\300,\3000\000\243\000\237\314\251\314\250\314\252\300\255
 2026-05-28T06:03:20.542713+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
@@ -97,7 +97,7 @@
 2026-05-28T06:03:49.603869+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
 2026-05-28T06:03:49.604001+00:00 mail postfix/submissions/smtpd[2281]: lost connection after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]
 2026-05-28T06:03:49.604048+00:00 mail postfix/submissions/smtpd[2281]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] commands=0/0
-2026-05-28T06:03:49.605510+00:00 mail dovecot: imap-login: Disconnected: Connection closed (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<REDACTED>
+2026-05-28T06:03:49.605510+00:00 mail dovecot: imap-login: Disconnected: Connection closed (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<arjxfdpSAuSsFAEe>
 2026-05-28T06:03:49.605512+00:00 mail postfix/submission/smtpd[2282]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
 2026-05-28T06:03:49.606057+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
 2026-05-28T06:03:49.606208+00:00 mail postfix/submission/smtpd[2282]: lost connection after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]
@@ -112,9 +112,46 @@
 2026-05-28T06:03:49.615204+00:00 mail postfix/submission/smtpd[2282]: improper command pipelining after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]: EHLO kali.techvault.local\r\nQUIT\r\n
 2026-05-28T06:03:49.615737+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
 2026-05-28T06:03:49.615891+00:00 mail postfix/submission/smtpd[2282]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] ehlo=1 quit=1 commands=2
-2026-05-28T06:03:49.623886+00:00 mail dovecot: imap-login: Disconnected: Aborted login by logging out (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<REDACTED>
+2026-05-28T06:03:49.623886+00:00 mail dovecot: imap-login: Disconnected: Aborted login by logging out (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<JQDyfdpSCOSsFAEe>
 2026-05-28T06:03:49.637266+00:00 mail postfix/submissions/smtpd[2281]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
 2026-05-28T06:03:49.637300+00:00 mail postfix/submissions/smtpd[2281]: improper command pipelining after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]: \026\003\001\006\224\001\000\006\220\003\003[=\225\344b\243\3512\236c\331\004\203\005\343\337K\326\214\206q\006\001^_\276\231\364W~\026\210 \346Q+\ayX\334.tG\207\307\205\2752\224\303>\273\260\362y\210~2\270\330\261*\204\0161\000\266\023\002\023\003\023\001\300,\3000\000\243\000\237\314\251\314\250\314\252\300\255
 2026-05-28T06:03:49.637984+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
 2026-05-28T06:03:49.638120+00:00 mail postfix/submissions/smtpd[2281]: warning: non-SMTP command from aptl-kali.aptl_aptl-dmz[172.20.1.30]: \026\003\001\006\224\001\000\006\220\003\003[=\225\344b\243\3512\236c\331\004\203\005\343\337K\326\2
 2026-05-28T06:03:49.638177+00:00 mail postfix/submissions/smtpd[2281]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] unknown=0/1 commands=0/1
+2026-05-28T06:08:02.474295+00:00 mail postfix/postscreen[4368]: CONNECT from [172.20.1.30]:35124 to [172.20.1.21]:25
+2026-05-28T06:08:02.474304+00:00 mail postfix/postscreen[4368]: ALLOWLISTED [172.20.1.30]:35124
+2026-05-28T06:08:02.477117+00:00 mail dovecot: imap-login: Disconnected: Connection closed (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<ADwEjdpSeN6sFAEe>
+2026-05-28T06:08:02.483587+00:00 mail postfix/postscreen[4368]: CONNECT from [172.20.1.30]:35138 to [172.20.1.21]:25
+2026-05-28T06:08:02.483603+00:00 mail postfix/postscreen[4368]: ALLOWLISTED [172.20.1.30]:35138
+2026-05-28T06:08:02.484520+00:00 mail postfix/submission/smtpd[4372]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
+2026-05-28T06:08:02.484542+00:00 mail postfix/smtpd[4370]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
+2026-05-28T06:08:02.484618+00:00 mail postfix/submissions/smtpd[4371]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
+2026-05-28T06:08:02.485336+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
+2026-05-28T06:08:02.485472+00:00 mail postfix/smtpd[4370]: lost connection after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]
+2026-05-28T06:08:02.485509+00:00 mail postfix/smtpd[4370]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] commands=0/0
+2026-05-28T06:08:02.485998+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
+2026-05-28T06:08:02.486080+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
+2026-05-28T06:08:02.486287+00:00 mail postfix/submissions/smtpd[4371]: lost connection after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]
+2026-05-28T06:08:02.486351+00:00 mail postfix/submissions/smtpd[4371]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] commands=0/0
+2026-05-28T06:08:02.486489+00:00 mail postfix/submission/smtpd[4372]: lost connection after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]
+2026-05-28T06:08:02.486524+00:00 mail postfix/smtpd[4370]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
+2026-05-28T06:08:02.486547+00:00 mail postfix/submission/smtpd[4372]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] commands=0/0
+2026-05-28T06:08:02.487027+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
+2026-05-28T06:08:02.487188+00:00 mail postfix/smtpd[4370]: improper command pipelining after EHLO from aptl-kali.aptl_aptl-dmz[172.20.1.30]: QUIT\r\n
+2026-05-28T06:08:02.487273+00:00 mail postfix/smtpd[4370]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] ehlo=1 quit=1 commands=2
+2026-05-28T06:08:02.490771+00:00 mail postfix/submission/smtpd[4372]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
+2026-05-28T06:08:02.490792+00:00 mail postfix/submission/smtpd[4372]: improper command pipelining after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]: EHLO kali.techvault.local\r\nQUIT\r\n
+2026-05-28T06:08:02.491557+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
+2026-05-28T06:08:02.491769+00:00 mail postfix/submission/smtpd[4372]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] ehlo=1 quit=1 commands=2
+2026-05-28T06:08:02.499653+00:00 mail dovecot: imap-login: Disconnected: Aborted login by logging out (no auth attempts in 0 secs): user=<>, rip=172.20.1.30, lip=172.20.1.21, session=<GJQEjdpSiN6sFAEe>
+2026-05-28T06:08:02.513114+00:00 mail postfix/submissions/smtpd[4371]: connect from aptl-kali.aptl_aptl-dmz[172.20.1.30]
+2026-05-28T06:08:02.513147+00:00 mail postfix/submissions/smtpd[4371]: improper command pipelining after CONNECT from aptl-kali.aptl_aptl-dmz[172.20.1.30]: \026\003\001\006\224\001\000\006\220\003\0037|\376\210\377\024o\016\030\372\370\334\031\vL%\207\035\315\217\335\005\v2\241\311\242\0301\027t\n #\2233\3635)\255\365\313t\233\375\206^\252\235\346q*\372\267\216\2240\350\360\025\251\306w\221\242\000\266\023\002\023\003\023\001\300,\3000\000\243\000\237\314\251\314\250\314\252\300\255
+2026-05-28T06:08:02.513692+00:00 mail opendmarc[1322]: ignoring connection from aptl-kali.aptl_aptl-dmz
+2026-05-28T06:08:02.513791+00:00 mail postfix/submissions/smtpd[4371]: warning: non-SMTP command from aptl-kali.aptl_aptl-dmz[172.20.1.30]: \026\003\001\006\224\001\000\006\220\003\0037|\376\210\377\024o\016\030\372\370\334\031\vL%\207\035\
+2026-05-28T06:08:02.513832+00:00 mail postfix/submissions/smtpd[4371]: disconnect from aptl-kali.aptl_aptl-dmz[172.20.1.30] unknown=0/1 commands=0/1
+2026-05-28T18:19:27.247101+00:00 mail dovecot: master: Warning: Time moved forwards by 0.100018 seconds - adjusting timeouts.
+2026-05-30T07:01:27.591605+00:00 mail dovecot: master: Warning: Time moved forwards by 0.101015 seconds - adjusting timeouts.
+tail: /var/log/mail/mail.log: file truncated
+2026-06-03T21:23:35.514379+00:00 mail dovecot: master: Warning: Time moved forwards by 0.100019 seconds - adjusting timeouts.
+2026-06-06T22:48:11.241960+00:00 mail dovecot: master: Warning: Time moved forwards by 0.100025 seconds - adjusting timeouts.
+tail: /var/log/mail/mail.log: file truncated

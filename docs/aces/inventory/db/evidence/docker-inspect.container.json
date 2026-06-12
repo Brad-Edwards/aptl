@@ -1,7 +1,7 @@
 [
   {
-    "Id": "cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00",
-    "Created": "2026-05-21T16:36:39.5542097Z",
+    "Id": "635ee40d3b0937adc766bba11af1099e18865dafdbddbcb640fd075bffdc81c2",
+    "Created": "2026-06-11T16:00:17.875693921Z",
     "Path": "docker-entrypoint.sh",
     "Args": [
       "postgres",
@@ -25,42 +25,42 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 994219,
+      "Pid": 804989,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-21T16:36:43.01438334Z",
+      "StartedAt": "2026-06-11T16:00:22.286655032Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-05-22T05:55:28.751489776+02:00",
-            "End": "2026-05-22T05:55:28.796680733+02:00",
+            "Start": "2026-06-12T15:32:14.605446484+02:00",
+            "End": "2026-06-12T15:32:14.656139801+02:00",
             "ExitCode": 0,
             "Output": "/var/run/postgresql:5432 - accepting connections\n"
           },
           {
-            "Start": "2026-05-22T05:55:38.79774512+02:00",
-            "End": "2026-05-22T05:55:38.838107804+02:00",
+            "Start": "2026-06-12T15:32:24.656932289+02:00",
+            "End": "2026-06-12T15:32:24.705410157+02:00",
             "ExitCode": 0,
             "Output": "/var/run/postgresql:5432 - accepting connections\n"
           },
           {
-            "Start": "2026-05-22T05:55:48.838869082+02:00",
-            "End": "2026-05-22T05:55:48.883950022+02:00",
+            "Start": "2026-06-12T15:32:34.706652783+02:00",
+            "End": "2026-06-12T15:32:34.756856246+02:00",
             "ExitCode": 0,
             "Output": "/var/run/postgresql:5432 - accepting connections\n"
           },
           {
-            "Start": "2026-05-22T05:55:58.884380789+02:00",
-            "End": "2026-05-22T05:55:58.926910289+02:00",
+            "Start": "2026-06-12T15:32:44.757685019+02:00",
+            "End": "2026-06-12T15:32:44.812381445+02:00",
             "ExitCode": 0,
             "Output": "/var/run/postgresql:5432 - accepting connections\n"
           },
           {
-            "Start": "2026-05-22T05:56:08.927873113+02:00",
-            "End": "2026-05-22T05:56:08.974884431+02:00",
+            "Start": "2026-06-12T15:32:54.813396857+02:00",
+            "End": "2026-06-12T15:32:54.860569724+02:00",
             "ExitCode": 0,
             "Output": "/var/run/postgresql:5432 - accepting connections\n"
           }
@@ -68,10 +68,10 @@
       }
     },
     "Image": "sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50",
-    "ResolvConfPath": "/var/lib/docker/containers/cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00/hostname",
-    "HostsPath": "/var/lib/docker/containers/cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00/hosts",
-    "LogPath": "/var/lib/docker/containers/cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00/cb08dbec28911525e2b8c948b9ebd566016e15adac2799f0bc2730812ab86a00-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/635ee40d3b0937adc766bba11af1099e18865dafdbddbcb640fd075bffdc81c2/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/635ee40d3b0937adc766bba11af1099e18865dafdbddbcb640fd075bffdc81c2/hostname",
+    "HostsPath": "/var/lib/docker/containers/635ee40d3b0937adc766bba11af1099e18865dafdbddbcb640fd075bffdc81c2/hosts",
+    "LogPath": "/var/lib/docker/containers/635ee40d3b0937adc766bba11af1099e18865dafdbddbcb640fd075bffdc81c2/635ee40d3b0937adc766bba11af1099e18865dafdbddbcb640fd075bffdc81c2-json.log",
     "Name": "/aptl-db",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -217,9 +217,9 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "POSTGRES_USER=techvault",
-        "POSTGRES_PASSWORD=<REDACTED-SCENARIO-FIXTURE>",
         "POSTGRES_DB=techvault",
+        "POSTGRES_USER=techvault",
+        "POSTGRES_PASSWORD=techvault_db_pass",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "GOSU_VERSION=1.19",
         "LANG=en_US.utf8",
@@ -277,8 +277,8 @@
       "StopSignal": "SIGINT"
     },
     "NetworkSettings": {
-      "SandboxID": "6322a9ffb3936aafc922e19614f830efcf07992e50667766bfc0c622edb4b5aa",
-      "SandboxKey": "/var/run/docker/netns/6322a9ffb393",
+      "SandboxID": "40688621e18958fc561da19ec2e93c3f80f55e6b1035810d33c42a047122b312",
+      "SandboxKey": "/var/run/docker/netns/40688621e189",
       "Ports": {
         "5432/tcp": null
       },
@@ -294,11 +294,11 @@
           ],
           "DriverOpts": null,
           "GwPriority": 0,
-          "NetworkID": "f1dcf3d5653a138f564e5472f6307b23d4eb3ac2fd4f81dd76aae7dcae526c1a",
-          "EndpointID": "94c308a4ed106b2f9dbb50a3c4abc75b25263720758fdd0369187436fedb0878",
+          "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
+          "EndpointID": "388a4f60525be56c8f5d82fcdbfa99d277cc9555964b209a129c876c87681813",
           "Gateway": "",
           "IPAddress": "172.20.2.11",
-          "MacAddress": "0a:0b:d2:e7:2f:52",
+          "MacAddress": "2e:00:24:fb:58:ce",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -306,7 +306,7 @@
           "DNSNames": [
             "aptl-db",
             "db",
-            "cb08dbec2891",
+            "635ee40d3b09",
             "db.techvault.local"
           ]
         }

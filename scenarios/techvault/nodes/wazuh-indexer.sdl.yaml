@@ -281,10 +281,10 @@ nodes:
           - identifier: config-wazuh_indexer_ssl_certs-wazuh-indexer-key-pem
             source_path: config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem
             destination_path: /usr/share/wazuh-indexer/certs/wazuh.indexer.key
-            checksum: ''
-            checksum_algorithm: ''
-            description: Generated indexer server private key bound into the Wazuh indexer runtime; raw bytes are operator-secret
-              material and intentionally omitted from evidence.
+            checksum: b9003fbf3ac6030da81bb19abeef031d35881010d2d8145cfc57c4978044f7a3
+            checksum_algorithm: sha256
+            description: Generated indexer server private key bound into the Wazuh indexer runtime; checksum verified from
+              /usr/share/wazuh-indexer/certs/wazuh.indexer.key in the live container.
           - identifier: config-wazuh_indexer_ssl_certs-admin-pem
             source_path: config/wazuh_indexer_ssl_certs/admin.pem
             destination_path: /usr/share/wazuh-indexer/certs/admin.pem
@@ -294,10 +294,10 @@ nodes:
           - identifier: config-wazuh_indexer_ssl_certs-admin-key-pem
             source_path: config/wazuh_indexer_ssl_certs/admin-key.pem
             destination_path: /usr/share/wazuh-indexer/certs/admin-key.pem
-            checksum: ''
-            checksum_algorithm: ''
-            description: Generated security-plugin admin private key bound into the Wazuh indexer runtime; raw bytes are operator-secret
-              material and intentionally omitted from evidence.
+            checksum: abfe717cb6dcf0377ce662c7ad6dc171a2f0e9b5c64abf96fee56f9254ce9511
+            checksum_algorithm: sha256
+            description: Generated security-plugin admin private key bound into the Wazuh indexer runtime; checksum verified
+              from /usr/share/wazuh-indexer/certs/admin-key.pem in the live container.
         attestation:
           status: absent
           verification: not_applicable
@@ -13229,21 +13229,22 @@ nodes:
           - network: techvault.security-net
             network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
             network_id_stability: ephemeral
-            endpoint_id: 1eb3bb0e2a5be86233852f0b592b0a1819c4b6fbaf7406e91e8c87d29fcf178e
+            endpoint_id: 330f0f7e150e07d60cd93ecb95cf0f12162dfcba8a6ff748395a4d251834110d
             endpoint_id_stability: ephemeral
             backend_generated: true
             ip_address: 172.20.0.12
             ip_prefix_length: 24
             gateway: 172.20.0.1
-            mac_address: ae:4b:7d:21:1f:d2
+            mac_address: fe:81:69:5e:59:72
             aliases:
               - aptl-wazuh-indexer
               - wazuh.indexer
             dns_names:
               - aptl-wazuh-indexer
               - wazuh.indexer
+              - b40f4f901839
             generated_dns_names:
-              - 50c9dab972af
+              - b40f4f901839
             backend: null
             description: Docker Compose aptl-security network endpoint observed by docker inspect.
         published_ports:

@@ -29,11 +29,12 @@ EVIDENCE_DIR = ASSET_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e"
-IMAGE_DIGEST = "aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e"
+IMAGE_ID = "sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb"
+IMAGE_DIGEST = "aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb"
 # The disclosed MISP admin API key fixture (nodes.techvault.misp ADMIN_KEY);
-# it must appear in the SDL encoding and must NOT appear in committed evidence.
+# it must appear in both SDL and committed evidence as scenario content.
 MISP_API_KEY_FIXTURE = "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw"
+GPG_KEY_FIXTURE = "A035C8C19219BA821ECEA86B64E628F8D684696D"
 RUNTIME_PACKAGE_COUNT = 110
 TRIVY_FINDING_COUNT = 220
 FILESYSTEM_TREE_ROW_COUNT = 244
@@ -251,14 +252,9 @@ def test_misp_suricata_sync_evidence_does_not_commit_secret_values():
         if path.is_file() and forbidden.search(_evidence_text(path))
     ]
     assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
-    # The MISP admin API key fixture must never appear in committed evidence
-    # (it is carried only in the SDL secret-fixture encoding).
-    leaked = [
-        path.name
-        for path in EVIDENCE_DIR.iterdir()
-        if path.is_file() and MISP_API_KEY_FIXTURE in _evidence_text(path)
-    ]
-    assert not leaked, f"MISP API key fixture leaked into evidence: {leaked}"
+    evidence_text = "\n".join(_evidence_text(path) for path in EVIDENCE_DIR.iterdir())
+    assert MISP_API_KEY_FIXTURE in evidence_text
+    assert GPG_KEY_FIXTURE in evidence_text
 
 
 def test_misp_suricata_sync_runtime_evidence_counts():

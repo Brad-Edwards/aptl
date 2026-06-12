@@ -1,7 +1,7 @@
 [
   {
-    "Id": "45f5c73dd16061bc9b4f27ed4b4911ee707cf1b348c9ce6ec2cdd0333b26914a",
-    "Created": "2026-05-23T06:18:29.92493339Z",
+    "Id": "15776121bcbe81af778d2df109831463803ace5c8c09b0bc66916ebd6a69d25c",
+    "Created": "2026-06-11T16:00:17.871662225Z",
     "Path": "docker-entrypoint.sh",
     "Args": [
       "redis-server",
@@ -15,17 +15,17 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2955768,
+      "Pid": 804534,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:34.634895704Z",
+      "StartedAt": "2026-06-11T16:00:21.961196998Z",
       "FinishedAt": "0001-01-01T00:00:00Z"
     },
     "Image": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
-    "ResolvConfPath": "/var/lib/docker/containers/45f5c73dd16061bc9b4f27ed4b4911ee707cf1b348c9ce6ec2cdd0333b26914a/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/45f5c73dd16061bc9b4f27ed4b4911ee707cf1b348c9ce6ec2cdd0333b26914a/hostname",
-    "HostsPath": "/var/lib/docker/containers/45f5c73dd16061bc9b4f27ed4b4911ee707cf1b348c9ce6ec2cdd0333b26914a/hosts",
-    "LogPath": "/var/lib/docker/containers/45f5c73dd16061bc9b4f27ed4b4911ee707cf1b348c9ce6ec2cdd0333b26914a/45f5c73dd16061bc9b4f27ed4b4911ee707cf1b348c9ce6ec2cdd0333b26914a-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/15776121bcbe81af778d2df109831463803ace5c8c09b0bc66916ebd6a69d25c/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/15776121bcbe81af778d2df109831463803ace5c8c09b0bc66916ebd6a69d25c/hostname",
+    "HostsPath": "/var/lib/docker/containers/15776121bcbe81af778d2df109831463803ace5c8c09b0bc66916ebd6a69d25c/hosts",
+    "LogPath": "/var/lib/docker/containers/15776121bcbe81af778d2df109831463803ace5c8c09b0bc66916ebd6a69d25c/15776121bcbe81af778d2df109831463803ace5c8c09b0bc66916ebd6a69d25c-json.log",
     "Name": "/aptl-misp-redis",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -137,8 +137,8 @@
     "Mounts": [
       {
         "Type": "volume",
-        "Name": "25859fa742d24995a82c66d581c0eedfc2b548f98468af5ab6c8c560e1d98102",
-        "Source": "/var/lib/docker/volumes/25859fa742d24995a82c66d581c0eedfc2b548f98468af5ab6c8c560e1d98102/_data",
+        "Name": "62d081c42d1cb9a1639336d81184e6f19fcc1dc90ef94d2101609e773f114a27",
+        "Source": "/var/lib/docker/volumes/62d081c42d1cb9a1639336d81184e6f19fcc1dc90ef94d2101609e773f114a27/_data",
         "Destination": "/data",
         "Driver": "local",
         "Mode": "",
@@ -147,7 +147,7 @@
       }
     ],
     "Config": {
-      "Hostname": "45f5c73dd160",
+      "Hostname": "15776121bcbe",
       "Domainname": "",
       "User": "",
       "AttachStdin": false,
@@ -193,8 +193,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "3fba635e8a3710f9f6285b1988b5457bee7fa78e6d88576c3a5ac3efe326bdf7",
-      "SandboxKey": "/var/run/docker/netns/3fba635e8a37",
+      "SandboxID": "d8f0755d53cd8996e1176484cfd3911802c3353f0be91d6a619616e49a43be3c",
+      "SandboxKey": "/var/run/docker/netns/d8f0755d53cd",
       "Ports": {
         "6379/tcp": null
       },
@@ -209,10 +209,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "7279ec3c7c60b8bbb3dcbcda88d0cd762c7681f3c6cd1aa023dcd092d6f0ea14",
+          "EndpointID": "3adbeefef751f220f107dfce2404ff362c214bf145f9378cd7239cedb7383dee",
           "Gateway": "172.20.0.1",
-          "IPAddress": "172.20.0.3",
-          "MacAddress": "92:11:52:ea:7d:44",
+          "IPAddress": "172.20.0.2",
+          "MacAddress": "da:8e:cb:fa:b6:2b",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -220,7 +220,7 @@
           "DNSNames": [
             "aptl-misp-redis",
             "misp-redis",
-            "45f5c73dd160"
+            "15776121bcbe"
           ]
         }
       }

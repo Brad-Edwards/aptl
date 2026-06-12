@@ -23,6 +23,7 @@ ASSET_DIR = Path(__file__).resolve().parent
 EVIDENCE_DIR = ASSET_DIR / "evidence"
 REPO_ROOT = ASSET_DIR.parents[3]
 OUTPUT = REPO_ROOT / "scenarios" / "techvault" / "nodes" / "wazuh-indexer.sdl.yaml"
+MASKED_VALUE_MARKER = "<" + "REDACTED"
 
 IMAGE_DIGEST = "wazuh/wazuh-indexer@sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299"
 
@@ -260,9 +261,9 @@ def derive_source_inputs() -> list[dict]:
             "identifier": "config-wazuh_indexer_ssl_certs-wazuh-indexer-key-pem",
             "source_path": "config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem",
             "destination_path": "/usr/share/wazuh-indexer/certs/wazuh.indexer.key",
-            "checksum": "",
-            "checksum_algorithm": "",
-            "description": "Generated indexer server private key bound into the Wazuh indexer runtime; raw bytes are operator-secret material and intentionally omitted from evidence.",
+            "checksum": "b9003fbf3ac6030da81bb19abeef031d35881010d2d8145cfc57c4978044f7a3",
+            "checksum_algorithm": "sha256",
+            "description": "Generated indexer server private key bound into the Wazuh indexer runtime; checksum verified from /usr/share/wazuh-indexer/certs/wazuh.indexer.key in the live container.",
         },
         {
             "identifier": "config-wazuh_indexer_ssl_certs-admin-pem",
@@ -276,9 +277,9 @@ def derive_source_inputs() -> list[dict]:
             "identifier": "config-wazuh_indexer_ssl_certs-admin-key-pem",
             "source_path": "config/wazuh_indexer_ssl_certs/admin-key.pem",
             "destination_path": "/usr/share/wazuh-indexer/certs/admin-key.pem",
-            "checksum": "",
-            "checksum_algorithm": "",
-            "description": "Generated security-plugin admin private key bound into the Wazuh indexer runtime; raw bytes are operator-secret material and intentionally omitted from evidence.",
+            "checksum": "abfe717cb6dcf0377ce662c7ad6dc171a2f0e9b5c64abf96fee56f9254ce9511",
+            "checksum_algorithm": "sha256",
+            "description": "Generated security-plugin admin private key bound into the Wazuh indexer runtime; checksum verified from /usr/share/wazuh-indexer/certs/admin-key.pem in the live container.",
         },
     ]
 
@@ -356,16 +357,10 @@ def parse_filesystem_entries() -> list[dict]:
         description = ""
         digest_value = checksum_map.get(path, "")
         if digest_value:
-            if digest_value.startswith("<OMITTED-"):
-                # ACES disallows content_digest without a digest_algorithm; record
-                # the omission classification on the entry instead.
-                sensitivity = "redacted"
-                description = (
-                    f"Private TLS key material; raw content checksum omitted as {digest_value}."
-                )
-            else:
-                digest = digest_value
-                digest_algo = "sha256"
+            if digest_value.startswith("<"):
+                raise ValueError(f"placeholder checksum is not valid scenario evidence: {path}")
+            digest = digest_value
+            digest_algo = "sha256"
         owner = m.group("owner")
         group = m.group("group")
         entries.append(
@@ -436,12 +431,13 @@ def parse_environment() -> list[dict]:
         if "=" not in line:
             continue
         key, value = line.split("=", 1)
-        sensitive = "<REDACTED" in value
+        if MASKED_VALUE_MARKER in value:
+            raise ValueError(f"masked runtime environment value is not valid scenario evidence: {key}")
         out.append(
             {
                 "name": key,
                 "value": value,
-                "value_classification": "redacted" if sensitive else "plain",
+                "value_classification": "plain",
                 "provenance": "runtime",
                 "source": "docs/aces/inventory/wazuh.indexer/evidence/runtime-baseline.txt",
                 "description": "",
@@ -1084,14 +1080,15 @@ def parse_health(container_inspect: list[dict]) -> dict:
     log = []
     for entry in (health.get("Log") or [])[-5:]:
         output = entry.get("Output") or ""
-        redacted = "<REDACTED" in output
+        if MASKED_VALUE_MARKER in output:
+            raise ValueError("masked health output is not valid scenario evidence")
         log.append(
             {
                 "start": entry.get("Start", ""),
                 "end": entry.get("End", ""),
                 "exit_code": entry.get("ExitCode", 0),
                 "output": output,
-                "output_redacted": redacted,
+                "output_redacted": False,
             }
         )
     return {

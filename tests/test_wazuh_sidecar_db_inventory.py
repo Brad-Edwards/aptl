@@ -29,11 +29,11 @@ EVIDENCE_DIR = ASSET_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3"
-IMAGE_DIGEST = "aptl-wazuh-sidecar@sha256:de74ca155d35c0f8f50b9133320ae02cb0e0a73ef72ff0dececf949a0ab5fcd3"
+IMAGE_ID = "sha256:1a9c99918f73a234721fe07ccafdcc6c49e1b3784a16ce86cdb2864636345d25"
+IMAGE_DIGEST = "aptl-wazuh-sidecar@sha256:1a9c99918f73a234721fe07ccafdcc6c49e1b3784a16ce86cdb2864636345d25"
 RUNTIME_PACKAGE_COUNT = 114
-TRIVY_FINDING_COUNT = 174
-FILESYSTEM_TREE_ROW_COUNT = 214
+TRIVY_FINDING_COUNT = 165
+FILESYSTEM_TREE_ROW_COUNT = 200
 FILESYSTEM_CHECKSUM_COUNT = 113
 SDL_FILESYSTEM_ENTRY_COUNT = 22
 LOCAL_IDENTITY_USER_COUNT = 19
@@ -256,9 +256,12 @@ def test_wazuh_sidecar_db_evidence_does_not_commit_raw_secret_values():
         if path.is_file() and forbidden.search(_evidence_text(path))
     ]
     assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
-    # The agent registration secret is recorded as metadata only.
+    # The in-range agent registration fixture is captured verbatim.
     agent_state = (EVIDENCE_DIR / "wazuh-agent-state.txt").read_text(encoding="utf-8")
-    assert "content withheld" in agent_state
+    assert (
+        "006 aptl-db-agent any "
+        "237959e9067132e19ce7dc8f0c95f769b54c9a1baf7d695551b138850461be31"
+    ) in agent_state
 
 
 def test_wazuh_sidecar_db_runtime_evidence_counts():
@@ -282,7 +285,7 @@ def test_wazuh_sidecar_db_runtime_evidence_counts():
 
 def test_wazuh_sidecar_db_trivy_counts_match_severity_breakdown():
     counts = {row["severity"]: row["count"] for row in _json_file("trivy-vulnerability-counts.json")}
-    assert counts == {"CRITICAL": 5, "HIGH": 14, "MEDIUM": 64, "LOW": 84, "UNKNOWN": 7}
+    assert counts == {"CRITICAL": 3, "HIGH": 12, "MEDIUM": 60, "LOW": 85, "UNKNOWN": 5}
     assert sum(counts.values()) == TRIVY_FINDING_COUNT
 
 

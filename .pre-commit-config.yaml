@@ -26,6 +26,9 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
         # `tests/` historically holds private-key-shaped fixtures.
+        # TechVault inventory evidence captures scenario target filesystem
+        # secrets verbatim; those files are reviewed scenario content, not
+        # operator credentials.
         # `mcp/aptl-mcp-common/{src,tests}/redaction.{ts,test.ts}` and
         # `src/aptl/utils/redaction.py` (+ its test) intentionally embed
         # PEM block markers — they implement and verify masking of those
@@ -33,6 +36,11 @@ repos:
         exclude: |
           (?x)^(
             tests/.*|
+            docs/aces/inventory/fileshare/evidence/filesystem-sensitive-paths\.txt|
+            docs/aces/inventory/reverse/evidence/filesystem-sensitive-paths\.txt|
+            docs/aces/inventory/shuffle-frontend/evidence/filesystem-sensitive-paths\.txt|
+            docs/aces/inventory/victim/evidence/filesystem-sensitive-paths\.txt|
+            docs/aces/inventory/workstation/evidence/filesystem-sensitive-paths\.txt|
             mcp/aptl-mcp-common/src/redaction\.ts|
             mcp/aptl-mcp-common/tests/redaction\.test\.ts|
             src/aptl/utils/redaction\.py

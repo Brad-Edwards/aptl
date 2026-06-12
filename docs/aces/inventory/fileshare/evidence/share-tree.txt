@@ -1,6 +1,8 @@
 --all-share-paths--
 -rw-r--r-- root root 0 0 210 /srv/shares/shared/user-flag.txt
+-rwx------ root root 0 0 1831 /srv/shares/it-backups/keys/deploy_key
 -rwx------ root root 0 0 377 /srv/shares/it-backups/db_backup_20240115.sql
+-rwx------ root root 0 0 408 /srv/shares/it-backups/keys/deploy_key.pub
 -rwx------ root root 0 0 61 /srv/shares/it-backups/keys/README
 -rwxr-x--- root root 0 0 268 /srv/shares/finance/reports/q3-revenue.csv
 -rwxr-x--- root root 0 0 514 /srv/shares/hr/employees/directory.csv

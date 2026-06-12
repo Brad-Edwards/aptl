@@ -1,14 +1,14 @@
 UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
-root                2668923             2668898             0                   06:58               ?                   00:00:11            /usr/sbin/init
-syslog              2670047             2668923             0                   06:58               ?                   00:00:00            @dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
-root                2673536             2668923             3                   06:59               ?                   00:20:57            /usr/bin/falco -o engine.kind=modern_ebpf
-root                2673537             2668923             0                   06:59               ?                   00:00:02            /usr/bin/falcoctl artifact follow --allowed-types=rulesfile
-tcpdump             2669065             2668923             0                   06:58               ?                   00:00:02            /usr/sbin/rsyslogd -n -iNONE
-root                2669071             2668923             0                   06:58               ?                   00:00:00            sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups
-root                2669064             2668923             0                   06:58               ?                   00:00:04            /lib/systemd/systemd-journald
-root                2670052             2668923             0                   06:58               ?                   00:00:00            /lib/systemd/systemd-logind
-root                2676435             2668923             0                   06:59               ?                   00:00:00            /var/ossec/bin/wazuh-execd
-landsca+            2676489             2668923             0                   06:59               ?                   00:00:12            /var/ossec/bin/wazuh-agentd
-root                2676593             2668923             0                   06:59               ?                   00:00:06            /var/ossec/bin/wazuh-syscheckd
-root                2676973             2668923             0                   06:59               ?                   00:00:04            /var/ossec/bin/wazuh-logcollector
-root                2677179             2668923             0                   06:59               ?                   00:00:01            /var/ossec/bin/wazuh-modulesd
+root                2668923             2668898             0                   Jun10               ?                   00:02:04            /usr/sbin/init
+syslog              2670047             2668923             0                   Jun10               ?                   00:00:00            @dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+root                2673536             2668923             5                   Jun10               ?                   03:02:09            /usr/bin/falco -o engine.kind=modern_ebpf
+root                2673537             2668923             0                   Jun10               ?                   00:00:11            /usr/bin/falcoctl artifact follow --allowed-types=rulesfile
+tcpdump             2669065             2668923             0                   Jun10               ?                   00:00:10            /usr/sbin/rsyslogd -n -iNONE
+root                2669071             2668923             0                   Jun10               ?                   00:00:00            sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups
+root                2669064             2668923             0                   Jun10               ?                   00:00:22            /lib/systemd/systemd-journald
+root                2670052             2668923             0                   Jun10               ?                   00:00:00            /lib/systemd/systemd-logind
+root                2676435             2668923             0                   Jun10               ?                   00:00:04            /var/ossec/bin/wazuh-execd
+landsca+            2676489             2668923             0                   Jun10               ?                   00:00:57            /var/ossec/bin/wazuh-agentd
+root                2676593             2668923             0                   Jun10               ?                   00:00:36            /var/ossec/bin/wazuh-syscheckd
+root                2676973             2668923             0                   Jun10               ?                   00:00:21            /var/ossec/bin/wazuh-logcollector
+root                2677179             2668923             0                   Jun10               ?                   00:00:07            /var/ossec/bin/wazuh-modulesd

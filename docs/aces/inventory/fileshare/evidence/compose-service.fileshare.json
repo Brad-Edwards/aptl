@@ -3,59 +3,46 @@
     "fileshare"
   ],
   "build": {
-    "context": "/home/atomik/src/aptl2",
+    "context": ".",
     "dockerfile": "containers/fileshare/Dockerfile"
   },
+  "container_name": "aptl-fileshare",
+  "hostname": "files.techvault.local",
+  "restart": "unless-stopped",
+  "environment": [
+    "SIEM_IP=172.20.0.10",
+    "WAZUH_MANAGER=wazuh.manager",
+    "AGENT_NAME=aptl-fileshare-agent",
+    "LOG_PATHS=/var/log/samba/log.samba-bgqd,/var/log/samba/log.*",
+    "LOG_FORMAT=syslog"
+  ],
+  "volumes": [
+    "fileshare_data:/srv/shares",
+    "fileshare_logs:/var/log/samba"
+  ],
   "cap_add": [
     "NET_ADMIN"
   ],
-  "command": null,
-  "container_name": "aptl-fileshare",
-  "deploy": {
-    "resources": {
-      "limits": {
-        "memory": "536870912"
-      }
-    },
-    "placement": {}
-  },
-  "entrypoint": null,
-  "environment": {
-    "AGENT_NAME": "aptl-fileshare-agent",
-    "LOG_FORMAT": "syslog",
-    "LOG_PATHS": "/var/log/samba/log.samba-bgqd,/var/log/samba/log.*",
-    "SIEM_IP": "172.20.0.10",
-    "WAZUH_MANAGER": "wazuh.manager"
-  },
-  "hostname": "files.techvault.local",
   "healthcheck": {
     "test": [
       "CMD-SHELL",
       "smbclient -L localhost -N || exit 1"
     ],
-    "timeout": "5s",
     "interval": "15s",
+    "timeout": "5s",
     "retries": 5,
     "start_period": "30s"
+  },
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "512m"
+      }
+    }
   },
   "networks": {
     "aptl-internal": {
       "ipv4_address": "172.20.2.12"
     }
-  },
-  "restart": "unless-stopped",
-  "volumes": [
-    {
-      "type": "volume",
-      "source": "fileshare_data",
-      "target": "/srv/shares",
-      "volume": {}
-    },
-    {
-      "type": "volume",
-      "source": "fileshare_logs",
-      "target": "/var/log/samba",
-      "volume": {}
-    }
-  ]
+  }
 }

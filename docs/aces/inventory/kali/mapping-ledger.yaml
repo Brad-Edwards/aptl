@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-kali@sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9
+  image_digest: aptl-kali@sha256:fee0813b38264c78fab66c86167595715803a6fd9152bf6c0af8e6835d368462
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -114,7 +114,7 @@ facts:
     category: provenance
     summary: >
       The asset uses first-party local image aptl-kali:latest, captured as
-      aptl-kali@sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9.
+      aptl-kali@sha256:fee0813b38264c78fab66c86167595715803a6fd9152bf6c0af8e6835d368462.
     evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-inspect.container.json

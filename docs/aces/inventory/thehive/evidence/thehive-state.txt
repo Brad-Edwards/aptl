@@ -9,7 +9,7 @@
 #
 # The keystore password is provided via the env_file
 # `config/soc_certs/thehive/keystore.p12.password` (env_file format:
-# `HTTPS_KEYSTORE_PASSWORD=<REDACTED> Play substitutes `${?HTTPS_KEYSTORE_PASSWORD}`
+# `HTTPS_KEYSTORE_PASSWORD=<value>`). Play substitutes `${?HTTPS_KEYSTORE_PASSWORD}`
 # at startup.
 
 play.server {
@@ -18,24 +18,24 @@ play.server {
   https.keyStore {
     path = "/etc/thehive/keystore.p12"
     type = "PKCS12"
-    password = <REDACTED>
+    password = ${?HTTPS_KEYSTORE_PASSWORD}
   }
 }
 --data-dir-top-level--
 total 8
-drwxr-xr-x 2 root root 4096 May 23 06:18 .
-drwxr-xr-x 4 root root 4096 May 23 06:19 ..
+drwxr-xr-x 2 root root 4096 Jun 11 16:00 .
+drwxr-xr-x 4 root root 4096 Jun 11 16:01 ..
 --index-dir-top-level--
 total 8
-drwxr-xr-x 2 root root 4096 May 23 06:18 .
-drwxr-xr-x 4 root root 4096 May 23 06:19 ..
+drwxr-xr-x 2 root root 4096 Jun 11 16:00 .
+drwxr-xr-x 4 root root 4096 Jun 11 16:01 ..
 --jvm-java-version--
 openjdk version "11.0.29" 2025-10-21 LTS
 OpenJDK Runtime Environment Corretto-11.0.29.7.1 (build 11.0.29+7-LTS)
 OpenJDK 64-Bit Server VM Corretto-11.0.29.7.1 (build 11.0.29+7-LTS, mixed mode)
 --jvm-pid1-cmdline--
 /usr/lib/jvm/java-11-amazon-corretto/bin/java
--Dconfig.file=/tmp/thehive-2IWJW1.conf
+-Dconfig.file=/tmp/thehive-gY9xfH.conf
 -Dlogger.file=/etc/thehive/logback.xml
 -Dpidfile.path=/dev/null
 -Dfile.encoding=UTF-8
@@ -48,8 +48,8 @@ Pid:	1
 PPid:	0
 Uid:	1000	1000	1000	1000
 Gid:	1000	1000	1000	1000
-VmSize:	10610780 kB
-VmRSS:	  966296 kB
+VmSize:	10614720 kB
+VmRSS:	  813440 kB
 Threads:	182
 --rendered-index-backend--
 index.search.backend = lucene

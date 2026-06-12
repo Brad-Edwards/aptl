@@ -35,8 +35,8 @@ notes:
 - The Wazuh agent registration name is runtime-generated (reverse-$(hostname)-$(date +%s)); the manager-side agents[] enumeration
   is intentionally not extended for this node (non-deterministic name). The forwarding is encoded as node forwarding_agents
   + the reverse-forwards-wazuh relationship.
-- Operator private key material (/keys/aptl_lab_key, SSH host keys) and the wazuh client.keys are path/metadata only with
-  content withheld (ADR-029).
+- Scenario target secret files under /keys, /etc/ssh, and /var/ossec/etc/client.keys are captured verbatim in
+  filesystem-sensitive-paths.txt and included in filesystem-checksums.txt.xz.
 correspondence_checks:
 - id: reverse-evidence-bundle-integrity
   status: implemented
@@ -90,11 +90,11 @@ correspondence_checks:
   ledger_fact_ids:
   - reverse.relationship.forwards-wazuh
   - reverse.network.identity
-- id: reverse-first-boot-and-redaction-caveats
+- id: reverse-first-boot-and-capture-caveats
   status: implemented
   source: docs/aces/inventory/reverse/evidence/capture-limits.txt
   method: README and tests assert non-destructive capture scope, the writable-layer first-boot install boundary, the corrected
-    FLARE tool install (flare-floss/flare-capa), key redaction, the scoped filesystem manifest, and unavailable osquery tables.
+    FLARE tool install (flare-floss/flare-capa), key capture boundary, the scoped filesystem manifest, and unavailable osquery tables.
   realized_evidence:
   - path: evidence/capture-limits.txt
   - path: evidence/filesystem-sensitive-paths.txt
@@ -341,8 +341,8 @@ facts:
     - nodes.techvault.reverse.runtime.filesystem_inventory
     rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
     caveat: The manifest excludes the radare2 source/build tree, pipx venv lib payloads, and ~/.cache (toolchain payload evidenced
-      by the package/SBOM surfaces). Operator private keys (/keys/aptl_lab_key, SSH host keys) are operator_secret metadata-only;
-      /var/ossec/etc/client.keys is secret_fixture metadata-only; content excluded from checksums (ADR-029).
+      by the package/SBOM surfaces). Scenario target secret files under /keys, /etc/ssh, and /var/ossec/etc/client.keys are
+      captured verbatim in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt.xz.
 - id: reverse.runtime.local-identity
   category: identity
   summary: Local passwd/group inventory records 27 users and 48 groups; labadmin is in the sudo group with a NOPASSWD grant.

@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-webapp@sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a
+  image_digest: aptl-webapp@sha256:261633f0d60aa96b6921fc561a31e76a7601ea7f52e4f435efac79686882e299
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -98,7 +98,7 @@ facts:
     category: provenance
     summary: >
       The asset uses first-party local image aptl-webapp:latest, captured as
-      aptl-webapp@sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a.
+      aptl-webapp@sha256:261633f0d60aa96b6921fc561a31e76a7601ea7f52e4f435efac79686882e299.
     evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-inspect.container.json
@@ -480,7 +480,7 @@ facts:
     category: runtime-configuration
     summary: >
       The container has Compose/runtime environment variables that need
-      redaction classification and provenance separate from authored feature
+      sensitivity classification and provenance separate from authored feature
       environment.
     evidence:
       - path: evidence/compose-service.webapp.json

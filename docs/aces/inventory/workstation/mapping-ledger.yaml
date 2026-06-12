@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-workstation@sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f
+  image_digest: aptl-workstation@sha256:a407dd9bd9aecf297a51bd747215873e5edcc71e8618e9775bea9a5bb654dcbd
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -76,10 +76,9 @@ notes:
     `aptl lab stop -v && aptl lab start`; this is a non-destructive frozen
     observation of the realized workstation container.
   - >
-    Raw credential fixture contents, generated flags, private-key material, and
-    the operator private key at /keys/aptl_lab_key are intentionally absent from
-    committed evidence. Path metadata and checksums are retained where the
-    redaction boundary permits them.
+    Credential fixture contents, generated flags, private-key material, and
+    /keys/aptl_lab_key are retained verbatim where present in
+    filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt.
   - >
     Brad-Edwards/aces#418 added the typed service-manager unit runtime surface
     consumed by this bundle. No known ACES expressivity blocker or
@@ -89,7 +88,7 @@ facts:
     category: provenance
     summary: >
       The asset uses first-party local image aptl-workstation:latest, captured
-      as aptl-workstation@sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f.
+      as aptl-workstation@sha256:a407dd9bd9aecf297a51bd747215873e5edcc71e8618e9775bea9a5bb654dcbd.
     evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-inspect.container.json
@@ -135,7 +134,7 @@ facts:
 
   - id: workstation.os.version
     category: runtime-configuration
-    summary: The realized runtime OS is Rocky Linux 9.7 (Blue Onyx).
+    summary: The realized runtime OS is Rocky Linux 9.8 (Blue Onyx).
     evidence:
       - path: evidence/runtime-baseline.txt
       - path: evidence/docker-inspect.image.json
@@ -283,10 +282,10 @@ facts:
   - id: workstation.runtime.filesystem-inventory
     category: filesystem-inventory
     summary: >
-      The committed runtime filesystem inventory includes 191 catalogued paths
-      and 132 checksum-backed files across /home, /root, /keys, /etc, /opt,
-      /var/ossec, and /var/log, with sensitive paths tagged by redaction
-      boundary.
+      The committed runtime filesystem inventory includes 193 catalogued paths
+      and 138 checksum-backed files across /home, /root, /keys, /etc, /opt,
+      /var/ossec, and /var/log, with sensitive paths tagged by capture-boundary
+      classification.
     evidence:
       - path: evidence/filesystem-tree.txt
       - path: evidence/filesystem-checksums.txt
@@ -443,7 +442,7 @@ facts:
     summary: >
       Workstation participant-visible artifacts include credential fixtures,
       passwordless SSH key material, database/webapp/AD references, generated
-      flags, and NOPASSWD sudo grants; raw values are absent from committed
+      flags, and NOPASSWD sudo grants; values are retained in committed
       evidence.
     evidence:
       - path: evidence/filesystem-sensitive-paths.txt
@@ -463,8 +462,8 @@ facts:
         - content.workstation-credential-fixtures
       rationale: >
         ACES vulnerabilities and content encode the scenario weakness IDs,
-        CWE classes, sensitive fixture dataset, and checksum/metadata-only
-        redaction boundary without committing raw secret values.
+        CWE classes, sensitive fixture dataset, and the verbatim
+        evidence/checksum surfaces for generated flags and key material.
 
   - id: workstation.relationships
     category: topology

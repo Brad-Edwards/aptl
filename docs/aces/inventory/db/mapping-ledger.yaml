@@ -51,7 +51,7 @@ notes:
 - Current ACES runtime fields cover the catalogued DB steady-state inventory facts without a known expressivity blocker.
 - Brad-Edwards/aces#388 added first-class database logical-state fields consumed by this inventory.
 - The PostgreSQL data-volume and init-script filesystem inventory is encoded; full Alpine root filesystem enumeration outside those surfaces is a capture boundary, not an ACES schema gap.
-- The resolved POSTGRES_PASSWORD value is redacted in evidence and represented in SDL as a scenario fixture secret classification.
+- The resolved POSTGRES_PASSWORD=techvault_db_pass value is retained unmasked in evidence and represented in SDL as a scenario fixture secret classification.
 facts:
 - id: db.image.identity
   category: provenance
@@ -186,7 +186,7 @@ facts:
       full PostgreSQL worker process set continues under the same field.
 - id: db.runtime.environment-policy
   category: runtime-configuration
-  summary: Runtime environment variables include Compose fixture DB/user/password inputs plus upstream image defaults, with secret value redacted in evidence.
+  summary: Runtime environment variables include Compose fixture DB/user/password inputs plus upstream image defaults, with POSTGRES_PASSWORD=techvault_db_pass retained unmasked in evidence.
   evidence:
   - path: evidence/compose-service.db.json
   - path: evidence/docker-inspect.container.json

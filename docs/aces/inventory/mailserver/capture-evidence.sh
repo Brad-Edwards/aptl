@@ -34,66 +34,19 @@ compose_cmd() {
   "${cmd[@]}"
 }
 
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's/(TvMail2024!)/<REDACTED-SCENARIO-FIXTURE>/g'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|key|cookie|session|private_key|api_key|jwt)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
 docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 
 compose_cmd config --format json \
-  | jq '
-      .services.mailserver
-      | .environment |= with_entries(
-          if (.key | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT)$"; "i"))
-          then .value = ("<REDACTED-" + (.key | gsub("_"; "-")) + ">")
-          else .
-          end
-        )
-    ' > "$OUT/compose-service.mailserver.json"
+  | jq '.services.mailserver' > "$OUT/compose-service.mailserver.json"
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -108,8 +61,8 @@ docker network inspect aptl_aptl-internal | jq . > "$OUT/docker-network.aptl-int
 docker volume inspect aptl_mailserver_data | jq . > "$OUT/docker-volume.mailserver-data.json"
 docker volume inspect aptl_mailserver_state | jq . > "$OUT/docker-volume.mailserver-state.json"
 docker volume inspect aptl_mailserver_logs | jq . > "$OUT/docker-volume.mailserver-logs.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" 2>&1 | redact_stream > "$OUT/docker-logs.mailserver.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" > "$OUT/docker-logs.mailserver.txt" 2>&1
 
 record_limit "Capture used the already-running aptl project and started only the mail profile service non-destructively; no aptl lab stop -v && aptl lab start clean reset was run for this bundle"
 record_limit "The mounted containers/mailserver/setup.sh was executed manually after container start before capture because the upstream docker-mailserver image waited for accounts and did not automatically run the mounted script"
@@ -228,7 +181,7 @@ docker exec "$CONTAINER" sh -lc '
   (dovecot --version || true) 2>&1
   (amavis -V || true) 2>&1
   (rspamadm --version || true) 2>&1
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 docker exec "$CONTAINER" sh -lc '
   set -eu
@@ -244,7 +197,7 @@ docker exec "$CONTAINER" sh -lc '
   (postqueue -p || true) 2>&1
   echo --supervisor--
   (supervisorctl status || true) 2>&1
-' | redact_stream > "$OUT/mailserver-state.txt"
+' > "$OUT/mailserver-state.txt"
 
 if docker inspect aptl-kali >/dev/null 2>&1; then
   docker exec aptl-kali sh -lc '
@@ -266,7 +219,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     echo --imaps-probe--
     timeout 8 sh -c "printf '\''a001 CAPABILITY\r\na002 LOGOUT\r\n'\'' | openssl s_client -connect 172.20.1.21:993 -servername mail.techvault.local -brief" 2>&1
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present"
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

@@ -36,43 +36,13 @@ compose_cmd() {
   "${cmd[@]}"
 }
 
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHKEY)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e "s/(admin user key set to ')[^']+(')/\1<REDACTED-ADMIN-KEY>\2/Ig" \
-    -e "s/(setting admin key to ')[^']+(')/\1<REDACTED-ADMIN-KEY>\2/Ig" \
-    -e 's/(misp_db_password|misp_root_password|redispassword|admin@admin\.test[[:space:]]+admin)/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/-----BEGIN [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-BEGIN>/g' \
-    -e 's/-----END [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-END>/g'
+capture_stream() {
+  cat
 }
 
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHKEY)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|key|cookie|session|private_key|api_key|jwt|authkey)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
+identity_jq='
+  def keep_env: .;
+  def keep_values: .;
 '
 
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
@@ -81,30 +51,18 @@ docker version --format json | jq . > "$OUT/docker-version.json"
 docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 
 yq -o=json '.services.misp' "$ROOT/docker-compose.yml" \
-  | jq '
-      .environment |= map(
-        if test("^(?<name>[^=]+)=") then
-          capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-          | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHKEY)$"; "i"))
-            then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-            else .
-            end
-        else
-          .
-        end
-      )
-    ' > "$OUT/compose-service.misp.json"
+  | jq . > "$OUT/compose-service.misp.json"
 record_limit "Compose service evidence was extracted from docker-compose.yml with yq because the full local compose project has an unrelated invalid dependency reference that prevents docker compose config from rendering."
 
 docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | .[].State.Health.Log |= ((. // []) | map(.Output = \"<REDACTED-HTML-HEALTHCHECK-OUTPUT>\")) | redact_sensitive_keys" \
+  | jq "$identity_jq keep_values" \
   > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
+  | jq "$identity_jq keep_values" \
   > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker history --no-trunc "$IMAGE" | capture_stream > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" | capture_stream > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -117,12 +75,11 @@ fi
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_misp_data | jq . > "$OUT/docker-volume.misp-data.json"
 docker volume inspect aptl_misp_config | jq . > "$OUT/docker-volume.misp-config.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.misp.txt"
+docker top "$CONTAINER" | capture_stream > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 | capture_stream > "$OUT/docker-logs.misp.txt"
 
 record_limit "Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof."
 record_limit "Full source tree and volume filesystem evidence is captured as compressed manifests. SDL encodes load-bearing participant-visible paths and structured runtime surfaces directly; byte-identical rebuild proof remains out of scope for this inventory issue."
-record_limit "Private key file content and secret-bearing config values are not captured or hashed as raw values; their path, mount, ownership, mode, and redaction classification are captured instead."
 
 sha256sum \
   "$ROOT/docker-compose.yml" \
@@ -130,7 +87,12 @@ sha256sum \
   "$ROOT/config/soc_certs/misp/server.pem" \
   "$ROOT/config/soc_certs/lab-ca.pem" \
   | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
-record_limit "config/soc_certs/misp/server.key is mounted by the container but intentionally omitted from source-checksums.txt because it is private key material."
+if [[ -f "$ROOT/config/soc_certs/misp/server.key" ]]; then
+  sha256sum "$ROOT/config/soc_certs/misp/server.key" \
+    | sed "s#  $ROOT/#  #" >> "$OUT/source-checksums.txt"
+else
+  record_limit "config/soc_certs/misp/server.key was not present in this checkout; the live mounted key is captured through /etc/nginx/certs/key.pem in container filesystem evidence."
+fi
 
 docker exec "$CONTAINER" sh -lc '
   dpkg-query -W -f="\${binary:Package}\t\${Version}\t\${Architecture}\n" | sort
@@ -184,9 +146,12 @@ docker exec "$CONTAINER" sh -lc '
         stability=stable
         sensitivity=plain
         case "$path" in
-          */database.php|*/config.php|*/email.php|*/bootstrap.php|/etc/nginx/certs/key.pem)
+          */database.php|*/config.php|*/email.php|/etc/nginx/certs/key.pem)
             stability=volume_backed
-            sensitivity=operator_secret
+            sensitivity=secret_fixture
+            ;;
+          */bootstrap.php)
+            stability=volume_backed
             ;;
           /var/www/MISP/app/files/*)
             stability=volume_backed
@@ -218,7 +183,6 @@ docker exec "$CONTAINER" sh -lc '
     find "$root" -xdev -type f -print0
   done \
     | sort -zu \
-    | grep -zEv "(/var/www/MISP/app/Config/(database|config|email|bootstrap)\.php|/etc/nginx/certs/key\.pem)$" \
     | xargs -0 -r sha256sum
 ' | xz -9 -c > "$OUT/filesystem-checksums.txt.xz"
 rm -f "$OUT/filesystem-checksums.txt.gz"
@@ -255,7 +219,7 @@ docker exec "$CONTAINER" sh -lc '
   redis-cli --version 2>&1 || true
   printf "%s\n" --supervisor--
   supervisorctl status 2>&1 || true
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' | capture_stream > "$OUT/runtime-baseline.txt"
 
 docker exec "$CONTAINER" sh -lc '
   set -eu
@@ -269,7 +233,7 @@ docker exec "$CONTAINER" sh -lc '
     $files = ["/var/www/MISP/app/Config/bootstrap.php", "/var/www/MISP/app/Config/config.php", "/var/www/MISP/app/Config/database.php", "/var/www/MISP/app/Config/email.php"];
     foreach ($files as $f) {
       if (is_file($f)) {
-        printf("%s\t%s\t<REDACTED-SECRET-FILE-DIGEST>\n", $f, filesize($f));
+        printf("%s\t%s\t%s\n", $f, filesize($f), hash_file("sha256", $f));
       }
     }
   '\''
@@ -285,6 +249,14 @@ docker exec "$CONTAINER" sh -lc '
   query -e "select id,setting,value from admin_settings order by id;"
   printf "%s\n" --db-content-counts--
   query -e "select '\''events'\'' as table_name, count(*) as count from events union all select '\''attributes'\'', count(*) from attributes union all select '\''objects'\'', count(*) from objects union all select '\''tags'\'', count(*) from tags union all select '\''taxonomies'\'', count(*) from taxonomies union all select '\''galaxies'\'', count(*) from galaxies union all select '\''galaxy_clusters'\'', count(*) from galaxy_clusters union all select '\''warninglists'\'', count(*) from warninglists union all select '\''feeds'\'', count(*) from feeds union all select '\''sharing_groups'\'', count(*) from sharing_groups union all select '\''object_templates'\'', count(*) from object_templates;"
+  printf "%s\n" --db-events--
+  query -e "select id,uuid,orgc_id,org_id,info,date,published,threat_level_id,analysis,distribution,timestamp from events order by id;"
+  printf "%s\n" --db-attributes--
+  query -e "select id,event_id,object_id,object_relation,category,type,value1,value2,to_ids,deleted,timestamp from attributes order by id;"
+  printf "%s\n" --db-event-tags--
+  query -e "select event_tags.id,event_tags.event_id,event_tags.local,event_tags.relationship_type,event_tags.tag_id,tags.name from event_tags left join tags on tags.id = event_tags.tag_id order by event_tags.id;"
+  printf "%s\n" --db-tags--
+  query -e "select id,name,colour,exportable,org_id,user_id,local_only,is_galaxy from tags order by id;"
   printf "%s\n" --db-schema-sample--
   query -e "show tables;" | sed -n "1,220p"
   printf "%s\n" --http-login--
@@ -300,7 +272,7 @@ docker exec "$CONTAINER" sh -lc '
   if [ -s /tmp/misp-restsearch.json ]; then
     jq "{response_type: (type), keys: (if type == \"object\" then keys else [] end), length: (if type == \"array\" then length else null end)}" /tmp/misp-restsearch.json 2>/dev/null || sed -n "1,20p" /tmp/misp-restsearch.json
   fi
-' | redact_stream > "$OUT/misp-state.txt"
+' | capture_stream > "$OUT/misp-state.txt"
 
 if docker inspect aptl-kali >/dev/null 2>&1; then
   docker exec aptl-kali sh -lc '
@@ -311,7 +283,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     timeout 5 sh -c "nc -vz 172.20.0.16 443" 2>&1
     timeout 5 sh -c "nc -vz misp.techvault.local 443" 2>&1
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' | capture_stream > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"
@@ -329,7 +301,7 @@ if docker inspect "$SYNC_CONTAINER" >/dev/null 2>&1; then
     printf "%s\n" --tls--
     timeout 8 sh -c "openssl s_client -connect misp:443 -servername misp -brief -CAfile /etc/lab-ca/lab-ca.pem < /dev/null" 2>&1
     true
-  ' | redact_stream > "$OUT/participant-discovery.misp-suricata-sync.txt"
+  ' | capture_stream > "$OUT/participant-discovery.misp-suricata-sync.txt"
 else
   record_limit "misp-suricata-sync participant-vantage discovery was skipped because $SYNC_CONTAINER was not present."
   printf '%s container unavailable\n' "$SYNC_CONTAINER" > "$OUT/participant-discovery.misp-suricata-sync.txt"

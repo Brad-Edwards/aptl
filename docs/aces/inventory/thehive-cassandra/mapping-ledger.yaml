@@ -71,7 +71,7 @@ correspondence_checks:
   ledger_fact_ids:
   - thehive-cassandra.datastore.cassandra-service
   - thehive-cassandra.runtime.service-listeners
-- id: thehive-cassandra-scope-and-redaction-caveats
+- id: thehive-cassandra-scope-and-capture-caveats
   status: implemented
   source: docs/aces/inventory/thehive-cassandra/evidence/capture-limits.txt
   method: README and tests assert non-destructive capture scope, the data-volume manifest exclusion, the LocalStrategy/virtual
@@ -157,7 +157,7 @@ facts:
 - id: thehive-cassandra.compose.service-contract
   category: compose
   summary: Compose declares aptl-thehive-cassandra, image cassandra:4.1, CASSANDRA_CLUSTER_NAME=thehive, MAX_HEAP_SIZE/HEAP_NEWSIZE,
-    the thehive_cassandra_data volume, 1g memory, and security-net 172.20.0.5 (no host-published ports).
+    the thehive_cassandra_data volume, 1g memory, and security-net 172.20.0.4 (no host-published ports).
   evidence:
   - path: evidence/compose-service.thehive-cassandra.json
   - path: evidence/docker-compose-version.json
@@ -193,7 +193,7 @@ facts:
     rationale: Current ACES SDL node runtime fields carry this catalogued fact directly.
 - id: thehive-cassandra.network.identity
   category: network
-  summary: The datastore is attached to security-net only at 172.20.0.5; 9042/7000/7199 are NOT host-published; kali (other
+  summary: The datastore is attached to security-net only at 172.20.0.4; 9042/7000/7199 are NOT host-published; kali (other
     subnets) cannot route to it.
   evidence:
   - path: evidence/docker-network.aptl-security.json

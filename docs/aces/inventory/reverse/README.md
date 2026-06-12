@@ -133,8 +133,10 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
 - The filesystem manifest excludes the radare2 source/build tree, pipx venv
   payloads, and `~/.cache` (toolchain payload evidenced by the package/SBOM
   surfaces).
-- `/keys/aptl_lab_key` and the SSH host keys are operator_secret metadata-only;
-  `/var/ossec/etc/client.keys` is secret_fixture metadata-only (ADR-029).
+- Scenario target secret files under `/keys`, `/etc/ssh`, and
+  `/var/ossec/etc/client.keys` are captured verbatim in
+  `filesystem-sensitive-paths.txt` and checksummed in
+  `filesystem-checksums.txt.xz`.
 - Syft CycloneDX normalized by stripping `syft:location:*` properties.
 - osquery `installed_applications` / `programs` tables unavailable in the
   digest-pinned Linux scanner image.

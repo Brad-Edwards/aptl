@@ -35,7 +35,7 @@ LOG_FORMAT=syslog
 LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 PWD=/
-SAMBA_ADMIN_PASSWORD=<REDACTED-SCENARIO-FIXTURE>
+SAMBA_ADMIN_PASSWORD=Admin123!
 SAMBA_DOMAIN=TECHVAULT
 SAMBA_REALM=TECHVAULT.LOCAL
 SHLVL=0
@@ -198,12 +198,10 @@ objectClass: user
 cn: Administrator
 description: Built-in account for administering the computer/domain
 instanceType: 4
-whenCreated: 20260523061843.0Z
-whenChanged: 20260523061843.0Z
+whenCreated: 20260611160030.0Z
 uSNCreated: 3853
-uSNChanged: 3853
 name: Administrator
-objectGUID: eec6f567-8006-441d-98ee-b2fce7359dd5
+objectGUID: 8e0211ed-6b26-48ee-892e-70826774c0df
 userAccountControl: 512
 badPwdCount: 0
 codePage: 0
@@ -211,9 +209,9 @@ countryCode: 0
 badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
-pwdLastSet: 134239907235557800
+pwdLastSet: 134256672307442250
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-500
+objectSid: S-1-5-21-1195619382-146717913-1119826051-500
 adminCount: 1
 accountExpires: 9223372036854775807
 logonCount: 0
@@ -226,6 +224,9 @@ memberOf: CN=Schema Admins,CN=Users,DC=techvault,DC=local
 memberOf: CN=Enterprise Admins,CN=Users,DC=techvault,DC=local
 memberOf: CN=Group Policy Creator Owners,CN=Users,DC=techvault,DC=local
 memberOf: CN=Administrators,CN=Builtin,DC=techvault,DC=local
+lastLogonTimestamp: 134257211162388130
+whenChanged: 20260612065836.0Z
+uSNChanged: 4147
 distinguishedName: CN=Administrator,CN=Users,DC=techvault,DC=local
 
 [Guest]
@@ -237,12 +238,12 @@ objectClass: user
 cn: Guest
 description: Built-in account for guest access to the computer/domain
 instanceType: 4
-whenCreated: 20260523061843.0Z
-whenChanged: 20260523061843.0Z
+whenCreated: 20260611160030.0Z
+whenChanged: 20260611160030.0Z
 uSNCreated: 3854
 uSNChanged: 3854
 name: Guest
-objectGUID: a1d01d21-fe90-4d38-9b45-edc946460243
+objectGUID: 2c8adb62-b085-4ecc-ad76-1402639dd6d6
 userAccountControl: 66082
 badPwdCount: 0
 codePage: 0
@@ -252,7 +253,7 @@ lastLogoff: 0
 lastLogon: 0
 pwdLastSet: 0
 primaryGroupID: 514
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-501
+objectSid: S-1-5-21-1195619382-146717913-1119826051-501
 accountExpires: 9223372036854775807
 logonCount: 0
 sAMAccountName: Guest
@@ -271,13 +272,13 @@ objectClass: user
 cn: krbtgt
 description: Key Distribution Center Service Account
 instanceType: 4
-whenCreated: 20260523061843.0Z
-whenChanged: 20260523061843.0Z
+whenCreated: 20260611160030.0Z
+whenChanged: 20260611160030.0Z
 uSNCreated: 3855
 uSNChanged: 3855
 showInAdvancedViewOnly: TRUE
 name: krbtgt
-objectGUID: f66c92d9-604a-4f54-bd9c-f171b4a5dc2c
+objectGUID: 5498f0ff-ebcf-4b7d-84e2-c46a011044b6
 userAccountControl: 514
 badPwdCount: 0
 codePage: 0
@@ -285,9 +286,9 @@ countryCode: 0
 badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
-pwdLastSet: 134239907235726640
+pwdLastSet: 134256672307567310
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-502
+objectSid: S-1-5-21-1195619382-146717913-1119826051-502
 adminCount: 1
 accountExpires: 9223372036854775807
 logonCount: 0
@@ -310,14 +311,14 @@ sn: Mitchell
 title: CEO
 givenName: Sarah
 instanceType: 4
-whenCreated: 20260523061851.0Z
-whenChanged: 20260523061851.0Z
+whenCreated: 20260611160039.0Z
+whenChanged: 20260611160039.0Z
 displayName: Sarah Mitchell
 uSNCreated: 4086
 department: Executive
 company: TechVault Solutions
 name: Sarah Mitchell
-objectGUID: abef0463-c3a7-4fe5-9e3b-4d347e26bb64
+objectGUID: b468bc84-9474-4df6-89fb-ad909a8a4f44
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -325,7 +326,7 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1111
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1111
 accountExpires: 9223372036854775807
 logonCount: 0
 sAMAccountName: sarah.mitchell
@@ -333,7 +334,7 @@ sAMAccountType: 805306368
 userPrincipalName: sarah.mitchell@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
 mail: sarah.mitchell@techvault.local
-pwdLastSet: 134239907314680480
+pwdLastSet: 134256672395884920
 userAccountControl: 512
 uSNChanged: 4088
 memberOf: CN=Executives,CN=Users,DC=techvault,DC=local
@@ -350,14 +351,14 @@ sn: Rodriguez
 title: CTO
 givenName: James
 instanceType: 4
-whenCreated: 20260523061852.0Z
-whenChanged: 20260523061852.0Z
+whenCreated: 20260611160040.0Z
+whenChanged: 20260611160040.0Z
 displayName: James Rodriguez
 uSNCreated: 4090
 department: Executive
 company: TechVault Solutions
 name: James Rodriguez
-objectGUID: 27e8f79f-bf64-4af7-a5ae-65dbd69eb0e3
+objectGUID: 66bfdbcc-a972-48be-8330-35adece143a2
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -365,7 +366,7 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1112
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1112
 accountExpires: 9223372036854775807
 logonCount: 0
 sAMAccountName: james.rodriguez
@@ -373,7 +374,7 @@ sAMAccountType: 805306368
 userPrincipalName: james.rodriguez@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
 mail: james.rodriguez@techvault.local
-pwdLastSet: 134239907322677040
+pwdLastSet: 134256672405034500
 userAccountControl: 512
 uSNChanged: 4092
 memberOf: CN=Executives,CN=Users,DC=techvault,DC=local
@@ -391,14 +392,14 @@ sn: Chang
 title: VP of Sales
 givenName: Lisa
 instanceType: 4
-whenCreated: 20260523061853.0Z
-whenChanged: 20260523061853.0Z
+whenCreated: 20260611160041.0Z
+whenChanged: 20260611160041.0Z
 displayName: Lisa Chang
 uSNCreated: 4095
 department: Sales
 company: TechVault Solutions
 name: Lisa Chang
-objectGUID: 8a618815-5f0d-44e4-8079-8a8d95bda984
+objectGUID: ad324ae3-d7ad-4d18-bb38-2d7711ff9c1f
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -406,7 +407,7 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1113
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1113
 accountExpires: 9223372036854775807
 logonCount: 0
 sAMAccountName: lisa.chang
@@ -414,7 +415,7 @@ sAMAccountType: 805306368
 userPrincipalName: lisa.chang@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
 mail: lisa.chang@techvault.local
-pwdLastSet: 134239907336498340
+pwdLastSet: 134256672419233670
 userAccountControl: 512
 uSNChanged: 4097
 memberOf: CN=Executives,CN=Users,DC=techvault,DC=local
@@ -432,14 +433,14 @@ sn: Chen
 title: DevOps Lead
 givenName: Emily
 instanceType: 4
-whenCreated: 20260523061855.0Z
-whenChanged: 20260523061855.0Z
+whenCreated: 20260611160043.0Z
+whenChanged: 20260611160043.0Z
 displayName: Emily Chen
 uSNCreated: 4100
 department: Engineering
 company: TechVault Solutions
 name: Emily Chen
-objectGUID: 170e3d4a-87dc-4155-984f-32ac4a11fe00
+objectGUID: a05c9380-0cfc-49f7-893f-3004d9ac90b7
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -447,7 +448,7 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1114
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1114
 accountExpires: 9223372036854775807
 logonCount: 0
 sAMAccountName: emily.chen
@@ -455,7 +456,7 @@ sAMAccountType: 805306368
 userPrincipalName: emily.chen@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
 mail: emily.chen@techvault.local
-pwdLastSet: 134239907350710510
+pwdLastSet: 134256672432473880
 userAccountControl: 512
 uSNChanged: 4102
 memberOf: CN=Engineering,CN=Users,DC=techvault,DC=local
@@ -474,14 +475,14 @@ sn: Thompson
 title: Senior Developer
 givenName: Michael
 instanceType: 4
-whenCreated: 20260523061857.0Z
-whenChanged: 20260523061857.0Z
+whenCreated: 20260611160044.0Z
+whenChanged: 20260611160044.0Z
 displayName: Michael Thompson
 uSNCreated: 4106
 department: Engineering
 company: TechVault Solutions
 name: Michael Thompson
-objectGUID: 104c815e-bc35-4728-8ab4-caea4bcca4ba
+objectGUID: 2f098bbb-ae19-4209-ad61-53341d073945
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -489,7 +490,7 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1115
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1115
 accountExpires: 9223372036854775807
 logonCount: 0
 sAMAccountName: michael.thompson
@@ -497,7 +498,7 @@ sAMAccountType: 805306368
 userPrincipalName: michael.thompson@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
 mail: michael.thompson@techvault.local
-pwdLastSet: 134239907370368890
+pwdLastSet: 134256672448124040
 userAccountControl: 512
 uSNChanged: 4108
 memberOf: CN=Engineering,CN=Users,DC=techvault,DC=local
@@ -514,14 +515,14 @@ sn: Kim
 title: Security Engineer
 givenName: David
 instanceType: 4
-whenCreated: 20260523061858.0Z
-whenChanged: 20260523061858.0Z
+whenCreated: 20260611160045.0Z
+whenChanged: 20260611160045.0Z
 displayName: David Kim
 uSNCreated: 4110
 department: Engineering
 company: TechVault Solutions
 name: David Kim
-objectGUID: ba4f6c64-3211-461c-856c-02f46b5e0c9c
+objectGUID: 32067819-630b-4776-a094-20fc731e8b27
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -529,7 +530,7 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1116
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1116
 accountExpires: 9223372036854775807
 logonCount: 0
 sAMAccountName: david.kim
@@ -537,7 +538,7 @@ sAMAccountType: 805306368
 userPrincipalName: david.kim@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
 mail: david.kim@techvault.local
-pwdLastSet: 134239907380096360
+pwdLastSet: 134256672455168050
 userAccountControl: 512
 uSNChanged: 4112
 memberOf: CN=Engineering,CN=Users,DC=techvault,DC=local
@@ -556,14 +557,14 @@ sn: Martinez
 title: Marketing Manager
 givenName: Robert
 instanceType: 4
-whenCreated: 20260523061900.0Z
-whenChanged: 20260523061900.0Z
+whenCreated: 20260611160047.0Z
+whenChanged: 20260611160047.0Z
 displayName: Robert Martinez
 uSNCreated: 4115
 department: Sales
 company: TechVault Solutions
 name: Robert Martinez
-objectGUID: 768bbff0-02d6-4414-b1ab-1471eb16dc26
+objectGUID: 9ca8d582-4e22-4982-b1c0-6fc5588da187
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -571,7 +572,7 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1117
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1117
 accountExpires: 9223372036854775807
 logonCount: 0
 sAMAccountName: robert.martinez
@@ -579,7 +580,7 @@ sAMAccountType: 805306368
 userPrincipalName: robert.martinez@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
 mail: robert.martinez@techvault.local
-pwdLastSet: 134239907401309640
+pwdLastSet: 134256672474892760
 userAccountControl: 512
 uSNChanged: 4117
 memberOf: CN=Sales,CN=Users,DC=techvault,DC=local
@@ -596,11 +597,11 @@ sn: Service
 description: SQL Server Service Account
 givenName: SQL
 instanceType: 4
-whenCreated: 20260523061901.0Z
+whenCreated: 20260611160048.0Z
 displayName: SQL Service
 uSNCreated: 4119
 name: SQL Service
-objectGUID: 5d6d1cc6-88f5-4fbe-a0e2-47e4415905c2
+objectGUID: 8154d3ce-bebe-4983-8719-e7b8cf3f1b7b
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -608,18 +609,18 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1118
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1118
 logonCount: 0
 sAMAccountName: svc-sql
 sAMAccountType: 805306368
 userPrincipalName: svc-sql@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
-pwdLastSet: 134239907410484780
+pwdLastSet: 134256672482201300
 userAccountControl: 66048
 accountExpires: 0
 servicePrincipalName: MSSQLSvc/db.techvault.local:1433
 servicePrincipalName: MSSQLSvc/db.techvault.local
-whenChanged: 20260523061902.0Z
+whenChanged: 20260611160049.0Z
 uSNChanged: 4124
 distinguishedName: CN=SQL Service,CN=Users,DC=techvault,DC=local
 
@@ -634,11 +635,11 @@ sn: Service
 description: Web Application Service Account
 givenName: Web
 instanceType: 4
-whenCreated: 20260523061902.0Z
+whenCreated: 20260611160049.0Z
 displayName: Web Service
 uSNCreated: 4125
 name: Web Service
-objectGUID: b0cd34d2-68f0-4634-899f-c78ab88a4a27
+objectGUID: ad1f0583-e34e-444c-b926-76fb9447abe9
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -646,17 +647,17 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1119
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1119
 logonCount: 0
 sAMAccountName: svc-web
 sAMAccountType: 805306368
 userPrincipalName: svc-web@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
-pwdLastSet: 134239907425932970
+pwdLastSet: 134256672496576350
 userAccountControl: 66048
 accountExpires: 0
+whenChanged: 20260611160050.0Z
 servicePrincipalName: HTTP/webapp.techvault.local
-whenChanged: 20260523061903.0Z
 uSNChanged: 4129
 distinguishedName: CN=Web Service,CN=Users,DC=techvault,DC=local
 
@@ -671,11 +672,11 @@ sn: Service
 description: Backup Service - NEEDS PRIVILEGE REVIEW
 givenName: Backup
 instanceType: 4
-whenCreated: 20260523061903.0Z
+whenCreated: 20260611160050.0Z
 displayName: Backup Service
 uSNCreated: 4130
 name: Backup Service
-objectGUID: 784687b2-a1b0-4d61-bf51-9b610344c10c
+objectGUID: 1d5a6047-ea24-40b6-9fe4-d4fe006cff13
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -683,16 +684,16 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1120
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1120
 logonCount: 0
 sAMAccountName: svc-backup
 sAMAccountType: 805306368
 userPrincipalName: svc-backup@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
-pwdLastSet: 134239907436701980
+pwdLastSet: 134256672507355030
 userAccountControl: 66048
 accountExpires: 0
-whenChanged: 20260523061904.0Z
+whenChanged: 20260611160051.0Z
 uSNChanged: 4133
 memberOf: CN=Domain Admins,CN=Users,DC=techvault,DC=local
 distinguishedName: CN=Backup Service,CN=Users,DC=techvault,DC=local
@@ -709,12 +710,12 @@ title: External Contractor
 description: Temporary contractor - TODO: disable after project ends
 givenName: Temp
 instanceType: 4
-whenCreated: 20260523061904.0Z
-whenChanged: 20260523061904.0Z
+whenCreated: 20260611160051.0Z
+whenChanged: 20260611160051.0Z
 displayName: Temp Contractor
 uSNCreated: 4135
 name: Temp Contractor
-objectGUID: dce827a4-3878-4b45-97aa-79c114e62aec
+objectGUID: e281e8d0-929e-4a7c-bbac-9bdca82c9e65
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -722,14 +723,14 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1121
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1121
 accountExpires: 9223372036854775807
 logonCount: 0
 sAMAccountName: contractor.temp
 sAMAccountType: 805306368
 userPrincipalName: contractor.temp@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
-pwdLastSet: 134239907448704100
+pwdLastSet: 134256672517217550
 userAccountControl: 512
 uSNChanged: 4137
 memberOf: CN=VPN-Users,CN=Users,DC=techvault,DC=local
@@ -749,12 +750,12 @@ title: Former Employee
 description: Account should have been deleted in Q2
 givenName: Former
 instanceType: 4
-whenCreated: 20260523061906.0Z
-whenChanged: 20260523061906.0Z
+whenCreated: 20260611160053.0Z
+whenChanged: 20260611160053.0Z
 displayName: Former Employee
 uSNCreated: 4141
 name: Former Employee
-objectGUID: 5a878cc6-a0cb-480b-82ae-03c6ee3c4fcd
+objectGUID: 78182aaf-d6ac-441c-8400-85410120a8ab
 badPwdCount: 0
 codePage: 0
 countryCode: 0
@@ -762,14 +763,14 @@ badPasswordTime: 0
 lastLogoff: 0
 lastLogon: 0
 primaryGroupID: 513
-objectSid: S-1-5-21-1501474058-3815655577-2215893124-1122
+objectSid: S-1-5-21-1195619382-146717913-1119826051-1122
 accountExpires: 9223372036854775807
 logonCount: 0
 sAMAccountName: former.employee
 sAMAccountType: 805306368
 userPrincipalName: former.employee@techvault.local
 objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=techvault,DC=local
-pwdLastSet: 134239907463784740
+pwdLastSet: 134256672530072750
 userAccountControl: 512
 uSNChanged: 4143
 distinguishedName: CN=Former Employee,CN=Users,DC=techvault,DC=local
@@ -788,159 +789,155 @@ User CN=Web Service,CN=Users,DC=techvault,DC=local has the following servicePrin
 
 --listeners--
 Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
-udp   UNCONN 0      0         127.0.0.11:37233      0.0.0.0:*
-udp   UNCONN 0      0            0.0.0.0:55470      0.0.0.0:*
-udp   UNCONN 0      0            0.0.0.0:53         0.0.0.0:*    users:(("dns[master]",pid=191,fd=50))
-udp   UNCONN 0      0        172.20.2.10:88         0.0.0.0:*    users:(("kdc(3",pid=187,fd=43),("kdc(2",pid=183,fd=43),("kdc(1",pid=176,fd=43),("kdc(0",pid=172,fd=43),("kdc[master]",pid=168,fd=43))
-udp   UNCONN 0      0            0.0.0.0:88         0.0.0.0:*    users:(("kdc(3",pid=187,fd=40),("kdc(2",pid=183,fd=40),("kdc(1",pid=176,fd=40),("kdc(0",pid=172,fd=40),("kdc[master]",pid=168,fd=40))
-udp   UNCONN 0      0        172.20.2.10:137        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=29))
-udp   UNCONN 0      0       172.20.2.255:137        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=28))
-udp   UNCONN 0      0            0.0.0.0:137        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=22))
-udp   UNCONN 0      0        172.20.2.10:138        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=31))
-udp   UNCONN 0      0       172.20.2.255:138        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=30))
-udp   UNCONN 0      0            0.0.0.0:138        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=26))
-udp   UNCONN 0      0        172.20.2.10:389        0.0.0.0:*    users:(("cldap[master]",pid=164,fd=34))
-udp   UNCONN 0      0            0.0.0.0:389        0.0.0.0:*    users:(("cldap[master]",pid=164,fd=32))
-udp   UNCONN 0      0        172.20.2.10:464        0.0.0.0:*    users:(("kdc(3",pid=187,fd=44),("kdc(2",pid=183,fd=44),("kdc(1",pid=176,fd=44),("kdc(0",pid=172,fd=44),("kdc[master]",pid=168,fd=44))
-udp   UNCONN 0      0            0.0.0.0:464        0.0.0.0:*    users:(("kdc(3",pid=187,fd=42),("kdc(2",pid=183,fd=42),("kdc(1",pid=176,fd=42),("kdc(0",pid=172,fd=42),("kdc[master]",pid=168,fd=42))
-udp   UNCONN 0      0               [::]:53            [::]:*    users:(("dns[master]",pid=191,fd=48))
-udp   UNCONN 0      0               [::]:88            [::]:*    users:(("kdc(3",pid=187,fd=36),("kdc(2",pid=183,fd=36),("kdc(1",pid=176,fd=36),("kdc(0",pid=172,fd=36),("kdc[master]",pid=168,fd=36))
-udp   UNCONN 0      0               [::]:389           [::]:*    users:(("cldap[master]",pid=164,fd=22))
-udp   UNCONN 0      0               [::]:464           [::]:*    users:(("kdc(3",pid=187,fd=38),("kdc(2",pid=183,fd=38),("kdc(1",pid=176,fd=38),("kdc(0",pid=172,fd=38),("kdc[master]",pid=168,fd=38))
-tcp   LISTEN 0      10           0.0.0.0:636        0.0.0.0:*    users:(("ldap(3",pid=210,fd=36),("ldap(2",pid=208,fd=36),("ldap(1",pid=206,fd=36),("ldap(0",pid=204,fd=36),("ldap[master]",pid=160,fd=36))
-tcp   LISTEN 0      10           0.0.0.0:389        0.0.0.0:*    users:(("ldap(3",pid=210,fd=35),("ldap(2",pid=208,fd=35),("ldap(1",pid=206,fd=35),("ldap(0",pid=204,fd=35),("ldap[master]",pid=160,fd=35))
-tcp   LISTEN 0      50           0.0.0.0:445        0.0.0.0:*    users:(("smbd",pid=150,fd=48))
-tcp   LISTEN 0      10           0.0.0.0:464        0.0.0.0:*    users:(("kdc(3",pid=187,fd=41),("kdc(2",pid=183,fd=41),("kdc(1",pid=176,fd=41),("kdc(0",pid=172,fd=41),("kdc[master]",pid=168,fd=41))
-tcp   LISTEN 0      10           0.0.0.0:53         0.0.0.0:*    users:(("dns[master]",pid=191,fd=49))
-tcp   LISTEN 0      10           0.0.0.0:88         0.0.0.0:*    users:(("kdc(3",pid=187,fd=39),("kdc(2",pid=183,fd=39),("kdc(1",pid=176,fd=39),("kdc(0",pid=172,fd=39),("kdc[master]",pid=168,fd=39))
-tcp   LISTEN 0      50           0.0.0.0:139        0.0.0.0:*    users:(("smbd",pid=150,fd=49))
-tcp   LISTEN 0      10           0.0.0.0:135        0.0.0.0:*    users:(("rpc(0",pid=154,fd=34))
-tcp   LISTEN 0      10           0.0.0.0:3268       0.0.0.0:*    users:(("ldap(3",pid=210,fd=37),("ldap(2",pid=208,fd=37),("ldap(1",pid=206,fd=37),("ldap(0",pid=204,fd=37),("ldap[master]",pid=160,fd=37))
-tcp   LISTEN 0      10           0.0.0.0:3269       0.0.0.0:*    users:(("ldap(3",pid=210,fd=38),("ldap(2",pid=208,fd=38),("ldap(1",pid=206,fd=38),("ldap(0",pid=204,fd=38),("ldap[master]",pid=160,fd=38))
-tcp   LISTEN 0      4096      127.0.0.11:34765      0.0.0.0:*
-tcp   LISTEN 0      10           0.0.0.0:49154      0.0.0.0:*    users:(("rpc(0",pid=154,fd=30))
-tcp   LISTEN 0      10           0.0.0.0:49152      0.0.0.0:*    users:(("rpc(3",pid=167,fd=26),("rpc(2",pid=163,fd=26),("rpc(1",pid=158,fd=26),("rpc(0",pid=154,fd=26),("rpc[master]",pid=149,fd=26))
-tcp   LISTEN 0      10           0.0.0.0:49153      0.0.0.0:*    users:(("rpc(0",pid=154,fd=15))
-tcp   LISTEN 0      10              [::]:636           [::]:*    users:(("ldap(3",pid=210,fd=32),("ldap(2",pid=208,fd=32),("ldap(1",pid=206,fd=32),("ldap(0",pid=204,fd=32),("ldap[master]",pid=160,fd=32))
-tcp   LISTEN 0      10              [::]:389           [::]:*    users:(("ldap(3",pid=210,fd=30),("ldap(2",pid=208,fd=30),("ldap(1",pid=206,fd=30),("ldap(0",pid=204,fd=30),("ldap[master]",pid=160,fd=30))
-tcp   LISTEN 0      50              [::]:445           [::]:*    users:(("smbd",pid=150,fd=46))
-tcp   LISTEN 0      10              [::]:464           [::]:*    users:(("kdc(3",pid=187,fd=37),("kdc(2",pid=183,fd=37),("kdc(1",pid=176,fd=37),("kdc(0",pid=172,fd=37),("kdc[master]",pid=168,fd=37))
-tcp   LISTEN 0      10              [::]:53            [::]:*    users:(("dns[master]",pid=191,fd=46))
-tcp   LISTEN 0      10              [::]:88            [::]:*    users:(("kdc(3",pid=187,fd=34),("kdc(2",pid=183,fd=34),("kdc(1",pid=176,fd=34),("kdc(0",pid=172,fd=34),("kdc[master]",pid=168,fd=34))
-tcp   LISTEN 0      50              [::]:139           [::]:*    users:(("smbd",pid=150,fd=47))
-tcp   LISTEN 0      10              [::]:135           [::]:*    users:(("rpc(0",pid=154,fd=33))
-tcp   LISTEN 0      10              [::]:3268          [::]:*    users:(("ldap(3",pid=210,fd=33),("ldap(2",pid=208,fd=33),("ldap(1",pid=206,fd=33),("ldap(0",pid=204,fd=33),("ldap[master]",pid=160,fd=33))
-tcp   LISTEN 0      10              [::]:3269          [::]:*    users:(("ldap(3",pid=210,fd=34),("ldap(2",pid=208,fd=34),("ldap(1",pid=206,fd=34),("ldap(0",pid=204,fd=34),("ldap[master]",pid=160,fd=34))
-tcp   LISTEN 0      10              [::]:49154         [::]:*    users:(("rpc(0",pid=154,fd=25))
-tcp   LISTEN 0      10              [::]:49152         [::]:*    users:(("rpc(3",pid=167,fd=24),("rpc(2",pid=163,fd=24),("rpc(1",pid=158,fd=24),("rpc(0",pid=154,fd=24),("rpc[master]",pid=149,fd=24))
-tcp   LISTEN 0      10              [::]:49153         [::]:*    users:(("rpc(0",pid=154,fd=14))
+udp   UNCONN 0      0         127.0.0.11:39762      0.0.0.0:*
+udp   UNCONN 0      0            0.0.0.0:58642      0.0.0.0:*
+udp   UNCONN 0      0            0.0.0.0:53         0.0.0.0:*    users:(("dns[master]",pid=209,fd=50))
+udp   UNCONN 0      0        172.20.2.10:88         0.0.0.0:*    users:(("kdc(3",pid=204,fd=43),("kdc(2",pid=200,fd=43),("kdc(1",pid=194,fd=43),("kdc(0",pid=190,fd=43),("kdc[master]",pid=186,fd=43))
+udp   UNCONN 0      0            0.0.0.0:88         0.0.0.0:*    users:(("kdc(3",pid=204,fd=40),("kdc(2",pid=200,fd=40),("kdc(1",pid=194,fd=40),("kdc(0",pid=190,fd=40),("kdc[master]",pid=186,fd=40))
+udp   UNCONN 0      0        172.20.2.10:137        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=29))
+udp   UNCONN 0      0       172.20.2.255:137        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=28))
+udp   UNCONN 0      0            0.0.0.0:137        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=22))
+udp   UNCONN 0      0        172.20.2.10:138        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=31))
+udp   UNCONN 0      0       172.20.2.255:138        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=30))
+udp   UNCONN 0      0            0.0.0.0:138        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=26))
+udp   UNCONN 0      0        172.20.2.10:389        0.0.0.0:*    users:(("cldap[master]",pid=182,fd=34))
+udp   UNCONN 0      0            0.0.0.0:389        0.0.0.0:*    users:(("cldap[master]",pid=182,fd=32))
+udp   UNCONN 0      0        172.20.2.10:464        0.0.0.0:*    users:(("kdc(3",pid=204,fd=44),("kdc(2",pid=200,fd=44),("kdc(1",pid=194,fd=44),("kdc(0",pid=190,fd=44),("kdc[master]",pid=186,fd=44))
+udp   UNCONN 0      0            0.0.0.0:464        0.0.0.0:*    users:(("kdc(3",pid=204,fd=42),("kdc(2",pid=200,fd=42),("kdc(1",pid=194,fd=42),("kdc(0",pid=190,fd=42),("kdc[master]",pid=186,fd=42))
+udp   UNCONN 0      0               [::]:53            [::]:*    users:(("dns[master]",pid=209,fd=48))
+udp   UNCONN 0      0               [::]:88            [::]:*    users:(("kdc(3",pid=204,fd=36),("kdc(2",pid=200,fd=36),("kdc(1",pid=194,fd=36),("kdc(0",pid=190,fd=36),("kdc[master]",pid=186,fd=36))
+udp   UNCONN 0      0               [::]:389           [::]:*    users:(("cldap[master]",pid=182,fd=22))
+udp   UNCONN 0      0               [::]:464           [::]:*    users:(("kdc(3",pid=204,fd=38),("kdc(2",pid=200,fd=38),("kdc(1",pid=194,fd=38),("kdc(0",pid=190,fd=38),("kdc[master]",pid=186,fd=38))
+tcp   LISTEN 0      10           0.0.0.0:49154      0.0.0.0:*    users:(("rpc(0",pid=173,fd=30))
+tcp   LISTEN 0      10           0.0.0.0:49153      0.0.0.0:*    users:(("rpc(0",pid=173,fd=15))
+tcp   LISTEN 0      10           0.0.0.0:49152      0.0.0.0:*    users:(("rpc(3",pid=185,fd=26),("rpc(2",pid=181,fd=26),("rpc(1",pid=177,fd=26),("rpc(0",pid=173,fd=26),("rpc[master]",pid=167,fd=26))
+tcp   LISTEN 0      4096      127.0.0.11:34103      0.0.0.0:*
+tcp   LISTEN 0      10           0.0.0.0:3269       0.0.0.0:*    users:(("ldap(3",pid=292,fd=38),("ldap(2",pid=290,fd=38),("ldap(1",pid=288,fd=38),("ldap(0",pid=286,fd=38),("ldap[master]",pid=178,fd=38))
+tcp   LISTEN 0      10           0.0.0.0:3268       0.0.0.0:*    users:(("ldap(3",pid=292,fd=37),("ldap(2",pid=290,fd=37),("ldap(1",pid=288,fd=37),("ldap(0",pid=286,fd=37),("ldap[master]",pid=178,fd=37))
+tcp   LISTEN 0      10           0.0.0.0:389        0.0.0.0:*    users:(("ldap(3",pid=292,fd=35),("ldap(2",pid=290,fd=35),("ldap(1",pid=288,fd=35),("ldap(0",pid=286,fd=35),("ldap[master]",pid=178,fd=35))
+tcp   LISTEN 0      50           0.0.0.0:445        0.0.0.0:*    users:(("smbd",pid=168,fd=48))
+tcp   LISTEN 0      10           0.0.0.0:464        0.0.0.0:*    users:(("kdc(3",pid=204,fd=41),("kdc(2",pid=200,fd=41),("kdc(1",pid=194,fd=41),("kdc(0",pid=190,fd=41),("kdc[master]",pid=186,fd=41))
+tcp   LISTEN 0      10           0.0.0.0:53         0.0.0.0:*    users:(("dns[master]",pid=209,fd=49))
+tcp   LISTEN 0      10           0.0.0.0:88         0.0.0.0:*    users:(("kdc(3",pid=204,fd=39),("kdc(2",pid=200,fd=39),("kdc(1",pid=194,fd=39),("kdc(0",pid=190,fd=39),("kdc[master]",pid=186,fd=39))
+tcp   LISTEN 0      10           0.0.0.0:135        0.0.0.0:*    users:(("rpc(0",pid=173,fd=34))
+tcp   LISTEN 0      50           0.0.0.0:139        0.0.0.0:*    users:(("smbd",pid=168,fd=49))
+tcp   LISTEN 0      10           0.0.0.0:636        0.0.0.0:*    users:(("ldap(3",pid=292,fd=36),("ldap(2",pid=290,fd=36),("ldap(1",pid=288,fd=36),("ldap(0",pid=286,fd=36),("ldap[master]",pid=178,fd=36))
+tcp   LISTEN 0      10              [::]:49154         [::]:*    users:(("rpc(0",pid=173,fd=25))
+tcp   LISTEN 0      10              [::]:49153         [::]:*    users:(("rpc(0",pid=173,fd=14))
+tcp   LISTEN 0      10              [::]:49152         [::]:*    users:(("rpc(3",pid=185,fd=24),("rpc(2",pid=181,fd=24),("rpc(1",pid=177,fd=24),("rpc(0",pid=173,fd=24),("rpc[master]",pid=167,fd=24))
+tcp   LISTEN 0      10              [::]:3269          [::]:*    users:(("ldap(3",pid=292,fd=34),("ldap(2",pid=290,fd=34),("ldap(1",pid=288,fd=34),("ldap(0",pid=286,fd=34),("ldap[master]",pid=178,fd=34))
+tcp   LISTEN 0      10              [::]:3268          [::]:*    users:(("ldap(3",pid=292,fd=33),("ldap(2",pid=290,fd=33),("ldap(1",pid=288,fd=33),("ldap(0",pid=286,fd=33),("ldap[master]",pid=178,fd=33))
+tcp   LISTEN 0      10              [::]:389           [::]:*    users:(("ldap(3",pid=292,fd=30),("ldap(2",pid=290,fd=30),("ldap(1",pid=288,fd=30),("ldap(0",pid=286,fd=30),("ldap[master]",pid=178,fd=30))
+tcp   LISTEN 0      50              [::]:445           [::]:*    users:(("smbd",pid=168,fd=46))
+tcp   LISTEN 0      10              [::]:464           [::]:*    users:(("kdc(3",pid=204,fd=37),("kdc(2",pid=200,fd=37),("kdc(1",pid=194,fd=37),("kdc(0",pid=190,fd=37),("kdc[master]",pid=186,fd=37))
+tcp   LISTEN 0      10              [::]:53            [::]:*    users:(("dns[master]",pid=209,fd=46))
+tcp   LISTEN 0      10              [::]:88            [::]:*    users:(("kdc(3",pid=204,fd=34),("kdc(2",pid=200,fd=34),("kdc(1",pid=194,fd=34),("kdc(0",pid=190,fd=34),("kdc[master]",pid=186,fd=34))
+tcp   LISTEN 0      10              [::]:135           [::]:*    users:(("rpc(0",pid=173,fd=33))
+tcp   LISTEN 0      50              [::]:139           [::]:*    users:(("smbd",pid=168,fd=47))
+tcp   LISTEN 0      10              [::]:636           [::]:*    users:(("ldap(3",pid=292,fd=32),("ldap(2",pid=290,fd=32),("ldap(1",pid=288,fd=32),("ldap(0",pid=286,fd=32),("ldap[master]",pid=178,fd=32))
 State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
-UNCONN 0      0         127.0.0.11:37233      0.0.0.0:*
-UNCONN 0      0            0.0.0.0:55470      0.0.0.0:*
-UNCONN 0      0            0.0.0.0:53         0.0.0.0:*    users:(("dns[master]",pid=191,fd=50))
-UNCONN 0      0        172.20.2.10:88         0.0.0.0:*    users:(("kdc(3",pid=187,fd=43),("kdc(2",pid=183,fd=43),("kdc(1",pid=176,fd=43),("kdc(0",pid=172,fd=43),("kdc[master]",pid=168,fd=43))
-UNCONN 0      0            0.0.0.0:88         0.0.0.0:*    users:(("kdc(3",pid=187,fd=40),("kdc(2",pid=183,fd=40),("kdc(1",pid=176,fd=40),("kdc(0",pid=172,fd=40),("kdc[master]",pid=168,fd=40))
-UNCONN 0      0        172.20.2.10:137        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=29))
-UNCONN 0      0       172.20.2.255:137        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=28))
-UNCONN 0      0            0.0.0.0:137        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=22))
-UNCONN 0      0        172.20.2.10:138        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=31))
-UNCONN 0      0       172.20.2.255:138        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=30))
-UNCONN 0      0            0.0.0.0:138        0.0.0.0:*    users:(("nbt[master]",pid=153,fd=26))
-UNCONN 0      0        172.20.2.10:389        0.0.0.0:*    users:(("cldap[master]",pid=164,fd=34))
-UNCONN 0      0            0.0.0.0:389        0.0.0.0:*    users:(("cldap[master]",pid=164,fd=32))
-UNCONN 0      0        172.20.2.10:464        0.0.0.0:*    users:(("kdc(3",pid=187,fd=44),("kdc(2",pid=183,fd=44),("kdc(1",pid=176,fd=44),("kdc(0",pid=172,fd=44),("kdc[master]",pid=168,fd=44))
-UNCONN 0      0            0.0.0.0:464        0.0.0.0:*    users:(("kdc(3",pid=187,fd=42),("kdc(2",pid=183,fd=42),("kdc(1",pid=176,fd=42),("kdc(0",pid=172,fd=42),("kdc[master]",pid=168,fd=42))
-UNCONN 0      0               [::]:53            [::]:*    users:(("dns[master]",pid=191,fd=48))
-UNCONN 0      0               [::]:88            [::]:*    users:(("kdc(3",pid=187,fd=36),("kdc(2",pid=183,fd=36),("kdc(1",pid=176,fd=36),("kdc(0",pid=172,fd=36),("kdc[master]",pid=168,fd=36))
-UNCONN 0      0               [::]:389           [::]:*    users:(("cldap[master]",pid=164,fd=22))
-UNCONN 0      0               [::]:464           [::]:*    users:(("kdc(3",pid=187,fd=38),("kdc(2",pid=183,fd=38),("kdc(1",pid=176,fd=38),("kdc(0",pid=172,fd=38),("kdc[master]",pid=168,fd=38))
+UNCONN 0      0         127.0.0.11:39762      0.0.0.0:*
+UNCONN 0      0            0.0.0.0:58642      0.0.0.0:*
+UNCONN 0      0            0.0.0.0:53         0.0.0.0:*    users:(("dns[master]",pid=209,fd=50))
+UNCONN 0      0        172.20.2.10:88         0.0.0.0:*    users:(("kdc(3",pid=204,fd=43),("kdc(2",pid=200,fd=43),("kdc(1",pid=194,fd=43),("kdc(0",pid=190,fd=43),("kdc[master]",pid=186,fd=43))
+UNCONN 0      0            0.0.0.0:88         0.0.0.0:*    users:(("kdc(3",pid=204,fd=40),("kdc(2",pid=200,fd=40),("kdc(1",pid=194,fd=40),("kdc(0",pid=190,fd=40),("kdc[master]",pid=186,fd=40))
+UNCONN 0      0        172.20.2.10:137        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=29))
+UNCONN 0      0       172.20.2.255:137        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=28))
+UNCONN 0      0            0.0.0.0:137        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=22))
+UNCONN 0      0        172.20.2.10:138        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=31))
+UNCONN 0      0       172.20.2.255:138        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=30))
+UNCONN 0      0            0.0.0.0:138        0.0.0.0:*    users:(("nbt[master]",pid=170,fd=26))
+UNCONN 0      0        172.20.2.10:389        0.0.0.0:*    users:(("cldap[master]",pid=182,fd=34))
+UNCONN 0      0            0.0.0.0:389        0.0.0.0:*    users:(("cldap[master]",pid=182,fd=32))
+UNCONN 0      0        172.20.2.10:464        0.0.0.0:*    users:(("kdc(3",pid=204,fd=44),("kdc(2",pid=200,fd=44),("kdc(1",pid=194,fd=44),("kdc(0",pid=190,fd=44),("kdc[master]",pid=186,fd=44))
+UNCONN 0      0            0.0.0.0:464        0.0.0.0:*    users:(("kdc(3",pid=204,fd=42),("kdc(2",pid=200,fd=42),("kdc(1",pid=194,fd=42),("kdc(0",pid=190,fd=42),("kdc[master]",pid=186,fd=42))
+UNCONN 0      0               [::]:53            [::]:*    users:(("dns[master]",pid=209,fd=48))
+UNCONN 0      0               [::]:88            [::]:*    users:(("kdc(3",pid=204,fd=36),("kdc(2",pid=200,fd=36),("kdc(1",pid=194,fd=36),("kdc(0",pid=190,fd=36),("kdc[master]",pid=186,fd=36))
+UNCONN 0      0               [::]:389           [::]:*    users:(("cldap[master]",pid=182,fd=22))
+UNCONN 0      0               [::]:464           [::]:*    users:(("kdc(3",pid=204,fd=38),("kdc(2",pid=200,fd=38),("kdc(1",pid=194,fd=38),("kdc(0",pid=190,fd=38),("kdc[master]",pid=186,fd=38))
 
 --processes--
     PID    PPID USER     GROUP    COMMAND         COMMAND
       1       0 root     root     supervisord     /usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
     135       1 syslog   syslog   rsyslogd        /usr/sbin/rsyslogd -n
     136       1 root     root     samba           samba: root process
-    145     136 root     root     tfork(146)      samba: tfork waiter process(146)
-    146     145 root     root     s3fs[master]    samba: task[s3fs] pre-fork master
-    147     136 root     root     tfork(149)      samba: tfork waiter process(149)
-    148     146 root     root     tfork(150)      samba: tfork waiter process(150)
-    149     147 root     root     rpc[master]     samba: task[rpc] pre-fork master
-    150     148 root     root     smbd            /usr/sbin/smbd -D --option=server role check:inhibit=yes --foreground
-    151     136 root     root     tfork(153)      samba: tfork waiter process(153)
-    152     149 root     root     tfork(154)      samba: tfork waiter process(154)
-    153     151 root     root     nbt[master]     samba: task[nbt] pre-fork master
-    154     152 root     root     rpc(0)          samba: task[rpc] pre-forked worker(0)
-    155     136 root     root     tfork(157)      samba: tfork waiter process(157)
-    156     149 root     root     tfork(158)      samba: tfork waiter process(158)
-    157     155 root     root     wrepl[master]   samba: task[wrepl] pre-fork master
-    158     156 root     root     rpc(1)          samba: task[rpc] pre-forked worker(1)
-    159     136 root     root     tfork(160)      samba: tfork waiter process(160)
-    160     159 root     root     ldap[master]    samba: task[ldap] pre-fork master
-    161     149 root     root     tfork(163)      samba: tfork waiter process(163)
-    162     136 root     root     tfork(164)      samba: tfork waiter process(164)
-    163     161 root     root     rpc(2)          samba: task[rpc] pre-forked worker(2)
-    164     162 root     root     cldap[master]   samba: task[cldap] pre-fork master
-    165     149 root     root     tfork(167)      samba: tfork waiter process(167)
-    166     136 root     root     tfork(168)      samba: tfork waiter process(168)
-    167     165 root     root     rpc(3)          samba: task[rpc] pre-forked worker(3)
-    168     166 root     root     kdc[master]     samba: task[kdc] pre-fork master
-    169     136 root     root     tfork(171)      samba: tfork waiter process(171)
-    170     168 root     root     tfork(172)      samba: tfork waiter process(172)
-    171     169 root     root     drepl[master]   samba: task[drepl] pre-fork master
-    172     170 root     root     kdc(0)          samba: task[kdc] pre-forked worker(0)
-    173     136 root     root     tfork(175)      samba: tfork waiter process(175)
-    174     168 root     root     tfork(176)      samba: tfork waiter process(176)
-    175     173 root     root     winbindd[master samba: task[winbindd] pre-fork master
-    176     174 root     root     kdc(1)          samba: task[kdc] pre-forked worker(1)
-    177     136 root     root     tfork(179)      samba: tfork waiter process(179)
-    178     175 root     root     tfork(181)      samba: tfork waiter process(181)
-    179     177 root     root     ntp_signd[maste samba: task[ntp_signd] pre-fork master
-    180     168 root     root     tfork(183)      samba: tfork waiter process(183)
-    181     178 root     root     winbindd        /usr/sbin/winbindd -D --option=server role check:inhibit=yes --foreground
-    182     136 root     root     tfork(184)      samba: tfork waiter process(184)
-    183     180 root     root     kdc(2)          samba: task[kdc] pre-forked worker(2)
-    184     182 root     root     kcc[master]     samba: task[kcc] pre-fork master
-    185     168 root     root     tfork(187)      samba: tfork waiter process(187)
-    186     136 root     root     tfork(188)      samba: tfork waiter process(188)
-    187     185 root     root     kdc(3)          samba: task[kdc] pre-forked worker(3)
-    188     186 root     root     dnsupdate[maste samba: task[dnsupdate] pre-fork master
-    189     136 root     root     tfork(191)      samba: tfork waiter process(191)
-    191     189 root     root     dns[master]     samba: task[dns] pre-fork master
-    197     150 root     root     smbd-notifyd    /usr/sbin/smbd -D --option=server role check:inhibit=yes --foreground
-    198     150 root     root     cleanupd        /usr/sbin/smbd -D --option=server role check:inhibit=yes --foreground
-    199     181 root     root     winbindd        winbindd: domain child [TECHVAULT]
-    200     181 root     root     winbindd        winbindd: idmap child
-    201     150 root     root     samba-bgqd      /usr/lib/x86_64-linux-gnu/samba/samba-bgqd --ready-signal-fd=47 --parent-watch-fd=13 --debuglevel=0 -F
-    203     160 root     root     tfork(204)      samba: tfork waiter process(204)
-    204     203 root     root     ldap(0)         samba: task[ldap] pre-forked worker(0)
-    205     160 root     root     tfork(206)      samba: tfork waiter process(206)
-    206     205 root     root     ldap(1)         samba: task[ldap] pre-forked worker(1)
-    207     160 root     root     tfork(208)      samba: tfork waiter process(208)
-    208     207 root     root     ldap(2)         samba: task[ldap] pre-forked worker(2)
-    209     160 root     root     tfork(210)      samba: tfork waiter process(210)
-    210     209 root     root     ldap(3)         samba: task[ldap] pre-forked worker(3)
-    509       1 root     wazuh    wazuh-execd     /var/ossec/bin/wazuh-execd
-    520       1 wazuh    wazuh    wazuh-agentd    /var/ossec/bin/wazuh-agentd
-    534       1 root     wazuh    wazuh-syscheckd /var/ossec/bin/wazuh-syscheckd
-    542       1 root     wazuh    wazuh-logcollec /var/ossec/bin/wazuh-logcollector
-    554       1 root     root     wazuh-agent.sh  /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
-   1029       1 root     wazuh    wazuh-execd     /var/ossec/bin/wazuh-execd
-   1037       1 wazuh    wazuh    wazuh-agentd    /var/ossec/bin/wazuh-agentd
-   1050       1 root     wazuh    wazuh-syscheckd /var/ossec/bin/wazuh-syscheckd
-   1063       1 root     wazuh    wazuh-logcollec /var/ossec/bin/wazuh-logcollector
-   1077       1 root     root     wazuh-modulesd  /var/ossec/bin/wazuh-modulesd
-   1095     554 root     root     tail            tail -F /var/ossec/logs/ossec.log
-   1186       0 root     root     bash            bash -lc  set +e section() { printf "\n--%s--\n" "$1"; } section os-release; cat /etc/os-release section uname; uname -a section hostname; hostname; hostname -f 2>/dev/null || true section versions; samba --version; smbd --version; winbindd --version; krb5-config --version 2>/dev/null || true section env; env | sort | sed -E "s/^(SAMBA_ADMIN_PASSWORD)=.*/\1=<REDACTED-SCENARIO-FIXTURE>/; s/^(APTL_FLAG_KEY)=.*/\1=<REDACTED-OPERATOR-SECRET>/" section samba-domain-info; samba-tool domain info 127.0.0.1 section samba-domain-level; samba-tool domain level show section samba-password-settings; samba-tool domain passwordsettings show section samba-ou-list; samba-tool ou list 2>/dev/null || true section samba-users; samba-tool user list | sort section samba-groups; samba-tool group list | sort section samba-group-members; for g in "Domain Admins" "IT-Admins" Engineering Sales HR Finance Executives VPN-Users Remote-Desktop "Domain Users"; do echo "[$g]"; samba-tool group listmembers "$g" 2>/dev/null | sort || true; done section samba-user-details; for u in Administrator Guest krbtgt sarah.mitchell james.rodriguez lisa.chang emily.chen michael.thompson david.kim jessica.williams robert.martinez svc-sql svc-web svc-backup contractor.temp former.employee; do echo "[$u]"; samba-tool user show "$u" 2>/dev/null | sed -E "/unicodePwd|supplementalCredentials|dBCSPwd|ntPwdHash|lmPwdHash|userPassword|clearTextPassword/I d" || true; done section samba-spns; for u in svc-sql svc-web; do echo "[$u]"; samba-tool spn list "$u" 2>/dev/null || true; done section listeners; ss -lntup; ss -lnup section processes; ps -eo pid,ppid,user,group,comm,args --sort pid section supervisor; supervisorctl status 2>/dev/null || true section mounts; mount section df; df -T section local-passwd; getent passwd section local-group; getent group section important-paths; for p in /opt/setup-ad.sh /opt/provision-users.sh /etc/supervisor/conf.d/samba.conf /etc/samba/smb.conf /etc/krb5.conf /etc/rsyslog.d/90-forward.conf /var/lib/samba/private/.provisioned /var/lib/samba/smb.conf.provisioned /opt/flags/user.txt /root/root.txt /opt/aptl/wazuh /var/ossec/etc/ossec.conf /var/ossec/etc/client.keys /var/log/samba; do ls -ld "$p" 2>/dev/null || true; done section logs; ls -la /var/log/samba 2>/dev/null || true
-   1260     554 root     root     sleep           sleep 5
-   1271    1186 root     root     ps              ps -eo pid,ppid,user,group,comm,args --sort pid
+    163     136 root     root     tfork(164)      samba: tfork waiter process(164)
+    164     163 root     root     s3fs[master]    samba: task[s3fs] pre-fork master
+    165     136 root     root     tfork(167)      samba: tfork waiter process(167)
+    166     164 root     root     tfork(168)      samba: tfork waiter process(168)
+    167     165 root     root     rpc[master]     samba: task[rpc] pre-fork master
+    168     166 root     root     smbd            /usr/sbin/smbd -D --option=server role check:inhibit=yes --foreground
+    169     136 root     root     tfork(170)      samba: tfork waiter process(170)
+    170     169 root     root     nbt[master]     samba: task[nbt] pre-fork master
+    171     167 root     root     tfork(173)      samba: tfork waiter process(173)
+    172     136 root     root     tfork(174)      samba: tfork waiter process(174)
+    173     171 root     root     rpc(0)          samba: task[rpc] pre-forked worker(0)
+    174     172 root     root     wrepl[master]   samba: task[wrepl] pre-fork master
+    175     167 root     root     tfork(177)      samba: tfork waiter process(177)
+    176     136 root     root     tfork(178)      samba: tfork waiter process(178)
+    177     175 root     root     rpc(1)          samba: task[rpc] pre-forked worker(1)
+    178     176 root     root     ldap[master]    samba: task[ldap] pre-fork master
+    179     167 root     root     tfork(181)      samba: tfork waiter process(181)
+    180     136 root     root     tfork(182)      samba: tfork waiter process(182)
+    181     179 root     root     rpc(2)          samba: task[rpc] pre-forked worker(2)
+    182     180 root     root     cldap[master]   samba: task[cldap] pre-fork master
+    183     136 root     root     tfork(186)      samba: tfork waiter process(186)
+    184     167 root     root     tfork(185)      samba: tfork waiter process(185)
+    185     184 root     root     rpc(3)          samba: task[rpc] pre-forked worker(3)
+    186     183 root     root     kdc[master]     samba: task[kdc] pre-fork master
+    187     136 root     root     tfork(189)      samba: tfork waiter process(189)
+    188     186 root     root     tfork(190)      samba: tfork waiter process(190)
+    189     187 root     root     drepl[master]   samba: task[drepl] pre-fork master
+    190     188 root     root     kdc(0)          samba: task[kdc] pre-forked worker(0)
+    191     136 root     root     tfork(193)      samba: tfork waiter process(193)
+    192     186 root     root     tfork(194)      samba: tfork waiter process(194)
+    193     191 root     root     winbindd[master samba: task[winbindd] pre-fork master
+    194     192 root     root     kdc(1)          samba: task[kdc] pre-forked worker(1)
+    195     136 root     root     tfork(198)      samba: tfork waiter process(198)
+    196     186 root     root     tfork(200)      samba: tfork waiter process(200)
+    197     193 root     root     tfork(199)      samba: tfork waiter process(199)
+    198     195 root     root     ntp_signd[maste samba: task[ntp_signd] pre-fork master
+    199     197 root     root     winbindd        /usr/sbin/winbindd -D --option=server role check:inhibit=yes --foreground
+    200     196 root     root     kdc(2)          samba: task[kdc] pre-forked worker(2)
+    201     136 root     root     tfork(203)      samba: tfork waiter process(203)
+    202     186 root     root     tfork(204)      samba: tfork waiter process(204)
+    203     201 root     root     kcc[master]     samba: task[kcc] pre-fork master
+    204     202 root     root     kdc(3)          samba: task[kdc] pre-forked worker(3)
+    205     136 root     root     tfork(206)      samba: tfork waiter process(206)
+    206     205 root     root     dnsupdate[maste samba: task[dnsupdate] pre-fork master
+    207     136 root     root     tfork(209)      samba: tfork waiter process(209)
+    209     207 root     root     dns[master]     samba: task[dns] pre-fork master
+    232     168 root     root     smbd-notifyd    /usr/sbin/smbd -D --option=server role check:inhibit=yes --foreground
+    235     168 root     root     cleanupd        /usr/sbin/smbd -D --option=server role check:inhibit=yes --foreground
+    254     199 root     root     winbindd        winbindd: domain child [TECHVAULT]
+    255     199 root     root     winbindd        winbindd: idmap child
+    256     168 root     root     samba-bgqd      /usr/lib/x86_64-linux-gnu/samba/samba-bgqd --ready-signal-fd=47 --parent-watch-fd=13 --debuglevel=0 -F
+    285     178 root     root     tfork(286)      samba: tfork waiter process(286)
+    286     285 root     root     ldap(0)         samba: task[ldap] pre-forked worker(0)
+    287     178 root     root     tfork(288)      samba: tfork waiter process(288)
+    288     287 root     root     ldap(1)         samba: task[ldap] pre-forked worker(1)
+    289     178 root     root     tfork(290)      samba: tfork waiter process(290)
+    290     289 root     root     ldap(2)         samba: task[ldap] pre-forked worker(2)
+    291     178 root     root     tfork(292)      samba: tfork waiter process(292)
+    292     291 root     root     ldap(3)         samba: task[ldap] pre-forked worker(3)
+    493       1 root     root     wazuh-agent.sh  /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
+    543       1 root     wazuh    wazuh-execd     /var/ossec/bin/wazuh-execd
+    551       1 wazuh    wazuh    wazuh-agentd    /var/ossec/bin/wazuh-agentd
+    573       1 root     wazuh    wazuh-syscheckd /var/ossec/bin/wazuh-syscheckd
+    590       1 root     wazuh    wazuh-logcollec /var/ossec/bin/wazuh-logcollector
+    604       1 root     wazuh    wazuh-modulesd  /var/ossec/bin/wazuh-modulesd
+    665     493 root     root     tail            tail -F /var/ossec/logs/ossec.log
+  29413       0 root     root     bash            bash -lc      set +e     section() { printf "\n--%s--\n" "$1"; }     section os-release; cat /etc/os-release     section uname; uname -a     section hostname; hostname; hostname -f 2>/dev/null || true     section versions; samba --version; smbd --version; winbindd --version; krb5-config --version 2>/dev/null || true     section env; env | sort     section samba-domain-info; samba-tool domain info 127.0.0.1     section samba-domain-level; samba-tool domain level show     section samba-password-settings; samba-tool domain passwordsettings show     section samba-ou-list; samba-tool ou list 2>/dev/null || true     section samba-users; samba-tool user list | sort     section samba-groups; samba-tool group list | sort     section samba-group-members; for g in "Domain Admins" "IT-Admins" Engineering Sales HR Finance Executives VPN-Users Remote-Desktop "Domain Users"; do echo "[$g]"; samba-tool group listmembers "$g" 2>/dev/null | sort || true; done     section samba-user-details; for u in Administrator Guest krbtgt sarah.mitchell james.rodriguez lisa.chang emily.chen michael.thompson david.kim jessica.williams robert.martinez svc-sql svc-web svc-backup contractor.temp former.employee; do echo "[$u]"; samba-tool user show "$u" 2>/dev/null || true; done     section samba-spns; for u in svc-sql svc-web; do echo "[$u]"; samba-tool spn list "$u" 2>/dev/null || true; done     section listeners; ss -lntup; ss -lnup     section processes; ps -eo pid,ppid,user,group,comm,args --sort pid     section supervisor; supervisorctl status 2>/dev/null || true     section mounts; mount     section df; df -T     section local-passwd; getent passwd     section local-group; getent group     section important-paths; for p in /opt/setup-ad.sh /opt/provision-users.sh /etc/supervisor/conf.d/samba.conf /etc/samba/smb.conf /etc/krb5.conf /etc/rsyslog.d/90-forward.conf /var/lib/samba/private/.provisioned /var/lib/samba/smb.conf.provisioned /opt/flags/user.txt /root/root.txt /opt/aptl/wazuh /var/ossec/etc/ossec.conf /var/ossec/etc/client.keys /var/log/samba; do ls -ld "$p" 2>/dev/null || true; done     section flag-contents; for p in /opt/flags/user.txt /root/root.txt; do echo "[$p]"; cat "$p" 2>/dev/null || true; done     section logs; ls -la /var/log/samba 2>/dev/null || true
+  29474     493 root     root     sleep           sleep 5
+  29483   29413 root     root     ps              ps -eo pid,ppid,user,group,comm,args --sort pid
 
 --supervisor--
-rsyslog                          RUNNING   pid 135, uptime 0:04:03
-samba                            RUNNING   pid 136, uptime 0:04:03
-wazuh-agent                      RUNNING   pid 554, uptime 0:03:36
+rsyslog                          RUNNING   pid 135, uptime 17:40:40
+samba                            RUNNING   pid 136, uptime 17:40:40
+wazuh-agent                      RUNNING   pid 493, uptime 17:40:24
 
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51139/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31657/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31656/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31655/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31654/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31653/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31652/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31651/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31650/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31649/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31648/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31647/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31646/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31540/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51156/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51156/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107876/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31657/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31656/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31655/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31654/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31653/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31652/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31651/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31650/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31649/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31648/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31647/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31646/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31540/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107888/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107888/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -951,8 +948,8 @@ shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
 /dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
 /dev/md2 on /etc/hostname type ext4 (rw,relatime)
 /dev/md2 on /etc/hosts type ext4 (rw,relatime)
-/dev/md2 on /var/lib/samba type ext4 (rw,relatime)
 /dev/md2 on /var/log/samba type ext4 (rw,relatime)
+/dev/md2 on /var/lib/samba type ext4 (rw,relatime)
 proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
 proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
 proc on /proc/irq type proc (ro,nosuid,nodev,noexec,relatime)
@@ -970,10 +967,10 @@ tmpfs on /sys/firmware type tmpfs (ro,relatime,inode64)
 
 --df--
 Filesystem     Type    1K-blocks      Used Available Use% Mounted on
-overlay        overlay 978087024 255472304 672856960  28% /
+overlay        overlay 978087024 482766696 445562568  53% /
 tmpfs          tmpfs       65536         0     65536   0% /dev
 shm            tmpfs       65536         0     65536   0% /dev/shm
-/dev/md2       ext4    978087024 255472304 672856960  28% /etc/hosts
+/dev/md2       ext4    978087024 482766696 445562568  53% /etc/hosts
 tmpfs          tmpfs    65902600         0  65902600   0% /proc/acpi
 tmpfs          tmpfs    65902600         0  65902600   0% /proc/scsi
 tmpfs          tmpfs    65902600         0  65902600   0% /sys/devices/virtual/powercap
@@ -1055,28 +1052,40 @@ wazuh:x:107:
 -rwxr-xr-x 1 root root 2813 Mar  7 06:52 /opt/setup-ad.sh
 -rwxr-xr-x 1 root root 8286 Mar  7 06:52 /opt/provision-users.sh
 -rw-rw-r-- 1 root root 1059 May  4 00:04 /etc/supervisor/conf.d/samba.conf
--rw-r--r-- 1 root root 342 May 23 06:18 /etc/samba/smb.conf
--rw-r--r-- 1 root root 200 May 23 06:18 /etc/krb5.conf
--rw-r--r-- 1 root root 21 May 23 06:19 /etc/rsyslog.d/90-forward.conf
--rw-r--r-- 1 root root 0 May 23 06:19 /var/lib/samba/private/.provisioned
--rw-r--r-- 1 root root 342 May 23 06:19 /var/lib/samba/smb.conf.provisioned
--rw-r--r-- 1 root root 196 May 23 06:19 /opt/flags/user.txt
--rw------- 1 root root 196 May 23 06:19 /root/root.txt
+-rw-r--r-- 1 root root 342 Jun 11 16:00 /etc/samba/smb.conf
+-rw-r--r-- 1 root root 200 Jun 11 16:00 /etc/krb5.conf
+-rw-r--r-- 1 root root 21 Jun 11 16:00 /etc/rsyslog.d/90-forward.conf
+-rw-r--r-- 1 root root 0 Jun 11 16:00 /var/lib/samba/private/.provisioned
+-rw-r--r-- 1 root root 342 Jun 11 16:00 /var/lib/samba/smb.conf.provisioned
+-rw-r--r-- 1 root root 196 Jun 11 16:00 /opt/flags/user.txt
+-rw------- 1 root root 196 Jun 11 16:00 /root/root.txt
 drwxr-xr-x 1 root root 4096 May 18 00:58 /opt/aptl/wazuh
--rw-r----- 1 root wazuh 990 May 23 06:19 /var/ossec/etc/ossec.conf
--rw-r----- 1 wazuh wazuh 92 May 23 06:21 /var/ossec/etc/client.keys
-drwxr-x--- 3 root adm 4096 May 23 06:19 /var/log/samba
+-rw-r----- 1 root wazuh 990 Jun 11 16:01 /var/ossec/etc/ossec.conf
+-rw-r----- 1 root wazuh 87 Jun 11 16:00 /var/ossec/etc/client.keys
+drwxr-x--- 3 root adm 4096 Jun 11 16:00 /var/log/samba
+
+--flag-contents--
+[/opt/flags/user.txt]
+===== APTL CTF Flag =====
+Flag:  APTL{user_ad_d179457f6eae87d310d9e1c576c30e73}
+Token: aptl:v1:ad:user:d179457f6eae87d310d9e1c576c30e73:6385dedbc4c22c24ac140ae602c3d12b
+==========================
+[/root/root.txt]
+===== APTL CTF Flag =====
+Flag:  APTL{root_ad_628ef9701766208ee19b9b6c7c49c488}
+Token: aptl:v1:ad:root:628ef9701766208ee19b9b6c7c49c488:3b64e89617df9117955e23fa154d32c7
+==========================
 
 --logs--
-total 36
-drwxr-x--- 3 root adm    4096 May 23 06:19 .
-drwxrwxr-x 1 root syslog 4096 May 23 06:19 ..
-drwx------ 5 root root   4096 May 23 06:19 cores
--rw-r--r-- 1 root root   4553 May 23 06:19 log.samba
--rw-r--r-- 1 root root    137 May 23 06:19 log.samba-bgqd
--rw-r--r-- 1 root root    168 May 23 06:19 log.smbd
--rw-r--r-- 1 root root      0 May 23 06:19 log.wb-TECHVAULT
--rw-r--r-- 1 root root    365 May 23 06:19 log.winbindd
--rw-r--r-- 1 root root      0 May 23 06:19 log.winbindd-idmap
--rw-r--r-- 1 root root      0 May 23 06:19 samba.log
--rw-r--r-- 1 root root      0 May 23 06:19 samba_err.log
+total 432
+drwxr-x--- 3 root adm      4096 Jun 11 16:00 .
+drwxrwxr-x 1 root syslog   4096 Jun 11 16:00 ..
+drwx------ 5 root root     4096 Jun 11 16:00 cores
+-rw-r--r-- 1 root root   406187 Jun 12 09:41 log.samba
+-rw-r--r-- 1 root root      137 Jun 11 16:00 log.samba-bgqd
+-rw-r--r-- 1 root root      168 Jun 11 16:00 log.smbd
+-rw-r--r-- 1 root root        0 Jun 11 16:00 log.wb-TECHVAULT
+-rw-r--r-- 1 root root      365 Jun 11 16:00 log.winbindd
+-rw-r--r-- 1 root root        0 Jun 11 16:00 log.winbindd-idmap
+-rw-r--r-- 1 root root        0 Jun 11 16:00 samba.log
+-rw-r--r-- 1 root root        0 Jun 11 16:00 samba_err.log

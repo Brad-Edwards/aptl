@@ -37,7 +37,7 @@ sh: 16: netstat: not found
 sh: 18: ss: not found
 sh: 18: netstat: not found
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51174/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/45216/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/45214/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/45212/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/45210/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/45208/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/45206/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/45204/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/45121/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51181/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51181/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107908/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106793/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106791/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106789/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106787/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106785/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106783/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106781/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/105422/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107916/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107916/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -131,11 +131,11 @@ wazuh:x:101:
      60       1 wazuh    /var/ossec/bin/wazuh-agentd
      74       1 root     /var/ossec/bin/wazuh-syscheckd
      84       1 root     /var/ossec/bin/wazuh-logcollector
-    101       1 root     /var/ossec/bin/wazuh-modulesd
-    119       1 root     tail -F /var/ossec/logs/ossec.log
- 309132       1 root     sleep 5
- 309435       0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --capabilities-pid1--   grep "^Cap" /proc/1/status || true   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   printf "%s\n" --outbound-connections--   (ss -ntp || netstat -ntp || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --sudoers--   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true   printf "%s\n" --process-tree--   ps -eo pid,ppid,user,args || true   printf "%s\n" --wazuh-version--   /var/ossec/bin/wazuh-control info 2>&1 || true
- 309460  309435 root     ps -eo pid,ppid,user,args
+     98       1 root     /var/ossec/bin/wazuh-modulesd
+    116       1 root     tail -F /var/ossec/logs/ossec.log
+  15492       1 root     sleep 5
+  15777       0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --capabilities-pid1--   grep "^Cap" /proc/1/status || true   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   printf "%s\n" --outbound-connections--   (ss -ntp || netstat -ntp || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --sudoers--   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true   printf "%s\n" --process-tree--   ps -eo pid,ppid,user,args || true   printf "%s\n" --wazuh-version--   /var/ossec/bin/wazuh-control info 2>&1 || true
+  15802   15777 root     ps -eo pid,ppid,user,args
 --wazuh-version--
 WAZUH_VERSION="v4.12.0"
 WAZUH_REVISION="rc1"

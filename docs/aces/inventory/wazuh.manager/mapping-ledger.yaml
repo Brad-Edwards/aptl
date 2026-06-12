@@ -241,7 +241,7 @@ facts:
         carry the corresponding Wazuh component state.
   - id: wazuh-manager.runtime.environment
     category: runtime-configuration
-    summary: Runtime environment records Wazuh API/indexer variables, Filebeat TLS configuration, root shell defaults, and redacted secret-bearing values.
+    summary: Runtime environment records Wazuh API/indexer variables, Filebeat TLS configuration, root shell defaults, and scenario fixture values.
     evidence:
       - path: evidence/runtime-baseline.txt
       - path: evidence/compose-service.wazuh.manager.json
@@ -251,7 +251,7 @@ facts:
       surface: nodes
       fields:
         - nodes.techvault.wazuh-manager.runtime.environment
-      rationale: ACES runtime environment supports provenance and redacted value classification.
+      rationale: ACES runtime environment supports provenance and scenario fixture value classification.
   - id: wazuh-manager.runtime.local-identity-database
     category: identity
     summary: getent captured 14 local users and 25 local groups, including the Wazuh service user and group.
@@ -362,7 +362,7 @@ facts:
       rationale: ACES #434 adds typed detection-definition semantics for manager-loaded rules, correlation rules, decoders, predicates, source spans, canonical digests, and local correlation references.
   - id: wazuh-manager.security-monitoring.settings
     category: security-monitoring
-    summary: Manager settings encode indexer URL, Filebeat TLS verification, API auth posture, default group size, and loaded rule/decoder counts with provenance and redaction classification.
+    summary: Manager settings encode indexer URL, Filebeat TLS verification, API auth posture, default group size, and loaded rule/decoder counts with provenance and sensitivity classification.
     evidence:
       - path: evidence/runtime-baseline.txt
       - path: evidence/wazuh-manager-state.txt
@@ -394,7 +394,7 @@ facts:
       caveat: osquery table attempts are retained as inventory evidence; ACES SDL carries derived runtime facts rather than a first-class osquery-table manifest.
   - id: wazuh-manager.capture.toolchain-baseline
     category: capture-methodology
-    summary: The bundle records Trivy, Syft, osquery, Docker, Compose, filesystem manifest, redaction, compression, and capture-limit evidence for rerunnable methodology review.
+    summary: The bundle records Trivy, Syft, osquery, Docker, Compose, filesystem manifest, compression, and capture-limit evidence for rerunnable methodology review.
     evidence:
       - path: evidence/capture-limits.txt
       - path: evidence/captured-at-utc.txt

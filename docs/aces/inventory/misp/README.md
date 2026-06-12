@@ -37,13 +37,15 @@ as current-running steady-state evidence, not as clean-lab rebuild proof.
 - OS/runtime: Debian GNU/Linux 13 (trixie), PHP 8.4.16, nginx 1.26.3,
   Python 3.12.13, MariaDB client 11.8.6.
 - MISP app version: `{"major":2, "minor":5, "hotfix":36}`.
-- Runtime counts: 17,516 filesystem entries, 12,544 checksummed files,
+- Runtime counts: 17,516 filesystem entries, 12,549 checksummed files,
   238 dpkg packages, 593 Trivy vulnerability findings, 21 local users,
   42 local groups, 49 steady-state processes, and 15 unique service listeners.
 - MISP logical state: one admin user, one local organisation, six roles, one
-  API-key metadata row, six admin settings, zero events, zero attributes, zero
-  objects, five tags, 165 taxonomies, 112 galaxies, 49,300 galaxy clusters,
+  API-key metadata row, six admin settings, one event, six attributes, zero
+  objects, seven tags, 165 taxonomies, 112 galaxies, 49,300 galaxy clusters,
   122 warninglists, two feeds, zero sharing groups, and 388 object templates.
+  The live event is `APTL Lab - Known Threat Actors` with three `ip-src` IOCs
+  and three `pattern-in-traffic` IOCs.
 - Participant discovery: `aptl-misp-suricata-sync` resolves `misp` and
   `aptl-misp`, reaches TCP 443 and TCP 80, and verifies TLS with the lab CA.
   `aptl-kali` cannot reach `172.20.0.16:443` from its current network vantage.
@@ -51,15 +53,14 @@ as current-running steady-state evidence, not as clean-lab rebuild proof.
 ## Limits
 
 - This is not a destructive fresh-lab reset or byte-identical rebuild proof.
-- Private key material, raw admin password/key values, MySQL password values,
-  CSRF-bearing healthcheck HTML, and secret-bearing config file hashes are
-  redacted or omitted.
+- Scenario fixture secrets are retained unmasked in the evidence and SDL. The
+  live TLS key and active MISP config files are represented by target-file
+  metadata and SHA-256 digests in the filesystem evidence.
 - Docker embedded DNS listener ports are backend-generated and ephemeral; the
   SDL records them as node-local runtime listeners with provenance and caveat
   text rather than as MISP application services.
-- No attack-induced MISP events, attributes, or objects were present. Typed
-  threat-intelligence event semantics were therefore not exercised by this
-  snapshot.
+- The snapshot contains one MISP event and six attributes; the bundle records
+  row-level event, attribute, event-tag, and tag evidence in `misp-state.txt`.
 
 Run:
 

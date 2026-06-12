@@ -284,7 +284,7 @@
     },
     "NetworkSettings": {
       "SandboxID": "0e9fa7813d12db9782711179e65a2889916bb3321f18461acde9fb64e527f4b7",
-      "SandboxKey": "<REDACTED>",
+      "SandboxKey": "/var/run/docker/netns/0e9fa7813d12",
       "Ports": {
         "110/tcp": null,
         "143/tcp": null,

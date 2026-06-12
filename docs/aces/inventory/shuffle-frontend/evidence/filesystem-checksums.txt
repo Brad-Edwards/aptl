@@ -5,6 +5,7 @@ ebab25e05a1bf23d7917cd7a03c3f365beb005a47f5babe6df7237ebb052599a  /etc/nginx/ful
 6f95d1d7d75e3c072907d845622a69d23110d1266c16ff122b3109b8b21f3ae9  /etc/nginx/mime.types
 3c4853bc67f62f2117d82e7d618365e9ffbfef41e91ab764e58abf1afc4ee74d  /etc/nginx/nginx.conf
 553445e43f5d26b5c04b6898ec80fb885d7cf5ee2abb7d1e5705366a2b6e0f40  /etc/nginx/nginx.conf.tmpl
+ceff379d5801fd687b89e0a8bc2a540019c368bd5121537ec076d9d7f2ac1619  /etc/nginx/privkey.pem
 f27b2027c571ccafcfb0fbb3f54d7aeee11a984e3a0f5a1fdf14629030fc9011  /etc/nginx/scgi_params
 015cb581c2eb84b1a1ac9b575521d5881f791f632bfa62f34b26ba97d70c0d4f  /etc/nginx/uwsgi_params
 876766b4e80133fd490603e073d3567425b88794828a9292104244c9e40875ed  /usr/share/nginx/html/50x.html
@@ -103,4 +104,3 @@ c06b20a3283e327604c724e73a5aaf27be795f95dfd4f74fc123b83917436e2c  /usr/share/ngi
 2e822c1c41548104cffc8ecca644b3c5483056064d1b386e188890c315bb2d40  /usr/share/nginx/html/images/workflows/user_input.svg
 b98c329c7437dfe8032650573a3b492156a5525ff5487a73b58b2c728770c062  /usr/share/nginx/html/index.html
 02f9929d90d5cb0d81f24287b2d8cf31b9231f89d0f3bab752432e5fd408b4ce  /usr/share/nginx/html/manifest.json
-<OMITTED-OPERATOR-SECRET-CHECKSUM>  /etc/nginx/privkey.pem

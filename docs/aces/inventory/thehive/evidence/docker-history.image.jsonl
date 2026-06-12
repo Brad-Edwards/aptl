@@ -16,4 +16,4 @@
 {"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-01-18T02:58:56+01:00","CreatedBy":"ENV JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto","CreatedSince":"4 months ago","ID":"\u003cmissing\u003e","Size":"0B"}
 {"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-01-18T02:58:56+01:00","CreatedBy":"LABEL org.opencontainers.image.authors=contact@strangebee.com","CreatedSince":"4 months ago","ID":"\u003cmissing\u003e","Size":"0B"}
 {"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-01-18T02:58:56+01:00","CreatedBy":"LABEL org.opencontainers.image.vendor=StrangeBee","CreatedSince":"4 months ago","ID":"\u003cmissing\u003e","Size":"0B"}
-{"Comment":"debuerreotype 0.17","CreatedAt":"2026-01-12T01:00:00+01:00","CreatedBy":"# debian.sh --arch 'amd64' out/ 'bookworm' '@1768176000'","CreatedSince":"4 months ago","ID":"\u003cmissing\u003e","Size":"85.2MB"}
+{"Comment":"debuerreotype 0.17","CreatedAt":"2026-01-12T01:00:00+01:00","CreatedBy":"# debian.sh --arch 'amd64' out/ 'bookworm' '@1768176000'","CreatedSince":"5 months ago","ID":"\u003cmissing\u003e","Size":"85.2MB"}

@@ -6,7 +6,6 @@ import gzip
 import hashlib
 import json
 import re
-import subprocess
 
 import pytest
 import yaml
@@ -31,9 +30,7 @@ EVIDENCE_DIR = WAZUH_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_DIGEST_RE = re.compile(
-    r"^wazuh/wazuh-manager@sha256:[0-9a-f]{64}$"
-)
+IMAGE_DIGEST_RE = re.compile(r"^wazuh/wazuh-manager@sha256:[0-9a-f]{64}$")
 
 REQUIRED_EVIDENCE_FILES = {
     "capture-limits.txt",
@@ -90,12 +87,18 @@ REQUIRED_EVIDENCE_FILES = {
     "wazuh-manager-state.txt",
 }
 
-RAW_SECRET_PATTERNS = (
-    r"SecretPassword",
-    r"WazuhPass123!",
-    r"BEGIN .*PRIVATE KEY",
-    r"<key>[^<]+</key>",
-    r"authorization: Bearer",
+FORBIDDEN_CAPTURE_PLACEHOLDERS = (
+    r"<REDACTED",
+    r"<OMITTED",
+    r"HTTP-[A-Z-]+-OMITTED",
+    r"value withheld",
+    r"absent from committed evidence",
+)
+FORBIDDEN_CAPTURE_HELPERS = (
+    "redact_stream",
+    "redact_env_jq",
+    "redact_sensitive_keys",
+    "sanitize_http_stream",
 )
 
 
@@ -153,20 +156,6 @@ def _manifest_corpus_digest(definitions: list[dict]) -> str:
     return hashlib.sha256(("\n".join(lines) + "\n").encode("utf-8")).hexdigest()
 
 
-def _redact_with_capture_script(text: str) -> str:
-    script = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
-    match = re.search(r"redact_stream\(\) \{\n.*?\n\}", script, re.DOTALL)
-    assert match, "capture script must define redact_stream"
-    result = subprocess.run(
-        ["bash", "-c", f"{match.group(0)}\nredact_stream"],
-        input=text,
-        capture_output=True,
-        check=True,
-        text=True,
-    )
-    return result.stdout
-
-
 def test_wazuh_manager_inventory_note_declares_scope_and_evidence():
     text = WAZUH_DOC_PATH.read_text(encoding="utf-8")
     required = (
@@ -187,7 +176,7 @@ def test_wazuh_manager_inventory_note_declares_scope_and_evidence():
     assert not missing, f"Wazuh manager inventory note missing scope markers: {missing}"
 
 
-def test_wazuh_manager_capture_script_pins_toolchain_and_redaction():
+def test_wazuh_manager_capture_script_pins_toolchain_and_preserves_raw_capture():
     text = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
     required = (
         "aquasec/trivy@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e",
@@ -201,35 +190,26 @@ def test_wazuh_manager_capture_script_pins_toolchain_and_redaction():
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Capture script missing reproducibility markers: {missing}"
+    assert "redact_stream" not in text
+    assert "<REDACTED" not in text
     assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
 
 
-def test_wazuh_manager_capture_stream_redaction_is_key_aware():
-    secret_value = "zulu-4279-mica-1836"
-    public_value = "public-observation-2026"
-    redacted = _redact_with_capture_script(
-        "\n".join(
-            [
-                f"PASSWORD={secret_value}",
-                f"password: {secret_value}",
-                f"api_key = {secret_value}",
-                f"cluster_key: {secret_value}",
-                f"indexer_key: {secret_value}",
-                f"x-api-key: {secret_value}",
-                f"ssl.key = {secret_value}",
-                f"<password>{secret_value}</password>",
-                f"<api_key>{secret_value}</api_key>",
-                f"<api-key>{secret_value}</api-key>",
-                f"<private-key>{secret_value}</private-key>",
-                f"Authorization: Bearer {secret_value}",
-                f"regular_field: {public_value}",
-            ]
-        )
-    )
+def test_wazuh_manager_evidence_preserves_secret_shaped_scenario_values():
+    container = json.dumps(_json_file("docker-inspect.container.json"))
+    state = (EVIDENCE_DIR / "wazuh-manager-state.txt").read_text(encoding="utf-8")
+    api_probe = _json_file("wazuh-api-probe.json")["output"]
 
-    assert secret_value not in redacted
-    assert public_value in redacted
-    assert "<REDACTED" in redacted
+    assert "INDEXER_PASSWORD=SecretPassword" in container
+    assert "API_PASSWORD=WazuhPass123!" in container
+    assert "password: 'SecretPassword'" in state
+    assert "<key>/etc/ssl/filebeat.key</key>" in state
+    assert 'WAZUH_VERSION="v4.12.0"' in state
+    assert "HTTP/1.1 401 Unauthorized" in api_probe
+    assert "No authorization token provided" in api_probe
+    assert "<REDACTED" not in container
+    assert "<REDACTED" not in state
+    assert "<REDACTED" not in api_probe
 
 
 def test_wazuh_manager_mapping_ledger_validates_without_gap_triage():
@@ -245,8 +225,14 @@ def test_wazuh_manager_mapping_ledger_validates_without_gap_triage():
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
     assert dispositions["wazuh-manager.security-monitoring.manager-state"] == "encoded"
     assert dispositions["wazuh-manager.security-monitoring.content-sets"] == "encoded"
-    assert dispositions["wazuh-manager.security-monitoring.detection-definitions"] == "encoded"
-    assert dispositions["wazuh-manager.capture.toolchain-baseline"] == "encoded_with_caveat"
+    assert (
+        dispositions["wazuh-manager.security-monitoring.detection-definitions"]
+        == "encoded"
+    )
+    assert (
+        dispositions["wazuh-manager.capture.toolchain-baseline"]
+        == "encoded_with_caveat"
+    )
     assert len(ledger["facts"]) >= 18
 
 
@@ -291,8 +277,7 @@ def test_wazuh_manager_mapping_ledger_references_every_evidence_file():
     ledger = load_mapping_ledger(LEDGER_PATH)
     refs = set()
     refs.update(
-        ref["path"]
-        for ref in ledger["provenance"]["attestation"].get("evidence", [])
+        ref["path"] for ref in ledger["provenance"]["attestation"].get("evidence", [])
     )
     for check in ledger["correspondence_checks"]:
         refs.update(ref["path"] for ref in check.get("realized_evidence", []))
@@ -300,24 +285,25 @@ def test_wazuh_manager_mapping_ledger_references_every_evidence_file():
         refs.update(ref["path"] for ref in fact["evidence"])
 
     evidence_files = {
-        f"evidence/{path.name}"
-        for path in EVIDENCE_DIR.iterdir()
-        if path.is_file()
+        f"evidence/{path.name}" for path in EVIDENCE_DIR.iterdir() if path.is_file()
     }
     assert evidence_files <= refs
 
 
-def test_wazuh_manager_evidence_does_not_contain_raw_secret_material():
-    patterns = [re.compile(pattern, re.IGNORECASE) for pattern in RAW_SECRET_PATTERNS]
+def test_wazuh_manager_evidence_has_no_capture_placeholders_or_helpers():
+    patterns = [
+        re.compile(pattern, re.IGNORECASE) for pattern in FORBIDDEN_CAPTURE_PLACEHOLDERS
+    ]
     offenders = {}
     for path in EVIDENCE_DIR.iterdir():
         if not path.is_file():
             continue
         text = _evidence_text(path)
-        leaked = [pattern.pattern for pattern in patterns if pattern.search(text)]
-        if leaked:
-            offenders[path.name] = leaked
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+        matches = [pattern.pattern for pattern in patterns if pattern.search(text)]
+        matches.extend(helper for helper in FORBIDDEN_CAPTURE_HELPERS if helper in text)
+        if matches:
+            offenders[path.name] = matches
+    assert not offenders, f"Evidence contains capture placeholders/helpers: {offenders}"
 
 
 def test_wazuh_manager_runtime_evidence_and_security_monitoring_counts():
@@ -334,17 +320,18 @@ def test_wazuh_manager_runtime_evidence_and_security_monitoring_counts():
     assert container["Config"]["Hostname"] == "wazuh.manager"
     assert container["HostConfig"]["Memory"] == 1073741824
 
-    os_packages = (EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()
+    os_packages = (
+        (EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()
+    )
     sbom = _json_file("syft-sbom.cyclonedx.json.gz")
-    filesystem_entries = (EVIDENCE_DIR / "filesystem-tree.txt").read_text(
-        encoding="utf-8"
-    ).splitlines()
+    filesystem_entries = (
+        (EVIDENCE_DIR / "filesystem-tree.txt").read_text(encoding="utf-8").splitlines()
+    )
     assert len(os_packages) == 118
     assert len(sbom["components"]) == 322
     assert len(filesystem_entries) == 933
     assert len(findings) == 368
 
-    assert 'WAZUH_VERSION="<REDACTED' not in state
     assert 'WAZUH_VERSION="v4.12.0"' in state
     assert "Available agents:" in state
     assert "Groups (1):" in state
@@ -405,7 +392,9 @@ def test_techvault_sdl_encodes_wazuh_manager_security_monitoring_surface():
     assert runtime is not None
     assert len(runtime.filesystem_inventory) == 1220
     assert len(runtime.local_identity.users) == len(_runtime_baseline_section("users"))
-    assert len(runtime.local_identity.groups) == len(_runtime_baseline_section("groups"))
+    assert len(runtime.local_identity.groups) == len(
+        _runtime_baseline_section("groups")
+    )
     assert len(runtime.processes) == 22
     assert runtime.health.status == "healthy"
     assert len(runtime.packages) == 322
@@ -427,7 +416,9 @@ def test_techvault_sdl_encodes_wazuh_manager_security_monitoring_surface():
     assert len(manager.content_sets) >= 4
     assert len(manager.detection_definitions) == 6121
 
-    listener_roles = {listener.listener_id: listener.role for listener in manager.listeners}
+    listener_roles = {
+        listener.listener_id: listener.role for listener in manager.listeners
+    }
     assert listener_roles["agent-events-1514"] == "agent_event_ingestion"
     assert listener_roles["agent-enrollment-1515"] == "agent_enrollment"
     assert listener_roles["syslog-514"] == "syslog_ingestion"
@@ -449,7 +440,8 @@ def test_techvault_sdl_encodes_wazuh_manager_security_monitoring_surface():
         definition["definition_id"]: definition for definition in manifest_definitions
     }
     sdl_by_id = {
-        definition.definition_id: definition for definition in manager.detection_definitions
+        definition.definition_id: definition
+        for definition in manager.detection_definitions
     }
     assert set(sdl_by_id) == set(manifest_by_id)
     for definition_id, expected in manifest_by_id.items():
@@ -479,10 +471,14 @@ def test_techvault_sdl_compiles_with_wazuh_security_monitoring_refs():
     assert len(node["runtime"]["package_vulnerabilities"]) == 368
     assert len(manager["agents"]) == 7
     assert len(manager["agent_groups"][0]["member_refs"]) == 7
-    assert Counter(component["status"] for component in manager["components"]) >= Counter({
-        "running": 11,
-        "stopped": 4,
-    })
+    assert Counter(
+        component["status"] for component in manager["components"]
+    ) >= Counter(
+        {
+            "running": 11,
+            "stopped": 4,
+        }
+    )
 
 
 def test_parity_inventory_cites_wazuh_manager_inventory_and_aces_428():

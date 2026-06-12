@@ -31,8 +31,6 @@ SYFT_IMAGE="${SYFT_IMAGE:-anchore/syft@sha256:86fde6445b483d902fe011dd9f68c4987d
 OSQUERY_IMAGE="${OSQUERY_IMAGE:-osquery/osquery@sha256:f8ec3300048158292df2d4bb0d1d7804af358f530005828c3387553f23c796cd}"
 SYFT_NORMALIZER="$ASSET_DIR/normalize-syft-cyclonedx.jq"
 
-SECRET_NAME_REGEX="(token|secret|password|credential|cookie|session|private_key|api_key|jwt|access_key|authd_pass)"
-
 require() {
   command -v "$1" >/dev/null 2>&1 || {
     printf 'required command missing: %s\n' "$1" >&2
@@ -43,40 +41,6 @@ require() {
 record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
-
-redact_text_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)=([^[:space:]]+)/\1=<REDACTED>/Ig'
-}
-
-redact_env_jq='
-  def redact_env($secret_re):
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test($secret_re; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys($secret_re):
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test($secret_re; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
 
 require docker
 require gzip
@@ -89,42 +53,22 @@ date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 record_limit "This capture used the already-running local lab and did not run aptl lab stop -v && aptl lab start; it is a frozen steady-state observation, not a clean-lab rebuild proof."
 record_limit "The reverse profile container was started for this inventory after fixing three pre-existing service-definition bugs on the same branch (missing cgroup: host, missing /run/lock tmpfs for Ubuntu systemd under AppArmor docker-default, and a 512m memory limit that OOM-killed the first-boot radare2 source build, raised to 2g). The first OOM-killed boot registered Wazuh agent id 008 (reverse-host, now Disconnected) before the container was recreated; the active registration is agent id 009 with a runtime-generated collision-suffixed name. Both rows are visible in observer-discovery.wazuh-manager.txt; the stale 008 row is local lab-state debris, not part of the asset spec."
-record_limit "The host-mounted operator private key material under /keys is catalogued by path metadata only; /keys/aptl_lab_key content is an operator-secret boundary. SSH host private keys and /var/ossec/etc/client.keys are metadata-only with content excluded from checksums (ADR-029)."
+record_limit "Scenario target secret files under /keys, /etc/ssh, and /var/ossec/etc/client.keys are captured verbatim in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt.xz."
 record_limit "The reverse-engineering Python tools are pipx-installed for labadmin from the Mandiant/FLARE PyPI distributions flare-floss==3.1.1 and flare-capa==9.4.0 (the correct names; the bare 'floss'/'capa' PyPI names are unrelated projects). This was corrected in SCN-010 #338: the initial capture found the bare 'floss' package (an unrelated spectrum-based fault-localization tool, analyzed as non-malicious) installed by an unpinned setup-reverse-tools.sh; the script was fixed to install the pinned flare- distributions and the box re-captured."
 
 docker version --format json | jq . > "$OUT/docker-version.json"
 docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 
 COMPOSE_PROFILES=reverse docker compose -f "$COMPOSE_FILE" config --format json \
-  | jq \
-    --arg service "$COMPOSE_SERVICE" \
-    --arg secret_re "$SECRET_NAME_REGEX" '
-      .services[$service]
-      | .environment = (
-          (.environment // {})
-          | with_entries(
-              if (.key | test($secret_re; "i")) then
-                .value = ("<REDACTED-" + (.key | gsub("_"; "-")) + ">")
-              else
-                .
-              end
-            )
-        )
-    ' > "$OUT/compose-service.reverse.json"
+  | jq --arg service "$COMPOSE_SERVICE" '.services[$service]' \
+  > "$OUT/compose-service.reverse.json"
 
-docker inspect "$CONTAINER" \
-  | jq --arg secret_re "$SECRET_NAME_REGEX" \
-      "$redact_env_jq
-      .[].Config.Env |= ((. // []) | map(redact_env(\$secret_re)))
-      | redact_sensitive_keys(\$secret_re)" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq --arg secret_re "$SECRET_NAME_REGEX" "$redact_env_jq redact_sensitive_keys(\$secret_re)" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_text_stream > "$OUT/docker-history.image.txt"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
 docker history --no-trunc --format '{{json .}}' "$IMAGE" \
-  | redact_text_stream > "$OUT/docker-history.image.jsonl"
+  > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw | jq . > "$OUT/docker-buildx-imagetools.image.raw.json"
@@ -145,8 +89,8 @@ if [[ -n "$home_volume" ]]; then
 else
   record_limit "The anonymous /home volume was not found in Docker inspect output."
 fi
-docker top "$CONTAINER" | redact_text_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_text_stream > "$OUT/docker-logs.reverse.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 > "$OUT/docker-logs.reverse.txt" 2>&1
 
 sha256sum \
   "$ROOT/docker-compose.yml" \
@@ -177,7 +121,7 @@ docker exec "$CONTAINER" bash -c '
   done
   echo --apt-keyrings--
   ls -la /usr/share/keyrings/ /etc/apt/trusted.gpg.d/ 2>/dev/null
-' | redact_text_stream > "$OUT/apt-repositories.txt"
+' > "$OUT/apt-repositories.txt"
 
 docker exec "$CONTAINER" bash -c '
   set +e
@@ -205,7 +149,7 @@ docker exec "$CONTAINER" bash -c '
   falco --version 2>&1
   echo --wazuh--
   /var/ossec/bin/wazuh-control info 2>&1
-' | redact_text_stream > "$OUT/language-manifests.txt"
+' > "$OUT/language-manifests.txt"
 
 docker exec "$CONTAINER" bash -c '
   set +e
@@ -250,7 +194,7 @@ docker exec "$CONTAINER" bash -c '
   systemctl --no-pager --type=service --state=running,exited,failed || true
   echo --process-tree--
   ps -eo pid,ppid,user,args || true
-' | redact_text_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 sed -i 's/[[:space:]]\+$//' "$OUT/runtime-baseline.txt" "$OUT/docker-top.txt"
 
 docker exec "$CONTAINER" bash -c '
@@ -266,7 +210,7 @@ docker exec "$CONTAINER" bash -c '
     wazuh-agent.service \
     falco-modern-bpf.service \
     falcoctl-artifact-follow.service || true
-' | redact_text_stream > "$OUT/systemd-units.txt"
+' > "$OUT/systemd-units.txt"
 
 # RE-toolchain state: the asset's purpose is the analysis workbench. Record
 # the installed tool surface and the labadmin workspace skeleton.
@@ -292,7 +236,7 @@ docker exec "$CONTAINER" bash -c '
   r2pm -l 2>/dev/null | head -10
   echo --marker--
   ls -la /opt/lab/.reverse_tools_installed 2>&1
-' | redact_text_stream > "$OUT/reverse-tools-state.txt"
+' > "$OUT/reverse-tools-state.txt"
 
 # Wazuh agent state (same surface as the sidecar bundles).
 docker exec "$CONTAINER" bash -c '
@@ -307,14 +251,14 @@ docker exec "$CONTAINER" bash -c '
   cat /var/ossec/var/run/wazuh-agentd.state 2>&1
   echo --client-keys-presence--
   if [ -s /var/ossec/etc/client.keys ]; then
-    printf "client.keys present: %s line(s), %s bytes (content withheld)\n" "$(wc -l < /var/ossec/etc/client.keys)" "$(wc -c < /var/ossec/etc/client.keys)"
-    awk "{print \$1, \$2, \$3}" /var/ossec/etc/client.keys 2>/dev/null
+    printf "client.keys present: %s line(s), %s bytes\n" "$(wc -l < /var/ossec/etc/client.keys)" "$(wc -c < /var/ossec/etc/client.keys)"
+    cat /var/ossec/etc/client.keys 2>/dev/null
   else
     printf "client.keys absent or empty\n"
   fi
   echo --rsyslog-forwarding--
   cat /etc/rsyslog.d/*.conf 2>/dev/null
-' | redact_text_stream > "$OUT/wazuh-agent-state.txt"
+' > "$OUT/wazuh-agent-state.txt"
 
 # Observer vantage: manager-side registration rows (includes the stale 008
 # row from the OOM-killed first boot; see capture-limits.txt).
@@ -327,7 +271,7 @@ if docker inspect "$MANAGER_CONTAINER" >/dev/null 2>&1; then
     id="$(/var/ossec/bin/agent_control -l 2>/dev/null | sed -n "s/^[[:space:]]*ID: \([0-9]*\),.*reverse.*Active.*/\1/p" | head -1)"
     if [ -n "$id" ]; then /var/ossec/bin/agent_control -i "$id" 2>&1; else echo "active reverse agent id not resolved"; fi
     true
-  ' | redact_text_stream > "$OUT/observer-discovery.wazuh-manager.txt"
+  ' > "$OUT/observer-discovery.wazuh-manager.txt"
 else
   record_limit "Wazuh manager observer-vantage discovery was skipped because $MANAGER_CONTAINER was not present."
   printf '%s container unavailable\n' "$MANAGER_CONTAINER" > "$OUT/observer-discovery.wazuh-manager.txt"
@@ -347,7 +291,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --ping--
     ping -c 1 -W 2 172.20.0.27 2>&1 | sed -n "1,4p"
     true
-  ' | redact_text_stream > "$OUT/participant-discovery.kali.txt"
+  ' > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"
@@ -381,7 +325,7 @@ docker exec "$CONTAINER" bash -c '
     -printf "%M %u %g %s %p\n" 2>/dev/null \
     | grep -Ev "/home/labadmin/(radare2|\.cache|\.local/share/pipx/venvs/[^/]+/lib)(/|$)" \
     | sort
-' | redact_text_stream | gzip -n > "$OUT/filesystem-tree.txt.gz"
+' | gzip -n > "$OUT/filesystem-tree.txt.gz"
 record_limit "The filesystem manifest excludes the radare2 source/build tree, pipx venv lib payloads, and ~/.cache under /home/labadmin (toolchain payload evidenced by the package/SBOM surfaces and language-manifests.txt); /var/log content rows are runtime logs on the reverse_logs volume."
 
 docker exec "$CONTAINER" bash -c '
@@ -401,24 +345,31 @@ docker exec "$CONTAINER" bash -c '
     -xdev \
     -maxdepth 4 \
     -type f \
-    ! -path /keys/aptl_lab_key \
-    ! -name "ssh_host_*_key" \
-    ! -path /var/ossec/etc/client.keys \
     -print0 2>/dev/null \
     | sort -z \
     | xargs -0 sha256sum
 ' | xz -9 -c > "$OUT/filesystem-checksums.txt.xz"
 
-cat > "$OUT/filesystem-sensitive-paths.txt" <<'EOF'
-/keys/aptl_lab_key	operator_private_key	metadata-only
-/keys/aptl_lab_key.pub	public_lab_key	checksum-only
-/keys/authorized_keys	public_lab_key	checksum-only
-/etc/ssh/ssh_host_dsa_key	host_private_key	metadata-only
-/etc/ssh/ssh_host_ecdsa_key	host_private_key	metadata-only
-/etc/ssh/ssh_host_ed25519_key	host_private_key	metadata-only
-/etc/ssh/ssh_host_rsa_key	host_private_key	metadata-only
-/var/ossec/etc/client.keys	wazuh_agent_secret	metadata-only
-EOF
+docker exec "$CONTAINER" sh -c '
+  for f in \
+    /keys/aptl_lab_key \
+    /keys/aptl_lab_key.pub \
+    /keys/authorized_keys \
+    /etc/ssh/ssh_host_dsa_key \
+    /etc/ssh/ssh_host_dsa_key.pub \
+    /etc/ssh/ssh_host_ecdsa_key \
+    /etc/ssh/ssh_host_ecdsa_key.pub \
+    /etc/ssh/ssh_host_ed25519_key \
+    /etc/ssh/ssh_host_ed25519_key.pub \
+    /etc/ssh/ssh_host_rsa_key \
+    /etc/ssh/ssh_host_rsa_key.pub \
+    /var/ossec/etc/client.keys; do
+      [ -e "$f" ] || continue
+      printf "%s\n" "--path:$f--"
+      cat "$f"
+      printf "\n"
+  done
+' > "$OUT/filesystem-sensitive-paths.txt"
 
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" --version \
   > "$OUT/trivy-version.txt"

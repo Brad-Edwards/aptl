@@ -42,7 +42,7 @@ auth.provider = ["local", "key"]
 # upgrade or a Play SSL-provider fix.
 
 --generated-runtime-conf--
-play.http.secret.key=<REDACTED>
+play.http.secret.key="GaPu97gEdL2k4mgtTzHM2JIGlKYiNUIQMtYwEUQp2lnUNNTqlUGtfqS7L9aTpYpc"
 job.directory="/opt/cortex/jobs"
 analyzer.urls=["https://download.thehive-project.org/analyzers.json"]
 responder.urls=["https://download.thehive-project.org/responders.json"]

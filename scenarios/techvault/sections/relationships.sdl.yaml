@@ -392,13 +392,13 @@ relationships:
     source: nodes.techvault.misp.runtime.applications.misp-web
     target: nodes.techvault.misp-db.runtime.database_services.misp-mariadb.databases.misp
     description: MISP application configuration points at the MariaDB companion service using MYSQL_HOST=misp-db, database
-      misp, and user misp; password value is redacted.
+      misp, user misp, and password misp_db_password.
     properties:
       protocol: mysql
       port: '3306'
       database: misp
       auth_method: password
-      credential_source: MYSQL_PASSWORD redacted
+      credential_source: MYSQL_PASSWORD=misp_db_password
     database_access:
       role_ref: misp
       auth_method: password
@@ -468,13 +468,14 @@ relationships:
     target: techvault.cortex
     description: 'TheHive consumes Cortex analyzers over the internal aptl-security network at http://cortex:9001. The
       connector is configured by docker-compose --cortex-proto/--cortex-hostnames/--cortex-port flags and authenticates with
-      the redacted fixture API key from config/cortex/thehive-cortex.env; Cortex observes it as aptl-svc@cortex.local in
+      the fixture API key aptlcortexlabapikey2026purple from config/cortex/thehive-cortex.env; Cortex observes it as aptl-svc@cortex.local in
       organization APTL with read/analyze/orgadmin roles.'
     properties:
       protocol: http
       port: '9001'
       auth_method: bearer_api_key
-      credential_classification: redacted_fixture
+      credential_classification: secret_fixture
+      credential_value: aptlcortexlabapikey2026purple
       vantage: aptl-thehive
     database_access: null
     mail_access: null
@@ -546,13 +547,13 @@ relationships:
     target: techvault.shuffle-opensearch
     description: The Shuffle backend persists all organisation, user, workflow, app, and execution state in the OpenSearch
       datastore at SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200. Authentication is HTTP basic (admin); TLS
-      verification is disabled via SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true and the password value is redacted.
+      verification is disabled via SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true and the password is StrongPassword123!.
     properties:
       protocol: https
       port: '9200'
       auth_method: password
       tls_verification: disabled
-      credential_source: SHUFFLE_OPENSEARCH_PASSWORD redacted
+      credential_source: SHUFFLE_OPENSEARCH_PASSWORD=StrongPassword123!
     database_access: null
     mail_access: null
     forwarding_edge: null

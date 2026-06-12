@@ -6,7 +6,6 @@ import gzip
 import hashlib
 import json
 import re
-import subprocess
 
 import pytest
 import yaml
@@ -76,14 +75,18 @@ REQUIRED_EVIDENCE_FILES = {
     "wazuh-indexer-index-mappings-census.json",
 }
 
-# These literal strings must NEVER appear in committed evidence; the redaction
-# stream and out-of-band omission are the only acceptable ways for committed
-# evidence to record their existence.
-RAW_SECRET_PATTERNS = (
-    r"BEGIN .*PRIVATE KEY",
-    r"^admin:\s*$",
-    r"\$2[ay]\$\d{2}\$[./A-Za-z0-9]{53}",
-    r"authorization:\s*Bearer\s+[A-Za-z0-9._-]+",
+FORBIDDEN_CAPTURE_PLACEHOLDERS = (
+    r"<REDACTED",
+    r"<OMITTED",
+    r"HTTP-[A-Z-]+-OMITTED",
+    r"value withheld",
+    r"absent from committed evidence",
+)
+FORBIDDEN_CAPTURE_HELPERS = (
+    "redact_stream",
+    "redact_env_jq",
+    "redact_sensitive_keys",
+    "sanitize_http_stream",
 )
 
 
@@ -125,20 +128,6 @@ def _indexer_state_section(name: str) -> str:
     return rest[: next_match.start()].strip()
 
 
-def _redact_with_capture_script(text: str) -> str:
-    script = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
-    match = re.search(r"redact_stream\(\) \{\n.*?\n\}", script, re.DOTALL)
-    assert match, "capture script must define redact_stream"
-    result = subprocess.run(
-        ["bash", "-c", f"{match.group(0)}\nredact_stream"],
-        input=text,
-        capture_output=True,
-        check=True,
-        text=True,
-    )
-    return result.stdout
-
-
 def test_wazuh_indexer_inventory_note_declares_scope_and_evidence():
     text = INDEXER_DOC_PATH.read_text(encoding="utf-8")
     required = (
@@ -167,7 +156,7 @@ def test_wazuh_indexer_inventory_note_declares_scope_and_evidence():
     assert not missing, f"Wazuh indexer inventory note missing scope markers: {missing}"
 
 
-def test_wazuh_indexer_capture_script_pins_toolchain_and_redaction():
+def test_wazuh_indexer_capture_script_pins_toolchain_and_preserves_raw_capture():
     text = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
     required = (
         "aquasec/trivy@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e",
@@ -178,40 +167,23 @@ def test_wazuh_indexer_capture_script_pins_toolchain_and_redaction():
         "evidence-sha256sums.txt",
         "INDEXER_USERNAME",
         "INDEXER_PASSWORD",
-        "REDACTED-INDEXER-INTERNAL-USER-HASH",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Capture script missing reproducibility markers: {missing}"
+    assert "redact_stream" not in text
+    assert "<REDACTED" not in text
     assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
 
 
-def test_wazuh_indexer_capture_stream_redaction_is_key_aware():
-    secret_value = "zulu-4279-mica-1836"
-    public_value = "public-observation-2026"
-    bcrypt_hash = "$2y$12$" + "a" * 53
-    redacted = _redact_with_capture_script(
-        "\n".join(
-            [
-                f"PASSWORD={secret_value}",
-                f"password: {secret_value}",
-                f"api_key = {secret_value}",
-                f"indexer_password: {secret_value}",
-                f"x-api-key: {secret_value}",
-                f"ssl.key = {secret_value}",
-                f"<password>{secret_value}</password>",
-                f"<api_key>{secret_value}</api_key>",
-                f'hash: "{bcrypt_hash}"',
-                f"Authorization: Bearer {secret_value}",
-                f"regular_field: {public_value}",
-            ]
-        )
-    )
+def test_wazuh_indexer_evidence_preserves_secret_shaped_scenario_state():
+    container = json.dumps(_json_file("docker-inspect.container.json"))
+    state = (EVIDENCE_DIR / "wazuh-indexer-state.txt").read_text(encoding="utf-8")
 
-    assert secret_value not in redacted
-    assert bcrypt_hash not in redacted
-    assert public_value in redacted
-    assert "<REDACTED" in redacted
-    assert "<REDACTED-INDEXER-INTERNAL-USER-HASH>" in redacted
+    assert "NAME=wazuh-indexer" in container
+    assert "$2y$12$K/SpwjtB.wOHJ/Nc6GVRDuc1h0rM1DfvziFRNPtk27P.c4yDr9njO" in state
+    assert "$2a$12$4AcgAt3xwOWadA5s5blL6ev39OXDNhmOesEoo33eZtrq2N0YrU3H." in state
+    assert "<REDACTED" not in container
+    assert "<REDACTED" not in state
 
 
 def test_wazuh_indexer_mapping_ledger_validates_without_gaps():
@@ -288,8 +260,7 @@ def test_wazuh_indexer_mapping_ledger_references_every_evidence_file():
     ledger = load_mapping_ledger(LEDGER_PATH)
     refs = set()
     refs.update(
-        ref["path"]
-        for ref in ledger["provenance"]["attestation"].get("evidence", [])
+        ref["path"] for ref in ledger["provenance"]["attestation"].get("evidence", [])
     )
     for check in ledger["correspondence_checks"]:
         refs.update(ref["path"] for ref in check.get("realized_evidence", []))
@@ -297,24 +268,25 @@ def test_wazuh_indexer_mapping_ledger_references_every_evidence_file():
         refs.update(ref["path"] for ref in fact["evidence"])
 
     evidence_files = {
-        f"evidence/{path.name}"
-        for path in EVIDENCE_DIR.iterdir()
-        if path.is_file()
+        f"evidence/{path.name}" for path in EVIDENCE_DIR.iterdir() if path.is_file()
     }
     assert evidence_files <= refs
 
 
-def test_wazuh_indexer_evidence_does_not_contain_raw_secret_material():
-    patterns = [re.compile(pattern, re.IGNORECASE) for pattern in RAW_SECRET_PATTERNS]
+def test_wazuh_indexer_evidence_has_no_capture_placeholders_or_helpers():
+    patterns = [
+        re.compile(pattern, re.IGNORECASE) for pattern in FORBIDDEN_CAPTURE_PLACEHOLDERS
+    ]
     offenders = {}
     for path in EVIDENCE_DIR.iterdir():
         if not path.is_file():
             continue
         text = _evidence_text(path)
-        leaked = [pattern.pattern for pattern in patterns if pattern.search(text)]
-        if leaked:
-            offenders[path.name] = leaked
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+        matches = [pattern.pattern for pattern in patterns if pattern.search(text)]
+        matches.extend(helper for helper in FORBIDDEN_CAPTURE_HELPERS if helper in text)
+        if matches:
+            offenders[path.name] = matches
+    assert not offenders, f"Evidence contains capture placeholders/helpers: {offenders}"
 
 
 def test_wazuh_indexer_runtime_evidence_and_opensearch_counts():
@@ -330,11 +302,13 @@ def test_wazuh_indexer_runtime_evidence_and_opensearch_counts():
     assert container["Config"]["Hostname"] == "wazuh.indexer"
     assert container["HostConfig"]["Memory"] == 2 * 1024**3
 
-    os_packages = (EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()
+    os_packages = (
+        (EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()
+    )
     sbom = _json_file("syft-sbom.cyclonedx.json.gz")
-    filesystem_entries = (EVIDENCE_DIR / "filesystem-tree.txt").read_text(
-        encoding="utf-8"
-    ).splitlines()
+    filesystem_entries = (
+        (EVIDENCE_DIR / "filesystem-tree.txt").read_text(encoding="utf-8").splitlines()
+    )
     # Floor checks - exact counts drift with each scanner DB / image rev but
     # the bundle must never silently shrink.
     assert len(os_packages) >= 100
@@ -372,12 +346,20 @@ def test_wazuh_indexer_runtime_evidence_and_opensearch_counts():
     assert expected_plugins <= plugin_components
     assert len(plugin_components) >= 18
 
-    # Internal users YAML carries the six built-in users with redacted hashes.
+    # Internal users YAML carries the six built-in users with raw bcrypt hashes.
     internal_users_yml = _indexer_state_section("internal-users-yml")
-    assert "<REDACTED-INDEXER-INTERNAL-USER-HASH>" in internal_users_yml
+    assert "<REDACTED" not in internal_users_yml
     parsed_users = yaml.safe_load(internal_users_yml) or {}
     user_names = {k for k in parsed_users.keys() if k != "_meta"}
-    assert user_names == {"admin", "kibanaserver", "kibanaro", "logstash", "readall", "snapshotrestore"}
+    assert user_names == {
+        "admin",
+        "kibanaserver",
+        "kibanaro",
+        "logstash",
+        "readall",
+        "snapshotrestore",
+    }
+    assert parsed_users["admin"]["hash"].startswith("$2y$12$")
 
     # opensearch.yml carries the discovery / port / TLS posture.
     opensearch_yml = _indexer_state_section("opensearch-yml")
@@ -427,7 +409,12 @@ def test_techvault_sdl_encodes_wazuh_indexer_datastore_surface():
     assert any(name.startswith("wazuh-archives-4.x-") for name in partition_names)
     assert ".opendistro_security" in partition_names
     setting_names = {s["name"] for s in ds["settings"]}
-    assert {"discovery.type", "network.host", "http.port", "transport.tcp.port"} <= setting_names
+    assert {
+        "discovery.type",
+        "network.host",
+        "http.port",
+        "transport.tcp.port",
+    } <= setting_names
     assert ds["transport_security"]["mode"] == "mutual_tls"
     assert ds["transport_security"]["client_verification"] is True
     # Plugins (with per-plugin versions) and structured templates are encoded.
@@ -439,7 +426,7 @@ def test_techvault_sdl_encodes_wazuh_indexer_datastore_surface():
 
     # ACES #468/#469/#470 shipped: cluster cardinality, node engine provenance,
     # per-index cardinality, and structured mappings now have typed homes and are
-    # encoded as field values (no longer blocked, no longer withheld to evidence).
+    # encoded as field values (no longer blocked from typed SDL representation).
     assert ds["cluster"]["uuid"] == "u-vGl1n0Q7e-SKz1tWvb-w"
     assert ds["cluster"]["doc_count"] == 1053842
     assert ds["cluster"]["store_size_bytes"] == 1391460626
@@ -455,17 +442,29 @@ def test_techvault_sdl_encodes_wazuh_indexer_datastore_surface():
     assert archive["open_closed_status"] == "open"
     mapping_names = {m["name"] for m in ds["mappings"]}
     assert "wazuh-archives-4.x-*" in mapping_names
-    archives_mapping = next(m for m in ds["mappings"] if m["name"] == "wazuh-archives-4.x-*")
+    archives_mapping = next(
+        m for m in ds["mappings"] if m["name"] == "wazuh-archives-4.x-*"
+    )
     assert archives_mapping["leaf_field_count"] == 947
     assert archives_mapping["schema_digest"].startswith("sha256:")
 
     authorities = runtime["identity_authorities"]
     assert len(authorities) == 1
     authority = authorities[0]
-    assert authority["identity_authority_id"] == "techvault-wazuh-indexer-opensearch-security"
+    assert (
+        authority["identity_authority_id"]
+        == "techvault-wazuh-indexer-opensearch-security"
+    )
     subject_names = {s["name"] for s in authority["subjects"]}
-    assert {"admin", "kibanaserver", "kibanaro", "logstash", "readall", "snapshotrestore"} <= subject_names
-    # Bcrypt hashes are redacted at capture; SDL never carries the raw hash.
+    assert {
+        "admin",
+        "kibanaserver",
+        "kibanaro",
+        "logstash",
+        "readall",
+        "snapshotrestore",
+    } <= subject_names
+    # Raw bcrypt hashes remain in evidence; the SDL authority models subjects and roles.
     flattened = json.dumps(authority)
     assert "$2y$" not in flattened and "$2a$" not in flattened
     # The basic_internal_auth_domain authc service must be present.

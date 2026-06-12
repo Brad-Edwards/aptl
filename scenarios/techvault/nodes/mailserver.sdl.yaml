@@ -6400,7 +6400,7 @@ nodes:
           description: 'Dovecot ssl_key setting — the configured TLS private-key file path (the default
             snakeoil key shipped with the range), captured from the dovecot configuration and classified
             secret_fixture as authored synthetic-range scenario content. The value is the asserted fact and
-            is recorded verbatim; ACES #471 removed the secret-name rule that previously forced it to be redacted.'
+            is recorded verbatim.'
         - setting_id: dovecot-078-ssl-prefer-server-ciphers
           component_ref: dovecot
           name: ssl_prefer_server_ciphers
@@ -6475,12 +6475,12 @@ nodes:
           - aptl-mailserver
           - mailserver
           dns_names:
+          - aptl-mailserver
+          - mailserver
+          - d195b7bed1a9
           - mail.techvault.local
-          - mailserver
-          - aptl-mailserver
           generated_dns_names:
-          - aptl-mailserver
-          - mailserver
+          - d195b7bed1a9
           backend:
             driver: bridge
             ipam_driver: ''
@@ -6502,11 +6502,12 @@ nodes:
           - aptl-mailserver
           - mailserver
           dns_names:
-          - mailserver
           - aptl-mailserver
+          - mailserver
+          - d195b7bed1a9
+          - mail.techvault.local
           generated_dns_names:
-          - aptl-mailserver
-          - mailserver
+          - d195b7bed1a9
           backend:
             driver: bridge
             ipam_driver: ''

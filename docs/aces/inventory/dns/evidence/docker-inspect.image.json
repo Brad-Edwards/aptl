@@ -1,11 +1,11 @@
 [
   {
-    "Id": "sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75",
+    "Id": "sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6",
     "RepoTags": [
       "aptl-dns:latest"
     ],
     "RepoDigests": [
-      "aptl-dns@sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75"
+      "aptl-dns@sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6"
     ],
     "Comment": "buildkit.dockerfile.v0",
     "Created": "2026-05-18T02:58:13.237317091+02:00",
@@ -54,18 +54,18 @@
       ]
     },
     "Metadata": {
-      "LastTagTime": "2026-05-23T06:17:07.949734141Z"
+      "LastTagTime": "2026-06-11T16:00:13.820144513Z"
     },
     "Descriptor": {
       "mediaType": "application/vnd.oci.image.index.v1+json",
-      "digest": "sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75",
+      "digest": "sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6",
       "size": 856
     },
     "Identity": {
       "Build": [
         {
-          "Ref": "ojug2q8rvs7samnk7eilnmtwu",
-          "CreatedAt": "2026-05-23T08:17:08.12518516+02:00"
+          "Ref": "w94w5t6z6xbqg5k82ebkay6nv",
+          "CreatedAt": "2026-06-11T18:00:13.905088191+02:00"
         }
       ]
     }

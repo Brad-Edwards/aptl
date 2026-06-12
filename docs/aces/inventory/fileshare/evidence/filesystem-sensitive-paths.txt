@@ -1,0 +1,96 @@
+--path:/srv/shares/engineering/deployments/deploy.sh--
+#!/bin/bash
+# Production deployment script - DO NOT SHARE
+DB_HOST=db.techvault.local
+DB_USER=techvault
+DB_PASS=techvault_db_pass
+AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+ssh deploy@$DB_HOST "pg_dump techvault > /tmp/backup.sql"
+
+--path:/srv/shares/finance/reports/q3-revenue.csv--
+Customer,MRR,ARR,Contract_End
+Meridian Financial,4500,54000,2025-06-30
+Apex Manufacturing,2200,26400,2025-03-15
+Coastal Healthcare,6800,81600,2025-12-31
+NorthStar Logistics,800,9600,2025-01-31
+Summit Education,1500,18000,2025-09-30
+Redwood Legal,5200,62400,2025-07-15
+
+--path:/srv/shares/hr/employees/directory.csv--
+Name,Email,SSN_Last4,Salary,Start_Date
+Sarah Mitchell,sarah.mitchell@techvault.local,4521,185000,2019-01-15
+James Rodriguez,james.rodriguez@techvault.local,7832,175000,2019-01-15
+Emily Chen,emily.chen@techvault.local,3214,145000,2020-03-01
+Michael Thompson,michael.thompson@techvault.local,9876,130000,2021-06-15
+David Kim,david.kim@techvault.local,5543,140000,2022-01-10
+Jessica Williams,jessica.williams@techvault.local,1122,85000,2022-09-01
+Robert Martinez,robert.martinez@techvault.local,6677,95000,2023-02-15
+
+--path:/srv/shares/it-backups/keys/deploy_key--
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAQEAq0zAQJbbehI7bOxhFRXq+mBsZW2Ov0ZBG1AX947gZe7csAERJf/5
+nHoInqRoCE9S6KmCpL6YI2NHhc1E4M9oRKySwWrExoNak/RsA1r16ZsU4PQaJQpUFKSz4s
+Sb9y5155AF4AWORLR8Khy72x6YzrYwfGt1KpHuJ8z3BiDpSVpIzfD64rP3Pm8er2WetKo2
+wDHc2oaiLQPUnwIpE8SqeyBhiazZjuH0gEBMGnJDEIP2oTETpZbprJ/6VA2tm/2NugHExM
+nFUeXSUQ6KUGZmuwoLkqs5Af2PVUwJNIGfcmlOPE4FlPba0YQFg3edjcrPnOZnOwvng010
+BNGZvTDReQAAA9Dc4ruJ3OK7iQAAAAdzc2gtcnNhAAABAQCrTMBAltt6Ejts7GEVFer6YG
+xlbY6/RkEbUBf3juBl7tywAREl//mcegiepGgIT1LoqYKkvpgjY0eFzUTgz2hErJLBasTG
+g1qT9GwDWvXpmxTg9BolClQUpLPixJv3LnXnkAXgBY5EtHwqHLvbHpjOtjB8a3Uqke4nzP
+cGIOlJWkjN8Pris/c+bx6vZZ60qjbAMdzahqItA9SfAikTxKp7IGGJrNmO4fSAQEwackMQ
+g/ahMROllumsn/pUDa2b/Y26AcTEycVR5dJRDopQZma7CguSqzkB/Y9VTAk0gZ9yaU48Tg
+WU9trRhAWDd52Nys+c5mc7C+eDTXQE0Zm9MNF5AAAAAwEAAQAAAQABXqhLfx+4D4T2Oo/b
+LChYTxf6AEDrz1TBcmfcQaiSZn4EXuA2rZ/4fzK28m/nhk509rgJKuhkbgyNUBmJjHcHVF
+oj3eXyNwYs8f+NtlCj/DeHEsSe87QKhARxOLfAWsvnQyvpp7m3wga1JbL5DiFULWytVGs+
+YPNAOIYbWf0ew9/ycj+RP3pBP2wQ9w4Ywy6f/zEs3Oj1/nnPMwUNp+hsOwNOm5t41B234P
+KaBpsh7juaLOROZ841/yp4mapFog3DSRGGqTVaUbSaRhphCgCnQC64V/Of1cs32tmGd4zG
+QWNjP62PlcZYLSL7x9FWkG7nPGSM8w3Gk/NTuUgEAUiVAAAAgQCP149+Nqjb1PbUXd7GwK
+naV0+MPkIJCNSu0binH9C7n/FDbzr2QiGeCgcdOkAYN8lN0cdCw/qB9ruUlYhtvhKffDtS
+0U4mfUvrHIgfhcZzD1Iu6AIzt4NuPTZhZpkTfgs1ZSICmHBK17nx7p3J5rRXaBEJ7nQh+/
+3tuAuLPmkzgAAAAIEAxBFIkCpogDoATGGhMYK2v0Bn7RiYM1SC2ZAkGPbWcYxAU0zNVpgB
+T/mVmL2s1nMl9OvYd1AI7mX4vLgzPILrTJWmlADGnx2pGmiwnW/dHJKcHnh0q6C9c1cLZs
+3/R6p1HfZejC5em+RhPkbiaDkC2UNG1+WdZIaNT0HWqetl7/UAAACBAN+pVwBNJOVuWgEi
+D24wISXhbqYjP5YLzZnI7Iu3V0LOeFP8Yjhs+puvynzCvhF3c64fHCSaegSndiMsQvI1zp
++M7e5jXp1cY1ksMVkVmMEn2aGEq/SIo6ol70JtBLRAiN4phXbg7EEAfWQJp+Jqp9WvL7+H
+QcClMrHzm0sHmfz1AAAAGnJvb3RAZmlsZXMudGVjaHZhdWx0LmxvY2Fs
+-----END OPENSSH PRIVATE KEY-----
+
+--path:/srv/shares/it-backups/keys/deploy_key.pub--
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCrTMBAltt6Ejts7GEVFer6YGxlbY6/RkEbUBf3juBl7tywAREl//mcegiepGgIT1LoqYKkvpgjY0eFzUTgz2hErJLBasTGg1qT9GwDWvXpmxTg9BolClQUpLPixJv3LnXnkAXgBY5EtHwqHLvbHpjOtjB8a3Uqke4nzPcGIOlJWkjN8Pris/c+bx6vZZ60qjbAMdzahqItA9SfAikTxKp7IGGJrNmO4fSAQEwackMQg/ahMROllumsn/pUDa2b/Y26AcTEycVR5dJRDopQZma7CguSqzkB/Y9VTAk0gZ9yaU48TgWU9trRhAWDd52Nys+c5mc7C+eDTXQE0Zm9MNF5 root@files.techvault.local
+
+--path:/srv/shares/it-backups/db_backup_20240115.sql--
+-- PostgreSQL dump from production
+-- Server: db.techvault.local
+-- Database: techvault
+-- Dumped by: svc-backup
+
+CREATE TABLE users (
+    id serial PRIMARY KEY,
+    username varchar(100),
+    email varchar(255),
+    password_hash varchar(255)
+);
+
+INSERT INTO users VALUES (1, 'admin', 'admin@techvault.local', '0192023a7bbd73250516f069df18b500');
+-- hash is MD5 of 'admin123'
+
+--path:/srv/shares/shared/wifi-passwords.txt--
+Office WiFi: TechVault-Corp / Vault2024Secure
+Guest WiFi: TechVault-Guest / Welcome2024
+Server Room: TechVault-Infra / Infra$ecure99
+
+--path:/srv/shares/shared/user-flag.txt--
+===== APTL CTF Flag =====
+Flag:  APTL{user_fileshare_7d5d8d89e5e9df9af8d7937d3a75c618}
+Token: aptl:v1:fileshare:user:7d5d8d89e5e9df9af8d7937d3a75c618:6e82ba4d1d12854d840bb33d6aa48f03
+==========================
+
+--path:/root/root.txt--
+===== APTL CTF Flag =====
+Flag:  APTL{root_fileshare_6bd5c98703a205583127318782193af6}
+Token: aptl:v1:fileshare:root:6bd5c98703a205583127318782193af6:75aae8c5b4c8b7dba2fd04867e8c43c3
+==========================
+
+--path:/var/ossec/etc/client.keys--
+003 aptl-fileshare-agent any b20d4556e9c01eab57b5bab4771dd0f4fc449819e1d9c851d43c4ccf7807dd17

@@ -6,14 +6,15 @@ to the realized `aptl-thehive-es` container at the established granularity bar
 (issue #330 depth), following the wazuh-indexer datastore precedent (same
 Elasticsearch/OpenSearch family).
 
-`thehive-es` is the **deployed-but-inactive Elasticsearch** companion in TheHive's soc stack: upstream
+`thehive-es` is the Elasticsearch companion in the SOC stack: upstream
 `docker.elastic.co/elasticsearch/elasticsearch:7.17.28`, single-node, with
 `xpack.security` disabled. The realized TheHive config uses **local Lucene**
 indexing (`index.search.backend = lucene`, directory `/data/index`), so this ES
-is **not** TheHive's active index backend — it holds only the system
-`.geoip_databases` index and TheHive holds no outbound connection to it. Primary
-case/alert data lives in Cassandra (`thehive-cassandra`). It is
-inventoried as the participant datastore node `nodes.techvault.thehive-es`.
+is **not** TheHive's active index backend and TheHive holds no outbound
+connection to it. Cortex uses this ES backend and creates the `cortex_6` index;
+the ES-internal `.geoip_databases` index is also present. Primary TheHive
+case/alert data lives in Cassandra (`thehive-cassandra`). It is inventoried as
+the participant datastore node `nodes.techvault.thehive-es`.
 On security-net only; ports 9200/9300 are not host-published. There is **no
 thehive→es data connection** (index-backend is lucene), so no such relationship
 is encoded.
@@ -27,12 +28,10 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 
 > **Near-gap, resolved without distortion.** The ACES `search_index` datastore
 > profile mandates at least one structured mapping manifest. At steady state the
-> only index is the ES-internal `.geoip_databases` system index, whose
-> `_mapping`/`_field_caps` APIs return a reserved-access error, and TheHive
-> creates no indices here at all (it uses local Lucene; primary data is in
-> Cassandra). Rather than fabricate a mapping or distort the `data_model`,
-> the real field schema (`data`/`name`/`chunk`) was captured via the operator
-> `_cluster/state/metadata` vantage and encoded faithfully. No ACES issue was
+> ES-internal `.geoip_databases` system index rejects the public `_mapping` /
+> `_field_caps` APIs, while Cortex's `cortex_6` mapping is visible normally.
+> Both mappings are captured via the operator `_cluster/state/metadata` vantage
+> and encoded without changing the `search_index` data model. No ACES issue was
 > required.
 
 ## Asset Summary
@@ -48,10 +47,10 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Registry digest | `docker.elastic.co/elasticsearch/elasticsearch@sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1` |
 | Runtime OS | Ubuntu 20.04.6 LTS |
 | Engine | Elasticsearch 7.17.28 (lucene 8.11.3), single-node, `xpack.security` disabled |
-| Cluster | `docker-cluster` (uuid `YG-I79ZXRJO0X4l7x3DozA`), health green, 1 node |
-| Indices | `.geoip_databases` only (ES-internal system index); **no TheHive indices** (TheHive uses local Lucene) |
+| Cluster | `docker-cluster` (uuid `ohJNVSX-TDyF6XOwPk-HLw`), health yellow, 1 node |
+| Indices | `.geoip_databases` (ES-internal) and `cortex_6` (Cortex backend); **no TheHive indices** (TheHive uses local Lucene) |
 | Reachable participant ports | none host-published; 9200 (REST/HTTP) + 9300 (transport) on security-net |
-| Network identity | `security-net` 172.20.0.4 (only network) |
+| Network identity | `security-net` 172.20.0.5 (only network) |
 | Memory limit | 1 GiB (`ES_JAVA_OPTS -Xms512m -Xmx512m`) |
 | Package inventory | 128 dpkg packages |
 | Trivy vulnerability findings | 94 image-layer findings: 23 high, 55 medium, 16 low |
@@ -115,8 +114,7 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
 - The `/usr/share/elasticsearch/data` volume content (runtime index state) is
   excluded from the filesystem manifest (top-level rows only); index state is in
   `elasticsearch-state.txt` + the datastore mappings instead.
-- The only steady-state index is the ES-internal `.geoip_databases`; its
-  `_mapping`/`_field_caps` APIs are system-reserved, so the field schema was
+- The steady-state indices are `.geoip_databases` and `cortex_6`; mappings are
   captured via the operator `_cluster/state/metadata` vantage.
 - `xpack.security.enabled=false` — 9200/9300 carry no TLS/auth; compose isolation
   is the only control.
@@ -133,4 +131,4 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
 - It does not cover behaviour over time or attack-induced transitions; any state
   present at the snapshot point is in scope. With `index.search.backend = lucene`,
   TheHive does not create indices in this ES at all; the `--es-hostnames` arg is
-  inert under the realized config.
+  inert under the realized config. Cortex does create `cortex_6`.

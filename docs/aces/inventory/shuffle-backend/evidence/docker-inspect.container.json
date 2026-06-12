@@ -1,7 +1,7 @@
 [
   {
-    "Id": "b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa",
-    "Created": "2026-05-23T06:18:31.96851201Z",
+    "Id": "35eaf7464bfd2158b1d1464e62613c4be293c99fc9c1b333eb9e2f0f669e39bd",
+    "Created": "2026-06-11T16:00:19.265606885Z",
     "Path": "./shufflebackend",
     "Args": [],
     "State": {
@@ -11,17 +11,17 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2959862,
+      "Pid": 807527,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:55.646269521Z",
+      "StartedAt": "2026-06-11T16:00:38.09502891Z",
       "FinishedAt": "0001-01-01T00:00:00Z"
     },
     "Image": "sha256:271b38ba5d2c68579f0d75b43d294b65626f57a7878eef545b8021c07b3e178d",
-    "ResolvConfPath": "/var/lib/docker/containers/b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa/hostname",
-    "HostsPath": "/var/lib/docker/containers/b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa/hosts",
-    "LogPath": "/var/lib/docker/containers/b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa/b735a651190127fa2e01279b81c7390d65eea72af9bf19be5598d6ea64863daa-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/35eaf7464bfd2158b1d1464e62613c4be293c99fc9c1b333eb9e2f0f669e39bd/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/35eaf7464bfd2158b1d1464e62613c4be293c99fc9c1b333eb9e2f0f669e39bd/hostname",
+    "HostsPath": "/var/lib/docker/containers/35eaf7464bfd2158b1d1464e62613c4be293c99fc9c1b333eb9e2f0f669e39bd/hosts",
+    "LogPath": "/var/lib/docker/containers/35eaf7464bfd2158b1d1464e62613c4be293c99fc9c1b333eb9e2f0f669e39bd/35eaf7464bfd2158b1d1464e62613c4be293c99fc9c1b333eb9e2f0f669e39bd-json.log",
     "Name": "/aptl-shuffle-backend",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -167,14 +167,14 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "SHUFFLE_OPENSEARCH_PASSWORD=<REDACTED-SHUFFLE-OPENSEARCH-PASSWORD>",
-        "SHUFFLE_DEFAULT_USERNAME=admin",
+        "SHUFFLE_OPENSEARCH_USERNAME=admin",
+        "SHUFFLE_OPENSEARCH_PASSWORD=StrongPassword123!",
         "SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true",
         "SHUFFLE_APP_SDK_TIMEOUT=120",
-        "SHUFFLE_DEFAULT_APIKEY=<REDACTED-SHUFFLE-DEFAULT-APIKEY>",
+        "SHUFFLE_DEFAULT_USERNAME=admin",
+        "SHUFFLE_DEFAULT_PASSWORD=ShuffleAdmin2024!",
+        "SHUFFLE_DEFAULT_APIKEY=31a211c4-ea5c-4a49-b022-5e2434e758a7",
         "SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200",
-        "SHUFFLE_OPENSEARCH_USERNAME=admin",
-        "SHUFFLE_DEFAULT_PASSWORD=<REDACTED-SHUFFLE-DEFAULT-PASSWORD>",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       ],
       "Cmd": [
@@ -198,8 +198,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "100c0010e8c2924b82e6202578091338efe5ef95a9231f3478683c89a1613d90",
-      "SandboxKey": "/var/run/docker/netns/100c0010e8c2",
+      "SandboxID": "e93d4004101ad7a24604f792cfe06974306cbc87d1db596dd8c6b35d5d4e9699",
+      "SandboxKey": "/var/run/docker/netns/e93d4004101a",
       "Ports": {
         "5001/tcp": null
       },
@@ -216,10 +216,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "d4294cfc69dd529f1d3d826007ac7fc22c76094148e61be663ac8bf9d1752e22",
+          "EndpointID": "3c817c2641a39319d11eb701d2aebefe660560be9a36b15173c79888bf731f94",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.20",
-          "MacAddress": "12:03:45:c0:31:dd",
+          "MacAddress": "ba:57:1a:c6:a8:f8",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -227,7 +227,7 @@
           "DNSNames": [
             "aptl-shuffle-backend",
             "shuffle-backend",
-            "b735a6511901"
+            "35eaf7464bfd"
           ]
         }
       }

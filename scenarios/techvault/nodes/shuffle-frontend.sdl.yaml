@@ -6,7 +6,7 @@ nodes:
       ghcr.io/shuffle/shuffle-frontend:latest). nginx 1.29.3 serving the pre-built React SPA and reverse-proxying /api/v1|v2
       to shuffle-backend:5001. Inventoried at experiment grade under docs/aces/inventory/shuffle-frontend/ (SCN-010 issue
       #354). On security-net 172.20.0.21; HTTP/80 published to the host as 3001:80 and HTTPS/443 as 3443:443. The nginx TLS
-      private key is an operator secret (metadata only); it reverse-proxies to the backend (relationships.shuffle-frontend-proxies-backend).'
+      private key is a captured scenario fixture; it reverse-proxies to the backend (relationships.shuffle-frontend-proxies-backend).'
     source:
       name: ghcr.io/shuffle/shuffle-frontend
       version: ghcr.io/shuffle/shuffle-frontend@sha256:3c471f39c4d0a773ee22ed8575a68579ff08dd7123e94e70a2482973a4cc296f
@@ -646,7 +646,7 @@ nodes:
         propagation: unknown
         stability: stable
         backend_generated: false
-        description: nginx TLS private key (lab-CA-signed, generated at lab start). Operator secret — metadata only.
+        description: nginx TLS private key (lab-CA-signed, generated at lab start). Captured scenario fixture.
       - target: /etc/lab-ca/lab-ca.pem
         source: /home/atomik/src/aptl/config/soc_certs/lab-ca.pem
         source_sensitivity: unknown
@@ -1091,13 +1091,14 @@ nodes:
         gid: 1000
         mode: '600'
         size: 1704
-        content_digest: <OMITTED-OPERATOR-SECRET-CHECKSUM>
+        content_digest: ceff379d5801fd687b89e0a8bc2a540019c368bd5121537ec076d9d7f2ac1619
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree + filesystem-checksums
         stability: stable
-        sensitivity: operator_secret
-        description: ''
+        sensitivity: secret_fixture
+        description: TLS private key for the Shuffle frontend HTTPS listener; checksum verified from /etc/nginx/privkey.pem
+          in the live container.
       - path: /etc/nginx/scgi_params
         entry_type: file
         presence: present
@@ -3679,27 +3680,28 @@ nodes:
           output_redacted: false
         description: Compose healthcheck (if any) probes the nginx HTTPS listener.
       network:
-        hostname: 216ed3a32aca
+        hostname: 0ac6370712e6
         domainname: ''
         endpoints:
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: d12a76fd719633683e0667a0f76fc7e285e04402ee22c5e398c2d4d563cc7cba
+          endpoint_id: 6b1df095e0e68b9efe75f89690336495533e160a1a2c35fa533cf074ef1626a3
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.0.21
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: 0e:41:62:f0:54:2f
+          mac_address: 3e:24:fe:1c:9d:fe
           aliases:
           - aptl-shuffle-frontend
           - shuffle-frontend
           dns_names:
           - aptl-shuffle-frontend
           - shuffle-frontend
+          - 0ac6370712e6
           generated_dns_names:
-          - 216ed3a32aca
+          - 0ac6370712e6
           backend:
             driver: bridge
             ipam_driver: default

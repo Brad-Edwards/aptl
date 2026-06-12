@@ -1034,13 +1034,13 @@ nodes:
         gid: 1000
         mode: '600'
         size: 411
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 3893e71546baef9cd178076c06acfcf98cdbe1478923abda856f1d58765f8c51
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
-        sensitivity: operator_secret
-        description: ''
+        sensitivity: secret_fixture
+        description: Reverse-proxy lab SSH private key; checksum verified from the live container.
       - path: /home/labadmin/.ssh/authorized_keys
         entry_type: file
         presence: present
@@ -1146,13 +1146,13 @@ nodes:
         gid: 0
         mode: '600'
         size: 1393
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: e0df77185dc9f3e71b4d5c535000330c18407e0dec0f3a142548dadf8ab0f616
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
-        sensitivity: operator_secret
-        description: ''
+        sensitivity: secret_fixture
+        description: Reverse-proxy SSH host DSA private key; checksum verified from the live container.
       - path: /root/.sigstore/root/tuf.db/CURRENT
         entry_type: file
         presence: present
@@ -1274,13 +1274,13 @@ nodes:
         gid: 0
         mode: '600'
         size: 2610
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 79d2ac9b0bca27b2288ea425de82dddad27414af106df4d89fc9e07c98489015
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
-        sensitivity: operator_secret
-        description: ''
+        sensitivity: secret_fixture
+        description: Reverse-proxy SSH host RSA private key; checksum verified from the live container.
       - path: /var/log/falco_events.json
         entry_type: file
         presence: present
@@ -1322,13 +1322,13 @@ nodes:
         gid: 0
         mode: '600'
         size: 411
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: ea0027840a71cc0fdac946aa3e3678ae0b4b7121774fb5b48fe7c12c52e3a3f5
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
-        sensitivity: operator_secret
-        description: ''
+        sensitivity: secret_fixture
+        description: Reverse-proxy SSH host Ed25519 private key; checksum verified from the live container.
       - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev.json
         entry_type: file
         presence: present
@@ -1354,13 +1354,13 @@ nodes:
         gid: 0
         mode: '600'
         size: 513
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: 1a339553b863d7aa3e3d953023f0d4c47da25df48ec0377f7da5a58c275dff4e
+        digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
-        sensitivity: operator_secret
-        description: ''
+        sensitivity: secret_fixture
+        description: Reverse-proxy SSH host ECDSA private key; checksum verified from the live container.
       - path: /root/.sigstore/root/targets/trusted_root.json
         entry_type: file
         presence: present
@@ -6184,6 +6184,7 @@ nodes:
           dns_names:
           - aptl-reverse
           - reverse
+          - f479361d5d17
           - reverse-host
           generated_dns_names:
           - f479361d5d17

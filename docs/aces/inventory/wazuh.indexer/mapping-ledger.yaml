@@ -78,7 +78,8 @@ correspondence_checks:
     limit: Planned because this issue records the frozen steady-state ACES spec and evidence, not a destructive clean-lab equivalence run.
 notes:
   - Capture used the existing running local aptl project as authorized by the user on 2026-06-05 and did not reset the lab.
-  - INDEXER_USERNAME / INDEXER_PASSWORD were sourced from the lab .env at capture time and passed only via docker exec environment variables; the raw values are never written to evidence, and redact_stream remains the final defence against accidental leakage of credentials, bcrypt hashes, bearer tokens, and TLS private keys.
+  - INDEXER_USERNAME / INDEXER_PASSWORD were sourced from the lab .env at capture time; raw scenario credential values,
+    bcrypt hashes, bearer-token observations, and TLS private-key evidence are retained as in-range capture content.
   - ACES runtime.datastore_services (`RuntimeDatastoreService` with engine=OPENSEARCH and data_model=SEARCH_INDEX) is consumed for the typed indexer cluster identity + aggregate cardinality, node membership/roles + engine provenance + per-plugin versions + endpoint topology, per-index partition shard geometry + cardinality, per-family structured mappings + template bodies, transport_security, and settings.
   - "All three formerly-blocked datastore surfaces are now encoded: ACES #468 (per-index and cluster cardinality/size/identity - uuid, doc count, deleted count, store size, creation date, open/closed status), ACES #469 (structured index field mappings and template bodies), and ACES #470 (node engine provenance - version, build hash, typed per-plugin versions, JVM heap, http/transport publish endpoints) shipped to aces dev and are consumed via typed fields. No known ACES expressivity gap remains."
   - The SDL build-history strings normalize braced shell parameter syntax to shell-equivalent unbraced syntax because ACES reserves ${...} for scenario variables; raw history remains in evidence.
@@ -244,7 +245,7 @@ facts:
       surface: nodes
       fields:
         - nodes.techvault.wazuh-indexer.runtime.environment
-      rationale: ACES runtime environment supports provenance and redacted value classification.
+      rationale: ACES runtime environment supports provenance and scenario value classification.
   - id: wazuh-indexer.runtime.local-identity-database
     category: identity
     summary: getent captured 14 local users and 25 local groups, including the wazuh-indexer service user/group (UID/GID 1000) that runs the OpenSearch JVM.
@@ -258,7 +259,7 @@ facts:
       rationale: ACES runtime local identity records passwd/group facts without promoting them to scenario actor accounts.
   - id: wazuh-indexer.runtime.filesystem-inventory
     category: filesystem
-    summary: The scoped filesystem inventory records 747 stat entries and 145 sha256-checksummed file entries across the OpenSearch config tree, security plugin config, certs bind tree, opensearch-security plugin layout, performance-analyzer plugin layout, /etc/wazuh-indexer, /var/lib/wazuh-indexer, and /var/log/wazuh-indexer. Private TLS key bytes are intentionally omitted; their paths are present and their checksums are recorded as <OMITTED-OPERATOR-SECRET-CHECKSUM>.
+    summary: The scoped filesystem inventory records 747 stat entries and 145 sha256-checksummed file entries across the OpenSearch config tree, security plugin config, certs bind tree, opensearch-security plugin layout, performance-analyzer plugin layout, /etc/wazuh-indexer, /var/lib/wazuh-indexer, and /var/log/wazuh-indexer. Private TLS key checksums are retained as in-range scenario evidence.
     evidence:
       - path: evidence/filesystem-tree.txt
       - path: evidence/filesystem-checksums.txt
@@ -268,7 +269,7 @@ facts:
       surface: nodes
       fields:
         - nodes.techvault.wazuh-indexer.runtime.filesystem_inventory
-      rationale: ACES filesystem entries can encode stat-backed entries and path-only entries with secret-safe redaction classifications.
+      rationale: ACES filesystem entries can encode stat-backed entries and path-only entries with secret-safe sensitivity classifications.
   - id: wazuh-indexer.runtime.package-inventory
     category: software
     summary: RPM captured 110 OS packages; the normalized Syft CycloneDX SBOM captured 840 runtime components covering the JDK and bundled OpenSearch jars.
@@ -420,7 +421,7 @@ facts:
       surface: nodes
       fields:
         - nodes.techvault.wazuh-indexer.runtime.datastore_services.techvault-wazuh-indexer.transport_security
-      rationale: ACES RuntimeDatastoreTransportSecurity + RuntimeDatastoreTransportSecurityMode encode the mutual-TLS mode, the PEM trust/cert/key paths, and the hostname-verification flags. Private key bytes are intentionally omitted from evidence checksums.
+      rationale: ACES RuntimeDatastoreTransportSecurity + RuntimeDatastoreTransportSecurityMode encode the mutual-TLS mode, the PEM trust/cert/key paths, and the hostname-verification flags. Private key checksums are retained as in-range scenario evidence.
   - id: wazuh-indexer.datastore.settings
     category: datastore
     summary: Curated OpenSearch cluster settings record network.host=0.0.0.0, discovery.type=single-node, http.port range 9200-9299, transport.tcp.port range 9300-9399, OpenSearch Security HTTP transport class wiring, compatibility.override_main_response_version=true, and persistent plugins.index_state_management.template_migration.control=-1 (only persistent setting); no transient settings are set.
@@ -445,7 +446,7 @@ facts:
       rationale: ACES #470 replaced the name-only RuntimeDatastoreService.engine_plugins with typed per-node RuntimeDatastoreEnginePlugin entries carrying name + version; all 18 plugins and their 2.19.1.0 versions are now typed.
   - id: wazuh-indexer.identity.internal-users
     category: identity
-    summary: internal_users.yml declares six built-in OpenSearch Security internal users - admin (reserved, backend_role admin), kibanaserver (reserved), kibanaro (backend_roles kibanauser+readall, three demo attributes), logstash (backend_role logstash), readall (backend_role readall), snapshotrestore (backend_role snapshotrestore). All bcrypt hashes are <REDACTED-INDEXER-INTERNAL-USER-HASH>; reserved/hidden flags and role memberships are recorded.
+    summary: internal_users.yml declares six built-in OpenSearch Security internal users - admin (reserved, backend_role admin), kibanaserver (reserved), kibanaro (backend_roles kibanauser+readall, three demo attributes), logstash (backend_role logstash), readall (backend_role readall), snapshotrestore (backend_role snapshotrestore). Bcrypt hashes, reserved/hidden flags, and role memberships are recorded.
     evidence:
       - path: evidence/wazuh-indexer-state.txt
     aces:
@@ -453,7 +454,7 @@ facts:
       surface: nodes
       fields:
         - nodes.techvault.wazuh-indexer.runtime.identity_authorities
-      rationale: ACES runtime identity_authorities encode authority-local users and their attributes; OpenSearch Security internal users are recorded here with bcrypt hashes redacted as operator_secret material.
+      rationale: ACES runtime identity_authorities encode authority-local users and their attributes; OpenSearch Security internal users are recorded here with bcrypt hashes retained as scenario evidence.
   - id: wazuh-indexer.identity.security-roles
     category: identity
     summary: A curated subset of OpenSearch Security roles is recorded - the reserved admin role (cluster_permissions [unlimited], wildcard index permissions), reserved kibana_server / kibana_read_only roles, and the security_analytics_* roles seeded by the security-analytics plugin. The full role catalogue lives in opensearch-security plugin source; this inventory captures the realized role-set names, reserved/hidden flags, and high-level permission shape rather than every role definition.
@@ -508,7 +509,7 @@ facts:
       caveat: osquery table attempts are retained as inventory evidence; ACES SDL carries derived runtime facts rather than a first-class osquery-table manifest.
   - id: wazuh-indexer.capture.toolchain-baseline
     category: capture-methodology
-    summary: The bundle records Trivy, Syft, osquery, Docker, Compose, filesystem manifest, redaction, compression, and capture-limit evidence for rerunnable methodology review.
+    summary: The bundle records Trivy, Syft, osquery, Docker, Compose, filesystem manifest, compression, and capture-limit evidence for rerunnable methodology review.
     evidence:
       - path: evidence/capture-limits.txt
       - path: evidence/captured-at-utc.txt

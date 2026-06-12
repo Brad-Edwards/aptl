@@ -34,7 +34,7 @@ steady-state artifact for the observed lab instance, not as clean-lab rebuild pr
 | Claim | Evidence |
 | --- | --- |
 | Capture time, tool versions, and limits are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt` |
-| Docker Compose service intent is represented by the redacted Compose service slice. | `evidence/compose-service.db.json` |
+| Docker Compose service intent is represented by the Compose service slice. | `evidence/compose-service.db.json` |
 | Upstream image identity, config, history, and layers are recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-history.image.txt`, `evidence/docker-history.image.jsonl` |
 | Runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-internal.json`, `evidence/docker-volume.db-data.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt` |
 | Init-script source inputs are checksum-addressable. | `evidence/source-checksums.txt` |
@@ -65,8 +65,9 @@ steady-state artifact for the observed lab instance, not as clean-lab rebuild pr
   scan time: 1 critical,
   11 high, 20
   medium, and 2 low.
-- The resolved `POSTGRES_PASSWORD` value is redacted from committed evidence.
-  The SDL records only that this is a scenario fixture secret.
+- The resolved `POSTGRES_PASSWORD=techvault_db_pass` fixture value is retained
+  unmasked in committed evidence and classified as scenario fixture content in
+  the SDL.
 
 ## ACES Mapping Result
 

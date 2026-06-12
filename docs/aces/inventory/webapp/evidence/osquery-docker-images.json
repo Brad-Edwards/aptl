@@ -1,15 +1,21 @@
 {
   "table": "docker_images",
-  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%aptl-webapp%\";",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%webapp%\";",
   "tool": "osqueryi version 4.9.0",
   "vantage": "containerized osquery host-side Docker socket view",
   "status": "captured",
   "rows": [
     {
-      "created": "1779517097",
-      "id": "4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a",
-      "size_bytes": "475310384",
+      "created": "1781190991",
+      "id": "261633f0d60aa96b6921fc561a31e76a7601ea7f52e4f435efac79686882e299",
+      "size_bytes": "475312887",
       "tags": "aptl-webapp:latest"
+    },
+    {
+      "created": "1779354163",
+      "id": "c998d27f252e6a9103d3053b59588d64bbad8afb25d951b3eb37b49a8a8ceaf7",
+      "size_bytes": "475276143",
+      "tags": "aptl2-webapp:latest"
     }
   ]
 }

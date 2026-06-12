@@ -56,8 +56,8 @@ ADR-035, ADR-033, ADR-029, or the ACES asset-inventorying methodology.
   `StartupDiagnostic`, `RangeSnapshot.to_dict()`, `LocalRunStore`, and the
   MCP run/capture helpers mirrored under `mcp/aptl-mcp-common`.
 - Shared safety helpers and policies: ADR-028, ADR-029, ADR-033, ADR-036,
-  ADR-037, `aptl.utils.redaction.redact`, and `aptl.utils.curl_safe` when
-  commands would otherwise put credentials in process argv.
+  ADR-037, and `aptl.utils.curl_safe` when commands would otherwise introduce
+  unrelated non-scenario credentials in process argv.
 
 ## Security And Validation Layers
 
@@ -67,16 +67,17 @@ ADR-035, ADR-033, ADR-029, or the ACES asset-inventorying methodology.
 - **Inventory ledger:** every captured fact needs an existing
   `AcesSurface` mapping, caveat, or linked ACES issue in
   `mapping-ledger.yaml`. No `needs_gap_triage` rows should remain at review.
-- **Secret classification:** ADR-029 is canonical. Operator secrets, private
-  SSH keys, bearer tokens, cookies, generated service config, and arbitrary
-  prior run transcripts must not be committed unredacted. Intentional target
-  fixture credentials may be encoded only when they are participant-visible
-  scenario facts with an explicit `secret_fixture`-style classification.
+- **Secret classification:** Authored TechVault scenario credentials and
+  target state are captured verbatim. Operator secrets, private host SSH keys,
+  bearer tokens, cookies, generated non-scenario service config, and arbitrary
+  prior run transcripts are outside this target inventory and must be excluded
+  with a capture-limit record.
 - **Kali capture data:** ADR-033 capture surfaces can contain full argv, hidden
   PTY input, raw pcap bytes, and prior experiment data. A non-empty
-  `kali_captures` volume is evidence to account for, but it is not safe to
-  commit wholesale. Prefer fresh-volume capture for this inventory; otherwise
-  record contamination and redact or checksum sensitive content.
+  `kali_captures` volume is evidence to account for, but prior operator/run
+  data is not scenario target content. Prefer fresh-volume capture for this
+  inventory; otherwise record contamination and exclude out-of-scope content
+  with checksums or a capture-limit entry.
 - **Config and env binding:** durable toggles remain in strict `AptlConfig`.
   `.env` parsing and placeholder rejection remain in `EnvVars` /
   `find_placeholder_env_values`. Do not add ACES-specific environment parsing
@@ -93,9 +94,9 @@ ADR-035, ADR-033, ADR-029, or the ACES asset-inventorying methodology.
   `capsh --drop=cap_audit_control` behavior, and healthcheck degraded
   subsystem reporting. Do not flatten them into one generic privilege flag.
 - **Error envelopes and observability:** any new CLI/test helper must report
-  narrow diagnostics and reuse redaction. Raw Docker, scanner, SSH, or ACES
-  exception payloads must not cross CLI, log, API, snapshot, or runstore
-  boundaries unfiltered.
+  narrow diagnostics and must not introduce unrelated non-scenario credentials.
+  Raw Docker, scanner, SSH, or ACES exception payloads must not cross CLI, log,
+  API, snapshot, or runstore boundaries unfiltered.
 
 ## Extensibility Seam
 

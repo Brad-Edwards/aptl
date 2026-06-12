@@ -478,7 +478,7 @@ Available agents:
         <ca>/etc/ssl/root-ca.pem</ca>
       </certificate_authorities>
       <certificate>/etc/ssl/filebeat.pem</certificate>
-      <key><REDACTED-CLUSTER-KEY></key>
+      <key>/etc/ssl/filebeat.key</key>
     </ssl>
   </indexer>
 
@@ -647,7 +647,7 @@ setup.ilm.enabled: false
 output.elasticsearch:
   hosts: ['https://wazuh.indexer:9200']
   username: 'admin'
-  password: '<REDACTED-OPERATOR-SECRET>'
+  password: 'SecretPassword'
   ssl.verification_mode: 'full'
   ssl.certificate_authorities: ['/etc/ssl/root-ca.pem']
   ssl.certificate: '/etc/ssl/filebeat.pem'

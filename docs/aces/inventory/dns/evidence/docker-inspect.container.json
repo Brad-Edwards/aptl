@@ -1,7 +1,7 @@
 [
   {
-    "Id": "ceed7fcfb8cfb21a8c5b8d18d801946bf8057dcaa1dc9f4507319ae33aad323d",
-    "Created": "2026-05-23T06:18:29.915059103Z",
+    "Id": "246fa725d79a63ee35eb461f245e09c61489d4d83624d57ee13129af84d7bfea",
+    "Created": "2026-06-11T16:00:17.870560437Z",
     "Path": "/usr/bin/supervisord",
     "Args": [
       "-n",
@@ -15,53 +15,53 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2955876,
+      "Pid": 804856,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:34.677724256Z",
+      "StartedAt": "2026-06-11T16:00:22.242967886Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-05-28T06:07:52.150450117+02:00",
-            "End": "2026-05-28T06:07:52.204965225+02:00",
+            "Start": "2026-06-12T15:19:21.054013467+02:00",
+            "End": "2026-06-12T15:19:21.115734467+02:00",
             "ExitCode": 0,
             "Output": "ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400\n"
           },
           {
-            "Start": "2026-05-28T06:08:07.20658587+02:00",
-            "End": "2026-05-28T06:08:07.277442424+02:00",
+            "Start": "2026-06-12T15:19:36.11711701+02:00",
+            "End": "2026-06-12T15:19:36.175380551+02:00",
             "ExitCode": 0,
             "Output": "ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400\n"
           },
           {
-            "Start": "2026-05-28T06:08:22.278372957+02:00",
-            "End": "2026-05-28T06:08:22.34684695+02:00",
+            "Start": "2026-06-12T15:19:51.176578205+02:00",
+            "End": "2026-06-12T15:19:51.225657909+02:00",
             "ExitCode": 0,
             "Output": "ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400\n"
           },
           {
-            "Start": "2026-05-28T06:08:37.348215957+02:00",
-            "End": "2026-05-28T06:08:37.405165405+02:00",
+            "Start": "2026-06-12T15:20:06.226444118+02:00",
+            "End": "2026-06-12T15:20:06.282190603+02:00",
             "ExitCode": 0,
             "Output": "ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400\n"
           },
           {
-            "Start": "2026-05-28T06:08:52.405722042+02:00",
-            "End": "2026-05-28T06:08:52.469729194+02:00",
+            "Start": "2026-06-12T15:20:21.282894375+02:00",
+            "End": "2026-06-12T15:20:21.339684377+02:00",
             "ExitCode": 0,
             "Output": "ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400\n"
           }
         ]
       }
     },
-    "Image": "sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75",
-    "ResolvConfPath": "/var/lib/docker/containers/ceed7fcfb8cfb21a8c5b8d18d801946bf8057dcaa1dc9f4507319ae33aad323d/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/ceed7fcfb8cfb21a8c5b8d18d801946bf8057dcaa1dc9f4507319ae33aad323d/hostname",
-    "HostsPath": "/var/lib/docker/containers/ceed7fcfb8cfb21a8c5b8d18d801946bf8057dcaa1dc9f4507319ae33aad323d/hosts",
-    "LogPath": "/var/lib/docker/containers/ceed7fcfb8cfb21a8c5b8d18d801946bf8057dcaa1dc9f4507319ae33aad323d/ceed7fcfb8cfb21a8c5b8d18d801946bf8057dcaa1dc9f4507319ae33aad323d-json.log",
+    "Image": "sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6",
+    "ResolvConfPath": "/var/lib/docker/containers/246fa725d79a63ee35eb461f245e09c61489d4d83624d57ee13129af84d7bfea/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/246fa725d79a63ee35eb461f245e09c61489d4d83624d57ee13129af84d7bfea/hostname",
+    "HostsPath": "/var/lib/docker/containers/246fa725d79a63ee35eb461f245e09c61489d4d83624d57ee13129af84d7bfea/hosts",
+    "LogPath": "/var/lib/docker/containers/246fa725d79a63ee35eb461f245e09c61489d4d83624d57ee13129af84d7bfea/246fa725d79a63ee35eb461f245e09c61489d4d83624d57ee13129af84d7bfea-json.log",
     "Name": "/aptl-dns",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -214,10 +214,10 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "LOG_PATHS=/var/log/named/query.log,/var/log/named/default.log",
-        "LOG_FORMAT=syslog",
         "WAZUH_MANAGER=wazuh.manager",
         "AGENT_NAME=aptl-dns-agent",
+        "LOG_PATHS=/var/log/named/query.log,/var/log/named/default.log",
+        "LOG_FORMAT=syslog",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "DEBIAN_FRONTEND=noninteractive"
       ],
@@ -245,7 +245,7 @@
         "com.docker.compose.config-hash": "70be7046831c355287aa8c42a660aae596bfd9a177b57db8b84ed2781a33a29c",
         "com.docker.compose.container-number": "1",
         "com.docker.compose.depends_on": "",
-        "com.docker.compose.image": "sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75",
+        "com.docker.compose.image": "sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
         "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
@@ -256,8 +256,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "32ee17a64c0b8f893ec82bcbfbe036942ca9496c2ba41eba5af01df3c3c1003e",
-      "SandboxKey": "/var/run/docker/netns/32ee17a64c0b",
+      "SandboxID": "8cf8c690e93d52d3c8522e3133d5d3e8db8e2e583001f63919fd2a9028ebf522",
+      "SandboxKey": "/var/run/docker/netns/8cf8c690e93d",
       "Ports": {
         "53/tcp": [
           {
@@ -293,10 +293,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "3b7c4e642d7ebef4866bf953ff0b04bd39affb9639881b4938cdcb8a9dc09c16",
-          "EndpointID": "eb2e45bb214120473221dc4d67404506498050a22542a3d7731d31620cdea687",
+          "EndpointID": "23e19fff8f280fa9e6f816e97e37ff3da76738cd585b518c1ffaaa857b0e2527",
           "Gateway": "",
           "IPAddress": "172.20.1.22",
-          "MacAddress": "d6:91:1f:4c:ff:c7",
+          "MacAddress": "3a:44:5f:7f:42:73",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -304,7 +304,7 @@
           "DNSNames": [
             "aptl-dns",
             "dns",
-            "ceed7fcfb8cf",
+            "246fa725d79a",
             "ns1.techvault.local"
           ]
         },
@@ -320,10 +320,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
-          "EndpointID": "43843734713a7c1cc6e230a499bd0c7cf020f058452e8c83920286e83a84913a",
+          "EndpointID": "e7559df484b29c7468f4e6167cbcdf8c764b0988d84116afb1b549489d1a050c",
           "Gateway": "",
           "IPAddress": "172.20.2.27",
-          "MacAddress": "7e:58:a5:13:f6:34",
+          "MacAddress": "c6:49:cc:27:01:da",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -331,7 +331,7 @@
           "DNSNames": [
             "aptl-dns",
             "dns",
-            "ceed7fcfb8cf",
+            "246fa725d79a",
             "ns1.techvault.local"
           ]
         },
@@ -347,10 +347,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "5d23550a01131bf2d9bdae8c31002c3848de46d7851ff4303660343979103cc9",
+          "EndpointID": "52b904dff453015126f11968f518f998fb605b94ae21f1d9bac7628d42a8918f",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.25",
-          "MacAddress": "36:a4:19:0b:50:e3",
+          "MacAddress": "ae:9b:d4:a3:d7:ee",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -358,7 +358,7 @@
           "DNSNames": [
             "aptl-dns",
             "dns",
-            "ceed7fcfb8cf",
+            "246fa725d79a",
             "ns1.techvault.local"
           ]
         }

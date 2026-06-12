@@ -34,12 +34,6 @@ write_chunked_stream() {
   split -b "$EVIDENCE_CHUNK_SIZE" -d -a 3 - "$OUT/$base.part-"
 }
 
-sanitize_http_stream() {
-  sed -E \
-    -e 's#(Authorization:[[:space:]]*)[^[:space:]]+([[:space:]]+[^[:space:]]+)?#\1<HTTP-AUTHORIZATION-HEADER-OMITTED>#Ig' \
-    -e 's#(set-cookie:[[:space:]]*)[^;[:space:]]+#\1<HTTP-COOKIE-VALUE-OMITTED>#Ig'
-}
-
 write_json_status() {
   local output="$1"
   local table="$2"
@@ -93,7 +87,7 @@ mkdir -p "$OUT"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 record_limit "This capture used the existing running lab as authorized by the user on 2026-06-06 and did not run aptl lab stop -v && aptl lab start; it is a non-destructive frozen steady-state observation, not clean-lab rebuild proof."
-record_limit "HTTP authorization headers and transient HTTP cookie values from unauthenticated probe responses are omitted from committed evidence; scenario fixture credentials and private-key file checksums are retained as captured range facts."
+record_limit "HTTP response headers, transient HTTP cookie values, scenario fixture credentials, and private-key file checksums are retained in committed evidence as captured range facts."
 record_limit "The Wazuh dashboard image does not include find, tar, ps, ss, netstat, ip, or mount; runtime evidence uses Docker inspect/network records, docker top, osquery namespace sharing, /proc/net/* listener fallback, and host-side docker export filesystem capture."
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -146,7 +140,6 @@ sha256sum \
   echo --runtime-wazuh-yml--
   docker exec "$CONTAINER" bash -lc 'sed -n "1,160p" /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml 2>/dev/null'
 } > "$OUT/dashboard-config-files.txt"
-rm -f "$OUT/dashboard-config-files.redacted.txt"
 
 docker exec "$CONTAINER" bash -lc '
   rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n" | sort
@@ -217,7 +210,7 @@ docker exec "$CONTAINER" bash -lc '
   curl -ks -i https://localhost:5601/api/status 2>&1 | sed -n "1,120p"
   echo --root-probe--
   curl -ks -i https://localhost:5601/ 2>&1 | sed -n "1,80p"
-' | sanitize_http_stream \
+' \
   | jq -Rs '{vantage: "container localhost", commands: ["curl -ks -i https://localhost:5601/api/status", "curl -ks -i https://localhost:5601/"], output: .}' \
   > "$OUT/wazuh-dashboard-probe.json"
 

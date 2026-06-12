@@ -32,6 +32,10 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 IMAGE_ID = "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13"
 IMAGE_DIGEST = "strangebee/thehive@sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13"
 PLAY_SECRET_FIXTURE = "aptl-thehive-lab-secret-key-2024-purple"
+HTTPS_KEYSTORE_PASSWORD = "kInP5SyV3kLmdbLVVMP1wgSQtzkEv2UM"
+TH_CORTEX_KEYS = "aptlcortexlabapikey2026purple"
+THEHIVE_SANDBOX_KEY = "/var/run/docker/netns/bfb6b9ee439f"
+THEHIVE_KEYSTORE_SHA256 = "cad6bfad83329a1b6a69db3940429fe9281961f88ef7e271e1608449858f89bc"
 RUNTIME_PACKAGE_COUNT = 126
 TRIVY_FINDING_COUNT = 376
 FILESYSTEM_TREE_ROW_COUNT = 556
@@ -40,7 +44,7 @@ LOCAL_IDENTITY_USER_COUNT = 19
 LOCAL_IDENTITY_GROUP_COUNT = 39
 DOCKER_HISTORY_ROW_COUNT = 19
 RUNTIME_PROCESS_COUNT = 1
-RUNTIME_ENV_COUNT = 5
+RUNTIME_ENV_COUNT = 6
 LEDGER_FACT_COUNT = 19
 
 REQUIRED_EVIDENCE_FILES = {
@@ -86,9 +90,12 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
 }
 
-RAW_SECRET_PATTERNS = (
-    r"BEGIN .*PRIVATE KEY",
-    r"-----BEGIN OPENSSH",
+SUPPRESSION_PLACEHOLDERS = (
+    "<REDACTED",
+    "<OMITTED",
+    "operator_secret",
+    "value withheld",
+    "content excluded",
 )
 
 
@@ -230,14 +237,14 @@ def test_thehive_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_thehive_evidence_does_not_commit_raw_secret_values():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
+def test_thehive_evidence_has_no_secret_suppression_placeholders():
+    forbidden = re.compile("|".join(re.escape(marker) for marker in SUPPRESSION_PLACEHOLDERS), re.IGNORECASE)
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and forbidden.search(_evidence_text(path))
     ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+    assert not offenders, f"Evidence still contains secret suppression placeholders: {offenders}"
 
 
 def test_thehive_runtime_evidence_counts():
@@ -247,8 +254,11 @@ def test_thehive_runtime_evidence_counts():
     assert image["Id"] == IMAGE_ID
     assert image["RepoDigests"][0] == IMAGE_DIGEST
     assert container["HostConfig"]["Memory"] == 1073741824
+    assert container["NetworkSettings"]["SandboxKey"] == THEHIVE_SANDBOX_KEY
     # The Play application secret is a committed fixture on the container command.
     assert PLAY_SECRET_FIXTURE in container["Config"]["Cmd"]
+    assert f"HTTPS_KEYSTORE_PASSWORD={HTTPS_KEYSTORE_PASSWORD}" in container["Config"]["Env"]
+    assert f"TH_CORTEX_KEYS={TH_CORTEX_KEYS}" in container["Config"]["Env"]
 
     assert len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()) == RUNTIME_PACKAGE_COUNT
     assert len(_json_file("trivy-vulnerability-list.json")) == TRIVY_FINDING_COUNT
@@ -256,6 +266,17 @@ def test_thehive_runtime_evidence_counts():
     assert len((EVIDENCE_DIR / "docker-history.image.jsonl").read_text(encoding="utf-8").splitlines()) == DOCKER_HISTORY_ROW_COUNT
     assert len(_section("users")) == LOCAL_IDENTITY_USER_COUNT
     assert len(_section("groups")) == LOCAL_IDENTITY_GROUP_COUNT
+
+
+def test_thehive_runtime_evidence_captures_scenario_secret_values():
+    runtime = (EVIDENCE_DIR / "runtime-baseline.txt").read_text(encoding="utf-8")
+    checksums = _evidence_text(EVIDENCE_DIR / "filesystem-checksums.txt.xz")
+    state = (EVIDENCE_DIR / "thehive-state.txt").read_text(encoding="utf-8")
+
+    assert f"HTTPS_KEYSTORE_PASSWORD={HTTPS_KEYSTORE_PASSWORD}" in runtime
+    assert f"TH_CORTEX_KEYS={TH_CORTEX_KEYS}" in runtime
+    assert f"{THEHIVE_KEYSTORE_SHA256}  /etc/thehive/keystore.p12" in checksums
+    assert "password = ${?HTTPS_KEYSTORE_PASSWORD}" in state
 
 
 def test_thehive_trivy_counts_match_severity_breakdown():
@@ -304,10 +325,12 @@ def test_techvault_sdl_encodes_thehive_node(legacy_scenario):
     # The Play application secret fixture is kept verbatim on the container command.
     assert PLAY_SECRET_FIXTURE in runtime["container"]["command"]
 
-    # The generated keystore password is operator_secret with value withheld.
+    # The generated keystore password is captured as scenario content.
     env = {item["name"]: item for item in runtime["environment"]}
-    assert env["HTTPS_KEYSTORE_PASSWORD"]["value_classification"] == "operator_secret"
-    assert env["HTTPS_KEYSTORE_PASSWORD"]["value"] == ""
+    assert env["HTTPS_KEYSTORE_PASSWORD"]["value_classification"] == "secret_fixture"
+    assert env["HTTPS_KEYSTORE_PASSWORD"]["value"] == HTTPS_KEYSTORE_PASSWORD
+    assert env["TH_CORTEX_KEYS"]["value_classification"] == "secret_fixture"
+    assert env["TH_CORTEX_KEYS"]["value"] == TH_CORTEX_KEYS
 
 
 def test_techvault_sdl_encodes_thehive_application(legacy_scenario):

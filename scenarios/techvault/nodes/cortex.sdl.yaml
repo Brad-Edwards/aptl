@@ -6,7 +6,7 @@ nodes:
       Cortex 3.1.8-1 serves HTTP on TCP/9001 at security-net 172.20.0.22, stores organization/user metadata in the shared
       thehive-es Elasticsearch backend (cortex_6 index), and exposes key/local auth for TheHive. Inventoried at experiment
       grade under docs/aces/inventory/cortex/ (SCN-010 issue #357) after a clean lab start. HTTPS is intentionally deferred
-      by ADR-034; TheHive consumes Cortex over the internal network with a redacted fixture API key.'
+      by ADR-034; TheHive consumes Cortex over the internal network with fixture API key aptlcortexlabapikey2026purple.'
     os: linux
     os_version: Debian GNU/Linux 11 (bullseye)
     source:
@@ -3899,6 +3899,7 @@ nodes:
           dns_names:
           - aptl-cortex
           - cortex
+          - ef853168108e
           generated_dns_names:
           - ef853168108e
           backend:
@@ -4030,12 +4031,12 @@ nodes:
           name: aptl-svc@cortex.local
           reserved: false
           hidden: false
-          credential_classification: redacted
+          credential_classification: none
           backend_roles:
           - read
           - analyze
           - orgadmin
-          description: Seeded APTL Cortex service account used by TheHive; raw API key/password are redacted.
+          description: Seeded APTL Cortex service account used by TheHive; API key aptlcortexlabapikey2026purple and password AptlCortexService2026!.
         roles:
         - role_id: read
           name: read
@@ -4074,7 +4075,7 @@ nodes:
         - tenant_id: aptl
           name: APTL
           description: Seeded Cortex organization for the APTL lab.
-        description: Observed from cortex_6 Elasticsearch documents and /api/user/current, with raw key/password redacted.
+        description: Observed from cortex_6 Elasticsearch documents and /api/user/current, including the Cortex service-account fixture credential values.
       packages:
       - manager: dpkg
         name: adduser

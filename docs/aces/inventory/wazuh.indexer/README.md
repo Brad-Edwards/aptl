@@ -27,7 +27,7 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
 | Cluster | single-node `opensearch` cluster, uuid `u-vGl1n0Q7e-SKz1tWvb-w`, status green |
 | Indices | 41 indices, 102 primary shards, 1,053,842 documents, ~1.39 GB store (per-index uuid/doc-count/store-size + per-family mapping schema encoded via ACES #468/#469 — see ACES Mapping Result) |
 | Plugins | 18 installed OpenSearch plugins at 2.19.1.0 (alerting, anomaly-detection, asynchronous-search, cross-cluster-replication, geospatial, index-management, job-scheduler, knn, ml, neural-search, notifications, notifications-core, observability, performance-analyzer, reports-scheduler, security, security-analytics, sql) |
-| Internal users | 6 OpenSearch Security built-in users (`admin`, `kibanaserver`, `kibanaro`, `logstash`, `readall`, `snapshotrestore`); bcrypt hashes redacted |
+| Internal users | 6 OpenSearch Security built-in users (`admin`, `kibanaserver`, `kibanaro`, `logstash`, `readall`, `snapshotrestore`); bcrypt hashes captured verbatim |
 | Package inventory | 110 RPM packages and 840 Syft SBOM components |
 | Trivy vulnerability findings | 276 total: critical 0, high 135, medium 123, low 18 (130 unique CVE IDs) |
 
@@ -103,8 +103,7 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
   PEM material under `/usr/share/wazuh-indexer/certs/`. The admin DN
   allowlist is `CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US`; transport
   hostname verification is disabled (default Wazuh-indexer posture).
-  Private-key bytes are intentionally omitted from evidence; their paths
-  are recorded with `<OMITTED-OPERATOR-SECRET-CHECKSUM>` checksums.
+  Private-key checksum values are retained as in-range scenario evidence.
 - The OpenSearch Security HTTP authc chain has six declared domains; only
   `basic_internal_auth_domain` (order 4, basic auth, internal backend) is
   HTTP-enabled. The two LDAP authz domains are disabled. The realized
@@ -112,10 +111,9 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
   authority on the HTTP layer.
 - Six built-in internal users live in the bind-mounted
   `internal_users.yml`: `admin` (reserved), `kibanaserver` (reserved),
-  `kibanaro`, `logstash`, `readall`, `snapshotrestore`. Bcrypt hashes are
-  recorded as `<REDACTED-INDEXER-INTERNAL-USER-HASH>`; reserved/hidden
-  flags, role memberships, and the three demo attributes on `kibanaro`
-  are kept.
+  `kibanaro`, `logstash`, `readall`, `snapshotrestore`. Bcrypt hashes,
+  reserved/hidden flags, role memberships, and the three demo attributes on
+  `kibanaro` are kept.
 - Runtime package state is encoded from the normalized Syft CycloneDX SBOM
   (840 components, JDK + bundled OpenSearch jars) and RPM package list
   (110 packages). Trivy captured 276 vulnerability findings (130 unique

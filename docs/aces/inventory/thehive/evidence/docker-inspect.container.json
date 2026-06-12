@@ -1,7 +1,7 @@
 [
   {
-    "Id": "3ee8e93f293ba3e8d5ebae58992c340265d79a9c8c840e85fd6f50273538259f",
-    "Created": "2026-05-23T06:18:31.819921815Z",
+    "Id": "8434e442eee0ae7b19788d1da5c8fee1957b84181c22f18e0c4f6e862a2759cd",
+    "Created": "2026-06-11T16:00:21.381838024Z",
     "Path": "/opt/thehive/entrypoint",
     "Args": [
       "--secret",
@@ -12,7 +12,12 @@
       "lucene",
       "--es-hostnames",
       "thehive-es",
-      "--no-config-cortex"
+      "--cortex-proto",
+      "http",
+      "--cortex-hostnames",
+      "cortex",
+      "--cortex-port",
+      "9001"
     ],
     "State": {
       "Status": "running",
@@ -21,42 +26,42 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2974336,
+      "Pid": 819543,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:19:42.235245872Z",
+      "StartedAt": "2026-06-11T16:01:28.127487793Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-06-10T07:15:04.925814598+02:00",
-            "End": "2026-06-10T07:15:04.98359623+02:00",
+            "Start": "2026-06-12T13:33:41.807510093+02:00",
+            "End": "2026-06-12T13:33:41.8848212+02:00",
             "ExitCode": 0,
             "Output": "{\"versions\":{\"Scalligraph\":\"5.4.11-1\",\"TheHive\":\"5.4.11-1\",\"Play\":\"3.0.x\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"session\",\"basic\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\",\"mfa\"],\"ssoAutoLogin\":false,\"freeTagDefaultColour\":\"#000000\"}}"
           },
           {
-            "Start": "2026-06-10T07:15:34.984424986+02:00",
-            "End": "2026-06-10T07:15:35.05302482+02:00",
+            "Start": "2026-06-12T13:34:11.885698205+02:00",
+            "End": "2026-06-12T13:34:11.94598241+02:00",
             "ExitCode": 0,
             "Output": "{\"versions\":{\"Scalligraph\":\"5.4.11-1\",\"TheHive\":\"5.4.11-1\",\"Play\":\"3.0.x\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"session\",\"basic\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\",\"mfa\"],\"ssoAutoLogin\":false,\"freeTagDefaultColour\":\"#000000\"}}"
           },
           {
-            "Start": "2026-06-10T07:16:05.05391535+02:00",
-            "End": "2026-06-10T07:16:05.118873841+02:00",
+            "Start": "2026-06-12T13:34:41.94643704+02:00",
+            "End": "2026-06-12T13:34:41.999611006+02:00",
             "ExitCode": 0,
             "Output": "{\"versions\":{\"Scalligraph\":\"5.4.11-1\",\"TheHive\":\"5.4.11-1\",\"Play\":\"3.0.x\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"session\",\"basic\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\",\"mfa\"],\"ssoAutoLogin\":false,\"freeTagDefaultColour\":\"#000000\"}}"
           },
           {
-            "Start": "2026-06-10T07:16:35.120069305+02:00",
-            "End": "2026-06-10T07:16:35.193412779+02:00",
+            "Start": "2026-06-12T13:35:12.000682688+02:00",
+            "End": "2026-06-12T13:35:12.052035298+02:00",
             "ExitCode": 0,
             "Output": "{\"versions\":{\"Scalligraph\":\"5.4.11-1\",\"TheHive\":\"5.4.11-1\",\"Play\":\"3.0.x\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"session\",\"basic\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\",\"mfa\"],\"ssoAutoLogin\":false,\"freeTagDefaultColour\":\"#000000\"}}"
           },
           {
-            "Start": "2026-06-10T07:17:05.194748071+02:00",
-            "End": "2026-06-10T07:17:05.261825757+02:00",
+            "Start": "2026-06-12T13:35:42.052463871+02:00",
+            "End": "2026-06-12T13:35:42.105408454+02:00",
             "ExitCode": 0,
             "Output": "{\"versions\":{\"Scalligraph\":\"5.4.11-1\",\"TheHive\":\"5.4.11-1\",\"Play\":\"3.0.x\"},\"config\":{\"protectDownloadsWith\":\"malware\",\"authType\":[\"key\",\"session\",\"basic\",\"local\"],\"capabilities\":[\"authByKey\",\"changePassword\",\"setPassword\",\"mfa\"],\"ssoAutoLogin\":false,\"freeTagDefaultColour\":\"#000000\"}}"
           }
@@ -64,10 +69,10 @@
       }
     },
     "Image": "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13",
-    "ResolvConfPath": "/var/lib/docker/containers/3ee8e93f293ba3e8d5ebae58992c340265d79a9c8c840e85fd6f50273538259f/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/3ee8e93f293ba3e8d5ebae58992c340265d79a9c8c840e85fd6f50273538259f/hostname",
-    "HostsPath": "/var/lib/docker/containers/3ee8e93f293ba3e8d5ebae58992c340265d79a9c8c840e85fd6f50273538259f/hosts",
-    "LogPath": "/var/lib/docker/containers/3ee8e93f293ba3e8d5ebae58992c340265d79a9c8c840e85fd6f50273538259f/3ee8e93f293ba3e8d5ebae58992c340265d79a9c8c840e85fd6f50273538259f-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/8434e442eee0ae7b19788d1da5c8fee1957b84181c22f18e0c4f6e862a2759cd/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/8434e442eee0ae7b19788d1da5c8fee1957b84181c22f18e0c4f6e862a2759cd/hostname",
+    "HostsPath": "/var/lib/docker/containers/8434e442eee0ae7b19788d1da5c8fee1957b84181c22f18e0c4f6e862a2759cd/hosts",
+    "LogPath": "/var/lib/docker/containers/8434e442eee0ae7b19788d1da5c8fee1957b84181c22f18e0c4f6e862a2759cd/8434e442eee0ae7b19788d1da5c8fee1957b84181c22f18e0c4f6e862a2759cd-json.log",
     "Name": "/aptl-thehive",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -192,16 +197,6 @@
     "Mounts": [
       {
         "Type": "volume",
-        "Name": "aptl_thehive_data",
-        "Source": "/var/lib/docker/volumes/aptl_thehive_data/_data",
-        "Destination": "/opt/thp/thehive/data",
-        "Driver": "local",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": ""
-      },
-      {
-        "Type": "volume",
         "Name": "aptl_thehive_index",
         "Source": "/var/lib/docker/volumes/aptl_thehive_index/_data",
         "Destination": "/opt/thp/thehive/index",
@@ -233,6 +228,16 @@
         "Mode": "ro",
         "RW": false,
         "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_thehive_data",
+        "Source": "/var/lib/docker/volumes/aptl_thehive_data/_data",
+        "Destination": "/opt/thp/thehive/data",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
       }
     ],
     "Config": {
@@ -250,7 +255,8 @@
       "StdinOnce": false,
       "Env": [
         "JVM_OPTS=-Xms512m -Xmx512m",
-        "HTTPS_KEYSTORE_PASSWORD=<REDACTED-HTTPS-KEYSTORE-PASSWORD>",
+        "HTTPS_KEYSTORE_PASSWORD=kInP5SyV3kLmdbLVVMP1wgSQtzkEv2UM",
+        "TH_CORTEX_KEYS=aptlcortexlabapikey2026purple",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto",
         "LANG=C.UTF-8"
@@ -264,7 +270,12 @@
         "lucene",
         "--es-hostnames",
         "thehive-es",
-        "--no-config-cortex"
+        "--cortex-proto",
+        "http",
+        "--cortex-hostnames",
+        "cortex",
+        "--cortex-port",
+        "9001"
       ],
       "Healthcheck": {
         "Test": [
@@ -283,9 +294,9 @@
         "/opt/thehive/entrypoint"
       ],
       "Labels": {
-        "com.docker.compose.config-hash": "fabfd62796970f228f87cd7299fd2ac12f6be29fb491afc3dc272e5c15bd7d9f",
+        "com.docker.compose.config-hash": "ec86843190b32d8058c3a4282adddb82a89f56d0de302ef6fe6c754ca1a001f7",
         "com.docker.compose.container-number": "1",
-        "com.docker.compose.depends_on": "thehive-cassandra:service_healthy:false,thehive-es:service_healthy:false",
+        "com.docker.compose.depends_on": "thehive-es:service_healthy:false,cortex:service_healthy:false,thehive-cassandra:service_healthy:false",
         "com.docker.compose.image": "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
@@ -306,8 +317,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "c2dee9ece9f5178394751eedcb072d8dabbe3f20a9bdfa45c891714df5e74692",
-      "SandboxKey": "<REDACTED>",
+      "SandboxID": "bfb6b9ee439f4f6a925f296d349956087f3adda0af33fdef3c68490c971a7888",
+      "SandboxKey": "/var/run/docker/netns/bfb6b9ee439f",
       "Ports": {
         "9000/tcp": [
           {
@@ -333,10 +344,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "831d69a1869f8e1dfcb83673f5010440f9e3a213331ae3e575e6df72167cc880",
+          "EndpointID": "e516382039e3d1ec5be6be9c50bc53f410819a793313fbe5e17e48399cc2c35c",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.18",
-          "MacAddress": "9e:dc:d0:3e:8d:c5",
+          "MacAddress": "ca:0d:20:64:1a:40",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -344,7 +355,7 @@
           "DNSNames": [
             "aptl-thehive",
             "thehive",
-            "3ee8e93f293b"
+            "8434e442eee0"
           ]
         }
       }

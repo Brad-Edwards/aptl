@@ -1,4 +1,4 @@
-sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9	ENTRYPOINT ["/entrypoint.sh"]	0B
+sha256:fee0813b38264c78fab66c86167595715803a6fd9152bf6c0af8e6835d368462	ENTRYPOINT ["/entrypoint.sh"]	0B
 <missing>	USER root	0B
 <missing>	RUN /bin/sh -c echo 'export PATH="$PATH:/usr/local/bin"' >> ~/.bashrc # buildkit	20.5kB
 <missing>	WORKDIR /home/kali	4.1kB
@@ -23,7 +23,7 @@ sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9	ENTRYPOI
 <missing>	ENV DEBIAN_FRONTEND=noninteractive	0B
 <missing>	/bin/sh -c #(nop) CMD ["bash"]	135MB
 <missing>	/bin/sh -c #(nop) ENV LANG=C.UTF-8	0B
-<missing>	/bin/sh -c #(nop) ADD file:243d6c26988a86a5c533ca1366d4e790e6bc8602766d2c96e69bbe3d6f8142ae in /      	0B
+<missing>	/bin/sh -c #(nop) ADD file:1efdd623d267f44a6f33918e870daeee657ac961e9a3e3d2dbaf5b4984733c12 in /      	0B
 <missing>	/bin/sh -c #(nop) LABEL org.opencontainers.image.created="$BUILD_DATE"       org.opencontainers.image.source="$PROJECT_URL"       org.opencontainers.image.revision="$VCS_REF"       org.opencontainers.image.vendor="OffSec"       org.opencontainers.image.version="$VERSION"       org.opencontainers.image.title="Kali Linux ($RELEASE_DESCRIPTION branch)"       org.opencontainers.image.description="Official Kali Linux container image for $RELEASE_DESCRIPTION"       org.opencontainers.image.url="https://www.kali.org/"       org.opencontainers.image.authors="Kali Developers <devel@kali.org>"	0B
 <missing>	/bin/sh -c #(nop) ARG BUILD_DATE PROJECT_URL RELEASE_DESCRIPTION TARBALL VCS_REF VERSION	0B
 <missing>	/bin/sh -c #(nop) ARG BUILD_DATE PROJECT_URL TARBALL VCS_REF VERSION	0B

@@ -23148,25 +23148,25 @@ nodes:
         domainname: ''
         endpoints:
         - network: techvault.internal-net
-          network_id: f1dcf3d5653a138f564e5472f6307b23d4eb3ac2fd4f81dd76aae7dcae526c1a
+          network_id: 5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f
           network_id_stability: stable
-          endpoint_id: 94c308a4ed106b2f9dbb50a3c4abc75b25263720758fdd0369187436fedb0878
+          endpoint_id: 388a4f60525be56c8f5d82fcdbfa99d277cc9555964b209a129c876c87681813
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.2.11
           ip_prefix_length: 24
           gateway: 172.20.2.1
-          mac_address: 0a:0b:d2:e7:2f:52
+          mac_address: 2e:00:24:fb:58:ce
           aliases:
           - aptl-db
           - db
           dns_names:
           - aptl-db
           - db
-          - cb08dbec2891
+          - 635ee40d3b09
           - db.techvault.local
           generated_dns_names:
-          - cb08dbec2891
+          - 635ee40d3b09
           backend:
             driver: bridge
             ipam_driver: default

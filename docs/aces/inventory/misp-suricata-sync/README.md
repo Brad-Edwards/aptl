@@ -36,7 +36,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | TechVault profile | `soc` |
 | Source class | `local-custom-build-integration-service` |
 | Image | `aptl-misp-suricata-sync:latest` (custom build from `containers/misp-suricata-sync/Dockerfile`) |
-| Local image config ID | `aptl-misp-suricata-sync@sha256:f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e` |
+| Local image config ID | `aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb` |
 | Base image | `python:3.11-slim` |
 | Runtime OS | Debian GNU/Linux 13 (trixie) |
 | Application | `aptl` 0.1.0 (pip; executed package `aptl.services.misp_suricata_sync`) on CPython 3.11.15 |
@@ -109,8 +109,8 @@ These are recorded as first-class entries in `evidence/capture-limits.txt`:
 - `docker buildx imagetools inspect` fails for the local-only image tag; image
   identity is the local config ID plus the build recipe.
 - `MISP_API_KEY` (= the disclosed `nodes.techvault.misp` `ADMIN_KEY`
-  secret_fixture) and the base image's `GPG_KEY` are redacted from committed
-  evidence (ADR-029); the SDL carries the fixture values.
+  secret_fixture) and the base image's `GPG_KEY` are retained verbatim in
+  committed evidence because they are TechVault scenario content.
 - `/var/run/suricata` is the suricata asset's command-socket volume and the
   hash-list files in the rules bind are suricata authored content; both are
   recorded here as path/metadata with cross-references.

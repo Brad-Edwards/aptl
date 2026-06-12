@@ -31,6 +31,8 @@ PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
 IMAGE_ID = "sha256:bfc28ce8118c09cd32840684f5c31b664f505d0f3e46898147864b18ccefcca0"
 IMAGE_DIGEST = "cassandra@sha256:bfc28ce8118c09cd32840684f5c31b664f505d0f3e46898147864b18ccefcca0"
+THEHIVE_CASSANDRA_IP = "172.20.0.4"
+THEHIVE_CASSANDRA_SANDBOX_KEY = "/var/run/docker/netns/fca6c4613ec5"
 RUNTIME_PACKAGE_COUNT = 122
 TRIVY_FINDING_COUNT = 398
 FILESYSTEM_TREE_ROW_COUNT = 222
@@ -85,9 +87,12 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
 }
 
-RAW_SECRET_PATTERNS = (
-    r"BEGIN .*PRIVATE KEY",
-    r"-----BEGIN OPENSSH",
+SUPPRESSION_PLACEHOLDERS = (
+    "<REDACTED",
+    "<OMITTED",
+    "operator_secret",
+    "value withheld",
+    "content excluded",
 )
 
 
@@ -229,14 +234,14 @@ def test_thehive_cassandra_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_thehive_cassandra_evidence_does_not_commit_raw_secret_values():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
+def test_thehive_cassandra_evidence_has_no_secret_suppression_placeholders():
+    forbidden = re.compile("|".join(re.escape(marker) for marker in SUPPRESSION_PLACEHOLDERS), re.IGNORECASE)
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and forbidden.search(_evidence_text(path))
     ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+    assert not offenders, f"Evidence still contains secret suppression placeholders: {offenders}"
 
 
 def test_thehive_cassandra_runtime_evidence_counts():
@@ -247,6 +252,8 @@ def test_thehive_cassandra_runtime_evidence_counts():
     assert image["RepoDigests"][0] == IMAGE_DIGEST
     assert image["Config"]["Cmd"] == ["cassandra", "-f"]
     assert container["HostConfig"]["Memory"] == 1073741824
+    assert container["NetworkSettings"]["SandboxKey"] == THEHIVE_CASSANDRA_SANDBOX_KEY
+    assert container["NetworkSettings"]["Networks"]["aptl_aptl-security"]["IPAddress"] == THEHIVE_CASSANDRA_IP
 
     assert len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()) == RUNTIME_PACKAGE_COUNT
     assert len(_json_file("trivy-vulnerability-list.json")) == TRIVY_FINDING_COUNT
@@ -300,7 +307,7 @@ def test_techvault_sdl_encodes_thehive_cassandra_node(legacy_scenario):
     assert network["published_ports"] == []
     endpoint = network["endpoints"][0]
     assert endpoint["network"] == "security-net"
-    assert endpoint["ip_address"] == "172.20.0.5"
+    assert endpoint["ip_address"] == THEHIVE_CASSANDRA_IP
 
     listener_ports = {listener["port"] for listener in runtime["service_listeners"]}
     assert {9042, 7000, 7199} == listener_ports

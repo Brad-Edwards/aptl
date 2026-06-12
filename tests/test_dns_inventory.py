@@ -30,11 +30,11 @@ EVIDENCE_DIR = DNS_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75"
+IMAGE_ID = "sha256:915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6"
 IMAGE_DIGEST = f"aptl-dns@{IMAGE_ID}"
 BIND_VERSION = "BIND 9.18.39-0ubuntu0.22.04.3-Ubuntu"
 PACKAGE_COUNT = 187
-TRIVY_FINDING_COUNT = 80
+TRIVY_FINDING_COUNT = 105
 FILESYSTEM_ENTRY_COUNT = 17
 LOCAL_IDENTITY_USER_COUNT = 22
 LOCAL_IDENTITY_GROUP_COUNT = 43
@@ -285,7 +285,7 @@ def test_dns_trivy_vulnerability_summary_matches_list():
 
     assert counts == dict(computed)
     assert sum(counts.values()) == len(vulnerabilities) == TRIVY_FINDING_COUNT
-    assert counts == {"LOW": 22, "MEDIUM": 58}
+    assert counts == {"HIGH": 2, "LOW": 39, "MEDIUM": 64}
     assert all(item["id"] for item in vulnerabilities)
     assert all(item["package_name"] for item in vulnerabilities)
 

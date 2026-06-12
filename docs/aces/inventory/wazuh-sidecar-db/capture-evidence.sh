@@ -38,41 +38,6 @@ mkdir -p "$OUT"
 record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
-
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)=([^[:space:]]+)/\1=<REDACTED>/Ig'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|key|cookie|session|private_key|api_key|jwt)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -84,32 +49,14 @@ docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 # be used because the soc profile pulls in services that depend_on
 # wazuh.manager and profile filtering invalidates the project.
 yq -o=json '.services."wazuh-sidecar-db"' "$ROOT/docker-compose.yml" \
-  | jq '
-      if (has("environment") and (.environment | type == "array")) then
-        .environment |= map(
-          if test("^(?<name>[^=]+)=") then
-            capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-            | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|KEY|COOKIE|SESSION|PRIVATE_KEY|API_KEY|JWT|AUTHD_PASS)$"; "i"))
-              then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-              else .
-              end
-          else
-            .
-          end
-        )
-      else . end
-    ' > "$OUT/compose-service.wazuh-sidecar-db.json"
+  | jq . > "$OUT/compose-service.wazuh-sidecar-db.json"
 record_limit "compose-service.wazuh-sidecar-db.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project. The block carries only plain environment, so authored and resolved compose values coincide."
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -121,12 +68,12 @@ fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_db_data | jq . > "$OUT/docker-volume.db_data.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.wazuh-sidecar-db.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 > "$OUT/docker-logs.wazuh-sidecar-db.txt"
 
 record_limit "Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof."
 record_limit "/logs is the shared aptl_db_data volume (the db container's PostgreSQL PGDATA) bind-mounted read-only. Only /logs/pg_log/postgresql.log — the monitored log source — is recorded as path metadata here; the full PGDATA content (including postgresql.conf, pg_hba.conf, base/, global/, and any credential stores) is the db asset's content and is inventoried under docs/aces/inventory/db/, not duplicated or checksummed in this bundle."
-record_limit "/var/ossec/etc/client.keys is the agent's manager-registration secret (shared key). It is recorded as path/metadata only; its content is excluded from checksums and never emitted (ADR-029)."
+record_limit "/var/ossec/etc/client.keys is an in-range Wazuh agent registration fixture. Its full content is emitted in wazuh-agent-state.txt and its checksum is retained in the SDL."
 record_limit "/var/ossec/.ssh is the wazuh agentless SSH material directory; recorded as metadata only, content excluded from checksums."
 
 # Build-recipe provenance: the Dockerfile and every build-context input it COPYs,
@@ -257,7 +204,7 @@ docker exec "$CONTAINER" sh -lc '
   ps -eo pid,ppid,user,args || true
   printf "%s\n" --wazuh-version--
   /var/ossec/bin/wazuh-control info 2>&1 || true
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 # Agent-specific state: rendered ossec.conf (manager addr / localfile / AR),
 # control status, connection state to the manager, AR config, and the presence
@@ -274,8 +221,8 @@ docker exec "$CONTAINER" sh -lc '
   cat /var/ossec/var/run/wazuh-agentd.state 2>&1 || true
   printf "%s\n" --client-keys-presence--
   if [ -s /var/ossec/etc/client.keys ]; then
-    printf "client.keys present: %s line(s), %s bytes (content withheld)\n" "$(wc -l < /var/ossec/etc/client.keys)" "$(wc -c < /var/ossec/etc/client.keys)"
-    awk "{print \$1, \$2, \$3}" /var/ossec/etc/client.keys 2>/dev/null || true
+    printf "client.keys present: %s line(s), %s bytes\n" "$(wc -l < /var/ossec/etc/client.keys)" "$(wc -c < /var/ossec/etc/client.keys)"
+    cat /var/ossec/etc/client.keys 2>/dev/null || true
   else
     printf "client.keys absent or empty\n"
   fi
@@ -288,7 +235,7 @@ docker exec "$CONTAINER" sh -lc '
   printf "%s\n" --internal-options--
   grep -vE "^#|^$" /var/ossec/etc/internal_options.conf 2>/dev/null | sed -n "1,60p" || true
   cat /var/ossec/etc/local_internal_options.conf 2>&1 || true
-' | redact_stream > "$OUT/wazuh-agent-state.txt"
+' > "$OUT/wazuh-agent-state.txt"
 
 # Observer vantage: the Wazuh manager ingests from this agent. agent_control -l
 # documents the registered agent (name, id, IP, status) — the realized form of
@@ -302,7 +249,7 @@ if docker inspect "$MANAGER_CONTAINER" >/dev/null 2>&1; then
     id="$(/var/ossec/bin/agent_control -l 2>/dev/null | sed -n "s/^[[:space:]]*ID: \([0-9]*\),.*aptl-db-agent.*/\1/p" | head -1)"
     if [ -n "$id" ]; then /var/ossec/bin/agent_control -i "$id" 2>&1; else echo "aptl-db-agent id not resolved from agent_control -l"; fi
     true
-  ' | redact_stream > "$OUT/observer-discovery.wazuh-manager.txt"
+  ' > "$OUT/observer-discovery.wazuh-manager.txt"
 else
   record_limit "Wazuh manager observer-vantage discovery was skipped because $MANAGER_CONTAINER was not present."
   printf '%s container unavailable\n' "$MANAGER_CONTAINER" > "$OUT/observer-discovery.wazuh-manager.txt"
@@ -322,7 +269,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --ping--
     ping -c 1 -W 2 172.20.0.35 2>&1 | sed -n "1,4p"
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

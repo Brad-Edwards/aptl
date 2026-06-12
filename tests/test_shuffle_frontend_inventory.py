@@ -41,6 +41,10 @@ DOCKER_HISTORY_ROW_COUNT = 32
 RUNTIME_PROCESS_COUNT = 2
 RUNTIME_ENV_COUNT = 7
 LEDGER_FACT_COUNT = 18
+SHUFFLE_FRONTEND_SANDBOX_KEY = "/var/run/docker/netns/c4e3bf917794"
+SHUFFLE_FRONTEND_PRIVKEY_SHA256 = (
+    "ceff379d5801fd687b89e0a8bc2a540019c368bd5121537ec076d9d7f2ac1619"
+)
 
 REQUIRED_EVIDENCE_FILES = {
     "capture-limits.txt",
@@ -59,6 +63,7 @@ REQUIRED_EVIDENCE_FILES = {
     "docker-version.json",
     "evidence-sha256sums.txt",
     "filesystem-checksums.txt",
+    "filesystem-sensitive-paths.txt",
     "filesystem-tree.txt",
     "frontend-state.txt",
     "language-manifests.txt",
@@ -83,9 +88,12 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
 }
 
-RAW_SECRET_PATTERNS = (
-    r"BEGIN .*PRIVATE KEY",
-    r"-----BEGIN OPENSSH",
+SUPPRESSION_PLACEHOLDERS = (
+    "<REDACTED",
+    "<OMITTED",
+    "operator_secret",
+    "value withheld",
+    "content excluded",
 )
 
 
@@ -144,7 +152,9 @@ def test_shuffle_frontend_note_declares_scope_and_realization_caveats():
         "TLS private key",
     )
     missing = [needle for needle in required if needle not in text]
-    assert not missing, f"shuffle-frontend inventory note missing scope markers: {missing}"
+    assert not missing, (
+        f"shuffle-frontend inventory note missing scope markers: {missing}"
+    )
 
 
 def test_shuffle_frontend_capture_script_pins_toolchain_and_probes():
@@ -176,7 +186,9 @@ def test_shuffle_frontend_mapping_ledger_validates_without_gaps():
     assert ledger["provenance"]["image_digest"] == IMAGE_DIGEST
     assert ledger["provenance"]["attestation"]["status"] == "not_available"
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
-    assert dispositions["shuffle-frontend.application.shuffle-frontend-web"] == "encoded"
+    assert (
+        dispositions["shuffle-frontend.application.shuffle-frontend-web"] == "encoded"
+    )
     assert dispositions["shuffle-frontend.relationship.proxies-backend"] == "encoded"
     assert dispositions["shuffle-frontend.runtime.mounts"] == "encoded_with_caveat"
 
@@ -190,7 +202,11 @@ def test_shuffle_frontend_gap_report_has_no_remaining_aces_gaps():
 def test_shuffle_frontend_evidence_bundle_files_are_present_and_non_empty():
     present = {path.name for path in EVIDENCE_DIR.iterdir() if path.is_file()}
     assert REQUIRED_EVIDENCE_FILES <= present
-    empty = [name for name in REQUIRED_EVIDENCE_FILES if (EVIDENCE_DIR / name).stat().st_size == 0]
+    empty = [
+        name
+        for name in REQUIRED_EVIDENCE_FILES
+        if (EVIDENCE_DIR / name).stat().st_size == 0
+    ]
     assert not empty, f"Evidence files must not be empty: {empty}"
 
 
@@ -217,24 +233,33 @@ def test_shuffle_frontend_evidence_sha256_manifest_matches_files():
 def test_shuffle_frontend_mapping_ledger_references_every_evidence_file():
     ledger = load_mapping_ledger(LEDGER_PATH)
     refs = set()
-    refs.update(ref["path"] for ref in ledger["provenance"]["attestation"].get("evidence", []))
+    refs.update(
+        ref["path"] for ref in ledger["provenance"]["attestation"].get("evidence", [])
+    )
     for check in ledger["correspondence_checks"]:
         refs.update(ref["path"] for ref in check.get("realized_evidence", []))
     for fact in ledger["facts"]:
         refs.update(ref["path"] for ref in fact["evidence"])
 
-    evidence_files = {f"evidence/{path.name}" for path in EVIDENCE_DIR.iterdir() if path.is_file()}
+    evidence_files = {
+        f"evidence/{path.name}" for path in EVIDENCE_DIR.iterdir() if path.is_file()
+    }
     assert evidence_files <= refs
 
 
-def test_shuffle_frontend_evidence_does_not_commit_raw_secret_values():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
+def test_shuffle_frontend_evidence_has_no_secret_suppression_placeholders():
+    forbidden = re.compile(
+        "|".join(re.escape(marker) for marker in SUPPRESSION_PLACEHOLDERS),
+        re.IGNORECASE,
+    )
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and forbidden.search(_evidence_text(path))
     ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+    assert not offenders, (
+        f"Evidence still contains secret suppression placeholders: {offenders}"
+    )
 
 
 def test_shuffle_frontend_runtime_evidence_counts():
@@ -244,24 +269,56 @@ def test_shuffle_frontend_runtime_evidence_counts():
     assert image["Id"] == IMAGE_ID
     assert image["RepoDigests"][0] == IMAGE_DIGEST
     assert image["Config"]["Cmd"] == ["nginx", "-g", "daemon off;"]
+    assert container["NetworkSettings"]["SandboxKey"] == SHUFFLE_FRONTEND_SANDBOX_KEY
 
-    assert len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()) == RUNTIME_PACKAGE_COUNT
+    assert (
+        len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines())
+        == RUNTIME_PACKAGE_COUNT
+    )
     assert len(_json_file("trivy-vulnerability-list.json")) == TRIVY_FINDING_COUNT
-    assert len((EVIDENCE_DIR / "filesystem-tree.txt").read_text(encoding="utf-8").splitlines()) == FILESYSTEM_TREE_ROW_COUNT
-    assert len((EVIDENCE_DIR / "docker-history.image.jsonl").read_text(encoding="utf-8").splitlines()) == DOCKER_HISTORY_ROW_COUNT
+    assert (
+        len(
+            (EVIDENCE_DIR / "filesystem-tree.txt")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        )
+        == FILESYSTEM_TREE_ROW_COUNT
+    )
+    assert (
+        len(
+            (EVIDENCE_DIR / "docker-history.image.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        )
+        == DOCKER_HISTORY_ROW_COUNT
+    )
     assert len(_section("users")) == LOCAL_IDENTITY_USER_COUNT
     assert len(_section("groups")) == LOCAL_IDENTITY_GROUP_COUNT
 
 
 def test_shuffle_frontend_trivy_counts_match_severity_breakdown():
-    counts = {row["severity"]: row["count"] for row in _json_file("trivy-vulnerability-counts.json")}
-    assert counts == {"CRITICAL": 7, "HIGH": 64, "MEDIUM": 138, "LOW": 182, "UNKNOWN": 1}
+    counts = {
+        row["severity"]: row["count"]
+        for row in _json_file("trivy-vulnerability-counts.json")
+    }
+    assert counts == {
+        "CRITICAL": 7,
+        "HIGH": 64,
+        "MEDIUM": 138,
+        "LOW": 182,
+        "UNKNOWN": 1,
+    }
     assert sum(counts.values()) == TRIVY_FINDING_COUNT
 
 
 def test_shuffle_frontend_listeners_are_http_and_https():
     rows = _json_file("osquery-listening-ports.json")["rows"]
-    ports = {row["port"] for row in rows if row["port"] not in ("0", "", None) and not row["address"].startswith("127.0.0.11")}
+    ports = {
+        row["port"]
+        for row in rows
+        if row["port"] not in ("0", "", None)
+        and not row["address"].startswith("127.0.0.11")
+    }
     assert {"80", "443"} <= ports
 
 
@@ -271,15 +328,22 @@ def test_shuffle_frontend_nginx_proxies_api_to_backend():
     assert "shuffle-backend:5001" in state
 
 
-def test_shuffle_frontend_tls_private_key_not_leaked():
-    # The TLS private key is operator_secret; its content must never appear in evidence.
-    forbidden = re.compile(r"BEGIN (RSA |EC )?PRIVATE KEY", re.MULTILINE)
-    offenders = [
-        path.name
-        for path in EVIDENCE_DIR.iterdir()
-        if path.is_file() and forbidden.search(_evidence_text(path))
-    ]
-    assert not offenders, f"TLS private key material leaked: {offenders}"
+def test_shuffle_frontend_tls_private_key_is_captured_as_scenario_content():
+    sensitive_paths = (EVIDENCE_DIR / "filesystem-sensitive-paths.txt").read_text(
+        encoding="utf-8"
+    )
+    filesystem_checksums = (EVIDENCE_DIR / "filesystem-checksums.txt").read_text(
+        encoding="utf-8"
+    )
+    filesystem_tree = (EVIDENCE_DIR / "filesystem-tree.txt").read_text(encoding="utf-8")
+
+    assert "--/etc/nginx/privkey.pem--" in sensitive_paths
+    assert "-----BEGIN PRIVATE KEY-----" in sensitive_paths
+    assert (
+        f"{SHUFFLE_FRONTEND_PRIVKEY_SHA256}  /etc/nginx/privkey.pem"
+        in filesystem_checksums
+    )
+    assert "secret_fixture\t/etc/nginx/privkey.pem" in filesystem_tree
 
 
 def test_techvault_sdl_encodes_shuffle_frontend_node(legacy_scenario):
@@ -302,14 +366,26 @@ def test_techvault_sdl_encodes_shuffle_frontend_node(legacy_scenario):
     endpoint = network["endpoints"][0]
     assert endpoint["network"] == "security-net"
     assert endpoint["ip_address"] == "172.20.0.21"
-    published = {(p["host_port"], p["container_port"]) for p in network["published_ports"]}
+    assert (
+        endpoint["endpoint_id"]
+        == "6b1df095e0e68b9efe75f89690336495533e160a1a2c35fa533cf074ef1626a3"
+    )
+    assert endpoint["mac_address"] == "3e:24:fe:1c:9d:fe"
+    assert endpoint["generated_dns_names"] == ["0ac6370712e6"]
+    published = {
+        (p["host_port"], p["container_port"]) for p in network["published_ports"]
+    }
     assert (3443, 443) in published
     assert (3001, 80) in published
     assert (3001, 3001) not in published  # pre-#405 dead mapping must stay gone
 
-    wildcard_ports = {l["port"] for l in runtime["service_listeners"] if l["scope"] == "wildcard"}
+    wildcard_ports = {
+        l["port"] for l in runtime["service_listeners"] if l["scope"] == "wildcard"
+    }
     assert {80, 443} == wildcard_ports
-    dns_listeners = [l for l in runtime["service_listeners"] if l["scope"] == "loopback_only"]
+    dns_listeners = [
+        l for l in runtime["service_listeners"] if l["scope"] == "loopback_only"
+    ]
     assert {l["address"] for l in dns_listeners} == {"127.0.0.11"}
     assert {l["protocol"] for l in dns_listeners} == {"tcp", "udp"}
 
@@ -321,6 +397,11 @@ def test_techvault_sdl_encodes_shuffle_frontend_node(legacy_scenario):
 
     proc_names = {p["name"] for p in runtime["processes"]}
     assert {"nginx", "nginx-worker"} == proc_names
+
+    filesystem = {entry["path"]: entry for entry in runtime["filesystem_inventory"]}
+    privkey = filesystem["/etc/nginx/privkey.pem"]
+    assert privkey["content_digest"] == SHUFFLE_FRONTEND_PRIVKEY_SHA256
+    assert privkey["sensitivity"] == "secret_fixture"
 
 
 def test_techvault_sdl_encodes_shuffle_frontend_application_and_proxy(legacy_scenario):
@@ -336,8 +417,12 @@ def test_techvault_sdl_encodes_shuffle_frontend_application_and_proxy(legacy_sce
     assert rel["properties"]["proxy_pass"] == "http://shuffle-backend:5001"
 
 
-def test_techvault_sdl_compiles_with_shuffle_frontend_runtime_fields(compiled_runtime_model):
-    node = compiled_runtime_model.node_deployments["provision.node.techvault.shuffle-frontend"].spec["node"]
+def test_techvault_sdl_compiles_with_shuffle_frontend_runtime_fields(
+    compiled_runtime_model,
+):
+    node = compiled_runtime_model.node_deployments[
+        "provision.node.techvault.shuffle-frontend"
+    ].spec["node"]
     runtime = node["runtime"]
     assert node["source"]["version"] == IMAGE_DIGEST
     assert len(runtime["packages"]) == RUNTIME_PACKAGE_COUNT
@@ -349,7 +434,10 @@ def test_techvault_sdl_compiles_with_shuffle_frontend_runtime_fields(compiled_ru
 def test_parity_inventory_cites_shuffle_frontend_inventory():
     import yaml
 
-    rows = {row["id"]: row for row in yaml.safe_load(PARITY_PATH.read_text(encoding="utf-8"))["rows"]}
+    rows = {
+        row["id"]: row
+        for row in yaml.safe_load(PARITY_PATH.read_text(encoding="utf-8"))["rows"]
+    }
     row = rows["scen.techvault.shuffle-frontend-inventory"]
     assert row["category"] == "aces_sdl"
     assert row["blocking_followup"] == "n/a"

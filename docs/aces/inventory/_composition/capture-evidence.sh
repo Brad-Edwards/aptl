@@ -24,7 +24,6 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 import json
-import re
 import sys
 
 import yaml
@@ -337,8 +336,6 @@ write_json(
         "account_count": len(accounts),
         "content_count": len(content),
         "forwarding_agent_count": len(root_sdl.get("forwarding_agents") or []),
-        "entities": sorted((root_sdl.get("entities") or {}).keys()),
-        "agents": sorted((root_sdl.get("agents") or {}).keys()),
     },
 )
 PY

@@ -11,7 +11,6 @@ Scope covered here:
 - observation chains into Wazuh and Suricata
 - defensive workflow chains across Shuffle, TheHive, Cortex, MISP, and Suricata
 - authored-versus-realized separation for the composition view
-- red/blue participant framing through `entities` and `agents` in `scenarios/techvault.sdl.yaml`
 
 The inventory is stored in `docs/aces/inventory/_composition/` and the generated evidence is under `docs/aces/inventory/_composition/evidence/`.
 

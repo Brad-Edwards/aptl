@@ -13,7 +13,6 @@ from aptl.core.aces_inventory import (
     load_mapping_ledger,
     validate_mapping_ledger,
 )
-from tests.techvault_sdl import load_expanded_techvault_sdl
 
 pytestmark = pytest.mark.integration
 
@@ -26,7 +25,7 @@ EVIDENCE_DIR = COMPOSITION_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-LEDGER_FACT_COUNT = 12
+LEDGER_FACT_COUNT = 11
 COMPOSITION_CONTENT_ITEM_COUNT = 569
 REQUIRED_EVIDENCE_FILES = {
     "capture-limits.txt",
@@ -97,7 +96,6 @@ def test_composition_mapping_ledger_validates_without_gaps():
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
     assert dispositions["composition.network.topology"] == "encoded"
     assert dispositions["composition.defensive.workflow-chains"] == "encoded_with_caveat"
-    assert dispositions["composition.participant.agent-framing"] == "encoded"
 
 
 def test_composition_gap_report_has_no_remaining_aces_gaps():
@@ -240,28 +238,13 @@ def test_composition_mounts_content_and_accounts_are_indexed():
     assert accounts["raw_secret_values_included"] is False
 
 
-def test_techvault_sdl_encodes_composition_participants_and_agent_scope():
-    scenario = load_expanded_techvault_sdl(str(TECHVAULT_SDL_PATH))
-    entities = scenario["entities"]
-    agents = scenario["agents"]
-    assert {"techvault.red-team", "techvault.blue-team"} <= set(entities)
-    assert entities["techvault.red-team"]["role"] == "red"
-    assert entities["techvault.blue-team"]["role"] == "blue"
+def test_techvault_sdl_does_not_define_synthetic_scenario_actors():
+    with TECHVAULT_SDL_PATH.open(encoding="utf-8") as fh:
+        root_sdl = yaml.safe_load(fh)
 
-    red = agents["techvault.red-agent"]
-    blue = agents["techvault.blue-agent"]
-    assert red["entity"] == "techvault.red-team"
-    assert blue["entity"] == "techvault.blue-team"
-    assert "techvault.kali" in red["initial_knowledge"]["hosts"]
-    assert "techvault.webapp" in red["initial_knowledge"]["hosts"]
-    assert {"techvault.redteam-net", "techvault.dmz-net", "techvault.internal-net"} <= set(
-        red["allowed_subnets"]
-    )
-    assert "techvault.wazuh-dashboard" in blue["initial_knowledge"]["hosts"]
-    assert "techvault.shuffle-frontend" in blue["initial_knowledge"]["hosts"]
-    assert {"techvault.security-net", "techvault.dmz-net", "techvault.internal-net"} <= set(
-        blue["allowed_subnets"]
-    )
+    assert "entities" not in root_sdl
+    assert "agents" not in root_sdl
+    assert root_sdl["forwarding_agents"]
 
 
 def test_parity_inventory_points_at_composition_bundle_and_tests():

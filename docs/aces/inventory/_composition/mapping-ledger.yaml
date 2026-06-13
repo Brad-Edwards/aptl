@@ -34,7 +34,6 @@ correspondence_checks:
   - composition.network.topology
   - composition.dependency.graph
   - composition.dns.surface
-  - composition.participant.agent-framing
   method: Generate a sanitized composition index from the committed TechVault root SDL and imported infrastructure/relationship sections, then compare the expected surfaces in tests/test_techvault_composition_inventory.py.
   limit: Static SDL snapshot only; this does not mutate or rebuild the lab.
 - id: composition-runtime-handoff-correspondence
@@ -137,7 +136,7 @@ facts:
     - relationships.suricata-logs-forwarded-wazuh
     - relationships.misp-suricata-sync-updates-suricata-rules
     caveat: ACES records the realized handoff through per-node mounts and relationship edges rather than a separate top-level volume graph.
-    rationale: Current nodes.runtime and relationships surfaces preserve the participant-observable shared-mount behavior without introducing a duplicate schema.
+    rationale: Current nodes.runtime and relationships surfaces preserve the shared-mount handoff behavior without introducing a duplicate schema.
 - id: composition.dns.surface
   category: dns
   summary: TechVault DNS placement and AD forwarding are encoded in the DNS node runtime service and AD-to-DNS relationship.
@@ -223,20 +222,6 @@ facts:
     - nodes.*.runtime.platform_applications
     caveat: Static integration topology is encoded; analyst timing, SOAR execution traces, and post-attack workflow state are out of scope for issue #329.
     rationale: Current ACES relationships and platform application runtime facts capture the authored defensive workflow topology.
-- id: composition.participant.agent-framing
-  category: participants
-  summary: Red and blue TechVault participants are encoded as scenario entities and agents with authored initial knowledge and allowed subnet scope.
-  evidence:
-  - path: evidence/composition-sdl-surface-index.json
-  aces:
-    disposition: encoded
-    surface: agents
-    fields:
-    - entities.techvault.red-team
-    - entities.techvault.blue-team
-    - agents.techvault.red-agent
-    - agents.techvault.blue-agent
-    rationale: ACES entities and agents encode participant identity, role, actions, initial knowledge, and network scope.
 - id: composition.per-asset-coverage
   category: inventory-coverage
   summary: The composition bundle cites existing per-asset inventories instead of copying scanner/SBOM/runtime evidence into a scenario-level bundle.

@@ -715,10 +715,10 @@ class TestOrchestrateLabStart:
             return_value=CertResult(success=True, generated=False, certs_dir=certs_dir),
         )
 
-        # Mock docker compose start
+        # Mock ACES runtime handoff start
         from aptl.core.lab import LabResult
         mocks["start"] = mocker.patch(
-            "aptl.core.lab.start_lab",
+            "aptl.core.lab.start_aces_scenario",
             return_value=LabResult(success=True, message="Lab started"),
         )
 
@@ -964,7 +964,7 @@ class TestOrchestrateLabStart:
             "containers": {"wazuh": False, "victim": False, "kali": False, "reverse": False},
         }))
 
-        # Re-mock start_lab and wait_for_service since config changes
+        # Re-mock ACES handoff and wait_for_service since config changes
         from aptl.core.lab import LabResult
         mocks["start"].return_value = LabResult(success=True, message="Lab started")
 
@@ -2042,6 +2042,22 @@ class TestLabOrchestrationContracts:
         # backend stays None
         with pytest.raises(icontract.ViolationError):
             _step_start_containers(ctx)
+
+    def test_start_containers_routes_through_aces_handoff(self, mocker, tmp_path):
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config()
+        ctx.backend = MagicMock()
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            return_value=LabResult(success=True, message="ok"),
+        )
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        start_aces.assert_called_once_with(tmp_path, ctx.config, ctx.backend)
 
     # -- ssh_key_is_ready --------------------------------------------
 

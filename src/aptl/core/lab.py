@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Optional
 import icontract
 import yaml
 
+from aptl.backends.aces import start_aces_scenario
 from aptl.core.certs import ensure_ssl_certs
 from aptl.core.soc_ca import ensure_soc_certs
 from aptl.core.config import AptlConfig, find_config, load_config
@@ -801,9 +802,7 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
 def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 8: Starting containers...")
     assert ctx.config is not None and ctx.backend is not None  # runtime guards above
-    start_result = start_lab(
-        ctx.config, project_dir=ctx.project_dir, backend=ctx.backend
-    )
+    start_result = start_aces_scenario(ctx.project_dir, ctx.config, ctx.backend)
     if not start_result.success and ctx.config.containers.soc:
         log.warning(
             "Initial compose up failed (SOC dependencies may still be "
@@ -811,9 +810,7 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         )
         import time
         time.sleep(60)
-        start_result = start_lab(
-            ctx.config, project_dir=ctx.project_dir, backend=ctx.backend
-        )
+        start_result = start_aces_scenario(ctx.project_dir, ctx.config, ctx.backend)
     if start_result.success:
         return None
     log.error("Lab start failed: %s", start_result.error)

@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Optional
 import icontract
 import yaml
 
-from aptl.backends.aces import start_aces_scenario
 from aptl.core.certs import ensure_ssl_certs
 from aptl.core.soc_ca import ensure_soc_certs
 from aptl.core.config import AptlConfig, find_config, load_config
@@ -65,6 +64,17 @@ if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
+
+
+def start_aces_scenario(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+) -> LabResult:
+    """Lazy ACES handoff import for the public lab-start path."""
+    from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
+
+    return _start_aces_scenario(project_dir, config, backend)
 
 
 def _runtime_require(condition, description):

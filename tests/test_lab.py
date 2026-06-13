@@ -11,6 +11,38 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 
+class TestLabImportContracts:
+    """Import contracts for core lab orchestration."""
+
+    def test_import_does_not_eagerly_load_aces_backend(self):
+        import subprocess
+        import sys
+
+        code = """
+import importlib.abc
+import sys
+
+
+class BlockAcesBackend(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "aptl.backends.aces":
+            raise RuntimeError("aptl.backends.aces imported eagerly")
+        return None
+
+
+sys.meta_path.insert(0, BlockAcesBackend())
+import aptl.core.lab
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+
+
 class TestComposeCommandBuilder:
     """Tests for building docker compose commands."""
 

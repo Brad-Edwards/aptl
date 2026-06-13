@@ -984,9 +984,19 @@ class TestOrchestrateLabStart:
 
     def test_pre_pull_runs_before_compose_up(self, mocker, tmp_path):
         """Should call docker pull for images before compose up."""
-        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab import (
+            _LAB_START_STEPS,
+            _step_pull_images,
+            _step_start_containers,
+            orchestrate_lab_start,
+        )
 
         mocks = self._patch_all_steps(mocker, tmp_path)
+
+        step_names = [step.__name__ for step in _LAB_START_STEPS]
+        assert step_names.index(_step_pull_images.__name__) < step_names.index(
+            _step_start_containers.__name__
+        )
 
         result = orchestrate_lab_start(tmp_path)
 

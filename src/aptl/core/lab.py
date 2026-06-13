@@ -62,6 +62,8 @@ from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
+    from docker.client import DockerClient
+
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
@@ -116,6 +118,7 @@ def _runtime_require(
     # detects `parameters` is empty, skips kwarg resolution, and calls
     # `error()` directly.
     def _narrow_violation() -> icontract.ViolationError:
+        """Return a fixed violation without rendering bound arguments."""
         return icontract.ViolationError(description)
 
     return icontract.require(
@@ -138,7 +141,7 @@ ALL_KNOWN_PROFILES = [
 ]
 
 
-def docker_client() -> Any:
+def docker_client() -> "DockerClient":
     """Get a Docker client. Separated for easy mocking."""
     import docker
 

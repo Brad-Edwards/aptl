@@ -3,6 +3,79 @@ description: 'ACES-authored TechVault scenario inventory surface. This file is t
   the TechVault container inventory passes and does not replace the legacy scenario set until the cutover issue completes.
 
   '
+entities:
+  techvault.red-team:
+    name: TechVault Red Team
+    description: External participant operating from the Kali attacker node.
+    role: red
+    mission: Discover and exercise participant-visible TechVault attack paths from the red-team vantage.
+    categories:
+    - participant
+    - red-team
+  techvault.blue-team:
+    name: TechVault SOC Team
+    description: Defensive participant operating from SOC tools on the security network.
+    role: blue
+    mission: Observe, triage, and respond through Wazuh, Shuffle, TheHive, Cortex, MISP, and Suricata.
+    categories:
+    - participant
+    - blue-team
+agents:
+  techvault.red-agent:
+    entity: techvault.red-team
+    description: Red participant anchored on the Kali node with authored access to red, DMZ, and internal target ranges.
+    actions:
+    - discover
+    - enumerate
+    - exploit
+    - credential_access
+    - lateral_movement
+    starting_accounts: []
+    initial_knowledge:
+      hosts:
+      - techvault.kali
+      - techvault.webapp
+      - techvault.dns
+      - techvault.mailserver
+      subnets:
+      - techvault.redteam-net
+      - techvault.dmz-net
+      - techvault.internal-net
+      services: []
+      accounts: []
+    allowed_subnets:
+    - techvault.redteam-net
+    - techvault.dmz-net
+    - techvault.internal-net
+  techvault.blue-agent:
+    entity: techvault.blue-team
+    description: Blue participant anchored on the SOC/security stack with observation and response scope over monitored TechVault assets.
+    actions:
+    - monitor
+    - triage
+    - investigate
+    - enrich
+    - respond
+    starting_accounts: []
+    initial_knowledge:
+      hosts:
+      - techvault.wazuh-dashboard
+      - techvault.wazuh-manager
+      - techvault.shuffle-frontend
+      - techvault.thehive
+      - techvault.cortex
+      - techvault.misp
+      - techvault.suricata
+      subnets:
+      - techvault.security-net
+      - techvault.dmz-net
+      - techvault.internal-net
+      services: []
+      accounts: []
+    allowed_subnets:
+    - techvault.security-net
+    - techvault.dmz-net
+    - techvault.internal-net
 forwarding_agents:
 - forwarding_agent_id: aptl-db-wazuh-agent
   implementation: wazuh_agent

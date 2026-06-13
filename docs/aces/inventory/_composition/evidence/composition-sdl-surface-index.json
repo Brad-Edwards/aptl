@@ -1,0 +1,25 @@
+{
+  "account_count": 277,
+  "agents": [
+    "techvault.blue-agent",
+    "techvault.red-agent"
+  ],
+  "content_count": 569,
+  "entities": [
+    "techvault.blue-team",
+    "techvault.red-team"
+  ],
+  "forwarding_agent_count": 2,
+  "import_count": 39,
+  "infrastructure_count": 22,
+  "node_import_count": 32,
+  "relationship_count": 29,
+  "section_import_count": 7,
+  "sources": [
+    "scenarios/techvault.sdl.yaml",
+    "scenarios/techvault/sections/infrastructure.sdl.yaml",
+    "scenarios/techvault/sections/relationships.sdl.yaml",
+    "scenarios/techvault/sections/accounts.sdl.yaml",
+    "scenarios/techvault/sections/content.sdl.yaml"
+  ]
+}

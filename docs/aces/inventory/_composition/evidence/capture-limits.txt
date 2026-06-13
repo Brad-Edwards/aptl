@@ -1,0 +1,7 @@
+Composition capture scope:
+- Non-destructive snapshot: did not run `aptl lab stop -v && aptl lab start`.
+- Reads committed SDL, docker-compose.yml, and existing per-asset inventory bundles.
+- Trivy, Syft, osquery, and mtree-style filesystem scans are not applicable at composition level because this target is a runtime-composed scenario, not a single image/rootfs.
+- Per-asset bundles own scanner, SBOM, package, filesystem, and live container baselines.
+- Raw secret values are intentionally not copied into composition evidence; only ownership/classification and sanitized placement summaries are retained.
+- Workflow execution traces, attack traces, post-attack state, and SOC analyst timing are out of scope for issue #329.

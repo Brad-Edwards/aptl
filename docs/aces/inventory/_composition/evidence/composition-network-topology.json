@@ -1,0 +1,280 @@
+{
+  "networks": [
+    {
+      "cidr": "172.20.1.0/24",
+      "gateway": "172.20.1.1",
+      "id": "techvault.dmz-net",
+      "internal": true
+    },
+    {
+      "cidr": "172.20.2.0/24",
+      "gateway": "172.20.2.1",
+      "id": "techvault.internal-net",
+      "internal": true
+    },
+    {
+      "cidr": "172.20.4.0/24",
+      "gateway": "172.20.4.1",
+      "id": "techvault.redteam-net",
+      "internal": true
+    },
+    {
+      "cidr": "172.20.0.0/24",
+      "gateway": "172.20.0.1",
+      "id": "techvault.security-net",
+      "internal": false
+    }
+  ],
+  "node_links": [
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.ad"
+    },
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.db"
+    },
+    {
+      "network": "techvault.dmz-net",
+      "node": "techvault.dns"
+    },
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.dns"
+    },
+    {
+      "network": "techvault.security-net",
+      "node": "techvault.dns"
+    },
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.fileshare"
+    },
+    {
+      "network": "techvault.redteam-net",
+      "node": "techvault.kali"
+    },
+    {
+      "network": "techvault.dmz-net",
+      "node": "techvault.kali"
+    },
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.kali"
+    },
+    {
+      "network": "techvault.dmz-net",
+      "node": "techvault.mailserver"
+    },
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.mailserver"
+    },
+    {
+      "network": "techvault.security-net",
+      "node": "techvault.misp"
+    },
+    {
+      "network": "techvault.security-net",
+      "node": "techvault.misp-db"
+    },
+    {
+      "network": "techvault.security-net",
+      "node": "techvault.misp-redis"
+    },
+    {
+      "network": "techvault.security-net",
+      "node": "techvault.misp-suricata-sync"
+    },
+    {
+      "network": "techvault.security-net",
+      "node": "techvault.shuffle-backend"
+    },
+    {
+      "network": "techvault.dmz-net",
+      "node": "techvault.suricata"
+    },
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.suricata"
+    },
+    {
+      "network": "techvault.security-net",
+      "node": "techvault.suricata"
+    },
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.victim"
+    },
+    {
+      "network": "techvault.security-net",
+      "node": "techvault.wazuh-dashboard"
+    },
+    {
+      "network": "techvault.security-net",
+      "node": "techvault.wazuh-indexer"
+    },
+    {
+      "network": "techvault.security-net",
+      "node": "techvault.wazuh-manager"
+    },
+    {
+      "network": "techvault.dmz-net",
+      "node": "techvault.wazuh-manager"
+    },
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.wazuh-manager"
+    },
+    {
+      "network": "techvault.dmz-net",
+      "node": "techvault.webapp"
+    },
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.webapp"
+    },
+    {
+      "network": "techvault.internal-net",
+      "node": "techvault.workstation"
+    }
+  ],
+  "source": "scenarios/techvault/sections/infrastructure.sdl.yaml",
+  "static_assignments": [
+    {
+      "address": "172.20.2.10",
+      "network": "techvault.internal-net",
+      "node": "techvault.ad"
+    },
+    {
+      "address": "172.20.2.11",
+      "network": "techvault.internal-net",
+      "node": "techvault.db"
+    },
+    {
+      "address": "172.20.1.22",
+      "network": "techvault.dmz-net",
+      "node": "techvault.dns"
+    },
+    {
+      "address": "172.20.2.27",
+      "network": "techvault.internal-net",
+      "node": "techvault.dns"
+    },
+    {
+      "address": "172.20.0.25",
+      "network": "techvault.security-net",
+      "node": "techvault.dns"
+    },
+    {
+      "address": "172.20.2.12",
+      "network": "techvault.internal-net",
+      "node": "techvault.fileshare"
+    },
+    {
+      "address": "172.20.4.30",
+      "network": "techvault.redteam-net",
+      "node": "techvault.kali"
+    },
+    {
+      "address": "172.20.1.30",
+      "network": "techvault.dmz-net",
+      "node": "techvault.kali"
+    },
+    {
+      "address": "172.20.2.35",
+      "network": "techvault.internal-net",
+      "node": "techvault.kali"
+    },
+    {
+      "address": "172.20.1.21",
+      "network": "techvault.dmz-net",
+      "node": "techvault.mailserver"
+    },
+    {
+      "address": "172.20.2.26",
+      "network": "techvault.internal-net",
+      "node": "techvault.mailserver"
+    },
+    {
+      "address": "172.20.0.16",
+      "network": "techvault.security-net",
+      "node": "techvault.misp"
+    },
+    {
+      "address": "172.20.0.17",
+      "network": "techvault.security-net",
+      "node": "techvault.misp-db"
+    },
+    {
+      "address": "172.20.0.19",
+      "network": "techvault.security-net",
+      "node": "techvault.misp-suricata-sync"
+    },
+    {
+      "address": "172.20.0.20",
+      "network": "techvault.security-net",
+      "node": "techvault.shuffle-backend"
+    },
+    {
+      "address": "172.20.1.50",
+      "network": "techvault.dmz-net",
+      "node": "techvault.suricata"
+    },
+    {
+      "address": "172.20.2.50",
+      "network": "techvault.internal-net",
+      "node": "techvault.suricata"
+    },
+    {
+      "address": "172.20.0.50",
+      "network": "techvault.security-net",
+      "node": "techvault.suricata"
+    },
+    {
+      "address": "172.20.2.20",
+      "network": "techvault.internal-net",
+      "node": "techvault.victim"
+    },
+    {
+      "address": "172.20.0.11",
+      "network": "techvault.security-net",
+      "node": "techvault.wazuh-dashboard"
+    },
+    {
+      "address": "172.20.0.12",
+      "network": "techvault.security-net",
+      "node": "techvault.wazuh-indexer"
+    },
+    {
+      "address": "172.20.0.10",
+      "network": "techvault.security-net",
+      "node": "techvault.wazuh-manager"
+    },
+    {
+      "address": "172.20.1.10",
+      "network": "techvault.dmz-net",
+      "node": "techvault.wazuh-manager"
+    },
+    {
+      "address": "172.20.2.30",
+      "network": "techvault.internal-net",
+      "node": "techvault.wazuh-manager"
+    },
+    {
+      "address": "172.20.1.20",
+      "network": "techvault.dmz-net",
+      "node": "techvault.webapp"
+    },
+    {
+      "address": "172.20.2.25",
+      "network": "techvault.internal-net",
+      "node": "techvault.webapp"
+    },
+    {
+      "address": "172.20.2.40",
+      "network": "techvault.internal-net",
+      "node": "techvault.workstation"
+    }
+  ]
+}

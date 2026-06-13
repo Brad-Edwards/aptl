@@ -72,7 +72,12 @@ def start_aces_scenario(
     backend: "DeploymentBackend",
 ) -> LabResult:
     """Lazy ACES handoff import for the public lab-start path."""
-    from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
+    try:
+        from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
+    except (ImportError, ModuleNotFoundError) as exc:
+        error = f"ACES runtime handoff unavailable: {redact(str(exc))}"
+        log.error(error)
+        return LabResult(success=False, error=error)
 
     return _start_aces_scenario(project_dir, config, backend)
 

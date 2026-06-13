@@ -14,6 +14,36 @@ import pytest
 class TestLabImportContracts:
     """Import contracts for core lab orchestration."""
 
+    def test_aces_handoff_import_failure_returns_failed_lab_result(
+        self, monkeypatch, tmp_path
+    ):
+        import builtins
+        import sys
+
+        import aptl.backends as backends
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import start_aces_scenario
+
+        real_import = builtins.__import__
+
+        def guarded_import(
+            name, global_vars=None, local_vars=None, fromlist=(), level=0
+        ):
+            if name == "aptl.backends.aces":
+                raise ModuleNotFoundError("No module named 'aces_sdl'")
+            return real_import(name, global_vars, local_vars, fromlist, level)
+
+        monkeypatch.delitem(sys.modules, "aptl.backends.aces", raising=False)
+        monkeypatch.delattr(backends, "aces", raising=False)
+        monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+        backend = MagicMock()
+        result = start_aces_scenario(tmp_path, AptlConfig(), backend)
+
+        assert result.success is False
+        assert "ACES runtime handoff unavailable" in result.error
+        backend.start.assert_not_called()
+
     def test_import_does_not_eagerly_load_aces_backend(self):
         import subprocess
         import sys

@@ -66,6 +66,22 @@ if TYPE_CHECKING:
 log = get_logger("lab")
 
 
+def start_aces_scenario(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+) -> LabResult:
+    """Lazy ACES handoff import for the public lab-start path."""
+    try:
+        from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
+    except (ImportError, ModuleNotFoundError) as exc:
+        error = f"ACES runtime handoff unavailable: {redact(str(exc))}"
+        log.error(error)
+        return LabResult(success=False, error=error)
+
+    return _start_aces_scenario(project_dir, config, backend)
+
+
 def _runtime_require(condition, description):
     """`icontract.require` that survives `python -O` AND keeps violation
     messages secret-safe.
@@ -801,9 +817,7 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
 def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 8: Starting containers...")
     assert ctx.config is not None and ctx.backend is not None  # runtime guards above
-    start_result = start_lab(
-        ctx.config, project_dir=ctx.project_dir, backend=ctx.backend
-    )
+    start_result = start_aces_scenario(ctx.project_dir, ctx.config, ctx.backend)
     if not start_result.success and ctx.config.containers.soc:
         log.warning(
             "Initial compose up failed (SOC dependencies may still be "
@@ -811,9 +825,7 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         )
         import time
         time.sleep(60)
-        start_result = start_lab(
-            ctx.config, project_dir=ctx.project_dir, backend=ctx.backend
-        )
+        start_result = start_aces_scenario(ctx.project_dir, ctx.config, ctx.backend)
     if start_result.success:
         return None
     log.error("Lab start failed: %s", start_result.error)

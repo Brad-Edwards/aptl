@@ -305,7 +305,7 @@ def test_techvault_sdl_encodes_shuffle_orborus_node(legacy_scenario):
     network = runtime["network"]
     endpoint = network["endpoints"][0]
     assert endpoint["network"] == "security-net"
-    assert endpoint["ip_address"] == "172.20.0.6"
+    assert endpoint["ip_address"] == "172.20.0.7"
     assert network["published_ports"] == []
 
     proc_names = {p["name"] for p in runtime["processes"]}

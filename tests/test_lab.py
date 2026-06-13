@@ -11,6 +11,68 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 
+class TestLabImportContracts:
+    """Import contracts for core lab orchestration."""
+
+    def test_aces_handoff_import_failure_returns_failed_lab_result(
+        self, monkeypatch, tmp_path
+    ):
+        import builtins
+        import sys
+
+        import aptl.backends as backends
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import start_aces_scenario
+
+        real_import = builtins.__import__
+
+        def guarded_import(
+            name, global_vars=None, local_vars=None, fromlist=(), level=0
+        ):
+            if name == "aptl.backends.aces":
+                raise ModuleNotFoundError("No module named 'aces_sdl'")
+            return real_import(name, global_vars, local_vars, fromlist, level)
+
+        monkeypatch.delitem(sys.modules, "aptl.backends.aces", raising=False)
+        monkeypatch.delattr(backends, "aces", raising=False)
+        monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+        backend = MagicMock()
+        result = start_aces_scenario(tmp_path, AptlConfig(), backend)
+
+        assert result.success is False
+        assert "ACES runtime handoff unavailable" in result.error
+        backend.start.assert_not_called()
+
+    def test_import_does_not_eagerly_load_aces_backend(self):
+        import subprocess
+        import sys
+
+        code = """
+import importlib.abc
+import sys
+
+
+class BlockAcesBackend(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "aptl.backends.aces":
+            raise RuntimeError("aptl.backends.aces imported eagerly")
+        return None
+
+
+sys.meta_path.insert(0, BlockAcesBackend())
+import aptl.core.lab
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+
+
 class TestComposeCommandBuilder:
     """Tests for building docker compose commands."""
 
@@ -715,10 +777,10 @@ class TestOrchestrateLabStart:
             return_value=CertResult(success=True, generated=False, certs_dir=certs_dir),
         )
 
-        # Mock docker compose start
+        # Mock ACES runtime handoff start
         from aptl.core.lab import LabResult
         mocks["start"] = mocker.patch(
-            "aptl.core.lab.start_lab",
+            "aptl.core.lab.start_aces_scenario",
             return_value=LabResult(success=True, message="Lab started"),
         )
 
@@ -964,7 +1026,7 @@ class TestOrchestrateLabStart:
             "containers": {"wazuh": False, "victim": False, "kali": False, "reverse": False},
         }))
 
-        # Re-mock start_lab and wait_for_service since config changes
+        # Re-mock ACES handoff and wait_for_service since config changes
         from aptl.core.lab import LabResult
         mocks["start"].return_value = LabResult(success=True, message="Lab started")
 
@@ -984,9 +1046,19 @@ class TestOrchestrateLabStart:
 
     def test_pre_pull_runs_before_compose_up(self, mocker, tmp_path):
         """Should call docker pull for images before compose up."""
-        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab import (
+            _LAB_START_STEPS,
+            _step_pull_images,
+            _step_start_containers,
+            orchestrate_lab_start,
+        )
 
         mocks = self._patch_all_steps(mocker, tmp_path)
+
+        step_names = [step.__name__ for step in _LAB_START_STEPS]
+        assert step_names.index(_step_pull_images.__name__) < step_names.index(
+            _step_start_containers.__name__
+        )
 
         result = orchestrate_lab_start(tmp_path)
 
@@ -2042,6 +2114,22 @@ class TestLabOrchestrationContracts:
         # backend stays None
         with pytest.raises(icontract.ViolationError):
             _step_start_containers(ctx)
+
+    def test_start_containers_routes_through_aces_handoff(self, mocker, tmp_path):
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config()
+        ctx.backend = MagicMock()
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            return_value=LabResult(success=True, message="ok"),
+        )
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        start_aces.assert_called_once_with(tmp_path, ctx.config, ctx.backend)
 
     # -- ssh_key_is_ready --------------------------------------------
 

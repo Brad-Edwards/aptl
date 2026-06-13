@@ -67,6 +67,17 @@ rows:
   # lateral-movement-data-theft, prime-enterprise, recon-nmap-scan,
   # webapp-compromise.
 
+  - id: scen.techvault.composition-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: TechVault composition connective tissue + cross-asset relationships
+    category: aces_sdl
+    aces_target: ACES infrastructure / relationships / forwarding_agents / accounts / content / nodes.runtime.* composition surfaces
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/_composition/ + tests/test_techvault_composition_inventory.py + scenarios/techvault.sdl.yaml"
+    blocking_followup: n/a
+    notes: "SCN-010 issue #329 composition inventory; SDL encodes network topology, dependency/relationship graph, DNS, trust/account/content placement, observation chains, and defensive integration chains with No known remaining ACES expressivity blocker. The bundle cites per-asset inventories and records snapshot-only/non-destructive capture limits."
+
   - id: scen.techvault.webapp-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml

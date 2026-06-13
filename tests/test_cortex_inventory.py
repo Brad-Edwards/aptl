@@ -112,12 +112,21 @@ def test_cortex_evidence_sha256_manifest_matches_files():
         expected, relative_path = line.split("  ", maxsplit=1)
         manifest_entries.add(relative_path)
         path = ASSET_DIR / relative_path
+        if not path.exists():
+            path = PROJECT_ROOT / relative_path
         actual = hashlib.sha256(path.read_bytes()).hexdigest()
         if actual != expected:
             offenders[relative_path] = {"expected": expected, "actual": actual}
     assert not offenders, f"Evidence checksum mismatches: {offenders}"
-    evidence_files = {str(path.relative_to(ASSET_DIR)) for path in EVIDENCE_DIR.iterdir() if path.is_file() and path.name != "evidence-sha256sums.txt"}
-    assert evidence_files <= manifest_entries
+    missing = set()
+    for path in EVIDENCE_DIR.iterdir():
+        if not path.is_file() or path.name == "evidence-sha256sums.txt":
+            continue
+        asset_relative = str(path.relative_to(ASSET_DIR))
+        repo_relative = str(path.relative_to(PROJECT_ROOT))
+        if asset_relative not in manifest_entries and repo_relative not in manifest_entries:
+            missing.add(asset_relative)
+    assert not missing, f"Evidence files missing from checksum manifest: {missing}"
 
 
 def test_cortex_mapping_ledger_references_every_evidence_file():

@@ -1,4 +1,4 @@
-"""Server SSH host-key trust material for the terminal relay (ADR-039).
+"""Server SSH host-key trust material for the terminal relay (ADR-040).
 
 This module owns *server* identity for the operator-facing WebSocket
 terminal relay, a contract kept deliberately separate from the operator
@@ -81,7 +81,7 @@ def format_known_hosts_line(host: str, port: int, key: "asyncssh.SSHKey") -> str
     Standard port 22 uses a plain ``host`` field; any other port uses the
     bracketed ``[host]:port`` form. The host field MUST match the exact
     ``asyncssh.connect(host=..., port=...)`` value the relay later dials —
-    bridge IPs and ``localhost`` pins are not interchangeable (ADR-039).
+    bridge IPs and ``localhost`` pins are not interchangeable (ADR-040).
     """
     exported = key.export_public_key("openssh").decode().split()
     # Keep only "<keytype> <base64>"; drop any trailing comment.
@@ -97,7 +97,7 @@ async def _capture_host_key(
 
     ``known_hosts=None`` is used *only here*, inside lab-start
     provisioning on the trusted host — the permitted trust-on-first-use
-    capture (ADR-039). The captured key becomes the pin the operator
+    capture (ADR-040). The captured key becomes the pin the operator
     session later verifies against.
     """
     async with asyncssh.connect(
@@ -173,7 +173,7 @@ def _write_known_hosts(project_dir: Path, lines: list[str]) -> Path:
     parent = target.parent
     expected_parent = project_dir.resolve() / KNOWN_HOSTS_RELPATH.parent
 
-    # Containment BEFORE any filesystem mutation (ADR-028/ADR-039): if the
+    # Containment BEFORE any filesystem mutation (ADR-028/ADR-040): if the
     # ``.aptl`` state dir already exists, reject a symlink — or any path
     # whose resolved location is not the literal expected directory —
     # before mkdir/chmod/write. ``Path.chmod`` follows symlinks, so a

@@ -200,7 +200,8 @@ nav:
     - ADR-036 Snapshot Endpoint Registry: adrs/adr-036-snapshot-endpoint-registry.md
     - ADR-037 Docker Compose Backend Cohesion: adrs/adr-037-docker-compose-backend-cohesion.md
     - ADR-038 Docs Style Lint and Published Site: adrs/adr-038-docs-style-lint-and-published-site.md
-    - ADR-039 Terminal SSH Host-Key Verification: adrs/adr-039-terminal-ssh-host-key-verification.md
+    - ADR-039 Web Control Plane Authentication: adrs/adr-039-web-control-plane-authentication.md
+    - ADR-040 Terminal SSH Host-Key Verification: adrs/adr-040-terminal-ssh-host-key-verification.md
 
 extra:
   social:

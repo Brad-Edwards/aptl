@@ -1,4 +1,4 @@
-# ADR-039: Terminal SSH Host-Key Verification Boundary
+# ADR-040: Terminal SSH Host-Key Verification Boundary
 
 ## Status
 

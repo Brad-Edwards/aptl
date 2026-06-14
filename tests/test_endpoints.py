@@ -483,7 +483,7 @@ class TestRegistryEntryShape:
 class TestTerminalSSHEndpoints:
     """``terminal_ssh_endpoints`` is the small registry projection the
     WebSocket relay uses to derive host/port/user from runtime inventory
-    instead of a hardcoded ``localhost`` map (ADR-039, issue #418)."""
+    instead of a hardcoded ``localhost`` map (ADR-040, issue #418)."""
 
     def test_names_cover_every_ssh_registry_entry(self):
         expected = {

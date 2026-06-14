@@ -1,4 +1,4 @@
-"""Tests for terminal SSH host-key pinning (ADR-039, issue #418).
+"""Tests for terminal SSH host-key pinning (ADR-040, issue #418).
 
 The terminal relay must verify SSH server identity. These tests cover the
 lab-start trust material: where the ``known_hosts`` file lives, how a pin
@@ -143,7 +143,7 @@ class TestPinTerminalHostKeys:
     def test_rejects_preexisting_aptl_symlink_before_chmod(self, tmp_path):
         # A pre-existing .aptl symlink to an out-of-tree directory must be
         # rejected by the containment guard BEFORE any chmod/write follows
-        # it (ADR-028/ADR-039 containment-before-I/O).
+        # it (ADR-028/ADR-040 containment-before-I/O).
         from aptl.core.host_keys import HostKeyError
 
         outside = tmp_path / "outside"

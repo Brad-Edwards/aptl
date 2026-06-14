@@ -3,15 +3,22 @@
 import asyncio
 import json
 from pathlib import Path
+from typing import Annotated
 
 import asyncssh
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from aptl.api.deps import ALLOWED_ORIGINS, get_project_dir
+from aptl.api.deps import (
+    ALLOWED_ORIGINS,
+    WebAuthSettings,
+    get_project_dir,
+    get_web_auth,
+    verify_ws_token,
+)
 from aptl.core.endpoints import TERMINAL_CONTAINER_NAMES
 from aptl.core.host_keys import known_hosts_path
-from aptl.core.snapshot import SSHEndpoint
 from aptl.core.lab import lab_status, lab_terminal_ssh_endpoints
+from aptl.core.snapshot import SSHEndpoint
 from aptl.core.ssh import _KEY_NAME
 from aptl.utils.logging import get_logger
 
@@ -81,17 +88,25 @@ async def _resolve_terminal_target(
     websocket: WebSocket,
     container: str,
     project_dir: Path,
+    auth: WebAuthSettings,
 ) -> tuple[SSHEndpoint, Path]:
     """Run the pre-dial validation gates for a terminal connection.
 
-    Performs the origin, container-allowlist, lab-running, endpoint, and
-    host-key-pin checks. Returns the resolved endpoint and known_hosts
-    path on success, or raises :class:`_TerminalReject` after closing the
-    WebSocket if any gate rejects the connection. ``container`` is the
-    original path param (used for the allowlist check); callers must
+    Performs the bearer-token, origin, container-allowlist, lab-running,
+    endpoint, and host-key-pin checks. Returns the resolved endpoint and
+    known_hosts path on success, or raises :class:`_TerminalReject` after
+    closing the WebSocket if any gate rejects the connection. ``container``
+    is the original path param (used for the allowlist check); callers must
     sanitize it before logging.
     """
     safe_container = _sanitize(container)
+
+    # Verify the bearer token before the handshake is accepted (ADR-039).
+    protocol = websocket.headers.get("sec-websocket-protocol", "")
+    if not verify_ws_token(protocol, auth):
+        await websocket.close(code=1008, reason="Unauthorized")
+        log.warning("Rejected WebSocket: invalid or missing auth token")
+        raise _TerminalReject
 
     # Reject cross-origin WebSocket connections.
     # CORS middleware does NOT protect WebSocket upgrades — browsers send
@@ -104,7 +119,7 @@ async def _resolve_terminal_target(
         raise _TerminalReject
 
     # Validate container name against the canonical registry projection
-    # (ADR-039) — a cheap reject before touching runtime inventory.
+    # (ADR-040) — a cheap reject before touching runtime inventory.
     if container not in TERMINAL_CONTAINER_NAMES:
         await websocket.accept()
         await websocket.close(code=1008, reason="Unknown container")
@@ -124,7 +139,7 @@ async def _resolve_terminal_target(
 
     await websocket.accept()
 
-    # Endpoint identity gate (ADR-039): host/user/port come from the
+    # Endpoint identity gate (ADR-040): host/user/port come from the
     # canonical endpoint registry projected over runtime inventory
     # (container IP over the bridge, issue #293), not a hardcoded
     # localhost map. A target that is not currently running fails closed.
@@ -140,7 +155,7 @@ async def _resolve_terminal_target(
         log.warning("Terminal target not available in runtime inventory")
         raise _TerminalReject
 
-    # SSH trust gate (ADR-039): verify the server host key against the
+    # SSH trust gate (ADR-040): verify the server host key against the
     # lab-start-pinned known_hosts file. A missing pin fails closed
     # rather than silently disabling verification.
     kh_path = known_hosts_path(project_dir)
@@ -164,6 +179,7 @@ async def terminal_ws(
     websocket: WebSocket,
     container: str,
     project_dir: Path = Depends(get_project_dir),
+    auth: Annotated[WebAuthSettings, Depends(get_web_auth)] = ...,  # type: ignore[assignment]
 ) -> None:
     """WebSocket endpoint for interactive terminal sessions.
 
@@ -174,7 +190,7 @@ async def terminal_ws(
 
     try:
         endpoint, kh_path = await _resolve_terminal_target(
-            websocket, container, project_dir
+            websocket, container, project_dir, auth
         )
     except _TerminalReject:
         return

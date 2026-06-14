@@ -1275,9 +1275,12 @@ services:
       dockerfile: web/Dockerfile.api
     restart: unless-stopped
     ports:
-      - "8400:8400"
+      # Loopback-only: only the operator's machine can reach this port (ADR-039).
+      - "127.0.0.1:8400:8400"
     environment:
       - APTL_PROJECT_DIR=/project
+      # Required: generate with python3 -c 'import secrets; print(secrets.token_hex(32))'
+      - APTL_API_TOKEN=${APTL_API_TOKEN:?APTL_API_TOKEN must be set to a secure token}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro
@@ -1297,9 +1300,16 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Loopback-only: only the operator's machine can reach the UI (ADR-039).
+      - "127.0.0.1:3000:3000"
     environment:
       - ORIGIN=http://localhost:3000
+      # Same token as aptl-web-api — SvelteKit server injects it as Bearer header.
+      - APTL_API_TOKEN=${APTL_API_TOKEN:?APTL_API_TOKEN must be set to a secure token}
+      # Internal Docker hostname the SvelteKit server uses to reach the API.
+      - APTL_API_URL=http://aptl-web-api:8400
+      # Hostname:port the browser uses for direct WebSocket connections.
+      - APTL_API_HOST=localhost:8400
     depends_on:
       - aptl-web-api
     networks:

@@ -315,7 +315,7 @@ def build_ssh_endpoints(
 # ``aptl-`` prefix). The WebSocket relay validates an incoming container
 # against this set before touching runtime inventory, so a new terminal
 # target is a single registry edit — not a second hardcoded map
-# (ADR-039).
+# (ADR-040).
 _TERMINAL_CONTAINER_PREFIX = "aptl-"
 TERMINAL_CONTAINER_NAMES: frozenset[str] = frozenset(
     entry.container_name.removeprefix(_TERMINAL_CONTAINER_PREFIX)
@@ -327,7 +327,7 @@ TERMINAL_CONTAINER_NAMES: frozenset[str] = frozenset(
 def terminal_ssh_endpoints(
     containers: list[ContainerSnapshot],
 ) -> dict[str, SSHEndpoint]:
-    """Map terminal short-name → reachable ``SSHEndpoint`` (ADR-039).
+    """Map terminal short-name → reachable ``SSHEndpoint`` (ADR-040).
 
     The small registry projection the operator terminal relay consumes to
     derive host/user/port from runtime inventory instead of a hardcoded

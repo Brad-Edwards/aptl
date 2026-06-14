@@ -18,7 +18,7 @@ pytest.importorskip("fastapi", reason="Web dependencies not installed")
 @pytest.fixture
 def integration_client(tmp_path):
     """TestClient wired to real core logic with DI override for project_dir."""
-    from aptl.api.deps import get_project_dir
+    from aptl.api.deps import get_project_dir, verify_token
     from aptl.api.main import app
     from starlette.testclient import TestClient
 
@@ -38,6 +38,7 @@ def integration_client(tmp_path):
     )
 
     app.dependency_overrides[get_project_dir] = lambda: tmp_path
+    app.dependency_overrides[verify_token] = lambda: None
     try:
         with TestClient(app) as client:
             yield client
@@ -162,8 +163,16 @@ class TestTerminalOriginIntegration:
     """WebSocket origin validation with real router logic (no mock on origin check)."""
 
     def test_unknown_container_with_valid_origin(self, integration_client):
-        """Unknown container is rejected even with a valid origin."""
-        with pytest.raises(Exception):
+        """Unknown container is rejected even with a valid origin.
+
+        The integration_client does not override get_web_auth, so the
+        endpoint-level auth dependency raises 401 before the WS handshake
+        is accepted — Starlette TestClient surfaces this as
+        WebSocketDenialResponse.
+        """
+        from starlette.testclient import WebSocketDenialResponse
+
+        with pytest.raises(WebSocketDenialResponse):
             with integration_client.websocket_connect(
                 "/api/terminal/ws/nonexistent",
                 headers={"origin": "http://localhost:3000"},
@@ -179,29 +188,30 @@ class TestTerminalOriginIntegration:
 class TestCorsEnvOverride:
     """Verify that APTL_ALLOWED_ORIGINS env var parsing logic works.
 
-    Tests the parsing logic directly to avoid module reload side effects
-    that could break other tests in the suite.
+    Tests call _parse_allowed_origins directly so that regressions in the
+    production parsing function (not just a local duplicate) are caught.
     """
 
     def test_custom_origins_parsed(self):
         """Comma-separated origins are parsed into a set."""
-        env_val = "http://custom:9000,http://other:8080"
-        result = {o.strip() for o in env_val.split(",") if o.strip()}
+        from aptl.api.deps import _parse_allowed_origins
+
+        result = _parse_allowed_origins("http://custom:9000,http://other:8080")
         assert result == {"http://custom:9000", "http://other:8080"}
 
     def test_empty_env_falls_back_to_defaults(self):
-        """Empty string produces empty set, triggering default fallback."""
-        env_val = ""
-        result = {o.strip() for o in env_val.split(",") if o.strip()}
-        # Empty set is falsy, so `result or defaults` returns defaults.
-        defaults = {"http://localhost:3000", "http://localhost:5173"}
-        actual = result or defaults
-        assert actual == defaults
+        """Empty string falls back to the default dev origins."""
+        from aptl.api.deps import _parse_allowed_origins
+
+        result = _parse_allowed_origins("")
+        assert "http://localhost:3000" in result
+        assert "http://localhost:5173" in result
 
     def test_whitespace_trimmed(self):
         """Leading/trailing whitespace in origins is stripped."""
-        env_val = " http://a:1 , http://b:2 "
-        result = {o.strip() for o in env_val.split(",") if o.strip()}
+        from aptl.api.deps import _parse_allowed_origins
+
+        result = _parse_allowed_origins(" http://a:1 , http://b:2 ")
         assert result == {"http://a:1", "http://b:2"}
 
     def test_default_origins_are_set(self):

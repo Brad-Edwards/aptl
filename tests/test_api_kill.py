@@ -10,11 +10,12 @@ pytest.importorskip("fastapi", reason="Web dependencies not installed")
 @pytest.fixture
 def api_client(tmp_path):
     """Create a FastAPI test client with DI override for project_dir."""
-    from aptl.api.deps import get_project_dir
+    from aptl.api.deps import get_project_dir, verify_token
     from aptl.api.main import app
     from starlette.testclient import TestClient
 
     app.dependency_overrides[get_project_dir] = lambda: tmp_path
+    app.dependency_overrides[verify_token] = lambda: None
     try:
         with TestClient(app) as client:
             yield client

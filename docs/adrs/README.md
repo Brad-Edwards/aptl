@@ -60,3 +60,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [036](adr-036-snapshot-endpoint-registry.md) | Snapshot Endpoint Registry Boundary | accepted | 2026-05-18 |
 | [037](adr-037-docker-compose-backend-cohesion.md) | Docker Compose Backend Cohesion | accepted | 2026-05-18 |
 | [038](adr-038-docs-style-lint-and-published-site.md) | Documentation Style Lint and Published Docs Site | accepted | 2026-06-11 |
+| [039](adr-039-web-control-plane-authentication.md) | Web Control Plane Authentication and Loopback Exposure | accepted | 2026-06-14 |

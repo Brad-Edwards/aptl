@@ -1,9 +1,9 @@
 """FastAPI application factory for the APTL web API."""
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from aptl.api.deps import ALLOWED_ORIGINS
+from aptl.api.deps import ALLOWED_ORIGINS, load_web_auth, verify_token
 from aptl.api.routers import config, kill, lab, terminal
 from aptl.utils.logging import get_logger, setup_logging
 
@@ -15,26 +15,30 @@ def create_app() -> FastAPI:
     setup_logging()
     log.info("Creating APTL web API application")
 
+    load_web_auth()  # logs CRITICAL and returns None when APTL_API_TOKEN is absent
+
     app = FastAPI(
         title="APTL Web API",
         description="Advanced Purple Team Lab — Web Interface API",
         version="0.1.0",
     )
 
-    app.add_middleware(  # NOSONAR — localhost-only origins; this is a local lab tool, not internet-facing
+    app.add_middleware(
         CORSMiddleware,
         allow_origins=list(ALLOWED_ORIGINS),
         allow_credentials=False,
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type", "Accept"],
+        allow_headers=["Content-Type", "Accept", "Authorization"],
     )
 
-    app.include_router(lab.router, prefix="/api")
-    app.include_router(config.router, prefix="/api")
-    app.include_router(terminal.router, prefix="/api")
-    app.include_router(kill.router, prefix="/api")
+    _auth = [Depends(verify_token)]
 
-    @app.get("/api/health")
+    app.include_router(lab.router, prefix="/api", dependencies=_auth)
+    app.include_router(config.router, prefix="/api", dependencies=_auth)
+    app.include_router(terminal.router, prefix="/api", dependencies=_auth)
+    app.include_router(kill.router, prefix="/api", dependencies=_auth)
+
+    @app.get("/api/health", dependencies=_auth)
     async def health() -> dict:
         return {"status": "ok"}
 

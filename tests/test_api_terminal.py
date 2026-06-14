@@ -10,14 +10,21 @@ pytest.importorskip("fastapi", reason="Web dependencies not installed")
 pytest.importorskip("asyncssh", reason="asyncssh not installed")
 
 
+_TEST_WS_TOKEN = "ws-test-token-abc"
+_VALID_WS_SUBPROTOCOLS = [f"aptl-token.{_TEST_WS_TOKEN}"]
+
+
 @pytest.fixture
 def api_client(tmp_path):
-    """Create a FastAPI test client with DI override for project_dir."""
-    from aptl.api.deps import get_project_dir
+    """Create a FastAPI test client with auth and project_dir overridden."""
+    from aptl.api.deps import WebAuthSettings, get_project_dir, get_web_auth, verify_token
     from aptl.api.main import app
     from starlette.testclient import TestClient
 
+    _test_auth = WebAuthSettings(api_token=_TEST_WS_TOKEN)
     app.dependency_overrides[get_project_dir] = lambda: tmp_path
+    app.dependency_overrides[verify_token] = lambda: None
+    app.dependency_overrides[get_web_auth] = lambda: _test_auth
     try:
         with TestClient(app) as client:
             yield client
@@ -60,12 +67,21 @@ def _make_mock_conn(process):
 
 
 _VALID_ORIGIN = {"origin": "http://localhost:3000"}
+_AUTHED = {"subprotocols": _VALID_WS_SUBPROTOCOLS}
 
 
 class TestTerminalWebSocket:
     def test_cross_origin_rejected(self, api_client):
-        """Cross-origin WebSocket connections are rejected before accept."""
-        with pytest.raises(Exception):
+        """Cross-origin WebSocket connections are rejected before accept.
+
+        No subprotocol is passed, so the token check fires first. The handler
+        sends a close frame before accept(), which Starlette surfaces as
+        WebSocketDisconnect (not WebSocketDenialResponse, which is reserved for
+        dependency-level HTTPException rejections).
+        """
+        from fastapi import WebSocketDisconnect
+
+        with pytest.raises(WebSocketDisconnect):
             with api_client.websocket_connect(
                 "/api/terminal/ws/victim",
                 headers={"origin": "http://evil.com"},
@@ -79,6 +95,7 @@ class TestTerminalWebSocket:
 
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
             headers={"origin": "http://localhost:3000"},
         ) as ws:
             msg = ws.receive_json()
@@ -86,21 +103,35 @@ class TestTerminalWebSocket:
             assert "not running" in msg["message"]
 
     def test_no_origin_header_rejected(self, api_client):
-        """Connections without an Origin header are rejected."""
-        with pytest.raises(Exception):
+        """Connections without an Origin header are rejected.
+
+        No subprotocol is passed, so the token check fires first. The handler
+        sends a close frame before accept(), which Starlette surfaces as
+        WebSocketDisconnect (not WebSocketDenialResponse).
+        """
+        from fastapi import WebSocketDisconnect
+
+        with pytest.raises(WebSocketDisconnect):
             with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
                 ws.receive_json()
 
     @patch("aptl.api.routers.terminal.lab_status")
     def test_invalid_container_rejected(self, mock_status, api_client):
-        """Unknown container name closes WebSocket with 1008."""
+        """Unknown container name closes WebSocket with 1008.
+
+        Auth and origin pass, so the server calls accept() before close(1008),
+        surfacing as WebSocketDisconnect (not WebSocketDenialResponse).
+        """
+        from fastapi import WebSocketDisconnect
+
         mock_status.return_value = _make_lab_status(running=True)
 
-        with pytest.raises(Exception):
+        with pytest.raises(WebSocketDisconnect):
             with api_client.websocket_connect(
-                "/api/terminal/ws/nonexistent", headers=_VALID_ORIGIN
+                "/api/terminal/ws/nonexistent",
+                subprotocols=_VALID_WS_SUBPROTOCOLS,
+                headers=_VALID_ORIGIN,
             ) as ws:
-                # Should be closed by server
                 ws.receive_json()
 
     @patch("aptl.api.routers.terminal.lab_status")
@@ -109,7 +140,9 @@ class TestTerminalWebSocket:
         mock_status.return_value = _make_lab_status(running=False)
 
         with api_client.websocket_connect(
-            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers=_VALID_ORIGIN,
         ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
@@ -130,7 +163,9 @@ class TestTerminalWebSocket:
         process.stdout.read = AsyncMock(return_value="")
 
         with api_client.websocket_connect(
-            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers=_VALID_ORIGIN,
         ) as ws:
             ws.send_text(json.dumps({"type": "stdin", "data": "ls\n"}))
 
@@ -153,7 +188,9 @@ class TestTerminalWebSocket:
         process.stdout.read = AsyncMock(side_effect=["$ prompt\n", ""])
 
         with api_client.websocket_connect(
-            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers=_VALID_ORIGIN,
         ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "stdout"
@@ -174,7 +211,9 @@ class TestTerminalWebSocket:
         process.stdout.read = AsyncMock(return_value="")
 
         with api_client.websocket_connect(
-            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers=_VALID_ORIGIN,
         ) as ws:
             ws.send_text(json.dumps({"type": "resize", "cols": 120, "rows": 40}))
 
@@ -195,7 +234,9 @@ class TestTerminalWebSocket:
         process.stdout.read = AsyncMock(return_value="")
 
         with api_client.websocket_connect(
-            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers=_VALID_ORIGIN,
         ) as ws:
             pass  # disconnect on exit
 
@@ -211,7 +252,9 @@ class TestTerminalWebSocket:
         mock_asyncssh.Error = Exception
 
         with api_client.websocket_connect(
-            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers=_VALID_ORIGIN,
         ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
@@ -224,7 +267,9 @@ class TestTerminalWebSocket:
 
         for name in ["victim", "kali", "reverse", "workstation"]:
             with api_client.websocket_connect(
-                f"/api/terminal/ws/{name}", headers=_VALID_ORIGIN
+                f"/api/terminal/ws/{name}",
+                subprotocols=_VALID_WS_SUBPROTOCOLS,
+                headers=_VALID_ORIGIN,
             ) as ws:
                 msg = ws.receive_json()
                 # Should get "lab not running" error, not unknown container

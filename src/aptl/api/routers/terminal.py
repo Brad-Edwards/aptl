@@ -3,11 +3,18 @@
 import asyncio
 import json
 from pathlib import Path
+from typing import Annotated
 
 import asyncssh
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from aptl.api.deps import ALLOWED_ORIGINS, get_project_dir
+from aptl.api.deps import (
+    ALLOWED_ORIGINS,
+    WebAuthSettings,
+    get_project_dir,
+    get_web_auth,
+    verify_ws_token,
+)
 from aptl.core.lab import lab_status
 from aptl.core.ssh import _KEY_NAME
 from aptl.utils.logging import get_logger
@@ -72,12 +79,23 @@ async def terminal_ws(
     websocket: WebSocket,
     container: str,
     project_dir: Path = Depends(get_project_dir),
+    auth: Annotated[WebAuthSettings, Depends(get_web_auth)] = ...,  # type: ignore[assignment]
 ) -> None:
     """WebSocket endpoint for interactive terminal sessions.
 
     Opens an SSH PTY connection to the specified container and relays
     stdin/stdout between the WebSocket and the SSH process.
     """
+    # Verify bearer token from Sec-WebSocket-Protocol before accept().
+    # Browsers cannot set Authorization headers on WebSocket upgrades, so
+    # the token is conveyed as "aptl-token.<TOKEN>" in the protocol field.
+    # Reject before SSH relay opens (ADR-039).
+    protocol = websocket.headers.get("sec-websocket-protocol", "")
+    if not verify_ws_token(protocol, auth):
+        await websocket.close(code=1008, reason="Unauthorized")
+        log.warning("Rejected WebSocket: invalid or missing auth token")
+        return
+
     # Reject cross-origin WebSocket connections.
     # CORS middleware does NOT protect WebSocket upgrades — browsers send
     # them cross-origin without preflight. Without this check, any website

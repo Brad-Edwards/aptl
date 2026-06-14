@@ -2,10 +2,13 @@
 	import '../app.css';
 	import NavBar from '$lib/components/NavBar.svelte';
 	import { initLabStore, destroyLabStore } from '$lib/stores/lab';
-	import { onMount } from 'svelte';
+	import { onMount, setContext } from 'svelte';
 	import type { Snippet } from 'svelte';
+	import type { LayoutData } from './$types';
 
-	let { children }: { children: Snippet } = $props();
+	let { children, data }: { children: Snippet; data: LayoutData } = $props();
+
+	setContext('apiCtx', { apiHost: data.apiHost, wsToken: data.wsToken });
 
 	onMount(() => {
 		initLabStore();

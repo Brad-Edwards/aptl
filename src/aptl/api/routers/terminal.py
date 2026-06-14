@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from aptl.api.deps import ALLOWED_ORIGINS, get_project_dir
 from aptl.core.endpoints import TERMINAL_CONTAINER_NAMES
 from aptl.core.host_keys import known_hosts_path
+from aptl.core.snapshot import SSHEndpoint
 from aptl.core.lab import lab_status, lab_terminal_ssh_endpoints
 from aptl.core.ssh import _KEY_NAME
 from aptl.utils.logging import get_logger
@@ -61,17 +62,26 @@ async def _relay_ws_to_ssh(
         log.debug("Malformed WebSocket message, ignoring")
 
 
-@router.websocket("/terminal/ws/{container}")
-async def terminal_ws(
+def _sanitize(value: str) -> str:
+    """Strip CR/LF from *value* to defend against log injection (S5145)."""
+    return value.replace("\r", "").replace("\n", "")
+
+
+async def _resolve_terminal_target(
     websocket: WebSocket,
     container: str,
-    project_dir: Path = Depends(get_project_dir),
-) -> None:
-    """WebSocket endpoint for interactive terminal sessions.
+    project_dir: Path,
+) -> tuple[SSHEndpoint, Path] | None:
+    """Run the pre-dial validation gates for a terminal connection.
 
-    Opens an SSH PTY connection to the specified container and relays
-    stdin/stdout between the WebSocket and the SSH process.
+    Performs the origin, container-allowlist, lab-running, endpoint, and
+    host-key-pin checks. Returns the resolved endpoint and known_hosts
+    path on success, or ``None`` after closing the WebSocket if any gate
+    rejects the connection. ``container`` is the original path param (used
+    for the allowlist check); callers must sanitize it before logging.
     """
+    safe_container = _sanitize(container)
+
     # Reject cross-origin WebSocket connections.
     # CORS middleware does NOT protect WebSocket upgrades — browsers send
     # them cross-origin without preflight. Without this check, any website
@@ -80,7 +90,7 @@ async def terminal_ws(
     if not origin or origin not in ALLOWED_ORIGINS:
         await websocket.close(code=1008, reason="Origin not allowed")
         log.warning("Rejected WebSocket from disallowed origin: %s", origin)
-        return
+        return None
 
     # Validate container name against the canonical registry projection
     # (ADR-039) — a cheap reject before touching runtime inventory.
@@ -88,7 +98,7 @@ async def terminal_ws(
         await websocket.accept()
         await websocket.close(code=1008, reason="Unknown container")
         log.warning("Rejected terminal connection for unknown container")
-        return
+        return None
 
     # Check lab is running
     status = await asyncio.to_thread(lab_status, project_dir=project_dir)
@@ -99,7 +109,7 @@ async def terminal_ws(
         )
         await websocket.close(code=1008, reason="Lab not running")
         log.warning("Rejected terminal connection: lab not running")
-        return
+        return None
 
     await websocket.accept()
 
@@ -117,7 +127,7 @@ async def terminal_ws(
         )
         await websocket.close(code=1008, reason="Container not available")
         log.warning("Terminal target not available in runtime inventory")
-        return
+        return None
 
     # SSH trust gate (ADR-039): verify the server host key against the
     # lab-start-pinned known_hosts file. A missing pin fails closed
@@ -132,10 +142,33 @@ async def terminal_ws(
         )
         await websocket.close(code=1008, reason="Host keys not pinned")
         log.warning("Terminal refused: no pinned known_hosts at %s", kh_path)
+        return None
+
+    log.info("Terminal WebSocket accepted for %s", safe_container)
+    return endpoint, kh_path
+
+
+@router.websocket("/terminal/ws/{container}")
+async def terminal_ws(
+    websocket: WebSocket,
+    container: str,
+    project_dir: Path = Depends(get_project_dir),
+) -> None:
+    """WebSocket endpoint for interactive terminal sessions.
+
+    Opens an SSH PTY connection to the specified container and relays
+    stdin/stdout between the WebSocket and the SSH process.
+    """
+    safe_container = _sanitize(container)
+
+    resolved = await _resolve_terminal_target(
+        websocket, container, project_dir
+    )
+    if resolved is None:
         return
+    endpoint, kh_path = resolved
 
     key_path = _get_key_path()
-    log.info("Terminal WebSocket accepted for %s", container)
 
     conn = None
     try:
@@ -156,7 +189,7 @@ async def terminal_ws(
             _relay_ws_to_ssh(websocket, process),
         )
     except asyncssh.Error as exc:
-        log.exception("SSH connection error for %s: %s", container, exc)
+        log.exception("SSH connection error for %s: %s", safe_container, exc)
         try:
             await websocket.send_json(
                 {"type": "error", "message": "SSH connection failed"}
@@ -164,8 +197,8 @@ async def terminal_ws(
         except Exception:
             pass
     except WebSocketDisconnect:
-        log.info("Terminal WebSocket disconnected from %s", container)
+        log.info("Terminal WebSocket disconnected from %s", safe_container)
     finally:
         if conn is not None:
             conn.close()
-        log.info("Terminal session cleaned up for %s", container)
+        log.info("Terminal session cleaned up for %s", safe_container)

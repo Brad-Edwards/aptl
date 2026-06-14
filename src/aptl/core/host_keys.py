@@ -50,7 +50,7 @@ class HostKeyError(ValueError):
 
 
 @dataclass
-class HostKeyPinResult:
+class HostKeyPinResult(object):
     """Outcome of a :func:`pin_terminal_host_keys` run."""
 
     path: Path
@@ -62,10 +62,17 @@ def known_hosts_path(project_dir: Path) -> Path:
     """Return the canonical ``.aptl/known_hosts`` path under *project_dir*.
 
     The project root is resolved (symlinks followed) before the fixed
-    relative path is joined, so the returned path is always rooted at the
+    relative path is joined, and the result is asserted to lie under that
+    resolved root, so the returned path is always provably rooted at the
     real project directory.
     """
-    return project_dir.resolve() / KNOWN_HOSTS_RELPATH
+    root = project_dir.resolve()
+    candidate = root / KNOWN_HOSTS_RELPATH
+    if not candidate.is_relative_to(root):
+        raise HostKeyError(
+            f"known_hosts path {candidate} escapes project root {root}"
+        )
+    return candidate
 
 
 def format_known_hosts_line(host: str, port: int, key: "asyncssh.SSHKey") -> str:
@@ -130,7 +137,9 @@ def pin_terminal_host_keys(
                     timeout=_CAPTURE_TIMEOUT_SECONDS,
                 )
             )
-        except Exception as exc:  # noqa: BLE001 - per-endpoint, non-fatal
+        # Per-endpoint probe failures are non-fatal: log and skip so one
+        # unreachable endpoint cannot abort the whole pinning run.
+        except Exception as exc:  # noqa: BLE001
             log.warning(
                 "Could not pin SSH host key for %s (%s:%d): %s",
                 endpoint.name,
@@ -203,8 +212,8 @@ def _enforce_mode(path: Path, mode: int, kind: str) -> None:
                 f"Could not set mode {oct(mode)} on known_hosts {kind} "
                 f"{path}: {exc}"
             ) from exc
-        return  # pragma: no cover - platform-dependent
-    if os.name != "posix":  # pragma: no cover - platform-dependent
+        return  # pragma: no cover
+    if os.name != "posix":  # pragma: no cover
         return
     effective = path.stat().st_mode & 0o777
     if effective != mode:

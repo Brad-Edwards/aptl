@@ -16,7 +16,7 @@ import hashlib
 import sys
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
@@ -29,7 +29,7 @@ log = get_logger("snapshot")
 
 
 @dataclass
-class SoftwareVersions:
+class SoftwareVersions(object):
     """Versions of key software components."""
 
     python_version: str = ""
@@ -41,7 +41,7 @@ class SoftwareVersions:
 
 
 @dataclass
-class ContainerSnapshot:
+class ContainerSnapshot(object):
     """State of a single Docker container."""
 
     name: str = ""
@@ -55,7 +55,7 @@ class ContainerSnapshot:
 
 
 @dataclass
-class WazuhRulesSnapshot:
+class WazuhRulesSnapshot(object):
     """Summary of Wazuh rule configuration."""
 
     total_rules: int = 0
@@ -66,7 +66,7 @@ class WazuhRulesSnapshot:
 
 
 @dataclass
-class NetworkSnapshot:
+class NetworkSnapshot(object):
     """State of a Docker network."""
 
     name: str = ""
@@ -76,7 +76,7 @@ class NetworkSnapshot:
 
 
 @dataclass
-class ServiceEndpoint:
+class ServiceEndpoint(object):
     """A host-accessible service endpoint."""
 
     name: str = ""
@@ -88,7 +88,7 @@ class ServiceEndpoint:
 
 
 @dataclass
-class SSHEndpoint:
+class SSHEndpoint(object):
     """An SSH-accessible container."""
 
     name: str = ""
@@ -100,7 +100,7 @@ class SSHEndpoint:
 
 
 @dataclass
-class RangeSnapshot:
+class RangeSnapshot(object):
     """Complete point-in-time snapshot of the lab range."""
 
     timestamp: str = ""
@@ -112,7 +112,7 @@ class RangeSnapshot:
     services: list[ServiceEndpoint] = field(default_factory=list)
     ssh: list[SSHEndpoint] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a JSON-serializable dictionary.
 
         Sensitive fields (service credentials, API tokens, etc.) are
@@ -195,6 +195,7 @@ _HEALTH_MARKERS = (
 
 
 def _parse_health(status: str) -> str:
+    """Map a docker status string to a health label."""
     for marker, label in _HEALTH_MARKERS:
         if marker in status:
             return label
@@ -224,8 +225,9 @@ def container_networks(
 
 
 def _row_to_snapshot(
-    backend: "DeploymentBackend", row: dict
+    backend: "DeploymentBackend", row: dict[str, Any]
 ) -> ContainerSnapshot:
+    """Build a ContainerSnapshot from a backend container row."""
     name = row.get("name", "")
     status = row.get("status", "")
     return ContainerSnapshot(
@@ -275,31 +277,29 @@ def _get_wazuh_rules_snapshot(
     snap = WazuhRulesSnapshot()
     manager = "aptl-wazuh-manager"
 
+    def _count(query: str) -> int | None:
+        out = _backend_exec(backend, manager, ["bash", "-c", query])
+        return int(out) if out.isdigit() else None
+
     # Count total rules
-    rule_count = _backend_exec(
-        backend,
-        manager,
-        [
-            "bash",
-            "-c",
-            "find /var/ossec/ruleset/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-        ],
+    snap.total_rules = (
+        _count(
+            "find /var/ossec/ruleset/rules -name '*.xml' "
+            "-exec grep -c '<rule ' {} + 2>/dev/null "
+            "| awk -F: '{s+=$NF} END {print s}'"
+        )
+        or snap.total_rules
     )
-    if rule_count and rule_count.isdigit():
-        snap.total_rules = int(rule_count)
 
     # Count custom rules
-    custom_count = _backend_exec(
-        backend,
-        manager,
-        [
-            "bash",
-            "-c",
-            "find /var/ossec/etc/rules -name '*.xml' -exec grep -c '<rule ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-        ],
+    snap.custom_rules = (
+        _count(
+            "find /var/ossec/etc/rules -name '*.xml' "
+            "-exec grep -c '<rule ' {} + 2>/dev/null "
+            "| awk -F: '{s+=$NF} END {print s}'"
+        )
+        or snap.custom_rules
     )
-    if custom_count and custom_count.isdigit():
-        snap.custom_rules = int(custom_count)
 
     # List custom rule files
     custom_files = _backend_exec(
@@ -317,30 +317,24 @@ def _get_wazuh_rules_snapshot(
         ]
 
     # Count total decoders
-    decoder_count = _backend_exec(
-        backend,
-        manager,
-        [
-            "bash",
-            "-c",
-            "find /var/ossec/ruleset/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-        ],
+    snap.total_decoders = (
+        _count(
+            "find /var/ossec/ruleset/decoders -name '*.xml' "
+            "-exec grep -c '<decoder ' {} + 2>/dev/null "
+            "| awk -F: '{s+=$NF} END {print s}'"
+        )
+        or snap.total_decoders
     )
-    if decoder_count and decoder_count.isdigit():
-        snap.total_decoders = int(decoder_count)
 
     # Count custom decoders
-    custom_dec = _backend_exec(
-        backend,
-        manager,
-        [
-            "bash",
-            "-c",
-            "find /var/ossec/etc/decoders -name '*.xml' -exec grep -c '<decoder ' {} + 2>/dev/null | awk -F: '{s+=$NF} END {print s}'",
-        ],
+    snap.custom_decoders = (
+        _count(
+            "find /var/ossec/etc/decoders -name '*.xml' "
+            "-exec grep -c '<decoder ' {} + 2>/dev/null "
+            "| awk -F: '{s+=$NF} END {print s}'"
+        )
+        or snap.custom_decoders
     )
-    if custom_dec and custom_dec.isdigit():
-        snap.custom_decoders = int(custom_dec)
 
     return snap
 

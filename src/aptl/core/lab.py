@@ -1059,7 +1059,8 @@ def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
         result = pin_terminal_host_keys(
             ctx.project_dir, endpoints, ctx.ssh_key_path
         )
-    except Exception as exc:  # noqa: BLE001 — observability, never fatal
+    # Observability only: pinning failures are never fatal to lab start.
+    except Exception as exc:  # noqa: BLE001
         log.warning("Terminal SSH host-key pinning failed: %s", exc)
         return None
     if result.failed:

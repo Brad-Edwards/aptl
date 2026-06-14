@@ -1,6 +1,5 @@
 """Tests for terminal WebSocket API endpoint."""
 
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -8,6 +7,10 @@ import pytest
 
 pytest.importorskip("fastapi", reason="Web dependencies not installed")
 pytest.importorskip("asyncssh", reason="asyncssh not installed")
+
+from starlette.websockets import WebSocketDisconnect  # noqa: E402
+
+from aptl.core.snapshot import SSHEndpoint  # noqa: E402
 
 
 @pytest.fixture
@@ -61,11 +64,43 @@ def _make_mock_conn(process):
 
 _VALID_ORIGIN = {"origin": "http://localhost:3000"}
 
+# A terminal endpoint as resolved from runtime inventory: container IP +
+# port 22 (issue #293 / ADR-039), NOT a hardcoded localhost:<port> map.
+_VICTIM_ENDPOINT = SSHEndpoint(
+    name="Victim",
+    host="172.20.2.20",
+    port=22,
+    user="labadmin",
+    key_path="~/.ssh/aptl_lab_key",
+    command="ssh -i ~/.ssh/aptl_lab_key labadmin@172.20.2.20",
+)
+
+
+def _pin_known_hosts(tmp_path):
+    """Write a plausible lab-start-pinned known_hosts file under .aptl/."""
+    kh = tmp_path / ".aptl" / "known_hosts"
+    kh.parent.mkdir(parents=True, exist_ok=True)
+    kh.write_text(
+        "172.20.2.20 ssh-ed25519 "
+        "AAAAC3NzaC1lZDI1NTE5AAAAIMTUqAKGaTTU6ZQIX0CtZty7aChRO5ArrLlzkucPQrBh\n"
+    )
+    return kh
+
 
 class TestTerminalWebSocket:
-    def test_cross_origin_rejected(self, api_client):
-        """Cross-origin WebSocket connections are rejected before accept."""
-        with pytest.raises(Exception):
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_cross_origin_rejected(self, mock_status, api_client):
+        """Cross-origin WebSocket connections are rejected before accept.
+
+        lab_status is mocked so the gate is verified deterministically even
+        in a Docker-less CI runner: if the Origin gate were removed, the
+        handler would fall through to the (mocked, silent) lab-running path
+        and ``receive_json`` would return a dict instead of raising — the
+        specific ``WebSocketDisconnect`` assertion then fails loudly rather
+        than swallowing an unrelated docker subprocess error.
+        """
+        mock_status.return_value = _make_lab_status(running=False)
+        with pytest.raises(WebSocketDisconnect):
             with api_client.websocket_connect(
                 "/api/terminal/ws/victim",
                 headers={"origin": "http://evil.com"},
@@ -85,9 +120,16 @@ class TestTerminalWebSocket:
             assert msg["type"] == "error"
             assert "not running" in msg["message"]
 
-    def test_no_origin_header_rejected(self, api_client):
-        """Connections without an Origin header are rejected."""
-        with pytest.raises(Exception):
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_no_origin_header_rejected(self, mock_status, api_client):
+        """Connections without an Origin header are rejected.
+
+        lab_status is mocked for the same determinism reason as
+        test_cross_origin_rejected: a removed Origin gate must surface as a
+        failed WebSocketDisconnect assertion, not a swallowed docker error.
+        """
+        mock_status.return_value = _make_lab_status(running=False)
+        with pytest.raises(WebSocketDisconnect):
             with api_client.websocket_connect("/api/terminal/ws/victim") as ws:
                 ws.receive_json()
 
@@ -96,7 +138,12 @@ class TestTerminalWebSocket:
         """Unknown container name closes WebSocket with 1008."""
         mock_status.return_value = _make_lab_status(running=True)
 
-        with pytest.raises(Exception):
+        # The container-name gate rejects before any runtime-inventory
+        # (docker) call, so a specific WebSocketDisconnect is the right
+        # assertion: if the gate were removed the handler would fall
+        # through to the unmocked lab_terminal_ssh_endpoints docker call and
+        # raise something other than WebSocketDisconnect, failing the test.
+        with pytest.raises(WebSocketDisconnect):
             with api_client.websocket_connect(
                 "/api/terminal/ws/nonexistent", headers=_VALID_ORIGIN
             ) as ws:
@@ -115,18 +162,91 @@ class TestTerminalWebSocket:
             assert msg["type"] == "error"
             assert "not running" in msg["message"]
 
-    @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_terminal_ssh_endpoints")
     @patch("aptl.api.routers.terminal.lab_status")
-    def test_stdin_forwarded_to_ssh(self, mock_status, mock_asyncssh, api_client):
-        """stdin messages are forwarded to SSH process."""
+    def test_container_not_in_inventory_rejected(
+        self, mock_status, mock_endpoints, api_client, tmp_path
+    ):
+        """A known container that is not in runtime inventory fails closed."""
         mock_status.return_value = _make_lab_status(running=True)
+        mock_endpoints.return_value = {}  # victim not currently running
+        _pin_known_hosts(tmp_path)
+
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+        ) as ws:
+            msg = ws.receive_json()
+            assert msg["type"] == "error"
+            assert "not available" in msg["message"].lower()
+
+    @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_terminal_ssh_endpoints")
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_known_hosts_path_passed_to_connect(
+        self, mock_status, mock_endpoints, mock_asyncssh, api_client, tmp_path
+    ):
+        """The relay verifies host keys: known_hosts is the pinned file, not None."""
+        mock_status.return_value = _make_lab_status(running=True)
+        mock_endpoints.return_value = {"victim": _VICTIM_ENDPOINT}
+        kh = _pin_known_hosts(tmp_path)
 
         process = _make_mock_process()
         conn = _make_mock_conn(process)
         mock_asyncssh.connect = AsyncMock(return_value=conn)
         mock_asyncssh.Error = Exception
+        process.stdout.read = AsyncMock(return_value="")
 
-        # stdout.read returns empty immediately to end the ssh->ws relay
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+        ) as ws:
+            pass
+
+        mock_asyncssh.connect.assert_awaited_once()
+        kwargs = mock_asyncssh.connect.call_args.kwargs
+        assert kwargs["known_hosts"] is not None
+        assert kwargs["known_hosts"] == str(kh)
+        # Endpoint identity comes from runtime inventory, not localhost.
+        assert kwargs["host"] == "172.20.2.20"
+        assert kwargs["port"] == 22
+        assert kwargs["username"] == "labadmin"
+
+    @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_terminal_ssh_endpoints")
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_missing_pin_fails_closed(
+        self, mock_status, mock_endpoints, mock_asyncssh, api_client, tmp_path
+    ):
+        """No pinned known_hosts file → reject without dialing SSH."""
+        mock_status.return_value = _make_lab_status(running=True)
+        mock_endpoints.return_value = {"victim": _VICTIM_ENDPOINT}
+        # Deliberately do NOT create .aptl/known_hosts.
+        mock_asyncssh.connect = AsyncMock()
+        mock_asyncssh.Error = Exception
+
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim", headers=_VALID_ORIGIN
+        ) as ws:
+            msg = ws.receive_json()
+            assert msg["type"] == "error"
+            assert "host key" in msg["message"].lower()
+
+        mock_asyncssh.connect.assert_not_called()
+
+    @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_terminal_ssh_endpoints")
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_stdin_forwarded_to_ssh(
+        self, mock_status, mock_endpoints, mock_asyncssh, api_client, tmp_path
+    ):
+        """stdin messages are forwarded to SSH process."""
+        mock_status.return_value = _make_lab_status(running=True)
+        mock_endpoints.return_value = {"victim": _VICTIM_ENDPOINT}
+        _pin_known_hosts(tmp_path)
+
+        process = _make_mock_process()
+        conn = _make_mock_conn(process)
+        mock_asyncssh.connect = AsyncMock(return_value=conn)
+        mock_asyncssh.Error = Exception
         process.stdout.read = AsyncMock(return_value="")
 
         with api_client.websocket_connect(
@@ -139,17 +259,20 @@ class TestTerminalWebSocket:
         process.stdin.write.assert_called_with("ls\n")
 
     @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_terminal_ssh_endpoints")
     @patch("aptl.api.routers.terminal.lab_status")
-    def test_stdout_forwarded_to_ws(self, mock_status, mock_asyncssh, api_client):
+    def test_stdout_forwarded_to_ws(
+        self, mock_status, mock_endpoints, mock_asyncssh, api_client, tmp_path
+    ):
         """SSH stdout is forwarded to WebSocket as stdout messages."""
         mock_status.return_value = _make_lab_status(running=True)
+        mock_endpoints.return_value = {"victim": _VICTIM_ENDPOINT}
+        _pin_known_hosts(tmp_path)
 
         process = _make_mock_process()
         conn = _make_mock_conn(process)
         mock_asyncssh.connect = AsyncMock(return_value=conn)
         mock_asyncssh.Error = Exception
-
-        # stdout returns data then empty
         process.stdout.read = AsyncMock(side_effect=["$ prompt\n", ""])
 
         with api_client.websocket_connect(
@@ -160,17 +283,20 @@ class TestTerminalWebSocket:
             assert "prompt" in msg["data"]
 
     @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_terminal_ssh_endpoints")
     @patch("aptl.api.routers.terminal.lab_status")
-    def test_resize_calls_change_terminal_size(self, mock_status, mock_asyncssh, api_client):
+    def test_resize_calls_change_terminal_size(
+        self, mock_status, mock_endpoints, mock_asyncssh, api_client, tmp_path
+    ):
         """resize messages call change_terminal_size on the SSH process."""
         mock_status.return_value = _make_lab_status(running=True)
+        mock_endpoints.return_value = {"victim": _VICTIM_ENDPOINT}
+        _pin_known_hosts(tmp_path)
 
         process = _make_mock_process()
         conn = _make_mock_conn(process)
         mock_asyncssh.connect = AsyncMock(return_value=conn)
         mock_asyncssh.Error = Exception
-
-        # stdout returns empty immediately
         process.stdout.read = AsyncMock(return_value="")
 
         with api_client.websocket_connect(
@@ -181,17 +307,20 @@ class TestTerminalWebSocket:
         process.change_terminal_size.assert_called_with(120, 40)
 
     @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_terminal_ssh_endpoints")
     @patch("aptl.api.routers.terminal.lab_status")
-    def test_disconnect_closes_ssh(self, mock_status, mock_asyncssh, api_client):
+    def test_disconnect_closes_ssh(
+        self, mock_status, mock_endpoints, mock_asyncssh, api_client, tmp_path
+    ):
         """WebSocket disconnect triggers SSH connection cleanup."""
         mock_status.return_value = _make_lab_status(running=True)
+        mock_endpoints.return_value = {"victim": _VICTIM_ENDPOINT}
+        _pin_known_hosts(tmp_path)
 
         process = _make_mock_process()
         conn = _make_mock_conn(process)
         mock_asyncssh.connect = AsyncMock(return_value=conn)
         mock_asyncssh.Error = Exception
-
-        # stdout returns empty immediately to allow clean close
         process.stdout.read = AsyncMock(return_value="")
 
         with api_client.websocket_connect(
@@ -202,12 +331,17 @@ class TestTerminalWebSocket:
         conn.close.assert_called_once()
 
     @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_terminal_ssh_endpoints")
     @patch("aptl.api.routers.terminal.lab_status")
-    def test_ssh_error_sends_error_message(self, mock_status, mock_asyncssh, api_client):
-        """SSH connection failure sends error message to WebSocket."""
+    def test_ssh_error_sends_error_message(
+        self, mock_status, mock_endpoints, mock_asyncssh, api_client, tmp_path
+    ):
+        """SSH failure (incl. host-key mismatch) sends generic error message."""
         mock_status.return_value = _make_lab_status(running=True)
+        mock_endpoints.return_value = {"victim": _VICTIM_ENDPOINT}
+        _pin_known_hosts(tmp_path)
 
-        mock_asyncssh.connect = AsyncMock(side_effect=Exception("Connection refused"))
+        mock_asyncssh.connect = AsyncMock(side_effect=Exception("host key mismatch"))
         mock_asyncssh.Error = Exception
 
         with api_client.websocket_connect(

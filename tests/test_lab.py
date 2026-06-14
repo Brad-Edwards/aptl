@@ -2472,3 +2472,57 @@ class TestGenerateSocCertsStep:
             f"_step_generate_soc_certs must precede _step_check_bind_mounts; "
             f"got order {names[i_soc]} → ... → {names[i_mounts]}"
         )
+
+
+class TestTerminalHostKeyPinningStep:
+    """The lab-start step that pins terminal SSH host keys (ADR-039,
+    issue #418) — registered after snapshot capture and non-fatal."""
+
+    def test_step_registered_after_capture_before_mcps(self):
+        from aptl.core.lab import _LAB_START_STEPS
+
+        names = [s.__name__ for s in _LAB_START_STEPS]
+        assert "_step_pin_terminal_host_keys" in names
+        i_pin = names.index("_step_pin_terminal_host_keys")
+        i_cap = names.index("_step_capture_snapshot")
+        i_mcp = names.index("_step_build_mcps")
+        assert i_cap < i_pin < i_mcp
+
+    @patch("aptl.core.lab.pin_terminal_host_keys")
+    @patch("aptl.core.lab.list_container_snapshots")
+    def test_step_pins_endpoints(self, mock_list, mock_pin, tmp_path):
+        from aptl.core.host_keys import HostKeyPinResult
+        from aptl.core.lab import _LabStartContext, _step_pin_terminal_host_keys
+
+        mock_list.return_value = []
+        mock_pin.return_value = HostKeyPinResult(
+            path=tmp_path / ".aptl" / "known_hosts", pinned=["Victim"], failed=[]
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.backend = MagicMock()
+        ctx.ssh_key_path = tmp_path / "key"
+
+        assert _step_pin_terminal_host_keys(ctx) is None
+        mock_pin.assert_called_once()
+
+    @patch("aptl.core.lab.pin_terminal_host_keys")
+    def test_step_noop_without_backend(self, mock_pin, tmp_path):
+        from aptl.core.lab import _LabStartContext, _step_pin_terminal_host_keys
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.backend = None
+        ctx.ssh_key_path = tmp_path / "key"
+
+        assert _step_pin_terminal_host_keys(ctx) is None
+        mock_pin.assert_not_called()
+
+    @patch("aptl.core.lab.list_container_snapshots", side_effect=RuntimeError("boom"))
+    def test_step_swallows_errors(self, _mock_list, tmp_path):
+        from aptl.core.lab import _LabStartContext, _step_pin_terminal_host_keys
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.backend = MagicMock()
+        ctx.ssh_key_path = tmp_path / "key"
+
+        # A pinning failure must never abort an otherwise-healthy lab start.
+        assert _step_pin_terminal_host_keys(ctx) is None

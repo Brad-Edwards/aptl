@@ -20,11 +20,13 @@ ADR-036 contract that these tests pin down:
 
 from aptl.core.endpoints import (
     ENDPOINT_REGISTRY,
+    TERMINAL_CONTAINER_NAMES,
     EndpointRegistryEntry,
     build_service_endpoints,
     build_ssh_endpoints,
     parse_host_port,
     select_ssh_host,
+    terminal_ssh_endpoints,
 )
 from aptl.core.snapshot import ContainerSnapshot
 
@@ -105,6 +107,7 @@ class TestEndpointRegistry:
             "aptl-victim",
             "aptl-kali",
             "aptl-reverse",
+            "aptl-workstation",
         }
 
     def test_service_entries_have_url_scheme_and_target_port(self):
@@ -475,3 +478,60 @@ class TestRegistryEntryShape:
             assert endpoints[0].port == 53000
         finally:
             ep_mod.ENDPOINT_REGISTRY = original
+
+
+class TestTerminalSSHEndpoints:
+    """``terminal_ssh_endpoints`` is the small registry projection the
+    WebSocket relay uses to derive host/port/user from runtime inventory
+    instead of a hardcoded ``localhost`` map (ADR-039, issue #418)."""
+
+    def test_names_cover_every_ssh_registry_entry(self):
+        expected = {
+            entry.container_name.removeprefix("aptl-")
+            for entry in ENDPOINT_REGISTRY
+            if entry.kind == "ssh"
+        }
+        assert TERMINAL_CONTAINER_NAMES == expected
+        # Sanity: the four documented terminal targets are present.
+        assert {"victim", "kali", "reverse", "workstation"} <= TERMINAL_CONTAINER_NAMES
+
+    def test_maps_short_name_to_container_ip_endpoint(self):
+        containers = [
+            ContainerSnapshot(
+                name="aptl-victim",
+                status="Up 5 minutes",
+                networks={"aptl_aptl-internal": "172.20.2.20"},
+                ports=[],
+            ),
+        ]
+        result = terminal_ssh_endpoints(containers)
+        assert set(result) == {"victim"}
+        ep = result["victim"]
+        assert ep.host == "172.20.2.20"  # container IP, not localhost
+        assert ep.port == 22
+        assert ep.user == "labadmin"
+
+    def test_skips_stopped_container(self):
+        containers = [
+            ContainerSnapshot(
+                name="aptl-victim",
+                status="Exited (0)",
+                networks={"aptl_aptl-internal": "172.20.2.20"},
+                ports=[],
+            ),
+        ]
+        assert terminal_ssh_endpoints(containers) == {}
+
+    def test_skips_container_without_reachable_ip(self):
+        containers = [
+            ContainerSnapshot(
+                name="aptl-victim",
+                status="Up 2 minutes",
+                networks={},
+                ports=[],
+            ),
+        ]
+        assert terminal_ssh_endpoints(containers) == {}
+
+    def test_empty_inventory(self):
+        assert terminal_ssh_endpoints([]) == {}

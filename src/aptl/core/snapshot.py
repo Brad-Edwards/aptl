@@ -255,6 +255,19 @@ def _get_container_snapshots(
     return [_row_to_snapshot(backend, row) for row in rows]
 
 
+def list_container_snapshots(
+    backend: "DeploymentBackend",
+) -> list[ContainerSnapshot]:
+    """Public wrapper: snapshot all ``aptl-`` containers with network IPs.
+
+    Consumers that need the per-container network/port inventory without
+    building a full :class:`RangeSnapshot` (e.g. the terminal relay's
+    endpoint resolution and the lab-start host-key pinning step) call
+    this instead of reaching into the private helper.
+    """
+    return _get_container_snapshots(backend)
+
+
 def _get_wazuh_rules_snapshot(
     backend: "DeploymentBackend",
 ) -> WazuhRulesSnapshot:

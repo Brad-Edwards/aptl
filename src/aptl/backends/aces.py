@@ -13,8 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import yaml
-
 from aces_contracts.diagnostics import Diagnostic
 from aces_contracts.planning import ChangeAction, ProvisioningPlan
 from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot
@@ -28,14 +26,13 @@ from aptl.backends.aces_diagnostics import (
     has_error,
     render_aces_diagnostics,
     snapshot_after_apply,
-    unsupported_resource_diagnostics,
 )
 from aptl.backends.aces_manifest import APTL_ACES_TARGET_NAME, create_aptl_manifest
+from aptl.backends.aces_realization import (
+    AptlRealization,
+    interpret_provisioning_plan,
+)
 from aptl.backends.aces_profiles import (
-    configured_profiles,
-    explicit_compose_profile_hints,
-    load_compose_profile_index,
-    node_aliases,
     select_backend_profiles,
 )
 from aptl.core.config import AptlConfig
@@ -102,8 +99,7 @@ def start_aces_scenario(
         return LabResult(
             success=True,
             message=(
-                "Lab started through ACES runtime target "
-                f"'{APTL_ACES_TARGET_NAME}'"
+                f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'"
             ),
         )
     return LabResult(
@@ -132,25 +128,7 @@ class AptlProvisioner(object):
                 )
             ]
 
-        diagnostics: list[Diagnostic] = []
-        diagnostics.extend(unsupported_resource_diagnostics(plan))
-
-        profiles, profile_diagnostics = self._profiles_from_plan(plan)
-        diagnostics.extend(profile_diagnostics)
-        configured = configured_profiles(self.config)
-        if configured and not (set(configured) & set(profiles)):
-            diagnostics.append(
-                diagnostic(
-                    "aptl.provisioner.no-configured-profile-matches",
-                    PROVISIONING_ADDRESS,
-                    (
-                        "ACES provisioning plan did not declare any node "
-                        "that maps to an enabled APTL compose profile."
-                    ),
-                )
-            )
-
-        return diagnostics
+        return list(self._realize_plan(plan).diagnostics)
 
     def apply(self, plan: object, snapshot: object) -> ApplyResult:
         """Apply an ACES provisioning plan via APTL's deployment backend."""
@@ -158,14 +136,29 @@ class AptlProvisioner(object):
         working_snapshot = (
             snapshot if isinstance(snapshot, RuntimeSnapshot) else RuntimeSnapshot()
         )
-        diagnostics = self.validate(plan)
+        diagnostics = self._invalid_plan_diagnostics(plan)
         result = ApplyResult(
             success=False,
             snapshot=working_snapshot,
             diagnostics=diagnostics,
         )
-        if isinstance(plan, ProvisioningPlan) and not has_error(diagnostics):
-            result = self._apply_valid_plan(plan, working_snapshot, diagnostics)
+        if isinstance(plan, ProvisioningPlan):
+            realization = self._realize_plan(plan)
+            diagnostics = list(realization.diagnostics)
+            if not has_error(diagnostics):
+                result = self._apply_valid_plan(
+                    plan,
+                    working_snapshot,
+                    diagnostics,
+                    realization,
+                )
+            else:
+                result = ApplyResult(
+                    success=False,
+                    snapshot=working_snapshot,
+                    diagnostics=diagnostics,
+                    details={"realization": realization.details()},
+                )
         return result
 
     def _apply_valid_plan(
@@ -173,18 +166,10 @@ class AptlProvisioner(object):
         plan: ProvisioningPlan,
         snapshot: RuntimeSnapshot,
         diagnostics: list[Diagnostic],
+        realization: AptlRealization,
     ) -> ApplyResult:
         """Apply a validated ACES plan to the deployment backend."""
-        profiles, profile_diagnostics = self._profiles_from_plan(plan)
-        diagnostics.extend(profile_diagnostics)
-        if has_error(diagnostics):
-            return ApplyResult(
-                success=False,
-                snapshot=snapshot,
-                diagnostics=diagnostics,
-            )
-
-        selected_profiles = select_backend_profiles(self.config, profiles)
+        selected_profiles = select_backend_profiles(self.config, realization.profiles)
         start_result = self.deployment_backend.start(selected_profiles)
         if not start_result.success:
             diagnostics.append(
@@ -198,66 +183,42 @@ class AptlProvisioner(object):
                 success=False,
                 snapshot=snapshot,
                 diagnostics=diagnostics,
-                details={"profiles": selected_profiles},
+                details={
+                    "profiles": selected_profiles,
+                    "realization": realization.details(),
+                },
             )
         return ApplyResult(
             success=True,
             snapshot=snapshot_after_apply(plan, snapshot),
             diagnostics=diagnostics,
             changed_addresses=_changed_addresses(plan),
-            details={"profiles": selected_profiles},
+            details={
+                "profiles": selected_profiles,
+                "realization": realization.details(),
+            },
         )
 
-    def _profiles_from_plan(
-        self,
-        plan: ProvisioningPlan,
-    ) -> tuple[frozenset[str], list[Diagnostic]]:
-        """Resolve APTL Compose profiles from ACES node resources."""
-        diagnostics: list[Diagnostic] = []
-        try:
-            profile_index = load_compose_profile_index(self.project_dir)
-        except (OSError, ValueError, yaml.YAMLError) as exc:
-            return (
-                frozenset(),
-                [
-                    diagnostic(
-                        "aptl.provisioner.compose-profile-index-failed",
-                        PROVISIONING_ADDRESS,
-                        redact(str(exc)),
-                    )
-                ],
-            )
+    def _realize_plan(self, plan: ProvisioningPlan) -> AptlRealization:
+        """Interpret an ACES plan against APTL's supported contract."""
+        return interpret_provisioning_plan(
+            plan=plan,
+            project_dir=self.project_dir,
+            config=self.config,
+        )
 
-        profiles: set[str] = set()
-        for resource in plan.resources.values():
-            if resource.resource_type != "node":
-                continue
-            payload = resource.payload
-            profiles.update(explicit_compose_profile_hints(payload))
-            profiles.update(
-                profile_index.profiles_for_aliases(
-                    node_aliases(resource.address, payload)
-                )
+    def _invalid_plan_diagnostics(self, plan: object) -> list[Diagnostic]:
+        if isinstance(plan, ProvisioningPlan):
+            return []
+        return [
+            diagnostic(
+                "aptl.provisioner.invalid-plan",
+                PROVISIONING_ADDRESS,
+                "APTL provisioner expected an ACES ProvisioningPlan.",
             )
-
-        if not profiles:
-            diagnostics.append(
-                diagnostic(
-                    "aptl.provisioner.profile-resolution-failed",
-                    PROVISIONING_ADDRESS,
-                    (
-                        "ACES provisioning plan contained no node resources "
-                        "that map to APTL compose profiles."
-                    ),
-                )
-            )
-        return frozenset(profiles), diagnostics
+        ]
 
 
 def _changed_addresses(plan: ProvisioningPlan) -> list[str]:
     """Return addresses whose planned operation changes runtime state."""
-    return [
-        op.address
-        for op in plan.operations
-        if op.action != ChangeAction.UNCHANGED
-    ]
+    return [op.address for op in plan.operations if op.action != ChangeAction.UNCHANGED]

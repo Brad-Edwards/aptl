@@ -3,11 +3,18 @@
 import asyncio
 import json
 from pathlib import Path
+from typing import Annotated
 
 import asyncssh
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from aptl.api.deps import ALLOWED_ORIGINS, get_project_dir
+from aptl.api.deps import (
+    ALLOWED_ORIGINS,
+    WebAuthSettings,
+    get_project_dir,
+    get_web_auth,
+    verify_ws_token,
+)
 from aptl.core.lab import lab_status
 from aptl.core.ssh import _KEY_NAME
 from aptl.utils.logging import get_logger
@@ -67,25 +74,41 @@ async def _relay_ws_to_ssh(
         log.debug("Malformed WebSocket message, ignoring")
 
 
+async def _reject_pre_accept(websocket: WebSocket, auth: WebAuthSettings) -> bool:
+    """Validate token and origin before the WebSocket handshake is accepted.
+
+    Returns True and closes the connection if the request should be rejected;
+    returns False when the request may proceed to accept(). Separating these
+    pre-accept guards keeps terminal_ws within Sonar's return-count limit and
+    makes the rejection path easy to test in isolation.
+    """
+    protocol = websocket.headers.get("sec-websocket-protocol", "")
+    if not verify_ws_token(protocol, auth):
+        await websocket.close(code=1008, reason="Unauthorized")
+        log.warning("Rejected WebSocket: invalid or missing auth token")
+        return True
+    origin = websocket.headers.get("origin", "")
+    if not origin or origin not in ALLOWED_ORIGINS:
+        await websocket.close(code=1008, reason="Origin not allowed")
+        log.warning("Rejected WebSocket from disallowed origin: %s", origin)
+        return True
+    return False
+
+
 @router.websocket("/terminal/ws/{container}")
 async def terminal_ws(
     websocket: WebSocket,
     container: str,
     project_dir: Path = Depends(get_project_dir),
+    auth: Annotated[WebAuthSettings, Depends(get_web_auth)] = ...,  # type: ignore[assignment]
 ) -> None:
     """WebSocket endpoint for interactive terminal sessions.
 
     Opens an SSH PTY connection to the specified container and relays
     stdin/stdout between the WebSocket and the SSH process.
     """
-    # Reject cross-origin WebSocket connections.
-    # CORS middleware does NOT protect WebSocket upgrades — browsers send
-    # them cross-origin without preflight. Without this check, any website
-    # the user visits could open a shell on lab containers.
-    origin = websocket.headers.get("origin", "")
-    if not origin or origin not in ALLOWED_ORIGINS:
-        await websocket.close(code=1008, reason="Origin not allowed")
-        log.warning("Rejected WebSocket from disallowed origin: %s", origin)
+    # Verify bearer token and origin before accept() (ADR-039).
+    if await _reject_pre_accept(websocket, auth):
         return
 
     # Validate container name
@@ -114,12 +137,13 @@ async def terminal_ws(
 
     conn = None
     try:
+        # known_hosts=None: localhost-only; containers regenerate host keys on rebuild
         conn = await asyncssh.connect(
             host="localhost",
             port=port,
             username=username,
             client_keys=[str(key_path)],
-            known_hosts=None,  # localhost-only; containers regenerate host keys on rebuild
+            known_hosts=None,
         )
         process = await conn.create_process(
             term_type="xterm-256color",

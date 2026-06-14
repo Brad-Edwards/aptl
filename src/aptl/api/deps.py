@@ -117,7 +117,7 @@ def get_web_auth() -> WebAuthSettings:
     return _WEB_AUTH
 
 
-async def verify_token(
+def verify_token(
     authorization: Annotated[Optional[str], Header(alias="Authorization")] = None,
 ) -> None:
     """FastAPI dependency: enforce bearer-token auth on every HTTP request.

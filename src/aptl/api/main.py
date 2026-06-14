@@ -15,7 +15,8 @@ def create_app() -> FastAPI:
     setup_logging()
     log.info("Creating APTL web API application")
 
-    load_web_auth()  # logs CRITICAL and returns None when APTL_API_TOKEN is absent
+    # logs CRITICAL and returns None when APTL_API_TOKEN is absent
+    load_web_auth()
 
     app = FastAPI(
         title="APTL Web API",
@@ -39,7 +40,8 @@ def create_app() -> FastAPI:
     app.include_router(kill.router, prefix="/api", dependencies=_auth)
 
     @app.get("/api/health", dependencies=_auth)
-    async def health() -> dict:
+    async def health() -> dict[str, str]:
+        """Return a liveness indicator for the web API."""
         return {"status": "ok"}
 
     return app

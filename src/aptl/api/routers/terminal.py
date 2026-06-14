@@ -74,6 +74,27 @@ async def _relay_ws_to_ssh(
         log.debug("Malformed WebSocket message, ignoring")
 
 
+async def _reject_pre_accept(websocket: WebSocket, auth: WebAuthSettings) -> bool:
+    """Validate token and origin before the WebSocket handshake is accepted.
+
+    Returns True and closes the connection if the request should be rejected;
+    returns False when the request may proceed to accept(). Separating these
+    pre-accept guards keeps terminal_ws within Sonar's return-count limit and
+    makes the rejection path easy to test in isolation.
+    """
+    protocol = websocket.headers.get("sec-websocket-protocol", "")
+    if not verify_ws_token(protocol, auth):
+        await websocket.close(code=1008, reason="Unauthorized")
+        log.warning("Rejected WebSocket: invalid or missing auth token")
+        return True
+    origin = websocket.headers.get("origin", "")
+    if not origin or origin not in ALLOWED_ORIGINS:
+        await websocket.close(code=1008, reason="Origin not allowed")
+        log.warning("Rejected WebSocket from disallowed origin: %s", origin)
+        return True
+    return False
+
+
 @router.websocket("/terminal/ws/{container}")
 async def terminal_ws(
     websocket: WebSocket,
@@ -86,24 +107,8 @@ async def terminal_ws(
     Opens an SSH PTY connection to the specified container and relays
     stdin/stdout between the WebSocket and the SSH process.
     """
-    # Verify bearer token from Sec-WebSocket-Protocol before accept().
-    # Browsers cannot set Authorization headers on WebSocket upgrades, so
-    # the token is conveyed as "aptl-token.<TOKEN>" in the protocol field.
-    # Reject before SSH relay opens (ADR-039).
-    protocol = websocket.headers.get("sec-websocket-protocol", "")
-    if not verify_ws_token(protocol, auth):
-        await websocket.close(code=1008, reason="Unauthorized")
-        log.warning("Rejected WebSocket: invalid or missing auth token")
-        return
-
-    # Reject cross-origin WebSocket connections.
-    # CORS middleware does NOT protect WebSocket upgrades — browsers send
-    # them cross-origin without preflight. Without this check, any website
-    # the user visits could open a shell on lab containers.
-    origin = websocket.headers.get("origin", "")
-    if not origin or origin not in ALLOWED_ORIGINS:
-        await websocket.close(code=1008, reason="Origin not allowed")
-        log.warning("Rejected WebSocket from disallowed origin: %s", origin)
+    # Verify bearer token and origin before accept() (ADR-039).
+    if await _reject_pre_accept(websocket, auth):
         return
 
     # Validate container name
@@ -132,12 +137,13 @@ async def terminal_ws(
 
     conn = None
     try:
+        # known_hosts=None: localhost-only; containers regenerate host keys on rebuild
         conn = await asyncssh.connect(
             host="localhost",
             port=port,
             username=username,
             client_keys=[str(key_path)],
-            known_hosts=None,  # localhost-only; containers regenerate host keys on rebuild
+            known_hosts=None,
         )
         process = await conn.create_process(
             term_type="xterm-256color",
